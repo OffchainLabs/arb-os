@@ -308,7 +308,7 @@ impl CodeStore {
     /// to the start of that segment.
     fn create_segment(&mut self) -> CodePt {
         self.segments.push(vec![Instruction::from_opcode(
-            AVMOpcode::Panic,
+            AVMOpcode::Zero,
             DebugInfo::default(),
         )]);
         CodePt::new_in_segment(self.segments.len() - 1, 0)
@@ -1227,6 +1227,7 @@ impl Machine {
     pub(crate) fn next_op_gas(&self) -> Option<u64> {
         if let MachineState::Running(pc) = self.state {
             Some(match self.code.get_insn(pc)?.opcode {
+                AVMOpcode::Zero => 5,
                 AVMOpcode::Plus => 3,
                 AVMOpcode::Mul => 3,
                 AVMOpcode::Minus => 3,
@@ -1393,6 +1394,7 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
+                    AVMOpcode::Zero |
                     AVMOpcode::Panic => Err(ExecutionError::new("panicked", &self.state, None)),
                     AVMOpcode::Jump => {
                         self.state = MachineState::Running(self.stack.pop_codepoint(&self.state)?);
@@ -2122,7 +2124,7 @@ impl Machine {
                     AVMOpcode::GetBuffer8 => {
                         let offset = self.stack.pop_usize(&self.state)?;
                         let buf = self.stack.pop_buffer(&self.state)?;
-                        self.stack.push_usize(buf.read_byte(offset).into());
+                        self.stack.push_usize(buf.read_byte(offset as u128).into());
                         self.incr_pc();
                         Ok(true)
                     }
@@ -2138,7 +2140,7 @@ impl Machine {
                         }
                         let mut res = [0u8; 8];
                         for i in 0..8 {
-                            res[i] = buf.read_byte(offset + i);
+                            res[i] = buf.read_byte((offset + i) as u128);
                         }
                         self.stack.push_uint(Uint256::from_bytes(&res));
                         self.incr_pc();
@@ -2156,7 +2158,7 @@ impl Machine {
                         }
                         let mut res = [0u8; 32];
                         for i in 0..32 {
-                            res[i] = buf.read_byte(offset + i);
+                            res[i] = buf.read_byte((offset + i) as u128);
                         }
                         self.stack.push_uint(Uint256::from_bytes(&res));
                         self.incr_pc();
@@ -2167,7 +2169,7 @@ impl Machine {
                         let val = self.stack.pop_uint(&self.state)?;
                         let buf = self.stack.pop_buffer(&self.state)?;
                         let bytes = val.to_bytes_be();
-                        let nbuf = buf.set_byte(offset, bytes[31]);
+                        let nbuf = buf.set_byte(offset as u128, bytes[31]);
                         self.stack.push(Value::copy_buffer(nbuf));
                         self.incr_pc();
                         Ok(true)
@@ -2186,7 +2188,7 @@ impl Machine {
                         let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
                         for i in 0..8 {
-                            nbuf = nbuf.set_byte(offset + i, bytes[i]);
+                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[i]);
                         }
                         self.stack.push(Value::copy_buffer(nbuf));
                         self.incr_pc();
@@ -2206,7 +2208,7 @@ impl Machine {
                         let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
                         for i in 0..32 {
-                            nbuf = nbuf.set_byte(offset + i, bytes[i]);
+                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[i]);
                         }
                         self.stack.push(Value::copy_buffer(nbuf));
                         self.incr_pc();

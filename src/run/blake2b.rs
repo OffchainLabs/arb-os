@@ -50,14 +50,14 @@ impl Clone for Blake2b {
 pub fn blake2bf_instruction(buf: Buffer) -> Buffer {
     let mut b = [0u8; 213];
     for i in 0..b.len() {
-        b[i] = buf.read_byte(i);
+        b[i] = buf.read_byte(i as u128);
     }
     b[212] = b[212] & 0x1u8;
     match eth_blake2bf_from_bytes(b) {
         Some(result) => {
-            let mut ret = Buffer::empty0();
+            let mut ret = Buffer::new_empty();
             for i in 0..64 {
-                ret = ret.set_byte(i, result[i]);
+                ret = ret.set_byte(i, result[i as usize]);
             }
             ret
         }

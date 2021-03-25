@@ -84,6 +84,10 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
         .collect();
     let input_struct = Type::Struct(input_fields.clone());
     let output_struct = Type::Struct(output_fields.clone());
+    let mut output_only: Vec<_> = output_only.into_iter().collect();
+    output_only.sort_by(|left, right| left.name.cmp(&right.name));
+    let mut intersection: Vec<_> = intersection.into_iter().collect();
+    intersection.sort_by(|left, right| left.name.cmp(&right.name));
     for field in output_only.iter() {
         writeln!(code, "use {}::set_{}_onUpgrade;", impl_file, field.name)
             .map_err(|_| GenCodeError::new("Failed to write use statement".to_string()))?;

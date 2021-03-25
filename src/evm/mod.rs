@@ -860,7 +860,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
 
     let beneficiary = Uint256::from_u64(9185);
 
-    let txid = add_contract._send_retryable_tx(
+    let (txid, _) = add_contract._send_retryable_tx(
         my_addr.clone(),
         "add",
         &[
@@ -872,6 +872,8 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
         Uint256::zero(),
         None,
         Some(beneficiary.clone()),
+        None,
+        None,
     )?;
     assert!(txid != Uint256::zero());
     let _gas_used = if debug {
@@ -887,10 +889,6 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
     let (keepalive_price, reprice_time) =
         arb_replayable._get_keepalive_price(&mut machine, txid.clone())?;
     assert_eq!(keepalive_price, Uint256::zero());
-    println!(
-        "reprice time {}, timestamp {}",
-        reprice_time, machine.runtime_env.current_timestamp
-    );
     assert!(reprice_time > machine.runtime_env.current_timestamp);
 
     let keepalive_ret = arb_replayable._keepalive(&mut machine, txid.clone(), keepalive_price)?;
@@ -905,7 +903,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
     assert_eq!(new_timeout, Uint256::zero()); // verify that txid has been removed
 
     // make another one, and have the beneficiary cancel it
-    let txid = add_contract._send_retryable_tx(
+    let (txid, _) = add_contract._send_retryable_tx(
         my_addr.clone(),
         "add",
         &[
@@ -917,6 +915,8 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
         Uint256::zero(),
         None,
         Some(beneficiary.clone()),
+        None,
+        None,
     )?;
     assert!(txid != Uint256::zero());
     let _gas_used = if debug {
@@ -944,6 +944,8 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
         Uint256::zero(),
         my_addr.clone(),
         my_addr.clone(),
+        Uint256::zero(),
+        Uint256::zero(),
         &[],
     );
     let _gas_used = if debug {
@@ -954,6 +956,40 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
     let all_logs = machine.runtime_env.get_all_receipt_logs();
     let last_log = &all_logs[all_logs.len() - 1];
     assert!(last_log.succeeded());
+
+    let (txid, redeemid) = add_contract._send_retryable_tx(
+        my_addr.clone(),
+        "add",
+        &[
+            ethabi::Token::Uint(Uint256::one().to_u256()),
+            ethabi::Token::Uint(Uint256::one().to_u256()),
+        ],
+        &mut machine,
+        Uint256::zero(),
+        Uint256::zero(),
+        None,
+        Some(beneficiary.clone()),
+        Some(Uint256::from_u64(1_000_000)),
+        Some(Uint256::zero()),
+    )?;
+    assert!(txid != Uint256::zero());
+    assert!(redeemid.is_some());
+    let redeemid = redeemid.unwrap();
+
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+
+    let receipts = machine.runtime_env.get_all_receipt_logs();
+    let last_receipt = receipts[receipts.len() - 1].clone();
+    assert!(last_receipt.succeeded());
+    assert_eq!(last_receipt.get_request_id(), redeemid);
+
+    let second_to_last = receipts[receipts.len() - 2].clone();
+    assert!(second_to_last.succeeded());
+    assert_eq!(second_to_last.get_request_id(), txid);
 
     if let Some(path) = log_to {
         machine
