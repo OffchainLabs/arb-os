@@ -613,6 +613,19 @@ fn codegen_programs(
     Ok(progs)
 }
 
+fn comma_list(input: &[String]) -> String {
+    let mut base = String::new();
+    if input.len() > 0 {
+        for object in input.iter().take(input.len() - 1) {
+            base.push_str(object);
+            base.push(',');
+            base.push(' ');
+        }
+        base.push_str(&input[input.len() - 1]);
+    }
+    base
+}
+
 ///Converts source string `source` into a series of `TopLevelDecl`s, uses identifiers from
 /// `string_table` and records new ones in it as well.  The `file_id` argument is used to construct
 /// file information for the location fields.
