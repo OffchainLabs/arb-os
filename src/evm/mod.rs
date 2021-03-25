@@ -2528,6 +2528,50 @@ pub fn _evm_eval_ripemd160(log_to: Option<&Path>, debug: bool) {
     }
 }
 
+#[test]
+fn evm_bad_receipt_revert_test() {
+    _evm_bad_receipt_revert_test_impl();
+}
+
+fn _evm_bad_receipt_revert_test_impl() {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let my_addr = Uint256::from_u64(1025);
+
+    let add_contract = AbiForContract::new_from_file(&test_contract_path("Add")).unwrap();
+    let (receipts, _) = add_contract.call_function(
+        my_addr.clone(),
+        "add",
+        &[ethabi::Token::Uint(Uint256::one().to_u256()), ethabi::Token::Uint(Uint256::one().to_u256())],
+        &mut machine,
+        Uint256::zero(),
+        false,
+    ).unwrap();
+    assert_eq!(receipts.len(), 1);
+    assert!(receipts[0].succeeded());
+    let _ = machine.run(None);
+    let total_receipts_before = machine.runtime_env.get_all_receipt_logs().len();
+
+    let txid = machine.runtime_env.insert_tx_message(
+        my_addr,
+        Uint256::zero(),
+        Uint256::zero(),
+        add_contract.address,
+        Uint256::one(),
+        &[],
+        true,
+    );
+    assert!(txid != receipts[0].get_request_id());
+    let _ = machine.run(None);
+
+    let receipts = machine.runtime_env.get_all_receipt_logs();
+    assert_eq!(receipts.len(), total_receipts_before+1);
+    assert_eq!(receipts[total_receipts_before].get_return_code(), Uint256::one());
+    assert_eq!(receipts[total_receipts_before].get_request_id(), txid);
+}
+
 pub fn make_logs_for_all_arbos_tests() {
     evm_direct_deploy_add(
         Some(Path::new("testlogs/evm_direct_deploy_add.aoslog")),
