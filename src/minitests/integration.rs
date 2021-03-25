@@ -4,44 +4,34 @@ use crate::run::{run, Machine, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use std::rc::Rc;
 
-#[test]
-fn test_basic() {
+fn compile_run_cycle(input: String) -> Machine {
     let mut compile = CompileStruct::default();
-    compile.input = vec!["test-programs/basic.mini".to_string()];
+    compile.input = vec![input];
     compile.test_mode = true;
     let mexe = compile.invoke().unwrap();
     let mut machine = Machine::new(
         mexe,
         RuntimeEnvironment::new(Uint256::from_usize(1111), None),
     );
-    let _result = run(&mut machine, vec![], false).unwrap();
+    run(&mut machine, vec![], false).unwrap();
+    machine
+}
+
+#[test]
+fn test_basic() {
+    let machine = compile_run_cycle("test-programs/basic.mini".to_string());
+    assert_eq!(machine.stack_top(), None);
 }
 
 #[test]
 fn test_xif_else() {
-    let mut compile = CompileStruct::default();
-    compile.input = vec!["test-programs/xif-else.mini".to_string()];
-    compile.test_mode = true;
-    let mexe = compile.invoke().unwrap();
-    let mut machine = Machine::new(
-        mexe,
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
-    );
-    let _result = run(&mut machine, vec![], false).unwrap();
+    let machine = compile_run_cycle("test-programs/xif-else.mini".to_string());
     assert_eq!(machine.stack_top(), Some(&Value::Int(Uint256::zero())));
 }
 
 #[test]
 fn test_codeblocks() {
-    let mut compile = CompileStruct::default();
-    compile.input = vec!["test-programs/codeblocks.mini".to_string()];
-    compile.test_mode = true;
-    let mexe = compile.invoke().unwrap();
-    let mut machine = Machine::new(
-        mexe,
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
-    );
-    let _result = run(&mut machine, vec![], false).unwrap();
+    let machine = compile_run_cycle("test-programs/codeblocks.mini".to_string());
     assert_eq!(
         machine.stack_top(),
         Some(&Value::Tuple(Rc::new(vec![
