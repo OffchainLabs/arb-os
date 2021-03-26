@@ -10,6 +10,8 @@ use rlp::RlpStream;
 use std::convert::TryInto;
 use std::path::Path;
 
+mod integration;
+
 fn test_from_file(path: &Path) {
     let res = run_from_file(path, vec![], false);
     match res {
