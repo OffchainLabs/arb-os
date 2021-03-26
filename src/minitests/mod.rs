@@ -3,9 +3,7 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{
-    _bytestack_from_bytes, load_from_file, run, run_from_file, Machine, RuntimeEnvironment,
-};
+use crate::run::{_bytestack_from_bytes, load_from_file, run, run_from_file, Machine};
 use crate::uint256::Uint256;
 use num_bigint::{BigUint, RandBigInt};
 use rlp::RlpStream;
@@ -14,15 +12,8 @@ use std::path::Path;
 
 mod integration;
 
-#[test]
-fn test_arraytest() {
-    let path = Path::new("builtin/arraytest.mexe");
-    let res = run_from_file(
-        path,
-        vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
-        false,
-    );
+fn test_from_file(path: &Path) {
+    let res = run_from_file(path, vec![], false);
     match res {
         Ok(res) => {
             assert_eq!(res[0], Value::Int(Uint256::zero()));
@@ -34,250 +25,73 @@ fn test_arraytest() {
 }
 
 #[test]
+fn test_arraytest() {
+    test_from_file(Path::new("builtin/arraytest.mexe"));
+}
+
+#[test]
 fn test_kvstest() {
-    let path = Path::new("builtin/kvstest.mexe");
-    let res = run_from_file(
-        path,
-        vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
-        false,
-    );
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("builtin/kvstest.mexe"));
 }
 
 #[test]
 fn test_storage_map() {
-    let path = Path::new("stdlib/storageMapTest.mexe");
-    let res = run_from_file(
-        path,
-        vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
-        false,
-    );
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("stdlib/storageMapTest.mexe"));
 }
 
 #[test]
 fn test_queuetest() {
-    let path = Path::new("stdlib/queuetest.mexe");
-    let res = run_from_file(
-        path,
-        vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
-        false,
-    );
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("stdlib/queuetest.mexe"));
 }
 
 #[test]
 fn test_globaltest() {
-    let path = Path::new("builtin/globaltest.mexe");
-    let res = run_from_file(
-        path,
-        vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
-        false,
-    );
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("builtin/globaltest.mexe"));
 }
 
 #[test]
 fn test_pqtest() {
-    let path = Path::new("stdlib/priorityqtest.mexe");
-    let res = run_from_file(
-        path,
-        vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
-        false,
-    );
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("stdlib/priorityqtest.mexe"));
 }
 
 #[test]
 fn test_bytearray() {
-    let path = Path::new("stdlib/bytearraytest.mexe");
-    let res = run_from_file(
-        path,
-        vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
-        false,
-    );
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("stdlib/bytearraytest.mexe"));
 }
 
 #[test]
 fn test_map() {
-    let path = Path::new("builtin/maptest.mexe");
-    let res = run_from_file(
-        path,
-        vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
-        false,
-    );
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("builtin/maptest.mexe"));
 }
 
 #[test]
 fn test_keccak() {
-    let path = Path::new("stdlib/keccaktest.mexe");
-    let res = run_from_file(
-        path,
-        vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
-        false,
-    );
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("stdlib/keccaktest.mexe"));
 }
 
 #[test]
 fn test_bls() {
-    let path = Path::new("stdlib/blstest.mexe");
-    let res = run_from_file(
-        path,
-        vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
-        false,
-    );
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("stdlib/blstest.mexe"));
 }
 
 #[test]
 fn test_sha256() {
-    let path = Path::new("stdlib/sha256test.mexe");
-    let res = run_from_file(
-        path,
-        vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
-        false,
-    );
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("stdlib/sha256test.mexe"));
 }
 
 #[test]
 fn test_fixedpoint() {
-    let path = Path::new("stdlib/fixedpointtest.mexe");
-    let res = run_from_file(
-        path,
-        vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
-        false,
-    );
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("stdlib/fixedpointtest.mexe"));
 }
 
 #[test]
 fn test_ripemd160() {
-    let path = Path::new("stdlib/ripemd160test.mexe");
-    let res = run_from_file(
-        path,
-        vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
-        false,
-    );
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("stdlib/ripemd160test.mexe"));
 }
 
 #[test]
 fn test_biguint() {
-    let path = Path::new("stdlib/biguinttest.mexe");
-    let res = run_from_file(
-        path,
-        vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
-        false,
-    );
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("stdlib/biguinttest.mexe"));
 }
 
 #[test]
@@ -333,7 +147,6 @@ fn test_rlp() {
     }
 }
 
-#[cfg(test)]
 fn encode_list3(testvec: (Uint256, Vec<u8>, Uint256)) -> Vec<u8> {
     let mut stream = RlpStream::new_list(3);
     stream
@@ -343,13 +156,11 @@ fn encode_list3(testvec: (Uint256, Vec<u8>, Uint256)) -> Vec<u8> {
     stream.out()
 }
 
-#[cfg(test)]
 fn test_rlp_uint(ui: Uint256, correct_result: Vec<u8>) {
     let path = Path::new("stdlib/rlptest.mexe");
     let res = run_from_file(
         path,
         vec![Value::Int(Uint256::zero()), Value::Int(ui)],
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -362,13 +173,11 @@ fn test_rlp_uint(ui: Uint256, correct_result: Vec<u8>) {
     }
 }
 
-#[cfg(test)]
 fn test_rlp_bytearray(input: Vec<u8>, correct_result: Vec<u8>) {
     let path = Path::new("stdlib/rlptest.mexe");
     let res = run_from_file(
         path,
         vec![Value::Int(Uint256::one()), _bytestack_from_bytes(&input)],
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -394,7 +203,6 @@ fn test_rlp_list3(testvec: (Uint256, Vec<u8>, Uint256), correct_result: Vec<u8>)
                 Value::Int(testvec.2),
             ]),
         ],
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -409,21 +217,7 @@ fn test_rlp_list3(testvec: (Uint256, Vec<u8>, Uint256), correct_result: Vec<u8>)
 
 #[test]
 fn test_codeload() {
-    let path = Path::new("minitests/codeloadtest.mexe");
-    let res = run_from_file(
-        path,
-        vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
-        false,
-    );
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("minitests/codeloadtest.mexe"));
 }
 
 #[test]
@@ -648,8 +442,7 @@ fn test_call_to_precompile5(
 
 #[test]
 fn test_precompile5_small() {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
     let my_addr = Uint256::from_usize(1025);
 
@@ -671,8 +464,7 @@ fn test_precompile5_small() {
 
 #[test]
 fn test_precompile5_big() {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
     let my_addr = Uint256::from_usize(1025);
 
@@ -695,11 +487,9 @@ fn test_precompile5_big() {
 
 #[test]
 fn reinterpret_register() {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut old_machine =
-        load_from_file(Path::new("upgradetests/regcopy_old.mexe"), rt_env.clone());
+    let mut old_machine = load_from_file(Path::new("upgradetests/regcopy_old.mexe"));
     let _ = run(&mut old_machine, vec![], false);
-    let mut new_machine = load_from_file(Path::new("upgradetests/regcopy_new.mexe"), rt_env);
+    let mut new_machine = load_from_file(Path::new("upgradetests/regcopy_new.mexe"));
     run(&mut new_machine, vec![old_machine.register], false).unwrap();
     assert_eq!(
         *new_machine.stack_top().unwrap(),
@@ -710,9 +500,7 @@ fn reinterpret_register() {
 #[test]
 fn small_upgrade() {
     use crate::run::upload::CodeUploader;
-
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("upgradetests/upgrade1_old.mexe"), rt_env.clone());
+    let mut machine = load_from_file(Path::new("upgradetests/upgrade1_old.mexe"));
     let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade1_new.mexe"));
     let code_bytes = uploader._to_flat_vec();
     let msg = Value::new_tuple(vec![
@@ -735,8 +523,7 @@ fn small_upgrade() {
 fn small_upgrade_auto_remap() {
     use crate::run::upload::CodeUploader;
 
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("upgradetests/upgrade2_old.mexe"), rt_env.clone());
+    let mut machine = load_from_file(Path::new("upgradetests/upgrade2_old.mexe"));
     let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade2_new.mexe"));
     let code_bytes = uploader._to_flat_vec();
     let msg = Value::new_tuple(vec![

@@ -19,7 +19,6 @@ use std::io;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use uint256::Uint256;
 
 mod compile;
 mod contracttemplates;
@@ -129,8 +128,7 @@ fn main() -> Result<(), CompileError> {
             let filename = run.input;
             let debug = run.debug;
             let path = Path::new(&filename);
-            let env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-            match run_from_file(path, Vec::new(), env, debug) {
+            match run_from_file(path, Vec::new(), debug) {
                 Ok(logs) => {
                     println!("Logs: {:?}", logs);
                 }
@@ -152,7 +150,7 @@ fn main() -> Result<(), CompileError> {
             profile_gen_from_file(
                 input.as_ref(),
                 Vec::new(),
-                RuntimeEnvironment::new(Uint256::from_usize(1111), None),
+                RuntimeEnvironment::default(),
                 path.mode,
             );
         }

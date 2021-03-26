@@ -22,6 +22,13 @@ pub mod rolluptest;
 mod runtime_env;
 pub mod upload;
 
+pub fn run_from_file(
+    path: &Path,
+    args: Vec<Value>,
+    debug: bool,
+) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
+    run_from_file_and_env(path, args, RuntimeEnvironment::default(), debug)
+}
 ///Executes the file located at path, or starts the debugger if debug is set to true.
 ///
 /// The args argument specifies the arguments to the executable.  These will be placed on the stack
@@ -33,21 +40,25 @@ pub mod upload;
 ///
 /// This function will panic if the specified path cannot be opened or does not contain a valid
 /// mini executable.
-pub fn run_from_file(
+pub fn run_from_file_and_env(
     path: &Path,
     args: Vec<Value>,
     env: RuntimeEnvironment,
     debug: bool,
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
-    let mut machine = load_from_file(path, env);
+    let mut machine = load_from_file_and_env(path, env);
     run(&mut machine, args, debug)
+}
+
+pub fn load_from_file(path: &Path) -> Machine {
+    load_from_file_and_env(path, RuntimeEnvironment::default())
 }
 
 ///Generates a `Machine` from the given path and `RuntimeEnvironment`. See `RuntimeEnvironment` for
 /// more details.
 ///
 /// Will panic if the path cannot be opened or doesn't represent a valid mini executable.
-pub fn load_from_file(path: &Path, env: RuntimeEnvironment) -> Machine {
+pub fn load_from_file_and_env(path: &Path, env: RuntimeEnvironment) -> Machine {
     let display = path.display();
 
     let mut file = match File::open(&path) {
@@ -101,7 +112,7 @@ pub fn profile_gen_from_file(
     env: RuntimeEnvironment,
     mode: ProfilerMode,
 ) {
-    let mut machine = load_from_file(path, env);
+    let mut machine = load_from_file_and_env(path, env);
     let profile = machine.profile_gen(args, mode);
     profile.profiler_session();
 }
