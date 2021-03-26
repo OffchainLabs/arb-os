@@ -597,6 +597,12 @@ impl RuntimeEnvironment {
     }
 }
 
+impl Default for RuntimeEnvironment {
+    fn default() -> Self {
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None)
+    }
+}
+
 fn get_send_contents(log: Value) -> Option<Vec<u8>> {
     if let Value::Tuple(tup) = log {
         if let Value::Int(kind) = &tup[0] {
@@ -1292,7 +1298,7 @@ impl RtEnvRecorder {
         trace_file: Option<&str>,
     ) -> bool {
         // returns true iff result matches
-        let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+        let mut rt_env = RuntimeEnvironment::default();
         rt_env.insert_full_inbox_contents(self.inbox.clone());
         let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
         if let Some(trace_file_name) = trace_file {

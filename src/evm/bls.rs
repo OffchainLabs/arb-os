@@ -561,7 +561,7 @@ pub fn test_bls_signed_batch() {
 }
 
 pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
-    let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut rt_env = RuntimeEnvironment::default();
 
     let alice_wallet = rt_env.new_wallet();
     let alice_addr = Uint256::from_bytes(alice_wallet.address().as_bytes());

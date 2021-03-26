@@ -1075,7 +1075,7 @@ pub fn evm_xcontract_call_using_batch(
     _profile: bool,
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
-    let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut rt_env = RuntimeEnvironment::default();
 
     let wallet = rt_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1459,7 +1459,7 @@ pub fn _evm_xcontract_call_using_compressed_batch(
     _profile: bool,
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
-    let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut rt_env = RuntimeEnvironment::default();
 
     let wallet = rt_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1722,7 +1722,7 @@ pub fn _evm_xcontract_call_using_compressed_batch_2(
     _profile: bool,
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
-    let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut rt_env = RuntimeEnvironment::default();
 
     let wallet = rt_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -2163,7 +2163,7 @@ pub fn _evm_test_contract_call(log_to: Option<&Path>, debug: bool) {
 
 pub fn evm_direct_deploy_and_compressed_call_add(log_to: Option<&Path>, debug: bool) {
     use std::convert::TryFrom;
-    let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut rt_env = RuntimeEnvironment::default();
     let wallet = rt_env.new_wallet();
     let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();

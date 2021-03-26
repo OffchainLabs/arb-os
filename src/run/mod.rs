@@ -9,7 +9,6 @@ use crate::mavm::{CodePt, Value};
 use emulator::{ExecutionError, StackTrace};
 use std::{fs::File, io::Read, path::Path};
 
-use crate::uint256::Uint256;
 pub use emulator::{Machine, ProfilerMode};
 pub use runtime_env::{
     _bytes_from_bytestack, _bytestack_from_bytes, generic_compress_token_amount,
@@ -28,12 +27,7 @@ pub fn run_from_file(
     args: Vec<Value>,
     debug: bool,
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
-    run_from_file_and_env(
-        path,
-        args,
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
-        debug,
-    )
+    run_from_file_and_env(path, args, RuntimeEnvironment::default(), debug)
 }
 ///Executes the file located at path, or starts the debugger if debug is set to true.
 ///
@@ -57,10 +51,7 @@ pub fn run_from_file_and_env(
 }
 
 pub fn load_from_file(path: &Path) -> Machine {
-    load_from_file_and_env(
-        path,
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
-    )
+    load_from_file_and_env(path, RuntimeEnvironment::default())
 }
 
 ///Generates a `Machine` from the given path and `RuntimeEnvironment`. See `RuntimeEnvironment` for

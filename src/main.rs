@@ -21,7 +21,6 @@ use std::io;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use uint256::Uint256;
 
 #[cfg(test)]
 mod buffertests;
@@ -248,7 +247,7 @@ fn main() -> Result<(), CompileError> {
             profile_gen_from_file(
                 input.as_ref(),
                 Vec::new(),
-                RuntimeEnvironment::new(Uint256::from_usize(1111), None),
+                RuntimeEnvironment::default(),
                 path.mode,
             );
         }
