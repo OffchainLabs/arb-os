@@ -4,11 +4,12 @@
 
 //! Contains utilities for compiling mini source code.
 
-use crate::link::{ExportedFunc, Import, ImportedFunc};
+use crate::link::{link, postlink_compile, ExportedFunc, Import, ImportedFunc, LinkedProgram};
 use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
 use crate::stringtable::StringTable;
 use ast::{Func, TypeTree};
+use clap::Clap;
 use lalrpop_util::lalrpop_mod;
 use mini::DeclsParser;
 use miniconstants::init_constant_table;
@@ -32,6 +33,22 @@ pub mod miniconstants;
 mod source;
 mod typecheck;
 lalrpop_mod!(mini);
+
+///Command line options for compile subcommand.
+#[derive(Clap, Debug, Default)]
+pub struct CompileStruct {
+    pub input: Vec<String>,
+    #[clap(short, long)]
+    pub debug_mode: bool,
+    #[clap(short, long)]
+    pub test_mode: bool,
+    #[clap(short, long)]
+    pub output: Option<String>,
+    #[clap(short, long)]
+    pub format: Option<String>,
+    #[clap(short, long)]
+    pub inline: bool,
+}
 
 ///Represents the contents of a source file after parsing.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -69,6 +86,40 @@ struct TypeCheckedModule {
     global_vars: Vec<GlobalVarDecl>,
     ///The name of the module, this may be removed later.
     name: String,
+}
+
+impl CompileStruct {
+    pub fn invoke(&self) -> Result<LinkedProgram, CompileError> {
+        let mut file_name_chart = BTreeMap::new();
+        let mut compiled_progs = Vec::new();
+        for filename in &self.input {
+            let path = Path::new(filename);
+            compile_from_file(path, &mut file_name_chart, self.inline)
+                .map_err(|mut e| {
+                    e.description = format!("Compile error: {}", e.description);
+                    e
+                })?
+                .into_iter()
+                .for_each(|prog| {
+                    file_name_chart.extend(prog.file_name_chart.clone());
+                    compiled_progs.push(prog)
+                });
+        }
+        let linked_prog = link(&compiled_progs, self.test_mode).map_err(|mut e| {
+            e.description = format!("Linking error: {}", e.description);
+            e
+        })?;
+        postlink_compile(
+            linked_prog,
+            file_name_chart.clone(),
+            self.test_mode,
+            self.debug_mode,
+        )
+        .map_err(|mut e| {
+            e.description = format!("Linking error: {}", e.description);
+            e
+        })
+    }
 }
 
 impl Module {
@@ -225,7 +276,7 @@ impl CompiledProgram {
     ///Writes self to output in format "format".  Supported values are: "pretty", "json", or
     /// "bincode" if None is specified, json is used, and if an invalid format is specified this
     /// value appended by "invalid format: " will be written instead
-    pub fn to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
+    pub fn _to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
         match format {
             Some("pretty") => {
                 writeln!(output, "exported: {:?}", self.exported_funcs).unwrap();
@@ -267,7 +318,6 @@ impl CompiledProgram {
 pub fn compile_from_file(
     path: &Path,
     file_name_chart: &mut BTreeMap<u64, String>,
-    _debug: bool,
     inline: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let library = path
