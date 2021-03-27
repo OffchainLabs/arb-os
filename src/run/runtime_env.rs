@@ -25,7 +25,6 @@ pub struct RuntimeEnvironment {
     pub current_timestamp: Uint256,
     pub logs: Vec<Value>,
     pub sends: Vec<Vec<u8>>,
-    pub next_inbox_seq_num: Uint256,
     pub caller_seq_nums: HashMap<Uint256, Uint256>,
     next_id: Uint256, // used to assign unique (but artificial) txids to messages
     pub recorder: RtEnvRecorder,
@@ -83,15 +82,16 @@ impl RuntimeEnvironment {
         sequencer_info: Option<(Uint256, Uint256, Uint256)>,
         owner: Option<Uint256>,
     ) -> Self {
+        let chain_id = chain_address.trim_to_u64() & 0xffffffffffff; // truncate to 48 bits
+
         let mut ret = RuntimeEnvironment {
-            chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
+            chain_id,
             chain_address,
-            l1_inbox: ArbitrumInbox::new(),
+            l1_inbox: ArbitrumInbox::new(chain_id),
             current_block_num: blocknum,
             current_timestamp: timestamp,
             logs: Vec::new(),
             sends: Vec::new(),
-            next_inbox_seq_num: Uint256::zero(),
             caller_seq_nums: HashMap::new(),
             next_id: Uint256::zero(),
             recorder: RtEnvRecorder::new(),
@@ -181,23 +181,14 @@ impl RuntimeEnvironment {
     }
 
     pub fn insert_l1_message(&mut self, msg_type: u8, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
-        let l1_msg = Value::new_tuple(vec![
-            Value::Int(Uint256::from_usize(msg_type as usize)),
-            Value::Int(self.current_block_num.clone()),
-            Value::Int(self.current_timestamp.clone()),
-            Value::Int(sender_addr),
-            Value::Int(self.next_inbox_seq_num.clone()),
-            Value::Int(self.get_gas_price()),
-            Value::Int(Uint256::from_usize(msg.len())),
-            Value::new_buffer(msg.to_vec()),
-        ]);
-        let msg_id =
-            Uint256::avm_hash2(&Uint256::from_u64(self.chain_id), &self.next_inbox_seq_num);
-        self.next_inbox_seq_num = self.next_inbox_seq_num.add(&Uint256::one());
-        self.l1_inbox.put(l1_msg.clone());
-        self.recorder.add_msg(l1_msg);
-
-        msg_id
+        self.l1_inbox.insert_l1_message(
+            msg_type,
+            sender_addr,
+            msg,
+            self.current_block_num.clone(),
+            self.current_timestamp.clone(),
+            &mut self.recorder,
+        )
     }
 
     pub fn _insert_retryable_tx_message(
@@ -237,10 +228,6 @@ impl RuntimeEnvironment {
                 None
             },
         )
-    }
-
-    pub fn get_gas_price(&self) -> Uint256 {
-        Uint256::_from_gwei(200)
     }
 
     pub fn insert_l2_message(
@@ -590,10 +577,18 @@ impl Default for RuntimeEnvironment {
 #[derive(Debug, Clone)]
 pub struct ArbitrumInbox {
     contents: Vec<Value>,
+    chain_id: u64,
+    next_seq_num: Uint256,
 }
 
 impl ArbitrumInbox {
-    pub fn new() -> Self { ArbitrumInbox{ contents: vec![]} }
+    pub fn new(chain_id: u64) -> Self {
+        ArbitrumInbox {
+            contents: vec![],
+            chain_id,
+            next_seq_num: Uint256::zero(),
+        }
+    }
 
     pub fn put(&mut self, msg: Value) {
         self.contents.push(msg);
@@ -625,6 +620,37 @@ impl ArbitrumInbox {
 
     pub fn set_contents(&mut self, new_contents: Vec<Value>) {
         self.contents = new_contents;
+    }
+
+    pub fn insert_l1_message(
+        &mut self,
+        msg_type: u8,
+        sender_addr: Uint256,
+        msg: &[u8],
+        block_num: Uint256,
+        timestamp: Uint256,
+        recorder: &mut RtEnvRecorder,
+    ) -> Uint256 {
+        let l1_msg = Value::new_tuple(vec![
+            Value::Int(Uint256::from_usize(msg_type as usize)),
+            Value::Int(block_num),
+            Value::Int(timestamp),
+            Value::Int(sender_addr),
+            Value::Int(self.next_seq_num.clone()),
+            Value::Int(self.get_gas_price()),
+            Value::Int(Uint256::from_usize(msg.len())),
+            Value::new_buffer(msg.to_vec()),
+        ]);
+        let msg_id = Uint256::avm_hash2(&Uint256::from_u64(self.chain_id), &self.next_seq_num);
+        self.next_seq_num = self.next_seq_num.add(&Uint256::one());
+        self.put(l1_msg.clone());
+        recorder.add_msg(l1_msg);
+
+        msg_id
+    }
+
+    pub fn get_gas_price(&self) -> Uint256 {
+        Uint256::_from_gwei(200)
     }
 }
 
