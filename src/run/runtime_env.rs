@@ -20,7 +20,7 @@ use std::{collections::HashMap, fs::File, io, path::Path};
 pub struct RuntimeEnvironment {
     pub chain_id: u64,
     pub chain_address: Uint256,
-    pub l1_inbox: Vec<Value>,
+    pub l1_inbox: ArbitrumInbox,
     pub current_block_num: Uint256,
     pub current_timestamp: Uint256,
     pub logs: Vec<Value>,
@@ -86,7 +86,7 @@ impl RuntimeEnvironment {
         let mut ret = RuntimeEnvironment {
             chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
             chain_address,
-            l1_inbox: vec![],
+            l1_inbox: ArbitrumInbox::new(),
             current_block_num: blocknum,
             current_timestamp: timestamp,
             logs: Vec::new(),
@@ -177,7 +177,7 @@ impl RuntimeEnvironment {
     }
 
     pub fn insert_full_inbox_contents(&mut self, contents: Vec<Value>) {
-        self.l1_inbox = contents;
+        self.l1_inbox.set_contents(contents);
     }
 
     pub fn insert_l1_message(&mut self, msg_type: u8, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
@@ -194,7 +194,7 @@ impl RuntimeEnvironment {
         let msg_id =
             Uint256::avm_hash2(&Uint256::from_u64(self.chain_id), &self.next_inbox_seq_num);
         self.next_inbox_seq_num = self.next_inbox_seq_num.add(&Uint256::one());
-        self.l1_inbox.push(l1_msg.clone());
+        self.l1_inbox.put(l1_msg.clone());
         self.recorder.add_msg(l1_msg);
 
         msg_id
@@ -526,22 +526,6 @@ impl RuntimeEnvironment {
         cur_seq_num
     }
 
-    pub fn get_from_inbox(&mut self) -> Option<Value> {
-        if self.l1_inbox.is_empty() {
-            None
-        } else {
-            Some(self.l1_inbox.remove(0))
-        }
-    }
-
-    pub fn peek_at_inbox_head(&mut self) -> Option<Value> {
-        if self.l1_inbox.is_empty() {
-            None
-        } else {
-            Some(self.l1_inbox[0].clone())
-        }
-    }
-
     pub fn push_log(&mut self, log_item: Value) {
         self.logs.push(log_item.clone());
         self.recorder.add_log(log_item);
@@ -600,6 +584,47 @@ impl RuntimeEnvironment {
 impl Default for RuntimeEnvironment {
     fn default() -> Self {
         RuntimeEnvironment::new(Uint256::from_usize(1111), None)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ArbitrumInbox {
+    contents: Vec<Value>,
+}
+
+impl ArbitrumInbox {
+    pub fn new() -> Self { ArbitrumInbox{ contents: vec![]} }
+
+    pub fn put(&mut self, msg: Value) {
+        self.contents.push(msg);
+    }
+
+    pub fn get(&mut self) -> Option<Value> {
+        if self.contents.is_empty() {
+            None
+        } else {
+            Some(self.contents.remove(0))
+        }
+    }
+
+    pub fn peek(&mut self, block_num: Uint256) -> Option<bool> {
+        if self.contents.is_empty() {
+            None
+        } else {
+            if let Value::Tuple(tup) = &self.contents[0] {
+                if let Value::Int(ui) = &tup[1] {
+                    Some(ui.clone() == block_num)
+                } else {
+                    panic!()
+                }
+            } else {
+                panic!()
+            }
+        }
+    }
+
+    pub fn set_contents(&mut self, new_contents: Vec<Value>) {
+        self.contents = new_contents;
     }
 }
 

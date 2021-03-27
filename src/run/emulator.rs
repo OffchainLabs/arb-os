@@ -1910,7 +1910,7 @@ impl Machine {
                         Ok(true)
                     }
                     AVMOpcode::Inbox => {
-                        match self.runtime_env.get_from_inbox() {
+                        match self.runtime_env.l1_inbox.get() {
                             Some(msg) => {
                                 self.stack.push(msg);
                                 self.incr_pc();
@@ -1924,27 +1924,11 @@ impl Machine {
                     }
                     AVMOpcode::InboxPeek => {
                         let bn = self.stack.pop_uint(&self.state)?;
-                        match self.runtime_env.peek_at_inbox_head() {
-                            Some(msg) => {
-                                if let Value::Tuple(tup) = msg {
-                                    if let Value::Int(msg_bn) = &tup[1] {
-                                        self.stack.push_bool(bn == msg_bn.clone());
-                                        self.incr_pc();
-                                        Ok(true)
-                                    } else {
-                                        Err(ExecutionError::new(
-                                            "inbox contents not a tuple",
-                                            &self.state,
-                                            None,
-                                        ))
-                                    }
-                                } else {
-                                    Err(ExecutionError::new(
-                                        "blocknum not an integer",
-                                        &self.state,
-                                        None,
-                                    ))
-                                }
+                        match self.runtime_env.l1_inbox.peek(bn.clone()) {
+                            Some(res) => {
+                                self.stack.push_bool(res);
+                                self.incr_pc();
+                                Ok(true)
                             }
                             None => {
                                 // machine is blocked, waiting for nonempty inbox
