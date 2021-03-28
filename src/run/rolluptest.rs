@@ -16,26 +16,26 @@ pub fn _insert_create_node(
     deadline_l1_delta: &Uint256,
     asserter: Uint256,
 ) {
-    let height_l1 = &height_l1.unwrap_or(&rt_env.current_block_num);
+    let height_l1 = &height_l1.unwrap_or(&rt_env.l1_inbox.current_block_num);
     let mut buf = vec![0u8];
     buf.extend(height_l2.to_bytes_be());
     buf.extend(prev.to_bytes_be());
     buf.extend(height_l1.to_bytes_be());
     buf.extend(height_l1.add(deadline_l1_delta).to_bytes_be());
     buf.extend(asserter.to_bytes_be());
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None);
 }
 
 pub fn _insert_confirm_node(rt_env: &mut RuntimeEnvironment, height_l2: &Uint256) {
     let mut buf = vec![1u8];
     buf.extend(height_l2.to_bytes_be());
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None);
 }
 
 pub fn _insert_reject_node(rt_env: &mut RuntimeEnvironment, height_l2: &Uint256) {
     let mut buf = vec![2u8];
     buf.extend(height_l2.to_bytes_be());
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None);
 }
 
 pub fn _insert_new_stake(
@@ -49,21 +49,21 @@ pub fn _insert_new_stake(
     buf.extend(staker.to_bytes_be());
     buf.extend(
         stake_time
-            .unwrap_or(rt_env.current_block_num.clone())
+            .unwrap_or(rt_env.l1_inbox.current_block_num.clone())
             .to_bytes_be(),
     );
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None);
 }
 
 pub fn _insert_claim_node(rt_env: &mut RuntimeEnvironment, height_l2: &Uint256, claimer: &Uint256) {
     let mut buf = vec![4u8];
     buf.extend(height_l2.to_bytes_be());
     buf.extend(claimer.to_bytes_be());
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None);
 }
 
 pub fn _insert_rollup_debug(rt_env: &mut RuntimeEnvironment) {
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &[255u8]);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &[255u8], None);
 }
 
 pub fn _do_rollup_tracker_ops() {
@@ -84,11 +84,13 @@ pub fn _do_rollup_tracker_ops() {
         owner.clone(),
         owner.clone(),
         Uint256::_from_eth(1),
+        None,
     );
     machine.runtime_env.insert_eth_deposit_message(
         claimer.clone(),
         claimer.clone(),
         Uint256::_from_eth(1),
+        None,
     );
 
     arbowner

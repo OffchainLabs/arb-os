@@ -320,6 +320,7 @@ fn _test_eth_blake_precompile_impl() {
             Uint256::from_u64(0),
             &xbytes,
             false,
+            None,
         );
         let _ = machine.run(None);
 

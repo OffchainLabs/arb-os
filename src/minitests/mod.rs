@@ -427,6 +427,7 @@ fn test_call_to_precompile5(
         Uint256::zero(),
         &calldata,
         false,
+        None,
     );
     let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
     let _gas_used = machine.run(None);

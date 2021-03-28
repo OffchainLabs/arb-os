@@ -99,6 +99,7 @@ impl AbiForContract {
         machine: &mut Machine,
         payment: Uint256,
         advance_time: Option<Uint256>,
+        sequencer_deltas: Option<(Uint256, Uint256)>,
         debug: bool,
     ) -> Result<Uint256, Option<ArbosReceipt>> {
         let initial_logs_len = machine.runtime_env.get_all_receipt_logs().len();
@@ -121,6 +122,7 @@ impl AbiForContract {
             payment,
             &augmented_code,
             false,
+            sequencer_deltas,
         );
 
         if let Some(delta_blocks) = advance_time {
@@ -186,6 +188,7 @@ impl AbiForContract {
         args: &[ethabi::Token],
         machine: &mut Machine,
         payment: Uint256,
+        sequencer_deltas: Option<(Uint256, Uint256)>,
         debug: bool,
     ) -> Result<(Vec<ArbosReceipt>, Vec<Vec<u8>>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
@@ -199,6 +202,7 @@ impl AbiForContract {
             payment,
             &calldata,
             false,
+            sequencer_deltas,
         );
 
         let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
@@ -243,6 +247,7 @@ impl AbiForContract {
             max_gas_immed.unwrap_or(Uint256::zero()),
             gas_price_immed.unwrap_or(Uint256::zero()),
             &calldata,
+            None,
         );
 
         Ok((txid, maybe_redeemid))
@@ -255,6 +260,7 @@ impl AbiForContract {
         args: &[ethabi::Token],
         machine: &mut Machine,
         payment: Uint256,
+        sequencer_deltas: Option<(Uint256, Uint256)>,
         debug: bool,
     ) -> Result<(Vec<ArbosReceipt>, Vec<Vec<u8>>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
@@ -268,6 +274,7 @@ impl AbiForContract {
             payment,
             &calldata,
             false,
+            sequencer_deltas,
         );
 
         let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
@@ -292,6 +299,7 @@ impl AbiForContract {
         args: &[ethabi::Token],
         machine: &mut Machine,
         payment: Uint256,
+        sequencer_deltas: Option<(Uint256, Uint256)>,
         debug: bool,
     ) -> Result<(Vec<ArbosReceipt>, Vec<Vec<u8>>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
@@ -305,6 +313,7 @@ impl AbiForContract {
             payment,
             &calldata,
             true,
+            sequencer_deltas,
         );
 
         let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
@@ -346,7 +355,7 @@ impl AbiForContract {
             );
         machine
             .runtime_env
-            .insert_l2_message(sender_addr, &tx_contents, false);
+            .insert_l2_message(sender_addr, &tx_contents, None);
 
         let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
         let num_sends_before = machine.runtime_env.get_all_sends().len();
@@ -552,6 +561,7 @@ impl<'a> ArbSys<'a> {
             ))],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
         if (receipts.len() != 1) || (sends.len() != 0) {
@@ -623,6 +633,7 @@ impl _ArbInfo {
             &[ethabi::Token::Address(addr.to_h160())],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -679,6 +690,7 @@ impl<'a> ArbAddressTable<'a> {
             ))],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
         if (receipts.len() != 1) || (sends.len() != 0) {
@@ -715,6 +727,7 @@ impl<'a> ArbAddressTable<'a> {
             &[],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
         if (receipts.len() != 1) || (sends.len() != 0) {
@@ -750,6 +763,7 @@ impl<'a> ArbAddressTable<'a> {
             &[ethabi::Token::Uint(ethabi::Uint::from(index.to_u256()))],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
         if (receipts.len() != 1) || (sends.len() != 0) {
@@ -785,6 +799,7 @@ impl<'a> ArbAddressTable<'a> {
             ],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
         if (receipts.len() != 1) || (sends.len() != 0) {
@@ -815,6 +830,7 @@ impl<'a> ArbAddressTable<'a> {
             &[ethabi::Token::Address(addr.to_h160())],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
         if (receipts.len() != 1) || (sends.len() != 0) {
@@ -873,6 +889,7 @@ impl<'a> ArbBLS<'a> {
             ],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
         if (receipts.len() != 1) || (sends.len() != 0) {
@@ -895,6 +912,7 @@ impl<'a> ArbBLS<'a> {
             &[ethabi::Token::Address(addr.to_h160())],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
         if (receipts.len() != 1) || (sends.len() != 0) {
@@ -999,6 +1017,7 @@ impl<'a> ArbFunctionTable<'a> {
             ],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
         if (receipts.len() != 1) || (sends.len() != 0) {
@@ -1049,6 +1068,7 @@ impl<'a> ArbFunctionTable<'a> {
             ))],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
         if (receipts.len() != 1) || (sends.len() != 0) {
@@ -1103,6 +1123,7 @@ impl<'a> _ArbOwner<'a> {
             &[ethabi::Token::Address(new_owner.to_h160())],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1131,6 +1152,7 @@ impl<'a> _ArbOwner<'a> {
             &[],
             machine,
             amount,
+            None,
             self.debug,
         )?;
 
@@ -1161,6 +1183,7 @@ impl<'a> _ArbOwner<'a> {
             &[ethabi::Token::Bool(enabled)],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1188,6 +1211,7 @@ impl<'a> _ArbOwner<'a> {
             &[],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1228,6 +1252,7 @@ impl<'a> _ArbOwner<'a> {
             ],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1253,6 +1278,7 @@ impl<'a> _ArbOwner<'a> {
             &[ethabi::Token::Uint(seconds_per_send.to_u256())],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1284,6 +1310,7 @@ impl<'a> _ArbOwner<'a> {
             ],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1313,6 +1340,7 @@ impl<'a> _ArbOwner<'a> {
             ],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1360,6 +1388,7 @@ impl<'a> _ArbOwner<'a> {
             &[ethabi::Token::Bytes(marshalled_code)],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1384,6 +1413,7 @@ impl<'a> _ArbOwner<'a> {
             &[],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
         Ok(())
@@ -1404,6 +1434,7 @@ impl<'a> _ArbOwner<'a> {
             ],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1449,6 +1480,7 @@ impl<'a> _ArbGasInfo<'a> {
             &[],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1512,6 +1544,7 @@ impl<'a> _ArbGasInfo<'a> {
             &[],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1557,6 +1590,7 @@ impl<'a> _ArbGasInfo<'a> {
             &[],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1627,7 +1661,14 @@ impl ArbosTest {
             Some(code),
             Some(storage),
         )?;
-        self.call(machine, Uint256::zero(), addr.clone(), calldata, balance)?;
+        self.call(
+            machine,
+            Uint256::zero(),
+            addr.clone(),
+            calldata,
+            balance,
+            None,
+        )?;
         self._get_marshalled_storage(machine, addr)
     }
 
@@ -1653,6 +1694,7 @@ impl ArbosTest {
             ],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1672,11 +1714,13 @@ impl ArbosTest {
         callee_addr: Uint256,
         calldata: Vec<u8>,
         callvalue: Uint256,
+        sequencer_deltas: Option<(Uint256, Uint256)>,
     ) -> Result<Vec<u8>, ethabi::Error> {
         machine.runtime_env.insert_eth_deposit_message(
             Uint256::zero(),
             caller_addr.clone(),
             callvalue.clone(),
+            None,
         );
         let _tx_id = machine.runtime_env.insert_tx_message(
             caller_addr,
@@ -1686,6 +1730,7 @@ impl ArbosTest {
             callvalue,
             &calldata,
             false,
+            sequencer_deltas,
         );
         let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
         let num_sends_before = machine.runtime_env.get_all_sends().len();
@@ -1722,6 +1767,7 @@ impl ArbosTest {
             &[ethabi::Token::Address(addr.to_h160())],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1754,6 +1800,7 @@ impl ArbosTest {
             &[ethabi::Token::Address(addr.to_h160())],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1798,6 +1845,7 @@ impl _ArbAggregator {
             &[ethabi::Token::Address(addr.to_h160())],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1832,6 +1880,7 @@ impl _ArbAggregator {
             &[ethabi::Token::Address(addr.to_h160())],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1851,6 +1900,7 @@ impl _ArbAggregator {
             &[],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1887,6 +1937,7 @@ impl _ArbAggregator {
             &[ethabi::Token::Address(addr.to_h160())],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1923,6 +1974,7 @@ impl _ArbReplayableTx {
             &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1947,6 +1999,7 @@ impl _ArbReplayableTx {
             &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1966,6 +2019,7 @@ impl _ArbReplayableTx {
             &[],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -1989,6 +2043,7 @@ impl _ArbReplayableTx {
             &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -2017,6 +2072,7 @@ impl _ArbReplayableTx {
             &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
             machine,
             payment,
+            None,
             self.debug,
         )?;
 
@@ -2040,6 +2096,7 @@ impl _ArbReplayableTx {
             &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -2064,6 +2121,7 @@ impl _ArbReplayableTx {
             &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 
@@ -2103,6 +2161,7 @@ impl _ArbStatistics {
             &[],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
 

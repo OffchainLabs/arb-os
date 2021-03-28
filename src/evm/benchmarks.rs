@@ -55,7 +55,7 @@ pub fn benchmark_add(iterations: u64, log_to: &Path) -> u64 {
     let my_addr = Uint256::from_u64(1025);
     let contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
         Ok(mut contract) => {
-            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, false);
+            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, None, false);
             if let Ok(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
                 contract
@@ -80,6 +80,7 @@ pub fn benchmark_add(iterations: u64, log_to: &Path) -> u64 {
                 .as_ref(),
                 &mut machine,
                 Uint256::zero(),
+                None,
                 false,
             )
             .unwrap();
@@ -102,7 +103,7 @@ pub fn benchmark_add_batched(iterations: u64, log_to: &Path) -> u64 {
 
     let contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
         Ok(mut contract) => {
-            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, false);
+            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, None, false);
             if let Ok(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
                 contract
@@ -136,7 +137,7 @@ pub fn benchmark_add_batched(iterations: u64, log_to: &Path) -> u64 {
 
     machine
         .runtime_env
-        .insert_batch_message(Uint256::from_usize(1025), &batch);
+        .insert_batch_message(Uint256::from_usize(1025), &batch, None);
 
     machine.run(None);
 

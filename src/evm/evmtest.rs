@@ -192,8 +192,8 @@ fn storage_from_jval(jval: serde_json::Value) -> HashMap<Uint256, Uint256> {
 fn start_test(blocknum: Uint256, timestamp: Uint256) -> (Machine, ArbosTest) {
     let rt_env = RuntimeEnvironment::new_with_blocknum_timestamp(
         Uint256::from_usize(1111),
-        blocknum,
-        timestamp,
+        Some(blocknum),
+        Some(timestamp),
         None,
         None,
         None,
@@ -222,6 +222,7 @@ fn do_call(
         callee_addr,
         calldata.to_vec(),
         callvalue,
+        None,
     ) {
         Ok(_result) => {
             if let Some(logs_path) = logfiles_path {

@@ -21,8 +21,6 @@ pub struct RuntimeEnvironment {
     pub chain_id: u64,
     pub chain_address: Uint256,
     pub l1_inbox: ArbitrumInbox,
-    pub current_block_num: Uint256,
-    pub current_timestamp: Uint256,
     pub logs: Vec<Value>,
     pub sends: Vec<Vec<u8>>,
     pub caller_seq_nums: HashMap<Uint256, Uint256>,
@@ -41,8 +39,8 @@ impl RuntimeEnvironment {
     ) -> Self {
         RuntimeEnvironment::new_with_blocknum_timestamp(
             chain_address,
-            Uint256::from_u64(100_000),
-            Uint256::from_u64(10_000_000),
+            None,
+            None,
             charging_policy,
             None,
             None,
@@ -51,12 +49,12 @@ impl RuntimeEnvironment {
 
     pub fn _new_options(
         chain_address: Uint256,
-        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
+        sequencer_info: Option<(Uint256, Uint256)>,
     ) -> Self {
         RuntimeEnvironment::new_with_blocknum_timestamp(
             chain_address,
-            Uint256::from_u64(100_000),
-            Uint256::from_u64(10_000_000),
+            None,
+            None,
             None,
             sequencer_info,
             None,
@@ -66,8 +64,8 @@ impl RuntimeEnvironment {
     pub fn _new_with_owner(chain_address: Uint256, owner: Option<Uint256>) -> Self {
         RuntimeEnvironment::new_with_blocknum_timestamp(
             chain_address,
-            Uint256::from_u64(100_000),
-            Uint256::from_u64(10_000_000),
+            None,
+            None,
             None,
             None,
             owner,
@@ -76,10 +74,10 @@ impl RuntimeEnvironment {
 
     pub fn new_with_blocknum_timestamp(
         chain_address: Uint256,
-        blocknum: Uint256,
-        timestamp: Uint256,
+        block_num: Option<Uint256>,
+        timestamp: Option<Uint256>,
         charging_policy: Option<(Uint256, Uint256, Uint256)>,
-        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
+        sequencer_delays: Option<(Uint256, Uint256)>,
         owner: Option<Uint256>,
     ) -> Self {
         let chain_id = chain_address.trim_to_u64() & 0xffffffffffff; // truncate to 48 bits
@@ -87,9 +85,7 @@ impl RuntimeEnvironment {
         let mut ret = RuntimeEnvironment {
             chain_id,
             chain_address,
-            l1_inbox: ArbitrumInbox::new(chain_id),
-            current_block_num: blocknum,
-            current_timestamp: timestamp,
+            l1_inbox: ArbitrumInbox::new(chain_id, block_num, timestamp, sequencer_delays),
             logs: Vec::new(),
             sends: Vec::new(),
             caller_seq_nums: HashMap::new(),
@@ -98,11 +94,7 @@ impl RuntimeEnvironment {
             compressor: TxCompressor::new(),
             charging_policy: charging_policy.clone(),
             num_wallets: 0,
-            chain_init_message: RuntimeEnvironment::get_params_bytes(
-                charging_policy,
-                sequencer_info,
-                owner,
-            ),
+            chain_init_message: RuntimeEnvironment::get_params_bytes(charging_policy, owner),
         };
 
         ret.send_chain_init_message();
@@ -114,12 +106,12 @@ impl RuntimeEnvironment {
             4,
             self.chain_address.clone(),
             &self.chain_init_message.clone(),
+            Some((Uint256::zero(), Uint256::zero())),
         );
     }
 
     fn get_params_bytes(
         charging_policy: Option<(Uint256, Uint256, Uint256)>,
-        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
         owner: Option<Uint256>,
     ) -> Vec<u8> {
         let mut buf = Vec::new();
@@ -140,14 +132,6 @@ impl RuntimeEnvironment {
 
         buf.extend(owner.unwrap_or(Uint256::zero()).to_bytes_be()); // owner address
 
-        if let Some((seq_addr, delay_blocks, delay_time)) = sequencer_info {
-            buf.extend(&[0u8; 8]);
-            buf.extend(&96u64.to_be_bytes());
-            buf.extend(seq_addr.to_bytes_be());
-            buf.extend(delay_blocks.to_bytes_be());
-            buf.extend(delay_time.to_bytes_be());
-        }
-
         buf
     }
 
@@ -157,12 +141,9 @@ impl RuntimeEnvironment {
         delta_timestamp: Option<Uint256>,
         send_heartbeat_message: bool,
     ) {
-        self.current_block_num = self.current_block_num.add(&delta_blocks);
-        self.current_timestamp = self
-            .current_timestamp
-            .add(&delta_timestamp.unwrap_or(Uint256::from_u64(13).mul(&delta_blocks)));
+        self.l1_inbox._advance_time(delta_blocks, delta_timestamp);
         if send_heartbeat_message {
-            self.insert_l2_message(Uint256::zero(), &[6u8], false);
+            self.insert_l2_message(Uint256::zero(), &[6u8], None);
         }
     }
 
@@ -180,13 +161,18 @@ impl RuntimeEnvironment {
         self.l1_inbox.set_contents(contents);
     }
 
-    pub fn insert_l1_message(&mut self, msg_type: u8, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
+    pub fn insert_l1_message(
+        &mut self,
+        msg_type: u8,
+        sender_addr: Uint256,
+        msg: &[u8],
+        sequencer_deltas: Option<(Uint256, Uint256)>,
+    ) -> Uint256 {
         self.l1_inbox.insert_l1_message(
             msg_type,
             sender_addr,
             msg,
-            self.current_block_num.clone(),
-            self.current_timestamp.clone(),
+            sequencer_deltas,
             &mut self.recorder,
         )
     }
@@ -203,6 +189,7 @@ impl RuntimeEnvironment {
         max_gas_immed: Uint256,
         gas_price_immed: Uint256,
         calldata: &[u8],
+        sequencer_deltas: Option<(Uint256, Uint256)>,
     ) -> (Uint256, Option<Uint256>) {
         let mut msg = vec![];
         msg.extend(destination.to_bytes_be());
@@ -216,7 +203,9 @@ impl RuntimeEnvironment {
         msg.extend(Uint256::from_usize(calldata.len()).to_bytes_be());
         msg.extend(calldata);
 
-        let mut buf = self.insert_l1_message(9u8, sender, &msg).to_bytes_be();
+        let mut buf = self
+            .insert_l1_message(9u8, sender, &msg, sequencer_deltas)
+            .to_bytes_be();
         let mut buf2 = buf.clone();
         buf.extend(&[0u8; 32]);
         buf2.extend(Uint256::one().to_bytes_be());
@@ -234,14 +223,10 @@ impl RuntimeEnvironment {
         &mut self,
         sender_addr: Uint256,
         msg: &[u8],
-        is_buddy_deploy: bool,
+        sequencer_deltas: Option<(Uint256, Uint256)>,
     ) -> Uint256 {
-        let default_id = self.insert_l1_message(
-            if is_buddy_deploy { 5 } else { 3 },
-            sender_addr.clone(),
-            msg,
-        );
-        if !is_buddy_deploy && (msg[0] == 0) {
+        let default_id = self.insert_l1_message(3, sender_addr.clone(), msg, sequencer_deltas);
+        if msg[0] == 0 {
             Uint256::avm_hash2(
                 &sender_addr,
                 &Uint256::avm_hash2(
@@ -254,11 +239,16 @@ impl RuntimeEnvironment {
         }
     }
 
-    pub fn insert_l2_message_with_deposit(&mut self, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
+    pub fn insert_l2_message_with_deposit(
+        &mut self,
+        sender_addr: Uint256,
+        msg: &[u8],
+        sequencer_deltas: Option<(Uint256, Uint256)>,
+    ) -> Uint256 {
         if (msg[0] != 0u8) && (msg[0] != 1u8) {
             panic!();
         }
-        let default_id = self.insert_l1_message(7, sender_addr.clone(), msg);
+        let default_id = self.insert_l1_message(7, sender_addr.clone(), msg, sequencer_deltas);
         if msg[0] == 0 {
             Uint256::avm_hash2(
                 &sender_addr,
@@ -281,6 +271,7 @@ impl RuntimeEnvironment {
         value: Uint256,
         data: &[u8],
         with_deposit: bool,
+        sequencer_deltas: Option<(Uint256, Uint256)>,
     ) -> Uint256 {
         let mut buf = vec![0u8];
         let seq_num = self.get_and_incr_seq_num(&sender_addr.clone());
@@ -292,9 +283,9 @@ impl RuntimeEnvironment {
         buf.extend_from_slice(data);
 
         if with_deposit {
-            self.insert_l2_message_with_deposit(sender_addr.clone(), &buf)
+            self.insert_l2_message_with_deposit(sender_addr.clone(), &buf, sequencer_deltas)
         } else {
-            self.insert_l2_message(sender_addr.clone(), &buf, false)
+            self.insert_l2_message(sender_addr.clone(), &buf, sequencer_deltas)
         }
     }
 
@@ -307,6 +298,7 @@ impl RuntimeEnvironment {
         value: Uint256,
         data: &[u8],
         with_deposit: bool,
+        sequencer_deltas: Option<(Uint256, Uint256)>,
     ) -> Uint256 {
         let mut buf = vec![1u8];
         buf.extend(max_gas.to_bytes_be());
@@ -316,39 +308,14 @@ impl RuntimeEnvironment {
         buf.extend_from_slice(data);
 
         if with_deposit {
-            self.insert_l2_message_with_deposit(sender_addr.clone(), &buf)
+            self.insert_l2_message_with_deposit(sender_addr.clone(), &buf, sequencer_deltas)
         } else {
-            self.insert_l2_message(sender_addr.clone(), &buf, false)
+            self.insert_l2_message(sender_addr.clone(), &buf, sequencer_deltas)
         }
     }
 
     pub fn new_batch(&self) -> Vec<u8> {
         vec![3u8]
-    }
-
-    pub fn _new_sequencer_batch(&self, delay: Option<(Uint256, Uint256)>) -> Vec<u8> {
-        let (delay_blocks, delay_seconds) = delay.unwrap_or((Uint256::one(), Uint256::one()));
-        let (release_block_num, release_timestamp) = if (self.current_block_num <= delay_blocks)
-            || (self.current_timestamp <= delay_seconds)
-        {
-            (Uint256::zero(), Uint256::zero())
-        } else {
-            (
-                self.current_block_num.sub(&delay_blocks).unwrap(),
-                self.current_timestamp.sub(&delay_seconds).unwrap(),
-            )
-        };
-        let low_order_bnum = release_block_num.trim_to_u64() & 0xffff;
-        let low_order_ts = release_timestamp.trim_to_u64() & 0xffffff;
-        let ret = vec![
-            5u8,
-            (low_order_bnum >> 8) as u8,
-            (low_order_bnum & 0xff) as u8,
-            (low_order_ts >> 16) as u8,
-            ((low_order_ts >> 8) & 0xff) as u8,
-            (low_order_ts & 0xff) as u8,
-        ];
-        ret
     }
 
     pub fn make_compressed_and_signed_l2_message(
@@ -433,6 +400,7 @@ impl RuntimeEnvironment {
         msgs: &[Vec<u8>],
         aggregated_sig: &[u8],
         batch_sender: &Uint256,
+        sequencer_deltas: Option<(Uint256, Uint256)>,
     ) {
         assert_eq!(senders.len(), msgs.len());
         let mut buf = vec![8u8];
@@ -443,7 +411,7 @@ impl RuntimeEnvironment {
             buf.extend(msgs[i].clone());
         }
 
-        self.insert_l2_message(batch_sender.clone(), &buf, false);
+        self.insert_l2_message(batch_sender.clone(), &buf, sequencer_deltas);
     }
 
     pub fn _append_compressed_and_signed_tx_message_to_batch(
@@ -471,8 +439,13 @@ impl RuntimeEnvironment {
         tx_id_bytes
     }
 
-    pub fn insert_batch_message(&mut self, sender_addr: Uint256, batch: &[u8]) {
-        self.insert_l2_message(sender_addr, batch, false);
+    pub fn insert_batch_message(
+        &mut self,
+        sender_addr: Uint256,
+        batch: &[u8],
+        sequencer_deltas: Option<(Uint256, Uint256)>,
+    ) {
+        self.insert_l2_message(sender_addr, batch, sequencer_deltas);
     }
 
     pub fn _insert_nonmutating_call_message(
@@ -481,6 +454,7 @@ impl RuntimeEnvironment {
         to_addr: Uint256,
         max_gas: Uint256,
         data: &[u8],
+        sequencer_deltas: Option<(Uint256, Uint256)>,
     ) {
         let mut buf = vec![2u8];
         buf.extend(max_gas.to_bytes_be());
@@ -488,7 +462,7 @@ impl RuntimeEnvironment {
         buf.extend(to_addr.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr, &buf, false);
+        self.insert_l2_message(sender_addr, &buf, sequencer_deltas);
     }
 
     pub fn insert_eth_deposit_message(
@@ -496,11 +470,12 @@ impl RuntimeEnvironment {
         sender_addr: Uint256,
         payee: Uint256,
         amount: Uint256,
+        sequencer_deltas: Option<(Uint256, Uint256)>,
     ) {
         let mut buf = payee.to_bytes_be();
         buf.extend(amount.to_bytes_be());
 
-        self.insert_l1_message(0, sender_addr, &buf);
+        self.insert_l1_message(0, sender_addr, &buf, sequencer_deltas);
     }
 
     pub fn get_and_incr_seq_num(&mut self, addr: &Uint256) -> Uint256 {
@@ -576,37 +551,69 @@ impl Default for RuntimeEnvironment {
 
 #[derive(Debug, Clone)]
 pub struct ArbitrumInbox {
-    contents: Vec<Value>,
+    delayed_inbox: Vec<Value>,
+    sequencer_inbox: Vec<Value>,
+    pub current_block_num: Uint256,
+    pub current_timestamp: Uint256,
+    delay_blocks: Uint256,
+    delay_seconds: Uint256,
     chain_id: u64,
     next_seq_num: Uint256,
 }
 
 impl ArbitrumInbox {
-    pub fn new(chain_id: u64) -> Self {
+    pub fn new(
+        chain_id: u64,
+        block_num: Option<Uint256>,
+        timestamp: Option<Uint256>,
+        sequencer_delays: Option<(Uint256, Uint256)>,
+    ) -> Self {
+        let (delay_blocks, delay_seconds) = if let Some((db, ds)) = sequencer_delays {
+            (db, ds)
+        } else {
+            (Uint256::zero(), Uint256::zero())
+        };
+
         ArbitrumInbox {
-            contents: vec![],
+            delayed_inbox: vec![],
+            sequencer_inbox: vec![],
+            current_block_num: block_num.unwrap_or(Uint256::from_u64(100_000)),
+            current_timestamp: timestamp.unwrap_or(Uint256::from_u64(10_000_000)),
+            delay_blocks,
+            delay_seconds,
             chain_id,
             next_seq_num: Uint256::zero(),
         }
     }
 
-    pub fn put(&mut self, msg: Value) {
-        self.contents.push(msg);
+    pub fn _advance_time(&mut self, delta_blocks: Uint256, delta_timestamp: Option<Uint256>) {
+        self.current_block_num = self.current_block_num.add(&delta_blocks);
+        self.current_timestamp = self
+            .current_timestamp
+            .add(&delta_timestamp.unwrap_or(Uint256::from_u64(13).mul(&delta_blocks)));
+    }
+
+    pub fn put(&mut self, msg: Value, is_sequencer_msg: bool) {
+        if is_sequencer_msg {
+            self.sequencer_inbox.push(msg);
+        } else {
+            self.delayed_inbox.push(msg);
+        }
     }
 
     pub fn get(&mut self) -> Option<Value> {
-        if self.contents.is_empty() {
+        if self.delayed_inbox.is_empty() {
             None
         } else {
-            Some(self.contents.remove(0))
+            Some(self.delayed_inbox.remove(0))
         }
     }
 
     pub fn peek(&mut self, block_num: Uint256) -> Option<bool> {
-        if self.contents.is_empty() {
+        if self.delayed_inbox.is_empty() {
             None
         } else {
-            if let Value::Tuple(tup) = &self.contents[0] {
+            if let Value::Tuple(tup) = &self.delayed_inbox[0] {
                 if let Value::Int(ui) = &tup[1] {
                     Some(ui.clone() == block_num)
                 } else {
@@ -619,7 +626,7 @@ impl ArbitrumInbox {
     }
 
     pub fn set_contents(&mut self, new_contents: Vec<Value>) {
-        self.contents = new_contents;
+        self.delayed_inbox = new_contents;
     }
 
     pub fn insert_l1_message(
@@ -627,14 +634,13 @@ impl ArbitrumInbox {
         msg_type: u8,
         sender_addr: Uint256,
         msg: &[u8],
-        block_num: Uint256,
-        timestamp: Uint256,
+        sequencer_deltas: Option<(Uint256, Uint256)>,
         recorder: &mut RtEnvRecorder,
     ) -> Uint256 {
         let l1_msg = Value::new_tuple(vec![
             Value::Int(Uint256::from_usize(msg_type as usize)),
-            Value::Int(block_num),
-            Value::Int(timestamp),
+            Value::Int(self.current_block_num.clone()),
+            Value::Int(self.current_timestamp.clone()),
             Value::Int(sender_addr),
             Value::Int(self.next_seq_num.clone()),
             Value::Int(self.get_gas_price()),
@@ -643,8 +649,8 @@ impl ArbitrumInbox {
         ]);
         let msg_id = Uint256::avm_hash2(&Uint256::from_u64(self.chain_id), &self.next_seq_num);
         self.next_seq_num = self.next_seq_num.add(&Uint256::one());
-        self.put(l1_msg.clone());
-        recorder.add_msg(l1_msg);
+        self.put(l1_msg.clone(), false);
+        recorder.add_msg(l1_msg, false);
 
         msg_id
     }
@@ -1319,8 +1325,12 @@ impl RtEnvRecorder {
         }
     }
 
-    fn add_msg(&mut self, msg: Value) {
-        self.inbox.push(msg);
+    fn add_msg(&mut self, msg: Value, is_sequencer_msg: bool) {
+        if is_sequencer_msg {
+            unimplemented!();
+        } else {
+            self.inbox.push(msg);
+        }
     }
 
     fn add_log(&mut self, log_item: Value) {

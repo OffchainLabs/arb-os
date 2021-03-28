@@ -186,7 +186,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
 
     let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
     if add_contract
-        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .deploy(&[], &mut machine, Uint256::zero(), None, None, false)
         .is_err()
     {
         panic!("failed to deploy Add contract");

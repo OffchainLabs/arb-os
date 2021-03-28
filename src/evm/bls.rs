@@ -57,6 +57,7 @@ impl<'a> _ArbBLS<'a> {
             ],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
         if (receipts.len() != 1) || (sends.len() != 0) {
@@ -79,6 +80,7 @@ impl<'a> _ArbBLS<'a> {
             &[ethabi::Token::Address(addr.to_h160())],
             machine,
             Uint256::zero(),
+            None,
             self.debug,
         )?;
         if (receipts.len() != 1) || (sends.len() != 0) {
@@ -573,7 +575,7 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
 
     let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
     if add_contract
-        .deploy(&[], &mut machine, Uint256::zero(), None, debug)
+        .deploy(&[], &mut machine, Uint256::zero(), None, None, debug)
         .is_err()
     {
         panic!("failed to deploy Add contract");
@@ -635,6 +637,7 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
         &[alice_compressed_tx, bob_compressed_tx],
         &aggregated_sig._to_bytes(),
         &Uint256::from_u64(1749),
+        None,
     );
 
     let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
