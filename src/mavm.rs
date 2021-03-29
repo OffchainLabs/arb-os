@@ -3,7 +3,7 @@
  */
 
 use crate::compile::DebugInfo;
-use crate::evm::upload::CodeUploader;
+use crate::evm::CodeUploader;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use ethers_core::utils::keccak256;

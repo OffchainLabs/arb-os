@@ -371,7 +371,7 @@ fn test_underfunded_nested_call() {
 
 #[test]
 fn test_bls_registry() {
-    crate::evm::bls::_evm_test_bls_registry(None, false);
+    crate::evm::_evm_test_bls_registry(None, false);
 }
 
 #[test]
@@ -476,7 +476,7 @@ fn reinterpret_register() {
 
 #[test]
 fn small_upgrade() {
-    use crate::evm::upload::CodeUploader;
+    use crate::evm::CodeUploader;
     let mut machine = load_from_file(Path::new("upgradetests/upgrade1_old.mexe"));
     let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade1_new.mexe"));
     let code_bytes = uploader._to_flat_vec();
@@ -498,7 +498,7 @@ fn small_upgrade() {
 
 #[test]
 fn small_upgrade_auto_remap() {
-    use crate::evm::upload::CodeUploader;
+    use crate::evm::CodeUploader;
 
     let mut machine = load_from_file(Path::new("upgradetests/upgrade2_old.mexe"));
     let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade2_new.mexe"));

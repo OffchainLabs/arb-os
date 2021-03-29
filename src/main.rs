@@ -171,7 +171,7 @@ fn main() -> Result<(), CompileError> {
         }
 
         Args::MakeBenchmarks => {
-            evm::benchmarks::make_benchmarks().map_err(|e| {
+            evm::make_benchmarks().map_err(|e| {
                 CompileError::new(
                     match e {
                         ethabi::Error::Other(desc) => desc,
@@ -240,7 +240,7 @@ fn main() -> Result<(), CompileError> {
             let mut num_failures = 0u64;
             for path_name in paths.iter() {
                 let path = Path::new(path_name);
-                let (ns, nf) = evm::evmtest::run_evm_tests(
+                let (ns, nf) = evm::run_evm_tests(
                     path,
                     if options.savelogs {
                         Some(Path::new("evm-test-logs/"))

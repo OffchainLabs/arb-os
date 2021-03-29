@@ -5,20 +5,25 @@
 use crate::compile::miniconstants::init_constant_table;
 use crate::evm::abi::{
     ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest, _ArbAggregator, _ArbGasInfo,
-    _ArbOwner, _ArbReplayableTx, builtin_contract_path,
+    _ArbReplayableTx,
 };
 use crate::evm::abi::{FunctionTable, _ArbInfo};
 use crate::run::{load_from_file, load_from_file_and_env, RuntimeEnvironment};
 use crate::uint256::Uint256;
-use abi::AbiForContract;
 use ethers_signers::Signer;
 use std::path::Path;
 
-pub mod abi;
-pub mod benchmarks;
-pub mod bls;
-pub mod evmtest;
-pub mod upload;
+pub use abi::{builtin_contract_path, AbiForContract, _ArbOwner};
+pub use benchmarks::make_benchmarks;
+pub use bls::_evm_test_bls_registry;
+pub use evmtest::run_evm_tests;
+pub use upload::CodeUploader;
+
+mod abi;
+mod benchmarks;
+mod bls;
+mod evmtest;
+mod upload;
 
 #[derive(Clone)]
 pub struct CallInfo<'a> {
