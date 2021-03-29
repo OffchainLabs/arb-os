@@ -1,0 +1,106 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+type BitArray = struct {
+    buf: buffer,
+    size: uint,
+}
+
+public func bitarray_new() -> BitArray {
+    return struct {
+        buf: newbuffer(),
+        size: 0,
+    };
+}
+
+public func bitarray_get(ba: BitArray, offset: uint) -> bool {
+    return (getbuffer8(ba.buf, offset/8) & (asm(offset%8, 1) uint { shl })) != 0;
+}
+
+public func bitarray_set(ba: BitArray, offset: uint, val: bool) -> BitArray {
+    let mask = asm(offset%8, 1) uint { shl };
+    return xif (val) {
+        if (offset >= ba.size) {
+            ba = ba with { size: offset+1 };
+        }
+        ba with {
+            buf: setbuffer8(ba.buf, offset/8, getbuffer8(ba.buf, offset/8) | mask)
+        }
+    } else {
+        ba with {
+            buf: setbuffer8(ba.buf, offset/8, getbuffer8(ba.buf, offset/8) | (0xff & ~mask))
+        }
+    };
+}
+
+public func bitarray_and(ba1: BitArray, ba2: BitArray) -> BitArray {
+    let minSize = xif (ba1.size < ba2.size) {
+        ba1.size
+    } else {
+        ba2.size
+    };
+    let i = 0;
+    let buf = newbuffer();
+    while (i < minSize) {
+        buf = setbuffer256(buf, i, getbuffer256(ba1.buf, i) & getbuffer256(ba2.buf, i));
+        i = i+32;
+    }
+    return struct {
+        buf: buf,
+        size: minSize,
+    };
+}
+
+public func bitarray_or(ba1: BitArray, ba2: BitArray) -> BitArray {
+    let maxSize = xif (ba1.size > ba2.size) {
+        ba1.size
+    } else {
+        ba2.size
+    };
+    let i = 0;
+    let buf = newbuffer();
+    while (i < maxSize) {
+        buf = setbuffer256(buf, i, getbuffer256(ba1.buf, i) | getbuffer256(ba2.buf, i));
+        i = i+32;
+    }
+    return struct {
+        buf: buf,
+        size: maxSize,
+    };
+}
+
+type BloomFilter = struct {
+    numHashes: uint,
+    numBits: uint,
+    contents: BitArray,
+}
+
+public func bloomfilter_new(numHashes: uint, numBits: uint) -> BloomFilter {
+    return struct {
+        numHashes: numHashes,
+        numBits: numBits,
+        contents: bitarray_new(),
+    };
+}
+
+public func bloomfilter_test(bloom: BloomFilter, val: bytes32) -> bool {
+    let i = 0;
+    while (i < bloom.numHashes) {
+        if (bitarray_get(bloom.contents, uint(hash(val, bytes32(i))) % bloom.numBits)) {
+            return false;
+        }
+        i = i+1;
+    }
+    return true;
+}
+
+public func bloomfilter_add(bloom: BloomFilter, val: bytes32) -> BloomFilter {
+    let contents = bloom.contents;
+    let i = 0;
+    while (i < bloom.numHashes) {
+        contents = bitarray_set(contents, uint(hash(val, bytes32(i))) % bloom.numBits, true);
+        i = i+1;
+    }
+    return bloom with { contents: contents };
+}
