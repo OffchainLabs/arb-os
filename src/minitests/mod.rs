@@ -12,16 +12,20 @@ use std::path::Path;
 
 mod integration;
 
-fn test_from_file(path: &Path) {
-    let res = run_from_file(path, vec![], false);
+fn test_from_file_with_args_and_return(path: &Path, args: Vec<Value>, ret: Value) {
+    let res = run_from_file(path, args, false);
     match res {
         Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
+            assert_eq!(res[0], ret);
         }
         Err(e) => {
             panic!("{:?}", e);
         }
     }
+}
+
+fn test_from_file(path: &Path) {
+    test_from_file_with_args_and_return(path, vec![], Value::Int(Uint256::zero()));
 }
 
 #[test]
@@ -157,44 +161,24 @@ fn encode_list3(testvec: (Uint256, Vec<u8>, Uint256)) -> Vec<u8> {
 }
 
 fn test_rlp_uint(ui: Uint256, correct_result: Vec<u8>) {
-    let path = Path::new("stdlib/rlptest.mexe");
-    let res = run_from_file(
-        path,
+    test_from_file_with_args_and_return(
+        "stdlib/rlptest.mexe".into(),
         vec![Value::Int(Uint256::zero()), Value::Int(ui)],
-        false,
+        _bytestack_from_bytes(&correct_result),
     );
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], _bytestack_from_bytes(&correct_result));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
 }
 
 fn test_rlp_bytearray(input: Vec<u8>, correct_result: Vec<u8>) {
-    let path = Path::new("stdlib/rlptest.mexe");
-    let res = run_from_file(
-        path,
+    test_from_file_with_args_and_return(
+        "stdlib/rlptest.mexe".into(),
         vec![Value::Int(Uint256::one()), _bytestack_from_bytes(&input)],
-        false,
+        _bytestack_from_bytes(&correct_result),
     );
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], _bytestack_from_bytes(&correct_result));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
 }
 
-#[cfg(test)]
 fn test_rlp_list3(testvec: (Uint256, Vec<u8>, Uint256), correct_result: Vec<u8>) {
-    let path = Path::new("stdlib/rlptest.mexe");
-    let res = run_from_file(
-        path,
+    test_from_file_with_args_and_return(
+        "stdlib/rlptest.mexe".into(),
         vec![
             Value::Int(Uint256::from_usize(2)),
             Value::new_tuple(vec![
@@ -203,16 +187,8 @@ fn test_rlp_list3(testvec: (Uint256, Vec<u8>, Uint256), correct_result: Vec<u8>)
                 Value::Int(testvec.2),
             ]),
         ],
-        false,
+        _bytestack_from_bytes(&correct_result),
     );
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], _bytestack_from_bytes(&correct_result));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
 }
 
 #[test]
