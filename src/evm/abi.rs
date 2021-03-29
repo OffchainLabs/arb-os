@@ -590,17 +590,19 @@ impl<'a> ArbSys<'a> {
     }
 }
 
-pub struct _ArbInfo {
+#[cfg(test)]
+pub struct ArbInfo {
     pub contract_abi: AbiForContract,
     debug: bool,
 }
 
-impl _ArbInfo {
+#[cfg(test)]
+impl ArbInfo {
     pub fn _new(debug: bool) -> Self {
         let mut contract_abi =
             AbiForContract::new_from_file(&builtin_contract_path("ArbInfo")).unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(101));
-        _ArbInfo {
+        ArbInfo {
             contract_abi,
             debug,
         }

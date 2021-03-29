@@ -2,7 +2,7 @@
  * Copyright 2021, Offchain Labs, Inc. All rights reserved.
  */
 
-use super::abi::{AbiForContract, ArbSys, _ArbOwner};
+use super::abi::{AbiForContract, _ArbOwner, ArbSys};
 use super::test_contract_path;
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, Instruction};
