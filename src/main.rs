@@ -171,7 +171,15 @@ fn main() -> Result<(), CompileError> {
         }
 
         Args::MakeBenchmarks => {
-            evm::benchmarks::make_benchmarks();
+            evm::benchmarks::make_benchmarks().map_err(|e| {
+                CompileError::new(
+                    match e {
+                        ethabi::Error::Other(desc) => desc,
+                        other => format!("{}", other),
+                    },
+                    None,
+                )
+            })?;
         }
 
         Args::MakeTemplates => {

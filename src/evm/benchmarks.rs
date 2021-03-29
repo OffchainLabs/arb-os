@@ -2,14 +2,18 @@
 * Copyright 2020, Offchain Labs, Inc. All rights reserved.
 */
 
-use crate::evm::{abi::AbiForContract, test_contract_path};
+use crate::evm::abi::AbiForContract;
 use crate::run::load_from_file;
 use crate::uint256::Uint256;
-use ethers_signers::Signer;
 use std::path::Path;
 
-pub fn make_benchmarks() {
-    let benchmarks: Vec<(fn(u64, &Path) -> u64, u64, &str, &str)> = vec![
+pub fn make_benchmarks() -> Result<(), ethabi::Error> {
+    let benchmarks: Vec<(
+        fn(u64, &Path) -> Result<u64, ethabi::Error>,
+        u64,
+        &str,
+        &str,
+    )> = vec![
         (benchmark_boot, 1, "boot ArbOS", "boot"),
         (benchmark_add, 100, "100 null txs", "nulltx_100"),
         (benchmark_add, 1000, "1000 null txs", "nulltx_1000"),
@@ -27,15 +31,15 @@ pub fn make_benchmarks() {
         ),
     ];
 
-    for benchmark in benchmarks {
-        let (bm_func, iterations, description, filename) = benchmark;
-        let filename = "benchmarks/".to_owned() + filename + ".aoslog";
-        let gas_used = bm_func(iterations, Path::new(&filename));
+    for (bm_func, iterations, description, filename) in benchmarks {
+        let filename = format!("benchmarks/{}.aoslog", filename);
+        let gas_used = bm_func(iterations, Path::new(&filename))?;
         println!("ArbGas for {}: {}", description, gas_used)
     }
+    Ok(())
 }
 
-pub fn benchmark_boot(_iterations: u64, log_to: &Path) -> u64 {
+pub fn benchmark_boot(_iterations: u64, log_to: &Path) -> Result<u64, ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
@@ -45,28 +49,15 @@ pub fn benchmark_boot(_iterations: u64, log_to: &Path) -> u64 {
         .recorder
         .to_file(log_to, machine.get_total_gas_usage().to_u64().unwrap())
         .unwrap();
-    gas_used
+    Ok(gas_used)
 }
 
-pub fn benchmark_add(iterations: u64, log_to: &Path) -> u64 {
+pub fn benchmark_add(iterations: u64, log_to: &Path) -> Result<u64, ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     let my_addr = Uint256::from_u64(1025);
-    let contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
-        Ok(mut contract) => {
-            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, false);
-            if let Ok(contract_addr) = result {
-                assert_ne!(contract_addr, Uint256::zero());
-                contract
-            } else {
-                panic!("deploy failed");
-            }
-        }
-        Err(e) => {
-            panic!("error loading contract: {:?}", e);
-        }
-    };
+    let contract = AbiForContract::deploy_add(&mut machine)?;
 
     for _ in 0..iterations {
         let _result = contract
@@ -90,30 +81,16 @@ pub fn benchmark_add(iterations: u64, log_to: &Path) -> u64 {
         .recorder
         .to_file(log_to, machine.get_total_gas_usage().to_u64().unwrap())
         .unwrap();
-    machine.get_total_gas_usage().to_u64().unwrap()
+    Ok(machine.get_total_gas_usage().to_u64().unwrap())
 }
 
-pub fn benchmark_add_batched(iterations: u64, log_to: &Path) -> u64 {
+pub fn benchmark_add_batched(iterations: u64, log_to: &Path) -> Result<u64, ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     let wallet = machine.runtime_env.new_wallet();
-    let _my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
-    let contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
-        Ok(mut contract) => {
-            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, false);
-            if let Ok(contract_addr) = result {
-                assert_ne!(contract_addr, Uint256::zero());
-                contract
-            } else {
-                panic!("deploy failed");
-            }
-        }
-        Err(e) => {
-            panic!("error loading contract: {:?}", e);
-        }
-    };
+    let contract = AbiForContract::deploy_add(&mut machine)?;
 
     let mut batch = machine.runtime_env.new_batch();
 
@@ -145,5 +122,5 @@ pub fn benchmark_add_batched(iterations: u64, log_to: &Path) -> u64 {
         .recorder
         .to_file(log_to, machine.get_total_gas_usage().to_u64().unwrap())
         .unwrap();
-    machine.get_total_gas_usage().to_u64().unwrap()
+    Ok(machine.get_total_gas_usage().to_u64().unwrap())
 }

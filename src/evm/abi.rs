@@ -2,6 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
+use crate::evm::test_contract_path;
 use crate::mavm::Value;
 use crate::run::{load_from_file, ArbosReceipt, Machine};
 use crate::uint256::Uint256;
@@ -418,6 +419,23 @@ impl AbiForContract {
             gas_limit,
         );
         Ok(())
+    }
+    pub fn deploy_add(machine: &mut Machine) -> Result<Self, ethabi::Error> {
+        match AbiForContract::new_from_file(&test_contract_path("Add")) {
+            Ok(mut contract) => {
+                let result = contract.deploy(&[], machine, Uint256::zero(), None, false);
+                if let Ok(contract_addr) = result {
+                    assert_ne!(contract_addr, Uint256::zero());
+                    Ok(contract)
+                } else {
+                    Err(ethabi::Error::from("deploy failed"))
+                }
+            }
+            Err(e) => Err(ethabi::Error::from(format!(
+                "error loading contract: {:?}",
+                e
+            ))),
+        }
     }
 }
 
