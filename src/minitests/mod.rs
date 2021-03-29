@@ -162,7 +162,7 @@ fn encode_list3(testvec: (Uint256, Vec<u8>, Uint256)) -> Vec<u8> {
 
 fn test_rlp_uint(ui: Uint256, correct_result: Vec<u8>) {
     test_from_file_with_args_and_return(
-        "stdlib/rlptest.mexe".into(),
+        Path::new("stdlib/rlptest.mexe"),
         vec![Value::Int(Uint256::zero()), Value::Int(ui)],
         _bytestack_from_bytes(&correct_result),
     );
@@ -170,7 +170,7 @@ fn test_rlp_uint(ui: Uint256, correct_result: Vec<u8>) {
 
 fn test_rlp_bytearray(input: Vec<u8>, correct_result: Vec<u8>) {
     test_from_file_with_args_and_return(
-        "stdlib/rlptest.mexe".into(),
+        Path::new("stdlib/rlptest.mexe"),
         vec![Value::Int(Uint256::one()), _bytestack_from_bytes(&input)],
         _bytestack_from_bytes(&correct_result),
     );
@@ -178,7 +178,7 @@ fn test_rlp_bytearray(input: Vec<u8>, correct_result: Vec<u8>) {
 
 fn test_rlp_list3(testvec: (Uint256, Vec<u8>, Uint256), correct_result: Vec<u8>) {
     test_from_file_with_args_and_return(
-        "stdlib/rlptest.mexe".into(),
+        Path::new("stdlib/rlptest.mexe"),
         vec![
             Value::Int(Uint256::from_usize(2)),
             Value::new_tuple(vec![
