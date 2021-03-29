@@ -128,10 +128,10 @@ impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, adminMod
         updateL1GasPriceEstimate(newMsgRaw.sender, newMsgRaw.gasPriceL1);
     }
 
-    if (newMsgRaw.ethBlockNumber == 0) {
+    if (newMsgRaw.ethBlockNumber < globalInbox.ethBlockNum) {
         newMsgRaw = newMsgRaw with { ethBlockNumber: globalInbox.ethBlockNum };
     }
-    if (newMsgRaw.timestamp == 0) {
+    if (newMsgRaw.timestamp < globalInbox.timestamp) {
         newMsgRaw = newMsgRaw with { timestamp: globalInbox.timestamp };
     }
 
