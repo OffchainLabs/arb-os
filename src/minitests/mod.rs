@@ -508,7 +508,7 @@ fn small_upgrade() {
         Value::Int(Uint256::from_usize(code_bytes.len())),
         Value::new_buffer(code_bytes),
     ]);
-    machine.runtime_env.insert_full_inbox_contents(vec![msg]);
+    machine.runtime_env.insert_full_inbox_contents(vec![(msg, false),]);
     let _ = run(&mut machine, vec![], false);
 
     //let mut new_machine = load_from_file(Path::new("upgradetests/regcopy_new.mexe"), rt_env);
@@ -531,7 +531,7 @@ fn small_upgrade_auto_remap() {
         Value::Int(Uint256::from_usize(code_bytes.len())),
         Value::new_buffer(code_bytes),
     ]);
-    machine.runtime_env.insert_full_inbox_contents(vec![msg]);
+    machine.runtime_env.insert_full_inbox_contents(vec![(msg, false)]);
     let _ = run(&mut machine, vec![], false);
 
     println!("Machine state after: {:?}", machine.state);
