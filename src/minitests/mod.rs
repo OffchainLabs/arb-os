@@ -11,6 +11,7 @@ use std::convert::TryInto;
 use std::path::Path;
 
 mod integration;
+mod rollup;
 
 fn test_from_file_with_args_and_return(path: &Path, args: Vec<Value>, ret: Value) {
     let res = run_from_file(path, args, false);
@@ -375,7 +376,7 @@ fn test_bls_registry() {
 
 #[test]
 fn test_rollup_tracker() {
-    crate::run::rolluptest::_do_rollup_tracker_ops();
+    rollup::_do_rollup_tracker_ops();
 }
 
 fn test_call_to_precompile5(
@@ -475,7 +476,7 @@ fn reinterpret_register() {
 
 #[test]
 fn small_upgrade() {
-    use crate::run::upload::CodeUploader;
+    use crate::evm::upload::CodeUploader;
     let mut machine = load_from_file(Path::new("upgradetests/upgrade1_old.mexe"));
     let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade1_new.mexe"));
     let code_bytes = uploader._to_flat_vec();
@@ -497,7 +498,7 @@ fn small_upgrade() {
 
 #[test]
 fn small_upgrade_auto_remap() {
-    use crate::run::upload::CodeUploader;
+    use crate::evm::upload::CodeUploader;
 
     let mut machine = load_from_file(Path::new("upgradetests/upgrade2_old.mexe"));
     let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade2_new.mexe"));

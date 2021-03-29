@@ -3,7 +3,7 @@
  */
 
 use crate::evm::abi::_ArbOwner;
-use crate::run::{load_from_file, runtime_env::RuntimeEnvironment};
+use crate::run::{load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use ethers_signers::Signer;
 use std::path::Path;

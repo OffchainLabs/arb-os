@@ -2,8 +2,8 @@
  * Copyright 2021, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::abi::{AbiForContract, ArbSys, _ArbOwner};
-use crate::evm::test_contract_path;
+use super::abi::{AbiForContract, ArbSys, _ArbOwner};
+use super::test_contract_path;
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, Instruction};
 use crate::run::load_from_file;

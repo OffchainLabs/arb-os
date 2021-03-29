@@ -18,6 +18,7 @@ pub mod abi;
 pub mod benchmarks;
 pub mod bls;
 pub mod evmtest;
+pub mod upload;
 
 #[derive(Clone)]
 pub struct CallInfo<'a> {
