@@ -28,58 +28,34 @@ pub struct AbiForContract {
 impl AbiForContract {
     pub fn new_from_file(filename: &str) -> Result<Self, ethabi::Error> {
         let path = Path::new(filename);
-        let mut file = match File::open(path) {
-            Ok(f) => f,
-            Err(e) => {
-                return Err(ethabi::Error::from(e.to_string()));
-            }
-        };
+        let mut file = File::open(path).map_err(|e| ethabi::Error::from(e.to_string()))?;
         let mut s = String::new();
-        s = match file.read_to_string(&mut s) {
-            Err(why) => {
-                return Err(ethabi::Error::from(why.to_string()));
-            }
-            Ok(_) => s,
-        };
+        file.read_to_string(&mut s)
+            .map_err(|e| ethabi::Error::from(e.to_string()))?;
 
-        let parse_result: Result<serde_json::Value, serde_json::Error> = serde_json::from_str(&s);
-        let json_from_file = match parse_result {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(ethabi::Error::from(e.to_string()));
-            }
-        };
+        let json_from_file = serde_json::from_str::<serde_json::Value>(&s)
+            .map_err(|e| ethabi::Error::from(e.to_string()))?;
 
         if let serde_json::Value::Object(fields) = json_from_file {
-            let json_abi = match fields.get("abi") {
-                Some(val) => val,
-                None => {
-                    return Err(ethabi::Error::from("no abi key in json"));
-                }
-            };
+            let json_abi = fields
+                .get("abi")
+                .ok_or_else(|| ethabi::Error::from("no abi key in json"))?;
 
-            let contract: ethabi::Contract = match serde_json::from_value(json_abi.clone()) {
-                Ok(c) => c,
-                Err(e) => {
-                    return Err(ethabi::Error::from(e.to_string()));
-                }
-            };
+            let contract: ethabi::Contract = serde_json::from_value(json_abi.clone())
+                .map_err(|e| ethabi::Error::from(e.to_string()))?;
 
-            let name = match &fields.get("contractName") {
-                Some(serde_json::Value::String(s)) => s,
-                _ => {
-                    return Err(ethabi::Error::from("no name key in json"));
-                }
-            };
+            let name = fields
+                .get("contractName")
+                .ok_or_else(|| ethabi::Error::from("no name key in json"))?;
 
-            let decoded_insns = match &fields.get("bytecode") {
-                Some(val) => {
-                    let code_str = val.as_str().unwrap().to_string();
-                    hex::decode(&code_str[2..]).unwrap()
-                }
-                None => {
-                    return Err(ethabi::Error::from("no code key in json"));
-                }
+            let decoded_insns = {
+                let code_str = fields
+                    .get("bytecode")
+                    .ok_or_else(|| ethabi::Error::from("no code key in json"))?
+                    .as_str()
+                    .unwrap()
+                    .to_string();
+                hex::decode(&code_str[2..]).unwrap()
             };
 
             Ok(AbiForContract {
