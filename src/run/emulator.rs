@@ -1910,7 +1910,7 @@ impl Machine {
                         Ok(true)
                     }
                     AVMOpcode::Inbox => {
-                        match self.runtime_env.l1_inbox.get() {
+                        match self.runtime_env.inbox.get() {
                             Some(msg) => {
                                 self.stack.push(msg);
                                 self.incr_pc();
@@ -1924,7 +1924,7 @@ impl Machine {
                     }
                     AVMOpcode::InboxPeek => {
                         let bn = self.stack.pop_uint(&self.state)?;
-                        match self.runtime_env.l1_inbox.peek(bn.clone()) {
+                        match self.runtime_env.inbox.peek(bn.clone()) {
                             Some(res) => {
                                 self.stack.push_bool(res);
                                 self.incr_pc();

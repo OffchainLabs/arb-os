@@ -902,12 +902,12 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
 
     let arb_replayable = _ArbReplayableTx::_new(debug);
     let timeout = arb_replayable._get_timeout(&mut machine, txid.clone())?;
-    assert!(timeout > machine.runtime_env.l1_inbox.current_timestamp);
+    assert!(timeout > machine.runtime_env.inbox.current_timestamp);
 
     let (keepalive_price, reprice_time) =
         arb_replayable._get_keepalive_price(&mut machine, txid.clone())?;
     assert_eq!(keepalive_price, Uint256::zero());
-    assert!(reprice_time > machine.runtime_env.l1_inbox.current_timestamp);
+    assert!(reprice_time > machine.runtime_env.inbox.current_timestamp);
 
     let keepalive_ret = arb_replayable._keepalive(&mut machine, txid.clone(), keepalive_price)?;
 

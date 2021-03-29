@@ -20,7 +20,7 @@ use std::{collections::HashMap, fs::File, io, path::Path};
 pub struct RuntimeEnvironment {
     pub chain_id: u64,
     pub chain_address: Uint256,
-    pub l1_inbox: ArbitrumInbox,
+    pub inbox: ArbitrumInbox,
     pub logs: Vec<Value>,
     pub sends: Vec<Vec<u8>>,
     pub caller_seq_nums: HashMap<Uint256, Uint256>,
@@ -85,7 +85,7 @@ impl RuntimeEnvironment {
         let mut ret = RuntimeEnvironment {
             chain_id,
             chain_address,
-            l1_inbox: ArbitrumInbox::new(chain_id, block_num, timestamp, sequencer_delays),
+            inbox: ArbitrumInbox::new(chain_id, block_num, timestamp, sequencer_delays.clone()),
             logs: Vec::new(),
             sends: Vec::new(),
             caller_seq_nums: HashMap::new(),
@@ -97,16 +97,20 @@ impl RuntimeEnvironment {
             chain_init_message: RuntimeEnvironment::get_params_bytes(charging_policy, owner),
         };
 
-        ret.send_chain_init_message();
+        ret.send_chain_init_message(sequencer_delays);
         ret
     }
 
-    pub fn send_chain_init_message(&mut self) {
+    pub fn send_chain_init_message(&mut self, sequencer_delays: Option<(Uint256, Uint256)>) {
         self.insert_l1_message(
             4,
             self.chain_address.clone(),
             &self.chain_init_message.clone(),
-            Some((Uint256::zero(), Uint256::zero())),
+            if sequencer_delays == Some((Uint256::zero(), Uint256::zero())) {
+                None  // if delays are zero, send as non-sequencer message to ensure it is delivered first
+            } else {
+                sequencer_delays
+            },
         );
     }
 
@@ -141,7 +145,7 @@ impl RuntimeEnvironment {
         delta_timestamp: Option<Uint256>,
         send_heartbeat_message: bool,
     ) {
-        self.l1_inbox._advance_time(delta_blocks, delta_timestamp);
+        self.inbox._advance_time(delta_blocks, delta_timestamp);
         if send_heartbeat_message {
             self.insert_l2_message(Uint256::zero(), &[6u8], None);
         }
@@ -158,7 +162,7 @@ impl RuntimeEnvironment {
     }
 
     pub fn insert_full_inbox_contents(&mut self, contents: Vec<Value>) {
-        self.l1_inbox.set_contents(contents);
+        self.inbox.set_contents(contents);
     }
 
     pub fn insert_l1_message(
@@ -168,7 +172,7 @@ impl RuntimeEnvironment {
         msg: &[u8],
         sequencer_deltas: Option<(Uint256, Uint256)>,
     ) -> Uint256 {
-        self.l1_inbox.insert_l1_message(
+        self.inbox.insert_l1_message(
             msg_type,
             sender_addr,
             msg,
@@ -551,14 +555,14 @@ impl Default for RuntimeEnvironment {
 
 #[derive(Debug, Clone)]
 pub struct ArbitrumInbox {
-    delayed_inbox: Vec<Value>,
-    sequencer_inbox: Vec<Value>,
+    delayed_inbox: Vec<(Value, Uint256)>,
+    sequencer_inbox: Vec<(Value, Uint256)>,
     pub current_block_num: Uint256,
     pub current_timestamp: Uint256,
     delay_blocks: Uint256,
     delay_seconds: Uint256,
     chain_id: u64,
-    next_seq_num: Uint256,
+    next_inbox_seq_num: Uint256,
 }
 
 impl ArbitrumInbox {
@@ -582,7 +586,7 @@ impl ArbitrumInbox {
             delay_blocks,
             delay_seconds,
             chain_id,
-            next_seq_num: Uint256::zero(),
+            next_inbox_seq_num: Uint256::zero(),
         }
     }
 
@@ -593,40 +597,76 @@ impl ArbitrumInbox {
             .add(&delta_timestamp.unwrap_or(Uint256::from_u64(13).mul(&delta_blocks)));
     }
 
-    pub fn put(&mut self, msg: Value, is_sequencer_msg: bool) {
+    pub fn put(&mut self, msg: Value, block_num: Uint256, is_sequencer_msg: bool) {
         if is_sequencer_msg {
-            self.sequencer_inbox.push(msg);
+            self.sequencer_inbox.push((msg, block_num));
         } else {
-            self.delayed_inbox.push(msg);
+            self.delayed_inbox.push((msg, block_num));
         }
     }
 
     pub fn get(&mut self) -> Option<Value> {
         if self.delayed_inbox.is_empty() {
-            None
+            if self.sequencer_inbox.is_empty() {
+                None
+            } else {
+                Some(self.sequencer_inbox.remove(0).0)
+            }
         } else {
-            Some(self.delayed_inbox.remove(0))
+            if self.sequencer_inbox.is_empty() {
+                if self.delayed_inbox[0].1.add(&self.delay_blocks) <= self.current_block_num {
+                    Some(self.delayed_inbox.remove(0).0)
+                } else {
+                    None
+                }
+            } else {
+                if self.delayed_inbox[0].1 <= self.sequencer_inbox[0].1 {
+                    Some(self.delayed_inbox.remove(0).0)
+                } else {
+                    Some(self.sequencer_inbox.remove(0).0)
+                }
+            }
         }
     }
 
     pub fn peek(&mut self, block_num: Uint256) -> Option<bool> {
         if self.delayed_inbox.is_empty() {
-            None
-        } else {
-            if let Value::Tuple(tup) = &self.delayed_inbox[0] {
-                if let Value::Int(ui) = &tup[1] {
-                    Some(ui.clone() == block_num)
+            if self.sequencer_inbox.is_empty() {
+                if self.current_block_num.add(&self.delay_blocks) < block_num {
+                    Some(false)
                 } else {
-                    panic!()
+                    None
                 }
             } else {
-                panic!()
+                Some(self.sequencer_inbox[0].1 <= block_num)
+            }
+        } else {
+            if self.sequencer_inbox.is_empty() {
+                if self.delayed_inbox[0].1 <= block_num {
+                    Some(true)
+                } else if self.current_block_num.add(&self.delay_blocks) > block_num {
+                    Some(false)
+                } else {
+                    None
+                }
+            } else {
+                Some((self.delayed_inbox[0].1 <= block_num) || (self.sequencer_inbox[0].1 <= block_num))
             }
         }
     }
 
     pub fn set_contents(&mut self, new_contents: Vec<Value>) {
-        self.delayed_inbox = new_contents;
+        self.delayed_inbox = new_contents.iter().map(|v|
+            if let Value::Tuple(tup) = v {
+                if let Value::Int(bn) = &tup[1] {
+                    (v.clone(), bn.clone())
+                } else {
+                    (v.clone(), Uint256::zero())
+                }
+            } else {
+                (v.clone(), Uint256::zero())
+            }
+        ).collect();
     }
 
     pub fn insert_l1_message(
@@ -637,19 +677,56 @@ impl ArbitrumInbox {
         sequencer_deltas: Option<(Uint256, Uint256)>,
         recorder: &mut RtEnvRecorder,
     ) -> Uint256 {
+        let (block_num, timestamp, is_sequencer_msg) = if let Some((bnum_delta, time_delta)) =
+            sequencer_deltas
+        {
+            let min_block_num =
+                if self.delay_blocks > self.current_block_num {
+                    Uint256::zero()
+                } else {
+                    self.current_block_num.sub(&self.delay_blocks).unwrap()
+                };
+            let block_num = if min_block_num.add(&bnum_delta) > self.current_block_num {
+                min_block_num
+            } else {
+                self.current_block_num.sub(&bnum_delta).unwrap()
+            };
+
+            let min_timestamp =
+                if self.delay_seconds > self.current_timestamp {
+                    Uint256::zero()
+                } else {
+                    self.current_timestamp.sub(&self.delay_seconds).unwrap()
+                };
+            let timestamp = if min_timestamp.add(&time_delta) > self.current_timestamp {
+                min_timestamp
+            } else {
+                self.current_timestamp.sub(&time_delta).unwrap()
+            };
+
+            (block_num, timestamp, true)
+        } else {
+            (
+                self.current_block_num.clone(),
+                self.current_timestamp.clone(),
+                false,
+            )
+        };
+
         let l1_msg = Value::new_tuple(vec![
             Value::Int(Uint256::from_usize(msg_type as usize)),
-            Value::Int(self.current_block_num.clone()),
-            Value::Int(self.current_timestamp.clone()),
+            Value::Int(block_num.clone()),
+            Value::Int(timestamp),
             Value::Int(sender_addr),
-            Value::Int(self.next_seq_num.clone()),
+            Value::Int(self.next_inbox_seq_num.clone()),
             Value::Int(self.get_gas_price()),
             Value::Int(Uint256::from_usize(msg.len())),
             Value::new_buffer(msg.to_vec()),
         ]);
-        let msg_id = Uint256::avm_hash2(&Uint256::from_u64(self.chain_id), &self.next_seq_num);
-        self.next_seq_num = self.next_seq_num.add(&Uint256::one());
-        self.put(l1_msg.clone(), false);
+        let msg_id =
+            Uint256::avm_hash2(&Uint256::from_u64(self.chain_id), &self.next_inbox_seq_num);
+        self.next_inbox_seq_num = self.next_inbox_seq_num.add(&Uint256::one());
+        self.put(l1_msg.clone(), block_num, is_sequencer_msg);
         recorder.add_msg(l1_msg, false);
 
         msg_id
@@ -1374,6 +1451,13 @@ impl RtEnvRecorder {
         } else {
             let _ = machine.run(None);
         }
+        machine.runtime_env._advance_time(Uint256::one(), None, false);
+        if debug {
+            let _ = machine.debug(None);
+        } else {
+            let _ = machine.run(None);
+        }
+
         let logs_expected = if require_same_gas {
             self.logs.clone()
         } else {
@@ -1546,6 +1630,7 @@ fn logfile_replay_tests() {
     for entry in std::fs::read_dir(Path::new("./replayTests")).unwrap() {
         let path = entry.unwrap().path();
         let name = path.file_name().unwrap();
+        println!("{:?}", name);
         assert_eq!(
             replay_from_testlog_file(
                 &("./replayTests/".to_owned() + name.to_str().unwrap()),

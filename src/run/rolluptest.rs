@@ -16,7 +16,7 @@ pub fn _insert_create_node(
     deadline_l1_delta: &Uint256,
     asserter: Uint256,
 ) {
-    let height_l1 = &height_l1.unwrap_or(&rt_env.l1_inbox.current_block_num);
+    let height_l1 = &height_l1.unwrap_or(&rt_env.inbox.current_block_num);
     let mut buf = vec![0u8];
     buf.extend(height_l2.to_bytes_be());
     buf.extend(prev.to_bytes_be());
@@ -49,7 +49,7 @@ pub fn _insert_new_stake(
     buf.extend(staker.to_bytes_be());
     buf.extend(
         stake_time
-            .unwrap_or(rt_env.l1_inbox.current_block_num.clone())
+            .unwrap_or(rt_env.inbox.current_block_num.clone())
             .to_bytes_be(),
     );
     rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None);
