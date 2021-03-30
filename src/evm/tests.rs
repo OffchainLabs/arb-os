@@ -1,4 +1,4 @@
-use super::abi::{ArbInfo, ArbOwner, _ArbGasInfo};
+use super::abi::{ArbAggregator, ArbGasInfo, ArbInfo, ArbOwner};
 use super::*;
 use crate::compile::miniconstants::init_constant_table;
 use crate::run::{load_from_file, RuntimeEnvironment};
@@ -308,7 +308,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
     let arbowner = ArbOwner::_new(&wallet, debug);
-    let arbgasinfo = _ArbGasInfo::_new(&wallet, debug);
+    let arbgasinfo = ArbGasInfo::_new(&wallet, debug);
 
     machine.runtime_env.insert_eth_deposit_message(
         my_addr.clone(),
@@ -571,4 +571,52 @@ pub fn _insert_claim_node(rt_env: &mut RuntimeEnvironment, height_l2: &Uint256, 
 
 pub fn _insert_rollup_debug(rt_env: &mut RuntimeEnvironment) {
     rt_env.insert_l1_message(8u8, Uint256::zero(), &[255u8]);
+}
+
+#[test]
+fn test_arbaggregator() {
+    match _evm_test_arbaggregator(None, false) {
+        Ok(()) => {}
+        Err(e) => panic!("{:?}", e),
+    }
+}
+
+pub fn _evm_test_arbaggregator(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let arbagg = ArbAggregator::_new(debug);
+
+    let pref_agg = arbagg._get_preferred_aggregator(&mut machine, my_addr.clone())?;
+    assert_eq!(pref_agg, (Uint256::zero(), true));
+
+    let new_pref_agg = Uint256::from_u64(4242);
+    arbagg._set_preferred_aggregator(&mut machine, new_pref_agg.clone(), my_addr.clone())?;
+    let pref_agg = arbagg._get_preferred_aggregator(&mut machine, my_addr.clone())?;
+    assert_eq!(pref_agg, (new_pref_agg, false));
+
+    let def_agg = arbagg._get_default_aggregator(&mut machine)?;
+    assert_eq!(def_agg, Uint256::zero());
+
+    let new_def_agg = Uint256::from_u64(9696);
+    arbagg._set_default_aggregator(&mut machine, new_def_agg.clone(), None)?;
+    let def_agg = arbagg._get_default_aggregator(&mut machine)?;
+    assert_eq!(def_agg, new_def_agg);
+
+    assert!(arbagg
+        ._set_default_aggregator(&mut machine, Uint256::from_u64(12345), Some(my_addr))
+        .is_err());
+
+    if let Some(path) = log_to {
+        machine
+            .runtime_env
+            .recorder
+            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
+            .unwrap();
+    }
+
+    Ok(())
 }

@@ -4,7 +4,7 @@
 
 use crate::evm::abi::FunctionTable;
 use crate::evm::abi::{
-    ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest, _ArbAggregator, _ArbReplayableTx,
+    ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest, _ArbReplayableTx,
 };
 use crate::run::{load_from_file, load_from_file_and_env, RuntimeEnvironment};
 use crate::uint256::Uint256;
@@ -283,46 +283,6 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     assert_eq!(x1, ox1);
     assert_eq!(y0, oy0);
     assert_eq!(y1, oy1);
-
-    if let Some(path) = log_to {
-        machine
-            .runtime_env
-            .recorder
-            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
-            .unwrap();
-    }
-
-    Ok(())
-}
-
-pub fn _evm_test_arbaggregator(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
-
-    let wallet = machine.runtime_env.new_wallet();
-    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
-
-    let arbagg = _ArbAggregator::_new(debug);
-
-    let pref_agg = arbagg._get_preferred_aggregator(&mut machine, my_addr.clone())?;
-    assert_eq!(pref_agg, (Uint256::zero(), true));
-
-    let new_pref_agg = Uint256::from_u64(4242);
-    arbagg._set_preferred_aggregator(&mut machine, new_pref_agg.clone(), my_addr.clone())?;
-    let pref_agg = arbagg._get_preferred_aggregator(&mut machine, my_addr.clone())?;
-    assert_eq!(pref_agg, (new_pref_agg, false));
-
-    let def_agg = arbagg._get_default_aggregator(&mut machine)?;
-    assert_eq!(def_agg, Uint256::zero());
-
-    let new_def_agg = Uint256::from_u64(9696);
-    arbagg._set_default_aggregator(&mut machine, new_def_agg.clone(), None)?;
-    let def_agg = arbagg._get_default_aggregator(&mut machine)?;
-    assert_eq!(def_agg, new_def_agg);
-
-    assert!(arbagg
-        ._set_default_aggregator(&mut machine, Uint256::from_u64(12345), Some(my_addr))
-        .is_err());
 
     if let Some(path) = log_to {
         machine

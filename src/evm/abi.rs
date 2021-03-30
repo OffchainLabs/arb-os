@@ -1417,19 +1417,21 @@ impl<'a> ArbOwner<'a> {
     }
 }
 
-pub struct _ArbGasInfo<'a> {
+#[cfg(test)]
+pub struct ArbGasInfo<'a> {
     pub contract_abi: AbiForContract,
     _wallet: &'a Wallet,
     my_address: Uint256,
     debug: bool,
 }
 
-impl<'a> _ArbGasInfo<'a> {
+#[cfg(test)]
+impl<'a> ArbGasInfo<'a> {
     pub fn _new(wallet: &'a Wallet, debug: bool) -> Self {
         let mut contract_abi =
             AbiForContract::new_from_file(&builtin_contract_path("ArbGasInfo")).unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(108));
-        _ArbGasInfo {
+        ArbGasInfo {
             contract_abi,
             _wallet: wallet,
             my_address: Uint256::from_bytes(wallet.address().as_bytes()),
@@ -1769,17 +1771,19 @@ impl ArbosTest {
     }
 }
 
-pub struct _ArbAggregator {
+#[cfg(test)]
+pub struct ArbAggregator {
     pub contract_abi: AbiForContract,
     debug: bool,
 }
 
-impl _ArbAggregator {
+#[cfg(test)]
+impl ArbAggregator {
     pub fn _new(debug: bool) -> Self {
         let mut contract_abi =
             AbiForContract::new_from_file(&builtin_contract_path("ArbAggregator")).unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(109));
-        _ArbAggregator {
+        ArbAggregator {
             contract_abi,
             debug,
         }
