@@ -2,18 +2,16 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::compile::miniconstants::init_constant_table;
 use crate::evm::abi::FunctionTable;
 use crate::evm::abi::{
-    ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest, _ArbAggregator, _ArbGasInfo,
-    _ArbReplayableTx,
+    ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest, _ArbAggregator, _ArbReplayableTx,
 };
 use crate::run::{load_from_file, load_from_file_and_env, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use ethers_signers::Signer;
 use std::path::Path;
 
-pub use abi::{builtin_contract_path, AbiForContract, _ArbOwner};
+pub use abi::{builtin_contract_path, AbiForContract};
 pub use benchmarks::make_benchmarks;
 pub use bls::_evm_test_bls_registry;
 pub use evmtest::run_evm_tests;
@@ -114,117 +112,6 @@ pub fn evm_xcontract_call_with_constructors(
     assert_eq!(logs.len(), 1);
     assert_eq!(sends.len(), 0);
     assert!(logs[0].succeeded());
-
-    if let Some(path) = log_to {
-        machine
-            .runtime_env
-            .recorder
-            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
-            .unwrap();
-    }
-
-    Ok(true)
-}
-
-pub fn _evm_run_with_gas_charging(
-    log_to: Option<&Path>,
-    funding: Uint256,
-    debug: bool,
-    _profile: bool,
-) -> Result<bool, ethabi::Error> {
-    // returns Ok(true) if success, Ok(false) if insufficient gas money, Err otherwise
-    use std::convert::TryFrom;
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
-
-    let wallet = machine.runtime_env.new_wallet();
-    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
-
-    machine
-        .runtime_env
-        .insert_eth_deposit_message(my_addr.clone(), my_addr.clone(), funding);
-    let _gas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    }; // handle these ETH deposit messages
-
-    println!("First deploy ...");
-    let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
-    if let Err(receipt) = fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) {
-        if receipt.unwrap().get_return_code() == Uint256::from_u64(3) {
-            return Ok(false);
-        } else {
-            panic!("unexpected failure deploying Fibonacci contract");
-        }
-    }
-
-    println!("Second deploy ...");
-    let mut pc_contract = AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
-    if let Err(receipt) = pc_contract.deploy(
-        &[ethabi::Token::Address(ethereum_types::H160::from_slice(
-            &fib_contract.address.to_bytes_be()[12..],
-        ))],
-        &mut machine,
-        Uint256::zero(),
-        None,
-        debug,
-    ) {
-        if receipt.unwrap().get_return_code() == Uint256::from_u64(3) {
-            return Ok(false);
-        } else {
-            panic!("unexpected failure deploying PaymentChannel contract");
-        }
-    }
-
-    // turn on gas charging
-    let arbowner = _ArbOwner::_new(&wallet, false);
-    arbowner._set_fees_enabled(&mut machine, true, true)?;
-    machine
-        .runtime_env
-        ._advance_time(Uint256::one(), None, false);
-
-    println!("Function call ...");
-    let (logs, sends) = pc_contract.call_function(
-        my_addr.clone(),
-        "deposit",
-        &[],
-        &mut machine,
-        Uint256::from_usize(10000),
-        debug,
-    )?;
-    assert_eq!(logs.len(), 1);
-    assert_eq!(sends.len(), 0);
-
-    if !logs[0].succeeded() {
-        if logs[0].get_return_code() == Uint256::from_u64(3) {
-            return Ok(false);
-        } else {
-            panic!();
-        }
-    }
-
-    let (logs, sends) = pc_contract.call_function(
-        my_addr,
-        "transferFib",
-        &[
-            ethabi::Token::Address(ethabi::Address::from_low_u64_be(1025)),
-            ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
-        ],
-        &mut machine,
-        Uint256::zero(),
-        debug,
-    )?;
-    assert_eq!(logs.len(), 1);
-    assert_eq!(sends.len(), 0);
-
-    if !logs[0].succeeded() {
-        if logs[0].get_return_code() == Uint256::from_u64(3) {
-            return Ok(false);
-        } else {
-            panic!();
-        }
-    }
 
     if let Some(path) = log_to {
         machine
@@ -408,117 +295,6 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     Ok(())
 }
 
-pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
-
-    let wallet = machine.runtime_env.new_wallet();
-    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
-
-    let arbowner = _ArbOwner::_new(&wallet, debug);
-
-    arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
-
-    arbowner._start_code_upload(&mut machine)?;
-
-    let mcode = vec![0x90u8, 1u8, 0u8, 42u8]; // debugprint(42)
-    arbowner._continue_code_upload(&mut machine, mcode)?;
-
-    arbowner._finish_code_upload_as_arbos_upgrade(&mut machine)?;
-
-    arbowner._set_seconds_per_send(&mut machine, Uint256::from_u64(10))?;
-
-    arbowner._set_gas_accounting_params(
-        &mut machine,
-        Uint256::from_u64(100_000_000),
-        Uint256::from_u64(6_000_000_000),
-        Uint256::from_u64(1_000_000_000),
-    )?;
-
-    if let Some(path) = log_to {
-        machine
-            .runtime_env
-            .recorder
-            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
-            .unwrap();
-    }
-
-    Ok(())
-}
-
-pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
-
-    let wallet = machine.runtime_env.new_wallet();
-    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
-
-    let arbowner = _ArbOwner::_new(&wallet, debug);
-    let arbgasinfo = _ArbGasInfo::_new(&wallet, debug);
-
-    machine.runtime_env.insert_eth_deposit_message(
-        my_addr.clone(),
-        my_addr.clone(),
-        Uint256::_from_eth(100),
-    );
-
-    let (l2tx, l1calldata, storage, basegas, conggas, totalgas) =
-        arbgasinfo._get_prices_in_wei(&mut machine)?;
-    assert!(l2tx.is_zero());
-    assert!(l1calldata.is_zero());
-    assert!(storage.is_zero());
-    assert!(basegas.is_zero());
-    assert!(conggas.is_zero());
-    assert_eq!(basegas.add(&conggas), totalgas);
-
-    arbowner._set_fees_enabled(&mut machine, true, true)?;
-    machine
-        .runtime_env
-        ._advance_time(Uint256::one(), None, true);
-
-    let (l2tx, l1calldata, storage, basegas, conggas, totalgas) =
-        arbgasinfo._get_prices_in_wei(&mut machine)?;
-    println!(
-        "L2 tx {}, L1 calldata {}, L2 storage {}, base gas {}, congestion gas {}, total gas {}",
-        l2tx, l1calldata, storage, basegas, conggas, totalgas
-    );
-    assert_eq!(l2tx, Uint256::from_u64(642483725000000));
-    assert_eq!(l1calldata, Uint256::from_u64(2778308000000));
-    assert_eq!(storage, Uint256::from_u64(301990000000000));
-    assert_eq!(basegas, Uint256::from_u64(15099500));
-    assert!(conggas.is_zero());
-    assert_eq!(basegas.add(&conggas), totalgas);
-
-    let (l2tx, l1calldata, storage) = arbgasinfo._get_prices_in_arbgas(&mut machine)?;
-    println!(
-        "L2 tx / ag {}, L1 calldata / ag {}, L2 storage / ag {}",
-        l2tx, l1calldata, storage
-    );
-    assert_eq!(l2tx, Uint256::from_u64(42550000));
-    assert_eq!(l1calldata, Uint256::from_u64(184000));
-    assert_eq!(storage, Uint256::from_u64(20000000));
-
-    let (speed_limit, gas_pool_max, tx_gas_limit) =
-        arbgasinfo._get_gas_accounting_params(&mut machine)?;
-    println!(
-        "speed limit {}, pool max {}, tx gas limit {}",
-        speed_limit, gas_pool_max, tx_gas_limit
-    );
-    assert_eq!(speed_limit, Uint256::from_u64(100_000_000));
-    assert_eq!(gas_pool_max, Uint256::from_u64(6_000_000_000));
-    assert_eq!(tx_gas_limit, Uint256::from_u64(1_000_000_000));
-
-    if let Some(path) = log_to {
-        machine
-            .runtime_env
-            .recorder
-            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
-            .unwrap();
-    }
-
-    Ok(())
-}
-
 pub fn _evm_test_arbaggregator(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
@@ -547,43 +323,6 @@ pub fn _evm_test_arbaggregator(log_to: Option<&Path>, debug: bool) -> Result<(),
     assert!(arbagg
         ._set_default_aggregator(&mut machine, Uint256::from_u64(12345), Some(my_addr))
         .is_err());
-
-    if let Some(path) = log_to {
-        machine
-            .runtime_env
-            .recorder
-            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
-            .unwrap();
-    }
-
-    Ok(())
-}
-
-pub fn _evm_test_rate_control(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
-
-    let wallet = machine.runtime_env.new_wallet();
-    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
-    let arbowner = _ArbOwner::_new(&wallet, debug);
-
-    arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
-
-    let const_table = init_constant_table();
-
-    let (r1, r2) = arbowner._get_fee_recipients(&mut machine)?;
-    assert_eq!(&r1, const_table.get("NetFee_defaultRecipient").unwrap());
-    assert_eq!(
-        &r2,
-        const_table.get("CongestionFee_defaultRecipient").unwrap()
-    );
-
-    let new_r1 = r1.add(&Uint256::one());
-    let new_r2 = r2.add(&Uint256::one());
-    arbowner._set_fee_recipients(&mut machine, new_r1.clone(), new_r2.clone())?;
-    let (updated_r1, updated_r2) = arbowner._get_fee_recipients(&mut machine)?;
-    assert_eq!(new_r1, updated_r1);
-    assert_eq!(new_r2, updated_r2);
 
     if let Some(path) = log_to {
         machine

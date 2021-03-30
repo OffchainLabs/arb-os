@@ -1067,19 +1067,21 @@ impl<'a> ArbFunctionTable<'a> {
     }
 }
 
-pub struct _ArbOwner<'a> {
+#[cfg(test)]
+pub struct ArbOwner<'a> {
     pub contract_abi: AbiForContract,
     wallet: &'a Wallet,
     my_address: Uint256,
     debug: bool,
 }
 
-impl<'a> _ArbOwner<'a> {
+#[cfg(test)]
+impl<'a> ArbOwner<'a> {
     pub fn _new(wallet: &'a Wallet, debug: bool) -> Self {
         let mut contract_abi =
             AbiForContract::new_from_file(&builtin_contract_path("ArbOwner")).unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(107));
-        _ArbOwner {
+        ArbOwner {
             contract_abi,
             wallet,
             my_address: Uint256::from_bytes(wallet.address().as_bytes()),

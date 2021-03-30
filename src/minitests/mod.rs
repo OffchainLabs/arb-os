@@ -11,7 +11,6 @@ use std::convert::TryInto;
 use std::path::Path;
 
 mod integration;
-mod rollup;
 
 fn test_from_file_with_args_and_return(path: &Path, args: Vec<Value>, ret: Value) {
     let res = run_from_file(path, args, false);
@@ -256,22 +255,6 @@ fn test_arbsys_direct() {
 }
 
 #[test]
-fn test_arbowner() {
-    match crate::evm::_evm_test_arbowner(None, false) {
-        Ok(()) => {}
-        Err(e) => panic!("{:?}", e),
-    }
-}
-
-#[test]
-fn test_arbgasinfo() {
-    match crate::evm::_evm_test_arbgasinfo(None, false) {
-        Ok(()) => {}
-        Err(e) => panic!("{:?}", e),
-    }
-}
-
-#[test]
 fn test_arbaggregator() {
     match crate::evm::_evm_test_arbaggregator(None, false) {
         Ok(()) => {}
@@ -302,22 +285,6 @@ fn test_evm_add_code() {
 #[test]
 pub fn test_crosscontract_call_with_constructors() {
     match crate::evm::evm_xcontract_call_with_constructors(None, false, false) {
-        Ok(result) => assert_eq!(result, true),
-        Err(e) => panic!("error {}", e),
-    }
-}
-
-#[test]
-pub fn test_gas_charging_underfunded() {
-    match crate::evm::_evm_run_with_gas_charging(None, Uint256::_from_gwei(20), false, false) {
-        Ok(result) => assert_eq!(result, false),
-        Err(e) => panic!("error {}", e),
-    }
-}
-
-#[test]
-pub fn test_gas_charging_fully_funded() {
-    match crate::evm::_evm_run_with_gas_charging(None, Uint256::_from_eth(1), false, false) {
         Ok(result) => assert_eq!(result, true),
         Err(e) => panic!("error {}", e),
     }
@@ -367,11 +334,6 @@ fn test_underfunded_nested_call() {
 #[test]
 fn test_bls_registry() {
     crate::evm::_evm_test_bls_registry(None, false);
-}
-
-#[test]
-fn test_rollup_tracker() {
-    rollup::_do_rollup_tracker_ops();
 }
 
 fn test_call_to_precompile5(
