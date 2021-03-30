@@ -323,11 +323,6 @@ fn test_underfunded_nested_call() {
     assert!(crate::evm::_underfunded_nested_call_test(None, false).is_ok());
 }
 
-#[test]
-fn test_bls_registry() {
-    crate::evm::_evm_test_bls_registry(None, false);
-}
-
 fn test_call_to_precompile5(
     machine: &mut Machine,
     sender_addr: &Uint256,
