@@ -11,6 +11,7 @@ use crate::stringtable::StringTable;
 use ast::{Func, TypeTree};
 use clap::Clap;
 use lalrpop_util::lalrpop_mod;
+use lalrpop_util::ParseError;
 use mini::DeclsParser;
 use miniconstants::init_constant_table;
 use serde::{Deserialize, Serialize};
@@ -662,6 +663,19 @@ fn codegen_programs(
     Ok(progs)
 }
 
+fn comma_list(input: &[String]) -> String {
+    let mut base = String::new();
+    if input.len() > 0 {
+        for object in input.iter().take(input.len() - 1) {
+            base.push_str(object);
+            base.push(',');
+            base.push(' ');
+        }
+        base.push_str(&input[input.len() - 1]);
+    }
+    base
+}
+
 ///Converts source string `source` into a series of `TopLevelDecl`s, uses identifiers from
 /// `string_table` and records new ones in it as well.  The `file_id` argument is used to construct
 /// file information for the location fields.
@@ -685,25 +699,37 @@ pub fn parse_from_source(
             &source,
         )
         .map_err(|e| match e {
-            lalrpop_util::ParseError::UnrecognizedToken {
-                token: (offset, tok, end),
-                expected: _,
+            ParseError::UnrecognizedToken {
+                token: (offset, _tok, end),
+                expected,
             } => CompileError::new(
                 format!(
-                    "unexpected token: {}, Type: {:?}",
+                    "unexpected token: {}, expected one of: {}",
                     &source[offset..end],
-                    tok
+                    comma_list(&expected),
                 ),
                 Some(lines.location(BytePos::from(offset), file_id).unwrap()),
             ),
-            lalrpop_util::ParseError::UnrecognizedEOF { location, expected } => CompileError::new(
+            ParseError::InvalidToken { location } => CompileError::new(
+                format!("found invalid token"),
+                lines.location(location.into(), file_id),
+            ),
+            ParseError::UnrecognizedEOF { location, expected } => CompileError::new(
                 format!(
                     "unexpected end of file: expected one of: {}",
-                    format!("{:?}", &expected)
+                    comma_list(&expected)
                 ),
                 lines.location(location.into(), file_id),
             ),
-            _ => CompileError::new(format!("{:?}", e), None),
+            ParseError::ExtraToken {
+                token: (offset, _tok, end),
+            } => CompileError::new(
+                format!("extra token: {}", &source[offset..end],),
+                Some(lines.location(BytePos::from(offset), file_id).unwrap()),
+            ),
+            ParseError::User { error } => {
+                CompileError::new(format!("custom parsing error: {}", error), None)
+            }
         })
 }
 
