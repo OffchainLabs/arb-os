@@ -11,12 +11,12 @@ use std::path::Path;
 
 pub use abi::{builtin_contract_path, AbiForContract};
 pub use benchmarks::make_benchmarks;
-pub use bls::_evm_test_bls_registry;
 pub use evmtest::run_evm_tests;
 pub use upload::CodeUploader;
 
 mod abi;
 mod benchmarks;
+#[cfg(test)]
 mod bls;
 mod evmtest;
 #[cfg(test)]
