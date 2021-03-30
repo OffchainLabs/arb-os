@@ -1,4 +1,4 @@
-use super::abi::{ArbAggregator, ArbGasInfo, ArbInfo, ArbOwner};
+use super::abi::{ArbAggregator, ArbGasInfo, ArbInfo, ArbOwner, ArbReplayableTx, ArbStatistics};
 use super::*;
 use crate::compile::miniconstants::init_constant_table;
 use crate::run::{load_from_file, RuntimeEnvironment};
@@ -618,5 +618,194 @@ pub fn _evm_test_arbaggregator(log_to: Option<&Path>, debug: bool) -> Result<(),
             .unwrap();
     }
 
+    Ok(())
+}
+
+#[test]
+fn test_retryable() {
+    match _test_retryable(None, false) {
+        Ok(()) => {}
+        Err(e) => panic!("{}", e),
+    }
+}
+
+pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+
+    let my_addr = Uint256::from_u64(1234);
+
+    let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
+    if add_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, debug)
+        .is_err()
+    {
+        panic!("failed to deploy Add contract");
+    }
+
+    let beneficiary = Uint256::from_u64(9185);
+
+    let (txid, _) = add_contract._send_retryable_tx(
+        my_addr.clone(),
+        "add",
+        &[
+            ethabi::Token::Uint(Uint256::one().to_u256()),
+            ethabi::Token::Uint(Uint256::one().to_u256()),
+        ],
+        &mut machine,
+        Uint256::zero(),
+        Uint256::zero(),
+        None,
+        Some(beneficiary.clone()),
+        None,
+        None,
+    )?;
+    assert!(txid != Uint256::zero());
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+
+    let arb_replayable = ArbReplayableTx::_new(debug);
+    let timeout = arb_replayable._get_timeout(&mut machine, txid.clone())?;
+    assert!(timeout > machine.runtime_env.current_timestamp);
+
+    let (keepalive_price, reprice_time) =
+        arb_replayable._get_keepalive_price(&mut machine, txid.clone())?;
+    assert_eq!(keepalive_price, Uint256::zero());
+    assert!(reprice_time > machine.runtime_env.current_timestamp);
+
+    let keepalive_ret = arb_replayable._keepalive(&mut machine, txid.clone(), keepalive_price)?;
+
+    let new_timeout = arb_replayable._get_timeout(&mut machine, txid.clone())?;
+    assert_eq!(keepalive_ret, new_timeout);
+    assert!(new_timeout > timeout);
+
+    arb_replayable._redeem(&mut machine, txid.clone())?;
+
+    let new_timeout = arb_replayable._get_timeout(&mut machine, txid.clone())?;
+    assert_eq!(new_timeout, Uint256::zero()); // verify that txid has been removed
+
+    // make another one, and have the beneficiary cancel it
+    let (txid, _) = add_contract._send_retryable_tx(
+        my_addr.clone(),
+        "add",
+        &[
+            ethabi::Token::Uint(Uint256::one().to_u256()),
+            ethabi::Token::Uint(Uint256::one().to_u256()),
+        ],
+        &mut machine,
+        Uint256::zero(),
+        Uint256::zero(),
+        None,
+        Some(beneficiary.clone()),
+        None,
+        None,
+    )?;
+    assert!(txid != Uint256::zero());
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+
+    let out_beneficiary = arb_replayable._get_beneficiary(&mut machine, txid.clone())?;
+    assert_eq!(out_beneficiary, beneficiary);
+
+    arb_replayable._cancel(&mut machine, txid.clone(), beneficiary.clone())?;
+
+    assert_eq!(
+        arb_replayable._get_timeout(&mut machine, txid)?,
+        Uint256::zero()
+    ); // verify txid no longer exists
+
+    let amount_to_pay = Uint256::from_u64(1_000_000);
+    let _txid = machine.runtime_env._insert_retryable_tx_message(
+        my_addr.clone(),
+        Uint256::from_u64(7890245789245), // random non-contract address
+        amount_to_pay.clone(),
+        amount_to_pay.clone(),
+        Uint256::zero(),
+        my_addr.clone(),
+        my_addr.clone(),
+        Uint256::zero(),
+        Uint256::zero(),
+        &[],
+    );
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+    let all_logs = machine.runtime_env.get_all_receipt_logs();
+    let last_log = &all_logs[all_logs.len() - 1];
+    assert!(last_log.succeeded());
+
+    let (txid, redeemid) = add_contract._send_retryable_tx(
+        my_addr.clone(),
+        "add",
+        &[
+            ethabi::Token::Uint(Uint256::one().to_u256()),
+            ethabi::Token::Uint(Uint256::one().to_u256()),
+        ],
+        &mut machine,
+        Uint256::zero(),
+        Uint256::zero(),
+        None,
+        Some(beneficiary.clone()),
+        Some(Uint256::from_u64(1_000_000)),
+        Some(Uint256::zero()),
+    )?;
+    assert!(txid != Uint256::zero());
+    assert!(redeemid.is_some());
+    let redeemid = redeemid.unwrap();
+
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+
+    let receipts = machine.runtime_env.get_all_receipt_logs();
+    let last_receipt = receipts[receipts.len() - 1].clone();
+    assert!(last_receipt.succeeded());
+    assert_eq!(last_receipt.get_request_id(), redeemid);
+
+    let second_to_last = receipts[receipts.len() - 2].clone();
+    assert!(second_to_last.succeeded());
+    assert_eq!(second_to_last.get_request_id(), txid);
+
+    if let Some(path) = log_to {
+        machine
+            .runtime_env
+            .recorder
+            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
+            .unwrap();
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_arb_statistics() {
+    assert!(_test_arb_stats().is_ok());
+}
+
+fn _test_arb_stats() -> Result<(), ethabi::Error> {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+
+    let arbstats = ArbStatistics::_new(false);
+
+    let (arb_blocknum, num_accounts, storage, _arbgas, txs, contracts) =
+        arbstats._get_stats(&mut machine)?;
+
+    assert_eq!(arb_blocknum, Uint256::from_u64(0));
+    assert_eq!(num_accounts, Uint256::from_u64(22));
+    assert_eq!(storage, Uint256::from_u64(0));
+    // assert_eq!(_arbgas, Uint256::from_u64(1_490_972));  // disable this because it will vary over versions
+    assert_eq!(txs, Uint256::from_u64(0));
+    assert_eq!(contracts, Uint256::from_u64(19));
     Ok(())
 }

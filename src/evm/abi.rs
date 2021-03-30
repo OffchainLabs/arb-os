@@ -4,7 +4,7 @@
 
 use crate::evm::test_contract_path;
 use crate::mavm::Value;
-use crate::run::{load_from_file, ArbosReceipt, Machine};
+use crate::run::{ArbosReceipt, Machine};
 use crate::uint256::Uint256;
 use ethers_core::utils::keccak256;
 use ethers_signers::Signer;
@@ -1902,17 +1902,19 @@ impl ArbAggregator {
     }
 }
 
-pub struct _ArbReplayableTx {
+#[cfg(test)]
+pub struct ArbReplayableTx {
     pub contract_abi: AbiForContract,
     debug: bool,
 }
 
-impl _ArbReplayableTx {
+#[cfg(test)]
+impl ArbReplayableTx {
     pub fn _new(debug: bool) -> Self {
         let mut contract_abi =
             AbiForContract::new_from_file(&builtin_contract_path("ArbRetryableTx")).unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(110));
-        _ArbReplayableTx {
+        ArbReplayableTx {
             contract_abi,
             debug,
         }
@@ -2079,17 +2081,19 @@ impl _ArbReplayableTx {
     }
 }
 
-pub struct _ArbStatistics {
+#[cfg(test)]
+pub struct ArbStatistics {
     pub contract_abi: AbiForContract,
     debug: bool,
 }
 
-impl _ArbStatistics {
+#[cfg(test)]
+impl ArbStatistics {
     pub fn _new(debug: bool) -> Self {
         let mut contract_abi =
             AbiForContract::new_from_file(&builtin_contract_path("ArbStatistics")).unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(111));
-        _ArbStatistics {
+        ArbStatistics {
             contract_abi,
             debug,
         }
@@ -2125,29 +2129,6 @@ impl _ArbStatistics {
             Err(ethabi::Error::from("reverted"))
         }
     }
-}
-
-#[test]
-fn test_arb_statistics() {
-    assert!(_test_arb_stats().is_ok());
-}
-
-fn _test_arb_stats() -> Result<(), ethabi::Error> {
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
-
-    let arbstats = _ArbStatistics::_new(false);
-
-    let (arb_blocknum, num_accounts, storage, _arbgas, txs, contracts) =
-        arbstats._get_stats(&mut machine)?;
-
-    assert_eq!(arb_blocknum, Uint256::from_u64(0));
-    assert_eq!(num_accounts, Uint256::from_u64(22));
-    assert_eq!(storage, Uint256::from_u64(0));
-    // assert_eq!(_arbgas, Uint256::from_u64(1_490_972));  // disable this because it will vary over versions
-    assert_eq!(txs, Uint256::from_u64(0));
-    assert_eq!(contracts, Uint256::from_u64(19));
-    Ok(())
 }
 
 struct FunctionTableItem {
