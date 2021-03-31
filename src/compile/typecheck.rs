@@ -11,7 +11,7 @@ use super::ast::{
 };
 use crate::compile::ast::FieldInitializer;
 use crate::link::{ExportedFunc, Import, ImportedFunc};
-use crate::mavm::{Instruction, Label, Value};
+use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
@@ -117,6 +117,74 @@ fn strip_returns(to_strip: &mut TypeCheckedNode, _state: &(), _mut_state: &mut (
         } else if let TypeCheckedStatementKind::ReturnVoid() = &mut stat.kind {
             stat.kind = TypeCheckedStatementKind::Break(None, "_inline".to_string());
         }
+    } else if let TypeCheckedNode::Expression(expr) = to_strip {
+        if let TypeCheckedExprKind::Try(inner, tipe) = &expr.kind {
+            expr.kind = TypeCheckedExprKind::CodeBlock(TypeCheckedCodeBlock::new(
+                vec![],
+                Some(Box::new(TypeCheckedExpr {
+                    kind: TypeCheckedExprKind::If(
+                        Box::new(TypeCheckedExpr {
+                            kind: TypeCheckedExprKind::Asm(
+                                Type::Bool,
+                                vec![
+                                    Instruction::from_opcode(
+                                        Opcode::AVMOpcode(AVMOpcode::Dup0),
+                                        inner.debug_info,
+                                    ),
+                                    Instruction::from_opcode_imm(
+                                        Opcode::AVMOpcode(AVMOpcode::Tget),
+                                        Value::Int(Uint256::zero()),
+                                        inner.debug_info,
+                                    ),
+                                ],
+                                vec![(**inner).clone()],
+                            ),
+                            debug_info: inner.debug_info,
+                        }),
+                        TypeCheckedCodeBlock::new(
+                            vec![],
+                            Some(Box::new(TypeCheckedExpr {
+                                kind: TypeCheckedExprKind::Asm(
+                                    tipe.clone(),
+                                    vec![Instruction::from_opcode_imm(
+                                        Opcode::AVMOpcode(AVMOpcode::Tget),
+                                        Value::Int(Uint256::one()),
+                                        inner.debug_info,
+                                    )],
+                                    vec![],
+                                ),
+                                debug_info: inner.debug_info,
+                            })),
+                            None,
+                        ),
+                        Some(TypeCheckedCodeBlock::new(
+                            vec![TypeCheckedStatement {
+                                kind: TypeCheckedStatementKind::Break(
+                                    Some(TypeCheckedExpr {
+                                        kind: TypeCheckedExprKind::Asm(
+                                            Type::Option(Box::new(tipe.clone())),
+                                            vec![],
+                                            vec![],
+                                        ),
+                                        debug_info: inner.debug_info,
+                                    }),
+                                    "_inline".to_string(),
+                                ),
+                                debug_info: inner.debug_info,
+                            }],
+                            Some(Box::new(TypeCheckedExpr {
+                                kind: TypeCheckedExprKind::Panic,
+                                debug_info: inner.debug_info,
+                            })),
+                            None,
+                        )),
+                        tipe.clone(),
+                    ),
+                    debug_info: inner.debug_info,
+                })),
+                None,
+            ))
+        }
     }
     true
 }
@@ -142,27 +210,54 @@ fn inline(
             {
                 let found_func = state.0.iter().find(|func| func.name == id);
                 if let Some(func) = found_func {
-                    let mut code: Vec<_> = args
-                        .iter()
-                        .zip(func.args.iter())
-                        .map(|(arg, otherarg)| TypeCheckedStatement {
+                    let mut code: Vec<_> = if func.args.len() == 0 {
+                        vec![]
+                    } else {
+                        vec![TypeCheckedStatement {
                             kind: TypeCheckedStatementKind::Let(
-                                TypeCheckedMatchPattern::new_simple(
-                                    otherarg.name,
-                                    otherarg.tipe.clone(),
+                                TypeCheckedMatchPattern::new_tuple(
+                                    func.args
+                                        .iter()
+                                        .map(|arg| {
+                                            TypeCheckedMatchPattern::new_simple(
+                                                arg.name,
+                                                arg.tipe.clone(),
+                                            )
+                                        })
+                                        .collect(),
+                                    Type::Tuple(
+                                        func.args.iter().map(|arg| arg.tipe.clone()).collect(),
+                                    ),
                                 ),
-                                arg.clone(),
+                                TypeCheckedExpr {
+                                    kind: TypeCheckedExprKind::Tuple(
+                                        args.iter()
+                                            .cloned()
+                                            .map(|mut expr| {
+                                                expr.recursive_apply(strip_returns, &(), &mut ());
+                                                expr
+                                            })
+                                            .collect(),
+                                        Type::Tuple(
+                                            func.args.iter().map(|arg| arg.tipe.clone()).collect(),
+                                        ),
+                                    ),
+                                    debug_info: DebugInfo::default(),
+                                },
                             ),
                             debug_info: DebugInfo::default(),
-                        })
-                        .collect();
+                        }]
+                    };
                     code.append(&mut func.code.clone());
                     let last = code.pop();
                     let block_exp = match last {
                         Some(TypeCheckedStatement {
-                            kind: TypeCheckedStatementKind::Return(exp),
+                            kind: TypeCheckedStatementKind::Return(mut exp),
                             debug_info: _,
-                        }) => Some(Box::new(exp)),
+                        }) => Some(Box::new({
+                            exp.recursive_apply(strip_returns, &(), &mut ());
+                            exp
+                        })),
                         _ => {
                             if let Some(statement) = last {
                                 code.push(statement);
