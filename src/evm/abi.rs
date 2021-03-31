@@ -420,10 +420,17 @@ impl AbiForContract {
         );
         Ok(())
     }
-    pub fn deploy_add(machine: &mut Machine) -> Result<Self, ethabi::Error> {
-        match AbiForContract::new_from_file(&test_contract_path("Add")) {
+    pub fn new_deployed(
+        machine: &mut Machine,
+        path: &str,
+        args: &[ethabi::Token],
+        payment: Uint256,
+        advance_time: Option<Uint256>,
+        debug: bool,
+    ) -> Result<AbiForContract, ethabi::Error> {
+        match AbiForContract::new_from_file(path) {
             Ok(mut contract) => {
-                let result = contract.deploy(&[], machine, Uint256::zero(), None, false);
+                let result = contract.deploy(args, machine, payment, advance_time, debug);
                 if let Ok(contract_addr) = result {
                     assert_ne!(contract_addr, Uint256::zero());
                     Ok(contract)
@@ -437,6 +444,17 @@ impl AbiForContract {
             ))),
         }
     }
+}
+
+pub fn deploy_add(machine: &mut Machine) -> Result<AbiForContract, ethabi::Error> {
+    AbiForContract::new_deployed(
+        machine,
+        &test_contract_path("Add"),
+        &[],
+        Uint256::zero(),
+        None,
+        false,
+    )
 }
 
 #[test]

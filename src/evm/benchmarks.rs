@@ -2,7 +2,7 @@
 * Copyright 2020, Offchain Labs, Inc. All rights reserved.
 */
 
-use crate::evm::abi::AbiForContract;
+use crate::evm::abi::deploy_add;
 use crate::run::load_from_file;
 use crate::uint256::Uint256;
 use std::path::Path;
@@ -57,7 +57,7 @@ pub fn benchmark_add(iterations: u64, log_to: &Path) -> Result<u64, ethabi::Erro
     machine.start_at_zero();
 
     let my_addr = Uint256::from_u64(1025);
-    let contract = AbiForContract::deploy_add(&mut machine)?;
+    let contract = deploy_add(&mut machine)?;
 
     for _ in 0..iterations {
         let _result = contract
@@ -90,7 +90,7 @@ pub fn benchmark_add_batched(iterations: u64, log_to: &Path) -> Result<u64, etha
 
     let wallet = machine.runtime_env.new_wallet();
 
-    let contract = AbiForContract::deploy_add(&mut machine)?;
+    let contract = deploy_add(&mut machine)?;
 
     let mut batch = machine.runtime_env.new_batch();
 
