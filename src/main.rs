@@ -32,6 +32,7 @@ pub mod pos;
 mod run;
 mod stringtable;
 mod uint256;
+mod upload;
 
 ///Command line options for run subcommand.
 #[derive(Clap, Debug)]

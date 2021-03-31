@@ -12,7 +12,6 @@ use std::path::Path;
 pub use abi::{builtin_contract_path, AbiForContract};
 pub use benchmarks::make_benchmarks;
 pub use evmtest::run_evm_tests;
-pub use upload::CodeUploader;
 
 mod abi;
 mod benchmarks;
@@ -21,7 +20,6 @@ mod bls;
 mod evmtest;
 #[cfg(test)]
 mod preinstalled_contracts;
-mod upload;
 
 #[derive(Clone)]
 pub struct CallInfo<'a> {
