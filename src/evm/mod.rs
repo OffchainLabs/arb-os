@@ -20,7 +20,7 @@ mod benchmarks;
 mod bls;
 mod evmtest;
 #[cfg(test)]
-mod tests;
+mod preinstalled_contracts;
 mod upload;
 
 #[derive(Clone)]
