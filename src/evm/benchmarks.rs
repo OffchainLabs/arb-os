@@ -3,7 +3,7 @@
 */
 
 use crate::evm::{abi::AbiForContract, test_contract_path};
-use crate::run::{load_from_file, RuntimeEnvironment};
+use crate::run::load_from_file;
 use crate::uint256::Uint256;
 use ethers_signers::Signer;
 use std::path::Path;
@@ -36,8 +36,7 @@ pub fn make_benchmarks() {
 }
 
 pub fn benchmark_boot(_iterations: u64, log_to: &Path) -> u64 {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     let gas_used = machine.run(None);
@@ -50,8 +49,7 @@ pub fn benchmark_boot(_iterations: u64, log_to: &Path) -> u64 {
 }
 
 pub fn benchmark_add(iterations: u64, log_to: &Path) -> u64 {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     let my_addr = Uint256::from_u64(1025);
@@ -96,8 +94,7 @@ pub fn benchmark_add(iterations: u64, log_to: &Path) -> u64 {
 }
 
 pub fn benchmark_add_batched(iterations: u64, log_to: &Path) -> u64 {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     let wallet = machine.runtime_env.new_wallet();
