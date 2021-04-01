@@ -1,9 +1,11 @@
 //
-// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+// Copyright 2021, Offchain Labs, Inc. All rights reserved.
 //
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 
 public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> any {
-    return input_globals.globalAccountStore;
+    // add codeRefTable field, which wasn't in previous version
+    let old = unsafecast<(any, any, any)>(input_globals.globalAccountStore);
+    return (old.0, old.1, old.2, newmap<any, any>);
 }
