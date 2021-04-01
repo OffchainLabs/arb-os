@@ -26,6 +26,7 @@ use accounts::accountStore_setRetryBuffer;
 use accounts::accountStore_transferEthBalance;
 use accounts::accountStore_destroyAccount;
 use accounts::accountStore_cloneContract;
+use accounts::accountStore_createOrAddCodeRef;
 use accounts::account_setStorageCell;
 use accounts::account_getBalance;
 use accounts::account_setBalance;
@@ -743,8 +744,9 @@ public impure func evmCallStack_returnFromCall(
                     // Constructor call was successful, so finish setting up the account.
                     // The constructor's returndata is EVM code for the contract.
                     // Compile that EVM code into AVM, and substitute that in as the code for the contract.
-                    if let Some(res) = translateEvmCodeSegment(bytestream_new(returnData), false) {
-                        let (entryPoint, evmJumpTable, _) = res;
+                    if let Some(res) = accountStore_createOrAddCodeRef(topFrame.accountStore, returnData) {
+                        let (uaStore, entryPoint, evmJumpTable) = res;
+                        topFrame = topFrame with { accountStore: uaStore };
 
                         // Use the storage left over by the constructor.
                         let storageMap = storageMap_new();
@@ -1252,6 +1254,28 @@ public impure func evmCallStack_setAccountInCurrentContext(addr: address, acct: 
                 acct,
             )
         );
+    }
+}
+
+public impure func evmCallStack_getAccountStoreInCurrentContext() -> AccountStore {
+    return xif let Some(topFrame) = globalCallStack {
+        accountStore_set(topFrame.accountStore, topFrame.runningAs, topFrame.runningAsAccount)
+    } else {
+        getGlobalAccountStore()
+    };
+}
+
+public impure func evmCallStack_setAccountStoreInCurrentContext(acctStore: AccountStore) {
+    if let Some(topFrame) = globalCallStack {
+        globalCallStack = Some(
+            topFrame with {
+                accountStore: acctStore
+            } with {
+                runningAsAccount: accountStore_get(acctStore, topFrame.runningAs)
+            }
+        );
+    } else {
+        setGlobalAccountStore(acctStore);
     }
 }
 

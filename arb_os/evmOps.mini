@@ -33,6 +33,8 @@ use evmCallStack::evmCallStack_callHitError;
 use evmCallStack::evmCallStack_runningCodeFromAccount;
 use evmCallStack::snapshotAuxStack;
 use evmCallStack::evmCallStack_changeNumAccounts;
+use evmCallStack::evmCallStack_getAccountStoreInCurrentContext;
+use evmCallStack::evmCallStack_setAccountStoreInCurrentContext;
 
 use evmCallStack::evmCallFrame_runningAsAccount;
 use evmCallStack::evmCallFrame_runningCodeFromAccount;
@@ -45,6 +47,7 @@ use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallFrame_getEvmLogs;
 use evmCallStack::evmCallFrame_shouldRevertOnStorageWrite;
 
+use accounts::accountStore_createOrAddCodeRef;
 use accounts::account_getAddress;
 use accounts::account_getCodeSize;
 use accounts::account_getBalance;
@@ -1050,8 +1053,10 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
 
             if (constructorSucceeded) {
                 if let Some(contractCode) = evmCallStack_getTopFrameReturnData() {
-                    if let Some(res) = translateEvmCodeSegment(bytestream_new(contractCode), false) {
-                        let (startPoint2, evmJumpTable2, _) = res;
+                    let astore = evmCallStack_getAccountStoreInCurrentContext();
+                    if let Some(res) = accountStore_createOrAddCodeRef(astore, contractCode) {
+                        let (uastore, startPoint2, evmJumpTable2) = res;
+                        evmCallStack_setAccountStoreInCurrentContext(uastore);
                         if let Some(oldAcct) = evmCallStack_getAccount(newAddress) {
                             let storage = storageMap_new();
                             if let Some(st) = account_getAllStorage(oldAcct) {
