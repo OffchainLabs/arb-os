@@ -19,7 +19,6 @@ use std::io;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use uint256::Uint256;
 use crate::run::upload::CodeUploader;
 
 mod compile;
