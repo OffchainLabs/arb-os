@@ -90,26 +90,31 @@ struct TypeCheckedModule {
 }
 
 impl CompileStruct {
-    pub fn invoke(&self) -> Result<LinkedProgram, CompileError> {
+    pub fn invoke(&self) -> Result<LinkedProgram, (CompileError, BTreeMap<u64, String>)> {
         let mut file_name_chart = BTreeMap::new();
         let mut compiled_progs = Vec::new();
         for filename in &self.input {
             let path = Path::new(filename);
-            compile_from_file(path, &mut file_name_chart, self.inline)
-                .map_err(|mut e| {
+            match compile_from_file(path, &mut file_name_chart, self.inline) {
+                Ok(idk) => idk,
+                Err(mut e) => {
                     e.description = format!("Compile error: {}", e.description);
-                    e
-                })?
-                .into_iter()
-                .for_each(|prog| {
-                    file_name_chart.extend(prog.file_name_chart.clone());
-                    compiled_progs.push(prog)
-                });
+                    return Err((e, file_name_chart));
+                }
+            }
+            .into_iter()
+            .for_each(|prog| {
+                file_name_chart.extend(prog.file_name_chart.clone());
+                compiled_progs.push(prog)
+            });
         }
-        let linked_prog = link(&compiled_progs, self.test_mode).map_err(|mut e| {
-            e.description = format!("Linking error: {}", e.description);
-            e
-        })?;
+        let linked_prog = match link(&compiled_progs, self.test_mode) {
+            Ok(idk) => idk,
+            Err(mut e) => {
+                e.description = format!("Compile error: {}", e.description);
+                return Err((e, file_name_chart));
+            }
+        };
         postlink_compile(
             linked_prog,
             file_name_chart.clone(),
@@ -118,7 +123,7 @@ impl CompileStruct {
         )
         .map_err(|mut e| {
             e.description = format!("Linking error: {}", e.description);
-            e
+            (e, file_name_chart)
         })
     }
 }
