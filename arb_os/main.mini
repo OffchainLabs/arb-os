@@ -23,6 +23,7 @@ use decompression::decompression_init;
 use errorHandler::errorHandler_init;
 use evmCallStack::evmCallStack_init;
 use evmOps::evmOps_init;
+use evmOps::evmOp_return;
 use evmlogs::EvmLogs;
 use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_init;
@@ -66,10 +67,12 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         // now re-do the initializations that set up pointers into the ArbOS code
         errorHandler_init();
         evmOps_init();
-        evmCallStack_makeEmpty();   // clear out the old EVM call stack from before the upgrade
         if (initializePreinstalls(true) == None<()>) {
             panic;   // don't try to run without preinstalls and precompiles
         }
+
+        // now return from the call that triggered the upgrade
+        evmOp_return(0, 0);
     } else {
         // this is a clean start, not an upgrade
         errorHandler_init();
