@@ -17,6 +17,8 @@ use evmCallStack::evmCallFrame_getCallvalue;
 use evmCallStack::evmCallFrame_getAccount;
 use evmCallStack::evmCallStack_setAccount;
 use evmCallStack::evmCallStack_setTopFrameMemory;
+use evmCallStack::evmCallStack_stackDepth;
+use evmCallStack::evmCallStack_returnFromCall;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert;
@@ -209,8 +211,15 @@ impure func arbowner_finishCodeUploadAsArbosUpgrade(topFrame: EvmCallFrame, call
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 40, 0, 0);
     }
+
+    // This can only be called directly from L1. Revert if called from L2.
+    if (evmCallStack_stackDepth() != 1) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 41, 0, 0);
+    }
+
     if let Some(upgrade) = upgradeInProgress {
-        asm(avmCodeBuilder_finish(upgrade), 0) { jump };  // jump to the new code
+        let upgradeCodePoint = unsafecast<impure func()>(avmCodeBuilder_finish(upgrade));
+        evmCallStack_returnFromCall(true, 0, 0, Some(upgradeCodePoint));
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 42, 0, 0);
     }

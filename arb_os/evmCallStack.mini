@@ -244,6 +244,7 @@ public impure func initEvmCallStack(
     ) {
         let startTxResult = gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.gasPayer);
         if (startTxResult == const::TxResultCode_success) {
+
             if (request.seqNum != None<uint>) {
                 // increment the caller's sequence number, if caller has sufficient balance
                 let acctStore = getGlobalAccountStore();
@@ -646,7 +647,8 @@ public impure func evmCallStack_doCall(
 public impure func evmCallStack_returnFromCall(
     success: bool,
     returnOffset: uint,
-    returnLength: uint
+    returnLength: uint,
+    jumpTargetIfTxEnd: option<impure func()>,
 ) -> option<()> {
     // A call just completed. Commit its effects as appropriate, and return control to its caller.
 
@@ -904,7 +906,11 @@ public impure func evmCallStack_returnFromCall(
 
         // Now discard any AVM stack contents and jump back to the main run loop.
         emptyAvmStack();
-        restoreAuxStackAndCall(mainRunLoop, None<Stack>, true);  // should never return
+        restoreAuxStackAndCall(
+            xif let Some(target) = jumpTargetIfTxEnd { target } else { mainRunLoop },
+            None<Stack>,
+            true
+        );  // should never return
         evmCallStack_callHitError(9);
         panic
     };
@@ -1478,7 +1484,7 @@ public func evmCallFrame_getParent(frame: EvmCallFrame) -> option<EvmCallFrame> 
 
 public impure func evmCallStack_callHitError(errInfo: any) {
     asm((664, errInfo),) { debugprint };
-    if (evmCallStack_returnFromCall(false, 0, 0) == None<()>) {
+    if (evmCallStack_returnFromCall(false, 0, 0, None<impure func()>) == None<()>) {
         // something has gone seriously wrong with the evmCallStack
         // recover by clearing the evmCallStack, refunding unused gas, and jumping back to the error handler
         globalCallStack = None<EvmCallFrame>;
