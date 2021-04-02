@@ -120,6 +120,7 @@ enum Args {
 }
 
 fn main() -> Result<(), CompileError> {
+    let mut print_time = true;
     let start_time = Instant::now();
     let matches = Args::parse();
 
@@ -264,14 +265,17 @@ fn main() -> Result<(), CompileError> {
         Args::SerializeUpgrade(up) => {
             let the_json = CodeUploader::_new_from_file(Path::new(&up.input))._to_json();
             print!("{}", the_json.unwrap());
+            print_time = false;
         }
     }
     let total_time = Instant::now() - start_time;
-    println!(
-        "Finished in {}.{:0>3} seconds.",
-        total_time.as_secs(),
-        total_time.subsec_millis()
-    );
+    if print_time {
+        println!(
+            "Finished in {}.{:0>3} seconds.",
+            total_time.as_secs(),
+            total_time.subsec_millis()
+        );
+    }
 
     Ok(())
 }
