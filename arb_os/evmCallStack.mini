@@ -93,6 +93,12 @@ use inbox::inbox_currentTimestamp;
 use retrybuffer::RetryBuffer;
 use retrybuffer::RetryableTx;
 
+use tracing::evmTracer_clear;
+use tracing::evmTracer_emitAndClear;
+use tracing::evmTracer_pushCall;
+use tracing::evmTracer_pushReturnRevert;
+use tracing::evmTracer_pushCallAndResultNoExecution;
+
 
 // This callframe is used to represent an EVM call in progress.
 // The callframe will have a full copy of the global AccountStore, but
@@ -134,6 +140,7 @@ type ResumeInfo = struct {            // information used to resume a call after
     returnDataNbytes: uint,           // max amount of returndata to copy into caller's memory
     callType: uint,                   // call type of the subcall
     savedGas: uint,                   // how much of the caller's gas was not lent to the subcall
+    givenGas: uint,                   // how much of the call's gas was lent to the subcall
 }
 
 var globalCallStack: option<EvmCallFrame>;   // call frame of currently running call, if any
@@ -235,7 +242,17 @@ public impure func initEvmCallStack(
     sendOnFailure: option<ByteArray>,
     chargeForCallvalue: bool,
 ) {
-    // Set up the call frame for a top-level call, and launch the call's execution.
+    evmTracer_clear();
+    evmTracer_pushCall(
+        callKind,
+        request.calldata,
+        request.value,
+        request.caller,
+        request.calleeAddr,
+        request.maxGas,
+        request.gasPrice,
+    );
+
     if let Some(entryPoint) = account_getStartCodePoint(
         accountStore_get(
             getGlobalAccountStore(),
@@ -307,6 +324,7 @@ public impure func initEvmCallStack(
                         None<EvmLogs>,
                         Some(gasUsage),
                         feeStats,
+                        true,
                     );
                 } else {
                     // unknown error type
@@ -317,6 +335,7 @@ public impure func initEvmCallStack(
                         None<EvmLogs>,
                         None<GasUsage>,
                         request.feeStats,
+                        true,
                     );
                 }
                 evmCallStack_callHitError(1);
@@ -330,6 +349,7 @@ public impure func initEvmCallStack(
                 None<EvmLogs>,
                 None<GasUsage>,
                 request.feeStats,
+                true,
             );
             evmCallStack_callHitError(2);
         }
@@ -373,6 +393,7 @@ public impure func initEvmCallStack(
                     None<EvmLogs>,
                     None<GasUsage>,
                     request.feeStats,
+                    true,
                 );
                 emptyAvmStack();
                 cleanAvmAuxStackAndCall(mainRunLoop, true);  // should never return
@@ -385,6 +406,7 @@ public impure func initEvmCallStack(
                     None<EvmLogs>,
                     None<GasUsage>,
                     request.feeStats,
+                    true,
                 );
                 evmCallStack_callHitError(3);
             }
@@ -397,6 +419,7 @@ public impure func initEvmCallStack(
                 None<EvmLogs>,
                 None<GasUsage>,
                 request.feeStats,
+                true,
             );
             emptyAvmStack();
             cleanAvmAuxStackAndCall(mainRunLoop, true);  // should never return
@@ -488,6 +511,7 @@ public impure func initEvmCallStackForConstructor(
                 None<EvmLogs>,
                 None<GasUsage>,
                 request.feeStats,
+                true,
             );
             evmCallStack_callHitError(15);
         }
@@ -500,6 +524,7 @@ public impure func initEvmCallStackForConstructor(
             None<EvmLogs>,
             None<GasUsage>,
             request.feeStats,
+            true,
         );
         evmCallStack_callHitError(4);  // should never return
         panic;
@@ -551,6 +576,7 @@ public impure func evmCallStack_doCall(
                        returnDataNbytes: retLength,
                        callType: kind,
                        savedGas: availableGas-gas,
+                       givenGas: gas,
                    }) };
 
         // now create a new callframe for the callee
@@ -615,28 +641,48 @@ public impure func evmCallStack_doCall(
         // there were no errors in the setup, so write the result to global storage
         globalCallStack = Some(newTopFrame);
 
+        // write trace info
+        evmTracer_pushCall(
+            kind,
+            newTopFrame.calldata,
+            newTopFrame.callvalue,
+            newTopFrame.caller,
+            newTopFrame.runningCodeFrom,
+            gas,
+            globalCurrentTxRequest.gasPrice,
+        );
+
         // jump to the called code's startCodePoint -- this should never return
         let _ = gasAccounting_resumeTxCharges(gas);
         asm(startCodePoint,) { jump };
     } else {
         // no code at that address, so just do eth transfer
-        if (balance > 0) {
-            return Some(
-                xif (chargeForCallvalue) {
-                    evmCallStack_transferEthFromCurrent(calleeAddr, balance) == Some(())
-                } else {
-                    evmCallStack_setAccount(
-                        calleeAddr,
-                        account_addToEthBalance(
-                            evmCallStack_getAccount(calleeAddr)?,
-                            balance
-                        )
+        let success = xif (balance > 0) {
+            xif (chargeForCallvalue) {
+                evmCallStack_transferEthFromCurrent(calleeAddr, balance) == Some(())
+            } else {
+                evmCallStack_setAccount(
+                    calleeAddr,
+                    account_addToEthBalance(
+                        evmCallStack_getAccount(calleeAddr)?,
+                        balance
                     )
-                }
-            );
+                )
+            }
         } else {
-            return Some(true);
-        }
+            true
+        };
+        evmTracer_pushCallAndResultNoExecution(
+            kind,
+            bytearray_extract(topFrame.memory, argsOffset, argsLength),
+            balance,
+            topFrame.runningAs,
+            calleeAddr,
+            gas,
+            globalCurrentTxRequest.gasPrice,
+            xif (success) { const::TxResultCode_success } else { const::TxResultCode_revert },
+        );
+        return Some(success);
     }
 
     evmCallStack_callHitError(7);
@@ -705,9 +751,15 @@ public impure func evmCallStack_returnFromCall(
             0,
             newTopFrame.memory,
             resumeInfo.returnDataOffset,
-            returnLength
+            returnLength,
         );
         newTopFrame = newTopFrame with { memory: newMemory };
+
+        evmTracer_pushReturnRevert(
+            xif (success) { const::TxResultCode_success } else { const::TxResultCode_revert },
+            returnData,
+            resumeInfo.givenGas - leftoverGas,
+        );
 
         // ready to return to caller
         // save updated EVM callstack state; send sendOnFailure message if applicable; restore caller's stack; jump to resume address
@@ -759,6 +811,7 @@ public impure func evmCallStack_returnFromCall(
                                 None<EvmLogs>,
                                 Some(gasUsage),
                                 feeStats,
+                                true,
                             );
                             evmCallStack_callHitError(5);  // should never return
                             panic;
@@ -797,6 +850,7 @@ public impure func evmCallStack_returnFromCall(
                             Some(updatedEvmLogs),
                             Some(gasUsage),
                             feeStats,
+                            true,
                         );
 
                         // increment global contract count
@@ -810,6 +864,7 @@ public impure func evmCallStack_returnFromCall(
                             None<EvmLogs>,
                             Some(gasUsage),
                             feeStats,
+                            true,
                         );
                     }
                 } else {
@@ -818,6 +873,7 @@ public impure func evmCallStack_returnFromCall(
                         // We'll commit the results of the tx
 
                         if let Some(retryableReq) = globalCurrentRetryableRequest {
+                            //TODO: emit trace information correctly for this case
                             emitTxReceipt(
                                 retryableReq with {
                                     arbBlockNumber: inbox_currentArbBlockNumber()
@@ -831,6 +887,7 @@ public impure func evmCallStack_returnFromCall(
                                 None<EvmLogs>,
                                 None<GasUsage>,
                                 txFeeStats_zero(),
+                                false,
                             );
                             globalCurrentRetryableRequest = None<IncomingRequest>;
                         }
@@ -873,6 +930,7 @@ public impure func evmCallStack_returnFromCall(
                         Some(updatedEvmLogs),
                         Some(gasUsage),
                         feeStats,
+                        true,
                     );
                 }
             } else {
@@ -884,6 +942,7 @@ public impure func evmCallStack_returnFromCall(
                     None<EvmLogs>,
                     Some(gasUsage),
                     feeStats,
+                    true,
                 );
             }
         } else {
@@ -899,6 +958,7 @@ public impure func evmCallStack_returnFromCall(
                 None<EvmLogs>,
                 Some(gasUsage),
                 feeStats,
+                true,
             );
         }
 

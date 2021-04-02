@@ -117,11 +117,12 @@ public impure func mainRunLoop() {
                         None<EvmLogs>,
                         None<GasUsage>,
                         txFeeStats_zero(),
+                        false,
                     );
                 }
             } else {
                 // reject for error
-                emitTxReceipt(msg, resultCode, None<ByteArray>, None<EvmLogs>, None<GasUsage>, txFeeStats_zero());
+                emitTxReceipt(msg, resultCode, None<ByteArray>, None<EvmLogs>, None<GasUsage>, txFeeStats_zero(), false);
             }
         } else {
             if let Some(request) = maybeL2 {
@@ -138,6 +139,7 @@ public impure func mainRunLoop() {
                             None<EvmLogs>,
                             None<GasUsage>,
                             request.feeStats,
+                            false,
                         );
                     }
                 } else {
@@ -149,6 +151,7 @@ public impure func mainRunLoop() {
                         None<EvmLogs>,
                         None<GasUsage>,
                         request.feeStats,
+                        false,
                     );
                 }
             } // else request was not identified as either L1 or L2, which should be impossible

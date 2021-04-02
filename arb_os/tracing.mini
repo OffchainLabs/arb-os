@@ -3,6 +3,7 @@
 //
 
 use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
 
 use std::stack::Stack;
 use std::stack::stack_new;
@@ -38,7 +39,6 @@ public impure func evmTracer_push(typecode: uint, item: any) {
 }
 
 public impure func evmTracer_pushCall(
-    tracer: EvmTracer,
     callType: uint,
     calldata: ByteArray,
     callvalue: uint,
@@ -54,7 +54,6 @@ public impure func evmTracer_pushCall(
 }
 
 public impure func evmTracer_pushReturnRevert(
-    tracer: EvmTracer,
     resultCode: uint,
     returndata: ByteArray,
     gasUsed: uint,
@@ -65,8 +64,21 @@ public impure func evmTracer_pushReturnRevert(
     );
 }
 
+public impure func evmTracer_pushCallAndResultNoExecution(
+    callType: uint,
+    calldata: ByteArray,
+    callvalue: uint,
+    from: address,
+    to: address,
+    gas: uint,
+    gasPrice: uint,
+    resultCode: uint,
+) {
+    evmTracer_pushCall(callType, calldata, callvalue, from, to, gas, gasPrice);
+    evmTracer_pushReturnRevert(resultCode, bytearray_new(0), 0);
+}
+
 public impure func evmTracer_pushCreate(
-    tracer: EvmTracer,
     code: ByteArray,
     addr: address,
 ) {
@@ -77,7 +89,6 @@ public impure func evmTracer_pushCreate(
 }
 
 public impure func evmTracer_pushCreate2(
-    tracer: EvmTracer,
     code: ByteArray,
     currentAddr: address,
     salt: uint,

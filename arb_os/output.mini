@@ -45,6 +45,9 @@ use gasAccounting::GasUsage;
 use gasAccounting::TxFeeStats;
 use gasAccounting::gasAccounting_summaryToPublish;
 
+use tracing::evmTracer_pushReturnRevert;
+use tracing::evmTracer_emitAndClear;
+
 
 // PerBlockReceiptData is different from OutputStatistics for now; might want to unify
 type PerBlockReceiptData = struct {
@@ -233,6 +236,7 @@ public impure func emitTxReceipt(
     maybeEvmLogs: option<EvmLogs>,
     gasUsage: option<GasUsage>,
     feeStats: TxFeeStats,
+    recordAndEmitTrace: bool,
 ) {
     arbStatistics_addTxReceipt();
 
@@ -277,6 +281,15 @@ public impure func emitTxReceipt(
         ),
         feeStats,
     ),) { log };
+
+    if (recordAndEmitTrace) {
+        evmTracer_pushReturnRevert(
+            resultCode,
+            returnData,
+            realGasUsage.gasUsed,
+        );
+        evmTracer_emitAndClear();
+    }
 }
 
 var globalOutbox: struct {

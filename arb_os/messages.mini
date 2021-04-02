@@ -154,6 +154,7 @@ public impure func handleL2Request(
                 None<EvmLogs>,
                 None<GasUsage>,
                 request.feeStats,
+                false,
             );
             return Some(());
         }
@@ -170,6 +171,7 @@ public impure func handleL2Request(
                 None<EvmLogs>,
                 None<GasUsage>,
                 request.feeStats,
+                false,
             );
             return Some(());
         }
@@ -196,6 +198,7 @@ public impure func handleL2Request(
                 None<EvmLogs>,
                 None<GasUsage>,
                 request.feeStats,
+                false,
             );
             return Some(());
         } else {
