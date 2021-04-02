@@ -199,7 +199,7 @@ func getFuncCode(ba: ByteArray) -> uint {
 }
 
 public func arbosVersion() -> uint {
-    return 1;
+    return 2;
 }
 
 impure func arbsys_arbOSVersion(topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> uint
