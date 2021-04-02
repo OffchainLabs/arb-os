@@ -3,7 +3,12 @@
 //
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
+use std::stack::stack_new;
 
 public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> any {
     return input_globals.globalAccountStore;
+}
+
+public func set_currentEvmTracer_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> any {
+    return (stack_new(),);
 }

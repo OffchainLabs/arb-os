@@ -24,6 +24,8 @@ use errorHandler::errorHandler_init;
 use evmCallStack::evmCallStack_init;
 use evmOps::evmOps_init;
 use evmlogs::EvmLogs;
+use tracing::evmTracer_init;
+use tracing::evmTracer_clear;
 use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_init;
 use inbox::inbox_init;
@@ -67,6 +69,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         errorHandler_init();
         evmOps_init();
         evmCallStack_makeEmpty();   // clear out the old EVM call stack from before the upgrade
+        evmTracer_clear();
         if (initializePreinstalls(true) == None<()>) {
             panic;   // don't try to run without preinstalls and precompiles
         }
@@ -88,6 +91,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         inbox_init();
         accountStore_init();
         txReceipts_init();
+        evmTracer_init();
         rollupTracker_init();
         if (initializePreinstalls(false) == None<()>) {
             panic;   // don't try to run without preinstalls and precompiles

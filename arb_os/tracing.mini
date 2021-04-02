@@ -1,0 +1,90 @@
+//
+// Copyright 2021, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::bytearray::ByteArray;
+
+use std::stack::Stack;
+use std::stack::stack_new;
+use std::stack::stack_push;
+use std::stack::stack_pop;
+
+
+type EvmTracer = struct {
+    recordStack: Stack,
+}
+
+var currentEvmTracer: EvmTracer;
+
+public impure func evmTracer_init() {
+    evmTracer_clear();
+}
+
+public impure func evmTracer_clear() {
+    currentEvmTracer = struct {
+        recordStack: stack_new(),
+    };
+}
+
+public impure func evmTracer_emitAndClear() {
+    asm((20000, currentEvmTracer),) { debugprint };
+    evmTracer_clear();
+}
+
+public impure func evmTracer_push(typecode: uint, item: any) {
+    currentEvmTracer = currentEvmTracer with {
+        recordStack: stack_push(currentEvmTracer.recordStack, (typecode, item))
+    };
+}
+
+public impure func evmTracer_pushCall(
+    tracer: EvmTracer,
+    callType: uint,
+    calldata: ByteArray,
+    callvalue: uint,
+    from: address,
+    to: address,
+    gas: uint,
+    gasPrice: uint,
+) {
+    evmTracer_push(
+        const::TraceEvent_call,
+        (callType, calldata, callvalue, from, to, gas, gasPrice),
+    );
+}
+
+public impure func evmTracer_pushReturnRevert(
+    tracer: EvmTracer,
+    resultCode: uint,
+    returndata: ByteArray,
+    gasUsed: uint,
+) {
+    evmTracer_push(
+        const::TraceEvent_returnOrRevert,
+        (resultCode, returndata, gasUsed),
+    );
+}
+
+public impure func evmTracer_pushCreate(
+    tracer: EvmTracer,
+    code: ByteArray,
+    addr: address,
+) {
+    evmTracer_push(
+        const::TraceEvent_create,
+        (code, addr),
+    );
+}
+
+public impure func evmTracer_pushCreate2(
+    tracer: EvmTracer,
+    code: ByteArray,
+    currentAddr: address,
+    salt: uint,
+    createdAddr: address,
+) {
+    evmTracer_push(
+        const::TraceEvent_create2,
+        (code, currentAddr, salt, createdAddr),
+    );
+}

@@ -199,6 +199,11 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         // type 5 not used -- was previously buddy contract result
         // AVM send types
         ("AVMSendType_batch", 0),
+        // trace event types
+        ("TraceEvent_call", 0),
+        ("TraceEvent_returnOrRevert", 1),
+        ("TraceEvent_create", 2),
+        ("TraceEvent_create2", 3),
         // chain initialization options
         ("InitOption_setChargingParams", 2),
         ("InitOption_setDefaultAggregator", 3),
