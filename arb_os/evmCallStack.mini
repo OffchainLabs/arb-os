@@ -439,6 +439,17 @@ public impure func initEvmCallStackForConstructor(
     // The constructor will run, and (if it succeeds) it will return code, which will become the new
     //      code for this new account.
 
+    evmTracer_clear();
+    evmTracer_pushCall(
+        const::EVMCallType_call,
+        request.calldata,
+        request.value,
+        request.caller,
+        request.calleeAddr,
+        request.maxGas,
+        request.gasPrice,
+    );
+
     globalCurrentTxRequest = request with { isConstructor: true };
     globalCurrentRetryableRequest = None<IncomingRequest>;
 

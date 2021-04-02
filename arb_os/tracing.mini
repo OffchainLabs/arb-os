@@ -27,8 +27,23 @@ public impure func evmTracer_clear() {
     };
 }
 
+public impure func evmTracer_emit() {
+    let val = unsafecast<any>(());
+    let theStack = currentEvmTracer.recordStack;
+    loop {
+        if let Some(res) = stack_pop(theStack) {
+            let (us, item) = res;
+            theStack = us;
+            val = (item, val);
+        } else {
+            asm((20000, val),) { debugprint };
+            return;
+        }
+    }
+}
+
 public impure func evmTracer_emitAndClear() {
-    asm((20000, currentEvmTracer),) { debugprint };
+    evmTracer_emit();
     evmTracer_clear();
 }
 
