@@ -1494,3 +1494,35 @@ public impure func evmCallStack_callHitError(errInfo: any) {
         panic;
     }
 }
+
+public impure func evmCallStack_version1_upgradeHack() {
+    // This is one-time functionality needed to support upgrade from ArbOS version 1 to version 2.
+    // This is used by the post-upgrade code to emit a tx receipt for the tx that finalized the upgrade.
+    // Future upgrades will emit the receipt before jumping to the new upgraded code, but version 1 doesn't do that.
+    // So upgrades from version 1 will call this, post-upgrade, to emit the missing receipt.
+    if let Some(topFrame) = globalCallStack {
+        while(topFrame.parent != None<EvmCallFrame>) {
+            if let Some(parent) = topFrame.parent {
+                topFrame = parent;
+            } else {
+                return;
+            }
+        }
+
+        let (maybeGasUsage, feeStats) = xif let Some(res) = gasAccounting_endTxCharges(int(0), txFeeStats_zero()) {
+             let (_, gasUsage, fs) = res;
+             (Some(gasUsage), fs)
+        } else {
+            (None<GasUsage>, txFeeStats_zero())
+        };
+
+        emitTxReceipt(
+            globalCurrentTxRequest.incomingRequest,
+            const::TxResultCode_success,
+            None<ByteArray>,
+            None<EvmLogs>,
+            maybeGasUsage,
+            feeStats,
+        );
+    }
+}

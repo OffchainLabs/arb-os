@@ -11,6 +11,7 @@ use accounts::accountStore_createAccountFromEvmCode;
 use arbstatistics::arbStatistics_init;
 use accounts::accountStore_upgradeContractFromEvmCode;
 use arbstatistics::arbStatistics_init;
+use arbsys::arbosVersion;
 use blockhash::blockhash_init;
 use chainParameters::chainParams_init;
 use chainParameters::chainParams_haveDoneInit;
@@ -53,6 +54,7 @@ use output::emitTxReceipt;
 use arbsys::arbsys_txcall;
 use inbox::IncomingRequest;
 use evmCallStack::evmCallStack_makeEmpty;
+use evmCallStack::evmCallStack_version1_upgradeHack;
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 use bridge_arbos_versions::remapGlobalsForUpgrade;
@@ -69,6 +71,10 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         evmOps_init();
         if (initializePreinstalls(true) == None<()>) {
             panic;   // don't try to run without preinstalls and precompiles
+        }
+
+        if (arbosVersion() == 2) {
+            evmCallStack_version1_upgradeHack();
         }
     } else {
         // this is a clean start, not an upgrade
