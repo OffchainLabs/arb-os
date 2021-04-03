@@ -28,4 +28,3 @@ fn test_hash_test() {
     assert_eq!(hash_buffer(&buf, true), hash_buffer2(buf.to_vec()));
 }
 */
-
