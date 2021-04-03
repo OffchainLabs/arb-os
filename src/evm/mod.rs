@@ -184,7 +184,7 @@ pub fn _evm_run_with_gas_charging(
         "deposit",
         &[],
         &mut machine,
-        Uint256::from_usize(10000),
+        Uint256::_from_eth(1),
         debug,
     )?;
     assert_eq!(logs.len(), 1);

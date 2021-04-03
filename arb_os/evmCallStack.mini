@@ -733,6 +733,7 @@ public impure func evmCallStack_returnFromCall(
             if (globalCurrentTxRequest.isConstructor) {
                 // contract code takes up space, so charge 1 storage for each 32 bytes of EVM code
                 evmCallStack_addStorageCharge( (bytearray_size(returnData) + 31) / 32 );
+                topFrame = globalCallStack?;
             }
             let (completed, gasUsage, feeStats) = gasAccounting_endTxCharges(
                 topFrame.storageDelta - int(storageReclaimedForSDQ(topFrame)),  // won't underflow because signed subtraction
@@ -1349,14 +1350,15 @@ public impure func evmCallStack_transferEthFromCurrent(
 public impure func evmCallStack_setTopFrameStorageCell(offset: uint, value: uint) -> option<()> {
     let topFrame = globalCallStack?;
     let storageSizeBefore = account_getStorageSize(topFrame.runningAsAccount)?;
+    let runningAsAccount = account_setStorageCell(
+        topFrame.runningAsAccount,
+        offset,
+        value
+    )?;
     globalCallStack = Some(topFrame with {
-        runningAsAccount: account_setStorageCell(
-            topFrame.runningAsAccount,
-            offset,
-            value
-        )?
+        runningAsAccount: runningAsAccount
     } with {
-        storageDelta: topFrame.storageDelta + int(account_getStorageSize(topFrame.runningAsAccount)?) - int(storageSizeBefore)
+        storageDelta: topFrame.storageDelta + int(account_getStorageSize(runningAsAccount)?) - int(storageSizeBefore)
     });
     return Some(());
 }

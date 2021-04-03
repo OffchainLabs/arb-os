@@ -194,7 +194,7 @@ impl AbiForContract {
 
         machine.runtime_env.insert_tx_message(
             sender_addr,
-            Uint256::from_usize(100_000_000),
+            Uint256::from_usize(1_000_000_000),
             Uint256::zero(),
             self.address.clone(),
             payment,
