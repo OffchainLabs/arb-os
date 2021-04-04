@@ -665,8 +665,16 @@ public impure func gasAccounting_extraCharge(wei: uint) {
     asm(gasLeft-gasToDeduct,) { setgas };
 }
 
-public impure func gasAccounting_getGasChargeAmount(numStorageUnits: uint) -> uint {
-    return numStorageUnits * gasAccountingInfo.currentPrices.perStorageCell;
+public impure func gasAccounting_getGasChargeAmountInArbGas(numStorageUnits: uint) -> uint {
+    let storagePriceWei = gasAccountingInfo.currentPrices.perStorageCell;
+    let computePriceWei = gasAccountingInfo.currentPrices.perArbGasTotal;
+    return xif (storagePriceWei == 0) {
+        0
+    } elseif (computePriceWei == 0) {
+        ~0
+    } else {
+        numStorageUnits * storagePriceWei / computePriceWei
+    };
 }
 
 public impure func gasAccounting_pauseTxCharges() -> uint {

@@ -71,7 +71,7 @@ use gasAccounting::gasAccounting_startTxCharges;
 use gasAccounting::gasAccounting_endTxCharges;
 use gasAccounting::gasAccounting_pauseTxCharges;
 use gasAccounting::gasAccounting_resumeTxCharges;
-use gasAccounting::gasAccounting_getGasChargeAmount;
+use gasAccounting::gasAccounting_getGasChargeAmountInArbGas;
 use gasAccounting::txFeeStats_zero;
 use gasAccounting::gasAccounting_addToReserveInAcctStore;
 
@@ -672,7 +672,7 @@ public impure func evmCallStack_returnFromCall(
         // the top-level caller will eventually be charged for this storage
         if ( success
           && (topFrame.storageDelta > int(0))
-          && (leftoverGas < gasAccounting_getGasChargeAmount(uint(topFrame.storageDelta))) ) {
+          && (leftoverGas < gasAccounting_getGasChargeAmountInArbGas(uint(topFrame.storageDelta))) ) {
             // callee couldn't pay for their storage, so morph this into a revert
             success = false;
             returnOffset = 0;
