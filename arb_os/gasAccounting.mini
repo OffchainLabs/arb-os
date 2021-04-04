@@ -112,12 +112,13 @@ var gasAccountingParams: struct {
     TxGasLimit: uint,            // max gas usable by any single transaction
 };
 
-type TxGasState = struct {   // this is the gas state of the currently running transaction
-    gasInReserve: uint,  // how much gas is being held in reserve
-    originalMax: uint,   // the tx's original maxGas value
-    price: uint,         // price of gas for this tx, in wei per unit of gas
-    weiHeldForGas: uint, // amount of currency we're holding to cover the current tx's gas use
-    refundTo: address,   // who gets a refund for unused gas at the end, if there is any
+type TxGasState = struct {        // this is the gas state of the currently running transaction
+    gasInReserve: uint,           // how much gas is being held in reserve
+    gasReservedForStorage: uint,  // how much gas is being reserved to pay for storage
+    originalMax: uint,            // the tx's original maxGas value
+    price: uint,                  // price of gas for this tx, in wei per unit of gas
+    weiHeldForGas: uint,          // amount of currency we're holding to cover the current tx's gas use
+    refundTo: address,            // who gets a refund for unused gas at the end, if there is any
 }
 
 type GasUsage = struct {
@@ -457,9 +458,11 @@ public impure func gasAccounting_startTxCharges(
 
     let _ = switchToChargingOS();   // call this in case we're somehow still charging a tx; ignore return value
 
-    if (maxGas > gasAccountingParams.TxGasLimit) {
-        maxGas = gasAccountingParams.TxGasLimit;
-    }
+    let gasForComputation = xif (maxGas < gasAccountingParams.TxGasLimit) {
+        maxGas
+    } else {
+        gasAccountingParams.TxGasLimit
+    };
 
     // take funds from the payer, enough to pay for maxGas at gasPrice
     let weiToHold = maxGas * gasPrice;
@@ -484,6 +487,7 @@ public impure func gasAccounting_startTxCharges(
     gasAccountingInfo = gasAccountingInfo with {
         txState: Some(struct {
             gasInReserve: 0,
+            gasReservedForStorage: maxGas - gasForComputation,
             originalMax: maxGas,
             price: gasPrice,
             weiHeldForGas: weiToHold,
@@ -497,7 +501,7 @@ public impure func gasAccounting_startTxCharges(
 
     arbStatistics_addToGasUsed(gasUsedByOS);
 
-    asm(maxGas,) { setgas };
+    asm(gasForComputation,) { setgas };
     return const::TxResultCode_success;
 }
 
@@ -508,7 +512,7 @@ public impure func gasAccounting_endTxCharges(storageDelta: int, feeStats: TxFee
 
     // switch over to charging the OS for gas
     let txState = gasAccountingInfo.txState?;
-    let gasToRefund = txState.gasInReserve + switchToChargingOS();
+    let gasToRefund = txState.gasInReserve + txState.gasReservedForStorage + switchToChargingOS();
 
     arbStatistics_addToStorage(storageDelta);
 
