@@ -1883,7 +1883,7 @@ pub fn _evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
             assert!(logs[0].succeeded());
         }
         Err(e) => {
-            panic!(e.to_string());
+            panic!("{}", e.to_string());
         }
     }
 
@@ -1967,7 +1967,7 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
             );
         }
         Err(e) => {
-            panic!(e.to_string());
+            panic!("{}", e.to_string());
         }
     }
 
@@ -1985,7 +1985,7 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
             assert!(logs[0].succeeded());
         }
         Err(e) => {
-            panic!(e.to_string());
+            panic!("{}", e.to_string());
         }
     }
 
@@ -2063,7 +2063,7 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
             );
         }
         Err(e) => {
-            panic!(e.to_string());
+            panic!("{}", e.to_string());
         }
     }
 
@@ -2126,7 +2126,7 @@ pub fn _evm_test_contract_call(log_to: Option<&Path>, debug: bool) {
                 );
             }
             Err(e) => {
-                panic!(e.to_string());
+                panic!("{}", e.to_string());
             }
         }
     }
@@ -2192,7 +2192,7 @@ pub fn evm_direct_deploy_and_compressed_call_add(log_to: Option<&Path>, debug: b
             );
         }
         Err(e) => {
-            panic!(e.to_string());
+            panic!("{}", e.to_string());
         }
     }
 

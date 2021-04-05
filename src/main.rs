@@ -6,6 +6,7 @@
 
 use crate::compile::CompileStruct;
 use crate::link::LinkedProgram;
+use crate::pos::try_display_location;
 use clap::Clap;
 use compile::CompileError;
 use contracttemplates::generate_contract_template_file_or_die;
@@ -14,6 +15,7 @@ use run::{
     profile_gen_from_file, replay_from_testlog_file, run_from_file, ProfilerMode,
     RuntimeEnvironment,
 };
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
 use std::io::Read;
@@ -117,12 +119,14 @@ fn main() -> Result<(), CompileError> {
     let matches = Args::parse();
 
     match matches {
-        Args::Compile(compile) => {
-            let mut output = get_output(compile.output.clone()).unwrap();
-            compile
-                .invoke()?
-                .to_output(&mut *output, compile.format.as_deref());
-        }
+        Args::Compile(compile) => match do_compile(compile) {
+            Ok(_) => {}
+            Err((err, file_name_chart)) => println!(
+                "{}\n{}",
+                err,
+                try_display_location(err.location, &file_name_chart, true)
+            ),
+        },
 
         Args::Run(run) => {
             let filename = run.input;
@@ -262,6 +266,14 @@ fn main() -> Result<(), CompileError> {
         total_time.subsec_millis()
     );
 
+    Ok(())
+}
+
+fn do_compile(compile: CompileStruct) -> Result<(), (CompileError, BTreeMap<u64, String>)> {
+    let mut output = get_output(compile.output.clone()).unwrap();
+    compile
+        .invoke()?
+        .to_output(&mut *output, compile.format.as_deref());
     Ok(())
 }
 
