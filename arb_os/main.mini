@@ -54,7 +54,7 @@ use output::emitTxReceipt;
 use arbsys::arbsys_txcall;
 use inbox::IncomingRequest;
 use evmCallStack::evmCallStack_makeEmpty;
-use evmCallStack::evmCallStack_version1_upgradeHack;
+use evmCallStack::evmCallStack_version2upgrade_hack;
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 use bridge_arbos_versions::remapGlobalsForUpgrade;
@@ -73,8 +73,8 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
             panic;   // don't try to run without preinstalls and precompiles
         }
 
-        if (arbosVersion() == 2) {
-            evmCallStack_version1_upgradeHack();
+        if (arbosVersion() == 3) {
+            evmCallStack_version2upgrade_hack();
         }
     } else {
         // this is a clean start, not an upgrade

@@ -1495,7 +1495,7 @@ public impure func evmCallStack_callHitError(errInfo: any) {
     }
 }
 
-public impure func evmCallStack_version1_upgradeHack() {
+public impure func evmCallStack_version2upgrade_hack() {
     // This is one-time functionality needed to support upgrade from ArbOS version 1 to version 2.
     // This is used by the post-upgrade code to emit a tx receipt for the tx that finalized the upgrade.
     // Future upgrades will emit the receipt before jumping to the new upgraded code, but version 1 doesn't do that.
