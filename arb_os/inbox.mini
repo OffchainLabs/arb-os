@@ -416,7 +416,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
                 // record the calldata usage, so it can be reported in tx receipt
                 msg = msg with {
                     aggregator: Some(struct {
-                        aggregator: None<address>,
+                        aggregator: xif let Some(aggInfo) = msg.aggregator { aggInfo.aggregator } else { None<address> },
                         calldataBytes: bytearray_size(msg.msgData),
                     })
                 };

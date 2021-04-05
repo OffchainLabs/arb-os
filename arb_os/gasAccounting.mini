@@ -840,6 +840,8 @@ public impure func getNextRequestFromCongestionAuction() -> (
                     tx = tx with {
                         feeStats: tx.feeStats with {
                             units: tx.feeStats.units with {
+                                tx: 1
+                            } with {
                                 calldataByte: aggInfo.calldataBytes
                             }
                         }
