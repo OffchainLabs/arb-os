@@ -512,52 +512,60 @@ public impure func gasAccounting_endTxCharges(storageDelta: int, feeStats: TxFee
 
     // switch over to charging the OS for gas
     let txState = gasAccountingInfo.txState?;
-    let gasToRefund = txState.gasInReserve + txState.gasReservedForStorage + switchToChargingOS();
+
+    let computeGasRemaining = txState.gasInReserve + switchToChargingOS();
+    let computeGasUsed = (txState.originalMax - txState.gasReservedForStorage) - computeGasRemaining;
 
     arbStatistics_addToStorage(storageDelta);
 
-    let gasForStorage = xif ((storageDelta > int(0)) && (txState.price > 0)) {
-        uint(storageDelta) * (gasAccountingInfo.currentPrices.perStorageCell + txState.price - 1) / txState.price
+    let storagePriceInArbGas = xif (txState.price == 0) {
+        0
+    } else {
+        (gasAccountingInfo.currentPrices.perStorageCell + txState.price - 1) / txState.price
+    };
+    let gasNeededForStorage = xif ((storageDelta > int(0)) && (txState.price > 0)) {
+        uint(storageDelta) * storagePriceInArbGas
     } else {
         0
     };
 
-    let (confirmed, gasUsed, weiForStorage, weiForCompute) = xif (gasForStorage <= gasToRefund) {
-        gasToRefund = gasToRefund - gasForStorage;
-        let gasUsed = txState.originalMax - gasToRefund;
+    let (confirmed, storageGasUsed, totalGasUsed, weiForStorage, weiForCompute) = xif ((computeGasUsed + gasNeededForStorage) <= txState.originalMax) {
         (
             true,
-            gasUsed,
-            gasForStorage * txState.price,
-            (gasUsed - gasForStorage) * txState.price
+            gasNeededForStorage,
+            computeGasUsed + gasNeededForStorage,
+            gasNeededForStorage * txState.price,
+            computeGasUsed * txState.price
         )
     } else {
-        gasToRefund = 0;
         (
             false,
+            txState.originalMax - computeGasUsed,
             txState.originalMax,
-            0,
-            txState.originalMax * txState.price,
+            (txState.originalMax - computeGasUsed) * txState.price,
+            computeGasUsed * txState.price,
         )
     };
 
     // refund the unused gas, and pay fees
-    let refund = gasToRefund * txState.price;
     let globalAS = getGlobalAccountStore();
-    globalAS = accountStore_set(
-       globalAS,
-       txState.refundTo,
-       account_addToEthBalance(
-           accountStore_get(globalAS, txState.refundTo),
-           refund
-       )
-    );
+    let refund = (txState.originalMax - totalGasUsed) * txState.price;
+    if (refund > 0) {
+        globalAS = accountStore_set(
+           globalAS,
+           txState.refundTo,
+           account_addToEthBalance(
+               accountStore_get(globalAS, txState.refundTo),
+               refund
+           )
+        );
+    }
     globalAS = accountStore_set(
         globalAS,
         gasAccountingInfo.feeConfig.forNetwork,
         account_addToEthBalance(
             accountStore_get(globalAS, gasAccountingInfo.feeConfig.forNetwork),
-            gasUsed * gasAccountingInfo.currentPrices.perArbGasBase,
+            computeGasUsed * gasAccountingInfo.currentPrices.perArbGasBase + storageGasUsed * storagePriceInArbGas,
         ),
     );
     globalAS = accountStore_set(
@@ -565,18 +573,18 @@ public impure func gasAccounting_endTxCharges(storageDelta: int, feeStats: TxFee
         gasAccountingInfo.feeConfig.forCongestion,
         account_addToEthBalance(
             accountStore_get(globalAS, gasAccountingInfo.feeConfig.forCongestion),
-            gasUsed * gasAccountingInfo.currentPrices.perArbGasCongestion,
+            computeGasUsed * gasAccountingInfo.currentPrices.perArbGasCongestion,
         ),
     );
     setGlobalAccountStore(globalAS);
 
     gasAccountingInfo = gasAccountingInfo with {
         congestionState: gasAccountingInfo.congestionState with {
-            gasPool: gasAccountingInfo.congestionState.gasPool - int(gasUsed)
+            gasPool: gasAccountingInfo.congestionState.gasPool - int(computeGasUsed)
         }
     } with {
-        gasRemainingThisBlock: xif (gasAccountingInfo.gasRemainingThisBlock >= gasUsed) {
-            gasAccountingInfo.gasRemainingThisBlock - gasUsed
+        gasRemainingThisBlock: xif (gasAccountingInfo.gasRemainingThisBlock >= computeGasUsed) {
+            gasAccountingInfo.gasRemainingThisBlock - computeGasUsed
         } else {
             0
         }
@@ -584,19 +592,19 @@ public impure func gasAccounting_endTxCharges(storageDelta: int, feeStats: TxFee
         txState: None<TxGasState>
     };
 
-    arbStatistics_addToGasUsed(gasUsed);
+    arbStatistics_addToGasUsed(computeGasUsed);
 
     return Some((
         confirmed,
         struct {
-            gasUsed: gasUsed,
+            gasUsed: totalGasUsed,
             gasPriceWei: txState.price,
         },
         feeStats with {
             units: feeStats.units with {
                 storage: xif(storageDelta > int(0)) { uint(storageDelta) } else { 0 }
             } with {
-                compute: txState.originalMax - (gasToRefund - gasForStorage)
+                compute: computeGasUsed
             }
         } with {
             weiPaid: feeStats.weiPaid with {
