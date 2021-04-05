@@ -91,9 +91,9 @@ All other options are ignored at present.
 
 [This is no longer supported.]
 
-##### Message type 6: reserved
+##### Message type 6: end of Arbitrum block
 
-This message type is reserved for internal use by ArbOS. It should never appear in the inbox.
+A message of this type directs ArbOS to end the current Arbitrum block and start a new one. All integer or address fields (other than the message type) should be zero, and the buffer should be empty.
 
 **Message type 7: L2 transaction funded by L1**
 
