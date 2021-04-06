@@ -182,6 +182,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("TxResultCode_formatError", 6),
         ("TxResultCode_cannotDeployAtAddress", 7),
         ("TxResultCode_exceededTxGasLimit", 8),
+        ("TxResultCode_insufficientGasForBaseFee", 9),
         ("TxResultCode_unknownFailure", 255),
         // EVM call types
         ("EVMCallType_call", 0),

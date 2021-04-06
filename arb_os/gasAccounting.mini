@@ -841,7 +841,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
                         // sender didn't have enough gas funds
                         // we took all of the funds to make a partial payment to the aggregator
                         // now fail the tx
-                        return (const::TxResultCode_noGasFunds, maybeRequest, Some(tx));
+                        return (const::TxResultCode_insufficientGasForBaseFee, maybeRequest, Some(tx));
                     }
 
                     // compute the number of ArbGas units corresponding to the aggregator fee, and deduct them from the tx
@@ -852,7 +852,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
                     if (tx.maxGas > roundedUpGasDelta) {
                         tx = tx with { maxGas: tx.maxGas - roundedUpGasDelta };
                     } else {
-                         return (const::TxResultCode_noGasFunds, maybeRequest, Some(tx));
+                         return (const::TxResultCode_insufficientGasForBaseFee, maybeRequest, Some(tx));
                     }
                 } else {
                     tx = tx with {
