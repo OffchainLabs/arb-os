@@ -55,6 +55,11 @@ use std::queue::queue_put;
 use std::queue::queue_get;
 use std::queue::queue_getOrDie;
 
+use std::stack::Stack;
+use std::stack::stack_new;
+use std::stack::stack_push;
+use std::stack::stack_pop;
+
 use chainParameters::chainParams_speedLimitPerSecond;
 
 use inbox::IncomingRequest;
@@ -505,7 +510,15 @@ public impure func gasAccounting_startTxCharges(
     return const::TxResultCode_success;
 }
 
-public impure func gasAccounting_endTxCharges(storageDelta: int, feeStats: TxFeeStats) -> option<(bool, GasUsage, TxFeeStats)> {
+public impure func gasAccounting_endTxCharges(
+    storageDelta: int,
+    feeStats: TxFeeStats,
+) -> option<(
+    bool,        // had enough gas?
+    GasUsage,    // total ArbGas used
+    TxFeeStats,  // fee stats of tx
+    DeferredPayments,  // fund payouts to do
+)> {
     // stop charging the current tx for gas
     // refund any unused gas
     // return (hadEnoughGas, total paid, fee stats of tx), or None if there isn't a tx active
@@ -548,35 +561,22 @@ public impure func gasAccounting_endTxCharges(storageDelta: int, feeStats: TxFee
     };
 
     // refund the unused gas, and pay fees
-    let globalAS = getGlobalAccountStore();
+    let payments = deferredPayments_new();
+
     let refund = (txState.originalMax - totalGasUsed) * txState.price;
     if (refund > 0) {
-        globalAS = accountStore_set(
-           globalAS,
-           txState.refundTo,
-           account_addToEthBalance(
-               accountStore_get(globalAS, txState.refundTo),
-               refund
-           )
-        );
+        payments = deferredPayments_add(payments, txState.refundTo, refund);
     }
-    globalAS = accountStore_set(
-        globalAS,
+    payments = deferredPayments_add(
+        payments,
         gasAccountingInfo.feeConfig.forNetwork,
-        account_addToEthBalance(
-            accountStore_get(globalAS, gasAccountingInfo.feeConfig.forNetwork),
-            computeGasUsed * gasAccountingInfo.currentPrices.perArbGasBase + storageGasUsed * storagePriceInArbGas,
-        ),
+        computeGasUsed * gasAccountingInfo.currentPrices.perArbGasBase + storageGasUsed * storagePriceInArbGas,
     );
-    globalAS = accountStore_set(
-        globalAS,
+    payments = deferredPayments_add(
+        payments,
         gasAccountingInfo.feeConfig.forCongestion,
-        account_addToEthBalance(
-            accountStore_get(globalAS, gasAccountingInfo.feeConfig.forCongestion),
-            computeGasUsed * gasAccountingInfo.currentPrices.perArbGasCongestion,
-        ),
+        computeGasUsed * gasAccountingInfo.currentPrices.perArbGasCongestion,
     );
-    setGlobalAccountStore(globalAS);
 
     gasAccountingInfo = gasAccountingInfo with {
         congestionState: gasAccountingInfo.congestionState with {
@@ -613,6 +613,7 @@ public impure func gasAccounting_endTxCharges(storageDelta: int, feeStats: TxFee
                 compute: weiForCompute
             }
         },
+        payments,
     ));
 }
 
@@ -1216,6 +1217,33 @@ public func txFeeStats_setPrices(stats: TxFeeStats, prices: GasPrices) -> TxFeeS
             calldataByte: prices.perL1CalldataByte,
             storage: prices.perStorageCell,
             compute: prices.perArbGasTotal,
+        }
+    };
+}
+
+type DeferredPayments = Stack
+
+public func deferredPayments_new() -> DeferredPayments {
+    return stack_new();
+}
+
+public func deferredPayments_add(dp: DeferredPayments, recipient: address, amount: uint) -> DeferredPayments {
+    return stack_push(dp, (recipient, amount));
+}
+
+public func deferredPayments_apply(acctStore: AccountStore, dp: DeferredPayments) -> AccountStore {
+    return xloop {
+        if let Some(res) = stack_pop(dp) {
+            let (udp, item) = res;
+            dp = udp;
+            let (recipient, amount) = unsafecast<(address, uint)>(item);
+            acctStore = accountStore_set(
+                acctStore,
+                recipient,
+                account_addToEthBalance(accountStore_get(acctStore, recipient), amount),
+            );
+        } else {
+            return acctStore;
         }
     };
 }
