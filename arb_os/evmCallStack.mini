@@ -240,14 +240,20 @@ public impure func initEvmCallStack(
     if let Some(entryPoint) = account_getStartCodePoint(
         accountStore_get(
             getGlobalAccountStore(),
-            request.calleeAddr
+            request.calleeAddr,
         )
     ) {
-        let startTxResult = gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.gasPayer);
+        let (startTxResult, acctStore, _) = gasAccounting_startTxCharges(
+            request.maxGas,
+            request.gasPrice,
+            request.gasPayer,
+            getGlobalAccountStore(),
+            None<AccountStore>,
+        );
         if (startTxResult == const::TxResultCode_success) {
+            setGlobalAccountStore(acctStore);
             if (request.seqNum != None<uint>) {
                 // increment the caller's sequence number, if caller has sufficient balance
-                let acctStore = getGlobalAccountStore();
                 if ( (!chargeForCallvalue) || (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value) ){
                     setGlobalAccountStore(
                         accountStore_set(
@@ -456,9 +462,16 @@ public impure func initEvmCallStackForConstructor(
     ) {
         acctStore = uas;
 
-        let startTxResult = gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.gasPayer);
+        let (startTxResult, uAcctStoreAfterInc, uAcctStore) = gasAccounting_startTxCharges(
+            request.maxGas,
+            request.gasPrice,
+            request.gasPayer,
+            acctStoreAfterIncrement,
+            Some(acctStore),
+        );
         if (startTxResult == const::TxResultCode_success) {
-            setGlobalAccountStore(acctStoreAfterIncrement);   // commit the incremented sequence number
+            setGlobalAccountStore(uAcctStoreAfterInc);   // commit the incremented sequence number
+            acctStore = uAcctStore;
 
             globalCallStack = Some(struct {
                 runningAs: request.calleeAddr,

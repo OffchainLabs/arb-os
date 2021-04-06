@@ -456,12 +456,20 @@ public impure func gasAccounting_summaryToPublish() -> any {
 public impure func gasAccounting_startTxCharges(
     maxGas: uint,
     gasPrice: uint,
-    payer: address
-) -> uint {     // returns const::TxResultCode_success if success, otherwise returns error code
+    payer: address,
+    acctStore: AccountStore,
+    maybeAltAcctStore: option<AccountStore>,
+) -> (
+    uint,          // const::TxResultCode_success if success, otherwise an error code
+    AccountStore,  // acctStore, with payments deducted
+    AccountStore   // altAcctStore if it exists, or a copy of acctStore otherwise, with payments deducted
+) {
     // Start charging a new Tx for ArbGas usage
     // The caller should already have verified that the payer has enough funds, but we'll return None if not.
 
     let _ = switchToChargingOS();   // call this in case we're somehow still charging a tx; ignore return value
+
+    let altAcctStore = xif let Some(aas) = maybeAltAcctStore { aas } else { acctStore };
 
     let gasForComputation = xif (maxGas < gasAccountingParams.TxGasLimit) {
         maxGas
@@ -471,20 +479,21 @@ public impure func gasAccounting_startTxCharges(
 
     // take funds from the payer, enough to pay for maxGas at gasPrice
     let weiToHold = maxGas * gasPrice;
-    let globalAS = getGlobalAccountStore();
     if let Some(acct) = account_deductFromEthBalance(
-        accountStore_get(globalAS, payer),
+        accountStore_get(acctStore, payer),
         weiToHold
     ) {
-        setGlobalAccountStore(
-            accountStore_set(
-                globalAS,
-                payer,
-                acct
-            )
-        );
+        if let Some(acct2) = account_deductFromEthBalance(
+            accountStore_get(altAcctStore, payer),
+            weiToHold
+        ) {
+            acctStore = accountStore_set(acctStore, payer, acct);
+            altAcctStore = accountStore_set(altAcctStore, payer, acct2);
+        } else {
+            return (const::TxResultCode_noGasFunds, acctStore, altAcctStore);
+        }
     } else {
-        return const::TxResultCode_noGasFunds;
+        return (const::TxResultCode_noGasFunds, acctStore, altAcctStore);
     }
 
     let gasUsedByOS = (~0) - asm() uint { getgas };
@@ -507,7 +516,7 @@ public impure func gasAccounting_startTxCharges(
     arbStatistics_addToGasUsed(gasUsedByOS);
 
     asm(gasForComputation,) { setgas };
-    return const::TxResultCode_success;
+    return (const::TxResultCode_success, acctStore, altAcctStore);
 }
 
 public impure func gasAccounting_endTxCharges(
