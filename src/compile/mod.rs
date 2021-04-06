@@ -199,6 +199,8 @@ pub struct CompiledProgram {
     pub source_file_map: Option<SourceFileMap>,
     ///Map from u64 hashes of file names to the `String`s they originate from
     pub file_name_chart: HashMap<u64, String>,
+    ///Tree of the types
+    pub type_tree: TypeTree,
 }
 
 impl CompiledProgram {
@@ -209,6 +211,7 @@ impl CompiledProgram {
         globals: Vec<GlobalVarDecl>,
         source_file_map: Option<SourceFileMap>,
         file_name_chart: HashMap<u64, String>,
+        type_tree: TypeTree,
     ) -> Self {
         CompiledProgram {
             code,
@@ -217,6 +220,7 @@ impl CompiledProgram {
             globals,
             source_file_map,
             file_name_chart,
+            type_tree,
         }
     }
 
@@ -274,6 +278,7 @@ impl CompiledProgram {
                 },
                 source_file_map,
                 self.file_name_chart,
+                self.type_tree,
             ),
             max_func_offset,
         )
@@ -411,7 +416,7 @@ pub fn compile_from_folder(
             .iter_mut()
             .for_each(|module| module.inline());
     }
-    let progs = codegen_programs(typechecked_modules, file_name_chart, folder)?;
+    let progs = codegen_programs(typechecked_modules, file_name_chart, type_tree, folder)?;
     Ok(progs)
 }
 
@@ -633,6 +638,7 @@ fn typecheck_programs(
 fn codegen_programs(
     typechecked_modules: Vec<TypeCheckedModule>,
     file_name_chart: &mut BTreeMap<u64, String>,
+    type_tree: TypeTree,
     folder: &Path,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let mut progs = vec![];
@@ -663,6 +669,7 @@ fn codegen_programs(
                 folder.join(name.clone()).display().to_string(),
             )),
             HashMap::new(),
+            type_tree.clone(),
         ))
     }
     Ok(progs)

@@ -271,6 +271,7 @@ pub fn link(
     test_mode: bool,
 ) -> Result<CompiledProgram, CompileError> {
     let progs = progs_in.to_vec();
+    let type_tree = progs[0].type_tree.clone();
     let mut insns_so_far: usize = 3; // leave 2 insns of space at beginning for initialization
     let mut imports_so_far: usize = 0;
     let mut int_offsets = Vec::new();
@@ -390,5 +391,6 @@ pub fn link(
             map.insert(file_hasher.finish(), "builtin/kvs.mini".to_string());
             map
         },
+        type_tree,
     ))
 }
