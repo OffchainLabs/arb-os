@@ -579,7 +579,7 @@ public impure func gasAccounting_endTxCharges(
     payments = deferredPayments_add(
         payments,
         gasAccountingInfo.feeConfig.forNetwork,
-        computeGasUsed * gasAccountingInfo.currentPrices.perArbGasBase + storageGasUsed * storagePriceInArbGas,
+        computeGasUsed * gasAccountingInfo.currentPrices.perArbGasBase + storageGasUsed * txState.price,
     );
     payments = deferredPayments_add(
         payments,
