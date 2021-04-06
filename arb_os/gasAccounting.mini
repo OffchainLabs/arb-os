@@ -921,6 +921,7 @@ impure func payForTxAndL1Gas(
         } with {
             perL1CalldataByte: fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, prices.perL1CalldataByte)
         };
+        feeStats = txFeeStats_setPrices(feeStats, prices);
     }
 
     let fullAmount = prices.perL2Tx + prices.perL1CalldataByte * calldataBytes;
