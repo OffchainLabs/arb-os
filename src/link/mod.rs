@@ -5,7 +5,7 @@
 //!Provides types and utilities for linking together compiled mini programs
 
 use crate::compile::{
-    CompileError, CompiledProgram, DebugInfo, GlobalVarDecl, SourceFileMap, Type,
+    CompileError, CompiledProgram, DebugInfo, GlobalVarDecl, SourceFileMap, Type, TypeTree,
 };
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::try_display_location;
@@ -33,6 +33,7 @@ pub struct LinkedProgram {
     pub globals: Vec<GlobalVarDecl>,
     #[serde(default)]
     pub file_name_chart: BTreeMap<u64, String>,
+    pub type_tree: TypeTree,
 }
 
 impl LinkedProgram {
@@ -237,13 +238,14 @@ pub fn postlink_compile(
         println!("============ after full compile/link =============");
     }
 
-    file_name_chart.extend(program.file_name_chart);
+    file_name_chart.extend(program.file_name_chart.clone());
 
     Ok(LinkedProgram {
         code: code_final,
         static_val: Value::none(),
-        globals: program.globals,
+        globals: program.globals.clone(),
         file_name_chart,
+        type_tree: program.type_tree,
     })
 }
 

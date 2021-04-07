@@ -8,7 +8,7 @@ use crate::link::{link, postlink_compile, ExportedFunc, Import, ImportedFunc, Li
 use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
 use crate::stringtable::StringTable;
-use ast::{Func, TypeTree};
+use ast::Func;
 use clap::Clap;
 use lalrpop_util::lalrpop_mod;
 use lalrpop_util::ParseError;
@@ -24,7 +24,7 @@ use std::io::{self, Read};
 use std::path::Path;
 use typecheck::TypeCheckedFunc;
 
-pub use ast::{DebugInfo, GlobalVarDecl, StructField, TopLevelDecl, Type};
+pub use ast::{DebugInfo, GlobalVarDecl, StructField, TopLevelDecl, Type, TypeTree};
 pub use source::Lines;
 pub use typecheck::{AbstractSyntaxTree, TypeCheckedNode};
 
