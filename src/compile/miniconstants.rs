@@ -8,10 +8,13 @@ use crate::evm::abi::{builtin_contract_path, AbiForContract};
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 
+pub static ARBOS_VERSION: u64 = 3;
+
 ///Creates a fixed list of globally accessible constants.
 pub fn init_constant_table() -> HashMap<String, Uint256> {
     let mut ret = HashMap::new();
     for (s, i) in &[
+        ("ArbosVersionNumber", ARBOS_VERSION),
         // addresses of precompiled contracts
         ("Address_ArbSys", 100),
         ("Address_ArbAddressTable", 102),

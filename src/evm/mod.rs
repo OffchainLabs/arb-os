@@ -13,6 +13,7 @@ use crate::uint256::Uint256;
 use abi::AbiForContract;
 use ethers_signers::Signer;
 use std::path::Path;
+use crate::compile::miniconstants::ARBOS_VERSION;
 
 pub mod abi;
 pub mod benchmarks;
@@ -319,7 +320,7 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     let arb_bls = ArbBLS::new(&wallet, debug);
 
     let version = arbsys._arbos_version(&mut machine)?;
-    assert_eq!(version, Uint256::one());
+    assert_eq!(version, Uint256::from_u64(ARBOS_VERSION));
 
     let tx_count = arbsys.get_transaction_count(&mut machine, my_addr.clone())?;
     assert_eq!(tx_count, Uint256::from_u64(2));
