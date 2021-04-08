@@ -675,7 +675,7 @@ fn codegen_programs(
     Ok(progs)
 }
 
-fn comma_list(input: &[String]) -> String {
+pub fn comma_list(input: &[String]) -> String {
     let mut base = String::new();
     if input.len() > 0 {
         for object in input.iter().take(input.len() - 1) {

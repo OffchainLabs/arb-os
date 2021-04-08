@@ -5,7 +5,8 @@
 //!Provides types and utilities for linking together compiled mini programs
 
 use crate::compile::{
-    CompileError, CompiledProgram, DebugInfo, GlobalVarDecl, SourceFileMap, Type, TypeTree,
+    comma_list, CompileError, CompiledProgram, DebugInfo, GlobalVarDecl, SourceFileMap, Type,
+    TypeTree,
 };
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::try_display_location;
@@ -23,6 +24,34 @@ mod optimize;
 mod striplabels;
 mod xformcode;
 
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SerializableTypeTree {
+    inner: HashMap<String, Type>,
+}
+
+impl SerializableTypeTree {
+    pub fn from_type_tree(tree: TypeTree) -> Self {
+        let mut inner = HashMap::new();
+        for ((path, id), tipe) in tree.into_iter() {
+            inner.insert(format!("{}, {}", comma_list(&path), id), tipe);
+        }
+        Self { inner }
+    }
+    pub fn into_type_tree(self) -> TypeTree {
+        let mut type_tree = HashMap::new();
+        for (path, tipe) in self.inner.into_iter() {
+            let mut x: Vec<_> = path.split(", ").map(|val| val.to_string()).collect();
+            let id = x
+                .pop()
+                .map(|id| id.parse::<usize>())
+                .expect("empty list")
+                .expect("failed to parse");
+            type_tree.insert((x, id), tipe);
+        }
+        type_tree
+    }
+}
+
 ///Represents a mini program that has gone through the post-link compilation step.
 ///
 /// This is typically constructed via the `postlink_compile` function.
@@ -33,7 +62,7 @@ pub struct LinkedProgram {
     pub globals: Vec<GlobalVarDecl>,
     #[serde(default)]
     pub file_name_chart: BTreeMap<u64, String>,
-    pub type_tree: TypeTree,
+    pub type_tree: SerializableTypeTree,
 }
 
 impl LinkedProgram {
@@ -64,6 +93,7 @@ impl LinkedProgram {
                     writeln!(output, "{}", prog_str).unwrap();
                 }
                 Err(e) => {
+                    println!("failure");
                     writeln!(output, "json serialization error: {:?}", e).unwrap();
                 }
             },
@@ -245,7 +275,7 @@ pub fn postlink_compile(
         static_val: Value::none(),
         globals: program.globals.clone(),
         file_name_chart,
-        type_tree: program.type_tree,
+        type_tree: SerializableTypeTree::from_type_tree(program.type_tree),
     })
 }
 

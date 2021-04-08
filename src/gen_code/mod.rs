@@ -1,4 +1,4 @@
-use crate::compile::{AbstractSyntaxTree, StructField, Type, TypeCheckedNode};
+use crate::compile::{AbstractSyntaxTree, StructField, Type, TypeCheckedNode, TypeTree};
 use crate::link::LinkedProgram;
 use crate::GenUpgrade;
 use serde::{Deserialize, Serialize};
@@ -202,14 +202,19 @@ fn get_globals_from_file(path: &Path) -> Result<Vec<StructField>, GenCodeError> 
         ))
     })?;
 
+    let type_tree = globals.type_tree.into_type_tree();
+
     let mut fields = vec![];
     for global in globals.globals {
         if global.name_id != usize::max_value() {
             let mut tipe = global.tipe;
-            if let Type::Nominal(_, _) = tipe {
-                tipe = Type::Any;
+            if let Type::Nominal(file_path, id) = tipe {
+                tipe = type_tree
+                    .get(&(file_path.clone(), id))
+                    .cloned()
+                    .unwrap_or(Type::Any);
             } else {
-                tipe.recursive_apply(replace_nominal, &(), &mut ());
+                tipe.recursive_apply(replace_nominal, &type_tree, &mut ());
             }
             fields.push(StructField::new(global.name, tipe))
         }
@@ -225,11 +230,14 @@ fn let_string(name: &String, expr: &String) -> String {
     format!("let {} = {};", name, expr)
 }
 
-fn replace_nominal(node: &mut TypeCheckedNode, _state: &(), _mut_state: &mut ()) -> bool {
+fn replace_nominal(node: &mut TypeCheckedNode, _state: &TypeTree, _mut_state: &mut ()) -> bool {
     match node {
         TypeCheckedNode::Type(tipe) => {
-            if let Type::Nominal(_, _) = tipe {
-                **tipe = Type::Any;
+            if let Type::Nominal(path, id) = tipe {
+                **tipe = _state
+                    .get(&(path.clone(), *id))
+                    .cloned()
+                    .unwrap_or(Type::Any);
                 false
             } else {
                 true
