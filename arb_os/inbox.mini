@@ -432,9 +432,10 @@ public impure func inbox_getNextUnpackedRequest() -> (
                     // else request was malformatted, ignore it and execute loop again to get another
                 }
             } elseif (msg.kind == const::L1MessageType_rollupProtocolEvent) {
-                if (msg.sender == address(0)) {
-                    let _ = callPluggable(const::PluggableModuleID_rollupTracker, msg.msgData);
-                }
+                // disable processing of these messages, because we don't do anything with the results at present
+                // if (msg.sender == address(0)) {
+                //     let _ = callPluggable(const::PluggableModuleID_rollupTracker, msg.msgData);
+                // }
                 // else request was forged or malformatted, ignore it and execute loop again to get another
             } elseif (msg.kind == const::L1MessageType_submitRetryableTx) {
                 if let Some(txRequest) = processRetryableTx(msg) {
