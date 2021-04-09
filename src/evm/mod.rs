@@ -306,6 +306,65 @@ pub fn _evm_tx_with_deposit(
     Ok(true)
 }
 
+pub fn _evm_block_num_consistency_test(
+    debug: bool,
+) -> Result<(), ethabi::Error> {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+
+    let my_addr = Uint256::from_usize(1025);
+
+    let mut bn_contract = AbiForContract::new_from_file(&test_contract_path("BlockNum"))?;
+    if bn_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, debug)
+        .is_err()
+    {
+        panic!("failed to deploy BlockNum contract");
+    }
+
+    let (logs, sends) = bn_contract.call_function(
+        my_addr.clone(),
+        "getBlock",
+        &[],
+        &mut machine,
+        Uint256::zero(),
+        debug,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    assert!(logs[0].succeeded());
+    let get_block_result = Uint256::from_bytes(&logs[0].get_return_data());
+
+    let (logs, sends) = bn_contract.call_function(
+        my_addr.clone(),
+        "setBlock",
+        &[],
+        &mut machine,
+        Uint256::zero(),
+        debug,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    assert!(logs[0].succeeded());
+
+    let (logs, sends) = bn_contract.call_function(
+        my_addr.clone(),
+        "currBlock",
+        &[],
+        &mut machine,
+        Uint256::zero(),
+        debug,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    assert!(logs[0].succeeded());
+    let curr_block_result = Uint256::from_bytes(&logs[0].get_return_data());
+
+    assert_eq!(get_block_result, curr_block_result);
+
+    Ok(())
+}
+
 pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
