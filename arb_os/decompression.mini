@@ -208,7 +208,11 @@ public impure func decompressAndVerifyEcdsaSignedTx(
         r: r,
         s: s
     };
-    let signer = recoverSigner(tx)?;
+    let signer = xif (originalRequest.kind == const::L1MessageType_L2ForGasEstimation) {
+        originalRequest.sender
+    } else {
+        recoverSigner(tx)?
+    };
     let encodedMessage = rlp_encodeMessageInfo(
         tx.seqNum,
         tx.gasPrice,

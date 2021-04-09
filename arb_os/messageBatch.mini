@@ -13,6 +13,7 @@ use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_extract;
 use std::bytestream::bytestream_new;
 use std::bytestream::bytestream_get64;
+use std::bytestream::bytestream_get256;
 use std::bytestream::bytestream_getN;
 use std::bytestream::bytestream_skipBytes;
 use std::bytearray::marshalledBytes_firstByte;
@@ -32,17 +33,25 @@ type MessageBatch = struct {
 }
 
 public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
-    return xif ( (msg.kind == const::L1MessageType_L2) && (bytearray_getByte(msg.msgData, 0) == const::L2MessageType_batch) ) {
+    return xif ( ((msg.kind == const::L1MessageType_L2) || (msg.kind == const::L1MessageType_L2ForGasEstimation))
+                  && (bytearray_getByte(msg.msgData, 0) == const::L2MessageType_batch) ) {
         let stream = bytestream_new(msg.msgData);
         stream = bytestream_skipBytes(stream, 1)?;    // skip past type byte in message
 
         // aggregator credit goes to the original aggregator of the request, if any, otherwise to sender of request
-        let aggregator = msg.sender;
-        if let Some(aggInfo) = msg.aggregator {
-            if let Some(agg) = aggInfo.aggregator {
-                aggregator = agg;
+        let aggregator = xif (msg.kind == const::L1MessageType_L2) {
+            let agg = msg.sender;
+            if let Some(aggInfo) = msg.aggregator {
+                if let Some(agg2) = aggInfo.aggregator {
+                    agg = agg2;
+                }
             }
-        }
+            agg
+        } else {
+            let (ustr, agg) = bytestream_get256(stream)?;
+            stream = ustr;
+            address(agg)
+        };
 
         Some(
             struct {
