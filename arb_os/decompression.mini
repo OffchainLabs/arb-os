@@ -189,10 +189,15 @@ public impure func decompressAndVerifyEcdsaSignedTx(
 
     let (_, txRequest) = decompressTx(bytestream_new(body), None<address>, None<FunctionTable>)?;
 
-    let seqNum = 0;
-    if let Some(sn) = txRequest.seqNum {
-        seqNum = sn;
-    }
+    let seqNum = xif(originalRequest.kind == const::L1MessageType_L2ForGasEstimation) {
+        account_getNextSeqNum(accountStore_get(getGlobalAccountStore(), originalRequest.sender))
+    } else {
+        xif let Some(sn) = txRequest.seqNum {
+            sn
+        } else {
+            0
+        }
+    };
 
     if (v < 2) {
         v = 35 + 2 * chainParams_chainId() + (1 - (v % 2));
