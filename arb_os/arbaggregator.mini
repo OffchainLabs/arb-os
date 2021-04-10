@@ -124,7 +124,7 @@ impure func arbaggregator_setDefaultAggregator(topFrame: EvmCallFrame, calldata:
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(40, 0, 0);
     }
-    if ((caller != address(0)) && (Some(caller) != chainParams_getOwner()) && (caller != chainParams_getDefaultAggregator())) {
+    if ((caller != address(0)) && (caller != chainParams_getOwner()) && (caller != chainParams_getDefaultAggregator())) {
         evmOp_revert_knownPc(41, 0, 0);
     }
     let newDefaultAgg = address(bytearray_get256(calldata, 4));

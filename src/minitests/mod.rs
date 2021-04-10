@@ -269,7 +269,7 @@ fn test_payment_in_constructor() {
 }
 
 #[test]
-fn test_block_num_consistency() { crate::evm::_evm_block_num_consistency_test(false); }
+fn test_block_num_consistency() { let _ = crate::evm::_evm_block_num_consistency_test(false).unwrap(); }
 
 #[test]
 fn test_arbsys() {

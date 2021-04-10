@@ -4,6 +4,7 @@
 
 use retrybuffer::RetryBuffer;
 use retrybuffer::retryBuffer_new;
+use retrybuffer::retryBuffer_setDefaultLifetime;
 
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
@@ -64,6 +65,12 @@ public impure func accountStore_init() {   // This must be called first!
         accounts: newmap<address, Account>,
         retryBuffer: retryBuffer_new(),
         numContracts: 0,
+    };
+}
+
+public impure func accounts_notifyParamsChanged() {
+    globalAccountStore = globalAccountStore with {
+        retryBuffer: retryBuffer_setDefaultLifetime(globalAccountStore.retryBuffer)
     };
 }
 

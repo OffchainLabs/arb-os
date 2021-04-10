@@ -23,7 +23,7 @@ use blockhash::blockhash_submitHash;
 
 use chainParameters::chainParams_gotParamsMessage;
 use chainParameters::chainParams_chainId;
-use chainParameters::haveReceivedChainInitMessage;
+use chainParameters::chainParams_getOwner;
 
 use gasAccounting::updateL1GasPriceEstimate;
 use gasAccounting::txFeeStats_zero;
@@ -113,8 +113,10 @@ public impure func inbox_get() -> IncomingRequest {
             inboxHashAccumulator: hash(globalInbox.inboxHashAccumulator, ebMsgHash)
         };
 
-        if (ebMsg.kind == const::L1MessageType_chainInit) {
-            chainParams_gotParamsMessage(ebMsg.sender, ebMsg.msgData);
+        if (ebMsg.kind == const::L1MessageType_setChainParameters) {
+            if ((ebMsg.sender == address(0)) || (ebMsg.sender == chainParams_getOwner())) {
+                chainParams_gotParamsMessage(ebMsg.msgData);
+            }   // ignore this message if it didn't come from chain owner
         } else {
             return ebMsg with {
                 requestId: uint(hash(bytes32(chainParams_chainId()), bytes32(ebMsg.requestId)))
@@ -214,19 +216,15 @@ impure func maybeEndOfArbitrumBlock(inbox: Inbox) -> (Inbox, bool) {
         )
     } else {
         (
-            xif (haveReceivedChainInitMessage()) {
-                inbox with {
-                    queue: incomingRequestQueue_put(
-                        inbox.queue,
-                        endOfArbBlockMessage(inbox.arbBlockNum, inbox.ethBlockNum, inbox.timestamp),
-                    )
-                } with {
-                    arbBlockNum: inbox.arbBlockNum+1
-                } with {
-                    seenMsgAtThisArbBlockNum: false
-                }
-            } else {
-                inbox
+            inbox with {
+                queue: incomingRequestQueue_put(
+                    inbox.queue,
+                    endOfArbBlockMessage(inbox.arbBlockNum, inbox.ethBlockNum, inbox.timestamp),
+                )
+            } with {
+                arbBlockNum: inbox.arbBlockNum+1
+            } with {
+                seenMsgAtThisArbBlockNum: false
             },
             true
         )

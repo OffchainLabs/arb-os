@@ -6,12 +6,55 @@
 
 use crate::evm::abi::{builtin_contract_path, AbiForContract};
 use crate::uint256::Uint256;
+use keccak_hash::keccak;
 use std::collections::HashMap;
 
 ///Creates a fixed list of globally accessible constants.
 pub fn init_constant_table() -> HashMap<String, Uint256> {
     let mut ret = HashMap::new();
+    // add parameters
+    for (s, def) in &[
+        ("SecondsPerBlockNumerator", 13),
+        ("SecondsPerBlockDenominator", 1),
+        ("FeesEnabled", 0u64),
+        ("NetworkFeeRecipient", 0),
+        ("CongestionFeeRecipient", 0),
+        ("FairGasPriceSender", 0),
+        ("DefaultAggregator", 0),
+        ("ChainID", 1 << 48),
+        ("ChallengePeriodEthBlocks", 7 * 24 * 60 * 60 / 15), // 7 days @ 15 seconds/block
+        ("SpeedLimitPerSecond", 100_000_000),
+        ("SecondsPerSend", 30*60),
+        ("ChainOwner", 0),
+        ("L1GasPerL2Tx", 57000),
+        ("L1GasPerL2CalldataUnit", 1),
+        ("L1GasPerStorage", 2000),
+        ("ArbGasDivisor", 10000), // min ArbGas price is L1 gas price / this
+        ("NonzeroBalanceCallStipend", 20000),
+        ("NetworkFeeShareNumerator", 15),
+        ("NetworkFeeShareDenominator", 100),
+        ("GasPoolMax", 60 * 100_000_000),
+        ("TxGasLimit", 10 * 100_000_000),
+        ("RetryablePriceBase", 1), // in L1 gas
+        ("RetryablePricePerByteNumerator", 1),
+        ("RetryablePricePerByteDenominator", 256),
+        ("RetryableTxRepriceIntervalSeconds", 24*60*60),
+        ("L1GasPriceEstimateGwei", 150),
+        ("L1GasPriceEstimateWeightDenominator", 100),
+        ("BatchSizeEstimateWeightDenominator", 5000),
+        ("RetryableTxLifetimeSeconds", 7 * 24 * 60 * 60),
+        ("AssumedBatchCostL1Gas", 50000),
+        ("ArbitrumNonZeroBalanceCallStipend", 20000),
+    ] {
+        let mut ss = s.as_bytes();
+        ret.insert(
+            "Atom_Param_".to_owned() + s,
+            Uint256::from_bytes(keccak(&mut ss).as_bytes()),
+        );
+        ret.insert("Default_Param_".to_owned() + s, Uint256::from_u64(*def));
+    }
     for (s, i) in &[
+        ("NumChainParameters", 24),
         // addresses of precompiled contracts
         ("Address_ArbSys", 100),
         ("Address_ArbAddressTable", 102),
@@ -150,7 +193,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         // L1 message types
         ("L1MessageType_ethDeposit", 0),
         ("L1MessageType_L2", 3),
-        ("L1MessageType_chainInit", 4),
+        ("L1MessageType_setChainParameters", 4),
         // type 5 not used -- previously was for buddy contract deploy
         ("L1MessageType_endOfBlock", 6),
         ("L1MessageType_L2FundedByL1", 7),
@@ -199,52 +242,19 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         // type 5 not used -- was previously buddy contract result
         // AVM send types
         ("AVMSendType_batch", 0),
-        // chain initialization options
-        ("InitOption_setChargingParams", 2),
-        ("InitOption_setDefaultAggregator", 3),
-        // charging mechanism
-        ("Charging_DefaultL1GasPerL2Tx", 3700),
-        ("Charging_DefaultL1GasPerCalldataByte", 16),
-        ("Charging_DefaultL1GasPerStorage", 2000),
-        ("Charging_DefaultArbGasDivisor", 10000),
-        ("Charging_AssumedBatchCostL1Gas", 50000),
-        ("Charging_GasPoolDepthSeconds", 60),
-        ("Charging_RetryableTxRepriceIntervalSeconds", 15 * 60), // 15 minutes
-        // fee customizability
-        ("NetFee_defaultRateNumerator", 15),
-        ("NetFee_defaultRateDenominator", 100),
-        // sequencer constants
-        ("Sequencer_maxDelaySeconds", 983040), // 30*128*256
-        ("Sequencer_deltaSeconds", 0),
         // pluggable modules
         ("PluggableModuleID_rollupTracker", 0),
         ("PluggableModuleID_precompile_0x05", 1),
-        // retry buffer
-        ("RetryBuffer_DefaultLifetimeSeconds", 60 * 60 * 24 * 7),
         // gas cost values for re-entrancy protection
         ("EVMWriteL1GasCost", 5000),
         ("EVMNonZeroBalanceCallStipend", 2300),
-        ("ArbitrumNonZeroBalanceCallStipend", 20000),
         // misc
         ("TwoToThe32", 1 << 32),
-        ("SecondsPerBlockNumerator", 2),
-        ("SecondsPerBlockDenominator", 1),
-        ("DefaultSpeedLimitPerSecond", 100_000_000),
-        ("DefaultSecondsPerSend", 900), // 15 minutes
-        ("Estimate_L1GasCostPerNode", 220000),
-        ("Estimate_L1GasPrice", 100 * 1_000_000_000), // 100 gwei
     ] {
         ret.insert(s.to_string(), Uint256::from_u64(*i));
     }
 
     for (s, u) in &[
-        ("Charging_DefaultNetworkFeeRecipient", "0"),
-        ("Charging_DefaultCongestionFeeRecipient", "0"),
-        (
-            "SpecialAccount_gasAccountingReserve",
-            // Keccak256 of "Arbitrum gas accounting reserve account"
-            "af6cbc19f66dec07f790912226744d744f04b37b666b9343317df33a5114fb96",
-        ),
         (
             "BLSSignatureDomainBase",
             // Keccak256 of "Arbitrum BLS signature domain"
@@ -258,7 +268,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ret.insert(s.to_string(), Uint256::from_string_hex(u).unwrap());
     }
 
-    for builtin in &["ArbRetryableTx", "ArbStatistics"] {
+    for builtin in &["ArbRetryableTx", "ArbStatistics", "ArbOwner"] {
         let fcodes = match func_codes_for_builtin_contract(builtin) {
             Ok(v) => v,
             Err(e) => panic!("Error accessing builtin function {}: {}", builtin, e),

@@ -26,6 +26,8 @@ use accounts::account_getAggregatorToPay;
 use arbstatistics::arbStatistics_addToStorage;
 use arbstatistics::arbStatistics_addToGasUsed;
 
+use chainParameters::chainParams_getOrDie;
+
 use evmCallStack::evmCallStack_isEmpty;
 use evmCallStack::evmCallStack_getAccountInCurrentContext;
 use evmCallStack::evmCallStack_setAccountInCurrentContext;
@@ -133,19 +135,29 @@ type RetryablePrices = struct {
 
 public impure func gasAccounting_init() {    // initialize on boot, before we have gotten the chain init message
     initGasPriceEstimator();
+    setupParameters(true);
+}
 
-    setGasAccountingParamsFromSpeedLimit(const::DefaultSpeedLimitPerSecond);
+public impure func gasAccounting_notifyParamsChanged() {
+    setupParameters(false);
+}
+
+impure func setupParameters(isInit: bool) {
+    setGasAccountingParamsFromSpeedLimit(chainParams_getOrDie(const::Atom_Param_SpeedLimitPerSecond));
 
     let pricingParams = struct {
-        l1GasPerL2Tx: const::Charging_DefaultL1GasPerL2Tx,
-        l1GasPerL1Calldata: const::Charging_DefaultL1GasPerCalldataByte,
-        l1GasPerStorage: const::Charging_DefaultL1GasPerStorage,
-        arbGasDivisor: const::Charging_DefaultArbGasDivisor,
+        l1GasPerL2Tx: chainParams_getOrDie(const::Atom_Param_L1GasPerL2Tx),
+        l1GasPerL1Calldata: chainParams_getOrDie(const::Atom_Param_L1GasPerL2CalldataUnit),
+        l1GasPerStorage: chainParams_getOrDie(const::Atom_Param_L1GasPerStorage),
+        arbGasDivisor: chainParams_getOrDie(const::Atom_Param_ArbGasDivisor),
     };
 
-    let congestionState = initCongestionState(true);
+    let congestionState = initCongestionState(isInit);
 
-    let netFeeRate = fixedPoint_new(const::NetFee_defaultRateNumerator, const::NetFee_defaultRateDenominator);
+    let netFeeRate = fixedPoint_new(
+        chainParams_getOrDie(const::Atom_Param_NetworkFeeShareNumerator),
+        chainParams_getOrDie(const::Atom_Param_NetworkFeeShareDenominator),
+    );
     let baseFeeMultiplier = fixedPoint_plusOne(netFeeRate);
     let shareForNetFee = xif let Some(x) = fixedPoint_div(netFeeRate, baseFeeMultiplier) {
         x
@@ -154,9 +166,9 @@ public impure func gasAccounting_init() {    // initialize on boot, before we ha
     };
 
     let feeConfig = struct {
-        enabled: false,   // after boot, run without fees
-        forNetwork: address(const::Charging_DefaultNetworkFeeRecipient),
-        forCongestion: address(const::Charging_DefaultCongestionFeeRecipient),
+        enabled: chainParams_getOrDie(const::Atom_Param_FeesEnabled) != 0,
+        forNetwork: address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
+        forCongestion: address(chainParams_getOrDie(const::Atom_Param_CongestionFeeRecipient)),
         baseFeeMultiplier: baseFeeMultiplier,
         shareForNetFee: shareForNetFee,
     };
@@ -177,7 +189,7 @@ public impure func gasAccounting_init() {    // initialize on boot, before we ha
         currentPrices: gasPrices,
         gasRemainingThisBlock: uint(congestionState.gasPool),
         congestionState: congestionState,
-        speedLimitPerSecond: const::DefaultSpeedLimitPerSecond,
+        speedLimitPerSecond: chainParams_getOrDie(const::Atom_Param_SpeedLimitPerSecond),
         pricingParams: pricingParams,
         gasAllocatedToThisBlock: uint(congestionState.gasPool),
         retryablePrices: retryablePrices,
@@ -274,11 +286,13 @@ impure func setRetryablePrices(oldRetryablePrices: RetryablePrices) -> Retryable
             struct {
                 perTx: gasPrice,
                 perCalldataByte: gasPrice / 256,
-                nextUpdateTimestamp: inbox_currentTimestamp() + const::Charging_RetryableTxRepriceIntervalSeconds,
+                nextUpdateTimestamp: inbox_currentTimestamp()
+                                     + chainParams_getOrDie(const::Atom_Param_RetryableTxRepriceIntervalSeconds),
             }
         } else {
             oldRetryablePrices with {
-                nextUpdateTimestamp: inbox_currentTimestamp() + const::Charging_RetryableTxRepriceIntervalSeconds
+                nextUpdateTimestamp: inbox_currentTimestamp()
+                                     + chainParams_getOrDie(const::Atom_Param_RetryableTxRepriceIntervalSeconds)
             }
         }
     };
@@ -1130,13 +1144,13 @@ public impure func setFairGasPriceSender(sender: address) {
 }
 
 // This adjusts l1GasPerL2Tx to be a weighted average, over recent transactions that arrived in batches,
-//     of the quantity (const::Charging_AssumedBatchCostL1Gas / batchSize). Because we're averaging over
+//     of  AssumedBatchCostL1Gas / batchSize). Because we're averaging over
 //     transactions, a batch contributes (batchSize) times, once for each transaction in it.
 public impure func updateBatchSizeEstimate(size: uint, batchSender: address) {
     if (batchSender == getFairGasPriceSender()) {
         if (size > 500) { size = 500; }
         let oldValue = gasAccountingInfo.pricingParams.l1GasPerL2Tx;
-        let newValue = (const::Charging_AssumedBatchCostL1Gas + (5000 - size) * oldValue) / 5000;
+        let newValue = (chainParams_getOrDie(const::Atom_Param_AssumedBatchCostL1Gas) + (5000 - size) * oldValue) / 5000;
 
         gasAccountingInfo = gasAccountingInfo with {
             pricingParams: gasAccountingInfo.pricingParams with {

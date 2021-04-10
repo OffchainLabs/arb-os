@@ -7,6 +7,8 @@ use accounts::account_setContractInfo;
 use chainParameters::chainParams_getOwner;
 use chainParameters::chainParams_setOwner;
 use chainParameters::chainParams_setSecondsPerSend;
+use chainParameters::chainParams_get;
+use chainParameters::chainParams_set;
 
 use evmCallStack::EvmCallFrame;
 use evmCallStack::evmCallStack_topFrame;
@@ -62,7 +64,7 @@ public impure func arbowner_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
         // make sure the caller is either address zero or the chain's owner
         let caller = evmCallFrame_getCaller(topFrame);
-        if ( (caller != address(0)) && (Some(caller) != chainParams_getOwner()) ) {
+        if ( (caller != address(0)) && (caller != chainParams_getOwner()) ) {
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 0, 0, 0);
         }
 
@@ -83,18 +85,10 @@ public impure func arbowner_txcall() {
            arbowner_finishCodeUploadAsPluggable(topFrame, calldata);
         } elseif (funcCode == 0xc3bf429d) {
             arbowner_addToReserveFunds(topFrame, calldata);
-        } elseif (funcCode == 0xa901dd92) {
-            arbowner_setFeesEnabled(topFrame, calldata);
-        } elseif (funcCode == 0x08df6923) {
-            arbowner_getFeeRecipients(topFrame, calldata);
-        } elseif (funcCode == 0xc6cabb40) {
-            arbowner_setFeeRecipients(topFrame, calldata);
-        } elseif (funcCode == 0xba7f4cc6) {
-            arbowner_setFairGasPriceSender(topFrame, calldata);
-        } elseif (funcCode == 0x29854f47) {
-            arbowner_setSecondsPerSend(topFrame, calldata);
-        } elseif (funcCode == 0x8ea93643) {
-            arbowner_setGasAccountingParams(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_getChainParameter) {
+            arbowner_getChainParameter(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_setChainParameter) {
+            arbowner_setChainParameter(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
@@ -122,61 +116,6 @@ impure func arbowner_addToReserveFunds(topFrame: EvmCallFrame, calldata: ByteArr
         gasAccounting_addToReserveInCurrentContext(callvalue);
     }
     evmOp_return(0, 0);
-}
-
-impure func arbowner_setFeesEnabled(topFrame: EvmCallFrame, calldata: ByteArray) { // (bool)
-    if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 200, 0, 0);
-    }
-    gasAccounting_setFeesEnabled(bytearray_get256(calldata, 4) != 0);
-    evmOp_return(0, 0);
-}
-
-impure func arbowner_getFeeRecipients(topFrame: EvmCallFrame, calldata: ByteArray) { // () -> (address, address)
-    if (bytearray_size(calldata) != 4) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 100, 0, 0);
-    }
-
-    let (r1, r2) = gasAccounting_getFeeRecipients();
-    let mem = bytearray_set256(
-        bytearray_set256(bytearray_new(0), 0, uint(r1)),
-        32,
-        uint(r2)
-    );
-    if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, 64);
-    } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 101, 0, 0);
-    }
-}
-
-impure func arbowner_setFeeRecipients(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, address)
-    if (bytearray_size(calldata) != 68) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 110, 0, 0);
-    }
-    let recipient1 = address(bytearray_get256(calldata, 4));
-    let recipient2 = address(bytearray_get256(calldata, 36));
-    gasAccounting_setFeeRecipients(recipient1, recipient2);
-    evmOp_return(0, 0);
-}
-
-impure func arbowner_setFairGasPriceSender(topFrame: EvmCallFrame, calldata: ByteArray) { // (address)
-    if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 210, 0, 0);
-    }
-    setFairGasPriceSender(address(bytearray_get256(calldata, 4)));
-    evmOp_return(0, 0);
-}
-
-impure func arbowner_setSecondsPerSend(topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint)
-    if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 120, 0, 0);
-    }
-    if (chainParams_setSecondsPerSend(bytearray_get256(calldata, 4)) == Some(())) {
-        evmOp_return(0, 0);
-    } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 121, 0, 0);
-    }
 }
 
 impure func arbowner_startCodeUpload(topFrame: EvmCallFrame, calldata: ByteArray) { // ()
@@ -250,22 +189,31 @@ impure func arbowner_bindAddressToPluggable(topFrame: EvmCallFrame, calldata: By
     }
 }
 
-impure func arbowner_setGasAccountingParams(topFrame: EvmCallFrame, calldata: ByteArray) { // (uint, uint, uint)
-    if (bytearray_size(calldata) != (4+3*32)) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 130, 0, 0);
+impure func arbowner_getChainParameter(topFrame: EvmCallFrame, calldata: ByteArray) { // (uint) -> uint
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 70, 0, 0);
     }
-    let speedLimitPerBlock = bytearray_get256(calldata, 4);
-    let speedLimitPerSecond = speedLimitPerBlock * const::SecondsPerBlockDenominator / const::SecondsPerBlockNumerator;
-    if (setGasAccountingParams(
-            speedLimitPerSecond,
-            bytearray_get256(calldata, 4+32),
-            bytearray_get256(calldata, 4+2*32),
-        )
-    ) {
-        evmOp_return(0, 0);
+    let paramId = bytearray_get256(calldata, 4);
+    if let Some(value) = chainParams_get(paramId) {
+        let mem = bytearray_set256(bytearray_new(0), 0, value);
+        if (evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_return(0, 32);
+        } else {
+            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 71, 0, 0);
+        }
     } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 131, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 72, 0, 0);
     }
+}
+
+impure func arbowner_setChainParameter(topFrame: EvmCallFrame, calldata: ByteArray) { // (uint, uint)
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 80, 0, 0);
+    }
+    let paramId = bytearray_get256(calldata, 4);
+    let newValue = bytearray_get256(calldata, 36);
+    chainParams_set(paramId, newValue);
+    evmOp_return(0, 0);
 }
 
 
