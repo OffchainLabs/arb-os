@@ -90,6 +90,7 @@ pub fn _do_rollup_tracker_ops() {
         claimer.clone(),
         Uint256::_from_eth(1),
     );
+    let _ = machine.run(None);
 
     arbowner
         ._add_to_reserve_funds(&mut machine, Uint256::_from_eth(1))
