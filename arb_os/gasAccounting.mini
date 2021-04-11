@@ -780,7 +780,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
     option<TxRequestData>,    // if it was an L2 tx message
 ) {
     let (maybeRequest, maybeTx) = inbox_getNextUnpackedRequest();
-    let (isChargeable, arbBlockNum, timestamp, payer, maxGas, gasBid) = getRequestGasInfo(maybeRequest, maybeTx);
+    let (isChargeable, arbBlockNum, timestamp, payer, maxGas) = getRequestGasInfo(maybeRequest, maybeTx);
 
     if (arbBlockNum > gasAccountingInfo.congestionState.lastArbBlockNumSeen) {
         // it's the first tx of a new block, so do beginning-of-block work
@@ -809,7 +809,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
         };
     }
 
-    return xif (isChargeable && gasAccountingInfo.feeConfig.enabled) {
+    return xif (payer != address(0) && gasAccountingInfo.feeConfig.enabled) {
         xif let Some(tx) = maybeTx {
             if let Some(txSeqNum) = tx.seqNum {
                 if (txSeqNum != account_getNextSeqNum(accountStore_get(getGlobalAccountStore(), tx.caller))) {
@@ -866,7 +866,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
                     };
                 }
             }
-            xif (tx.maxGas > gasAccountingInfo.gasRemainingThisBlock) {
+            xif (isChargeable && tx.maxGas > gasAccountingInfo.gasRemainingThisBlock) {
                 // the current block doesn't have enough gas left to run the tx
                 (const::TxResultCode_congestion, maybeRequest, Some(tx))
             } else {
@@ -1057,9 +1057,9 @@ public impure func getGasLimitPerTx() -> uint {
 func getRequestGasInfo(
     maybeRequest: option<IncomingRequest>,
     maybeTx: option<TxRequestData>
-) -> (bool, uint, uint, address, uint, uint) {
+) -> (bool, uint, uint, address, uint) {
     if let Some(req) = maybeRequest {
-        return (false, req.arbBlockNumber, req.timestamp, req.sender, 0, 0);
+        return (false, req.arbBlockNumber, req.timestamp, req.sender, 0);
     }
     if let Some(tx) = maybeTx {
         if (tx.incomingRequest.adminMode) {
@@ -1068,8 +1068,7 @@ func getRequestGasInfo(
                 tx.incomingRequest.arbBlockNumber,
                 tx.incomingRequest.timestamp,
                 tx.incomingRequest.sender,
-                tx.maxGas,
-                0
+                tx.maxGas
             );
         } else {
             return (
@@ -1077,13 +1076,12 @@ func getRequestGasInfo(
                 tx.incomingRequest.arbBlockNumber,
                 tx.incomingRequest.timestamp,
                 tx.incomingRequest.sender,
-                tx.maxGas,
-                tx.gasPrice
+                tx.maxGas
             );
         }
     }
     panic;  // shouldn't happen
-    return (false, 0, 0, address(0), 0, 0);
+    return (false, 0, 0, address(0), 0);
 }
 
 public impure func getRetryableTxPrice(calldataSize: uint) -> (uint, uint) {
