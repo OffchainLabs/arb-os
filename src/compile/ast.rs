@@ -314,10 +314,14 @@ impl Type {
     }
 
     pub fn display(&self) -> String {
-        self.display_indented(0)
+        self.display_indented(0, "::")
     }
 
-    fn display_indented(&self, indent_level: usize) -> String {
+    pub fn display_separator(&self, separator: &str) -> String {
+        self.display_indented(0, separator)
+    }
+
+    fn display_indented(&self, indent_level: usize, separator: &str) -> String {
         match self {
             Type::Void => "void".to_string(),
             Type::Uint => "uint".to_string(),
@@ -330,13 +334,15 @@ impl Type {
                 let mut out = "(".to_string();
                 for s in subtypes {
                     //This should be improved by removing the final trailing comma.
-                    out.push_str(&(s.display_indented(indent_level) + ", "));
+                    out.push_str(&(s.display_indented(indent_level, separator) + ", "));
                 }
                 out.push(')');
                 out
             }
-            Type::Array(t) => format!("[]{}", t.display_indented(indent_level)),
-            Type::FixedArray(t, size) => format!("[{}]{}", size, t.display_indented(indent_level)),
+            Type::Array(t) => format!("[]{}", t.display_indented(indent_level, separator)),
+            Type::FixedArray(t, size) => {
+                format!("[{}]{}", size, t.display_indented(indent_level, separator))
+            }
             Type::Struct(fields) => {
                 let mut out = "struct {\n".to_string();
                 for _ in 0..indent_level {
@@ -347,7 +353,7 @@ impl Type {
                     out.push_str(&format!(
                         "    {}: {},\n",
                         field.name,
-                        field.tipe.display_indented(indent_level + 1)
+                        field.tipe.display_indented(indent_level + 1, separator)
                     ));
                     for _ in 0..indent_level {
                         out.push_str("    ");
@@ -359,7 +365,7 @@ impl Type {
             Type::Nominal(path, id) => {
                 let mut out = String::new();
                 for path_item in path {
-                    out.push_str(&format!("{}::", path_item))
+                    out.push_str(&format!("{}{}", path_item, separator))
                 }
                 out.push_str(&format!("{}", id));
                 out
@@ -371,25 +377,25 @@ impl Type {
                 }
                 out.push_str("func(");
                 for arg in args {
-                    out.push_str(&(arg.display_indented(indent_level) + ", "));
+                    out.push_str(&(arg.display_indented(indent_level, separator) + ", "));
                 }
                 out.push(')');
                 if **ret != Type::Void {
                     out.push_str(" -> ");
-                    out.push_str(&ret.display_indented(indent_level));
+                    out.push_str(&ret.display_indented(indent_level, separator));
                 }
                 out
             }
             Type::Map(key, val) => {
                 format!(
                     "map<{},{}>",
-                    key.display_indented(indent_level),
-                    val.display_indented(indent_level)
+                    key.display_indented(indent_level, separator),
+                    val.display_indented(indent_level, separator)
                 )
             }
             Type::Any => "any".to_string(),
             Type::Every => "every".to_string(),
-            Type::Option(t) => format!("option<{}>", t.display_indented(indent_level)),
+            Type::Option(t) => format!("option<{}>", t.display_indented(indent_level, separator)),
         }
     }
 }

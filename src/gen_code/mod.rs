@@ -2,13 +2,15 @@ use crate::compile::{AbstractSyntaxTree, StructField, Type, TypeCheckedNode, Typ
 use crate::link::LinkedProgram;
 use crate::GenUpgrade;
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::Read;
 use std::io::Write;
 use std::path::Path;
+use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct GenCodeError {
@@ -53,20 +55,26 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
             data: HashSet::new(),
         }
     };
-    let mut code = File::create(&out_file).map_err(|_| {
-        GenCodeError::new(format!(
-            "Could not create output file \"{}\"",
-            out_file.to_str().unwrap_or("")
-        ))
-    })?;
+    let mut code = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(&out_file)
+        .map_err(|_| {
+            GenCodeError::new(format!(
+                "Could not create output file \"{}\"",
+                out_file.to_str().unwrap_or("")
+            ))
+        })?;
     writeln!(code, "").unwrap();
     writeln!(
         code,
         "// This file is machine-generated. Don't edit it unless you know what you're doing."
     )
     .unwrap();
-    let mut input_fields = get_globals_from_file(&from)?;
-    let mut output_fields = get_globals_from_file(&to)?;
+    writeln!(code, "").unwrap();
+    let (mut input_fields, in_recursers, in_tree) = get_globals_from_file(&from)?;
+    let (mut output_fields, _out_recursers, _out_tree) = get_globals_from_file(&to)?;
     output_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
     input_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
     let mut intersection: HashSet<&StructField> = input_fields
@@ -101,6 +109,20 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
     if map.data.contains("_jump_table") {
         writeln!(code, "use {}::set_jump_table;", impl_file)
             .map_err(|_| GenCodeError::new("Failed to write use statement".to_string()))?;
+    }
+    writeln!(code).map_err(|_| GenCodeError::new("Failed to write empty line".to_string()))?;
+    for thing in in_recursers {
+        writeln!(
+            code,
+            "type {} = {}",
+            thing.display_separator("_"),
+            if let Type::Nominal(a, b) = thing.clone() {
+                in_tree.get(&(a, b)).unwrap().display_separator("_")
+            } else {
+                unimplemented!()
+            }
+        )
+        .unwrap();
     }
     writeln!(code).map_err(|_| GenCodeError::new("Failed to write empty line".to_string()))?;
     writeln!(
@@ -181,7 +203,9 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
     Ok(())
 }
 
-fn get_globals_from_file(path: &Path) -> Result<Vec<StructField>, GenCodeError> {
+fn get_globals_from_file(
+    path: &Path,
+) -> Result<(Vec<StructField>, HashSet<Type>, TypeTree), GenCodeError> {
     let mut file = File::open(&path).map_err(|_| {
         GenCodeError::new(format!(
             "Could not create file \"{}\"",
@@ -204,6 +228,8 @@ fn get_globals_from_file(path: &Path) -> Result<Vec<StructField>, GenCodeError> 
 
     let type_tree = globals.type_tree.into_type_tree();
 
+    let mut stuff = Rc::new(RefCell::new(HashSet::new()));
+
     let mut fields = vec![];
     for global in globals.globals {
         if global.name_id != usize::max_value() {
@@ -214,34 +240,43 @@ fn get_globals_from_file(path: &Path) -> Result<Vec<StructField>, GenCodeError> 
                     .cloned()
                     .unwrap_or(Type::Any);
             } else {
-                tipe.recursive_apply(replace_nominal, &type_tree, &mut ());
+                tipe.recursive_apply(replace_nominal, &type_tree, &mut (vec![], stuff.clone()));
             }
             fields.push(StructField::new(global.name, tipe))
         }
     }
-    Ok(fields)
+    let real_stuff = Rc::get_mut(&mut stuff).unwrap().clone().into_inner();
+    Ok((fields, real_stuff, type_tree))
 }
 
 fn type_decl_string(type_name: &String, tipe: &Type) -> String {
-    format!("type {} = {}", type_name, tipe.display())
+    format!("type {} = {}", type_name, tipe.display_separator("_"))
 }
 
 fn let_string(name: &String, expr: &String) -> String {
     format!("let {} = {};", name, expr)
 }
 
-fn replace_nominal(node: &mut TypeCheckedNode, _state: &TypeTree, _mut_state: &mut ()) -> bool {
+fn replace_nominal(
+    node: &mut TypeCheckedNode,
+    state: &TypeTree,
+    mut_state: &mut (Vec<Type>, Rc<RefCell<HashSet<Type>>>),
+) -> bool {
     match node {
         TypeCheckedNode::Type(tipe) => {
+            if mut_state.0.iter().any(|thing| thing == *tipe) {
+                let mut to_render = mut_state.1.borrow_mut();
+                to_render.insert(tipe.clone());
+                return false;
+            }
             if let Type::Nominal(path, id) = tipe {
-                **tipe = _state
+                mut_state.0.push(Type::Nominal(path.clone(), *id));
+                **tipe = state
                     .get(&(path.clone(), *id))
                     .cloned()
                     .unwrap_or(Type::Any);
-                false
-            } else {
-                true
             }
+            true
         }
         _ => true,
     }
