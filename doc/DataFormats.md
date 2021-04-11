@@ -44,7 +44,7 @@ Each message type is associated with rules, imposed by the Arbitrum protocol, re
 
 ##### Message type 3: L2 message
 
-This message type is initiated by a client, via a transaction to the EthBridge. Its purpose is to deliver to ArbOS an L2 data payload which the EthBridge does not need to understand. The EthBridge simply passes on the type-specific data uninterpreted. ArbOS will parse and validate the L2 data.
+This message type is initiated by a client, via a transaction to the EthBridge. Its purpose is to deliver to ArbOS an L2 data payload which the Ethridge does not need to understand. The EthBridge simply passes on the type-specific data uninterpreted. ArbOS will parse and validate the L2 data.
 
 Details of L2 message subtypes and formats are listed in a separate section below.
 

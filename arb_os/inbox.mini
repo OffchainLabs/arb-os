@@ -321,10 +321,7 @@ func hashIncomingRequest(req: IncomingRequest) -> bytes32 {
     );
 }
 
-public impure func inbox_getNextUnpackedRequest() -> (
-    option<IncomingRequest>,  // if it was an L1 message
-    option<TxRequestData>,    // if it was an L2 tx message
-) {
+public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
     let msg = unsafecast<IncomingRequest>(());   // value will be re-initialized before use
     
     return xloop {
@@ -333,7 +330,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
             globalInputQueue = globalInputQueue with {
                 txQ: newQ
             };
-            return (None<IncomingRequest>, Some(unsafecast<TxRequestData>(tx)));
+            return unsafecast<TxRequestData>(tx);
         }
         if let Some(res) = incomingRequestQueueStack_get(globalInputQueue.batchQ) {
             let (newQ, umsg) = res;
@@ -386,7 +383,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
                         )
                     );
                     if let Some(txRequest) = translateUnsignedTx(msg) {
-                        return (None<IncomingRequest>, Some(txRequest));
+                        return txRequest;
                     }
                     // else request was malformatted, ignore it and execute loop again to get another
                     //     but don't undo the deposit
@@ -401,7 +398,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
                         )
                     );
                     if let Some(txRequest) = translateUnsignedTx(msg) {
-                        return (None<IncomingRequest>, Some(txRequest));
+                        return txRequest;
                     }
                     // else request was malformatted, ignore it and execute loop again to get another
                     //     but don't undo the deposit
@@ -428,7 +425,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
                 } elseif (firstByte == const::L2MessageType_signedCompressedTx) {
                     // it's a single message with compressed headers
                     if let Some(txRequest) = decompressAndVerifyEcdsaSignedTx(msg.msgData, msg) {
-                        return (None<IncomingRequest>, Some(txRequest));
+                        return txRequest;
                     }
                     // else signature was invalid, ignore msg and execute loop again to get another
                 } elseif (firstByte == const::L2MessageType_blsBatch) {
@@ -443,7 +440,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
                 } else {
                     // subtype must be unsigned EOA, unsigned contract, or nonmutating
                     if let Some(txRequest) = translateUnsignedTx(msg) {
-                        return (None<IncomingRequest>, Some(txRequest));
+                        return txRequest;
                     }
                     // else request was malformatted, ignore it and execute loop again to get another
                 }
@@ -454,11 +451,11 @@ public impure func inbox_getNextUnpackedRequest() -> (
                 // else request was forged or malformatted, ignore it and execute loop again to get another
             } elseif (msg.kind == const::L1MessageType_submitRetryableTx) {
                 if let Some(txRequest) = processRetryableTx(msg) {
-                    return (None<IncomingRequest>, Some(txRequest));
+                    return txRequest;
                 }
                 // submission failed, or no immediate tx included; either way, loop back to get next message
             } else {
-                return (Some(msg), None<TxRequestData>);
+                // invalid message type -- ignore it
             }
         }
     };
