@@ -314,34 +314,41 @@ impl Type {
     }
 
     pub fn display(&self) -> String {
-        self.display_indented(0, "::")
+        self.display_indented(0, "::").0
     }
 
-    pub fn display_separator(&self, separator: &str) -> String {
+    pub fn display_separator(&self, separator: &str) -> (String, HashSet<Type>) {
         self.display_indented(0, separator)
     }
 
-    fn display_indented(&self, indent_level: usize, separator: &str) -> String {
+    fn display_indented(&self, indent_level: usize, separator: &str) -> (String, HashSet<Type>) {
+        let mut type_set = HashSet::new();
         match self {
-            Type::Void => "void".to_string(),
-            Type::Uint => "uint".to_string(),
-            Type::Int => "int".to_string(),
-            Type::Bool => "bool".to_string(),
-            Type::Bytes32 => "bytes32".to_string(),
-            Type::EthAddress => "address".to_string(),
-            Type::Buffer => "buffer".to_string(),
+            Type::Void => ("void".to_string(), type_set),
+            Type::Uint => ("uint".to_string(), type_set),
+            Type::Int => ("int".to_string(), type_set),
+            Type::Bool => ("bool".to_string(), type_set),
+            Type::Bytes32 => ("bytes32".to_string(), type_set),
+            Type::EthAddress => ("address".to_string(), type_set),
+            Type::Buffer => ("buffer".to_string(), type_set),
             Type::Tuple(subtypes) => {
                 let mut out = "(".to_string();
                 for s in subtypes {
                     //This should be improved by removing the final trailing comma.
-                    out.push_str(&(s.display_indented(indent_level, separator) + ", "));
+                    let (displayed, subtypes) = s.display_indented(indent_level, separator);
+                    out.push_str(&(displayed + ", "));
+                    type_set.extend(subtypes);
                 }
                 out.push(')');
-                out
+                (out, type_set)
             }
-            Type::Array(t) => format!("[]{}", t.display_indented(indent_level, separator)),
+            Type::Array(t) => {
+                let (displayed, subtypes) = t.display_indented(indent_level, separator);
+                (format!("[]{}", displayed), subtypes)
+            }
             Type::FixedArray(t, size) => {
-                format!("[{}]{}", size, t.display_indented(indent_level, separator))
+                let (displayed, subtypes) = t.display_indented(indent_level, separator);
+                (format!("[{}]{}", size, displayed), subtypes)
             }
             Type::Struct(fields) => {
                 let mut out = "struct {\n".to_string();
@@ -350,17 +357,16 @@ impl Type {
                 }
                 for field in fields {
                     //This should indent further when dealing with sub-structs
-                    out.push_str(&format!(
-                        "    {}: {},\n",
-                        field.name,
-                        field.tipe.display_indented(indent_level + 1, separator)
-                    ));
+                    let (displayed, subtypes) =
+                        field.tipe.display_indented(indent_level + 1, separator);
+                    out.push_str(&format!("    {}: {},\n", field.name, displayed));
                     for _ in 0..indent_level {
                         out.push_str("    ");
                     }
+                    type_set.extend(subtypes);
                 }
                 out.push('}');
-                out
+                (out, type_set)
             }
             Type::Nominal(path, id) => {
                 let mut out = String::new();
@@ -368,7 +374,8 @@ impl Type {
                     out.push_str(&format!("{}{}", path_item, separator))
                 }
                 out.push_str(&format!("{}", id));
-                out
+                type_set.insert(self.clone());
+                (out, type_set)
             }
             Type::Func(impure, args, ret) => {
                 let mut out = String::new();
@@ -377,25 +384,32 @@ impl Type {
                 }
                 out.push_str("func(");
                 for arg in args {
-                    out.push_str(&(arg.display_indented(indent_level, separator) + ", "));
+                    let (displayed, subtypes) = arg.display_indented(indent_level, separator);
+                    out.push_str(&(displayed + ", "));
+                    type_set.extend(subtypes)
                 }
                 out.push(')');
                 if **ret != Type::Void {
+                    let (displayed, subtypes) = ret.display_indented(indent_level, separator);
                     out.push_str(" -> ");
-                    out.push_str(&ret.display_indented(indent_level, separator));
+                    out.push_str(&displayed);
+                    type_set.extend(subtypes);
                 }
-                out
+                (out, type_set)
             }
             Type::Map(key, val) => {
-                format!(
-                    "map<{},{}>",
-                    key.display_indented(indent_level, separator),
-                    val.display_indented(indent_level, separator)
-                )
+                let (key_display, key_subtypes) = key.display_indented(indent_level, separator);
+                type_set.extend(key_subtypes);
+                let (val_display, val_subtypes) = val.display_indented(indent_level, separator);
+                type_set.extend(val_subtypes);
+                (format!("map<{},{}>", key_display, val_display), type_set)
             }
-            Type::Any => "any".to_string(),
-            Type::Every => "every".to_string(),
-            Type::Option(t) => format!("option<{}>", t.display_indented(indent_level, separator)),
+            Type::Any => ("any".to_string(), type_set),
+            Type::Every => ("every".to_string(), type_set),
+            Type::Option(t) => {
+                let (display, subtypes) = t.display_indented(indent_level, separator);
+                (format!("option<{}>", display), subtypes)
+            }
         }
     }
 }

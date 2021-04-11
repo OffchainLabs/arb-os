@@ -115,9 +115,9 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
         writeln!(
             code,
             "type {} = {}",
-            thing.display_separator("_"),
+            thing.display_separator("_").0,
             if let Type::Nominal(a, b) = thing.clone() {
-                in_tree.get(&(a, b)).unwrap().display_separator("_")
+                in_tree.get(&(a, b)).unwrap().display_separator("_").0
             } else {
                 unimplemented!()
             }
@@ -250,7 +250,7 @@ fn get_globals_from_file(
 }
 
 fn type_decl_string(type_name: &String, tipe: &Type) -> String {
-    format!("type {} = {}", type_name, tipe.display_separator("_"))
+    format!("type {} = {}", type_name, tipe.display_separator("_").0)
 }
 
 fn let_string(name: &String, expr: &String) -> String {
