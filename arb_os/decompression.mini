@@ -230,25 +230,33 @@ public impure func decompressAndVerifyEcdsaSignedTx(
         tx.s,
     );
 
+    originalRequest = originalRequest with {
+        sender: signer
+    } with {
+        msgData: bytearray_copy(
+            encodedMessage,
+            0,
+            bytearray_setByte(bytearray_new(0), 0, 4),
+            1,
+            bytearray_size(encodedMessage)
+        )
+    };
+
     return Some(
         txRequest with {
             caller: signer
         } with {
             gasPayer: signer
         } with {
-            incomingRequest: originalRequest with {
-                requestId: uint(keccak256(encodedMessage, 0, bytearray_size(encodedMessage)))
-            } with {
-                sender: signer
-            } with {
-                msgData: bytearray_copy(
-                    encodedMessage,
-                    0,
-                    bytearray_setByte(bytearray_new(0), 0, 4),
-                    1,
-                    bytearray_size(encodedMessage)
-                )
+            incomingRequest: xif (originalRequest.kind == const::L1MessageType_L2ForGasEstimation) {
+                originalRequest
+            } else {
+                originalRequest with {
+                    requestId: uint(keccak256(encodedMessage, 0, bytearray_size(encodedMessage)))
+                }
             }
+        } with {
+            seqNum: Some(seqNum)
         }
     );
 }
