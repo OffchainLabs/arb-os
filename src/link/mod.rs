@@ -18,6 +18,7 @@ use std::io;
 use xformcode::make_uninitialized_tuple;
 
 pub use xformcode::{value_from_field_list, TupleTree, TUPLE_SIZE};
+use crate::compile::miniconstants::ARBOS_VERSION;
 
 mod optimize;
 mod striplabels;
@@ -28,6 +29,8 @@ mod xformcode;
 /// This is typically constructed via the `postlink_compile` function.
 #[derive(Serialize, Deserialize)]
 pub struct LinkedProgram {
+    #[serde(default)]
+    pub arbos_version: u64,
     pub code: Vec<Instruction<AVMOpcode>>,
     pub static_val: Value,
     pub globals: Vec<GlobalVarDecl>,
@@ -240,6 +243,7 @@ pub fn postlink_compile(
     file_name_chart.extend(program.file_name_chart);
 
     Ok(LinkedProgram {
+        arbos_version: ARBOS_VERSION,
         code: code_final,
         static_val: Value::none(),
         globals: program.globals,

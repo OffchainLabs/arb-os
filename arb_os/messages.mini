@@ -56,38 +56,6 @@ use inbox::IncomingRequest;
 use gasAccounting::GasUsage;
 
 
-public impure func handleL1Request(
-    msg: IncomingRequest
-) -> option<()> {   // return None if error; otherwise return Some(()) or do a tx and never return from here
-    // Parse an incoming message and do appropriate computations
-    let inStream = bytestream_new(msg.msgData);
-
-    return xif (msg.kind == const::L1MessageType_ethDeposit) {
-        // ethdeposit message
-        let (bs, destination) = bytestream_get256(inStream)?;
-        inStream = bs;
-
-        let (bs, amount) = bytestream_get256(inStream)?;
-        inStream = bs;
-
-        let globalAS = getGlobalAccountStore();
-        let destAccount = accountStore_get(globalAS, address(destination));
-        destAccount = account_addToEthBalance(destAccount, amount);
-        setGlobalAccountStore(
-            accountStore_set(
-                globalAS,
-                address(destination),
-                destAccount
-            )
-        );
-        Some(())
-    } else {
-        // not a valid message type
-        // (This should not have been called if msg.kind == const::L1MessageType_L2.)
-        None<()>
-    };
-}
-
 impure func verifyAndIncrSequenceNum(addr: address, seqNum: uint) -> option<()> {
     // Verify the sequence number on a message.
     // If it matches, increment the next expected seq num, and return Some(()).
