@@ -6,7 +6,7 @@ use crate::evm::abi::{AbiForContract, ArbSys, _ArbOwner};
 use crate::evm::test_contract_path;
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, Instruction};
-use crate::run::{load_from_file, RuntimeEnvironment};
+use crate::run::load_from_file;
 use crate::uint256::Uint256;
 use ethers_signers::Signer;
 use rustc_hex::ToHex;
@@ -15,6 +15,7 @@ use std::fmt;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use crate::compile::miniconstants::ARBOS_VERSION;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct CodeUploader {
@@ -178,8 +179,7 @@ fn _test_upgrade_arbos_to_different_version() {
 }
 
 fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("arb_os/arbos_before.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos_before.mexe"));
     machine.start_at_zero();
 
     let wallet = machine.runtime_env.new_wallet();
@@ -223,7 +223,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let wallet2 = machine.runtime_env.new_wallet();
     let arbsys = ArbSys::new(&wallet2, false);
     let arbos_version = arbsys._arbos_version(&mut machine)?;
-    assert_eq!(arbos_version, Uint256::one());
+    assert_eq!(arbos_version, Uint256::from_u64(ARBOS_VERSION));
     let arbos_version_orig = arbsys_orig_binding._arbos_version(&mut machine)?;
     assert_eq!(arbos_version, arbos_version_orig);
 

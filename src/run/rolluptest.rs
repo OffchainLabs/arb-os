@@ -67,8 +67,7 @@ pub fn _insert_rollup_debug(rt_env: &mut RuntimeEnvironment) {
 }
 
 pub fn _do_rollup_tracker_ops() {
-    let rt_env = RuntimeEnvironment::_new_with_owner(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     let wallet = machine.runtime_env.new_wallet();
@@ -91,6 +90,7 @@ pub fn _do_rollup_tracker_ops() {
         claimer.clone(),
         Uint256::_from_eth(1),
     );
+    let _ = machine.run(None);
 
     arbowner
         ._add_to_reserve_funds(&mut machine, Uint256::_from_eth(1))

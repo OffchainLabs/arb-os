@@ -5,7 +5,7 @@
 use crate::compile::miniconstants::init_constant_table;
 use crate::evm::abi::{builtin_contract_path, AbiForContract};
 use crate::evm::test_contract_path;
-use crate::run::{load_from_file, Machine, RuntimeEnvironment};
+use crate::run::{load_from_file, load_from_file_and_env, Machine, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
@@ -121,8 +121,7 @@ impl<'a> _ArbBLS<'a> {
 }
 
 pub fn _evm_test_bls_registry(log_to: Option<&Path>, debug: bool) {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     let wallet = machine.runtime_env.new_wallet();
@@ -562,14 +561,14 @@ pub fn test_bls_signed_batch() {
 }
 
 pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
-    let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut rt_env = RuntimeEnvironment::default();
 
     let alice_wallet = rt_env.new_wallet();
     let alice_addr = Uint256::from_bytes(alice_wallet.address().as_bytes());
     let bob_wallet = rt_env.new_wallet();
     let bob_addr = Uint256::from_bytes(bob_wallet.address().as_bytes());
 
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
     let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;

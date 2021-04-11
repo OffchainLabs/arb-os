@@ -1092,7 +1092,13 @@ fn mavm_codegen_expr<'a>(
             let tuple_size = if let Type::Tuple(fields) = tce_type {
                 fields.len()
             } else {
-                panic!("type-checking bug: tuple lookup in non-tuple type");
+                return Err(new_codegen_error(
+                    format!(
+                        "type-checking bug: tuple lookup in non-tuple type \"{}\"",
+                        tce_type.display()
+                    ),
+                    debug.location,
+                ));
             };
             let (lg, c, exp_locals) = mavm_codegen_expr(
                 tce,
