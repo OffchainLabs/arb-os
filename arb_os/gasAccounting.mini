@@ -779,11 +779,14 @@ public impure func getNextRequestFromCongestionAuction() -> (
     TxRequestData,
 ) {
     let tx = inbox_getNextUnpackedRequest();
-    let (arbBlockNum, timestamp, payer, maxGas, gasBid) = getRequestGasInfo(tx);
 
-    if (arbBlockNum > gasAccountingInfo.congestionState.lastArbBlockNumSeen) {
+    if (tx.incomingRequest.arbBlockNumber > gasAccountingInfo.congestionState.lastArbBlockNumSeen) {
         // it's the first tx of a new block, so do beginning-of-block work
-        let updatedCongestionState = updateCongestionState(gasAccountingInfo.congestionState, arbBlockNum, timestamp);
+        let updatedCongestionState = updateCongestionState(
+            gasAccountingInfo.congestionState,
+            tx.incomingRequest.arbBlockNumber,
+            tx.incomingRequest.timestamp
+        );
         let gasForThisBlock = xif(gasAccountingInfo.congestionState.gasPool > int(0)) {
             uint(gasAccountingInfo.congestionState.gasPool)
         } else {
@@ -808,7 +811,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
         };
     }
 
-    return xif ((!tx.incomingRequest.adminMode) && gasAccountingInfo.feeConfig.enabled) {
+    return xif ((tx.incomingRequest.sender != address(0)) && gasAccountingInfo.feeConfig.enabled) {
         if let Some(txSeqNum) = tx.seqNum {
             if (txSeqNum != account_getNextSeqNum(accountStore_get(getGlobalAccountStore(), tx.caller))) {
                 // don't charge the user if sequence number is wrong
@@ -864,17 +867,11 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 };
             }
         }
-        xif (tx.maxGas > gasAccountingInfo.gasRemainingThisBlock) {
+        xif (tx.incomingRequest.adminMode || (tx.maxGas <= gasAccountingInfo.gasRemainingThisBlock)) {
+            (const::TxResultCode_success, tx with { gasPrice: gasAccountingInfo.currentPrices.perArbGasTotal })
+        } else {
             // the current block doesn't have enough gas left to run the tx
             (const::TxResultCode_congestion, tx)
-        } else {
-            // return success, setting the tx's gas price to the current price
-            (
-                const::TxResultCode_success,
-                tx with {
-                    gasPrice: gasAccountingInfo.currentPrices.perArbGasTotal
-                }
-            )
         }
     } else {
         // fees are disabled, or this tx isn't chargeable, so just approve it, but set the units in feeStats first
@@ -1039,16 +1036,6 @@ impure func updateCongestionState(state: CongestionState, toBlockNum: uint, toTi
 
 public impure func getGasLimitPerTx() -> uint {
     return gasAccountingParams.TxGasLimit;
-}
-
-func getRequestGasInfo(tx: TxRequestData) -> (uint, uint, address, uint, uint) {
-    return (
-        tx.incomingRequest.arbBlockNumber,
-        tx.incomingRequest.timestamp,
-        tx.incomingRequest.sender,
-        tx.maxGas,
-        xif (tx.incomingRequest.adminMode) { 0 } else { tx.gasPrice },
-    );
 }
 
 public impure func getRetryableTxPrice(calldataSize: uint) -> (uint, uint) {
