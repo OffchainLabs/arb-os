@@ -72,7 +72,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
             panic;   // don't try to run without preinstalls and precompiles
         }
 
-        if (arbosVersion() == 3) {
+        if (arbosVersion() >= 3) {
             evmCallStack_version2upgrade_hack();
         }
     } else {
