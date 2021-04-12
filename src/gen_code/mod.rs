@@ -73,8 +73,8 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
     )
     .unwrap();
     writeln!(code, "").unwrap();
-    let (mut input_fields, in_recursers, in_tree) = get_globals_from_file(&from)?;
-    let (mut output_fields, _out_recursers, _out_tree) = get_globals_from_file(&to)?;
+    let (mut input_fields, mut in_recursers, in_tree) = get_globals_from_file(&from)?;
+    let (mut output_fields, mut out_recursers, out_tree) = get_globals_from_file(&to)?;
     output_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
     input_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
     let mut intersection: HashSet<&StructField> = input_fields
@@ -111,18 +111,49 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
             .map_err(|_| GenCodeError::new("Failed to write use statement".to_string()))?;
     }
     writeln!(code).map_err(|_| GenCodeError::new("Failed to write empty line".to_string()))?;
-    for thing in in_recursers {
-        writeln!(
-            code,
-            "type {} = {}",
-            thing.display_separator("_").0,
-            if let Type::Nominal(a, b) = thing.clone() {
-                in_tree.get(&(a, b)).unwrap().display_separator("_").0
-            } else {
-                unimplemented!()
-            }
-        )
-        .unwrap();
+    let mut total_in_recursers = in_recursers.clone();
+    while !in_recursers.is_empty() {
+        let mut new_recursers = HashSet::new();
+        for thing in in_recursers {
+            writeln!(code, "type {} = {}", thing.display_separator("_").0, {
+                if let Type::Nominal(a, b) = thing.clone() {
+                    let (displayed, subtypes) =
+                        in_tree.get(&(a, b)).unwrap().display_separator("_");
+                    new_recursers.extend(subtypes);
+                    displayed
+                } else {
+                    unimplemented!()
+                }
+            })
+            .unwrap();
+        }
+        in_recursers = new_recursers
+            .difference(&total_in_recursers)
+            .cloned()
+            .collect();
+        total_in_recursers.extend(new_recursers);
+    }
+    let mut total_out_recursers = out_recursers.clone();
+    while !out_recursers.is_empty() {
+        let mut new_recursers = HashSet::new();
+        for thing in out_recursers {
+            writeln!(code, "type {} = {}", thing.display_separator("_").0, {
+                if let Type::Nominal(a, b) = thing.clone() {
+                    let (displayed, subtypes) =
+                        out_tree.get(&(a, b)).unwrap().display_separator("_");
+                    new_recursers.extend(subtypes);
+                    displayed
+                } else {
+                    unimplemented!()
+                }
+            })
+            .unwrap();
+        }
+        out_recursers = new_recursers
+            .difference(&total_out_recursers)
+            .cloned()
+            .collect();
+        total_out_recursers.extend(new_recursers);
     }
     writeln!(code).map_err(|_| GenCodeError::new("Failed to write empty line".to_string()))?;
     writeln!(
@@ -264,6 +295,9 @@ fn replace_nominal(
 ) -> bool {
     match node {
         TypeCheckedNode::Type(tipe) => {
+            if **tipe == Type::Option(Box::new(Type::Nominal(vec!["pluggables".to_string()], 1))) {
+                panic!("this does show up")
+            }
             if mut_state.0.iter().any(|thing| thing == *tipe) {
                 let mut to_render = mut_state.1.borrow_mut();
                 to_render.insert(tipe.clone());

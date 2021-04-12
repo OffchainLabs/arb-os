@@ -104,11 +104,11 @@ $(UPGRADETESTDIR)/upgrade2_new.mexe: $(UPGRADETESTDIR)/upgrade2_old.mexe $(UPGRA
 
 $(ARBOSDIR)/arbos-upgrade.mexe: $(TESTCONTRACTS) $(ARBOSDIR) $(STDDIR) $(BUILTINDIR) $(TEMPLATES) src/compile/miniconstants.rs
 	cp $(ARBOSDIR)/dummy_version_bridge.mini $(ARBOSDIR)/bridge_arbos_versions.mini
-	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe"
+	$(CARGORUNRELEASE) compile "arb_os" -o "arb_os/arbos-upgrade.mexe"
 	$(CARGORUN) gen-upgrade-code $(ARBOSDIR)/arbos_before.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/bridge_arbos_versions.mini customize_arbos_bridge_versions $(ARBOSDIR)/upgrade.toml
-	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe"
+	$(CARGORUNRELEASE) compile "arb_os" -o "arb_os/arbos-upgrade.mexe"
 	$(CARGORUN) gen-upgrade-code $(ARBOSDIR)/arbos_before.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/bridge_arbos_versions.mini customize_arbos_bridge_versions $(ARBOSDIR)/upgrade.toml
-	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe"
+	$(CARGORUNRELEASE) compile "arb_os" -o "arb_os/arbos-upgrade.mexe"
 	cp $(ARBOSDIR)/bridge_arbos_versions.mini $(ARBOSDIR)/save_bridge_for_debugging.mini
 	cp $(ARBOSDIR)/dummy_version_bridge.mini $(ARBOSDIR)/bridge_arbos_versions.mini
 
@@ -116,7 +116,7 @@ $(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
 	$(CARGORUN) compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe $(COMPILEFLAGS) -t
 
 $(ARBOSDIR)/arbos.mexe: $(TESTCONTRACTS) $(ARBOSDIR) $(STDDIR) $(BUILTINDIR) $(TEMPLATES) src/compile/miniconstants.rs
-	$(CARGORUN) compile "arb_os" -o "arb_os/arbos.mexe" $(COMPILEFLAGS)
+	$(CARGORUNRELEASE) compile "arb_os" -o "arb_os/arbos.mexe" $(COMPILEFLAGS)
 
 upgrade: $(ARBOSDIR)/upgrade.mini
 
