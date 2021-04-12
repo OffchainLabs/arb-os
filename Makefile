@@ -155,7 +155,7 @@ benchmark: compiler $(TEMPLATES) $(ARBOS)
 
 compiler: ./target/release/mini
 
-./target/release/mini: src
+./target/release/mini: src/* src/*/*
 	cargo build --release
 
 clean:

@@ -46,20 +46,17 @@ impl RuntimeEnvironment {
             Uint256::from_u64(10_000_000),
             charging_policy,
             None,
-            None,
         )
     }
 
     pub fn _new_options(
         chain_address: Uint256,
-        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
     ) -> Self {
         RuntimeEnvironment::new_with_blocknum_timestamp(
             chain_address,
             Uint256::from_u64(100_000),
             Uint256::from_u64(10_000_000),
             None,
-            sequencer_info,
             None,
         )
     }
@@ -70,7 +67,6 @@ impl RuntimeEnvironment {
             Uint256::from_u64(100_000),
             Uint256::from_u64(10_000_000),
             None,
-            None,
             owner,
         )
     }
@@ -80,7 +76,6 @@ impl RuntimeEnvironment {
         blocknum: Uint256,
         timestamp: Uint256,
         charging_policy: Option<(Uint256, Uint256, Uint256)>,
-        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
         owner: Option<Uint256>,
     ) -> Self {
         let mut ret = RuntimeEnvironment {
@@ -99,8 +94,6 @@ impl RuntimeEnvironment {
             charging_policy: charging_policy.clone(),
             num_wallets: 0,
             chain_init_message: RuntimeEnvironment::get_params_bytes(
-                charging_policy,
-                sequencer_info,
                 owner,
             ),
         };
@@ -118,34 +111,13 @@ impl RuntimeEnvironment {
     }
 
     fn get_params_bytes(
-        charging_policy: Option<(Uint256, Uint256, Uint256)>,
-        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
         owner: Option<Uint256>,
     ) -> Vec<u8> {
         let mut buf = Vec::new();
-        buf.extend(Uint256::from_u64(3 * 60 * 60).to_bytes_be()); // grace period in blocks
-        buf.extend(Uint256::from_u64(100_000_000 / 1000).to_bytes_be()); // arbgas speed limit per tick
-        buf.extend(Uint256::from_u64(10_000_000_000).to_bytes_be()); // max execution steps
-        buf.extend(Uint256::from_u64(1000).to_bytes_be()); // base stake amount in wei
-        buf.extend(Uint256::zero().to_bytes_be()); // staking token address (zero means ETH)
-        buf.extend(owner.clone().unwrap_or(Uint256::zero()).to_bytes_be()); // owner address
-
-        if let Some((base_gas_price, storage_charge, pay_fees_to)) = charging_policy.clone() {
-            buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 2u8]); // option ID = 2
-            buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 96u8]); // option payload size = 96 bytes
-            buf.extend(base_gas_price.to_bytes_be());
-            buf.extend(storage_charge.to_bytes_be());
-            buf.extend(pay_fees_to.to_bytes_be());
-        }
-
-        buf.extend(owner.unwrap_or(Uint256::zero()).to_bytes_be()); // owner address
-
-        if let Some((seq_addr, delay_blocks, delay_time)) = sequencer_info {
-            buf.extend(&[0u8; 8]);
-            buf.extend(&96u64.to_be_bytes());
-            buf.extend(seq_addr.to_bytes_be());
-            buf.extend(delay_blocks.to_bytes_be());
-            buf.extend(delay_time.to_bytes_be());
+        let params_to_set = vec![("ChainOwmer", owner.clone().unwrap_or(Uint256::zero()))];
+        for (name, val) in params_to_set {
+            buf.extend(&keccak256(name.as_bytes()));
+            buf.extend(val.to_bytes_be());
         }
 
         buf

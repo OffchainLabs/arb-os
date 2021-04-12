@@ -9,6 +9,7 @@ use chainParameters::chainParams_setOwner;
 use chainParameters::chainParams_setSecondsPerSend;
 use chainParameters::chainParams_get;
 use chainParameters::chainParams_set;
+use chainParameters::notifyParamsChanged;
 
 use evmCallStack::EvmCallFrame;
 use evmCallStack::evmCallStack_topFrame;
@@ -213,6 +214,7 @@ impure func arbowner_setChainParameter(topFrame: EvmCallFrame, calldata: ByteArr
     let paramId = bytearray_get256(calldata, 4);
     let newValue = bytearray_get256(calldata, 36);
     chainParams_set(paramId, newValue);
+    notifyParamsChanged();
     evmOp_return(0, 0);
 }
 

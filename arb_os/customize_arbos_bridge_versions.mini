@@ -3,11 +3,12 @@
 //
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
+use chainParameters::chainParams_getDefaults;
 
 public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> any {
     return input_globals.globalAccountStore;
 }
 
-public func set_allChainParameters_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> map<uint, uint> {
-    return newmap<uint, uint>;
+public func set_globalChainParameters_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> map<uint, uint> {
+    return chainParams_getDefaults();
 }

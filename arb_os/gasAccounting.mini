@@ -184,7 +184,7 @@ impure func setupParameters(isInit: bool) {
         }
     );
     gasAccountingInfo = struct {
-        txState: None<TxGasState>,
+        txState: xif (isInit) { None<TxGasState> } else { gasAccountingInfo.txState },
         feeConfig: feeConfig,
         currentPrices: gasPrices,
         gasRemainingThisBlock: uint(congestionState.gasPool),

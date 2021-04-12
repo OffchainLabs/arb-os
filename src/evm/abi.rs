@@ -1145,20 +1145,22 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
-    pub fn _set_fees_enabled(
+    pub fn _set_chain_parameter(
         &self,
         machine: &mut Machine,
-        enabled: bool,
+        param_name: &str,
+        value: Uint256,
         force_owner: bool, // force the message to come from address zero, which is an owner
     ) -> Result<(), ethabi::Error> {
+        let param_id = _param_id_from_name(param_name);
         let (receipts, _sends) = self.contract_abi.call_function(
             if force_owner {
                 Uint256::zero()
             } else {
                 self.my_address.clone()
             },
-            "setFeesEnabled",
-            &[ethabi::Token::Bool(enabled)],
+            "setChainParameter",
+            &[ethabi::Token::Uint(param_id.to_u256()), ethabi::Token::Uint(value.to_u256())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -1178,14 +1180,21 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
-    pub fn _get_fee_recipients(
+    pub fn _get_chain_parameter(
         &self,
         machine: &mut Machine,
-    ) -> Result<(Uint256, Uint256), ethabi::Error> {
+        param_name: &str,
+        force_owner: bool, // force the message to come from address zero, which is an owner
+    ) -> Result<Uint256, ethabi::Error> {
+        let param_id = _param_id_from_name(param_name);
         let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
-            "getFeeRecipient",
-            &[],
+            if force_owner {
+                Uint256::zero()
+            } else {
+                self.my_address.clone()
+            },
+            "getChainParameter",
+            &[ethabi::Token::Uint(param_id.to_u256())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -1195,22 +1204,33 @@ impl<'a> _ArbOwner<'a> {
             return Err(ethabi::Error::from("wrong number of receipts"));
         }
 
-        if !receipts[0].succeeded() {
-            return Err(ethabi::Error::from("reverted"));
+        if receipts[0].succeeded() {
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
+        } else {
+            Err(ethabi::Error::from(format!(
+                "tx failed: {}",
+                receipts[0]._get_return_code_text()
+            )))
         }
+    }
 
-        let return_vals = ethabi::decode(
-            &[ethabi::ParamType::Address, ethabi::ParamType::Address],
-            &receipts[0].get_return_data(),
-        )?;
+    pub fn _set_fees_enabled(
+        &self,
+        machine: &mut Machine,
+        enabled: bool,
+        force_owner: bool, // force the message to come from address zero, which is an owner
+    ) -> Result<(), ethabi::Error> {
+        self._set_chain_parameter(machine,"FeesEnabled", if enabled { Uint256::one() } else { Uint256::zero() }, force_owner)
+    }
 
-        match (&return_vals[0], &return_vals[1]) {
-            (ethabi::Token::Address(addr1), ethabi::Token::Address(addr2)) => Ok((
-                Uint256::from_bytes(addr1.as_bytes()),
-                Uint256::from_bytes(addr2.as_bytes()),
-            )),
-            _ => panic!(),
-        }
+    pub fn _get_fee_recipients(
+        &self,
+        machine: &mut Machine,
+    ) -> Result<(Uint256, Uint256), ethabi::Error> {
+        Ok((
+            self._get_chain_parameter(machine, "NetworkFeeRecipient", true)?,
+            self._get_chain_parameter(machine, "CongestionFeeRecipient", true)?,
+        ))
     }
 
     pub fn _set_fee_recipients(
@@ -1219,27 +1239,8 @@ impl<'a> _ArbOwner<'a> {
         recipient1: Uint256,
         recipient2: Uint256,
     ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
-            "setFeeRecipient",
-            &[
-                ethabi::Token::Address(recipient1.to_h160()),
-                ethabi::Token::Address(recipient2.to_h160()),
-            ],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(())
-        } else {
-            Err(ethabi::Error::from("reverted"))
-        }
+        self._set_chain_parameter(machine, "NetworkFeeRecipient", recipient1, true)?;
+        self._set_chain_parameter(machine, "CongestionFeeRecipient", recipient2, true)
     }
 
     pub fn _set_seconds_per_send(
@@ -1247,24 +1248,7 @@ impl<'a> _ArbOwner<'a> {
         machine: &mut Machine,
         seconds_per_send: Uint256,
     ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
-            "setSecondsPerSend",
-            &[ethabi::Token::Uint(seconds_per_send.to_u256())],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(())
-        } else {
-            Err(ethabi::Error::from("reverted"))
-        }
+        self._set_chain_parameter(machine, "SecondsPerSend", seconds_per_send, true)
     }
 
     pub fn _set_gas_accounting_params(
@@ -1274,57 +1258,9 @@ impl<'a> _ArbOwner<'a> {
         gas_pool_max: Uint256,
         tx_gas_limit: Uint256,
     ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
-            "setGasAccountingParams",
-            &[
-                ethabi::Token::Uint(speed_limit.to_u256()),
-                ethabi::Token::Uint(gas_pool_max.to_u256()),
-                ethabi::Token::Uint(tx_gas_limit.to_u256()),
-            ],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(())
-        } else {
-            Err(ethabi::Error::from("reverted"))
-        }
-    }
-
-    pub fn _change_sequencer(
-        &self,
-        machine: &mut Machine,
-        sequencer_addr: Uint256,
-        delay_seconds: Uint256,
-    ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
-            "changeSequencer",
-            &[
-                ethabi::Token::Address(sequencer_addr.to_h160()),
-                ethabi::Token::Uint(delay_seconds.to_u256()),
-            ],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(())
-        } else {
-            Err(ethabi::Error::from("reverted"))
-        }
+        self._set_chain_parameter(machine, "SpeedLimitPerSecond", speed_limit, true)?;
+        self._set_chain_parameter(machine, "GasPoolMax", gas_pool_max, true)?;
+        self._set_chain_parameter(machine, "TxGasLimit", tx_gas_limit, true)
     }
 
     pub fn _start_code_upload(&self, machine: &mut Machine) -> Result<(), ethabi::Error> {
@@ -1417,6 +1353,10 @@ impl<'a> _ArbOwner<'a> {
             Err(ethabi::Error::from("reverted"))
         }
     }
+}
+
+fn _param_id_from_name(name: &str) -> Uint256 {
+    Uint256::from_bytes(&keccak256(name.as_bytes()))
 }
 
 pub struct _ArbGasInfo<'a> {
