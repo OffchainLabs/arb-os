@@ -63,7 +63,9 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
     if (unsafecast<any>(oldGlobals) != ()) {
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
 
-        asm(remapGlobalsForUpgrade(oldGlobals),) { rset };
+        let (newGlobals, oldArbosVersion) = remapGlobalsForUpgrade(oldGlobals);
+
+        asm(newGlobals,) { rset };
 
         // now re-do the initializations that set up pointers into the ArbOS code
         errorHandler_init();
@@ -72,7 +74,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
             panic;   // don't try to run without preinstalls and precompiles
         }
 
-        if (arbosVersion() >= 3) {
+        if (oldArbosVersion < 3) {
             evmCallStack_version2upgrade_hack();
         }
     } else {
