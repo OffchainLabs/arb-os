@@ -48,7 +48,6 @@ use std::storageMap::StorageMap;
 use decompression::decompression_init;
 use gasAccounting::getNextRequestFromCongestionAuction;
 use gasAccounting::txFeeStats_zero;
-use messages::handleL1Request; // return None if message format error; Some(()) if other error; if no error, never return
 use messages::handleL2Request; // return None if message format error; Some(()) if other error; if no error, never return
 use output::emitTxReceipt;
 use arbsys::arbsys_txcall;
@@ -107,55 +106,33 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
 
 public impure func mainRunLoop() {
     loop {
-        let (resultCode, maybeL1, maybeL2) = getNextRequestFromCongestionAuction();
-        if let Some(msg) = maybeL1 {
-            if (resultCode == const::TxResultCode_success) {
-                if(handleL1Request(msg) == None<()>) {
-                    // reject for message format error
-                    emitTxReceipt(
-                        msg,
-                        const::TxResultCode_formatError,
-                        None<ByteArray>,
-                        None<EvmLogs>,
-                        None<GasUsage>,
-                        txFeeStats_zero(),
-                    );
-                }
-            } else {
-                // reject for error
-                emitTxReceipt(msg, resultCode, None<ByteArray>, None<EvmLogs>, None<GasUsage>, txFeeStats_zero());
+        let (resultCode, request) = getNextRequestFromCongestionAuction();
+        if (resultCode == const::TxResultCode_success) {
+            if (handleL2Request(
+                bytestream_new(request.incomingRequest.msgData),
+                request
+            ) == None<()>) {
+                // reject for message format error
+                emitTxReceipt(
+                    request.incomingRequest,
+                    const::TxResultCode_formatError,
+                    None<ByteArray>,
+                    None<EvmLogs>,
+                    None<GasUsage>,
+                    request.feeStats,
+                );
             }
         } else {
-            if let Some(request) = maybeL2 {
-                if (resultCode == const::TxResultCode_success) {
-                    if (handleL2Request(
-                        bytestream_new(request.incomingRequest.msgData),
-                        request
-                    ) == None<()>) {
-                        // reject for message format error
-                        emitTxReceipt(
-                            request.incomingRequest,
-                            const::TxResultCode_formatError,
-                            None<ByteArray>,
-                            None<EvmLogs>,
-                            None<GasUsage>,
-                            request.feeStats,
-                        );
-                    }
-                } else {
-                    // reject for error
-                    emitTxReceipt(
-                        request.incomingRequest,
-                        resultCode,
-                        None<ByteArray>,
-                        None<EvmLogs>,
-                        None<GasUsage>,
-                        request.feeStats,
-                    );
-                }
-            } // else request was not identified as either L1 or L2, which should be impossible
+            // reject for error
+            emitTxReceipt(
+                request.incomingRequest,
+                resultCode,
+                None<ByteArray>,
+                None<EvmLogs>,
+                None<GasUsage>,
+                request.feeStats,
+            );
         }
-        // if we reach here, message has already been handled and log already sent
     }
 }
 

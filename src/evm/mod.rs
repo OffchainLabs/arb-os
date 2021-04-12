@@ -13,6 +13,7 @@ use crate::uint256::Uint256;
 use abi::AbiForContract;
 use ethers_signers::Signer;
 use std::path::Path;
+use crate::compile::miniconstants::ARBOS_VERSION;
 
 pub mod abi;
 pub mod benchmarks;
@@ -182,7 +183,7 @@ pub fn _evm_run_with_gas_charging(
         "deposit",
         &[],
         &mut machine,
-        Uint256::from_usize(10000),
+        Uint256::_from_eth(1),
         debug,
     )?;
     assert_eq!(logs.len(), 1);
@@ -319,7 +320,7 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     let arb_bls = ArbBLS::new(&wallet, debug);
 
     let version = arbsys._arbos_version(&mut machine)?;
-    assert_eq!(version, Uint256::from_u64(3));
+    assert_eq!(version, Uint256::from_u64(ARBOS_VERSION));
 
     let tx_count = arbsys.get_transaction_count(&mut machine, my_addr.clone())?;
     assert_eq!(tx_count, Uint256::from_u64(2));
@@ -453,6 +454,11 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         my_addr.clone(),
         Uint256::_from_eth(100),
     );
+    let _ = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
 
     let (l2tx, l1calldata, storage, basegas, conggas, totalgas) =
         arbgasinfo._get_prices_in_wei(&mut machine)?;
@@ -2273,6 +2279,11 @@ pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), et
         my_addr.clone(),
         Uint256::from_u64(20000),
     );
+    let _ = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
 
     let arbinfo = _ArbInfo::_new(false);
     let balance = arbinfo._get_balance(&mut machine, &my_addr)?;
@@ -2342,9 +2353,9 @@ pub fn evm_payment_to_empty_address(log_to: Option<&Path>, debug: bool) {
     };
 
     let receipts = machine.runtime_env.get_all_receipt_logs();
-    assert_eq!(receipts.len(), 1);
-    assert_eq!(receipts[0].get_request_id(), tx_id);
-    assert!(receipts[0].succeeded());
+    assert_eq!(receipts.len(), 2);
+    assert_eq!(receipts[1].get_request_id(), tx_id);
+    assert!(receipts[1].succeeded());
 
     if let Some(path) = log_to {
         machine
