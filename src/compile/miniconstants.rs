@@ -9,6 +9,8 @@ use crate::uint256::Uint256;
 use keccak_hash::keccak;
 use std::collections::HashMap;
 
+pub static ARBOS_VERSION: u64 = 3;
+
 ///Creates a fixed list of globally accessible constants.
 pub fn init_constant_table() -> HashMap<String, Uint256> {
     let mut ret = HashMap::new();
@@ -55,6 +57,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
     }
     for (s, i) in &[
         ("NumChainParameters", 24),
+        ("ArbosVersionNumber", ARBOS_VERSION),
         // addresses of precompiled contracts
         ("Address_ArbSys", 100),
         ("Address_ArbAddressTable", 102),
@@ -199,6 +202,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("L1MessageType_L2FundedByL1", 7),
         ("L1MessageType_rollupProtocolEvent", 8),
         ("L1MessageType_submitRetryableTx", 9),
+        ("L1MessageType_L2ForGasEstimation", 10),
         // L2 message types
         ("L2MessageType_unsignedEOATx", 0),
         ("L2MessageType_unsignedContractTx", 1),
@@ -225,6 +229,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("TxResultCode_formatError", 6),
         ("TxResultCode_cannotDeployAtAddress", 7),
         ("TxResultCode_exceededTxGasLimit", 8),
+        ("TxResultCode_insufficientGasForBaseFee", 9),
         ("TxResultCode_unknownFailure", 255),
         // EVM call types
         ("EVMCallType_call", 0),

@@ -283,7 +283,7 @@ impl RuntimeEnvironment {
         }
     }
 
-    pub fn _insert_tx_message_from_contract(
+    pub fn insert_tx_message_from_contract(
         &mut self,
         sender_addr: Uint256,
         max_gas: Uint256,
@@ -482,10 +482,15 @@ impl RuntimeEnvironment {
         payee: Uint256,
         amount: Uint256,
     ) {
-        let mut buf = payee.to_bytes_be();
-        buf.extend(amount.to_bytes_be());
-
-        self.insert_l1_message(0, sender_addr, &buf);
+        self.insert_tx_message_from_contract(
+            sender_addr,
+            Uint256::from_u64(100_000_000),
+            Uint256::zero(),
+            payee,
+            amount,
+            &[],
+            true
+        );
     }
 
     pub fn get_and_incr_seq_num(&mut self, addr: &Uint256) -> Uint256 {

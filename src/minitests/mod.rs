@@ -343,7 +343,7 @@ pub fn test_gas_charging_underfunded() {
 
 #[test]
 pub fn test_gas_charging_fully_funded() {
-    match crate::evm::_evm_run_with_gas_charging(None, Uint256::_from_eth(1), false, false) {
+    match crate::evm::_evm_run_with_gas_charging(None, Uint256::_from_eth(1000), false, false) {
         Ok(result) => assert_eq!(result, true),
         Err(e) => panic!("error {}", e),
     }
