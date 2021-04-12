@@ -1518,7 +1518,10 @@ public impure func evmCallStack_version2upgrade_hack() {
         }
 
         let (maybeGasUsage, feeStats) = xif let Some(res) = gasAccounting_endTxCharges(int(0), txFeeStats_zero()) {
-             let (_, gasUsage, fs) = res;
+             let (_, gasUsage, fs, deferredPayments) = res;
+             setGlobalAccountStore(
+                deferredPayments_apply(getGlobalAccountStore(), deferredPayments)
+             );
              (Some(gasUsage), fs)
         } else {
             (None<GasUsage>, txFeeStats_zero())
