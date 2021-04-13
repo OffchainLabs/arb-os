@@ -4,6 +4,7 @@ use crate::run::{load_from_file, Machine, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use ethers_signers::{Signer, Wallet};
 use std::path::Path;
+use crate::upload::CodeUploader;
 
 pub struct ArbInfo {
     pub contract_abi: AbiForContract,
@@ -946,6 +947,11 @@ pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), et
         my_addr.clone(),
         Uint256::from_u64(20000),
     );
+    let _ = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
 
     let arbinfo = ArbInfo::_new(false);
     let balance = arbinfo._get_balance(&mut machine, &my_addr)?;
@@ -1016,8 +1022,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
 
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
 
-    let uploader =
-        crate::upload::CodeUploader::_new_from_file(Path::new("arb_os/arbos-upgrade.mexe"));
+    let uploader = CodeUploader::_new_from_file(Path::new("arb_os/arbos-upgrade.mexe"));
     arbowner._start_code_upload(&mut machine)?;
 
     let mut accum = vec![];
@@ -1037,7 +1042,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let wallet2 = machine.runtime_env.new_wallet();
     let arbsys = ArbSys::new(&wallet2, false);
     let arbos_version = arbsys._arbos_version(&mut machine)?;
-    assert_eq!(arbos_version, Uint256::one());
+    assert_eq!(arbos_version, Uint256::from_u64(ARBOS_VERSION));
     let arbos_version_orig = arbsys_orig_binding._arbos_version(&mut machine)?;
     assert_eq!(arbos_version, arbos_version_orig);
 
@@ -1054,7 +1059,7 @@ pub fn test_gas_charging_underfunded() {
 
 #[test]
 pub fn test_gas_charging_fully_funded() {
-    match _evm_run_with_gas_charging(None, Uint256::_from_eth(1), false, false) {
+    match _evm_run_with_gas_charging(None, Uint256::_from_eth(1000), false, false) {
         Ok(result) => assert_eq!(result, true),
         Err(e) => panic!("error {}", e),
     }
@@ -1124,7 +1129,7 @@ pub fn _evm_run_with_gas_charging(
         "deposit",
         &[],
         &mut machine,
-        Uint256::from_usize(10000),
+        Uint256::_from_eth(1),
         debug,
     )?;
     assert_eq!(logs.len(), 1);
@@ -1240,6 +1245,11 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         my_addr.clone(),
         Uint256::_from_eth(100),
     );
+    let _ = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
 
     let (l2tx, l1calldata, storage, basegas, conggas, totalgas) =
         arbgasinfo._get_prices_in_wei(&mut machine)?;
@@ -1364,6 +1374,7 @@ pub fn _do_rollup_tracker_ops() {
         claimer.clone(),
         Uint256::_from_eth(1),
     );
+    let _ = machine.run(None);
 
     arbowner
         ._add_to_reserve_funds(&mut machine, Uint256::_from_eth(1))
