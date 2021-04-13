@@ -76,6 +76,10 @@ public impure func avmCodeBuilder_append(builder: AvmCodeBuilder, stream: ByteSt
     });
 }
 
+public func avmCodeBuilder_getCodeHash(builder: AvmCodeBuilder) -> bytes32 {
+    return hash(builder.code);
+}
+
 public func avmCodeBuilder_finish(builder: AvmCodeBuilder) -> AvmCodePoint {
     return builder.code;
 }
@@ -104,7 +108,7 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
     } elseif (kind == 10) {   // 0-tuple
         Some((stream, ()))
     } elseif (kind == 11) {   // 1-tuple
-        let val = unsafecast<[1]any>((0,0));
+        let val = newfixedarray(1, 0);
         let (ustr, x) = unmarshalValue(stream, codeMap)?;
         Some((ustr, val with { [0] = x }))
     } elseif (kind == 12) {   // 2-tuple

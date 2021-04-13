@@ -20,6 +20,8 @@ use evmCallStack::evmCallFrame_getCallvalue;
 use evmCallStack::evmCallFrame_getAccount;
 use evmCallStack::evmCallStack_setAccount;
 use evmCallStack::evmCallStack_setTopFrameMemory;
+use evmCallStack::evmCallStack_stackDepth;
+use evmCallStack::evmCallStack_returnFromCall;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert;
@@ -48,6 +50,7 @@ use std::bytearray::bytearray_extract;
 use std::avmcodebuilder::AvmCodeBuilder;
 use std::avmcodebuilder::avmCodeBuilder_new;
 use std::avmcodebuilder::avmCodeBuilder_append;
+use std::avmcodebuilder::avmCodeBuilder_getCodeHash;
 use std::avmcodebuilder::avmCodeBuilder_finish;
 
 use std::bytestream::bytestream_new;
@@ -80,7 +83,9 @@ public impure func arbowner_txcall() {
             arbowner_startCodeUpload(topFrame, calldata);
         } elseif (funcCode == 0x56331f75) {
             arbowner_continueCodeUpload(topFrame, calldata);
-        } elseif (funcCode == 0xfbb53a17) {
+        } elseif (funcCode == const::funcCode_ArbOwner_getUploadedCodeHash) {
+            arbowner_getUploadedCodeHash(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_finishCodeUploadAsArbosUpgrade) {
            arbowner_finishCodeUploadAsArbosUpgrade(topFrame, calldata);
         } elseif (funcCode == 0xf4f4e136) {
            arbowner_finishCodeUploadAsPluggable(topFrame, calldata);
@@ -145,14 +150,42 @@ impure func arbowner_continueCodeUpload(topFrame: EvmCallFrame, calldata: ByteAr
     }
 }
 
-impure func arbowner_finishCodeUploadAsArbosUpgrade(topFrame: EvmCallFrame, calldata: ByteArray) { // ()
+impure func arbowner_getUploadedCodeHash(topFrame: EvmCallFrame, calldata: ByteArray) { // () -> bytes32
     if (bytearray_size(calldata) != 4) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 40, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 140, 0, 0);
     }
     if let Some(upgrade) = upgradeInProgress {
-        asm(avmCodeBuilder_finish(upgrade), 0) { jump };  // jump to the new code
+        let codeHash = avmCodeBuilder_getCodeHash(upgrade);
+        if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, uint(codeHash)))) {
+            evmOp_return(0, 32);
+        } else {
+            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 141, 0, 0);
+        }
     } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 42, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 142, 0, 0);
+    }
+}
+
+impure func arbowner_finishCodeUploadAsArbosUpgrade(topFrame: EvmCallFrame, calldata: ByteArray) { // ()
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 40, 0, 0);
+    }
+
+    // This can only be called directly from L1. Revert if called from L2.
+    if (evmCallStack_stackDepth() != 1) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 41, 0, 0);
+    }
+
+    if let Some(upgrade) = upgradeInProgress {
+        let requiredCodeHash = bytes32(bytearray_get256(calldata, 4));
+        if (avmCodeBuilder_getCodeHash(upgrade) != requiredCodeHash) {
+            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 42, 0, 0);
+        }
+        let upgradeCodePoint = unsafecast<impure func()>(avmCodeBuilder_finish(upgrade));
+        upgradeInProgress = None<AvmCodeBuilder>;
+        let _ = evmCallStack_returnFromCall(true, 0, 0, Some(upgradeCodePoint));
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 43, 0, 0);
     }
 }
 

@@ -10,7 +10,8 @@ interface ArbOwner {
     // the code to be installed as the upgrade, then calls finishArbosUpgrade to complete the upgrade and start executing the new code.
     function startCodeUpload() external;
     function continueCodeUpload(bytes calldata marshalledCode) external;
-    function finishCodeUploadAsArbosUpgrade() external;
+    function getUploadedCodeHash() external view returns(bytes32);
+    function finishCodeUploadAsArbosUpgrade(bytes32 requiredCodeHash) external;
     function finishCodeUploadAsPluggable(uint id, bool keepState) external;
 
     // Bind an address to a pluggable, so the pluggable can be a contract.
