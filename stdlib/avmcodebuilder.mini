@@ -76,6 +76,10 @@ public impure func avmCodeBuilder_append(builder: AvmCodeBuilder, stream: ByteSt
     });
 }
 
+public func avmCodeBuilder_getCodeHash(builder: AvmCodeBuilder) -> bytes32 {
+    return hash(builder.code);
+}
+
 public func avmCodeBuilder_finish(builder: AvmCodeBuilder) -> AvmCodePoint {
     return builder.code;
 }

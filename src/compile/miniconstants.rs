@@ -263,7 +263,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ret.insert(s.to_string(), Uint256::from_string_hex(u).unwrap());
     }
 
-    for builtin in &["ArbRetryableTx", "ArbStatistics"] {
+    for builtin in &["ArbRetryableTx", "ArbStatistics", "ArbOwner"] {
         let fcodes = match func_codes_for_builtin_contract(builtin) {
             Ok(v) => v,
             Err(e) => panic!("Error accessing builtin function {}: {}", builtin, e),

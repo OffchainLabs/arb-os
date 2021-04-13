@@ -1374,14 +1374,30 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
+    pub fn _get_uploaded_code_hash(
+        &self,
+        machine: &mut Machine,
+    ) -> Result<Uint256, ethabi::Error> {
+        let (receipts, _) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "getUploadedCodeHash",
+            &[],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+        Ok(Uint256::from_bytes(&receipts[receipts.len()-1].get_return_data()))
+    }
+
     pub fn _finish_code_upload_as_arbos_upgrade(
         &self,
         machine: &mut Machine,
+        expected_code_hash: Uint256,
     ) -> Result<(), ethabi::Error> {
         let _res = self.contract_abi.call_function(
             self.my_address.clone(),
             "finishCodeUploadAsArbosUpgrade",
-            &[],
+            &[ethabi::Token::FixedBytes(expected_code_hash.to_bytes_be())],
             machine,
             Uint256::zero(),
             self.debug,
