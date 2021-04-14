@@ -21,6 +21,7 @@ use std::io;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
+use crate::run::upload::CodeUploader;
 
 mod compile;
 mod contracttemplates;
@@ -99,6 +100,11 @@ struct GenUpgrade {
     config_file: Option<String>,
 }
 
+#[derive(Clap, Debug)]
+struct SerializeUpgrade{
+    input: String,
+}
+
 ///Main enum for command line arguments.
 #[derive(Clap, Debug)]
 enum Args {
@@ -113,9 +119,11 @@ enum Args {
     Reformat(Reformat),
     EvmTests(EvmTests),
     GenUpgradeCode(GenUpgrade),
+    SerializeUpgrade(SerializeUpgrade),
 }
 
 fn main() -> Result<(), CompileError> {
+    let mut print_time = true;
     let start_time = Instant::now();
     let matches = Args::parse();
 
@@ -267,13 +275,20 @@ fn main() -> Result<(), CompileError> {
                 println!("Successfully generated code");
             }
         }
+        Args::SerializeUpgrade(up) => {
+            let the_json = CodeUploader::_new_from_file(Path::new(&up.input))._to_json();
+            print!("{}", the_json.unwrap());
+            print_time = false;
+        }
     }
     let total_time = Instant::now() - start_time;
-    println!(
-        "Finished in {}.{:0>3} seconds.",
-        total_time.as_secs(),
-        total_time.subsec_millis()
-    );
+    if print_time {
+        println!(
+            "Finished in {}.{:0>3} seconds.",
+            total_time.as_secs(),
+            total_time.subsec_millis()
+        );
+    }
 
     Ok(())
 }
