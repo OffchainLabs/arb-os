@@ -21,7 +21,7 @@ use std::io;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use crate::run::upload::CodeUploader;
+use crate::upload::CodeUploader;
 
 mod compile;
 mod contracttemplates;

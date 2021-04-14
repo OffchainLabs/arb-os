@@ -358,14 +358,30 @@ impl<'a> ArbOwner<'a> {
         }
     }
 
+    pub fn _get_uploaded_code_hash(
+        &self,
+        machine: &mut Machine,
+    ) -> Result<Uint256, ethabi::Error> {
+        let (receipts, _) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "getUploadedCodeHash",
+            &[],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+        Ok(Uint256::from_bytes(&receipts[receipts.len()-1].get_return_data()))
+    }
+
     pub fn _finish_code_upload_as_arbos_upgrade(
         &self,
         machine: &mut Machine,
+        expected_code_hash: Uint256,
     ) -> Result<(), ethabi::Error> {
         let _res = self.contract_abi.call_function(
             self.my_address.clone(),
             "finishCodeUploadAsArbosUpgrade",
-            &[],
+            &[ethabi::Token::FixedBytes(expected_code_hash.to_bytes_be())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -704,6 +720,57 @@ impl ArbAggregator {
             Err(ethabi::Error::from("reverted"))
         }
     }
+
+    pub fn _get_fee_collector(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+    ) -> Result<Uint256, ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::from_u64(10892),
+            "getFeeCollector",
+            &[ethabi::Token::Address(addr.to_h160())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _set_fee_collector(
+        &self,
+        machine: &mut Machine,
+        agg_addr: Uint256,
+        new_collector: Uint256,
+        sender: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            sender,
+            "setFeeCollector",
+            &[
+                ethabi::Token::Address(agg_addr.to_h160()),
+                ethabi::Token::Address(new_collector.to_h160()),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
 }
 
 pub struct ArbReplayableTx {
@@ -1017,7 +1084,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys_orig_binding._arbos_version(&mut machine)?,
-        Uint256::one()
+        Uint256::from_u64(4)
     );
 
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
@@ -1037,7 +1104,11 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
         arbowner._continue_code_upload(&mut machine, accum)?;
     }
 
-    arbowner._finish_code_upload_as_arbos_upgrade(&mut machine)?;
+    let expected_code_hash = arbowner._get_uploaded_code_hash(&mut machine)?;
+    arbowner._finish_code_upload_as_arbos_upgrade(
+        &mut machine,
+        expected_code_hash,
+    )?;
 
     let wallet2 = machine.runtime_env.new_wallet();
     let arbsys = ArbSys::new(&wallet2, false);
@@ -1200,7 +1271,11 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
     let mcode = vec![0x90u8, 1u8, 0u8, 42u8]; // debugprint(42)
     arbowner._continue_code_upload(&mut machine, mcode)?;
 
-    arbowner._finish_code_upload_as_arbos_upgrade(&mut machine)?;
+    let expected_code_hash = arbowner._get_uploaded_code_hash(&mut machine)?;
+    arbowner._finish_code_upload_as_arbos_upgrade(
+        &mut machine,
+        expected_code_hash,
+    )?;
 
     arbowner._set_seconds_per_send(&mut machine, Uint256::from_u64(10))?;
 
@@ -1526,6 +1601,11 @@ pub fn _evm_test_arbaggregator(log_to: Option<&Path>, debug: bool) -> Result<(),
 
     let arbagg = ArbAggregator::_new(debug);
 
+    assert_eq!(
+        arbagg._get_fee_collector(&mut machine, my_addr.clone())?,
+        my_addr.clone()
+    );
+
     let pref_agg = arbagg._get_preferred_aggregator(&mut machine, my_addr.clone())?;
     assert_eq!(pref_agg, (Uint256::zero(), true));
 
@@ -1543,8 +1623,67 @@ pub fn _evm_test_arbaggregator(log_to: Option<&Path>, debug: bool) -> Result<(),
     assert_eq!(def_agg, new_def_agg);
 
     assert!(arbagg
-        ._set_default_aggregator(&mut machine, Uint256::from_u64(12345), Some(my_addr))
+        ._set_default_aggregator(
+            &mut machine,
+            Uint256::from_u64(12345),
+            Some(my_addr.clone())
+        )
         .is_err());
+
+    assert_eq!(
+        arbagg._get_fee_collector(&mut machine, my_addr.clone())?,
+        my_addr.clone()
+    );
+
+    let new_collector = Uint256::from_u64(1298031);
+
+    assert!(arbagg
+        ._set_fee_collector(
+            &mut machine,
+            my_addr.clone(),
+            new_collector.clone(),
+            new_collector.clone()
+        )
+        .is_err());
+    assert_eq!(
+        arbagg._get_fee_collector(&mut machine, my_addr.clone())?,
+        my_addr.clone()
+    );
+
+    assert!(arbagg
+        ._set_fee_collector(
+            &mut machine,
+            my_addr.clone(),
+            new_collector.clone(),
+            my_addr.clone()
+        )
+        .is_ok());
+    assert_eq!(
+        arbagg._get_fee_collector(&mut machine, my_addr.clone())?,
+        new_collector.clone()
+    );
+
+    let newer_collector = Uint256::from_u64(589713578913);
+    assert!(arbagg
+        ._set_fee_collector(
+            &mut machine,
+            my_addr.clone(),
+            newer_collector.clone(),
+            my_addr.clone()
+        )
+        .is_err());
+    assert!(arbagg
+        ._set_fee_collector(
+            &mut machine,
+            my_addr.clone(),
+            newer_collector.clone(),
+            new_collector.clone()
+        )
+        .is_ok());
+    assert_eq!(
+        arbagg._get_fee_collector(&mut machine, my_addr.clone())?,
+        newer_collector.clone()
+    );
 
     if let Some(path) = log_to {
         machine
