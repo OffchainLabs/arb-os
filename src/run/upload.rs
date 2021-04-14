@@ -2,6 +2,7 @@
  * Copyright 2021, Offchain Labs, Inc. All rights reserved.
  */
 
+use crate::compile::miniconstants::ARBOS_VERSION;
 use crate::evm::abi::{AbiForContract, ArbSys, _ArbOwner};
 use crate::evm::test_contract_path;
 use crate::link::LinkedProgram;
@@ -15,7 +16,6 @@ use std::fmt;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use crate::compile::miniconstants::ARBOS_VERSION;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct CodeUploader {

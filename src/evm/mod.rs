@@ -3,6 +3,7 @@
  */
 
 use crate::compile::miniconstants::init_constant_table;
+use crate::compile::miniconstants::ARBOS_VERSION;
 use crate::evm::abi::{
     ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest, _ArbAggregator, _ArbGasInfo,
     _ArbOwner, _ArbReplayableTx, builtin_contract_path,
@@ -13,7 +14,6 @@ use crate::uint256::Uint256;
 use abi::AbiForContract;
 use ethers_signers::Signer;
 use std::path::Path;
-use crate::compile::miniconstants::ARBOS_VERSION;
 
 pub mod abi;
 pub mod benchmarks;
@@ -567,7 +567,7 @@ pub fn _evm_test_rate_control(log_to: Option<&Path>, debug: bool) -> Result<(), 
 
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
 
-    let const_table = init_constant_table();
+    let const_table = init_constant_table(Some(Path::new("arb_os/constants.json")));
 
     let (r1, r2) = arbowner._get_fee_recipients(&mut machine)?;
     assert_eq!(&r1, const_table.get("NetFee_defaultRecipient").unwrap());

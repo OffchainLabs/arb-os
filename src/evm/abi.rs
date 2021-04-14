@@ -1702,15 +1702,15 @@ impl ArbosTest {
         if (logs.len() != num_logs_before + 2) || (sends.len() != num_sends_before) {
             return Err(ethabi::Error::from("wrong number of receipts or sends"));
         }
-        if !logs[num_logs_before+1].succeeded() {
+        if !logs[num_logs_before + 1].succeeded() {
             println!(
                 "arbosTest.run revert code {}",
-                logs[num_logs_before+1].get_return_code()
+                logs[num_logs_before + 1].get_return_code()
             );
             return Err(ethabi::Error::from("reverted"));
         }
 
-        Ok(logs[num_logs_before+1].get_return_data())
+        Ok(logs[num_logs_before + 1].get_return_data())
     }
 
     pub fn get_account_info(
