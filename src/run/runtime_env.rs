@@ -3,7 +3,7 @@
  */
 
 use crate::mavm::{Buffer, Value};
-use crate::run::{load_from_file, ProfilerMode};
+use crate::run::{load_from_file_and_env, ProfilerMode};
 use crate::uint256::Uint256;
 use ethers_core::rand::rngs::StdRng;
 use ethers_core::rand::SeedableRng;
@@ -311,7 +311,7 @@ impl RuntimeEnvironment {
         }
     }
 
-    pub fn _insert_tx_message_from_contract(
+    pub fn insert_tx_message_from_contract(
         &mut self,
         sender_addr: Uint256,
         max_gas: Uint256,
@@ -510,10 +510,15 @@ impl RuntimeEnvironment {
         payee: Uint256,
         amount: Uint256,
     ) {
-        let mut buf = payee.to_bytes_be();
-        buf.extend(amount.to_bytes_be());
-
-        self.insert_l1_message(0, sender_addr, &buf);
+        self.insert_tx_message_from_contract(
+            sender_addr,
+            Uint256::from_u64(100_000_000),
+            Uint256::zero(),
+            payee,
+            amount,
+            &[],
+            true
+        );
     }
 
     pub fn get_and_incr_seq_num(&mut self, addr: &Uint256) -> Uint256 {
@@ -594,6 +599,12 @@ impl RuntimeEnvironment {
         } else {
             Some(sends[0].clone())
         }
+    }
+}
+
+impl Default for RuntimeEnvironment {
+    fn default() -> Self {
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None)
     }
 }
 
@@ -1293,9 +1304,9 @@ impl RtEnvRecorder {
         trace_file: Option<&str>,
     ) -> bool {
         // returns true iff result matches
-        let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+        let mut rt_env = RuntimeEnvironment::default();
         rt_env.insert_full_inbox_contents(self.inbox.clone());
-        let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+        let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
         if let Some(trace_file_name) = trace_file {
             machine.add_trace_writer(trace_file_name);
         }

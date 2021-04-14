@@ -1,5 +1,5 @@
 //
-// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
 //
 
 use inbox::IncomingRequest;
@@ -71,9 +71,10 @@ use gasAccounting::gasAccounting_startTxCharges;
 use gasAccounting::gasAccounting_endTxCharges;
 use gasAccounting::gasAccounting_pauseTxCharges;
 use gasAccounting::gasAccounting_resumeTxCharges;
-use gasAccounting::gasAccounting_getGasChargeAmount;
+use gasAccounting::gasAccounting_getGasChargeAmountInArbGas;
 use gasAccounting::txFeeStats_zero;
 use gasAccounting::gasAccounting_addToReserveInAcctStore;
+use gasAccounting::deferredPayments_apply;
 
 use codeSegment::translateEvmCodeSegment;
 
@@ -239,22 +240,28 @@ public impure func initEvmCallStack(
     if let Some(entryPoint) = account_getStartCodePoint(
         accountStore_get(
             getGlobalAccountStore(),
-
             request.calleeAddr
         )
     ) {
         globalCurrentTxRequest = request;
         globalCurrentRetryableRequest = None<IncomingRequest>;
 
-        let startTxResult = xif(request.maxGas < const::Charging_MinArbGasForContractTx) {
-            const::TxResultCode_belowMinimumTxGas
+        let (startTxResult, acctStore, _) = xif(request.maxGas < const::Charging_MinArbGasForContractTx) {
+            (const::TxResultCode_belowMinimumTxGas, getGlobalAccountStore(), ())
         } else {
-            gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.gasPayer)
+            gasAccounting_startTxCharges(
+            	request.maxGas, 
+            	request.gasPrice, 
+            	request.gasPayer, 
+            	getGlobalAccountStore(), 
+            	None<AccountStore>
+            )
         };
+
         if (startTxResult == const::TxResultCode_success) {
+            setGlobalAccountStore(acctStore);
             if (request.seqNum != None<uint>) {
                 // increment the caller's sequence number, if caller has sufficient balance
-                let acctStore = getGlobalAccountStore();
                 if ( (!chargeForCallvalue) || (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value) ){
                     setGlobalAccountStore(
                         accountStore_set(
@@ -304,7 +311,10 @@ public impure func initEvmCallStack(
             } else {
                 if let Some(res) = gasAccounting_endTxCharges(int(0), request.feeStats) {
                     // insufficient balance error
-                    let (completed, gasUsage, feeStats) = res;
+                    let (completed, gasUsage, feeStats, payments) = res;
+                    setGlobalAccountStore(
+                        deferredPayments_apply(getGlobalAccountStore(), payments)
+                    );
                     emitTxReceipt(
                         request.incomingRequest,
                         const::TxResultCode_insufficientBalance,
@@ -457,13 +467,21 @@ public impure func initEvmCallStackForConstructor(
     ) {
         acctStore = uas;
 
-        let startTxResult = xif(request.maxGas < const::Charging_MinArbGasForContractTx) {
-            const::TxResultCode_belowMinimumTxGas
+        let (startTxResult, uAcctStoreAfterInc, uAcctStore) = xif(request.maxGas < const::Charging_MinArbGasForContractTx) {
+            (const::TxResultCode_belowMinimumTxGas, acctStoreAfterIncrement, Some(acctStore)
         } else {
-            gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.gasPayer)
+            gasAccounting_startTxCharges(
+                request.maxGas, 
+                request.gasPrice, 
+                request.gasPayer, 
+                acctStoreAfterIncrement,
+                Some(acctStore)
+            )
         };
+
         if (startTxResult == const::TxResultCode_success) {
-            setGlobalAccountStore(acctStoreAfterIncrement);   // commit the incremented sequence number
+            setGlobalAccountStore(uAcctStoreAfterInc);   // commit the incremented sequence number
+            acctStore = uAcctStore;
 
             globalCallStack = Some(struct {
                 runningAs: request.calleeAddr,
@@ -655,7 +673,8 @@ public impure func evmCallStack_doCall(
 public impure func evmCallStack_returnFromCall(
     success: bool,
     returnOffset: uint,
-    returnLength: uint
+    returnLength: uint,
+    jumpTargetIfTxEnd: option<impure func()>,
 ) -> option<()> {
     // A call just completed. Commit its effects as appropriate, and return control to its caller.
 
@@ -675,21 +694,6 @@ public impure func evmCallStack_returnFromCall(
                 topFrame.runningAsAccount
             )
         };
-
-        // if not reverting, make sure the callee has enough gas that they could pay for their storage delta
-        // note that we don't charge them here, we just make sure they could have paid
-        // the top-level caller will eventually be charged for this storage
-        if ( success
-          && (topFrame.storageDelta > int(0))
-          && (leftoverGas < gasAccounting_getGasChargeAmount(uint(topFrame.storageDelta))) ) {
-            // callee couldn't pay for their storage, so morph this into a revert
-            success = false;
-            returnOffset = 0;
-            returnLength = 0;
-            returnData = bytearray_new(0);
-            let (txid, addrs, parentAddrs) = evmCallStack_stackInfo();
-            asm((10000, topFrame.runningCodeFrom, 0xfffffffffffffffd, txid, addrs, parentAddrs),) { debugprint };
-        }
 
         if (success && !topFrame.static) {
             // copy relevant data back to parent frame
@@ -742,8 +746,9 @@ public impure func evmCallStack_returnFromCall(
             if (globalCurrentTxRequest.isConstructor) {
                 // contract code takes up space, so charge 1 storage for each 32 bytes of EVM code
                 evmCallStack_addStorageCharge( (bytearray_size(returnData) + 31) / 32 );
+                topFrame = globalCallStack?;
             }
-            let (completed, gasUsage, feeStats) = gasAccounting_endTxCharges(
+            let (completed, gasUsage, feeStats, deferredPayments) = gasAccounting_endTxCharges(
                 topFrame.storageDelta - int(storageReclaimedForSDQ(topFrame)),  // won't underflow because signed subtraction
                 globalCurrentTxRequest.feeStats
             )?;
@@ -775,17 +780,20 @@ public impure func evmCallStack_returnFromCall(
 
                         // Update the global account store
                         setGlobalAccountStore(
-                            accountStore_set(
-                                topFrame.accountStore,
-                                topFrame.runningAs,
-                                account_setContractInfo(
-                                    topFrame.runningAsAccount,
-                                    returnData,
-                                    evmJumpTable,
-                                    entryPoint,
-                                    storageMap,
-                                    true,
-                                )
+                            deferredPayments_apply(
+                                accountStore_set(
+                                    topFrame.accountStore,
+                                    topFrame.runningAs,
+                                    account_setContractInfo(
+                                        topFrame.runningAsAccount,
+                                        returnData,
+                                        evmJumpTable,
+                                        entryPoint,
+                                        storageMap,
+                                        true,
+                                    )
+                                ),
+                                deferredPayments,
                             )
                         );
 
@@ -867,7 +875,7 @@ public impure func evmCallStack_returnFromCall(
                         let updEvmLogs = sendQueuedMessages(topFrame.sendQueue, topFrame.evmLogs);
 
                         // Save results back to the main globalAccountStore
-                        setGlobalAccountStore(acctStore,);
+                        setGlobalAccountStore(deferredPayments_apply(acctStore, deferredPayments));
 
                         updEvmLogs
                     } else {
@@ -894,10 +902,12 @@ public impure func evmCallStack_returnFromCall(
                     Some(gasUsage),
                     feeStats,
                 );
+                setGlobalAccountStore(deferredPayments_apply(getGlobalAccountStore(), deferredPayments));
             }
         } else {
             // Request failed
-            let (_, gasUsage, feeStats) = gasAccounting_endTxCharges(int(0), globalCurrentTxRequest.feeStats)?;
+            let (_, gasUsage, feeStats, payments) = gasAccounting_endTxCharges(int(0), globalCurrentTxRequest.feeStats)?;
+            setGlobalAccountStore(deferredPayments_apply(getGlobalAccountStore(), payments));
             if let Some(msg) = topFrame.sendOnFailure {
                 outbox_append(msg);
             }
@@ -914,7 +924,11 @@ public impure func evmCallStack_returnFromCall(
         // Now discard any EVM and AVM stack contents and jump back to the main run loop.
         globalCallStack = None<EvmCallFrame>;
         emptyAvmStack();
-        restoreAuxStackAndCall(mainRunLoop, None<Stack>, true);  // should never return
+        restoreAuxStackAndCall(
+            xif let Some(target) = jumpTargetIfTxEnd { target } else { mainRunLoop },
+            None<Stack>,
+            true
+        );  // should never return
         evmCallStack_callHitError(9);
         panic
     };
@@ -1359,14 +1373,15 @@ public impure func evmCallStack_transferEthFromCurrent(
 public impure func evmCallStack_setTopFrameStorageCell(offset: uint, value: uint) -> option<()> {
     let topFrame = globalCallStack?;
     let storageSizeBefore = account_getStorageSize(topFrame.runningAsAccount)?;
+    let runningAsAccount = account_setStorageCell(
+        topFrame.runningAsAccount,
+        offset,
+        value
+    )?;
     globalCallStack = Some(topFrame with {
-        runningAsAccount: account_setStorageCell(
-            topFrame.runningAsAccount,
-            offset,
-            value
-        )?
+        runningAsAccount: runningAsAccount
     } with {
-        storageDelta: topFrame.storageDelta + int(account_getStorageSize(topFrame.runningAsAccount)?) - int(storageSizeBefore)
+        storageDelta: topFrame.storageDelta + int(account_getStorageSize(runningAsAccount)?) - int(storageSizeBefore)
     });
     return Some(());
 }
@@ -1488,7 +1503,7 @@ public func evmCallFrame_getParent(frame: EvmCallFrame) -> option<EvmCallFrame> 
 
 public impure func evmCallStack_callHitError(errInfo: any) {
     asm((664, errInfo),) { debugprint };
-    if (evmCallStack_returnFromCall(false, 0, 0) == None<()>) {
+    if (evmCallStack_returnFromCall(false, 0, 0, None<impure func()>) == None<()>) {
         // something has gone seriously wrong with the evmCallStack
         // recover by clearing the evmCallStack, refunding unused gas, and jumping back to the error handler
         globalCallStack = None<EvmCallFrame>;
@@ -1497,4 +1512,14 @@ public impure func evmCallStack_callHitError(errInfo: any) {
         errorHandler();  // should never return
         panic;
     }
+}
+
+func getLastFrame(topFrame: EvmCallFrame) -> EvmCallFrame {
+    return xloop {
+        if let Some(tf) = topFrame.parent {
+            topFrame = tf;
+        } else {
+            return topFrame;
+        }
+    };
 }
