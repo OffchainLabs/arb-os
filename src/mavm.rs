@@ -3,9 +3,9 @@
  */
 
 use crate::compile::DebugInfo;
-use crate::run::upload::CodeUploader;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
+use crate::upload::CodeUploader;
 use ethers_core::utils::keccak256;
 use serde::de::Visitor;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};

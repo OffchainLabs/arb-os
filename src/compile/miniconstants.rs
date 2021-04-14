@@ -4,7 +4,7 @@
 
 //!Creates a fixed list of globally accessible constants.
 
-use crate::evm::abi::{builtin_contract_path, AbiForContract};
+use crate::evm::{builtin_contract_path, AbiForContract};
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 
