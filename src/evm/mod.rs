@@ -530,6 +530,11 @@ pub fn _evm_test_arbaggregator(log_to: Option<&Path>, debug: bool) -> Result<(),
 
     let arbagg = _ArbAggregator::_new(debug);
 
+    assert_eq!(
+        arbagg._get_fee_collector(&mut machine, my_addr.clone())?,
+        my_addr.clone()
+    );
+
     let pref_agg = arbagg._get_preferred_aggregator(&mut machine, my_addr.clone())?;
     assert_eq!(pref_agg, (Uint256::zero(), true));
 
@@ -547,8 +552,67 @@ pub fn _evm_test_arbaggregator(log_to: Option<&Path>, debug: bool) -> Result<(),
     assert_eq!(def_agg, new_def_agg);
 
     assert!(arbagg
-        ._set_default_aggregator(&mut machine, Uint256::from_u64(12345), Some(my_addr))
+        ._set_default_aggregator(
+            &mut machine,
+            Uint256::from_u64(12345),
+            Some(my_addr.clone())
+        )
         .is_err());
+
+    assert_eq!(
+        arbagg._get_fee_collector(&mut machine, my_addr.clone())?,
+        my_addr.clone()
+    );
+
+    let new_collector = Uint256::from_u64(1298031);
+
+    assert!(arbagg
+        ._set_fee_collector(
+            &mut machine,
+            my_addr.clone(),
+            new_collector.clone(),
+            new_collector.clone()
+        )
+        .is_err());
+    assert_eq!(
+        arbagg._get_fee_collector(&mut machine, my_addr.clone())?,
+        my_addr.clone()
+    );
+
+    assert!(arbagg
+        ._set_fee_collector(
+            &mut machine,
+            my_addr.clone(),
+            new_collector.clone(),
+            my_addr.clone()
+        )
+        .is_ok());
+    assert_eq!(
+        arbagg._get_fee_collector(&mut machine, my_addr.clone())?,
+        new_collector.clone()
+    );
+
+    let newer_collector = Uint256::from_u64(589713578913);
+    assert!(arbagg
+        ._set_fee_collector(
+            &mut machine,
+            my_addr.clone(),
+            newer_collector.clone(),
+            my_addr.clone()
+        )
+        .is_err());
+    assert!(arbagg
+        ._set_fee_collector(
+            &mut machine,
+            my_addr.clone(),
+            newer_collector.clone(),
+            new_collector.clone()
+        )
+        .is_ok());
+    assert_eq!(
+        arbagg._get_fee_collector(&mut machine, my_addr.clone())?,
+        newer_collector.clone()
+    );
 
     if let Some(path) = log_to {
         machine

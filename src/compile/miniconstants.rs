@@ -8,7 +8,7 @@ use crate::evm::abi::{builtin_contract_path, AbiForContract};
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 
-pub static ARBOS_VERSION: u64 = 4;
+pub static ARBOS_VERSION: u64 = 5;
 
 ///Creates a fixed list of globally accessible constants.
 pub fn init_constant_table() -> HashMap<String, Uint256> {
@@ -263,7 +263,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ret.insert(s.to_string(), Uint256::from_string_hex(u).unwrap());
     }
 
-    for builtin in &["ArbRetryableTx", "ArbStatistics", "ArbOwner"] {
+    for builtin in &["ArbAggregator", "ArbRetryableTx", "ArbStatistics", "ArbOwner"] {
         let fcodes = match func_codes_for_builtin_contract(builtin) {
             Ok(v) => v,
             Err(e) => panic!("Error accessing builtin function {}: {}", builtin, e),
