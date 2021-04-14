@@ -828,13 +828,13 @@ public impure func getNextRequestFromCongestionAuction() -> (
 
         if let Some(aggInfo) = tx.incomingRequest.aggregator {
             if let Some(theAggregator) = aggInfo.aggregator {
-                let feeForTxAndCalldata = prices.perL2Tx + prices.perL1CalldataByte * aggInfo.calldataBytes;
+                let feeForTxAndCalldata = prices.perL2Tx + prices.perL1CalldataUnit * aggInfo.calldataUnits;
 
                 // reimburse aggregator for tx and calldata, and collect network fee
                 let (fullyPaid, feeStats) = payForTxAndL1Gas(
                     tx.gasPayer,
                     theAggregator,
-                    aggInfo.calldataBytes,
+                    aggInfo.calldataUnits,
                     gasAccountingInfo.feeConfig,
                     prices,
                     tx.feeStats
@@ -851,7 +851,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 // round up to the nearest integer number of units -- this will burn the wei that would pay
                 //       for a fractional ArbGas unit (rounding down would credit the user with fractional
                 //       ETH that we don't have)
-                let roundedUpGasDelta = (feeStats.weiPaid.tx + feeStats.weiPaid.calldataByte + prices.perArbGasTotal - 1) / prices.perArbGasTotal;
+                let roundedUpGasDelta = (feeStats.weiPaid.tx + feeStats.weiPaid.calldataUnit + prices.perArbGasTotal - 1) / prices.perArbGasTotal;
                 if (tx.maxGas > roundedUpGasDelta) {
                     tx = tx with { maxGas: tx.maxGas - roundedUpGasDelta };
                 } else {
@@ -870,7 +870,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
                         units: tx.feeStats.units with {
                             tx: 1
                         } with {
-                            calldataByte: aggInfo.calldataBytes
+                            calldataUnit: aggInfo.calldataUnits
                         }
                     }
                 };
@@ -891,8 +891,8 @@ public impure func getNextRequestFromCongestionAuction() -> (
                     units: tx.feeStats.units with {
                         tx: 1
                     } with {
-                        calldataByte: xif let Some(aggInfo) = tx.incomingRequest.aggregator {
-                            aggInfo.calldataBytes
+                        calldataUnit: xif let Some(aggInfo) = tx.incomingRequest.aggregator {
+                            aggInfo.calldataUnits
                         } else {
                             0
                         }
@@ -1048,7 +1048,7 @@ public impure func getGasLimitPerTx() -> uint {
 }
 
 public impure func getRetryableTxPrice(calldataSize: uint) -> (uint, uint) {
-    // returns (basePriceWei, calldataBytePriceWei, nextChangeTimestamp
+    // returns (basePriceWei, calldataUnitByteWei, nextChangeTimestamp
     let prices = gasAccountingInfo.retryablePrices;
     if (prices.nextUpdateTimestamp < inbox_currentTimestamp()) {
         prices = setRetryablePrices(prices);
