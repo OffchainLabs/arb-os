@@ -4,13 +4,14 @@
 
 //!Creates a fixed list of globally accessible constants.
 
+use crate::compile::CompileError;
 use crate::evm::abi::{builtin_contract_path, AbiForContract};
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
-use std::path::Path;
 use std::io::Read;
+use std::path::Path;
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ConstantsFile {
@@ -22,7 +23,9 @@ pub struct ConstantsFile {
 pub static ARBOS_VERSION: u64 = 3;
 
 ///Creates a fixed list of globally accessible constants.
-pub fn init_constant_table(constants_path: Option<&Path>) -> HashMap<String, Uint256> {
+pub fn init_constant_table(
+    constants_path: Option<&Path>,
+) -> Result<HashMap<String, Uint256>, CompileError> {
     let mut ret = HashMap::new();
     let consts = ConstantsFile {
         integer: (&[
@@ -279,10 +282,25 @@ pub fn init_constant_table(constants_path: Option<&Path>) -> HashMap<String, Uin
     };
 
     let real_consts = if let Some(consts_file) = constants_path {
-        let mut file = File::open(consts_file).unwrap();
+        let mut file = File::open(consts_file).map_err(|_| {
+            CompileError::new(
+                format!("Could not open constants file {:?}", consts_file),
+                None,
+            )
+        })?;
         let mut consts_string = String::new();
-        file.read_to_string(&mut consts_string);
-        serde_json::from_str::<ConstantsFile>(&consts_string).unwrap()
+        file.read_to_string(&mut consts_string).map_err(|_| {
+            CompileError::new(
+                format!("Could not read file {:?} to a string", consts_file),
+                None,
+            )
+        })?;
+        serde_json::from_str::<ConstantsFile>(&consts_string).map_err(|_| {
+            CompileError::new(
+                format!("Could not parse {:?} as constants file", consts_file),
+                None,
+            )
+        })?
     } else {
         ConstantsFile::default()
     };
@@ -298,24 +316,28 @@ pub fn init_constant_table(constants_path: Option<&Path>) -> HashMap<String, Uin
     }
 
     for builtin in consts.contract {
-        let fcodes = match func_codes_for_builtin_contract(&builtin) {
-            Ok(v) => v,
-            Err(e) => panic!("Error accessing builtin function {}: {}", builtin, e),
-        };
+        let fcodes = func_codes_for_builtin_contract(&builtin).map_err(|e| {
+            CompileError::new(
+                format!("Error accessing builtin function {}: {}", builtin, e),
+                None,
+            )
+        })?;
         for (name, code) in fcodes {
             ret.insert(name, code);
         }
 
-        let etopics = match event_topics_for_builtin_contract(&builtin) {
-            Ok(v) => v,
-            Err(e) => panic!("Error accessing builtin event {}: {}", builtin, e),
-        };
+        let etopics = event_topics_for_builtin_contract(&builtin).map_err(|e| {
+            CompileError::new(
+                format!("Error accessing builtin event {}: {}", builtin, e),
+                None,
+            )
+        })?;
         for (name, topic) in etopics {
             ret.insert(name, topic);
         }
     }
 
-    ret
+    Ok(ret)
 }
 
 fn func_codes_for_builtin_contract(
