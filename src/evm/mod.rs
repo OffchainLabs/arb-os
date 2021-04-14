@@ -4,6 +4,7 @@
 
 use crate::evm::abi::FunctionTable;
 use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest};
+use crate::evm::preinstalled_contracts::ArbReplayableTx;
 use crate::run::{load_from_file, load_from_file_and_env, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use ethers_signers::Signer;
@@ -586,7 +587,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
         machine.run(None)
     };
 
-    let arb_replayable = _ArbReplayableTx::_new(debug);
+    let arb_replayable = ArbReplayableTx::_new(debug);
     let timeout = arb_replayable._get_timeout(&mut machine, txid.clone())?;
     assert!(timeout > machine.runtime_env.current_timestamp);
 
