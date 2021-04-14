@@ -4,12 +4,14 @@
 
 //! Contains utilities for compiling mini source code.
 
-use crate::link::{ExportedFunc, Import, ImportedFunc};
+use crate::link::{link, postlink_compile, ExportedFunc, Import, ImportedFunc, LinkedProgram};
 use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
 use crate::stringtable::StringTable;
 use ast::{Func, TypeTree};
+use clap::Clap;
 use lalrpop_util::lalrpop_mod;
+use lalrpop_util::ParseError;
 use mini::DeclsParser;
 use miniconstants::init_constant_table;
 use serde::{Deserialize, Serialize};
@@ -32,6 +34,22 @@ pub mod miniconstants;
 mod source;
 mod typecheck;
 lalrpop_mod!(mini);
+
+///Command line options for compile subcommand.
+#[derive(Clap, Debug, Default)]
+pub struct CompileStruct {
+    pub input: Vec<String>,
+    #[clap(short, long)]
+    pub debug_mode: bool,
+    #[clap(short, long)]
+    pub test_mode: bool,
+    #[clap(short, long)]
+    pub output: Option<String>,
+    #[clap(short, long)]
+    pub format: Option<String>,
+    #[clap(short, long)]
+    pub inline: bool,
+}
 
 ///Represents the contents of a source file after parsing.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -69,6 +87,45 @@ struct TypeCheckedModule {
     global_vars: Vec<GlobalVarDecl>,
     ///The name of the module, this may be removed later.
     name: String,
+}
+
+impl CompileStruct {
+    pub fn invoke(&self) -> Result<LinkedProgram, (CompileError, BTreeMap<u64, String>)> {
+        let mut file_name_chart = BTreeMap::new();
+        let mut compiled_progs = Vec::new();
+        for filename in &self.input {
+            let path = Path::new(filename);
+            match compile_from_file(path, &mut file_name_chart, self.inline) {
+                Ok(idk) => idk,
+                Err(mut e) => {
+                    e.description = format!("Compile error: {}", e.description);
+                    return Err((e, file_name_chart));
+                }
+            }
+            .into_iter()
+            .for_each(|prog| {
+                file_name_chart.extend(prog.file_name_chart.clone());
+                compiled_progs.push(prog)
+            });
+        }
+        let linked_prog = match link(&compiled_progs, self.test_mode) {
+            Ok(idk) => idk,
+            Err(mut e) => {
+                e.description = format!("Compile error: {}", e.description);
+                return Err((e, file_name_chart));
+            }
+        };
+        postlink_compile(
+            linked_prog,
+            file_name_chart.clone(),
+            self.test_mode,
+            self.debug_mode,
+        )
+        .map_err(|mut e| {
+            e.description = format!("Linking error: {}", e.description);
+            (e, file_name_chart)
+        })
+    }
 }
 
 impl Module {
@@ -225,7 +282,7 @@ impl CompiledProgram {
     ///Writes self to output in format "format".  Supported values are: "pretty", "json", or
     /// "bincode" if None is specified, json is used, and if an invalid format is specified this
     /// value appended by "invalid format: " will be written instead
-    pub fn to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
+    pub fn _to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
         match format {
             Some("pretty") => {
                 writeln!(output, "exported: {:?}", self.exported_funcs).unwrap();
@@ -267,7 +324,6 @@ impl CompiledProgram {
 pub fn compile_from_file(
     path: &Path,
     file_name_chart: &mut BTreeMap<u64, String>,
-    _debug: bool,
     inline: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let library = path
@@ -332,159 +388,30 @@ pub fn compile_from_folder(
     file_name_chart: &mut BTreeMap<u64, String>,
     inline: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
-    //Parsing step
     let (mut programs, import_map) = create_program_tree(folder, library, main, file_name_chart)?;
-    //Resolution of imports (use statements)
-    for (name, imports) in &import_map {
-        for import in imports {
-            let import_path = import.path.clone();
-            let (named_type, imp_func) = if let Some(program) = programs.get_mut(&import_path) {
-                //Looks up info from target program
-                let index = program.string_table.get(import.name.clone());
-                let named_type = program.named_types.get(&index).cloned();
-                let imp_func = program.func_table.get(&index).cloned();
-                (named_type, imp_func)
-            } else {
-                return Err(CompileError::new(
-                    format!(
-                        "Internal error: Can not find target file for import \"{}::{}\"",
-                        import.path.get(0).cloned().unwrap_or_else(String::new),
-                        import.name
-                    ),
-                    None,
-                ));
-            };
-            //Modifies origin program to include import
-            let origin_program = programs.get_mut(name).ok_or_else(|| {
-                CompileError::new(
-                    format!(
-                        "Internal error: Can not find originating file for import \"{}::{}\"",
-                        import.path.get(0).cloned().unwrap_or_else(String::new),
-                        import.name
-                    ),
-                    None,
-                )
-            })?;
-            let index = origin_program.string_table.get(import.name.clone());
-            if let Some(named_type) = named_type {
-                origin_program.named_types.insert(index, named_type.clone());
-            } else if let Some(imp_func) = imp_func {
-                origin_program.func_table.insert(index, imp_func.clone());
-                origin_program.imported_funcs.push(ImportedFunc::new(
-                    origin_program.imported_funcs.len(),
-                    index,
-                    &origin_program.string_table,
-                ));
-            } else {
-                println!(
-                    "Warning: import \"{}::{}\" does not correspond to a type or function",
-                    import.path.get(0).cloned().unwrap_or_else(String::new),
-                    import.name
-                );
-            }
-        }
-    }
-    //Conversion of programs `HashMap` to `Vec` for typechecking
-    let mut typechecked = vec![];
-    let mut progs = vec![];
+    resolve_imports(&mut programs, &import_map)?;
+    //Conversion of programs from `HashMap` to `Vec` for typechecking
     let type_tree = create_type_tree(&programs);
-    let mut output = vec![programs
+    let mut modules = vec![programs
         .remove(&if let Some(lib) = library {
             vec![lib.to_string(), main.to_string()]
         } else {
             vec![main.to_string()]
         })
         .expect("no main")];
-    output.append(&mut {
+    modules.append(&mut {
         let mut out: Vec<_> = programs.values().cloned().collect();
         out.sort_by(|module1, module2| module2.name.cmp(&module1.name));
         out
     });
-    //Typechecking loop
-    for Module {
-        imported_funcs,
-        funcs,
-        named_types,
-        global_vars,
-        string_table,
-        func_table: hm,
-        name,
-    } in output
-    {
-        let mut checked_funcs = vec![];
-        let (exported_funcs, global_vars, string_table) = typecheck::typecheck_top_level_decls(
-            funcs,
-            named_types,
-            global_vars,
-            string_table,
-            hm,
-            &mut checked_funcs,
-            &type_tree,
-        )
-        .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
-        checked_funcs.iter_mut().for_each(|func| {
-            let detected_purity = func.is_pure();
-            let declared_purity = func.properties.pure;
-            if !detected_purity && declared_purity {
-                println!(
-                    "Warning: func {} is impure but not marked impure",
-                    string_table.name_from_id(func.name)
-                )
-            } else if detected_purity && !declared_purity {
-                println!(
-                    "Warning: func {} is declared impure but does not contain impure code",
-                    string_table.name_from_id(func.name)
-                )
-            }
-        });
-        typechecked.push(TypeCheckedModule::new(
-            checked_funcs,
-            string_table,
-            imported_funcs,
-            exported_funcs,
-            global_vars,
-            name,
-        ));
-    }
-    /*for module in &mut typechecked {
-        for _func in &mut module.checked_funcs {
-            func.recursive_apply(print_node, &"    ".to_string(), &mut 0);
-        }
-    }*/
+    let mut typechecked_modules = typecheck_programs(&type_tree, modules)?;
     //Inlining stage
     if inline {
-        typechecked.iter_mut().for_each(|module| module.inline());
+        typechecked_modules
+            .iter_mut()
+            .for_each(|module| module.inline());
     }
-    //Codegen loop
-    for TypeCheckedModule {
-        checked_funcs,
-        string_table,
-        imported_funcs,
-        exported_funcs,
-        global_vars,
-        name,
-    } in typechecked
-    {
-        let code_out = codegen::mavm_codegen(
-            checked_funcs,
-            &string_table,
-            &imported_funcs,
-            &global_vars,
-            file_name_chart,
-        )
-        .map_err(|e| CompileError::new(e.reason.to_string(), e.location))?;
-        progs.push(CompiledProgram::new(
-            code_out.to_vec(),
-            exported_funcs,
-            imported_funcs,
-            global_vars,
-            Some(SourceFileMap::new(
-                code_out.len(),
-                folder.join(name.clone()).display().to_string(),
-            )),
-            HashMap::new(),
-        ))
-    }
+    let progs = codegen_programs(typechecked_modules, file_name_chart, folder)?;
     Ok(progs)
 }
 
@@ -579,6 +506,62 @@ fn create_program_tree(
     Ok((programs, import_map))
 }
 
+fn resolve_imports(
+    programs: &mut HashMap<Vec<String>, Module>,
+    import_map: &HashMap<Vec<String>, Vec<Import>>,
+) -> Result<(), CompileError> {
+    for (name, imports) in import_map {
+        for import in imports {
+            let import_path = import.path.clone();
+            let (named_type, imp_func) = if let Some(program) = programs.get_mut(&import_path) {
+                //Looks up info from target program
+                let index = program.string_table.get(import.name.clone());
+                let named_type = program.named_types.get(&index).cloned();
+                let imp_func = program.func_table.get(&index).cloned();
+                (named_type, imp_func)
+            } else {
+                return Err(CompileError::new(
+                    format!(
+                        "Internal error: Can not find target file for import \"{}::{}\"",
+                        import.path.get(0).cloned().unwrap_or_else(String::new),
+                        import.name
+                    ),
+                    None,
+                ));
+            };
+            //Modifies origin program to include import
+            let origin_program = programs.get_mut(name).ok_or_else(|| {
+                CompileError::new(
+                    format!(
+                        "Internal error: Can not find originating file for import \"{}::{}\"",
+                        import.path.get(0).cloned().unwrap_or_else(String::new),
+                        import.name
+                    ),
+                    None,
+                )
+            })?;
+            let index = origin_program.string_table.get(import.name.clone());
+            if let Some(named_type) = named_type {
+                origin_program.named_types.insert(index, named_type.clone());
+            } else if let Some(imp_func) = imp_func {
+                origin_program.func_table.insert(index, imp_func.clone());
+                origin_program.imported_funcs.push(ImportedFunc::new(
+                    origin_program.imported_funcs.len(),
+                    index,
+                    &origin_program.string_table,
+                ));
+            } else {
+                println!(
+                    "Warning: import \"{}::{}\" does not correspond to a type or function",
+                    import.path.get(0).cloned().unwrap_or_else(String::new),
+                    import.name
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 ///Constructor for `TypeTree`
 fn create_type_tree(program_tree: &HashMap<Vec<String>, Module>) -> TypeTree {
     program_tree
@@ -592,6 +575,110 @@ fn create_type_tree(program_tree: &HashMap<Vec<String>, Module>) -> TypeTree {
         })
         .flatten()
         .collect()
+}
+
+fn typecheck_programs(
+    type_tree: &TypeTree,
+    modules: Vec<Module>,
+) -> Result<Vec<TypeCheckedModule>, CompileError> {
+    let mut typechecked = vec![];
+    for Module {
+        imported_funcs,
+        funcs,
+        named_types,
+        global_vars,
+        string_table,
+        func_table: hm,
+        name,
+    } in modules
+    {
+        let mut checked_funcs = vec![];
+        let (exported_funcs, global_vars, string_table) = typecheck::typecheck_top_level_decls(
+            funcs,
+            named_types,
+            global_vars,
+            string_table,
+            hm,
+            &mut checked_funcs,
+            type_tree,
+        )
+        .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
+        checked_funcs.iter_mut().for_each(|func| {
+            let detected_purity = func.is_pure();
+            let declared_purity = func.properties.pure;
+            if !detected_purity && declared_purity {
+                println!(
+                    "Warning: func {} is impure but not marked impure",
+                    string_table.name_from_id(func.name)
+                )
+            } else if detected_purity && !declared_purity {
+                println!(
+                    "Warning: func {} is declared impure but does not contain impure code",
+                    string_table.name_from_id(func.name)
+                )
+            }
+        });
+        typechecked.push(TypeCheckedModule::new(
+            checked_funcs,
+            string_table,
+            imported_funcs,
+            exported_funcs,
+            global_vars,
+            name,
+        ));
+    }
+    Ok(typechecked)
+}
+
+fn codegen_programs(
+    typechecked_modules: Vec<TypeCheckedModule>,
+    file_name_chart: &mut BTreeMap<u64, String>,
+    folder: &Path,
+) -> Result<Vec<CompiledProgram>, CompileError> {
+    let mut progs = vec![];
+    for TypeCheckedModule {
+        checked_funcs,
+        string_table,
+        imported_funcs,
+        exported_funcs,
+        global_vars,
+        name,
+    } in typechecked_modules
+    {
+        let code_out = codegen::mavm_codegen(
+            checked_funcs,
+            &string_table,
+            &imported_funcs,
+            &global_vars,
+            file_name_chart,
+        )
+        .map_err(|e| CompileError::new(e.reason.to_string(), e.location))?;
+        progs.push(CompiledProgram::new(
+            code_out.to_vec(),
+            exported_funcs,
+            imported_funcs,
+            global_vars,
+            Some(SourceFileMap::new(
+                code_out.len(),
+                folder.join(name.clone()).display().to_string(),
+            )),
+            HashMap::new(),
+        ))
+    }
+    Ok(progs)
+}
+
+fn comma_list(input: &[String]) -> String {
+    let mut base = String::new();
+    if input.len() > 0 {
+        for object in input.iter().take(input.len() - 1) {
+            base.push_str(object);
+            base.push(',');
+            base.push(' ');
+        }
+        base.push_str(&input[input.len() - 1]);
+    }
+    base
 }
 
 ///Converts source string `source` into a series of `TopLevelDecl`s, uses identifiers from
@@ -617,25 +704,37 @@ pub fn parse_from_source(
             &source,
         )
         .map_err(|e| match e {
-            lalrpop_util::ParseError::UnrecognizedToken {
-                token: (offset, tok, end),
-                expected: _,
+            ParseError::UnrecognizedToken {
+                token: (offset, _tok, end),
+                expected,
             } => CompileError::new(
                 format!(
-                    "unexpected token: {}, Type: {:?}",
+                    "unexpected token: {}, expected one of: {}",
                     &source[offset..end],
-                    tok
+                    comma_list(&expected),
                 ),
                 Some(lines.location(BytePos::from(offset), file_id).unwrap()),
             ),
-            lalrpop_util::ParseError::UnrecognizedEOF { location, expected } => CompileError::new(
+            ParseError::InvalidToken { location } => CompileError::new(
+                format!("found invalid token"),
+                lines.location(location.into(), file_id),
+            ),
+            ParseError::UnrecognizedEOF { location, expected } => CompileError::new(
                 format!(
                     "unexpected end of file: expected one of: {}",
-                    format!("{:?}",&expected)
+                    comma_list(&expected)
                 ),
                 lines.location(location.into(), file_id),
             ),
-            _ => CompileError::new(format!("{:?}", e), None),
+            ParseError::ExtraToken {
+                token: (offset, _tok, end),
+            } => CompileError::new(
+                format!("extra token: {}", &source[offset..end],),
+                Some(lines.location(BytePos::from(offset), file_id).unwrap()),
+            ),
+            ParseError::User { error } => {
+                CompileError::new(format!("custom parsing error: {}", error), None)
+            }
         })
 }
 

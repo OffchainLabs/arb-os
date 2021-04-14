@@ -4,13 +4,13 @@
 
 #![allow(unused_parens)]
 
+use crate::compile::CompileStruct;
 use crate::link::LinkedProgram;
+use crate::pos::try_display_location;
 use clap::Clap;
-use compile::{compile_from_file, CompileError};
+use compile::CompileError;
 use contracttemplates::generate_contract_template_file_or_die;
 use gen_code::gen_upgrade_code;
-use link::{link, postlink_compile};
-use pos::try_display_location;
 use run::{
     profile_gen_from_file, replay_from_testlog_file, run_from_file, ProfilerMode,
     RuntimeEnvironment,
@@ -21,10 +21,8 @@ use std::io;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use uint256::Uint256;
+use crate::run::upload::CodeUploader;
 
-#[cfg(test)]
-mod buffertests;
 mod compile;
 mod contracttemplates;
 mod evm;
@@ -37,24 +35,6 @@ pub mod pos;
 mod run;
 mod stringtable;
 mod uint256;
-
-///Command line options for compile subcommand.
-#[derive(Clap, Debug)]
-struct CompileStruct {
-    input: Vec<String>,
-    #[clap(short, long)]
-    debug_mode: bool,
-    #[clap(short, long)]
-    test_mode: bool,
-    #[clap(short, long)]
-    output: Option<String>,
-    #[clap(short, long)]
-    compile_only: bool,
-    #[clap(short, long)]
-    format: Option<String>,
-    #[clap(short, long)]
-    inline: bool,
-}
 
 ///Command line options for run subcommand.
 #[derive(Clap, Debug)]
@@ -119,6 +99,11 @@ struct GenUpgrade {
     config_file: Option<String>,
 }
 
+#[derive(Clap, Debug)]
+struct SerializeUpgrade{
+    input: String,
+}
+
 ///Main enum for command line arguments.
 #[derive(Clap, Debug)]
 enum Args {
@@ -133,101 +118,29 @@ enum Args {
     Reformat(Reformat),
     EvmTests(EvmTests),
     GenUpgradeCode(GenUpgrade),
+    SerializeUpgrade(SerializeUpgrade),
 }
 
 fn main() -> Result<(), CompileError> {
+    let mut print_time = true;
     let start_time = Instant::now();
     let matches = Args::parse();
 
     match matches {
-        Args::Compile(compile) => {
-            let debug_mode = compile.debug_mode;
-            let test_mode = compile.test_mode;
-            let mut output = get_output(compile.output.clone()).unwrap();
-            let filenames: Vec<_> = compile.input.clone();
-            let mut file_name_chart = BTreeMap::new();
-            if compile.compile_only {
-                let filename = &filenames[0];
-                let path = Path::new(filename);
-                match compile_from_file(path, &mut file_name_chart, debug_mode, compile.inline) {
-                    Ok(mut compiled_program) => {
-                        compiled_program.iter_mut().for_each(|prog| {
-                            prog.file_name_chart.extend(file_name_chart.clone());
-                            prog.to_output(&mut *output, compile.format.as_deref());
-                        });
-                    }
-                    Err(e) => {
-                        println!(
-                            "Compilation error: {}\n{}",
-                            e,
-                            try_display_location(e.location, &file_name_chart, true)
-                        );
-                        return Err(e);
-                    }
-                }
-            } else {
-                let mut compiled_progs = Vec::new();
-                for filename in &filenames {
-                    let path = Path::new(filename);
-                    match compile_from_file(path, &mut file_name_chart, debug_mode, compile.inline)
-                    {
-                        Ok(compiled_program) => {
-                            compiled_program.into_iter().for_each(|prog| {
-                                file_name_chart.extend(prog.file_name_chart.clone());
-                                compiled_progs.push(prog)
-                            });
-                        }
-                        Err(e) => {
-                            println!(
-                                "Compilation error: {}\n{}",
-                                e,
-                                try_display_location(e.location, &file_name_chart, true)
-                            );
-                            return Err(e);
-                        }
-                    }
-                }
-
-                match link(&compiled_progs, test_mode) {
-                    Ok(linked_prog) => {
-                        match postlink_compile(
-                            linked_prog,
-                            file_name_chart.clone(),
-                            test_mode,
-                            debug_mode,
-                        ) {
-                            Ok(completed_program) => {
-                                completed_program
-                                    .to_output(&mut *output, compile.format.as_deref());
-                            }
-                            Err(e) => {
-                                println!(
-                                    "Linking error: {}\n{}",
-                                    e,
-                                    try_display_location(e.location, &file_name_chart, true)
-                                );
-                                return Err(e);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        println!(
-                            "Linking error: {}\n{}",
-                            e,
-                            try_display_location(e.location, &file_name_chart, true)
-                        );
-                        return Err(e);
-                    }
-                }
-            }
-        }
+        Args::Compile(compile) => match do_compile(compile) {
+            Ok(_) => {}
+            Err((err, file_name_chart)) => println!(
+                "{}\n{}",
+                err,
+                try_display_location(err.location, &file_name_chart, true)
+            ),
+        },
 
         Args::Run(run) => {
             let filename = run.input;
             let debug = run.debug;
             let path = Path::new(&filename);
-            let env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-            match run_from_file(path, Vec::new(), env, debug) {
+            match run_from_file(path, Vec::new(), debug) {
                 Ok(logs) => {
                     println!("Logs: {:?}", logs);
                 }
@@ -249,7 +162,7 @@ fn main() -> Result<(), CompileError> {
             profile_gen_from_file(
                 input.as_ref(),
                 Vec::new(),
-                RuntimeEnvironment::new(Uint256::from_usize(1111), None),
+                RuntimeEnvironment::default(),
                 path.mode,
             );
         }
@@ -353,14 +266,29 @@ fn main() -> Result<(), CompileError> {
                 println!("Successfully generated code");
             }
         }
+        Args::SerializeUpgrade(up) => {
+            let the_json = CodeUploader::_new_from_file(Path::new(&up.input))._to_json();
+            print!("{}", the_json.unwrap());
+            print_time = false;
+        }
     }
     let total_time = Instant::now() - start_time;
-    println!(
-        "Finished in {}.{:0>3} seconds.",
-        total_time.as_secs(),
-        total_time.subsec_millis()
-    );
+    if print_time {
+        println!(
+            "Finished in {}.{:0>3} seconds.",
+            total_time.as_secs(),
+            total_time.subsec_millis()
+        );
+    }
 
+    Ok(())
+}
+
+fn do_compile(compile: CompileStruct) -> Result<(), (CompileError, BTreeMap<u64, String>)> {
+    let mut output = get_output(compile.output.clone()).unwrap();
+    compile
+        .invoke()?
+        .to_output(&mut *output, compile.format.as_deref());
     Ok(())
 }
 

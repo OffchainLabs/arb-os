@@ -8,10 +8,13 @@ use crate::evm::abi::{builtin_contract_path, AbiForContract};
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 
+pub static ARBOS_VERSION: u64 = 5;
+
 ///Creates a fixed list of globally accessible constants.
 pub fn init_constant_table() -> HashMap<String, Uint256> {
     let mut ret = HashMap::new();
     for (s, i) in &[
+        ("ArbosVersionNumber", ARBOS_VERSION),
         // addresses of precompiled contracts
         ("Address_ArbSys", 100),
         ("Address_ArbAddressTable", 102),
@@ -156,6 +159,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("L1MessageType_L2FundedByL1", 7),
         ("L1MessageType_rollupProtocolEvent", 8),
         ("L1MessageType_submitRetryableTx", 9),
+        ("L1MessageType_L2ForGasEstimation", 10),
         // L2 message types
         ("L2MessageType_unsignedEOATx", 0),
         ("L2MessageType_unsignedContractTx", 1),
@@ -182,6 +186,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("TxResultCode_formatError", 6),
         ("TxResultCode_cannotDeployAtAddress", 7),
         ("TxResultCode_exceededTxGasLimit", 8),
+        ("TxResultCode_insufficientGasForBaseFee", 9),
         ("TxResultCode_unknownFailure", 255),
         // EVM call types
         ("EVMCallType_call", 0),
@@ -220,13 +225,13 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("PluggableModuleID_rollupTracker", 0),
         ("PluggableModuleID_precompile_0x05", 1),
         // retry buffer
-        ("RetryBuffer_DefaultLifetimeSeconds", 60*60*24*7),
+        ("RetryBuffer_DefaultLifetimeSeconds", 60 * 60 * 24 * 7),
         // gas cost values for re-entrancy protection
         ("EVMWriteL1GasCost", 5000),
         ("EVMNonZeroBalanceCallStipend", 2300),
         ("ArbitrumNonZeroBalanceCallStipend", 20000),
         // misc
-        ("TwoToThe32", 1<<32),
+        ("TwoToThe32", 1 << 32),
         ("SecondsPerBlockNumerator", 2),
         ("SecondsPerBlockDenominator", 1),
         ("DefaultSpeedLimitPerSecond", 100_000_000),
@@ -258,7 +263,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ret.insert(s.to_string(), Uint256::from_string_hex(u).unwrap());
     }
 
-    for builtin in &["ArbRetryableTx", "ArbStatistics"] {
+    for builtin in &["ArbAggregator", "ArbRetryableTx", "ArbStatistics", "ArbOwner"] {
         let fcodes = match func_codes_for_builtin_contract(builtin) {
             Ok(v) => v,
             Err(e) => panic!("Error accessing builtin function {}: {}", builtin, e),
