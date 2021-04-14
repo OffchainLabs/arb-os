@@ -916,7 +916,7 @@ public impure func evmOp_staticcall(
 }
 
 public impure func evmOp_revert(memOffset: uint, memNbytes: uint) {
-    let _ = evmCallStack_returnFromCall(false, memOffset, memNbytes);
+    let _ = evmCallStack_returnFromCall(false, memOffset, memNbytes, None<impure func()>);
 
     evm_runtimePanic(28);
 }
@@ -936,7 +936,7 @@ public impure func evmOp_revert_knownPc(evmPc: uint, memOffset: uint, memNbytes:
 }
 
 public impure func evmOp_return(memOffset: uint, memNbytes: uint) {
-    let _ = evmCallStack_returnFromCall(true, memOffset, memNbytes);
+    let _ = evmCallStack_returnFromCall(true, memOffset, memNbytes, None<impure func()>);
 
     evm_runtimePanic(29);
 }
