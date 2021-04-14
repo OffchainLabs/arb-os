@@ -114,7 +114,7 @@ public impure func inbox_get() -> IncomingRequest {
         };
 
         if (ebMsg.kind == const::L1MessageType_setChainParameters) {
-            if ((ebMsg.sender == address(0)) || (ebMsg.sender == chainParams_getOwner())) {
+            if (ebMsg.sender == address(0)) {
                 chainParams_gotParamsMessage(ebMsg.msgData);
             }   // ignore this message if it didn't come from chain owner
         } else {

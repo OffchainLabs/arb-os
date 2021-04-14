@@ -469,7 +469,7 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
 
     let arbowner = _ArbOwner::_new(&wallet, debug);
 
-    arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
+    arbowner._give_ownership(&mut machine, my_addr, true)?;
 
     arbowner._start_code_upload(&mut machine)?;
 
@@ -543,10 +543,10 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         "L2 tx {}, L1 calldata {}, L2 storage {}, base gas {}, congestion gas {}, total gas {}",
         l2tx, l1calldata, storage, basegas, conggas, totalgas
     );
-    assert_eq!(l2tx, Uint256::from_u64(642483725000000));
-    assert_eq!(l1calldata, Uint256::from_u64(2778308000000));
-    assert_eq!(storage, Uint256::from_u64(301990000000000));
-    assert_eq!(basegas, Uint256::from_u64(15099500));
+    assert_eq!(l2tx, Uint256::from_u64(9929845027500000));
+    assert_eq!(l1calldata, Uint256::from_u64(174207807500));
+    assert_eq!(storage, Uint256::from_u64(302970100000000));
+    assert_eq!(basegas, Uint256::from_u64(15148505));
     assert!(conggas.is_zero());
     assert_eq!(basegas.add(&conggas), totalgas);
 
@@ -555,8 +555,8 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         "L2 tx / ag {}, L1 calldata / ag {}, L2 storage / ag {}",
         l2tx, l1calldata, storage
     );
-    assert_eq!(l2tx, Uint256::from_u64(42550000));
-    assert_eq!(l1calldata, Uint256::from_u64(184000));
+    assert_eq!(l2tx, Uint256::from_u64(655500000));
+    assert_eq!(l1calldata, Uint256::from_u64(11500));
     assert_eq!(storage, Uint256::from_u64(20000000));
 
     let (speed_limit, gas_pool_max, tx_gas_limit) =
@@ -628,7 +628,7 @@ pub fn _evm_test_rate_control(log_to: Option<&Path>, debug: bool) -> Result<(), 
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
     let arbowner = _ArbOwner::_new(&wallet, debug);
 
-    arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
+    arbowner._give_ownership(&mut machine, my_addr, true)?;
 
     let const_table = init_constant_table();
 

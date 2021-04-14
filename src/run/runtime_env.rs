@@ -78,8 +78,9 @@ impl RuntimeEnvironment {
         charging_policy: Option<(Uint256, Uint256, Uint256)>,
         owner: Option<Uint256>,
     ) -> Self {
+        let chain_id = chain_address.trim_to_u64() & 0xffffffffffff; // truncate to 48 bits
         let mut ret = RuntimeEnvironment {
-            chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
+            chain_id,
             chain_address,
             l1_inbox: vec![],
             current_block_num: blocknum,
@@ -95,6 +96,7 @@ impl RuntimeEnvironment {
             num_wallets: 0,
             chain_init_message: RuntimeEnvironment::get_params_bytes(
                 owner,
+                chain_id,
             ),
         };
 
@@ -105,16 +107,20 @@ impl RuntimeEnvironment {
     pub fn send_chain_init_message(&mut self) {
         self.insert_l1_message(
             4,
-            self.chain_address.clone(),
+            Uint256::zero(),
             &self.chain_init_message.clone(),
         );
     }
 
     fn get_params_bytes(
         owner: Option<Uint256>,
+        chain_id: u64,
     ) -> Vec<u8> {
         let mut buf = Vec::new();
-        let params_to_set = vec![("ChainOwmer", owner.clone().unwrap_or(Uint256::zero()))];
+        let params_to_set = vec![
+            ("ChainOwner", owner.clone().unwrap_or(Uint256::zero())),
+            ("ChainID", Uint256::from_u64(chain_id)),
+        ];
         for (name, val) in params_to_set {
             buf.extend(&keccak256(name.as_bytes()));
             buf.extend(val.to_bytes_be());

@@ -48,7 +48,7 @@ type GlobalsBeforeUpgrade = struct {
     inErrorHandler: bool,
     globalIndexedAddressTable: any,
     unreachableMask: uint,
-    globalChainParams: option<any>,
+    globalChainParameters: map<uint,uint>,
     blockhashes: struct {
         latestBlockNum: uint,
         oldHashes: [256]bytes32,
@@ -106,7 +106,7 @@ type GlobalsAfterUpgrade = struct {
     inErrorHandler: bool,
     globalIndexedAddressTable: any,
     unreachableMask: uint,
-    globalChainParams: option<any>,
+    globalChainParameters: map<uint,uint>,
     blockhashes: struct {
         latestBlockNum: uint,
         oldHashes: [256]bytes32,
@@ -117,7 +117,7 @@ type GlobalsAfterUpgrade = struct {
     _jump_table: any,
 }
 
-public impure func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> GlobalsAfterUpgrade {
+public impure func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> (GlobalsAfterUpgrade, uint) {
     let arbStats = input_globals.arbStats;
     let blockhashes = input_globals.blockhashes;
     let evmOpJumpTable = input_globals.evmOpJumpTable;
@@ -126,7 +126,7 @@ public impure func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -
     let globalAccountStore = input_globals.globalAccountStore;
     let globalBlockReceiptData = input_globals.globalBlockReceiptData;
     let globalCallStack = input_globals.globalCallStack;
-    let globalChainParams = input_globals.globalChainParams;
+    let globalChainParameters = input_globals.globalChainParameters;
     let globalCurrentRetryableRequest = input_globals.globalCurrentRetryableRequest;
     let globalCurrentTxRequest = input_globals.globalCurrentTxRequest;
     let globalInbox = input_globals.globalInbox;
@@ -140,7 +140,7 @@ public impure func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -
     let unreachableMask = input_globals.unreachableMask;
     let upgradeInProgress = input_globals.upgradeInProgress;
     let _jump_table = (asm() GlobalsAfterUpgrade { rget })._jump_table;
-    return struct {
+    return (struct {
         moduleManager: moduleManager,
         globalBlockReceiptData: globalBlockReceiptData,
         logsQueuedForEndOfBlock: logsQueuedForEndOfBlock,
@@ -157,13 +157,13 @@ public impure func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -
         inErrorHandler: inErrorHandler,
         globalIndexedAddressTable: globalIndexedAddressTable,
         unreachableMask: unreachableMask,
-        globalChainParams: globalChainParams,
+        globalChainParameters: globalChainParameters,
         blockhashes: blockhashes,
         arbStats: arbStats,
         upgradeInProgress: upgradeInProgress,
         globalAccountStore: globalAccountStore,
         _jump_table: _jump_table,
-    };
+    }, 4);
 }
 
 

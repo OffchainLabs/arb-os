@@ -74,7 +74,7 @@ pub fn _do_rollup_tracker_ops() {
     let owner = Uint256::from_bytes(wallet.address().as_bytes());
     let arbowner = _ArbOwner::_new(&wallet, false);
     arbowner
-        ._give_ownership(&mut machine, owner.clone(), Some(Uint256::zero()))
+        ._give_ownership(&mut machine, owner.clone(), true)
         .unwrap();
 
     let my_addr = Uint256::from_u64(11025);

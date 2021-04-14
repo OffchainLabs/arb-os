@@ -1095,29 +1095,9 @@ impl<'a> _ArbOwner<'a> {
         &self,
         machine: &mut Machine,
         new_owner: Uint256,
-        old_owner: Option<Uint256>,
+        force_owner: bool,
     ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            old_owner.unwrap_or(self.my_address.clone()),
-            "giveOwnership",
-            &[ethabi::Token::Address(new_owner.to_h160())],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(())
-        } else {
-            Err(ethabi::Error::from(format!(
-                "tx failed: {}",
-                receipts[0]._get_return_code_text()
-            )))
-        }
+        self._set_chain_parameter(machine, "ChainOwner", new_owner, force_owner)
     }
 
     pub fn _add_to_reserve_funds(
