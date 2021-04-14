@@ -3,9 +3,9 @@
  */
 
 use crate::compile::DebugInfo;
-use crate::run::upload::CodeUploader;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
+use crate::upload::CodeUploader;
 use ethers_core::utils::keccak256;
 use serde::de::Visitor;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
@@ -891,6 +891,7 @@ pub enum Opcode {
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, Eq, PartialEq, Hash)]
 #[repr(u8)]
 pub enum AVMOpcode {
+    Zero = 0x00,
     Plus = 0x01,
     Mul,
     Minus,
@@ -1155,6 +1156,7 @@ impl AVMOpcode {
             AVMOpcode::ErrPush => "errpush",
             AVMOpcode::Inbox => "inbox",
             AVMOpcode::Panic => "panic",
+            AVMOpcode::Zero => "zero",
             AVMOpcode::Halt => "halt",
             AVMOpcode::InboxPeek => "inboxpeek",
             AVMOpcode::Jump => "jump",
@@ -1188,6 +1190,7 @@ impl AVMOpcode {
 
     pub fn from_number(num: usize) -> Option<Self> {
         match num {
+            0x00 => Some(AVMOpcode::Zero),
             0x01 => Some(AVMOpcode::Plus),
             0x02 => Some(AVMOpcode::Mul),
             0x03 => Some(AVMOpcode::Minus),
@@ -1276,6 +1279,7 @@ impl AVMOpcode {
 
     pub fn to_number(&self) -> u8 {
         match self {
+            AVMOpcode::Zero => 0,
             AVMOpcode::Plus => 0x01,
             AVMOpcode::Mul => 0x02,
             AVMOpcode::Minus => 0x03,
