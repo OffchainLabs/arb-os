@@ -840,7 +840,7 @@ public impure func evmCallStack_returnFromCall(
                                     timestamp: inbox_currentTimestamp()
                                 },
                                 const::TxResultCode_success,
-                                None<ByteArray>,
+                                Some(returnData),
                                 Some(reqAndLogs.evmLogs),
                                 None<GasUsage>,
                                 txFeeStats_zero(),
