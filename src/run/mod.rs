@@ -18,9 +18,7 @@ pub use runtime_env::{
 mod blake2b;
 mod emulator;
 mod ripemd160port;
-pub mod rolluptest;
 mod runtime_env;
-pub mod upload;
 
 pub fn run_from_file(
     path: &Path,

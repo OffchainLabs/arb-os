@@ -5,7 +5,7 @@
 //!Creates a fixed list of globally accessible constants.
 
 use crate::compile::CompileError;
-use crate::evm::abi::{builtin_contract_path, AbiForContract};
+use crate::evm::{builtin_contract_path, AbiForContract};
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -20,7 +20,7 @@ pub struct ConstantsFile {
     contract: Vec<String>,
 }
 
-pub static ARBOS_VERSION: u64 = 3;
+pub static ARBOS_VERSION: u64 = 5;
 
 ///Creates a fixed list of globally accessible constants.
 pub fn init_constant_table(

@@ -23,9 +23,9 @@ COMPILEFLAGS = -c "arb_os/constants.json"
 COMPILEFLAGSNOINLINE = -c "arb_os/constants.json"
 
 
-all: $(ARBOSCONTRACTS) $(TESTFILES) $(TESTCONTRACTS) $(TEMPLATES) $(UPGRADEFILES) arbos arbos-upgrade test
+all: $(ARBOSCONTRACTS) $(TESTFILES) $(TESTCONTRACTS) $(TEMPLATES) $(UPGRADEFILES) arbos upgrade test
 arbos: $(ARBOSDIR)/arbos.mexe
-arbos-upgrade: $(ARBOSDIR)/arbos-upgrade.mexe
+upgrade: $(ARBOSDIR)/upgrade.json
 contracts: $(TESTCONTRACTS) $(ARBOSCONTRACTS)
 
 $(ARBOSDIR)/contractTemplates.mini: $(ARBOSCONTRACTS)
@@ -112,6 +112,9 @@ $(ARBOSDIR)/arbos-upgrade.mexe: $(TESTCONTRACTS) $(ARBOSDIR) $(STDDIR) $(BUILTIN
 	cp $(ARBOSDIR)/bridge_arbos_versions.mini $(ARBOSDIR)/save_bridge_for_debugging.mini
 	cp $(ARBOSDIR)/dummy_version_bridge.mini $(ARBOSDIR)/bridge_arbos_versions.mini
 
+$(ARBOSDIR)/upgrade.json: $(ARBOSDIR)/arbos-upgrade.mexe
+	cargo run -- serialize-upgrade $(ARBOSDIR)/arbos-upgrade.mexe >$(ARBOSDIR)/upgrade.json
+
 $(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
 	$(CARGORUN) compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe $(COMPILEFLAGS) -t
 
@@ -155,5 +158,5 @@ benchmark: $(TEMPLATES) $(ARBOS)
 	$(CARGORUNRELEASE) make-benchmarks
 
 clean:
-	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe $(UPGRADETESTDIR)/*.mexe $(ARBOSDIR)/arbos.mexe $(ARBOSDIR)/arbos-upgrade.mexe minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini
+	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe $(UPGRADETESTDIR)/*.mexe $(ARBOSDIR)/arbos.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/upgrade.json minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini
 	rm -rf contracts/artifacts contracts/cache
