@@ -1982,6 +1982,16 @@ impl Machine {
 					Opcode::AVMOpcode(AVMOpcode::DebugPrint) => {
 						let r1 = self.stack.pop(&self.state)?;
                         println!("debugprint: {}", r1);
+                        match r1 {
+                            Value::Buffer(buf) => {
+                                let mut res = vec![];
+                                for i in 0..32 {
+                                    res.push(buf.read_byte(i))
+                                }
+                                println!("Result {}", hex::encode(res));
+                            },
+                            _ => {},
+                        };
                         println!("{}\n{}", try_display_location(insn.debug_info.location, &self.file_name_chart), self.arb_gas_remaining);
 						self.incr_pc();
 						Ok(true)
@@ -2139,7 +2149,7 @@ impl Machine {
                         let arg = self.stack.pop_usize(&self.state)?;
                         let buf = self.stack.pop_buffer(&self.state)?;
                         let (_, idx) = self.stack.pop_wasm_codepoint(&self.state)?;
-                        println!("Going to run JIT");
+                        // println!("Going to run JIT");
                         let (nbuf, len) = self.wasm_instances[idx].run(buf, arg);
                         self.stack.push(Value::Int(Uint256::from_usize(len)));
                         self.stack.push(Value::Buffer(nbuf));
@@ -2168,7 +2178,7 @@ impl Machine {
                                 labels.push(Value::CodePoint(code_pt))
                             }
                         }
-                        println!("Labels are here {:?}", labels);
+                        // println!("Labels are here {:?}", labels);
                         let mut labels_rev = vec![];
                         for a in labels.iter().rev() {
                             labels_rev.push(a.clone())

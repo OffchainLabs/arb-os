@@ -204,6 +204,11 @@ fn main() -> Result<(), CompileError> {
             // wasm::run_jit(&buffer, &param);
             let a = wasm::JitWasm::new(&buffer);
             let buf = Buffer::new(param.to_vec());
+            /*
+            for i in 0..1000000 {
+                let (buf, len) = a.run(buf.clone(), param.len());
+            }
+            */
             let (buf, len) = a.run(buf, param.len());
             let mut res = vec![];
             for i in 0..len {

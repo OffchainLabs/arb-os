@@ -344,6 +344,14 @@ UnsignedInteger: Uint256 = {
 
 BufferLiteral: Vec<u8> = {
 	r"\\x[0-9a-fA-F]*" => hex::decode((&<>[2..]).to_string()).expect("Bad buffer literal"),
+	"#include" <s:r#""[^"]*""#> => {
+		use std::fs::File;
+		use std::io::Read;
+		let mut file = File::open(&s[1..s.len()-1]).unwrap();
+        let mut buffer = Vec::<u8>::new();
+        file.read_to_end(&mut buffer).unwrap();
+		buffer
+	},
 };
 
 ConstVal: Uint256 = {

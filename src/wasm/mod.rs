@@ -1540,6 +1540,10 @@ fn table_to_tuple2(tab: &[Value], prefix: usize, shift: usize, level: usize) -> 
     return Value::new_tuple(v);
 }
 
+pub fn make_table(tab: &[Value]) -> Value {
+    table_to_tuple2(tab, 0, 0, LEVEL - 1)
+}
+
 fn value_replace_labels(v: Value, label_map: &HashMap<Label, Value>) -> Result<Value, Label> {
     match v {
         Value::Int(_) => Ok(v),
@@ -1608,10 +1612,6 @@ pub fn get_inst(inst: &Instruction) -> u8 {
         Opcode::AVMOpcode(op) => op as u8,
         _ => 0,
     }
-}
-
-pub fn make_table(tab: &[Value]) -> Value {
-    table_to_tuple2(tab, 0, 0, LEVEL - 1)
 }
 
 pub fn resolve_labels(arr: Vec<Instruction>) -> (Vec<Instruction>, Value) {
@@ -2067,6 +2067,9 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
     init
 }
 
+use std::fs::File;
+use std::io::Write;
+
 pub fn load(buffer: &[u8], param: &[u8]) -> Vec<Instruction> {
     let init = process_wasm(buffer);
     let mut op_buf = vec![];
@@ -2091,6 +2094,13 @@ pub fn load(buffer: &[u8], param: &[u8]) -> Vec<Instruction> {
     let (res, tab) = resolve_labels(init);
     // println!("Table {}", tab);
     let res = clear_labels(res);
+    // println!("Code {}", );
+    let str = serde_json::to_string(&res).unwrap();
+    let mut file = File::create("foo.json").unwrap();
+    file.write_all(&str.as_bytes());
+    let mut file2 = File::create("labels.json").unwrap();
+    file2.write_all(serde_json::to_string(&has_label_buf).unwrap().as_bytes());
+
     let mut a = vec![];
     a.push(push_value(int_from_usize(param.len())));
     a.push(push_value(Value::new_buffer(param.to_vec())));
