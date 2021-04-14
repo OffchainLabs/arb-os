@@ -1996,8 +1996,7 @@ fn evm_bad_receipt_revert_test() {
 }
 
 fn _evm_bad_receipt_revert_test_impl() {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     let my_addr = Uint256::from_u64(1025);

@@ -247,7 +247,8 @@ public impure func initEvmCallStack(
         globalCurrentRetryableRequest = None<IncomingRequest>;
 
         let (startTxResult, acctStore, _) = xif(request.maxGas < const::Charging_MinArbGasForContractTx) {
-            (const::TxResultCode_belowMinimumTxGas, getGlobalAccountStore(), ())
+            let gaccts = getGlobalAccountStore();
+            (const::TxResultCode_belowMinimumTxGas, gaccts, gaccts, )
         } else {
             gasAccounting_startTxCharges(
             	request.maxGas, 
@@ -468,7 +469,7 @@ public impure func initEvmCallStackForConstructor(
         acctStore = uas;
 
         let (startTxResult, uAcctStoreAfterInc, uAcctStore) = xif(request.maxGas < const::Charging_MinArbGasForContractTx) {
-            (const::TxResultCode_belowMinimumTxGas, acctStoreAfterIncrement, Some(acctStore)
+            (const::TxResultCode_belowMinimumTxGas, acctStoreAfterIncrement, acctStore)
         } else {
             gasAccounting_startTxCharges(
                 request.maxGas, 
