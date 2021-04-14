@@ -845,6 +845,7 @@ public impure func evmCallStack_returnFromCall(
                                 None<GasUsage>,
                                 txFeeStats_zero(),
                             );
+                            returnData = bytearray_new(0);   // outer tx should have no returndata
                             globalCurrentRetryableRequest = None<IncomingRequestAndLogs>;
                         }
 
@@ -929,9 +930,9 @@ public impure func evmCallStack_returnFromCall(
     };
 }
 
-public impure func evmCallStack_callRetryableTxAndReturn(rtx: RetryableTx) -> bool {
+public impure func evmCallStack_callRetryableTxAndReturn(rtx: RetryableTx) -> (bool, ByteArray) {
     let ret = false;
-    if let Some(topFrame) = globalCallStack {
+    return xif let Some(topFrame) = globalCallStack {
         // Save parts of the callframe, then overwrite them before making the call,
         //     in order to impersonate the original caller.
         let savedRunningAs = topFrame.runningAs;
@@ -959,7 +960,7 @@ public impure func evmCallStack_callRetryableTxAndReturn(rtx: RetryableTx) -> bo
             false,    // don't charge for callvalue, because we already took it when rtx was created
         );
 
-        ret = xif let Some(newTopFrame) = globalCallStack {
+        xif let Some(newTopFrame) = globalCallStack {
             // save evm logs to emit in inner tx's receipt
             if let Some(retryableReq) = globalCurrentRetryableRequest {
                 globalCurrentRetryableRequest = Some(
@@ -975,12 +976,13 @@ public impure func evmCallStack_callRetryableTxAndReturn(rtx: RetryableTx) -> bo
             };
             newTopFrame = evmCallFrame_setRunningAsAddress(newTopFrame, savedRunningAs);
             globalCallStack = Some(newTopFrame);
-            retCode
+            (retCode, xif let Some(retInfo) = newTopFrame.returnInfo { retInfo.data } else { bytearray_new(0) })
         } else {
-            false
-        };
-    }
-    return ret;
+            (false, bytearray_new(0))
+        }
+    } else {
+        (false, bytearray_new(0))
+    };
 }
 
 func ethTransferOrGrant(

@@ -82,11 +82,16 @@ impure func arbRetryable_redeem(topFrame: EvmCallFrame, calldata: ByteArray) {  
     }
 
     let txId = bytearray_get256(calldata, 4);
-    if (redeemRetryableTxInTx(txId)) {
+    let (success, returnData) = redeemRetryableTxInTx(txId);
+    if (success) {
         arbRetryable_emitRedeemed(topFrame, txId);
-        evmOp_return(0, 0);
+        if (evmCallStack_setTopFrameMemory(returnData)) {
+            evmOp_return(0, bytearray_size(returnData));
+        } else {
+            evmOp_revert_knownPc(12, 0, 0);
+        }
     } else {
-        evmOp_revert_knownPc(12, 0, 0);
+        evmOp_revert_knownPc(13, 0, 0);
     }
 }
 
