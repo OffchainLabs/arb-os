@@ -214,7 +214,7 @@ impl RuntimeEnvironment {
         msg.extend(Uint256::from_usize(calldata.len()).to_bytes_be());
         msg.extend(calldata);
 
-        let submit_req_id = self.insert_l1_message(9u8, sender, &msg);
+        let submit_req_id = self.insert_l1_message(9u8, sender, &msg, None, None);
         let mut buf = submit_req_id.to_bytes_be();
         let mut buf2 = buf.clone();
         buf.extend(&[0u8; 32]);
@@ -1475,25 +1475,6 @@ pub fn replay_from_testlog_file(
             Ok(success)
         }
         Err(e) => panic!("json parsing failed: {}", e),
-    }
-}
-
-#[test]
-fn logfile_replay_tests() {
-    for entry in std::fs::read_dir(Path::new("./replayTests")).unwrap() {
-        let path = entry.unwrap().path();
-        let name = path.file_name().unwrap();
-        assert_eq!(
-            replay_from_testlog_file(
-                &("./replayTests/".to_owned() + name.to_str().unwrap()),
-                false,
-                false,
-                ProfilerMode::Never,
-                None,
-            )
-            .unwrap(),
-            true
-        );
     }
 }
 

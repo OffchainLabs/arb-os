@@ -1541,19 +1541,19 @@ pub fn _insert_create_node(
     buf.extend(height_l1.to_bytes_be());
     buf.extend(height_l1.add(deadline_l1_delta).to_bytes_be());
     buf.extend(asserter.to_bytes_be());
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None, None);
 }
 
 pub fn _insert_confirm_node(rt_env: &mut RuntimeEnvironment, height_l2: &Uint256) {
     let mut buf = vec![1u8];
     buf.extend(height_l2.to_bytes_be());
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None, None);
 }
 
 pub fn _insert_reject_node(rt_env: &mut RuntimeEnvironment, height_l2: &Uint256) {
     let mut buf = vec![2u8];
     buf.extend(height_l2.to_bytes_be());
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None, None);
 }
 
 pub fn _insert_new_stake(
@@ -1570,18 +1570,18 @@ pub fn _insert_new_stake(
             .unwrap_or(rt_env.current_block_num.clone())
             .to_bytes_be(),
     );
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None, None);
 }
 
 pub fn _insert_claim_node(rt_env: &mut RuntimeEnvironment, height_l2: &Uint256, claimer: &Uint256) {
     let mut buf = vec![4u8];
     buf.extend(height_l2.to_bytes_be());
     buf.extend(claimer.to_bytes_be());
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None, None);
 }
 
 pub fn _insert_rollup_debug(rt_env: &mut RuntimeEnvironment) {
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &[255u8]);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &[255u8], None, None);
 }
 
 #[test]
