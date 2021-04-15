@@ -1,141 +1,162 @@
-
+CARGORUN = cargo run --
+CARGORUNRELEASE = cargo run --release --
+ARBOSDIR = arb_os
 BUILTINDIR = builtin
 STDDIR = stdlib
-
-test: all
-	cargo test --release
-
-testlogs: all
-	rm -rf testlogs
-	mkdir testlogs
-	cargo run --release maketestlogs >/dev/null
-
-evmdebug: all
-	cargo run evmdebug
-
-TESTEXES = $(BUILTINDIR)/kvstest.mexe $(BUILTINDIR)/cuckookvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
-BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao $(BUILTINDIR)/cuckookvs.mao
-STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/bytestream.mao $(STDDIR)/stack.mao
-STDLIB = $(STDLIBMAOS)
-
-all: $(TESTEXES) arbos
-
-$(BUILTINDIR)/kvstest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/kvstest.mini
-	cargo run compile $(BUILTINDIR)/kvstest.mini -o $(BUILTINDIR)/kvstest.mexe
-
-$(BUILTINDIR)/cuckookvstest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/cuckookvstest.mini
-	cargo run compile $(BUILTINDIR)/cuckookvstest.mini $(BUILTINDIR)/cuckookvs.mao -o $(BUILTINDIR)/cuckookvstest.mexe
-
-$(STDDIR)/queuetest.mexe: $(BUILTINMAOS) $(STDDIR)/queuetest.mini $(STDLIB)
-	cargo run compile $(STDDIR)/queuetest.mini $(STDLIB) -o $(STDDIR)/queuetest.mexe
-
-$(BUILTINDIR)/arraytest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/arraytest.mini
-	cargo run compile $(BUILTINDIR)/arraytest.mini -o $(BUILTINDIR)/arraytest.mexe
-
-$(BUILTINDIR)/globaltest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/globaltest.mini
-	cargo run compile $(BUILTINDIR)/globaltest.mini -o $(BUILTINDIR)/globaltest.mexe
-
-$(STDDIR)/priorityqtest.mexe: $(BUILTINMAOS) $(STDDIR)/priorityqtest.mini $(STDLIB)
-	cargo run compile $(STDDIR)/priorityqtest.mini $(STDLIB) -o $(STDDIR)/priorityqtest.mexe
-
-$(STDDIR)/bytearraytest.mexe: $(BUILTINMAOS) $(STDDIR)/bytearraytest.mini $(STDLIB)
-	cargo run compile $(STDDIR)/bytearraytest.mini $(STDLIB) -o $(STDDIR)/bytearraytest.mexe
-
-minitests/codeloadtest.mexe: minitests/codeloadtest.mini
-	cargo run compile minitests/codeloadtest.mini -o minitests/codeloadtest.mexe
-
-$(STDDIR)/keccaktest.mexe: $(BUILTINMAOS) $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mao $(STDDIR)/bytearray.mao
-	cargo run compile $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mao $(STDDIR)/bytearray.mao -o $(STDDIR)/keccaktest.mexe
-
-$(STDDIR)/priorityq.mao: $(BUILTINMAOS) $(STDDIR)/priorityq.mini
-	cargo run compile $(STDDIR)/priorityq.mini -c -o $(STDDIR)/priorityq.mao
-
-$(STDDIR)/queue.mao: $(BUILTINMAOS) $(STDDIR)/queue.mini
-	cargo run compile $(STDDIR)/queue.mini -c -o $(STDDIR)/queue.mao
-
-$(STDDIR)/bytearray.mao: $(BUILTINMAOS) $(STDDIR)/bytearray.mini
-	cargo run compile $(STDDIR)/bytearray.mini -c -o $(STDDIR)/bytearray.mao
-
-$(STDDIR)/bytestream.mao: $(BUILTINMAOS) $(STDDIR)/bytestream.mini
-	cargo run compile $(STDDIR)/bytestream.mini -c -o $(STDDIR)/bytestream.mao
-
-$(STDDIR)/random.mao: $(STDDIR)/random.mini
-	cargo run compile $(STDDIR)/random.mini -c -o $(STDDIR)/random.mao
-
-$(STDDIR)/stack.mao: $(STDDIR)/stack.mini
-	cargo run compile $(STDDIR)/stack.mini -c -o $(STDDIR)/stack.mao
-
-$(STDDIR)/keccak.mao: $(STDDIR)/keccak.mini		
-	cargo run compile $(STDDIR)/keccak.mini -c -o $(STDDIR)/keccak.mao
-
-$(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
-	cargo run compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe
-
-$(BUILTINDIR)/array.mao: $(BUILTINDIR)/array.mini
-	cargo run compile $(BUILTINDIR)/array.mini -c -o $(BUILTINDIR)/array.mao
-
-$(BUILTINDIR)/kvs.mao: $(BUILTINDIR)/kvs.mini
-	cargo run compile $(BUILTINDIR)/kvs.mini -c -o $(BUILTINDIR)/kvs.mao
-
-$(BUILTINDIR)/cuckookvs.mao: $(BUILTINDIR)/cuckookvs.mini
-	cargo run compile $(BUILTINDIR)/cuckookvs.mini -c -o $(BUILTINDIR)/cuckookvs.mao
-
-ARBOSDIR = arb_os
-ARBOSAOS = $(ARBOSDIR)/main.mao $(ARBOSDIR)/accounts.mao $(ARBOSDIR)/messages.mao $(ARBOSDIR)/inbox.mao $(ARBOSDIR)/evmCallStack.mao $(ARBOSDIR)/evmOps.mao $(ARBOSDIR)/codeSegment.mao $(ARBOSDIR)/evmlogs.mao $(ARBOSDIR)/errorHandler.mao $(ARBOSDIR)/gasAccounting.mao $(ARBOSDIR)/contractTemplates.mao $(ARBOSDIR)/tokens.mao
+ARTIFACTDIR = contracts/artifacts/arbos
+CONTRACTDIR = contracts/arbos
+TCSRCDIR = $(CONTRACTDIR)/test
+TCBUILDDIR = $(ARTIFACTDIR)/test
+UPGRADETESTDIR = upgradetests
+ACSRCDIR = $(CONTRACTDIR)/builtin
+ACBUILDDIR = $(ARTIFACTDIR)/builtin
 ARBOS = $(ARBOSDIR)/arbos.mexe
 
-arbos: $(ARBOS)
+TEMPLATES = $(ARBOSDIR)/contractTemplates.mini
+TESTFILES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/biguinttest.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe $(STDDIR)/sha256test.mexe $(STDDIR)/ripemd160test.mexe minitests/codeloadtest.mexe $(STDDIR)/fixedpointtest.mexe $(STDDIR)/blstest.mexe
+TESTCONTRACTSPURE = $(TCBUILDDIR)/Add.sol/Add.json $(TCBUILDDIR)/Fibonacci.sol/Fibonacci.json $(TCBUILDDIR)/PaymentChannel.sol/PaymentChannel.json $(TCBUILDDIR)/Underfunded.sol/Underfunded.json $(TCBUILDDIR)/ReverterFactory.sol/ReverterFactory.json $(TCBUILDDIR)/Callback.sol/Callback.json
+TESTCONTRACTS = $(ACBUILDDIR)/ArbSys.sol/ArbSys.json $(TESTCONTRACTSPURE)
+UPGRADEFILES = $(UPGRADETESTDIR)/regcopy_old.mexe $(UPGRADETESTDIR)/regcopy_new.mexe $(UPGRADETESTDIR)/upgrade1_old.mexe $(UPGRADETESTDIR)/upgrade1_new.mexe $(UPGRADETESTDIR)/upgrade2_new.mexe
+ARBOSCONTRACTS = $(ACBUILDDIR)/ArbAddressTable.sol/ArbAddressTable.json $(ACBUILDDIR)/ArbBLS.sol/ArbBLS.json $(ACBUILDDIR)/ArbFunctionTable.sol/ArbFunctionTable.json $(ACBUILDDIR)/ArbInfo.sol/ArbInfo.json $(ACBUILDDIR)/ArbOwner.sol/ArbOwner.json $(ACBUILDDIR)/ArbSys.sol/ArbSys.json $(ACBUILDDIR)/ArbosTest.sol/ArbosTest.json $(ACBUILDDIR)/ArbRetryable.sol/ArbRetryable.json
 
-$(ARBOSDIR)/accounts.mao: $(ARBOSDIR)/accounts.mini
-	cargo run compile $(ARBOSDIR)/accounts.mini -c -o $(ARBOSDIR)/accounts.mao
+COMPILEFLAGS =
+COMPILEFLAGSNOINLINE =
 
-$(ARBOSDIR)/messages.mao: $(ARBOSDIR)/messages.mini
-	cargo run compile $(ARBOSDIR)/messages.mini -c -o $(ARBOSDIR)/messages.mao
 
-$(ARBOSDIR)/main.mao: $(ARBOSDIR)/main.mini
-	cargo run compile $(ARBOSDIR)/main.mini -c -o $(ARBOSDIR)/main.mao
+all: $(ARBOSCONTRACTS) $(TESTFILES) $(TESTCONTRACTS) $(TEMPLATES) $(UPGRADEFILES) arbos upgrade test
+arbos: $(ARBOSDIR)/arbos.mexe
+upgrade: $(ARBOSDIR)/upgrade.json
+contracts: $(TESTCONTRACTS) $(ARBOSCONTRACTS)
 
-$(ARBOSDIR)/inbox.mao: $(ARBOSDIR)/inbox.mini
-	cargo run compile $(ARBOSDIR)/inbox.mini -c -o $(ARBOSDIR)/inbox.mao
+$(ARBOSDIR)/contractTemplates.mini: $(ARBOSCONTRACTS)
+	$(CARGORUN) make-templates
 
-$(ARBOSDIR)/evmCallStack.mao: $(ARBOSDIR)/evmCallStack.mini
-	cargo run compile $(ARBOSDIR)/evmCallStack.mini -c -o $(ARBOSDIR)/evmCallStack.mao
+$(BUILTINDIR)/kvstest.mexe: $(BUILTINDIR)/kvstest.mini
+	$(CARGORUN) compile $(BUILTINDIR)/kvstest.mini -o $(BUILTINDIR)/kvstest.mexe $(COMPILEFLAGS) -t
 
-$(ARBOSDIR)/evmOps.mao: $(ARBOSDIR)/evmOps.mini
-	cargo run compile $(ARBOSDIR)/evmOps.mini -c -o $(ARBOSDIR)/evmOps.mao
+$(STDDIR)/queuetest.mexe: $(STDDIR)/queuetest.mini
+	$(CARGORUN) compile $(STDDIR)/queuetest.mini -o $(STDDIR)/queuetest.mexe $(COMPILEFLAGS) -t
 
-$(ARBOSDIR)/codeSegment.mao: $(ARBOSDIR)/codeSegment.mini
-	cargo run compile $(ARBOSDIR)/codeSegment.mini -c -o $(ARBOSDIR)/codeSegment.mao
+$(BUILTINDIR)/arraytest.mexe: $(BUILTINDIR)/arraytest.mini
+	$(CARGORUN) compile $(BUILTINDIR)/arraytest.mini -o $(BUILTINDIR)/arraytest.mexe $(COMPILEFLAGS) -t
 
-$(ARBOSDIR)/evmlogs.mao: $(ARBOSDIR)/evmlogs.mini
-	cargo run compile $(ARBOSDIR)/evmlogs.mini -c -o $(ARBOSDIR)/evmlogs.mao
+$(BUILTINDIR)/globaltest.mexe: $(BUILTINDIR)/globaltest.mini
+	$(CARGORUN) compile $(BUILTINDIR)/globaltest.mini -o $(BUILTINDIR)/globaltest.mexe $(COMPILEFLAGS) -t
 
-$(ARBOSDIR)/errorHandler.mao: $(ARBOSDIR)/errorHandler.mini
-	cargo run compile $(ARBOSDIR)/errorHandler.mini -c -o $(ARBOSDIR)/errorHandler.mao
+$(STDDIR)/priorityqtest.mexe: $(STDDIR)/priorityqtest.mini
+	$(CARGORUN) compile $(STDDIR)/priorityqtest.mini -o $(STDDIR)/priorityqtest.mexe $(COMPILEFLAGS) -t
 
-$(ARBOSDIR)/gasAccounting.mao: $(ARBOSDIR)/gasAccounting.mini
-	cargo run compile $(ARBOSDIR)/gasAccounting.mini -c -o $(ARBOSDIR)/gasAccounting.mao
+$(STDDIR)/storageMapTest.mexe: $(STDDIR)/storageMapTest.mini
+	$(CARGORUN) compile $(STDDIR)/storageMapTest.mini -o $(STDDIR)/storageMapTest.mexe $(COMPILEFLAGS) -t
 
-$(ARBOSDIR)/contractTemplates.mao: $(ARBOSDIR)/contractTemplates.mini
-	cargo run compile $(ARBOSDIR)/contractTemplates.mini -c -o $(ARBOSDIR)/contractTemplates.mao
+$(STDDIR)/bytearraytest.mexe: $(STDDIR)/bytearraytest.mini
+	$(CARGORUN) compile $(STDDIR)/bytearraytest.mini -o $(STDDIR)/bytearraytest.mexe $(COMPILEFLAGS) -t
 
-$(ARBOSDIR)/contractTemplates.mini: src/contracttemplates.rs
-	cargo run maketemplates
+$(STDDIR)/blstest.mexe: $(BUILTINMAOS) $(STDDIR)/blstest.mini $(STDDIR)
+	$(CARGORUN) compile $(STDDIR)/blstest.mini $(STDLIB) -o $(STDDIR)/blstest.mexe $(COMPILEFLAGS) -t
 
-$(ARBOSDIR)/tokens.mao: $(ARBOSDIR)/tokens.mini
-	cargo run compile $(ARBOSDIR)/tokens.mini -c -o $(ARBOSDIR)/tokens.mao
+$(STDDIR)/fixedpointtest.mexe: $(STDDIR)/fixedpointtest.mini $(STDDIR)/fixedpoint.mini
+	$(CARGORUN) compile $(STDDIR)/fixedpointtest.mini -o $(STDDIR)/fixedpointtest.mexe $(COMPILEFLAGS) -t
 
-$(ARBOS): $(ARBOSAOS) $(STDLIB) $(BUILTINMAOS)
-	cargo run compile $(ARBOSAOS) $(STDLIB) -o $(ARBOS)
+$(STDDIR)/bytearraybench.mexe: $(BUILTINMAOS) $(STDDIR)/bytearraybench.mini $(STDLIB)
+	$(CARGORUN) compile $(STDDIR)/bytearraybench.mini $(STDLIB) -o $(STDDIR)/bytearraybench.mexe $(COMPILEFLAGS) -t
 
-arbos.pretty: $(ARBOSAOS) $(STDLIB) $(BUILTINMAOS)
-	cargo run compile $(ARBOSAOS) $(STDLIB) -f pretty >arbos.pretty
+$(STDDIR)/bufferopcodetest.mexe: $(BUILTINMAOS) $(STDDIR)/bufferopcodetest.mini
+	$(CARGORUN) compile $(STDDIR)/bufferopcodetest.mini -o $(STDDIR)/bufferopcodetest.mexe $(COMPILEFLAGS) -t
 
-run: arbos
-	cargo run run $(ARBOS)
+minitests/codeloadtest.mexe: minitests/codeloadtest.mini
+	$(CARGORUN) compile minitests/codeloadtest.mini -o minitests/codeloadtest.mexe $(COMPILEFLAGS) -t
 
-compiler: 
-	cargo build
+$(STDDIR)/keccaktest.mexe: $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mini $(STDDIR)/bytearray.mini $(STDDIR)/expandingIntArray.mini
+	$(CARGORUN) compile $(STDDIR)/keccaktest.mini -o $(STDDIR)/keccaktest.mexe $(COMPILEFLAGS) -t
 
-clean: 
-	rm -f $(BUILTINMAOS) $(TESTEXES) $(STDLIBMAOS) $(ARBOSAOS) $(ARBOSDIR)/*.mexe $(ARBOSDIR)/contractTemplates.mini
+$(STDDIR)/biguinttest.mexe: $(STDDIR)/biguinttest.mini $(STDDIR)/biguint.mini
+	$(CARGORUN) compile $(STDDIR)/biguinttest.mini -o $(STDDIR)/biguinttest.mexe $(COMPILEFLAGS) -t
+
+$(STDDIR)/sha256test.mexe: $(STDDIR)/sha256test.mini $(STDDIR)/sha256.mini
+	$(CARGORUN) compile $(STDDIR)/sha256test.mini -o $(STDDIR)/sha256test.mexe $(COMPILEFLAGS) -t
+
+$(STDDIR)/ripemd160test.mexe: $(STDDIR)/ripemd160test.mini $(STDDIR)/ripemd160.mini
+	$(CARGORUN) compile $(STDDIR)/ripemd160test.mini -o $(STDDIR)/ripemd160test.mexe $(COMPILEFLAGS) -t
+
+$(STDDIR)/rlptest.mexe: $(BUILTINMAOS) $(STDDIR)/rlptest.mini
+	$(CARGORUN) compile $(STDDIR)/rlptest.mini -o $(STDDIR)/rlptest.mexe $(COMPILEFLAGS) -t
+
+$(UPGRADETESTDIR)/regcopy_old.mexe: $(UPGRADETESTDIR)/regcopy_old.mini
+	$(CARGORUN) compile $(UPGRADETESTDIR)/regcopy_old.mini -o $(UPGRADETESTDIR)/regcopy_old.mexe $(COMPILEFLAGS) -t
+
+$(UPGRADETESTDIR)/regcopy_new.mexe: $(UPGRADETESTDIR)/regcopy_new.mini
+	$(CARGORUN) compile $(UPGRADETESTDIR)/regcopy_new.mini -o $(UPGRADETESTDIR)/regcopy_new.mexe $(COMPILEFLAGS) -t
+
+$(UPGRADETESTDIR)/upgrade1_old.mexe: $(UPGRADETESTDIR)/upgrade1_old.mini $(STDDIR)/avmcodebuilder.mini
+	$(CARGORUN) compile $(UPGRADETESTDIR)/upgrade1_old.mini -o $(UPGRADETESTDIR)/upgrade1_old.mexe $(COMPILEFLAGS) -t
+
+$(UPGRADETESTDIR)/upgrade1_new.mexe: $(UPGRADETESTDIR)/upgrade1_new.mini
+	$(CARGORUN) compile $(UPGRADETESTDIR)/upgrade1_new.mini -o $(UPGRADETESTDIR)/upgrade1_new.mexe $(COMPILEFLAGSNOINLINE)
+
+$(UPGRADETESTDIR)/upgrade2_old.mexe: $(UPGRADETESTDIR)/upgrade2_old.mini $(STDDIR)/avmcodebuilder.mini
+	$(CARGORUN) compile $(UPGRADETESTDIR)/upgrade2_old.mini -o $(UPGRADETESTDIR)/upgrade2_old.mexe $(COMPILEFLAGS) -t
+
+$(UPGRADETESTDIR)/upgrade2_new.mexe: $(UPGRADETESTDIR)/upgrade2_old.mexe $(UPGRADETESTDIR)/upgrade2_new.mini $(UPGRADETESTDIR)/impl2.mini $(UPGRADETESTDIR)/upgrade2.toml
+	$(CARGORUN) compile $(UPGRADETESTDIR)/upgrade2_new.mini -o $(UPGRADETESTDIR)/upgrade2_new.mexe $(COMPILEFLAGSNOINLINE)
+	$(CARGORUN) gen-upgrade-code $(UPGRADETESTDIR)/upgrade2_old.mexe $(UPGRADETESTDIR)/upgrade2_new.mexe $(UPGRADETESTDIR)/bridge2.mini impl2 $(UPGRADETESTDIR)/upgrade2.toml
+	$(CARGORUN) compile $(UPGRADETESTDIR)/upgrade2_new.mini -o $(UPGRADETESTDIR)/upgrade2_new.mexe $(COMPILEFLAGSNOINLINE)
+
+$(ARBOSDIR)/arbos-upgrade.mexe: $(TESTCONTRACTS) $(ARBOSDIR) $(STDDIR) $(BUILTINDIR) $(TEMPLATES) src/compile/miniconstants.rs
+	cp $(ARBOSDIR)/dummy_version_bridge.mini $(ARBOSDIR)/bridge_arbos_versions.mini
+	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe"
+	$(CARGORUN) gen-upgrade-code $(ARBOSDIR)/arbos_before.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/bridge_arbos_versions.mini customize_arbos_bridge_versions $(ARBOSDIR)/upgrade.toml
+	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe"
+	$(CARGORUN) gen-upgrade-code $(ARBOSDIR)/arbos_before.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/bridge_arbos_versions.mini customize_arbos_bridge_versions $(ARBOSDIR)/upgrade.toml
+	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe"
+	cp $(ARBOSDIR)/bridge_arbos_versions.mini $(ARBOSDIR)/save_bridge_for_debugging.mini
+	cp $(ARBOSDIR)/dummy_version_bridge.mini $(ARBOSDIR)/bridge_arbos_versions.mini
+
+$(ARBOSDIR)/upgrade.json: $(ARBOSDIR)/arbos-upgrade.mexe
+	cargo run -- serialize-upgrade $(ARBOSDIR)/arbos-upgrade.mexe >$(ARBOSDIR)/upgrade.json
+
+$(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
+	$(CARGORUN) compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe $(COMPILEFLAGS) -t
+
+$(ARBOSDIR)/arbos.mexe: $(TESTCONTRACTS) $(ARBOSDIR) $(STDDIR) $(BUILTINDIR) $(TEMPLATES) src/compile/miniconstants.rs
+	$(CARGORUN) compile "arb_os" -o "arb_os/arbos.mexe" $(COMPILEFLAGS)
+
+upgrade: $(ARBOSDIR)/upgrade.mini
+
+$(ARBOSDIR)/upgrade.mini: upgradeConfig.toml
+	$(CARGORUN) gen-upgrade-code arb_os/arbos.mexe arb_os/arbos.mexe arb_os/upgrade.mini upgradeGlobals upgradeConfig.toml
+
+$(TESTCONTRACTSPURE): $(TCSRCDIR)
+	(cd contracts; yarn build)
+
+$(ARBOSCONTRACTS): $(ACSRCDIR)
+	(cd contracts; yarn build)
+
+run:
+	$(CARGORUNRELEASE) run "arb_os/arbos.mexe"
+
+test:
+	cargo test --release 
+
+evmtest: $(ARBOS)
+	$(CARGORUNRELEASE) evm-tests
+
+evmtestlogs: $(ARBOS)
+	rm -rf evm-test-logs
+	mkdir evm-test-logs
+	$(CARGORUNRELEASE) evm-tests --savelogs
+
+testlogs: $(TEMPLATES) $(ARBOS)
+	rm -rf testlogs
+	mkdir testlogs
+	$(CARGORUNRELEASE) make-test-logs >/dev/null
+
+evmdebug: all
+	$(CARGORUNRELEASE) evm-debug
+
+benchmark: $(TEMPLATES) $(ARBOS)
+	$(CARGORUNRELEASE) make-benchmarks
+
+clean:
+	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe $(UPGRADETESTDIR)/*.mexe $(ARBOSDIR)/arbos.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/upgrade.json minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini
+	rm -rf contracts/artifacts contracts/cache

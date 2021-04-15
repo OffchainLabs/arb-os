@@ -1,0 +1,78 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_toSizeAndBuffer;
+
+use std::keccak::keccak256;
+
+use std::queue::Queue;
+use std::queue::queue_new;
+use std::queue::queue_size;
+use std::queue::queue_isEmpty;
+use std::queue::queue_put;
+use std::queue::queue_getOrDie;
+
+
+public func merkleize(data: []ByteArray) -> (any, bytes32) {
+    let length = len(data);
+    let layer = newarray<(any, bytes32)>(length);
+    let i = 0;
+    while(i < length) {
+        let (size, buf) = bytearray_toSizeAndBuffer(data[i]);
+        layer = layer with { [i] = ((size, buf, ()), hash(keccak256(data[i], 0, bytearray_size(data[i])))) };
+        i = i+1;
+    }
+
+    while(length > 1) {
+        let newLayer = newarray<(any, bytes32)>((length+1)/2);
+        let i = 0;
+        while(i < (length+1)/2) {
+            if (2*i+1 == length) {
+                newLayer = newLayer with { [i] = layer[2*i] };
+            } else {
+                newLayer = newLayer with { [i] = ((layer[2*i].0, layer[2*i+1].0), hash(layer[2*i].1, layer[2*i+1].1)) };
+            }
+            i = i+1;
+        }
+        layer = newLayer;
+        length = len(layer);
+    }
+
+    return layer[0];
+}
+
+public func merkleizeFromQueue(queue: Queue) -> (any, bytes32) {
+    let num = queue_size(queue);
+    let arr = newarray<ByteArray>(num);
+    let i = 0;
+    while (i < num) {
+        let (uq, item) = queue_getOrDie(queue);
+        queue = uq;
+        arr = arr with { [i] = unsafecast<ByteArray>(item) };
+        i = i + 1;
+    }
+    return merkleize(arr);
+}
+
+type MerkleTreeBuilder = struct {
+    contents: Queue,
+}
+
+public func merkleTreeBuilder_new() -> MerkleTreeBuilder {
+    return struct { contents: queue_new() };
+}
+
+public func merkleTreeBuilder_isEmpty(mtb: MerkleTreeBuilder) -> bool {
+    return queue_isEmpty(mtb.contents);
+}
+
+public func merkleTreeBuilder_add(mtb: MerkleTreeBuilder, item: ByteArray) -> MerkleTreeBuilder {
+    return mtb with { contents: queue_put(mtb.contents, item) };
+}
+
+public func merkleTreeBuilder_finish(mtb: MerkleTreeBuilder) -> (any, bytes32) {
+    return merkleizeFromQueue(mtb.contents);
+}

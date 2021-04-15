@@ -1,121 +1,169 @@
 //
-// Copyright 2020, Offchain Labs, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type AccountStore;
-import type MarshalledBytes;
-import type ByteArray;
-import type ByteStream;
-import type MessageFromL1;
 
-import impure func errorHandler_init();
-import impure func initKeccakConstants();
-import impure func gasAccounting_init();
-import impure func inbox_init();
-import impure func accountStore_init();
-import impure func getGlobalAccountStore() -> AccountStore;
-import impure func setGlobalAccountStore(acctStore: AccountStore);
-import func accountStore_createAccountFromEvmCode(
-    store: AccountStore,
-    newAddr: address,
-    code: ByteArray,
-    evmJumpTable: map<uint, func()>,
-    initCodePt: func(),
-    storageMap: map<uint, uint>
-) -> option<AccountStore>;
-import impure func translateEvmCodeSegment(
-    bs: ByteStream
-) -> option<(func(), map<uint, func()>)>;
-import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
-import func bytestream_new(ba: ByteArray) -> ByteStream;
-import func getErc20code() -> MarshalledBytes;
-import func getErc721code() -> MarshalledBytes;
-import func getErc20address() -> address;
-import func getErc721address() -> address;
-import func getErc20storage() -> map<uint, uint>;
-import func getErc721storage() -> map<uint, uint>;
+use accounts::AccountStore;
+use accounts::accountStore_init;
+use accounts::getGlobalAccountStore;
+use accounts::setGlobalAccountStore;
+use accounts::accountStore_createAccountFromEvmCode;
+use arbstatistics::arbStatistics_init;
+use accounts::accountStore_upgradeContractFromEvmCode;
+use arbstatistics::arbStatistics_init;
+use arbsys::arbosVersion;
+use blockhash::blockhash_init;
+use chainParameters::chainParams_init;
+use chainParameters::chainParams_haveDoneInit;
+use codeSegment::codeSegment_init;
+use codeSegment::translateEvmCodeSegment;
+use contractTemplates::getArbInfoCode;
+use contractTemplates::getArbInfoAddress;
+use contractTemplates::getArbInfoStorage;
+use decompression::decompression_init;
+use errorHandler::errorHandler_init;
+use evmCallStack::evmCallStack_init;
+use evmOps::evmOps_init;
+use evmOps::evmOp_return;
+use evmlogs::EvmLogs;
+use gasAccounting::GasUsage;
+use gasAccounting::gasAccounting_init;
+use inbox::inbox_init;
+use inbox::inbox_get;
+use messages::TxRequestData;
+use output::output_init;
+use output::txReceipts_init;
+use pluggables::pluggables_init;
+use precompiles::precompiles_init;
+use rollupTracker::rollupTracker_init;
 
-import impure func inbox_get() -> MessageFromL1;
-import impure func getNextMsgFromCongestionAuction() -> (
-    MessageFromL1,  // a message
-    bool,           // was it approved for execution
-    uint,           // maxGas it's allowed to use
-    uint,           // gas price it will pay
-) ;
-import impure func handleMessageFromL1(
-    msg: MessageFromL1,
-    maxGas: uint,
-    gasPrice: uint
-) -> option<()>;
+use std::bytearray::MarshalledBytes;
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytestream::ByteStream;
+use std::bytestream::bytestream_new;
+use std::storageMap::StorageMap;
+
+use decompression::decompression_init;
+use gasAccounting::getNextRequestFromCongestionAuction;
+use gasAccounting::txFeeStats_zero;
+use messages::handleL2Request; // return None if message format error; Some(()) if other error; if no error, never return
+use output::emitTxReceipt;
+use arbsys::arbsys_txcall;
+use inbox::IncomingRequest;
+use evmCallStack::evmCallStack_makeEmpty;
+
+use bridge_arbos_versions::GlobalsBeforeUpgrade;
+use bridge_arbos_versions::remapGlobalsForUpgrade;
 
 
-impure func main() {
-    errorHandler_init();
-    initKeccakConstants();
-    gasAccounting_init();
-    inbox_init();
-    accountStore_init();
-    if (initializeContractTemplates() == None<()>) {
-        panic;   // don't try to run without contract templates
+impure func main(oldGlobals: GlobalsBeforeUpgrade) {
+    if (unsafecast<any>(oldGlobals) != ()) {
+        // this is an upgrade; we're inheriting the state of a previous ArbOS instance
+
+        let (newGlobals, oldArbosVersion) = remapGlobalsForUpgrade(oldGlobals);
+
+        asm(newGlobals,) { rset };
+
+        // now re-do the initializations that set up pointers into the ArbOS code
+        errorHandler_init();
+        evmOps_init();
+        if (initializePreinstalls(true) == None<()>) {
+            panic;   // don't try to run without preinstalls and precompiles
+        }
+    } else {
+        // this is a clean start, not an upgrade
+        errorHandler_init();
+        arbStatistics_init();
+
+        pluggables_init();
+        codeSegment_init();
+        chainParams_init();
+        output_init();
+        decompression_init();
+        inbox_init();
+        gasAccounting_init();
+        evmCallStack_init();
+        evmOps_init();
+        blockhash_init();
+        inbox_init();
+        accountStore_init();
+        txReceipts_init();
+        rollupTracker_init();
+        if (initializePreinstalls(false) == None<()>) {
+            panic;   // don't try to run without preinstalls and precompiles
+        }
     }
-    
+
+    // initialize any customizations here
+
     mainRunLoop();
 }
 
 public impure func mainRunLoop() {
     loop {
-        let (msg, approved, maxGas, gasPrice) = getNextMsgFromCongestionAuction();
-        if ( ! approved) {
-            panic;  // not yet implemented
-        } elseif (None<()> == handleMessageFromL1(msg, maxGas, gasPrice)) {
-            panic;  // not yet implemented
+        let (resultCode, request) = getNextRequestFromCongestionAuction();
+        if (resultCode == const::TxResultCode_success) {
+            if (handleL2Request(
+                bytestream_new(request.incomingRequest.msgData),
+                request
+            ) == None<()>) {
+                // reject for message format error
+                emitTxReceipt(
+                    request.incomingRequest,
+                    const::TxResultCode_formatError,
+                    None<ByteArray>,
+                    None<EvmLogs>,
+                    None<GasUsage>,
+                    request.feeStats,
+                );
+            }
+        } else {
+            // reject for error
+            emitTxReceipt(
+                request.incomingRequest,
+                resultCode,
+                None<ByteArray>,
+                None<EvmLogs>,
+                None<GasUsage>,
+                request.feeStats,
+            );
         }
     }
-    panic;  // should never be reached
 }
 
-impure func initializeContractTemplates() -> option<()> {
+impure func initializePreinstalls(isUpgrade: bool) -> option<()> {
     let acctStore = getGlobalAccountStore();
 
-    let code = bytearray_unmarshalBytes(getErc20code());
-    let (initCodePt, evmJumpTable) = translateEvmCodeSegment(
-        bytestream_new(code)
+    let code = bytearray_unmarshalBytes(getArbInfoCode())?;
+    let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
+        bytestream_new(code),
+        false
     )?;
-    acctStore = accountStore_createAccountFromEvmCode(
-        acctStore,
-        getErc20address(),
-        code,
-        evmJumpTable,
-        initCodePt,
-        getErc20storage()
-    )?;
+    acctStore = xif (isUpgrade) {
+        accountStore_upgradeContractFromEvmCode(
+            acctStore,
+            getArbInfoAddress(),
+            code,
+            evmJumpTable,
+            initCodePt,
+        )
+    } else {
+        accountStore_createAccountFromEvmCode(
+            acctStore,
+            getArbInfoAddress(),
+            code,
+            evmJumpTable,
+            initCodePt,
+            getArbInfoStorage()
+        )?
+    };
 
-    let code = bytearray_unmarshalBytes(getErc721code());
-    let (initCodePt, evmJumpTable) = translateEvmCodeSegment(
-        bytestream_new(code)
-    )?;
-    acctStore = accountStore_createAccountFromEvmCode(
-        acctStore,
-        getErc721address(),
-        code,
-        evmJumpTable,
-        initCodePt,
-        getErc721storage()
-    )?;
+    // set up precompiled contracts
+    acctStore = precompiles_init(acctStore, isUpgrade)?;
 
     setGlobalAccountStore(acctStore);
+
     return Some(());
 }
-

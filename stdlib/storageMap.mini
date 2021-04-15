@@ -1,0 +1,240 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+// This is an efficient implementation of an int->int key-value store,
+//       with an implied "default value" of 0 for uninitialized keys.
+// It's designed to be suitable for tracking the storage of an EVM contract.
+//
+// It's built as an 8-ary trie, using hash(key) as the index for trie-ing.
+// Each "slot" in the trie is either:
+// *  0, which means an empty subtree
+// *  a 2-tuple (key, value), which means that pair is the only item in the subtree
+// *  an 8-tuple, with each entry referencing a subtree
+// To find a key's path down the tree, compute hash(key). Then the low-order 3 bits
+//     gives the branch to take at top-level, the next 3 bits give the branch to take at
+//     the second level, and so on.
+// Because of the zero default, setting a slot to 0 is treated as a deletion.
+
+// There's a lot of unsafecast and assembly code in here, because of the decision to
+//     have multiple node types that can live in the same slots. This was done because
+//     it's more space-efficient than alternative approaches, which is important when the
+//     structure gets large--which it will do for some EVM contracts.
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_set256;
+
+use std::bytestream::bytestream_new;
+use std::bytestream::bytestream_atEof;
+use std::bytestream::bytestream_get256;
+
+
+type StorageMap = struct {
+    tree: StorageMapNode,
+    size: uint,
+}
+
+type StorageMapNode = [8]any
+
+type StorageMapCell = struct {
+    key: uint,
+    value: uint,
+}
+
+
+public func storageMap_new() -> StorageMap {
+    return struct {
+        tree: unsafecast<StorageMapNode>(0),
+        size: 0,
+    };
+}
+
+public func storageMap_size(kvs: StorageMap) -> uint {
+    return kvs.size;
+}
+
+public func storageMap_get(kvs: StorageMap, key: uint) -> uint {
+    let s = kvs.tree;
+    let reductionFactor = 1;
+    return xloop {
+        if (s == unsafecast<StorageMapNode>(0)) {
+            // empty subtree
+            return 0;
+        } elseif (asm(s,) uint { length } == 2) {
+            // singleton item
+            if (key == unsafecast<StorageMapCell>(s).key) {
+                return unsafecast<StorageMapCell>(s).value;
+            } else {
+                return 0;
+            }
+        } else {
+            // still at an internal node of the tree; walk downward and try again
+            s = unsafecast<StorageMapNode>(s[(key/reductionFactor) & 0x7]);
+            reductionFactor = reductionFactor * 8;
+        }
+    };
+}
+
+// An Unwinder remembers how to reassemble the tree as we traverse back up it.
+// During a set operation, we walk down the tree to the leaf, building an Unwinder as we go.
+// Then we use the Unwinder to guide our traversal back up the tree and to remind us of the
+//      writes we need to do on that upward traversal.
+type Unwinder = struct {
+    kvs: [8]any,
+    index: uint,
+    next: option<Unwinder>,
+}
+
+public func storageMap_set(s: StorageMap, key: uint, value: uint) -> StorageMap {
+    let (utree, maybeUnwinder, delta) = storageMap_set2(s.tree, key, value);
+    return xloop {
+        if let Some(unwinder) = maybeUnwinder {
+            utree = unwinder.kvs with {
+                [unwinder.index] = utree
+            };
+            maybeUnwinder = unwinder.next;
+        } else {
+            if (delta != int(0)) {
+                s = s with { size: uint(int(s.size) + delta) };
+            }
+            return s with { tree: utree };
+        }
+    };
+}
+
+public func storageMap_set2(s: StorageMapNode, key: uint, value: uint) -> (StorageMapNode, option<Unwinder>, int) {
+    let reductionFactor = 1;
+    let unwinder = None<Unwinder>;
+    return xloop {
+        if (s == unsafecast<StorageMapNode>(0)) {
+            if (value == 0) {
+                // writing zero to an empty slot; do nothing
+                return (s, unwinder, int(0));
+            } else {
+                // writing non-zero to empty slot; create a singleton item
+                return (
+                    unsafecast<StorageMapNode>(
+                        struct {
+                            key: key,
+                            value: value
+                        }
+                    ),
+                    unwinder,
+                    int(1)
+                );
+            }
+        } elseif (asm(s,) uint { length } == 2) {
+            let kid = unsafecast<StorageMapCell>(s);
+            if (kid.key == key) {
+                // overwriting an existing item with same key
+                if (value == 0) {
+                    // delete existing item
+                    return (
+                        unsafecast<StorageMapNode>(0),
+                        unwinder,
+                        -1s,
+                    );
+                } else {
+                    // update existing item with new value
+                    return (
+                        unsafecast<StorageMapNode>(kid with { value: value }),
+                        unwinder,
+                        int(0)
+                    );
+                }
+            } else {
+                // already found a singleton here
+                // create new internal node and push singleton into it
+                // then loop back and try again
+                s = unsafecast<StorageMapNode>(newfixedarray(8, 0)) with {
+                    [(kid.key/reductionFactor) & 0x7] = kid
+                };
+            }
+        } else {
+            // traversing an internal node
+            // update the unwinder so we know what to do on the way back up
+            // then move one level down the tree
+            let slot = (key / reductionFactor) & 0x7;
+            unwinder = Some(struct {
+                kvs: s,
+                index: slot,
+                next: unwinder,
+            });
+            s = unsafecast<StorageMapNode>(s[slot]);
+            reductionFactor = reductionFactor * 8;
+        }
+    };
+}
+
+public func storageMap_delete(s: StorageMap, key: uint) -> StorageMap {
+    return storageMap_set(s, key, 0);
+}
+
+// apply a closure to all non-zero items in the storageMap, in sequence
+// for each item (k,v) such that v!=0 we'll do:  state <- closure(k, v, state)
+// this will return the state at the end
+// order of traversal is deterministic but weird and subject to change,
+//       so callers are advised not to rely on the ordering
+public func storageMap_forall(
+    s: StorageMap,
+    closure: func(uint, uint, any) -> any,
+    state: any
+) -> any {
+    return storageMap_forall_tree(s.tree, closure, state);
+}
+
+public func storageMap_forall_tree(
+    t: StorageMapNode,
+    closure: func(uint, uint, any) -> any,
+    state: any
+) -> any {
+    return xif (t == unsafecast<StorageMapNode>(0)) {
+        state
+    } elseif (asm(t,) uint { length } == 2) {
+        closure(
+            unsafecast<StorageMapCell>(t).key,
+            unsafecast<StorageMapCell>(t).value,
+            state
+        )
+   } else {
+        let i = 0;
+        while (i < 8) {
+            state = storageMap_forall_tree(unsafecast<StorageMapNode>(t[i]), closure, state);
+            i = i+1;
+        }
+        state
+   };
+}
+
+public func storageMap_serialize(s: StorageMap) -> ByteArray {
+    return unsafecast<ByteArray>(storageMap_forall(s, smSerHelper, bytearray_new(0)));
+}
+
+public func storageMap_deserialize(ba: ByteArray) -> option<StorageMap> {
+    let stream = bytestream_new(ba);
+    let ret = storageMap_new();
+    while (! bytestream_atEof(stream)) {
+        let (ustr, k) = bytestream_get256(stream)?;
+        stream = ustr;
+        let (ustr, v) = bytestream_get256(stream)?;
+        stream = ustr;
+        ret = storageMap_set(ret, k, v);
+    }
+    return Some(ret);
+}
+
+func smSerHelper(index: uint, value: uint, state: any) -> any {
+    let ba = unsafecast<ByteArray>(state);
+    let sz = bytearray_size(ba);
+    return bytearray_set256(
+        bytearray_set256(
+            ba,
+            sz,
+            index,
+        ),
+        sz+32,
+        value,
+    );
+}

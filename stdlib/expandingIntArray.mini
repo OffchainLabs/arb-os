@@ -1,0 +1,194 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::bytearray::OpClosureFunc;
+use std::bytearray::opClosure;
+
+type ExpandingIntArray = struct {
+    size: uint,
+    chunk: uint,
+    contents: [8]any,
+}
+
+public func expandingIntArray_new() -> ExpandingIntArray {
+    return struct {
+        size: 8,
+        chunk: 1,
+        contents: unsafecast<[8]any>((0,0,0,0,0,0,0,0)),
+    };
+}
+
+public func expandingIntArray_size(arr: ExpandingIntArray) -> uint {
+    return arr.size;
+}
+
+public func expandingIntArray_get(arr: ExpandingIntArray, index: uint) -> uint {
+    if (index >= arr.size) {
+        return 0;
+    }
+    let chunk = arr.chunk;
+    let tree = arr.contents;
+    while (chunk > 1) {
+        tree = unsafecast<[8]any>(tree[index / chunk]);
+        index = index % chunk;
+        chunk = chunk / 8;
+    }
+    return unsafecast<uint>(tree[index]);
+}
+
+public func expandingIntArray_getConsecutive(arr: ExpandingIntArray, index: uint) -> (uint, uint) {
+    if (index+1 >= arr.size) {
+        return (expandingIntArray_get(arr, index), 0);
+    }
+    let tree = arr.contents;
+    let chunk = arr.chunk;
+
+    while (chunk > 1) {
+        let offset = index % chunk;
+        if ((offset+1) == chunk) {
+            let loSlot = index / chunk;
+            return (
+                ear_get_2(unsafecast<[8]any>(tree[loSlot]), chunk/8, chunk-1),
+                ear_get_2(unsafecast<[8]any>(tree[loSlot+1]), chunk/8, 0)
+            );
+        }
+        tree = unsafecast<[8]any>(tree[index/chunk]);
+        index = offset;
+        chunk = chunk / 8;
+    }
+
+    return (unsafecast<uint>(tree[index]), unsafecast<uint>(tree[index+1]));
+}
+
+func ear_get_2(tree: [8]any, chunk: uint, index: uint) -> uint {
+    while (chunk > 1) {
+        tree = unsafecast<[8]any>(tree[index/chunk]);
+        index = index % chunk;
+        chunk = chunk / 8;
+    }
+    return unsafecast<uint>(tree[index]);
+}
+
+type Unwinder = struct {
+    tree: [8]any,
+    slot: uint,
+    next: option<Unwinder>,
+}
+
+public func expandingIntArray_set(arr: ExpandingIntArray, index: uint, value: uint) -> ExpandingIntArray {
+    return expandingIntArray_setN(arr, 1, index, value);
+}
+
+public func expandingIntArray_setN(
+    arr: ExpandingIntArray,
+    inChunk: uint,   // must be a power of 8
+    index: uint,     // must be a multiple of inChunk
+    value: any
+) -> ExpandingIntArray {
+    while ((index+inChunk) > arr.size) {
+        arr = expandingIntArray_grow(arr);
+    }
+
+    if ( (inChunk == arr.size) && (index == 0) ) {
+        return arr with { contents: unsafecast<[8]any>(value) };
+    }
+
+    let chunk = arr.chunk;
+    let tree = arr.contents;
+    let unwinder = None<Unwinder>;
+    return xloop {
+        if (chunk <= inChunk) {
+            tree = tree with { [index/chunk] = value };
+            loop {
+                if let Some(unw) = unwinder {
+                    tree = unw.tree with { [unw.slot] = tree };
+                    unwinder = unw.next;
+                } else {
+                    return arr with { contents: tree };
+                }
+            }
+        }
+        let slot = index/chunk;
+        unwinder = Some(struct {
+            tree: tree,
+            slot: slot,
+            next: unwinder,
+        });
+        tree = unsafecast<[8]any>(tree[slot]);
+        index = index % chunk;
+        chunk = chunk / 8;
+    };
+}
+
+public func expandingIntArray_op(
+    arr: ExpandingIntArray,
+    index: uint,
+    closure: opClosure
+) -> (ExpandingIntArray, any) {
+    while (index >= arr.size) {
+        arr = expandingIntArray_grow(arr);
+    }
+    let tree = arr.contents;
+    let chunk = arr.chunk;
+
+    let (tree, retVal) = ear_op2(arr.contents, arr.chunk, index, closure);
+    return (
+        arr with { contents: tree },
+        retVal,
+    );
+}
+
+func ear_op2(
+    tree: [8]any,
+    chunk: uint,
+    index: uint,
+    closure: opClosure
+) -> ([8]any, any) {
+    return xif (chunk == 1) {
+        let (newSlotContents, retVal) = closure.f(closure.val, unsafecast<uint>(tree[index]));
+        (
+            tree with { [index] = newSlotContents },
+            retVal,
+        )
+    } else {
+        let slot = index / chunk;
+        let (newSlotContents, retVal) = ear_op2(
+            unsafecast<[8]any>(tree[slot]),
+            chunk/8,
+            index%chunk,
+            closure
+        );
+        (
+            tree with { [slot] = newSlotContents },
+            retVal,
+        )
+    };
+}
+
+public func expandingIntArray_opConsecutive(
+    arr: ExpandingIntArray,
+    index: uint,
+    loClosure: opClosure,
+    hiClosure: opClosure
+) -> (ExpandingIntArray, any, any) {
+    // TODO: make this more efficient
+    let (arr1, val1) = expandingIntArray_op(arr, index, loClosure);
+    let (arr2, val2) = expandingIntArray_op(arr1, index+1, hiClosure);
+    return (arr2, val1, val2);
+}
+
+func expandingIntArray_grow(arr: ExpandingIntArray) -> ExpandingIntArray {
+    let newContents = unsafecast<[8]any>((0,0,0,0,0,0,0,0));
+    let newChunk = 1;
+    while (newChunk <= arr.chunk) {
+        newContents = unsafecast<[8]any>((newContents, newContents, newContents, newContents, newContents, newContents, newContents, newContents));
+        newChunk = newChunk * 8;
+    }
+    newContents = newContents with { [0] = arr.contents };
+    return struct {
+        size: 8*newChunk,
+        chunk: newChunk,
+        contents: newContents,
+    };
+}

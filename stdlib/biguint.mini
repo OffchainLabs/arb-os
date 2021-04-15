@@ -1,0 +1,601 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_set256;
+
+use std::random::RandomGenerator;
+use std::random::random_next;
+
+
+func modDigit(x: uint) -> uint {
+    return x & 0xffffffffffffffffffff;
+}
+
+func divDigit(x: uint) -> uint {
+    return asm(80, x) uint { shr };
+}
+
+func mulDigit(x: uint) -> uint {
+    return asm(80, x) uint { shl };
+}
+
+func realSize(x: []uint) -> uint {
+    let reducedSize = len(x);
+    while( (reducedSize > 1) && (x[reducedSize-1] == 0) ) {
+        reducedSize = reducedSize-1;
+    }
+    return reducedSize;
+}
+
+func shrinkToFit(x: []uint) -> []uint {
+    let reducedSize = realSize(x);
+    return xif (reducedSize < len(x)) {
+        let ret = newarray<uint>(reducedSize);
+        while(reducedSize > 0) {
+            reducedSize = reducedSize-1;
+            ret = ret with { [reducedSize] = x[reducedSize] };
+        }
+        ret
+    } else {
+        x
+    };
+}
+
+func shiftPowerOfDigit(x: []uint, n: uint) -> []uint {
+    let ret = newarray<uint>(len(x) + n);
+    let i = len(x);
+    while(i > 0) {
+        i = i-1;
+        ret = ret with { [i+n] = x[i] };
+    }
+    return ret;
+}
+
+public func biguint_zero() -> []uint {
+    return newarray<uint>(1) with { [0] = 0 };
+}
+
+public func biguint_one() -> []uint {
+    return newarray<uint>(1) with { [0] = 1 };
+}
+
+public func biguint_fromUint(x: uint) -> []uint {
+    let ret = newarray<uint>(4);  // assume this will be big enough
+    let i = 0;
+    while(x > 0) {
+        ret = ret with { [i] = modDigit(x) };
+        x = divDigit(x);
+        i = i+1;
+    }
+    return ret;
+}
+
+public func biguint_fromBytes(ba: ByteArray) -> []uint {
+    let nbytes = bytearray_size(ba);
+    let nwords = (nbytes+9) / 10;
+    let ret = newarray<uint>(nwords);
+
+    let w = 0;
+    while(w < nwords) {
+        let acc = 0;
+        let bytesInThisWord = nbytes - 10*w;
+        if (bytesInThisWord > 10) {    bytesInThisWord = 10;    }
+        let i = 0;
+        while(i < bytesInThisWord) {
+            acc = acc * 256 + bytearray_getByte(ba, nbytes - 10*w - (bytesInThisWord-i));
+            i = i+1;
+        }
+        ret = ret with { [w] = acc };
+        w = w+1;
+    }
+
+    return ret;
+}
+
+public func biguint_toBytes(x: []uint) -> ByteArray {
+    let nbytes = biguint_sizeBytes(x);
+    let ndigits = (nbytes+9)/10;
+    let ret = bytearray_new(0);
+
+    let digit = ndigits;
+    while (digit > 0) {
+        digit = digit-1;
+        ret = bytearray_set256(ret, 10*((ndigits-1)-digit), asm(256-80, x[digit]) uint { shl });
+    }
+
+    if ((nbytes%10) == 0) {
+        ret = bytearray_extract(ret, 0, nbytes);
+    } else {
+        ret = bytearray_extract(ret, 10-(nbytes%10), nbytes);
+    }
+    return ret;
+}
+
+public func biguint_sizeBytes(x: []uint) -> uint {
+    let lenDigits = realSize(x);
+    if (lenDigits == 0) {    return 0;    }
+    let topWord = x[lenDigits-1];
+    let lenBytes = 0;
+
+    if (topWord >= 0x10000000000) {
+        lenBytes = lenBytes+5;
+        topWord = topWord / 0x10000000000;
+    }
+    if (topWord >= 0x10000) {
+        lenBytes = lenBytes+2;
+        topWord = topWord / 0x10000;
+    }
+    if (topWord >= 0x10000) {
+        lenBytes = lenBytes+2;
+        topWord = topWord / 0x10000;
+    }
+    if(topWord >= 0x100) {
+        lenBytes = lenBytes+1;
+        topWord = topWord / 0x100;
+    }
+    if(topWord > 0) {
+        lenBytes = lenBytes+1;
+    }
+    return lenBytes + 10 * (lenDigits-1);
+}
+
+public func biguint_sizeBits(x: []uint) -> uint {
+    let bytesSize = biguint_sizeBytes(x);
+    if (bytesSize == 0) {    return 0;    }
+
+    let sz = 8 * (bytesSize - 1);
+    let topByte = (asm(8*(bytesSize%10), x[((bytesSize+9)/10)-1]) uint { shr }) & 0xff;
+    if (topByte >= 16) {
+        sz = sz + 4;
+        topByte = topByte / 16;
+    }
+    if (topByte >= 4) {
+        sz = sz + 2;
+        topByte = topByte / 4;
+    }
+    if (topByte >= 2) {
+        sz = sz + 1;
+        topByte = topByte / 2;
+    }
+    if (topByte == 1) {
+        sz = sz + 1;
+    }
+    return sz;
+}
+
+public func biguint_random(nwords: uint, gen: RandomGenerator) -> ([]uint, RandomGenerator) {
+    let ret = newarray<uint>(nwords);
+    while(nwords > 0) {
+        nwords = nwords - 1;
+        let (ugen, val) = random_next(gen);
+        gen = ugen;
+        ret = ret with { [nwords] = modDigit(uint(val)) };
+    }
+    return (ret, gen);
+}
+
+public func biguint_marshal(x: []uint) -> any {
+    let sz = realSize(x);
+    let ret = unsafecast<any>(());
+    let i = 0;
+    while(i < sz) {
+        ret = (x[i], ret);
+        i = i+1;
+    }
+    return ret;
+}
+
+public func biguint_isZero(x: []uint) -> bool {
+    let i = len(x);
+    while(i > 0) {
+        i = i-1;
+        if (x[i] != 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+public func biguint_compare(x: []uint, y: []uint) -> int {
+    let xSize = len(x);
+    let ySize = len(y);
+    let i = xSize;
+    if (ySize > xSize) {  i = ySize;  }
+    while(i > 0) {
+        i = i-1;
+        if (i >= xSize) {
+            if (y[i] != 0) {    return -int(1);    }
+        } elseif (i >= ySize) {
+            if (x[i] != 0) {    return int(1);    }
+        } else {
+            let xi = x[i];
+            let yi = y[i];
+            if (xi > yi) {    return int(1);    }
+            elseif(xi < yi) {    return -int(1);    }
+        }
+    }
+    return int(0);
+}
+
+public func biguint_equal(x: []uint, y: []uint) -> bool {
+    return biguint_compare(x, y) == int(0);
+}
+
+public func biguint_getBit(x: []uint, bnum: uint) -> uint {
+    if (bnum >= 80*len(x)) {    return 0;    }
+
+    return (asm(bnum%80, x[bnum/80]) uint { shr }) & 1;
+}
+
+public func biguint_shiftLeft(x: []uint, n: uint) -> []uint {
+    let numBytesBefore = biguint_sizeBytes(x);
+    let numBytesAfter = numBytesBefore + (n+7)/8;
+    let numWordsBefore = (numBytesBefore + 9) / 10;
+    let numWordsAfter = (numBytesAfter + 9) / 10;
+    let ret = newarray<uint>(numWordsAfter);
+
+    let wordsToShift = n/80;
+    let bitsToShift = n%80;
+
+    let i = 0;
+    let carry = 0;
+    while(i < numWordsBefore) {
+        carry = carry + asm(bitsToShift, x[i]) uint { shl };
+        ret = ret with { [i+wordsToShift] = modDigit(carry) };
+        carry = divDigit(carry);
+        i = i+1;
+    }
+    if (carry > 0) {
+        ret = ret with { [numWordsBefore+wordsToShift] = carry };
+    }
+    return ret;
+}
+
+public func biguint_shiftRight(x: []uint, n: uint) -> []uint {
+    let numWordsBefore = realSize(x);
+    let digitsToShift = n/80;
+    if (n%80 != 0)  {
+        x = biguint_shiftLeft(x, 80-(n%80));
+        numWordsBefore = realSize(x);
+        digitsToShift = 1+digitsToShift;
+    }
+    if (digitsToShift >= numWordsBefore)  {    return biguint_zero();    }
+    let numWordsAfter = numWordsBefore-digitsToShift;
+    let ret = newarray<uint>(numWordsAfter);
+    let i = 0;
+    while(i < numWordsAfter) {
+        ret = ret with { [i] = x[i+digitsToShift] };
+        i = i+1;
+    }
+    return ret;
+}
+
+public func biguint_add(x: []uint, y: []uint) -> []uint {
+    let xSize = realSize(x);
+    let ySize = realSize(y);
+
+    // ensure that xSize >= ySize, swapping if needed
+    if (xSize < ySize) {
+        let ts = xSize;   xSize = ySize;   ySize = ts;
+        let t = x;   x = y;   y = t;
+    }
+
+    let ret = newarray<uint>(xSize+1);
+
+    let carry = 0;
+    let i = 0;
+    while(i < xSize) {
+        carry = x[i] + carry;
+        if (i < ySize) {
+            carry = carry + y[i];
+        }
+        ret = ret with { [i] = modDigit(carry) };
+        carry = divDigit(carry);
+        i = i + 1;
+    }
+
+    return ret with { [xSize] = carry };
+}
+
+public func biguint_subtract(x: []uint, y: []uint) -> option<[]uint> {
+    let comp = biguint_compare(x, y);
+    return xif (comp < int(0)) {
+        None<[]uint>
+    } elseif(comp == int(0)) {
+        Some(biguint_zero())
+    } else {
+        let resSize = realSize(x);
+        let ySize = realSize(y);
+        let ret = newarray<uint>(resSize);
+        let i = 0;
+        let carry = int(0);
+        while(i < resSize) {
+            let t = int(x[i]) + carry;
+            if (i < ySize) {
+                t = t - int(y[i]);
+            }
+            if(t >= int(0)) {
+                ret = ret with { [i] = uint(t) };
+                carry = int(0);
+            } else {
+                ret = ret with { [i] = uint(t)+mulDigit(1) };
+                carry = -int(1);
+            }
+            i = i+1;
+        }
+        Some(ret)
+    };
+}
+
+public func biguint_mul(x: []uint, y: []uint) -> []uint {
+    let n = realSize(x)-1;
+    let t = realSize(y)-1;
+
+    let ret = newarray<uint>(n+t+2);
+
+    let i = 0;
+    while(i <= t) {
+        let carry = 0;
+        let j = 0;
+        let uv = 0;
+        while(j <= n) {
+            uv = ret[i+j] + x[j]*y[i] + carry;
+            carry = divDigit(uv);
+            ret = ret with { [i+j] = modDigit(uv) };
+            j = j+1;
+        }
+        ret = ret with { [i+n+1] = carry };
+        i = i+1;
+    }
+
+    return ret;
+}
+
+public func biguint_shortMul(x: []uint, y: uint) -> []uint {
+    let xSize = realSize(x);
+    let ret = newarray<uint>(xSize+1);
+    let carry = 0;
+    let i = 0;
+    while(i < xSize) {
+        carry = x[i] * y + carry;
+        ret = ret with { [i] = modDigit(carry) };
+        carry = divDigit(carry);
+        i = i+1;
+    }
+    ret = ret with { [xSize] = carry };
+    return ret;
+}
+
+public func biguint_square(x: []uint) -> []uint {
+    // based on Algorithm 14.16, page 597, Handbook of Applied Cryptography, http://cacr.uwaterloo.ca/hac/about/chap14.pdf
+    let t = realSize(x);
+    let ret = newarray<uint>(2*t);
+
+    let i = 0;
+    while(i < t) {
+        let xi = x[i];
+        let uv = ret[2*i] + xi*xi;
+        ret = ret with { [2*i] = modDigit(uv) };
+        let c = divDigit(uv);
+        let j = i+1;
+        while(j < t) {
+            uv = ret[i+j] + 2*x[j]*xi + c;
+            ret = ret with { [i+j] = modDigit(uv) };
+            c = divDigit(uv);
+            j = j+1;
+        }
+        ret = ret with { [i+t] = c };
+        i = i+1;
+    }
+
+    return ret;
+}
+
+public func biguint_divmod(x: []uint, y: []uint) -> option<([]uint, []uint)> {
+    // based on Algorithm 14.20, page 598, Handbook of Applied Cryptography, http://cacr.uwaterloo.ca/hac/about/chap14.pdf
+    if (biguint_isZero(y)) {
+        return None;
+    } elseif (biguint_compare(x, y) < int(0)) {
+        return Some((biguint_zero(), x));
+    } elseif (realSize(y) == 1) {
+        let (quot, rem) = biguint_shortDivMod(x, y[0])?;
+        return Some((quot, newarray<uint>(1) with { [0] = rem }));
+    }
+
+    let z = y[realSize(y)-1];
+    let shiftBits = 0;
+    while(z < 0x80000000000000000000) {
+        z = z+z;
+        shiftBits = shiftBits+1;
+    }
+    x = biguint_shiftLeft(x, shiftBits);
+    y = biguint_shiftLeft(y, shiftBits);
+
+    let n = realSize(x)-1;
+    let t = realSize(y)-1;
+    let sizeDiff = n-t;
+    let q = newarray<uint>(sizeDiff+1);
+
+    let ybnt = shiftPowerOfDigit(y, sizeDiff);
+    while(biguint_compare(x, ybnt) >= int(0)) {
+        q = q with { [sizeDiff] = 1 + q[sizeDiff] };
+        if let Some(diff) = biguint_subtract(x, ybnt) {
+            x = diff;
+        } else {
+            panic;
+        }
+    }
+
+    let i = n;
+    while(i >= t+1) {
+        if (x[i] == y[t]) {
+            q = q with { [i-t-1] = mulDigit(1)-1 };
+        } else {
+            q = q with { [i-t-1] = (mulDigit(x[i]) + x[i-1]) / y[t] };
+        }
+        while(q[i-t-1]*(mulDigit(y[t])+y[t-1]) > mulDigit(mulDigit(x[i])+x[i-1])+x[i-2]) {
+            q = q with { [i-t-1] = q[i-t-1]-1 };
+        }
+        if let Some(diff) = biguint_subtract(
+            x,
+            shiftPowerOfDigit(
+                biguint_mul(
+                    newarray<uint>(1) with { [0] = q[i-t-1] },
+                    y,
+                ),
+                i-t-1
+            ),
+        ) {
+            x = diff;
+        } else {
+            q = q with { [i-t-1] = q[i-t-1]-1 };
+            if let Some(diff) = biguint_subtract(
+                x,
+                shiftPowerOfDigit(
+                    biguint_mul(
+                        newarray<uint>(1) with { [0] = q[i-t-1] },
+                        y,
+                    ),
+                    i-t-1
+                ),
+            ) {
+                x = diff;
+            } else {
+                panic;
+            }
+        }
+        i = i-1;
+    }
+    return Some((q, biguint_shiftRight(x, shiftBits)));
+}
+
+public func biguint_mod(x: []uint, y: []uint) -> option<[]uint> {
+    // same as the divmod algorithm above, except we don't keep track of the quotient
+    if (biguint_isZero(y)) {
+        return None;
+    } elseif (biguint_compare(x, y) < int(0)) {
+        return Some(x);
+    } elseif (realSize(y) == 1) {
+        return Some(newarray<uint>(1) with { [0] = biguint_shortMod(x, y[0])? });
+    }
+
+    let z = y[realSize(y)-1];
+    let shiftBits = 0;
+    while(z < mulDigit(1)/2) {
+        z = z+z;
+        shiftBits = shiftBits+1;
+    }
+    x = biguint_shiftLeft(x, shiftBits);
+    y = biguint_shiftLeft(y, shiftBits);
+
+    let n = realSize(x)-1;
+    let t = realSize(y)-1;
+    let sizeDiff = n-t;
+
+    let ybnt = shiftPowerOfDigit(y, sizeDiff);
+    while(biguint_compare(x, ybnt) >= int(0)) {
+        if let Some(diff) = biguint_subtract(x, ybnt) {
+            x = diff;
+        } else {
+            panic;
+        }
+    }
+
+    let i = n;
+    let qit1 = 0;
+    while(i >= t+1) {
+        if (x[i] == y[t]) {
+            qit1 = mulDigit(1)-1;
+        } else {
+            qit1 = (mulDigit(x[i]) + x[i-1]) / y[t];
+        }
+        while(qit1*(mulDigit(y[t])+y[t-1]) > mulDigit(mulDigit(x[i])+x[i-1])+x[i-2]) {
+            qit1 = qit1-1;
+        }
+        if let Some(diff) = biguint_subtract(
+            x,
+            shiftPowerOfDigit(
+                biguint_shortMul(y, qit1),
+                i-t-1
+            ),
+        ) {
+            x = diff;
+        } else {
+            qit1 = qit1-1;
+            if let Some(diff) = biguint_subtract(
+                x,
+                shiftPowerOfDigit(
+                    biguint_shortMul(y, qit1),
+                    i-t-1
+                ),
+            ) {
+                x = diff;
+            } else {
+                panic;
+            }
+        }
+        if (x[i] != 0) { panic; }
+        i = i-1;
+    }
+    return Some(biguint_shiftRight(x, shiftBits));
+}
+
+public func biguint_shortDivMod(x: []uint, y: uint) -> option<([]uint, uint)> {
+    if (y == 0) {    return None;    }
+
+    let xSize = realSize(x);
+    let quot = newarray<uint>(xSize);
+    let carry = 0;
+    let i = xSize;
+    while(i > 0) {
+        i = i-1;
+        carry = carry * 0x100000000000000000000 + x[i];
+        quot = quot with { [i] = carry / y };
+        carry = carry % y;
+    }
+    return Some((quot, carry));
+}
+
+public func biguint_shortMod(x: []uint, m: uint) -> option<uint> {
+    if (m == 0) {    return None;    }
+
+    let xSize = realSize(x);
+    let digitMod = 0x100000000000000000000 % m;
+    let ret = 0;
+    let i = xSize;
+    while(i > 0) {
+        i = i-1;
+        ret = (ret * digitMod + x[i]) % m;
+    }
+    return Some(ret);
+}
+
+public func biguint_modmul(x: []uint, y: []uint, m: []uint) -> option<[]uint> {
+    return biguint_mod(biguint_mul(x, y), m);
+}
+
+public func biguint_modexp(x: []uint, e: []uint, m: []uint) -> option<[]uint> {
+    if (biguint_isZero(m)) {    return None;    }
+
+    x = shrinkToFit(x);
+    e = shrinkToFit(e);
+    m = shrinkToFit(m);
+
+    let ret = biguint_one();
+    let b = 8*biguint_sizeBytes(x);
+    while(b > 0) {
+        b = b-1;
+        ret = biguint_square(ret);
+        ret = biguint_mod(ret, m)?;
+        if (biguint_getBit(e, b) != 0) {
+            ret = biguint_modmul(ret, x, m)?;
+        }
+    }
+    return Some(ret);
+}

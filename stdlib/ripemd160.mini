@@ -1,0 +1,152 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_get64;
+use std::bytearray::bytearray_set64;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_copy;
+
+use std::keccak::flipEndian64;
+
+
+type Ripemd160Hasher = struct {
+    accumulator: bytes32,
+    buf: [2]uint,
+    offset: uint,
+    totalSizeBytes: uint,
+}
+
+public func ripemd160hasher_new() -> Ripemd160Hasher {
+    return struct {
+        accumulator: bytes32(0x67452301EFCDAB8998BADCFE10325476C3D2E1F0),
+        buf: unsafecast<[2]uint>((0,0)),
+        offset: 0,
+        totalSizeBytes: 0,
+    };
+}
+
+public func ripemd160hasher_pushByte(h: Ripemd160Hasher, b: uint) -> Ripemd160Hasher {
+    let word = h.offset / 32;
+    let newBuffer = h.buf with {
+        [word] = h.buf[word] ^ asm(248-8*(h.offset % 32), b&0xff) uint { shl }
+    };
+    return xif (h.offset >= 63) {
+        h with {
+            accumulator: asm(h.accumulator, newBuffer[0], newBuffer[1]) bytes32 { ripemd160f }
+        } with {
+            buf: unsafecast<[2]uint>((0,0))
+        } with {
+            offset: 0
+        } with {
+            totalSizeBytes: 1 + h.totalSizeBytes
+        }
+    } else {
+        h with {
+            buf: newBuffer
+        } with {
+            offset: h.offset+1
+        } with {
+            totalSizeBytes: 1 + h.totalSizeBytes
+        }
+    };
+}
+
+public func ripemd160hasher_push256(h: Ripemd160Hasher, val: uint) -> Ripemd160Hasher {
+    let offset = h.offset;
+    return xif (offset == 0) {
+        h with {
+            buf: h.buf with { [0] = val }
+        } with {
+            offset: 32
+        } with {
+            totalSizeBytes: 32+h.totalSizeBytes
+        }
+    } elseif (offset == 32) {
+        h with {
+            accumulator: asm(h.accumulator, h.buf[0], val) bytes32 { ripemd160f }
+        } with {
+            buf: unsafecast<[2]uint>((0,0))
+        } with {
+            offset: 0
+        } with {
+            totalSizeBytes: 32+h.totalSizeBytes
+        }
+    } elseif (offset < 32) {
+        h with {
+            buf: h.buf with {
+                [0] = h.buf[0] | asm(8*offset, val) uint { shr }
+            } with {
+                [1] = h.buf[1] | asm(8*(32-offset), val) uint { shl }
+            }
+        } with {
+            offset: 32+offset
+        } with {
+            totalSizeBytes: 32+h.totalSizeBytes
+        }
+    } else {
+        offset = offset-32;
+        h with {
+            accumulator: asm(
+                h.accumulator,
+                h.buf[0],
+                h.buf[1] | asm(8*offset, val) uint { shr }
+            ) bytes32 { ripemd160f }
+        } with {
+            buf: unsafecast<[2]uint>((
+                asm(8*(32-offset), val) uint { shl },
+                0
+            ))
+        } with {
+            offset: offset
+        } with {
+            totalSizeBytes: 32+h.totalSizeBytes
+        }
+    };
+}
+
+public func ripemd160hasher_finish(h: Ripemd160Hasher) -> bytes32 {
+    // write the first padding byte
+    h = ripemd160hasher_pushByte(h, 0x80) with {
+        totalSizeBytes: h.totalSizeBytes   // undo the +1 caused by ripemd160hasher_pushByte call
+    };
+
+    // make sure there is space for the 64-bit total length
+    if (h.offset > 56) {
+        h = h with {
+            accumulator: asm(h.accumulator, h.buf[0], h.buf[1]) bytes32 { ripemd160f }
+        } with {
+            buf: unsafecast<[2]uint>((0,0))
+        };
+    }
+
+    // insert the total size, and invoke the compression function
+    return asm(
+        h.accumulator,
+        h.buf[0],
+        h.buf[1] | flipEndian64(8*h.totalSizeBytes),  //TODO: check endianness
+    ) bytes32 { ripemd160f };
+}
+
+public func ripemd160_byteArray(ba: ByteArray) -> bytes32 {
+    let hasher = ripemd160hasher_new();
+    let i = 0;
+    let sz = bytearray_size(ba);
+    while (i+32 < sz) {
+        hasher = ripemd160hasher_push256(hasher, bytearray_get256(ba, i));
+        i = i+32;
+    }
+    while (i < sz) {
+        hasher = ripemd160hasher_pushByte(hasher, bytearray_getByte(ba, i));
+        i = i+1;
+    }
+    return ripemd160hasher_finish(hasher);
+}
+
+

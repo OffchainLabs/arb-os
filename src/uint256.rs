@@ -1,30 +1,18 @@
 /*
- * Copyright 2020, Offchain Labs, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use keccak_hash::keccak;
+use ethereum_types::{H160, U256};
+use ethers_core::utils::keccak256;
 use num_bigint::{BigInt, BigUint, Sign, ToBigInt};
 use num_traits::cast::ToPrimitive;
 use num_traits::identities::{One, Zero};
-use num_traits::pow::Pow;
 use num_traits::sign::Signed;
 use num_traits::CheckedSub;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp::Ordering;
 use std::fmt;
-use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
+use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Rem, Shl, Sub};
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, Hash)]
 pub struct Uint256 {
@@ -89,8 +77,32 @@ impl Uint256 {
         }
     }
 
+    pub fn from_u256(x: &U256) -> Self {
+        let mut b: Vec<u8> = vec![0u8; 32];
+        x.to_big_endian(&mut b);
+        Uint256::from_bytes(&b)
+    }
+
+    pub fn from_u32_digits(b: &[u32]) -> Self {
+        let mut val = BigUint::from(0u64);
+        val.assign_from_slice(b);
+        Uint256 { val }
+    }
+
+    pub fn _from_gwei(num_gwei: u64) -> Self {
+        Uint256::from_u64(num_gwei).mul(&Uint256::from_u64(1_000_000_000))
+    }
+
+    pub fn _from_eth(num_eth: u64) -> Self {
+        Uint256::from_u64(num_eth).mul(&Uint256::from_u64(1_000_000_000_000_000_000))
+    }
+
     pub fn to_usize(&self) -> Option<usize> {
         self.val.to_usize()
+    }
+
+    pub fn to_u64(&self) -> Option<u64> {
+        self.val.to_u64()
     }
 
     pub fn to_bytes_be(&self) -> Vec<u8> {
@@ -99,9 +111,73 @@ impl Uint256 {
         if raw.len() < 32 {
             let mut ret = vec![0u8; 32 - raw.len()];
             ret.extend(raw);
-            return ret;
+            ret
         } else {
-            return raw;
+            raw
+        }
+    }
+
+    pub fn to_h160(&self) -> H160 {
+        H160::from_slice(&{
+            let raw = self.val.to_bytes_be();
+            if raw.len() < 20 {
+                let mut ret = vec![0u8; 20 - raw.len()];
+                ret.extend(raw);
+                ret
+            } else {
+                raw
+            }
+        })
+    }
+
+    pub fn to_u256(&self) -> U256 {
+        U256::from_big_endian(&self.to_bytes_minimal())
+    }
+
+    pub fn trim_to_u64(&self) -> u64 {
+        self.val
+            .clone()
+            .bitand(BigUint::from(0xffffffffffffffffu64))
+            .to_u64()
+            .unwrap()
+    }
+
+    pub fn to_bytes_minimal(&self) -> Vec<u8> {
+        if self.is_zero() {
+            vec![]
+        } else {
+            self.val.to_bytes_be()
+        }
+    }
+
+    pub fn to_u32_digits_be(&self) -> [u32; 8] {
+        let mut ret = [0u32; 8];
+        let v = self.val.to_u32_digits();
+        for (i, vv) in v.iter().enumerate() {
+            ret[7 - i] = *vv;
+        }
+        ret
+    }
+
+    pub fn to_u32_digits_be_2(&self, ui2: &Self) -> [u32; 16] {
+        let mut ret = [0u32; 16];
+        let v = self.val.to_u32_digits();
+        for (i, vv) in v.iter().enumerate() {
+            ret[7 - i] = *vv;
+        }
+        let v = ui2.val.to_u32_digits();
+        for (i, vv) in v.iter().enumerate() {
+            ret[15 - i] = *vv;
+        }
+        ret
+    }
+
+    pub fn rlp_encode(&self) -> Vec<u8> {
+        // RLP encode the minimal byte representation of self
+        if (self.is_zero()) {
+            vec![0x80u8]
+        } else {
+            rlp::encode(&self.to_bytes_minimal())
         }
     }
 
@@ -117,7 +193,13 @@ impl Uint256 {
         }
     }
 
-    pub fn max_neg_int() -> Self {
+    pub fn max_int() -> Self {
+        Uint256 {
+            val: BigUint::new(vec![0xffff_ffff; 8]),
+        }
+    }
+
+    pub fn _max_neg_int() -> Self {
         Uint256::one().exp(&Uint256::from_usize(255))
     }
 
@@ -126,13 +208,10 @@ impl Uint256 {
     }
 
     pub fn unary_minus(&self) -> Option<Self> {
-        let s = self.to_signed();
-        if s == BigInt::new(Sign::Minus, vec![0, 0, 0, 0, 0, 0, 0, 0x8000_0000]) {
-            None
+        if self.val == BigUint::new(vec![0, 0, 0, 0, 0, 0, 0, 0x8000_0000]) {
+            Some(self.clone())
         } else {
-            Some(Uint256 {
-                val: Uint256::bigint_to_biguint(s.neg()),
-            })
+            Some(self.bitwise_neg().add(&Uint256::one()))
         }
     }
 
@@ -172,7 +251,7 @@ impl Uint256 {
     pub fn unchecked_sub(&self, other: &Self) -> Self {
         // subtraction mod 2**256
         if self < other {
-            return other.sub(self).unwrap().unary_minus().unwrap();
+            other.sub(self).unwrap().unary_minus().unwrap()
         } else {
             self.sub(other).unwrap()
         }
@@ -253,7 +332,35 @@ impl Uint256 {
 
     pub fn exp(&self, other: &Self) -> Self {
         Uint256 {
-            val: Uint256::trim(&self.val.pow(&other.val)).0,
+            val: self.val.modpow(&other.val, &BigUint::one().shl(256)),
+        }
+    }
+
+    pub fn shift_left(&self, num: usize) -> Self {
+        if num >= 256 {
+            Uint256::zero()
+        } else {
+            Uint256 {
+                val: Uint256::trim(&(self.val.clone() << num)).0,
+            }
+        }
+    }
+
+    pub fn shift_right(&self, num: usize) -> Self {
+        Uint256 {
+            val: (self.val.clone() >> num),
+        }
+    }
+
+    pub fn shift_arith(&self, raw_num: usize) -> Self {
+        let need_fill = self.val.bits() == 256;
+        let num = if raw_num > 256 { 256 } else { raw_num };
+        let mut val = (self.val.clone() >> num);
+        if need_fill {
+            val = val + (Uint256::max_int().val << (256 - num))
+        }
+        Uint256 {
+            val: Uint256::trim(&val).0,
         }
     }
 
@@ -276,7 +383,7 @@ impl Uint256 {
         } else {
             let unshifted = self.val.to_bigint().unwrap();
             let shift = BigInt::new(Sign::Plus, vec![0, 0, 0, 0, 0, 0, 0, 0, 1]);
-            shift.sub(unshifted)
+            unshifted.sub(shift)
         }
     }
 
@@ -292,16 +399,16 @@ impl Uint256 {
 
     pub fn avm_hash(&self) -> Self {
         let bytes_buf = self.to_bytes_be();
-        let hash_result = keccak(bytes_buf);
-        Uint256::from_bytes(hash_result.as_bytes())
+        let hash_result = keccak256(&bytes_buf); // keccak
+        Uint256::from_bytes(&hash_result)
     }
 
     pub fn avm_hash2(v1: &Self, v2: &Self) -> Self {
-        let mut bytes1 = v1.val.to_bytes_be();
-        let bytes2 = v2.val.to_bytes_be();
+        let mut bytes1 = v1.to_bytes_be();
+        let bytes2 = v2.to_bytes_be();
         bytes1.extend(bytes2);
-        let hash_result = keccak(bytes1);
-        Uint256::from_bytes(hash_result.as_bytes())
+        let hash_result = keccak256(&bytes1);
+        Uint256::from_bytes(&hash_result)
     }
 }
 
@@ -333,22 +440,6 @@ impl Serialize for Uint256 {
     }
 }
 
-/*
-struct Uint256Visitor;
-
-impl<'de> Visitor<'de> for Uint256Visitor {
-    type Value = Uint256;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("a sequence of bytes")
-    }
-
-    fn visit_bytes<E>(self, v :&[u8]) -> Result<Self::Value, E> where E: de::Error, {
-        Ok(Uint256::from_bytes(v))
-    }
-}
-*/
-
 impl<'de> Deserialize<'de> for Uint256 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -359,4 +450,17 @@ impl<'de> Deserialize<'de> for Uint256 {
             val: BigUint::parse_bytes(s.as_bytes(), 16).unwrap(),
         })
     }
+}
+
+#[test]
+fn test_uint256_u32_digit_order() {
+    assert_eq!(Uint256::from_u64(1).to_u32_digits_be()[7], 1u32);
+    assert_eq!(
+        Uint256::from_string_hex(
+            "6a09e667bb67ae853c6ef372a54ff53a510e527f9b05688c1f83d9ab5be0cd19"
+        )
+        .unwrap()
+        .to_u32_digits_be()[0],
+        0x6a09e667u32
+    );
 }

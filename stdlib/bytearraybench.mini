@@ -1,0 +1,36 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+import type ByteArray;
+import type MarshalledBytes;
+
+import func bytearray_new(size: uint) -> ByteArray;
+import func bytearray_unmarshalBytes(mbytes: MarshalledBytes) -> ByteArray;
+import func bytearray_size(ba: ByteArray) -> uint;
+import func bytearray_getByte(ba: ByteArray, idx: uint) -> uint;
+import func bytearray_setByte(ba: ByteArray, idx: uint, val: uint) -> ByteArray;
+import func bytearray_get64(ba: ByteArray, idx: uint) -> uint;
+import func bytearray_set64(ba: ByteArray, idx: uint, val: uint) -> ByteArray;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
+import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
+import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toOffset: uint, nbytes: uint) -> ByteArray;
+
+import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
+
+
+func main() {
+	let j = 0;
+	while (j < 1) {
+		j = j+1;
+		let i = 0;
+		let ba = bytearray_new(33);
+		while (i < 1024*1024) {
+			ba = bytearray_setByte(ba, i, 123);
+			i = i+1;
+		}
+	}
+}
+

@@ -1,24 +1,14 @@
 /*
- * Copyright 2020, Offchain Labs, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub type StringId = usize;
 
-#[derive(Clone, Debug, Default)]
+///Maps `String`s to `usize` IDs.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StringTable {
     next_id: StringId,
     table: HashMap<String, StringId>,
@@ -36,6 +26,8 @@ impl StringTable {
         }
     }
 
+    ///Returns the `StringID` associated with `name` if it exists, if not creates a new entry and
+    /// returns the newly created ID.
     pub fn get(&mut self, name: String) -> StringId {
         match self.table.get(&name) {
             Some(id) => *id,
@@ -49,10 +41,12 @@ impl StringTable {
         }
     }
 
+    ///If an ID exists, returns it, if not returns `None`.
     pub fn get_if_exists(&self, name: &str) -> Option<&StringId> {
         self.table.get(name)
     }
 
+    ///Takes a `usize` ID and returns the associated `String`
     pub fn name_from_id(&self, name: StringId) -> &String {
         &self.by_id[name as usize]
     }

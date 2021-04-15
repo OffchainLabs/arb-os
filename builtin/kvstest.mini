@@ -1,28 +1,20 @@
 //
-// Copyright 2020, Offchain Labs, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import func builtin_kvsDelete(kvs: any, key: any) -> any;
-import func builtin_kvsForall(kvs: any, cb: func(any, any, any) -> any, state: any) -> any;
-import func builtin_kvsSize(kvs: any) -> uint;
+use core::kvs::Kvs;
+use core::kvs::builtin_kvsNew;
+use core::kvs::builtin_kvsGet;
+use core::kvs::builtin_kvsSet;
+use core::kvs::builtin_kvsDelete;
+use core::kvs::builtin_kvsForall;
+use core::kvs::builtin_kvsSize;
 
 impure func main() {
 	asm(tests(),) { log };
 }
 
-func tests() -> uint {
+impure func tests() -> uint {
 	let s = builtin_kvsNew();
 	if (builtin_kvsGet(s, 17) != None<any>) {
 		return 1;
@@ -140,19 +132,19 @@ func tests() -> uint {
 }
 
 func isSome(x: option<any>) -> bool {
-	if let Some(unused) = x {
-		return true;
+	return xif let Some(unused) = x {
+		true
 	} else {
-		return false;
-	}
+		false
+	};
 }
 
 func getSomeOr(x: option<any>, backupVal: any) -> any {
-	if let Some(val) = x {
-		return val;
+	return xif let Some(val) = x {
+		val
 	} else {
-		return backupVal;
-	}
+		backupVal
+	};
 }
 
 func sumForKvsIterator(key: any, value: any, state: any) -> any {

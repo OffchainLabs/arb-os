@@ -1,0 +1,182 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::storageMap::StorageMap;
+
+use std::storageMap::storageMap_new;
+use std::storageMap::storageMap_size;
+use std::storageMap::storageMap_get;
+use std::storageMap::storageMap_set;
+use std::storageMap::storageMap_delete;
+use std::storageMap::storageMap_forall;
+
+
+impure func main() {
+	asm(tests(),) { log };
+}
+
+func tests() -> uint {
+	let s = storageMap_new();
+	if (storageMap_get(s, 17) != 0) {
+		return 1;
+	}
+	if (storageMap_size(s) != 0) {
+	    return 101;
+	}
+
+	s = storageMap_new();
+	s = storageMap_set(s, 42, 42);
+	if (storageMap_get(s, 42) != 42) {
+		return 2;
+	}
+	if (storageMap_size(s) != 1) {
+	    return 102;
+	}
+
+	s = storageMap_new();
+	s = storageMap_set(s, 42, 43);
+	s = storageMap_set(s, 55, 56);
+	s = storageMap_set(s, 42, 99);
+	if (storageMap_get(s, 42) != 99) {
+		return 3;
+	}
+	if (storageMap_size(s) != 2) {
+	    return 103;
+	}
+
+	s = storageMap_new();
+	s = storageMap_set(s, 42, 43);
+	s = storageMap_set(s, 55, 56);
+	s = storageMap_set(s, 42, 99);
+	if (storageMap_get(s, 55) != 56) {
+		return 4;
+	}
+	if (storageMap_size(s) != 2) {
+	    return 104;
+	}
+
+	s = storageMap_new();
+	let i = 0;
+	while (i < 41) {
+		s = storageMap_set(s, i, 1000+i);
+		i = i+1;
+	}
+	if (storageMap_get(s, 17) != 1017) {
+		return 5;
+	}
+	if (storageMap_size(s) != 41) {
+	    return 105;
+	}
+
+	s = storageMap_new();
+	let i = 0;
+	while (i < 27) {
+		s = storageMap_set(s, i, 1000+i);
+		i = i+1;
+	}
+	s = storageMap_delete(s, 17);
+	if (storageMap_get(s, 17) != 0) {
+		return 6;
+	}
+	if (storageMap_size(s) != 26) {
+	    return 106;
+	}
+
+	s = storageMap_new();
+	s = storageMap_set(s, 42, 43);
+	s = storageMap_set(s, 55, 56);
+	s = storageMap_set(s, 42, 99);
+	if (storageMap_get(s, 42) != 99) {
+		return 7;
+	}
+	if (storageMap_size(s) != 2) {
+	    return 107;
+	}
+
+	s = storageMap_new();
+	s = storageMap_set(s, 42, 43);
+	s = storageMap_set(s, 55, 56);
+	s = storageMap_set(s, 42, 99);
+	if (storageMap_get(s, 3) != 0) {
+		return 8;
+	}
+	if (storageMap_size(s) != 2) {
+	    return 108;
+	}
+
+	s = storageMap_new();
+	s = storageMap_set(s, 42, 43);
+	s = storageMap_set(s, 55, 56);
+	s = storageMap_set(s, 42, 99);
+	let rawResult = storageMap_forall(s, sumForKvsIterator, 0);
+	if (unsafecast<uint>(rawResult) != 155) {
+		return 9;
+	}
+	if (storageMap_size(s) != 2) {
+	    return 109;
+	}
+
+    // regression test for bug #73
+    s = storageMap_new();
+    s = storageMap_set(s, 42, 43);
+    s = storageMap_set(s, 55, 56);
+    s = storageMap_delete(s, 42);
+    s = storageMap_set(s, 55, 100);
+    s = storageMap_delete(s, 55);
+    if (storageMap_get(s, 55) != 0) {
+        return 10;
+    }
+	if (storageMap_size(s) != 0) {
+	    return 110;
+	}
+
+    // test size counting, including reductions for zero
+    s = storageMap_new();
+    let i = 0;
+    while (i < 1007) {
+        s = storageMap_set(s, i, 2000+i);
+        i = i+1;
+    }
+    if (storageMap_size(s) != 1007) {
+        return 11;
+    }
+    s = storageMap_set(s, 55, 0);
+    if (storageMap_size(s) != 1006) {
+        return 111;
+    }
+    s = storageMap_set(s, 3000, 0);
+    if (storageMap_size(s) != 1006) {
+        return 211;
+    }
+    s = storageMap_delete(s, 55);
+    if (storageMap_size(s) != 1006) {
+        return 311;
+    }
+    s = storageMap_delete(s, 77);
+    if (storageMap_size(s) != 1005) {
+        return 411;
+    }
+
+	return 0;
+}
+
+func isSome(x: option<any>) -> bool {
+	return xif let Some(unused) = x {
+		true
+	} else {
+		false
+	};
+}
+
+func getSomeOr(x: option<any>, backupVal: any) -> any {
+	return xif let Some(val) = x {
+		val
+	} else {
+		backupVal
+	};
+}
+
+func sumForKvsIterator(key: uint, value: uint, state: any) -> any {
+	return value + unsafecast<uint>(state);
+}

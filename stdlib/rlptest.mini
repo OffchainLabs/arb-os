@@ -1,0 +1,174 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::bytearray::ByteArray;
+use std::bytestream::ByteStream;
+use std::bytearray::MarshalledBytes;
+
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_marshalFull;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_set256;
+
+use std::bytestream::bytestream_new;
+
+use std::keccak::keccak256;
+
+use std::rlp::rlp_encodeUint;
+use std::rlp::rlp_encodeAddress;
+use std::rlp::rlp_encodeBytes;
+use std::rlp::rlp_encodeList;
+use std::rlp::rlp_encodeMessageInfo;
+use std::rlp::rlp_encodeAndHashMessageInfoForSignature;
+use std::rlp::rlp_decodeMessageInfo;
+
+use std::rlp::rlp_decodeUint;
+use std::rlp::rlp_decodeAddress;
+use std::rlp::rlp_decodeBytes;
+
+use std::rlp::bytesNeededToRepresentUint;
+
+type SignedTx = struct {
+    seqNum: uint,
+    gasPrice: uint,
+    gasLimit: uint,
+    to: address,
+    value: uint,
+    data: ByteArray,
+    v: uint,
+    r: uint,
+    s: uint
+}
+
+impure func main(kind: uint, value: any) {
+    if (kind == 0) {
+        let ui = unsafecast<uint>(value);
+        let ba = bytearray_new(0);
+        let (uba, _) = rlp_encodeUint(ui, ba, 0);
+        ba = uba;
+
+        // decode and verify no difference
+        if let Some(res) = rlp_decodeUint(bytestream_new(ba)) {
+            if (res.1 == ui) {
+                asm(bytearray_marshalFull(ba),) { log };
+            } else {
+                asm(0,) { log };
+            }
+        } else {
+            asm(1,) { log };
+        }
+    } elseif (kind == 1) {
+        let mb = unsafecast<MarshalledBytes>(value);
+        if let Some(in) = bytearray_unmarshalBytes(mb) {
+            let encoded = rlp_encodeBytes(
+                in,
+                0,
+                bytearray_size(in),
+                bytearray_new(0),
+                0
+            ).0;
+
+            // decode and verify no difference
+            if let Some(res) = rlp_decodeBytes(bytestream_new(encoded)) {
+                let marshDec = bytearray_marshalFull(res.1);
+                if (marshDec == mb) {
+                    asm(bytearray_marshalFull(encoded),) { log };
+                } else {
+                    asm( (20, bytearray_marshalFull(encoded)), ) { log };
+                }
+            } else {
+                asm(3,) { log };
+            }
+        } else {
+            panic;
+        }
+    } elseif (kind == 2) {
+        let vals = unsafecast<(uint, MarshalledBytes, uint)>(value);
+        if let Some(data) = bytearray_unmarshalBytes(vals.1) {
+            let encodedPieces = unsafecast<[]ByteArray>(newarray<any>(3));  // workaround issue #120
+            encodedPieces = encodedPieces with {
+                [0] = rlp_encodeUint(vals.0, bytearray_new(0), 0).0
+            } with {
+                [1] = rlp_encodeBytes(data, 0, bytearray_size(data), bytearray_new(0), 0).0
+            } with {
+                [2] = rlp_encodeUint(vals.2, bytearray_new(0), 0).0
+            };
+            if let Some(res) = rlp_encodeList(encodedPieces, 0, 3, bytearray_new(0), 0) {
+                asm(bytearray_marshalFull(res.0),) { log };
+            } else {
+                asm(4,) { log };
+            }
+        } else {
+            panic;
+        }
+    }
+
+    testRlpHasher();
+}
+
+func testRlpHasher() {
+    let seqNum = 0;
+    let gasPrice = 31;
+    let gasLimit = uint(hash(0));
+    let to = address(3919850193);
+    let value = uint(hash(gasLimit));
+    let data = randomByteArray();
+    let v = uint(hash(value));
+    let r = 0;
+    let s = 0;
+
+    let oldBuf = rlp_encodeMessageInfo(
+        seqNum,
+        gasPrice,
+        gasLimit,
+        to,
+        value,
+        data,
+        v,
+        r,
+        s
+    );
+
+    if let Some(res) = rlp_decodeMessageInfo(bytestream_new(oldBuf)) {
+        let (_, tx) = res;
+        if (keccak256(oldBuf, 0, bytearray_size(oldBuf)) != rlp_encodeAndHashMessageInfoForSignature(tx, Some(tx.v))) {
+            asm(12,) { debugprint };
+            panic;
+        }
+    } else {
+        asm(13,) { debugprint };
+        panic;
+    }
+
+    let newWay = rlp_encodeAndHashMessageInfoForSignature(
+        struct {
+            seqNum: seqNum,
+            gasPrice: gasPrice,
+            gasLimit: gasLimit,
+            to: to,
+            value: value,
+            data: data,
+            v: v,
+            r: r,
+            s: s
+        },
+        Some(v)
+    );
+
+    if (keccak256(oldBuf, 0, bytearray_size(oldBuf)) != newWay) {
+        panic;
+    }
+}
+
+func randomByteArray() -> ByteArray {
+    let ret = bytearray_new(0);
+    let i = 0;
+    while (i < 5) {
+        ret = bytearray_set256(ret, 32*i, uint(hash(i+1017)));
+        i = i+1;
+    }
+    return ret;
+}

@@ -1,17 +1,5 @@
 //
-// Copyright 2020, Offchain Labs, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
 type BoundedQueue = struct {
@@ -43,24 +31,40 @@ public func boundedQueue_size(q: BoundedQueue) -> uint {
 }
 
 public func boundedQueue_put(q: BoundedQueue, val: any) -> BoundedQueue {
-    if (boundedQueue_isFull(q)) {
-        return q;
+    return xif (boundedQueue_isFull(q)) {
+        q
     } else {
         let putIndex = q.nextPut;
-        return q with { nextPut: (putIndex+1) % q.capacity } 
-                 with { contents: q.contents with { [putIndex] = val } };
-    }
+        q with { nextPut: (putIndex+1) % q.capacity }
+            with { contents: q.contents with { [putIndex] = val } }
+    };
 }
 
 public func boundedQueue_get(q: BoundedQueue) -> option<(BoundedQueue, any)> {
-    if (boundedQueue_isEmpty(q)) {
-        return None;
+    return xif (boundedQueue_isEmpty(q)) {
+        None<(BoundedQueue, any)>
     } else {
-        return Some((
+        Some((
             q with { nextGet: (q.nextGet+1) % q.capacity },
             q.contents[q.nextGet],
-        ));
-    }
+        ))
+    };
+}
+
+public func boundedQueue_nth(q: BoundedQueue, n: uint) -> option<any> {
+    return xif (n < boundedQueue_size(q)) {
+        Some(q.contents[(q.nextGet + n) % q.capacity])
+    } else {
+        None<any>
+    };
+}
+
+public func boundedQueue_set_nth(q: BoundedQueue, n: uint, value: any) -> option<BoundedQueue> {
+    return xif (n < boundedQueue_size(q)) {
+        Some(q with { contents: q.contents with { [(q.nextGet + n) % q.capacity] = value } })
+    } else {
+        None<BoundedQueue>
+    };
 }
 
 public func boundedQueue_expand(q: BoundedQueue, newSize: uint) -> BoundedQueue {
@@ -102,4 +106,65 @@ public func queue_put(q: Queue, val: any) -> Queue {
 
 public func queue_get(q: Queue) -> option<(Queue, any)> {
     return boundedQueue_get(q);
+}
+
+public func queue_getOrDie(q: Queue) -> (Queue, any) {
+    return xif let Some(res) = queue_get(q) {
+        res
+    } else {
+        panic
+    };
+}
+
+public func queue_nth(q: Queue, n: uint) -> option<any> {
+    return boundedQueue_nth(q, n);
+}
+
+public func queue_set_nth(q: Queue, n: uint, value: any) -> option<Queue> {
+    return boundedQueue_set_nth(q, n, value);
+}
+
+public func queue_discardOne(q: Queue) -> Queue {
+    // return q with first item removed; if no first item, return it q unmodified
+    return xif let Some(res) = queue_get(q) {
+        res.0
+    } else {
+        q
+    };
+}
+
+type QueueStack = option<any>
+type QueueStackCell = struct {
+    head: Queue,
+    rest: QueueStack,
+}
+
+public func queuestack_new() -> QueueStack {
+    return None<any>;
+}
+
+public func queuestack_push(qs: QueueStack, q: Queue) -> QueueStack {
+    return Some(
+        unsafecast<any>(
+            struct {
+                head: q,
+                rest: qs,
+            }
+        )
+    );
+}
+
+public func queuestack_get(qs: QueueStack) -> option<(QueueStack, any)> {
+    return xloop {
+        let cell = unsafecast<QueueStackCell>(qs?);
+        if let Some(res) = queue_get(cell.head) {
+            let (uq, item) = res;
+            return Some((
+                queuestack_push(cell.rest, uq),
+                item
+            ));
+        } else {
+            qs = cell.rest;
+        }
+    };
 }

@@ -1,0 +1,75 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::bytearray::ByteArray;
+use std::bls::BLSKey;
+use std::bls::BLSSignature;
+use std::bls::BLSHashedMessage;
+
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_set256;
+
+use std::bls::bls_verifySignature;
+use std::bls::bls_hashToPoint;
+use std::bls::bls_verifySingleSig;
+use std::bls::bls_hashAndVerifySingleSig;
+
+
+impure func main() {
+	asm(tests(),) { log };
+}
+
+func tests() -> uint {
+    let domain2 = bytes32(0x2d889d03243d367c56457383bb04bcdadff3a522dbf9c97145d0a58c1e88d6f9);
+
+    let message2 = bytearray_new(12);
+    message2 = bytearray_setByte(message2,0,0x46);
+    message2 = bytearray_setByte(message2,1,0xf5);
+    message2 = bytearray_setByte(message2,2,0xa4);
+    message2 = bytearray_setByte(message2,3,0x33);
+    message2 = bytearray_setByte(message2,4,0x9d);
+    message2 = bytearray_setByte(message2,5,0x68);
+    message2 = bytearray_setByte(message2,6,0x7a);
+    message2 = bytearray_setByte(message2,7,0x8c);
+    message2 = bytearray_setByte(message2,8,0x2f);
+    message2 = bytearray_setByte(message2,9,0x7e);
+    message2 = bytearray_setByte(message2,10,0x1d);
+    message2 = bytearray_setByte(message2,11,0x7b);
+
+    let signature = struct {
+        x: 0x0d9c060fbeb416fc52d052764a0774cbe6f2a998034645bf5f4c1726b0da6289,
+        y: 0x240e4d2d8958684713d37f2f7c20a67627bbecb60450e62aeb5b2eab6d4dbbff
+    };
+
+    let pubkey = struct {
+        ax: 0x16d85ac6b1495562dabf0e052b323cb27095143a8dd228dceeccd94ca23fce6e,
+        ay: 0x252f8568427a600d5e7b2db105ca1bdf8b4f10c2c98a78da764f0cdb6fa9547d,
+        bx: 0x2bb33da900a0cc9a13e56fd0d3226c562d1fc54106754f11dc992daa153407a0,
+        by: 0x236e9f6e5631d4800ea7f50debef4d331ea50f50e6c1c03a3efdd292e30a52ff
+    };
+
+    let bad_signature = struct {
+        x: 0x0e9c060fbeb416fc52d052764a0774cbe6f2a998034645bf5f4c1726b0da6289,
+        y: 0x240e4d2d8958684713d37f2f7c20a67627bbecb60450e62aeb5b2eab6d4dbbff
+    };
+
+    if let Some(hashedmessage) = bls_hashToPoint(domain2, message2) {
+        if let Some(res) = bls_verifySingleSig(hashedmessage, pubkey, signature){
+            // This is the expected case.
+        } else {
+            return 5;
+        }
+        if let Some(res2) = bls_verifySingleSig(hashedmessage, pubkey, bad_signature){
+            return 6;
+        }
+    } else {
+         return 7;
+    }
+
+    return 0;   // passed all tests
+}

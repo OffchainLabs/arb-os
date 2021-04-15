@@ -1,0 +1,147 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::biguint::biguint_add;
+use std::biguint::biguint_compare;
+use std::biguint::biguint_divmod;
+use std::biguint::biguint_equal;
+use std::biguint::biguint_fromUint;
+use std::biguint::biguint_isZero;
+use std::biguint::biguint_marshal;
+use std::biguint::biguint_mod;
+use std::biguint::biguint_modmul;
+use std::biguint::biguint_modexp;
+use std::biguint::biguint_mul;
+use std::biguint::biguint_random;
+use std::biguint::biguint_square;
+use std::biguint::biguint_subtract;
+use std::biguint::biguint_zero;
+
+use std::random::RandomGenerator;
+use std::random::random_new;
+
+
+impure func main() {
+    asm(2*1000*1000*1000,) { setgas };
+	asm(tests(),) { log };
+}
+
+func tests() -> uint {
+    let gen = random_new(bytes32(0));
+
+    if ( ! biguint_isZero(biguint_zero()) ) {
+        return 1;
+    }
+
+    let i = 0;
+    while(i < 20) {
+        let (res, ugen) = doTests(gen);
+        gen = ugen;
+        if (res != 0) {    return 100*i + res;    }
+        i = i+1;
+    }
+
+    return 0;
+}
+
+func doTests(gen: RandomGenerator) -> (uint, RandomGenerator) {
+    let (w, ugen) = biguint_random(5, gen);
+    gen = ugen;
+    let (x, ugen) = biguint_random(6, gen);
+    gen = ugen;
+    let (y, ugen) = biguint_random(4, gen);
+    gen = ugen;
+    if (biguint_compare(x, y) != int(1)) {
+        return (2, gen);
+    }
+    if (biguint_compare(y, x) != -int(1)) {
+        return (3, gen);
+    }
+    if (!biguint_equal(x, x)) {
+        return (4, gen);
+    }
+    if (!biguint_equal(y, y)) {
+        return (5, gen);
+    }
+
+    let z = biguint_add(x,y);
+    if (biguint_compare(z, x) != int(1)) {
+        return (6, gen);
+    }
+    if let Some(diff) = biguint_subtract(biguint_add(x, y), y) {
+        if (!biguint_equal(diff, x)) {
+            return (7, gen);
+        }
+    } else {
+        return (8, gen);
+    }
+
+    if (biguint_compare(biguint_add(x,y), biguint_add(y,x)) != int(0)) {
+        return (9, gen);
+    }
+    if (!biguint_equal(
+        biguint_add(x, biguint_add(y, w)),
+        biguint_add(biguint_add(x, y), w),
+    )) {
+        return (10, gen);
+    }
+
+    let z1 = biguint_add(
+        biguint_mul(x, w),
+        biguint_mul(x, y),
+    );
+    let z2 = biguint_mul(
+        x,
+        biguint_add(w, y),
+    );
+    if (!biguint_equal(z1, z2)) {
+        return (11, gen);
+    }
+
+    if let Some(res) = biguint_divmod(x, y) {
+        let (q, r) = res;
+        if (biguint_compare(q, y) != -int(1)) {
+            return (12, gen);
+        }
+        let x2 = biguint_add(biguint_mul(q, y), r);
+        if (!biguint_equal(x, x2)) {
+            return (13, gen);
+        }
+        if let Some(mod2) = biguint_mod(x, y) {
+            if (!biguint_equal(r, mod2)) {
+                return (14, gen);
+            }
+        } else {
+            return (15, gen);
+        }
+    } else {
+        return (16, gen);
+    }
+
+    if (!biguint_equal(biguint_mul(x,x), biguint_square(x))) {
+        return (17, gen);
+    }
+
+    if let Some(x2m) = biguint_modmul(x, x, y) {
+        if let Some(x4m) = biguint_modmul(x2m, x2m, y) {
+            if let Some(x5m) = biguint_modmul(x4m, x, y) {
+                if let Some(r) = biguint_modexp(x, biguint_fromUint(5), y) {
+                    if (biguint_compare(x5m, r) != int(0)) {
+                        return (18, gen);
+                    }
+                } else {
+                    return (19, gen);
+                }
+            } else {
+                return (20, gen);
+            }
+        } else {
+            return (21, gen);
+        }
+    } else {
+        return (22, gen);
+    }
+
+    return (0, gen);
+}

@@ -1,43 +1,62 @@
 /*
- * Copyright 2020, Offchain Labs, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
+
+//!Provides functionality for running mavm executables.
 
 use crate::link::LinkedProgram;
 use crate::mavm::{CodePt, Value};
 use emulator::{ExecutionError, StackTrace};
-use std::fs::File;
-use std::io::Read;
-use std::path::Path;
+use std::{fs::File, io::Read, path::Path};
 
-pub use emulator::Machine;
-pub use runtime_env::{bytes_from_bytestack, bytestack_from_bytes, RuntimeEnvironment};
+pub use emulator::{Machine, ProfilerMode};
+pub use runtime_env::{
+    _bytes_from_bytestack, _bytestack_from_bytes, generic_compress_token_amount,
+    replay_from_testlog_file, ArbosReceipt, RuntimeEnvironment,
+};
 
+mod blake2b;
 mod emulator;
+mod ripemd160port;
 mod runtime_env;
 
 pub fn run_from_file(
     path: &Path,
     args: Vec<Value>,
+    debug: bool,
+) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
+    run_from_file_and_env(path, args, RuntimeEnvironment::default(), debug)
+}
+///Executes the file located at path, or starts the debugger if debug is set to true.
+///
+/// The args argument specifies the arguments to the executable.  These will be placed on the stack
+/// prior to the start of execution and are neither type checked nor checked for having the correct
+/// length.
+///
+/// The env specifies various aspects about the environment such as the inbox messages.  See
+/// `RuntimeEnvironment` for more details.
+///
+/// This function will panic if the specified path cannot be opened or does not contain a valid
+/// mini executable.
+pub fn run_from_file_and_env(
+    path: &Path,
+    args: Vec<Value>,
     env: RuntimeEnvironment,
     debug: bool,
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
-    let mut machine = load_from_file(path, env);
+    let mut machine = load_from_file_and_env(path, env);
     run(&mut machine, args, debug)
 }
 
-pub fn load_from_file(path: &Path, env: RuntimeEnvironment) -> Machine {
+pub fn load_from_file(path: &Path) -> Machine {
+    load_from_file_and_env(path, RuntimeEnvironment::default())
+}
+
+///Generates a `Machine` from the given path and `RuntimeEnvironment`. See `RuntimeEnvironment` for
+/// more details.
+///
+/// Will panic if the path cannot be opened or doesn't represent a valid mini executable.
+pub fn load_from_file_and_env(path: &Path, env: RuntimeEnvironment) -> Machine {
     let display = path.display();
 
     let mut file = match File::open(&path) {
@@ -54,6 +73,10 @@ pub fn load_from_file(path: &Path, env: RuntimeEnvironment) -> Machine {
     load_from_string(s, env)
 }
 
+///Interprets s as a mini executable and generates a `Machine` with the specified
+/// `RuntimeEnvironment`.
+///
+/// Will panic if s cannot be interpreted as a mini executable.
 fn load_from_string(s: String, env: RuntimeEnvironment) -> Machine {
     let parse_result: Result<LinkedProgram, serde_json::Error> = serde_json::from_str(&s);
     let program = match parse_result {
@@ -63,23 +86,32 @@ fn load_from_string(s: String, env: RuntimeEnvironment) -> Machine {
             panic!();
         }
     };
-    return Machine::new(program, env);
+    Machine::new(program, env)
 }
 
+///Runs the specified `Machine` from its first codepoint.
 pub fn run(
     machine: &mut Machine,
     args: Vec<Value>,
     debug: bool,
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
-    match machine.test_call(CodePt::new_internal(0), args, debug) {
-        Ok(_stack) => Ok(machine.runtime_env.get_all_logs()),
+    // We use PC 1 here because PC pushes an unwanted value--designed for a different entry ABI
+    match machine.test_call(CodePt::new_internal(1), args, debug) {
+        Ok(_stack) => Ok(machine.runtime_env.get_all_raw_logs()),
         Err(e) => Err((e, machine.get_stack_trace())),
     }
 }
 
-pub fn profile_gen_from_file(path: &Path, args: Vec<Value>, env: RuntimeEnvironment) {
-    let mut machine = load_from_file(path, env);
-    let profile = machine.profile_gen(args);
+///Interprets path as a mini executable and starts a profiler session with executable arguments args
+/// and `RuntimeEnvironment` env.  See `profiler_session` for more details.
+pub fn profile_gen_from_file(
+    path: &Path,
+    args: Vec<Value>,
+    env: RuntimeEnvironment,
+    mode: ProfilerMode,
+) {
+    let mut machine = load_from_file_and_env(path, env);
+    let profile = machine.profile_gen(args, mode);
     profile.profiler_session();
 }
 
