@@ -4,7 +4,7 @@
 
 use crate::evm::test_contract_path;
 use crate::mavm::Value;
-use crate::run::{ArbosReceipt, Machine, load_from_file};
+use crate::run::{load_from_file, ArbosReceipt, Machine};
 use crate::uint256::Uint256;
 use ethers_core::utils::keccak256;
 use ethers_signers::Signer;
@@ -209,18 +209,19 @@ impl AbiForContract {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
-        let (submit_txid, retryable_txid, maybe_redeemid) = machine.runtime_env._insert_retryable_tx_message(
-            sender.clone(),
-            self.address.clone(),
-            payment.clone(),
-            payment,
-            max_submission_cost,
-            credit_back_address.unwrap_or(sender.clone()),
-            beneficiary.unwrap_or(sender),
-            max_gas_immed.unwrap_or(Uint256::zero()),
-            gas_price_immed.unwrap_or(Uint256::zero()),
-            &calldata,
-        );
+        let (submit_txid, retryable_txid, maybe_redeemid) =
+            machine.runtime_env._insert_retryable_tx_message(
+                sender.clone(),
+                self.address.clone(),
+                payment.clone(),
+                payment,
+                max_submission_cost,
+                credit_back_address.unwrap_or(sender.clone()),
+                beneficiary.unwrap_or(sender),
+                max_gas_immed.unwrap_or(Uint256::zero()),
+                gas_price_immed.unwrap_or(Uint256::zero()),
+                &calldata,
+            );
 
         Ok((submit_txid, retryable_txid, maybe_redeemid))
     }
@@ -1143,15 +1144,15 @@ impl ArbosTest {
         if (logs.len() != num_logs_before + 2) || (sends.len() != num_sends_before) {
             return Err(ethabi::Error::from("wrong number of receipts or sends"));
         }
-        if !logs[num_logs_before+1].succeeded() {
+        if !logs[num_logs_before + 1].succeeded() {
             println!(
                 "arbosTest.run revert code {}",
-                logs[num_logs_before+1].get_return_code()
+                logs[num_logs_before + 1].get_return_code()
             );
             return Err(ethabi::Error::from("reverted"));
         }
 
-        Ok(logs[num_logs_before+1].get_return_data())
+        Ok(logs[num_logs_before + 1].get_return_data())
     }
 
     pub fn get_account_info(

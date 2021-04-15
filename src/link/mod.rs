@@ -17,8 +17,8 @@ use std::hash::Hasher;
 use std::io;
 use xformcode::make_uninitialized_tuple;
 
-pub use xformcode::{value_from_field_list, TupleTree, TUPLE_SIZE};
 use crate::compile::miniconstants::ARBOS_VERSION;
+pub use xformcode::{value_from_field_list, TupleTree, TUPLE_SIZE};
 
 mod optimize;
 mod striplabels;
