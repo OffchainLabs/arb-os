@@ -2,7 +2,7 @@
   "integer": [
     [
       "ArbosVersionNumber",
-      3
+      5
     ],
     [
       "Address_ArbSys",
@@ -828,7 +828,9 @@
     ]
   ],
   "contract": [
+    "ArbAggregator",
     "ArbRetryableTx",
-    "ArbStatistics"
+    "ArbStatistics",
+    "ArbOwner"
   ]
 }

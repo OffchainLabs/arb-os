@@ -2,9 +2,6 @@
  * Copyright 2021, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::compile::miniconstants::ARBOS_VERSION;
-use crate::evm::abi::{AbiForContract, ArbSys, _ArbOwner};
-use crate::evm::test_contract_path;
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, Instruction};
 use rustc_hex::ToHex;
