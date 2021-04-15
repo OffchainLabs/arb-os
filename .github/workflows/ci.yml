@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v2
 
       - name: Install stable
         uses: actions-rs/toolchain@v1
@@ -37,39 +37,48 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
-        rust: [beta, stable, nightly]
-        include:
-          - rust: nightly
-            allow_failure: true
+        os: [ubuntu-20.04]
+        rust: [stable]
+        #rust: [stable, beta]
+
     steps:
       - name: Checkout
         uses: actions/checkout@v1
 
-      - name: Install ${{ matrix.rust }}
+      - name: Install dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y \
+            libasound2-dev libudev-dev build-essential pkg-config libssl-dev
+
+      - name: Install Rust ${{ matrix.rust }}
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: ${{ matrix.rust }}
           override: true
 
-      - name: Install libasound2-dev and libudev-dev
-        if: startsWith(matrix.os, 'ubuntu')
-        run: sudo apt-get update && sudo apt-get install libasound2-dev libudev-dev
-
-      - name: make ArbOs
-        run: make clean && make
+      - uses: actions/cache@v2
+        with:
+          path: |
+            target
+          key: ${{ matrix.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.os }}-cargo-${{ matrix.rust }}-
 
       - name: Build
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --all
-        continue-on-error: ${{ matrix.allow_failure }}
+
+      - name: Make ArbOs
+        run: make clean && make
+
+      - name: Check if ArbOS changed
+        run: git update-index --refresh && git diff-index --quiet HEAD --
 
       - name: Test
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --all
-        continue-on-error: ${{ matrix.allow_failure }}
