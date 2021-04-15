@@ -21,6 +21,7 @@ use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
+use std::bytearray::bytearray_getCalldataUnits;
 
 use std::bytestream::ByteStream;
 use std::bytestream::bytestream_new;
@@ -40,6 +41,8 @@ use std::expandingIntArray::expandingIntArray_get;
 use std::expandingIntArray::expandingIntArray_set;
 
 use std::keccak::keccak256;
+
+use std::rlp::rlp_encodeUint;
 
 use std::queue::Queue;
 use std::queue::queue_new;
@@ -190,13 +193,18 @@ public impure func decompressAndVerifyEcdsaSignedTx(
 
     let (_, txRequest) = decompressTx(bytestream_new(body), None<address>, None<FunctionTable>)?;
 
-    let seqNum = xif(originalRequest.kind == const::L1MessageType_L2ForGasEstimation) {
-        account_getNextSeqNum(accountStore_get(getGlobalAccountStore(), originalRequest.sender))
+    let (seqNum, calldataUnitsDelta) = xif(originalRequest.kind == const::L1MessageType_L2ForGasEstimation) {
+        let realSnum = account_getNextSeqNum(accountStore_get(getGlobalAccountStore(), originalRequest.sender));
+        (
+            realSnum,
+            int(bytearray_getCalldataUnits(rlp_encodeUint(realSnum, bytearray_new(0), 0).0)) - int(16),
+                            // subtract 16 because initial seqNum was 0, which RLP-encodes to [0x80], which costs 16
+        )
     } else {
         xif let Some(sn) = txRequest.seqNum {
-            sn
+            (sn, int(0))
         } else {
-            0
+            (0, int(0))
         }
     };
 
@@ -242,6 +250,13 @@ public impure func decompressAndVerifyEcdsaSignedTx(
             bytearray_size(encodedMessage)
         )
     };
+    if (calldataUnitsDelta != int(0)) {
+        if let Some(aggInfo) = originalRequest.aggregator {
+            originalRequest = originalRequest with {
+                aggregator: Some(aggInfo with { calldataUnits: uint(int(aggInfo.calldataUnits) + calldataUnitsDelta) })
+            };
+        }
+    }
 
     return Some(
         txRequest with {
