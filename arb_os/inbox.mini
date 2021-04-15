@@ -158,9 +158,7 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
     // Automatically generate an end-of-block message if that is needed.
     // If there are no messages available in the L1 inbox, this blocks until one is available
 
-    asm(100,) { debugprint };
     if let Some(pendingMsg) = inbox.pendingMessage {
-        asm(101,) { debugprint };
         let rawSideloadMsg = asm(inbox.arbBlockNum,) any { sideload };
         if (rawSideloadMsg != ()) {
             let newMsg = incomingRequestFromRaw(unsafecast<IncomingRequestFromInbox>(rawSideloadMsg), true);
@@ -169,7 +167,6 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
             };
         }
 
-        asm((102, inbox.arbBlockNum),) { debugprint };
         // do end of block processing
         outputStats_endOfBlock(inbox.arbBlockNum, inbox.ethBlockNum, inbox.timestamp);
         blockhash_submitHash(inbox.arbBlockNum, inbox.ethBlockNum, inbox.inboxHashAccumulator);
@@ -180,41 +177,35 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
             arbBlockNum: inbox.arbBlockNum + 1
         };
 
-        if (pendingMsg.kind != const::L1MessageType_endOfBlock) {
-            asm(103,) { debugprint };
-             return inbox with {
+        return xif (pendingMsg.kind != const::L1MessageType_endOfBlock) {
+            inbox with {
                 queue: incomingRequestQueue_put(
                     inbox.queue,
                     pendingMsg with { arbBlockNumber: pendingMsg.arbBlockNumber + 1 },
                 )
-            };
-        }
-
-        asm(104,) { debugprint };
-        return inbox with {
-            atStartOfBlock: true
+            }
+        } else {
+            inbox with {
+                atStartOfBlock: true
+            }
         };
     }
 
     let newMsg = incomingRequestFromRaw(asm() IncomingRequestFromInbox { inbox }, false);
     if ( (!inbox.atStartOfBlock) && ((newMsg.ethBlockNumber > inbox.ethBlockNum) || (newMsg.timestamp > inbox.timestamp)) ){
-        asm(105,) { debugprint };
         return inbox with {
             pendingMessage: Some(newMsg)
         };
     } elseif (newMsg.kind == const::L1MessageType_endOfBlock) {
         return xif (inbox.atStartOfBlock) {
-            asm(106,) { debugprint };
             inbox
         } else {
-            asm(107,) { debugprint };
             inbox with {
                 pendingMessage: Some(newMsg)
             }
         };
     }
 
-    asm((107, newMsg.arbBlockNumber),) { debugprint };
     return inbox with {
         queue: incomingRequestQueue_put(inbox.queue, newMsg)
     } with {
@@ -401,7 +392,6 @@ public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
                 // else L2 msg type is invalid in ETH deposit message, ignore msg and execute loop again to get another
                 //      note that deposit doesn't happen in this case
             } elseif (msg.kind == const::L1MessageType_endOfBlock) {
-                asm((200, msg.arbBlockNumber),) { debugprint };
                 // it's an end-of-block message, so just trigger end-of-block processing
                 outputStats_endOfBlock(msg.arbBlockNumber, msg.ethBlockNumber, msg.timestamp);
                 blockhash_submitHash(msg.arbBlockNumber, msg.ethBlockNumber, globalInbox.inboxHashAccumulator);

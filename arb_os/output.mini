@@ -101,7 +101,6 @@ var globalBlockReceiptData: struct {
 var logsQueuedForEndOfBlock: Queue;
 
 public impure func outputStats_endOfBlock(arbBlockNum: uint, ethBlockNum: uint, timestamp: uint) {
-    asm((300, arbBlockNum),) { debugprint };
     if ((inbox_currentTimestamp() >= globalBlockReceiptData.nextSendTime) && !outbox_isEmpty() ){
         outbox_send();
         globalBlockReceiptData = globalBlockReceiptData with {
@@ -135,7 +134,6 @@ public impure func outputStats_endOfBlock(arbBlockNum: uint, ethBlockNum: uint, 
     }
     logsQueuedForEndOfBlock = q;
 
-    asm((301, arbBlockNum),) { debugprint };
     asm((
         const::LogType_blockSummary,
         arbBlockNum,
