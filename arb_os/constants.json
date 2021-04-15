@@ -208,6 +208,7 @@
     "EVMLogTopicForL2ToL1Send": "5baaa87db386365b5c161be377bc3d8e317e8d98d71a3ca7ed7d555340c8f767",
     "SpecialAccount_gasAccountingReserve": "af6cbc19f66dec07f790912226744d744f04b37b666b9343317df33a5114fb96"
   },
+  "contract_folder": "contracts/artifacts/arbos/builtin",
   "contract": [
     "ArbAggregator",
     "ArbOwner",

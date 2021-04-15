@@ -11,6 +11,10 @@ use ethers_signers::Signer;
 use ethers_signers::Wallet;
 use std::{fs::File, io::Read, path::Path};
 
+pub fn contract_path(folder: &str, contract_name: &str) -> String {
+    format!("{}/{}.sol/{}.json", folder, contract_name, contract_name)
+}
+
 pub fn builtin_contract_path(contract_name: &str) -> String {
     format!(
         "contracts/artifacts/arbos/builtin/{}.sol/{}.json",

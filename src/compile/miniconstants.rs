@@ -5,7 +5,7 @@
 //!Creates a fixed list of globally accessible constants.
 
 use crate::compile::CompileError;
-use crate::evm::{builtin_contract_path, AbiForContract};
+use crate::evm::{contract_path, AbiForContract};
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -18,6 +18,7 @@ pub struct ConstantsFile {
     pub arbos_version: u64,
     integer: BTreeMap<String, u64>,
     hex: BTreeMap<String, String>,
+    contract_folder: String,
     contract: BTreeSet<String>,
 }
 
@@ -60,22 +61,24 @@ pub fn init_constant_table(
     }
 
     for builtin in consts.contract {
-        let fcodes = func_codes_for_builtin_contract(&builtin).map_err(|e| {
-            CompileError::new(
-                format!("Error accessing builtin function {}: {}", builtin, e),
-                None,
-            )
-        })?;
+        let fcodes =
+            func_codes_for_builtin_contract(&consts.contract_folder, &builtin).map_err(|e| {
+                CompileError::new(
+                    format!("Error accessing builtin function {}: {}", builtin, e),
+                    None,
+                )
+            })?;
         for (name, code) in fcodes {
             ret.insert(name, code);
         }
 
-        let etopics = event_topics_for_builtin_contract(&builtin).map_err(|e| {
-            CompileError::new(
-                format!("Error accessing builtin event {}: {}", builtin, e),
-                None,
-            )
-        })?;
+        let etopics = event_topics_for_builtin_contract(&consts.contract_folder, &builtin)
+            .map_err(|e| {
+                CompileError::new(
+                    format!("Error accessing builtin event {}: {}", builtin, e),
+                    None,
+                )
+            })?;
         for (name, topic) in etopics {
             ret.insert(name, topic);
         }
@@ -90,9 +93,10 @@ pub fn init_constant_table(
 }
 
 fn func_codes_for_builtin_contract(
+    folder: &str,
     contract_name: &str,
 ) -> Result<Vec<(String, Uint256)>, ethabi::Error> {
-    let cabi = AbiForContract::new_from_file(&builtin_contract_path(contract_name))?;
+    let cabi = AbiForContract::new_from_file(&contract_path(folder, contract_name))?;
     let mut ret = vec![];
     for (_, funcs) in &cabi.contract.functions {
         for func in funcs {
@@ -107,9 +111,10 @@ fn func_codes_for_builtin_contract(
 }
 
 fn event_topics_for_builtin_contract(
+    folder: &str,
     contract_name: &str,
 ) -> Result<Vec<(String, Uint256)>, ethabi::Error> {
-    let cabi = AbiForContract::new_from_file(&builtin_contract_path(contract_name))?;
+    let cabi = AbiForContract::new_from_file(&contract_path(folder, contract_name))?;
     let mut ret = vec![];
     for (_, events) in &cabi.contract.events {
         for event in events {

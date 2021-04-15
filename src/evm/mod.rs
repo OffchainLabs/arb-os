@@ -11,7 +11,7 @@ use ethers_signers::Signer;
 use std::path::Path;
 
 use crate::compile::miniconstants::init_constant_table;
-pub use abi::{builtin_contract_path, AbiForContract};
+pub use abi::{builtin_contract_path, contract_path, AbiForContract};
 pub use benchmarks::make_benchmarks;
 pub use evmtest::run_evm_tests;
 
