@@ -1,4 +1,5 @@
 {
+  "arbos_version": 6,
   "integer": {
     "AVMSendType_batch": 0,
     "AVM_add": 1,
@@ -85,7 +86,6 @@
     "Address_ArbosTest": 105,
     "Address_ReservedForEthBridge": 200,
     "ArbitrumNonZeroBalanceCallStipend": 20000,
-    "ArbosVersionNumber": 6,
     "Charging_AssumedBatchCostL1Gas": 50000,
     "Charging_DefaultArbGasDivisor": 10000,
     "Charging_DefaultL1GasPerCalldataByte": 16,

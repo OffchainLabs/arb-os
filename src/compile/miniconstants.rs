@@ -8,19 +8,18 @@ use crate::compile::CompileError;
 use crate::evm::{builtin_contract_path, AbiForContract};
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ConstantsFile {
+    pub arbos_version: u64,
     integer: BTreeMap<String, u64>,
     hex: BTreeMap<String, String>,
     contract: BTreeSet<String>,
 }
-
-pub static ARBOS_VERSION: u64 = 6;
 
 ///Creates a fixed list of globally accessible constants.
 pub fn init_constant_table(
@@ -81,6 +80,11 @@ pub fn init_constant_table(
             ret.insert(name, topic);
         }
     }
+
+    ret.insert(
+        "ArbosVersionNumber".to_string(),
+        Uint256::from_u64(consts.arbos_version),
+    );
 
     Ok(ret)
 }

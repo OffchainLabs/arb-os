@@ -2,8 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::compile::miniconstants::ARBOS_VERSION;
-use crate::evm::abi::{FunctionTable};
+use crate::evm::abi::FunctionTable;
 use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest};
 use crate::evm::preinstalled_contracts::_ArbReplayableTx;
 use crate::run::{load_from_file, load_from_file_and_env, RuntimeEnvironment};
@@ -11,6 +10,7 @@ use crate::uint256::Uint256;
 use ethers_signers::Signer;
 use std::path::Path;
 
+use crate::compile::miniconstants::init_constant_table;
 pub use abi::{builtin_contract_path, AbiForContract};
 pub use benchmarks::make_benchmarks;
 pub use evmtest::run_evm_tests;
@@ -211,7 +211,13 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     let arb_bls = ArbBLS::new(&wallet, debug);
 
     let version = arbsys._arbos_version(&mut machine)?;
-    assert_eq!(version, Uint256::from_u64(ARBOS_VERSION));
+    assert_eq!(
+        version,
+        *init_constant_table(Some(Path::new("arb_os/constants.json")))
+            .unwrap()
+            .get("ArbosVersionNumber")
+            .unwrap()
+    );
 
     let tx_count = arbsys.get_transaction_count(&mut machine, my_addr.clone())?;
     assert_eq!(tx_count, Uint256::from_u64(2));
@@ -697,18 +703,19 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
     assert_eq!(second_to_last.get_request_id(), txid);
 
     let num_receipts_before = receipts.len();
-    let (submit_txid, _inner_txid, maybe_redeem_id) = machine.runtime_env._insert_retryable_tx_message(
-        my_addr.clone(),
-        add_contract.address,
-        Uint256::zero(),
-        Uint256::_from_eth(1),
-        Uint256::_from_gwei(1_000_000),
-        my_addr.clone(),
-        my_addr.clone(),
-        Uint256::from_u64(10_000_000),
-        Uint256::zero(),
-        &[],
-    );
+    let (submit_txid, _inner_txid, maybe_redeem_id) =
+        machine.runtime_env._insert_retryable_tx_message(
+            my_addr.clone(),
+            add_contract.address,
+            Uint256::zero(),
+            Uint256::_from_eth(1),
+            Uint256::_from_gwei(1_000_000),
+            my_addr.clone(),
+            my_addr.clone(),
+            Uint256::from_u64(10_000_000),
+            Uint256::zero(),
+            &[],
+        );
 
     let _gas_used = if debug {
         machine.debug(None)
@@ -720,7 +727,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
     assert_eq!(new_receipts.len(), 2);
     assert!(new_receipts[0].succeeded());
     assert_eq!(new_receipts[0].get_request_id(), submit_txid);
-    assert!( ! new_receipts[1].succeeded());
+    assert!(!new_receipts[1].succeeded());
     assert_eq!(new_receipts[1].get_request_id(), maybe_redeem_id.unwrap());
 
     if let Some(path) = log_to {
