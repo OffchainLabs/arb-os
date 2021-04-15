@@ -250,7 +250,7 @@ public impure func initEvmCallStack(
         )
     ) {
         globalCurrentTxRequest = request;
-        globalCurrentRetryableRequest = None<IncomingRequest>;
+        globalCurrentRetryableRequest = None<IncomingRequestAndLogs>;
 
         let (startTxResult, acctStore, _) = xif(request.maxGas < const::Charging_MinArbGasForContractTx) {
             let gaccts = getGlobalAccountStore();
