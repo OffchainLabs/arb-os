@@ -1,0 +1,4618 @@
+{
+  "code": [
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 50
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 56
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": {
+        "Tuple": [
+          {
+            "Buffer": ""
+          },
+          {
+            "Int": "0"
+          },
+          {
+		"Buffer": ""
+          },
+          {
+            "Int": "3"
+          }
+        ]
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 81
+      },
+      "immediate": {
+        "Int": "1"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 81
+      },
+      "immediate": {
+        "Int": "2"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 81
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 51
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 160
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": {
+        "Int": "400"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 165
+      },
+      "immediate": {
+        "Int": "0"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 50
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 81
+      },
+      "immediate": {
+        "Int": "0"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 51
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 56
+      },
+      "immediate": {
+        "Tuple": [
+          {
+            "Buffer": ""
+          },
+          {
+            "Int": "9"
+          }
+        ]
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 83
+      },
+      "immediate": {
+        "Int": "0"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": {
+        "Int": "2"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 165
+      },
+      "immediate": {
+        "Int": "0"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 84
+      },
+      "immediate": {
+        "Int": "0"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": "I32Const(0) level 0 func 0 idx 0"
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": {
+        "Int": "0"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": "I32Const(222) level 1 func 0 idx 1"
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": {
+        "Int": "de"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": "Call(2) level 2 func 0 idx 2"
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 56
+      },
+      "immediate": {
+        "Tuple": [
+          {
+            "Buffer": ""
+          },
+          {
+            "Int": "1"
+          }
+        ]
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 83
+      },
+      "immediate": {
+        "Int": "0"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 165
+      },
+      "immediate": {
+        "Int": "8"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 84
+      },
+      "immediate": {
+        "Int": "0"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 83
+      },
+      "immediate": {
+        "Int": "0"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 165
+      },
+      "immediate": {
+        "Int": "0"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 84
+      },
+      "immediate": {
+        "Int": "0"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 50
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": {
+        "Int": "1"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": {
+        "Int": "6"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 48
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 52
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 57
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 48
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": "I32Const(0) level 0 func 0 idx 3"
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": {
+        "Int": "0"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": "End level 1 func 0 idx 4"
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 83
+      },
+      "immediate": {
+        "Int": "1"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 56
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 50
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": {
+        "Int": "1"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 57
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 48
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 52
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": "Read"
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 50
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": {
+        "Int": "2"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 83
+      },
+      "immediate": {
+        "Int": "0"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 162
+      },
+      "immediate": {
+        "Int": "0"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 161
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 83
+      },
+      "immediate": {
+        "Int": "1"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 56
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 50
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": {
+        "Int": "1"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 57
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 48
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 52
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 50
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": "Getting buffer length"
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 83
+      },
+      "immediate": {
+        "Int": "1"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 56
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 50
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": {
+        "Int": "1"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 57
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 48
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 52
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": "Write"
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 50
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": {
+        "Int": "2"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 83
+      },
+      "immediate": {
+        "Int": "0"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 162
+      },
+      "immediate": {
+        "Int": "8"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 83
+      },
+      "immediate": {
+        "Int": "0"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 162
+      },
+      "immediate": {
+        "Int": "0"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 164
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 50
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 81
+      },
+      "immediate": {
+        "Int": "2"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 51
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 83
+      },
+      "immediate": {
+        "Int": "1"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 56
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 50
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": {
+        "Int": "1"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 57
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 64
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 22
+      },
+      "immediate": {
+        "Int": "7"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 28
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 68
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 67
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 48
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 52
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 115
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": "Cleaning up"
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 50
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": {
+        "Int": "2"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 50
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 80
+      },
+      "immediate": {
+        "Int": "3"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 57
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 48
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 57
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 51
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 116
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    }
+  ],
+  "static_val": {
+    "Int": "123456"
+  }
+}

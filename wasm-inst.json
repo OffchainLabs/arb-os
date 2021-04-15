@@ -1,0 +1,65 @@
+{
+  "code": [
+    {
+      "opcode": {
+        "AVMOpcode": 160
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 59
+      },
+      "immediate": {
+        "Int": "123"
+      },
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 241
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    },
+    {
+      "opcode": {
+        "AVMOpcode": 116
+      },
+      "immediate": null,
+      "debug_info": {
+        "location": null,
+        "attributes": {
+          "breakpoint": false,
+          "inline": false
+        }
+      },
+      "debug_str": null
+    }
+  ],
+  "static_val": {
+    "Int": "123456"
+  }
+}
