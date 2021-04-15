@@ -1008,11 +1008,15 @@ impl Machine {
     /// machine reaches a stopped state for any other reason.  Returns the total gas used by self.
     pub fn run(&mut self, stop_pc: Option<CodePt>) -> u64 {
         let mut gas_used = 0;
+        let orig_gas = self.total_gas_usage.clone().to_u64().unwrap();
         while self.state.is_running() {
             if let Some(spc) = stop_pc {
                 if let MachineState::Running(pc) = self.state {
                     if pc == spc {
-                        return gas_used;
+                        let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
+                        // gas_used
+                        return final_gas - orig_gas
+                        // return gas_used;
                     }
                 }
             }
@@ -1072,7 +1076,9 @@ impl Machine {
             match self.run_one(false) {
                 Ok(still_runnable) => {
                     if !still_runnable {
-                        return gas_used;
+                        let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
+                        return final_gas - orig_gas
+                        // return gas_used;
                     }
                 }
                 Err(e) => {
@@ -1081,7 +1087,9 @@ impl Machine {
                 }
             }
         }
-        gas_used
+        let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
+        // gas_used
+        final_gas - orig_gas
     }
 
     ///Generates a `ProfilerData` from a run of self with args from address 0.
@@ -1297,7 +1305,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => 100,
                 Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => 100,
                 Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => 100,
-                Opcode::AVMOpcode(AVMOpcode::RunWasm) => 100,
+                Opcode::AVMOpcode(AVMOpcode::RunWasm) => 1000000,
                 Opcode::AVMOpcode(AVMOpcode::CompileWasm) => 100,
                 _ => return None,
             })
@@ -2150,7 +2158,12 @@ impl Machine {
                         let buf = self.stack.pop_buffer(&self.state)?;
                         let (_, idx) = self.stack.pop_wasm_codepoint(&self.state)?;
                         // println!("Going to run JIT");
-                        let (nbuf, len) = self.wasm_instances[idx].run(buf, arg);
+                        let (nbuf, len, gas_left) = self.wasm_instances[idx].run(buf, arg);
+
+                        let gas256 = Uint256::from_u64(gas_left);
+                        self.total_gas_usage = self.total_gas_usage.sub(&gas256).unwrap();
+                        self.arb_gas_remaining = self.arb_gas_remaining.add(&gas256);
+
                         self.stack.push(Value::Int(Uint256::from_usize(len)));
                         self.stack.push(Value::Buffer(nbuf));
                         self.incr_pc();
@@ -2171,10 +2184,10 @@ impl Machine {
                         println!("Got opcodes {}", init.len());
                         for i in (0..init.len()).rev() {
                             let op = code_vec[i].clone();
-                            println!("Hmm {} {:?}", i, op);
+                            // println!("Hmm {} {:?}", i, op);
                             code_pt = self.code.push_insn(crate::wasm::get_inst(&op) as usize, op.immediate, code_pt).unwrap();
                             if crate::wasm::has_label(&init[i]) {
-                                println!("Found label at {} {:?}", i, code_pt);
+                                // println!("Found label at {} {:?}", i, code_pt);
                                 labels.push(Value::CodePoint(code_pt))
                             }
                         }

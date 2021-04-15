@@ -223,6 +223,19 @@ fn set_buffer_len(res: &mut Vec<Instruction>) {
     res.push(simple_op(AVMOpcode::Rset));
 }
 
+fn get_gas_left(res: &mut Vec<Instruction>) {
+    res.push(simple_op(AVMOpcode::Rget));
+    res.push(debug_op("Getting gas".to_string()));
+    res.push(immed_op(AVMOpcode::Tget, int_from_usize(4)));
+}
+
+fn set_gas_left(res: &mut Vec<Instruction>) {
+    res.push(simple_op(AVMOpcode::Rget));
+    res.push(debug_op("Setting buffer length".to_string()));
+    res.push(immed_op(AVMOpcode::Tset, int_from_usize(4)));
+    res.push(simple_op(AVMOpcode::Rset));
+}
+
 // load byte, save address
 fn load_byte(res: &mut Vec<Instruction>, offset: usize) {
     // value, address
@@ -851,7 +864,7 @@ fn handle_function(
                 }
                 if c.level != ptr {
                     eprintln!("End block mismatch {} != {} rets {}", ptr, c.level, c.rets);
-                    panic!("End block mismatch {}");
+                    panic!("End block mismatch");
                 }
                 ptr = c.level;
             }
@@ -1680,8 +1693,10 @@ fn find_function(m: &Module, name: &str) -> Option<u32> {
 pub fn get_answer64(answer: wasmtime::Func) -> i32 {
     let answer = answer.get0::<i32>().unwrap();
 
-    let result = answer().unwrap();
-    result as i32
+    match answer() {
+        Ok(result) => result as i32,
+        Err(_) => 0,
+    }
 }
 
 pub fn get_answer32(answer: wasmtime::Func, param: i64) -> i32 {
@@ -1771,6 +1786,7 @@ pub struct JitWasm {
     instance: wasmtime::Instance,
     cell: std::rc::Rc<std::cell::RefCell<Buffer>>,
     len_cell: std::rc::Rc<std::cell::RefCell<i32>>,
+    gas_cell: std::rc::Rc<std::cell::RefCell<i32>>,
 }
 
 use std::fmt;
@@ -1801,6 +1817,9 @@ impl JitWasm {
         let len1 = len_cell.clone();
         let len2 = len_cell.clone();
 
+        let gas_cell = Rc::new(RefCell::new(4));
+        let gas1 = gas_cell.clone();
+
         let read_func = Func::wrap(&store, move |offset: i32| {
             let ret = cell1.borrow().read_byte(offset as usize) as i32;
             ret
@@ -1813,6 +1832,32 @@ impl JitWasm {
         let len_func = Func::wrap(&store, move || len1.borrow().clone() as i32);
 
         let set_len_func = Func::wrap(&store, move |nlen: i32| { len2.replace_with(|_| nlen); });
+
+        let callback_type = FuncType::new(
+            [ValType::I32].iter().cloned(),
+            [].iter().cloned(),
+        );
+        let gas_func = Func::new(&store, callback_type, move |_, args, results| {
+            let gas_used = args[0].unwrap_i32();
+            let gas = gas1.borrow().clone();
+            if gas_used > gas {
+                gas1.replace_with(|_gas| 0);
+                Err(wasmtime::Trap::new("out of gas"))
+            } else {
+                gas1.replace_with(|gas| *gas - gas_used);
+                Ok(())
+            }
+        });
+    
+/*        let gas_func = Func::new(&store, move |gas_used: i32| {
+            gas1.replace_with(|gas| {
+                if gas_used > *gas {
+                    *gas - gas_used
+                } else {
+
+                }
+            });
+        });*/
 
         let error_func = Func::wrap(&store, || {
             panic!("Unknown import");
@@ -1831,6 +1876,8 @@ impl JitWasm {
                         imports.push(len_func.clone().into())
                     } else if name.contains("setlen") {
                         imports.push(set_len_func.clone().into())
+                    } else if name.contains("usegas") {
+                        imports.push(gas_func.clone().into())
                     } else {
                         imports.push(error_func.clone().into())
                     }
@@ -1846,12 +1893,14 @@ impl JitWasm {
             instance,
             cell,
             len_cell,
+            gas_cell,
         };
     }
 
-    pub fn run(&self, buf: Buffer, len: usize) -> (Buffer, usize) {
+    pub fn run(&self, buf: Buffer, len: usize) -> (Buffer, usize, u64) {
         self.cell.replace_with(|_buf| buf);
         self.len_cell.replace_with(|_len| len as i32);
+        self.gas_cell.replace_with(|_gas| 1000000);
 
         let res = match self.instance.get_func("test") {
             Some(f) => get_answer64(f) as i64,
@@ -1861,6 +1910,7 @@ impl JitWasm {
         (
             self.cell.borrow().clone(),
             self.len_cell.borrow().clone() as usize,
+            self.gas_cell.borrow().clone() as u64,
         )
     }
 }
@@ -1906,10 +1956,11 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
     // Initialize register
     // init.push(immed_op(AVMOpcode::Rset, Value::new_tuple(vec![Value::new_buffer(vec![]), int_from_usize(0)])));
     init.push(push_value(Value::new_tuple(vec![
-        Value::new_buffer(vec![]),
-        int_from_usize(0),
-        Value::new_buffer(vec![123, 234, 12]),
-        int_from_usize(3),
+        Value::new_buffer(vec![]), // memory
+        int_from_usize(0), // memory limit
+        Value::new_buffer(vec![123, 234, 12]), // IO buffer
+        int_from_usize(3), // IO len
+        int_from_usize(1000000), // gas left
     ])));
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(1)));
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(2)));
@@ -2013,6 +2064,26 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
             init.push(get64_from_buffer(0));
             set_buffer_len(&mut init);
         }
+        if f.field().contains("usegas") {
+            let ok_label = label;
+            label = label + 1;
+            init.push(get_frame());
+            init.push(get64_from_buffer(0));
+            get_gas_left(&mut init);
+            init.push(simple_op(AVMOpcode::GreaterThan));
+            cjump(&mut init, ok_label);
+
+            init.push(push_value(int_from_usize(0)));
+            set_gas_left(&mut init);
+            call_jump(&mut init, (f_count + 1) as u32);
+
+            init.push(mk_label(ok_label));
+            init.push(get_frame());
+            init.push(get64_from_buffer(0));
+            get_gas_left(&mut init);
+            init.push(simple_op(AVMOpcode::Minus));
+            set_gas_left(&mut init);
+        }
         // Return from function
         init.push(get_return_pc());
         get_return_from_table(&mut init);
@@ -2055,6 +2126,8 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
     init.push(mk_func_label(f_count + 1));
     init.push(debug_op("Cleaning up".to_string()));
     init.push(simple_op(AVMOpcode::Rget));
+    init.push(immed_op(AVMOpcode::Tget, int_from_usize(4)));
+    init.push(simple_op(AVMOpcode::Rget));
     init.push(immed_op(AVMOpcode::Tget, int_from_usize(2)));
     init.push(simple_op(AVMOpcode::Rget));
     init.push(immed_op(AVMOpcode::Tget, int_from_usize(3)));
@@ -2095,12 +2168,13 @@ pub fn load(buffer: &[u8], param: &[u8]) -> Vec<Instruction> {
     // println!("Table {}", tab);
     let res = clear_labels(res);
     // println!("Code {}", );
+    /*
     let str = serde_json::to_string(&res).unwrap();
     let mut file = File::create("foo.json").unwrap();
-    file.write_all(&str.as_bytes());
+    file.write_all(&str.as_bytes()).unwrap();
     let mut file2 = File::create("labels.json").unwrap();
-    file2.write_all(serde_json::to_string(&has_label_buf).unwrap().as_bytes());
-
+    file2.write_all(serde_json::to_string(&has_label_buf).unwrap().as_bytes()).unwrap();
+*/
     let mut a = vec![];
     a.push(push_value(int_from_usize(param.len())));
     a.push(push_value(Value::new_buffer(param.to_vec())));

@@ -174,15 +174,16 @@ fn main() -> Result<(), CompileError> {
             // machine.debug(Some(CodePt::new_internal(code_len - 1)));
             let len = machine.stack.nth(0);
             let buf = machine.stack.nth(1);
-            match (len, buf) {
-                (Some(Value::Int(a)), Some(Value::Buffer(buf))) => {
+            let gas_left = machine.stack.nth(2);
+            match (len, buf, gas_left) {
+                (Some(Value::Int(a)), Some(Value::Buffer(buf)), Some(Value::Int(gl))) => {
                     let len = a.to_usize().unwrap();
                     let mut res = vec![];
                     for i in 0..len {
                         // println!("{}", buf.read_byte(i));
                         res.push(buf.read_byte(i))
                     }
-                    println!("Result {}", hex::encode(res));
+                    println!("Gas used {}, Result {}", 1000000 - gl.to_usize().unwrap(), hex::encode(res));
                 }
                 _ => println!("Unexpected output")
             };
@@ -206,15 +207,15 @@ fn main() -> Result<(), CompileError> {
             let buf = Buffer::new(param.to_vec());
             /*
             for i in 0..1000000 {
-                let (buf, len) = a.run(buf.clone(), param.len());
+                let (buf, len; _) = a.run(buf.clone(), param.len());
             }
             */
-            let (buf, len) = a.run(buf, param.len());
+            let (buf, len, gas_left) = a.run(buf, param.len());
             let mut res = vec![];
             for i in 0..len {
                 res.push(buf.read_byte(i))
             }
-            println!("Result {}", hex::encode(res));
+            println!("Gas used {}, Result {}", 1000000 - gas_left, hex::encode(res));
         }
         Args::Compile(compile) => {
             let debug_mode = compile.debug_mode;
