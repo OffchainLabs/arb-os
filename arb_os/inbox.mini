@@ -191,7 +191,7 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
         }
 
         asm(104,) { debugprint };
-        inbox = inbox with {
+        return inbox with {
             atStartOfBlock: true
         };
     }
