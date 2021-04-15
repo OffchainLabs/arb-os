@@ -20,7 +20,7 @@ pub struct ConstantsFile {
     contract: Vec<String>,
 }
 
-pub static ARBOS_VERSION: u64 = 5;
+pub static ARBOS_VERSION: u64 = 6;
 
 ///Creates a fixed list of globally accessible constants.
 pub fn init_constant_table(

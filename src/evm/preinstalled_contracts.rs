@@ -6,17 +6,17 @@ use ethers_signers::{Signer, Wallet};
 use std::path::Path;
 use crate::upload::CodeUploader;
 
-pub struct ArbInfo {
+pub struct _ArbInfo {
     pub contract_abi: AbiForContract,
     debug: bool,
 }
 
-impl ArbInfo {
+impl _ArbInfo {
     pub fn _new(debug: bool) -> Self {
         let mut contract_abi =
             AbiForContract::new_from_file(&builtin_contract_path("ArbInfo")).unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(101));
-        ArbInfo {
+        _ArbInfo {
             contract_abi,
             debug,
         }
@@ -55,19 +55,19 @@ impl ArbInfo {
     }
 }
 
-pub struct ArbOwner<'a> {
+pub struct _ArbOwner<'a> {
     pub contract_abi: AbiForContract,
     wallet: &'a Wallet,
     my_address: Uint256,
     debug: bool,
 }
 
-impl<'a> ArbOwner<'a> {
+impl<'a> _ArbOwner<'a> {
     pub fn _new(wallet: &'a Wallet, debug: bool) -> Self {
         let mut contract_abi =
             AbiForContract::new_from_file(&builtin_contract_path("ArbOwner")).unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(107));
-        ArbOwner {
+        _ArbOwner {
             contract_abi,
             wallet,
             my_address: Uint256::from_bytes(wallet.address().as_bytes()),
@@ -419,19 +419,19 @@ impl<'a> ArbOwner<'a> {
     }
 }
 
-pub struct ArbGasInfo<'a> {
+pub struct _ArbGasInfo<'a> {
     pub contract_abi: AbiForContract,
     _wallet: &'a Wallet,
     my_address: Uint256,
     debug: bool,
 }
 
-impl<'a> ArbGasInfo<'a> {
+impl<'a> _ArbGasInfo<'a> {
     pub fn _new(wallet: &'a Wallet, debug: bool) -> Self {
         let mut contract_abi =
             AbiForContract::new_from_file(&builtin_contract_path("ArbGasInfo")).unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(108));
-        ArbGasInfo {
+        _ArbGasInfo {
             contract_abi,
             _wallet: wallet,
             my_address: Uint256::from_bytes(wallet.address().as_bytes()),
@@ -593,17 +593,17 @@ impl<'a> ArbGasInfo<'a> {
     }
 }
 
-pub struct ArbAggregator {
+pub struct _ArbAggregator {
     pub contract_abi: AbiForContract,
     debug: bool,
 }
 
-impl ArbAggregator {
+impl _ArbAggregator {
     pub fn _new(debug: bool) -> Self {
         let mut contract_abi =
             AbiForContract::new_from_file(&builtin_contract_path("ArbAggregator")).unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(109));
-        ArbAggregator {
+        _ArbAggregator {
             contract_abi,
             debug,
         }
@@ -773,17 +773,17 @@ impl ArbAggregator {
     }
 }
 
-pub struct ArbReplayableTx {
+pub struct _ArbReplayableTx {
     pub contract_abi: AbiForContract,
     debug: bool,
 }
 
-impl ArbReplayableTx {
+impl _ArbReplayableTx {
     pub fn _new(debug: bool) -> Self {
         let mut contract_abi =
             AbiForContract::new_from_file(&builtin_contract_path("ArbRetryableTx")).unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(110));
-        ArbReplayableTx {
+        _ArbReplayableTx {
             contract_abi,
             debug,
         }
@@ -950,17 +950,17 @@ impl ArbReplayableTx {
     }
 }
 
-pub struct ArbStatistics {
+pub struct _ArbStatistics {
     pub contract_abi: AbiForContract,
     debug: bool,
 }
 
-impl ArbStatistics {
+impl _ArbStatistics {
     pub fn _new(debug: bool) -> Self {
         let mut contract_abi =
             AbiForContract::new_from_file(&builtin_contract_path("ArbStatistics")).unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(111));
-        ArbStatistics {
+        _ArbStatistics {
             contract_abi,
             debug,
         }
@@ -1020,7 +1020,7 @@ pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), et
         machine.run(None)
     };
 
-    let arbinfo = ArbInfo::_new(false);
+    let arbinfo = _ArbInfo::_new(false);
     let balance = arbinfo._get_balance(&mut machine, &my_addr)?;
     assert_eq!(balance, Uint256::from_u64(20000));
 
@@ -1079,7 +1079,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
         panic!("failed to deploy Add contract");
     }
 
-    let arbowner = ArbOwner::_new(&wallet, false);
+    let arbowner = _ArbOwner::_new(&wallet, false);
 
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
@@ -1188,7 +1188,7 @@ pub fn _evm_run_with_gas_charging(
     }
 
     // turn on gas charging
-    let arbowner = ArbOwner::_new(&wallet, false);
+    let arbowner = _ArbOwner::_new(&wallet, false);
     arbowner._set_fees_enabled(&mut machine, true, true)?;
     machine
         .runtime_env
@@ -1262,7 +1262,7 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
-    let arbowner = ArbOwner::_new(&wallet, debug);
+    let arbowner = _ArbOwner::_new(&wallet, debug);
 
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
 
@@ -1312,8 +1312,8 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
-    let arbowner = ArbOwner::_new(&wallet, debug);
-    let arbgasinfo = ArbGasInfo::_new(&wallet, debug);
+    let arbowner = _ArbOwner::_new(&wallet, debug);
+    let arbgasinfo = _ArbGasInfo::_new(&wallet, debug);
 
     machine.runtime_env.insert_eth_deposit_message(
         my_addr.clone(),
@@ -1389,7 +1389,7 @@ pub fn _evm_test_rate_control(log_to: Option<&Path>, debug: bool) -> Result<(), 
 
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
-    let arbowner = ArbOwner::_new(&wallet, debug);
+    let arbowner = _ArbOwner::_new(&wallet, debug);
 
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
 
@@ -1431,7 +1431,7 @@ pub fn _do_rollup_tracker_ops() {
 
     let wallet = machine.runtime_env.new_wallet();
     let owner = Uint256::from_bytes(wallet.address().as_bytes());
-    let arbowner = ArbOwner::_new(&wallet, false);
+    let arbowner = _ArbOwner::_new(&wallet, false);
     arbowner
         ._give_ownership(&mut machine, owner.clone(), Some(Uint256::zero()))
         .unwrap();
@@ -1599,7 +1599,7 @@ pub fn _evm_test_arbaggregator(log_to: Option<&Path>, debug: bool) -> Result<(),
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
-    let arbagg = ArbAggregator::_new(debug);
+    let arbagg = _ArbAggregator::_new(debug);
 
     assert_eq!(
         arbagg._get_fee_collector(&mut machine, my_addr.clone())?,
@@ -1720,7 +1720,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
 
     let beneficiary = Uint256::from_u64(9185);
 
-    let (txid, _) = add_contract._send_retryable_tx(
+    let (_, txid, _) = add_contract._send_retryable_tx(
         my_addr.clone(),
         "add",
         &[
@@ -1742,7 +1742,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
         machine.run(None)
     };
 
-    let arb_replayable = ArbReplayableTx::_new(debug);
+    let arb_replayable = _ArbReplayableTx::_new(debug);
     let timeout = arb_replayable._get_timeout(&mut machine, txid.clone())?;
     assert!(timeout > machine.runtime_env.current_timestamp);
 
@@ -1763,7 +1763,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
     assert_eq!(new_timeout, Uint256::zero()); // verify that txid has been removed
 
     // make another one, and have the beneficiary cancel it
-    let (txid, _) = add_contract._send_retryable_tx(
+    let (_, txid, _) = add_contract._send_retryable_tx(
         my_addr.clone(),
         "add",
         &[
@@ -1817,7 +1817,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
     let last_log = &all_logs[all_logs.len() - 1];
     assert!(last_log.succeeded());
 
-    let (txid, redeemid) = add_contract._send_retryable_tx(
+    let (_submitid, txid, maybe_redeemid) = add_contract._send_retryable_tx(
         my_addr.clone(),
         "add",
         &[
@@ -1833,8 +1833,8 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
         Some(Uint256::zero()),
     )?;
     assert!(txid != Uint256::zero());
-    assert!(redeemid.is_some());
-    let redeemid = redeemid.unwrap();
+    assert!(maybe_redeemid.is_some());
+    let redeemid = maybe_redeemid.unwrap();
 
     let _gas_used = if debug {
         machine.debug(None)
@@ -1871,7 +1871,7 @@ fn _test_arb_stats() -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
-    let arbstats = ArbStatistics::_new(false);
+    let arbstats = _ArbStatistics::_new(false);
 
     let (arb_blocknum, num_accounts, storage, _arbgas, txs, contracts) =
         arbstats._get_stats(&mut machine)?;
