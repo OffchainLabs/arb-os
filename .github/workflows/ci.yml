@@ -12,7 +12,7 @@ env:
 
 jobs:
   rustfmt:
-    name: Rustfmt Check
+    name: Rust formatting check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -33,7 +33,7 @@ jobs:
           args: --all -- --check
 
   test:
-    name: Test ${{ matrix.rust }} on ${{ matrix.os }}
+    name: Test with ${{ matrix.rust }} rust on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
