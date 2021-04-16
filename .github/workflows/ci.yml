@@ -38,8 +38,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-20.04]
-        rust: [stable]
-        #rust: [stable, beta]
+        rust: [stable, beta]
 
     steps:
       - name: Checkout
@@ -57,9 +56,12 @@ jobs:
           toolchain: ${{ matrix.rust }}
           override: true
 
-      - uses: actions/cache@v2
+      - name: Cache rust build products
+        uses: actions/cache@v2
         with:
           path: |
+            ~/.cargo/registry
+            ~/.cargo/git
             target
           key: ${{ matrix.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
@@ -71,14 +73,12 @@ jobs:
           command: build
           args: --all
 
-      - name: Make ArbOs
+      - name: Install npm dependencies
+        run: |
+          npm install -g yarn && cd contracts && yarn install
+
+      - name: Make and test ArbOs
         run: make clean && make
 
       - name: Check if ArbOS changed
-        run: git update-index --refresh && git diff-index --quiet HEAD --
-
-      - name: Test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all
+        run: git update-index --refresh && git diff-index HEAD --
