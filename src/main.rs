@@ -7,6 +7,7 @@
 use crate::compile::CompileStruct;
 use crate::link::LinkedProgram;
 use crate::pos::try_display_location;
+use crate::upload::CodeUploader;
 use clap::Clap;
 use compile::CompileError;
 use contracttemplates::generate_contract_template_file_or_die;
@@ -21,7 +22,6 @@ use std::io;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use crate::upload::CodeUploader;
 
 mod compile;
 mod contracttemplates;
@@ -101,7 +101,7 @@ struct GenUpgrade {
 }
 
 #[derive(Clap, Debug)]
-struct SerializeUpgrade{
+struct SerializeUpgrade {
     input: String,
 }
 

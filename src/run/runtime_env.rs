@@ -519,7 +519,7 @@ impl RuntimeEnvironment {
             payee,
             amount,
             &[],
-            true
+            true,
         );
     }
 

@@ -8,6 +8,7 @@ fn compile_run_cycle(input: String) -> Machine {
     let mut compile = CompileStruct::default();
     compile.input = vec![input];
     compile.test_mode = true;
+    compile.consts_file = Some(format!("arb_os/constants.json"));
     let mexe = compile.invoke().unwrap();
     let mut machine = Machine::new(
         mexe,
