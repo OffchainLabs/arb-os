@@ -574,19 +574,21 @@ public impure func gasAccounting_endTxCharges(
     let payments = deferredPayments_new();
 
     let refund = (txState.originalMax - totalGasUsed) * txState.price;
-    if (refund > 0) {
-        payments = deferredPayments_add(payments, txState.refundTo, refund);
+    if ( ! feeStats.noFeeGasEstimationMode ) {
+        if (refund > 0) {
+            payments = deferredPayments_add(payments, txState.refundTo, refund);
+        }
+        payments = deferredPayments_add(
+            payments,
+            gasAccountingInfo.feeConfig.forNetwork,
+            computeGasUsed * gasAccountingInfo.currentPrices.perArbGasBase + storageGasUsed * txState.price,
+        );
+        payments = deferredPayments_add(
+            payments,
+            gasAccountingInfo.feeConfig.forCongestion,
+            computeGasUsed * gasAccountingInfo.currentPrices.perArbGasCongestion,
+        );
     }
-    payments = deferredPayments_add(
-        payments,
-        gasAccountingInfo.feeConfig.forNetwork,
-        computeGasUsed * gasAccountingInfo.currentPrices.perArbGasBase + storageGasUsed * txState.price,
-    );
-    payments = deferredPayments_add(
-        payments,
-        gasAccountingInfo.feeConfig.forCongestion,
-        computeGasUsed * gasAccountingInfo.currentPrices.perArbGasCongestion,
-    );
 
     gasAccountingInfo = gasAccountingInfo with {
         congestionState: gasAccountingInfo.congestionState with {
@@ -825,6 +827,18 @@ public impure func getNextRequestFromCongestionAuction() -> (
             feeStats: txFeeStats_setPrices(tx.feeStats, prices)
         };
 
+        if let Some(gep) = tx.incomingRequest.gasEstimationParams {
+            if (tx.maxGas > gep.computeGasLimit) {
+                tx = tx with { maxGas: gep.computeGasLimit };
+            }
+            if (gep.ignoreInsufficientGasFunds) {
+                tx = tx with {
+                    feeStats: tx.feeStats with {
+                        noFeeGasEstimationMode: true
+                    }
+                };
+            }
+        }
 
         if let Some(aggInfo) = tx.incomingRequest.aggregator {
             if let Some(theAggregator) = aggInfo.aggregator {
@@ -837,7 +851,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
                     aggInfo.calldataUnits,
                     gasAccountingInfo.feeConfig,
                     prices,
-                    tx.feeStats
+                    tx.feeStats,
                 );
                 tx = tx with { feeStats: feeStats };
                 if (!fullyPaid) {
@@ -876,7 +890,19 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 };
             }
         }
-        xif (tx.incomingRequest.adminMode || (tx.maxGas <= gasAccountingInfo.gasRemainingThisBlock)) {
+        xif (tx.incomingRequest.kind == const::L1MessageType_L2ForGasEstimation) {
+            let gasPrice = gasAccountingInfo.currentPrices.perArbGasTotal;
+            let gasPayerFunds = account_getBalance(accountStore_get(getGlobalAccountStore(), tx.gasPayer));
+            xif (tx.value >= gasPayerFunds) {
+                (const::TxResultCode_insufficientBalance, tx)
+            } else {
+                let affordableGas = (gasPayerFunds - tx.value) / tx.feeStats.price.compute;
+                if (tx.maxGas > affordableGas) {
+                    tx = tx with { maxGas: affordableGas };
+                }
+                (const::TxResultCode_success, tx)
+            }
+        } elseif (tx.incomingRequest.adminMode || (tx.maxGas <= gasAccountingInfo.gasRemainingThisBlock)) {
             (const::TxResultCode_success, tx with { gasPrice: gasAccountingInfo.currentPrices.perArbGasTotal })
         } else {
             // the current block doesn't have enough gas left to run the tx
@@ -909,7 +935,7 @@ impure func payForTxAndL1Gas(
     calldataUnits: uint,
     feeConfig: FeeConfig,
     prices: GasPrices,
-    feeStats: TxFeeStats
+    feeStats: TxFeeStats,
 ) -> (bool, TxFeeStats) {    // returns (success, updatedFeeStats)
     // This pays for the base Tx fee plus L1 calldata fee.
     // Most of the funds go to the aggregator, and a slice goes to the network fee pool.
@@ -959,30 +985,32 @@ impure func payForTxAndL1Gas(
         amount
     };
 
-    acctStore = xif let Some(store) = accountStore_transferEthBalance(
-        acctStore,
-        payer,
-        feeConfig.forNetwork,
-        payableToFee,   // safe because payerBalance >= amount and feeConfig.shareForNetFee <= 1
-    ) {
-        store
-    } else {
-        panic  // should never happen -- we just checked the balance
-    };
-
-    if (amount > payableToFee) {
-        // Reimburse the aggregator for its costs for this tx.
-        feeStats = feeStats with { paidAggregator: recipient };
+    if ( ! feeStats.noFeeGasEstimationMode) {
         acctStore = xif let Some(store) = accountStore_transferEthBalance(
             acctStore,
             payer,
-            accountStore_feeCollectorForAggregator(acctStore, recipient),
-            amount - payableToFee,  // safe because payableToFee <= amount <= payer's original balance
+            feeConfig.forNetwork,
+            payableToFee,   // safe because payerBalance >= amount and feeConfig.shareForNetFee <= 1
         ) {
             store
         } else {
-            panic   // should never happen -- we have deducted amount (in total) <= payerBalance
+            panic  // should never happen -- we just checked the balance
         };
+
+        if (amount > payableToFee) {
+            // Reimburse the aggregator for its costs for this tx.
+            feeStats = feeStats with { paidAggregator: recipient };
+            acctStore = xif let Some(store) = accountStore_transferEthBalance(
+                acctStore,
+                payer,
+                accountStore_feeCollectorForAggregator(acctStore, recipient),
+                amount - payableToFee,  // safe because payableToFee <= amount <= payer's original balance
+            ) {
+                store
+            } else {
+                panic   // should never happen -- we have deducted amount (in total) <= payerBalance
+            };
+        }
     }
 
     setGlobalAccountStore(acctStore);
@@ -1164,6 +1192,7 @@ type TxFeeStats = struct {
     units: FourResources,
     weiPaid: FourResources,
     paidAggregator: address,
+    noFeeGasEstimationMode: bool,
 }
 
 public func txFeeStats_zero() -> TxFeeStats {
@@ -1178,6 +1207,7 @@ public func txFeeStats_zero() -> TxFeeStats {
         units: frZero,
         weiPaid: frZero,
         paidAggregator: address(0),
+        noFeeGasEstimationMode: false,
     };
 }
 

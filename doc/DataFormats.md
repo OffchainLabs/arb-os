@@ -143,12 +143,14 @@ The type-specific data consists of:
 
 * 3 (byte)
 * aggregator address (address encoded as uint)
+* limit on computation ArbGas (uint)
 * an L2 message of subtype 7
 
-This executes the enclosed L2 message, with two deviations from the normal semantics.
+This executes the enclosed L2 message, with the following deviations from the normal semantics.
 
 * The aggregator address specified in the message is considered to be the aggregator that submitted this message.
 * The transaction signature on the L2 message is ignored, and the enclosed transaction is treated as if it carried a valid signature by the sender of this L1 message.
+* The ArbGas used for computation will be limited by the supplied limit. (The supplied limit will be ignored if it is larger than the ordinary limit that applies to all transactions.)
 
 ## L2 messages
 

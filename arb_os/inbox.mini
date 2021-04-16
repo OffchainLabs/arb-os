@@ -156,6 +156,7 @@ impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, adminMod
         },
         aggregator: None<AggregatorInfo>,
         adminMode: adminMode,
+        gasEstimationParams: None<GasEstimationParams>,
     };
 }
 
@@ -250,6 +251,7 @@ func endOfArbBlockMessage(arbBlockNum: uint, ethBlockNum: uint, timestamp: uint)
         },
         aggregator: None<AggregatorInfo>,
         adminMode: false,
+        gasEstimationParams: None<GasEstimationParams>,
     };
 }
 
@@ -287,6 +289,12 @@ type IncomingRequest = struct {
     provenance: RequestProvenance,
     aggregator: option<AggregatorInfo>,
     adminMode: bool,
+    gasEstimationParams: option<GasEstimationParams>,
+}
+
+type GasEstimationParams = struct {
+    computeGasLimit: uint,
+    ignoreInsufficientGasFunds: bool,
 }
 
 type RequestProvenance = struct {

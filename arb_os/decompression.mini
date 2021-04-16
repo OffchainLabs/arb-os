@@ -59,6 +59,7 @@ use accounts::account_getBlsKey;
 use evmCallStack::evmCallStack_getAccount;
 use evmCallStack::evmCallStack_addStorageCharge;
 use inbox::IncomingRequest;
+use inbox::GasEstimationParams;
 use gasAccounting::txFeeStats_zero;
 use messages::TxRequestData;
 
@@ -256,6 +257,17 @@ public impure func decompressAndVerifyEcdsaSignedTx(
                 aggregator: Some(aggInfo with { calldataUnits: uint(int(aggInfo.calldataUnits) + calldataUnitsDelta) })
             };
         }
+    }
+    if ( (originalRequest.kind == const::L1MessageType_L2ForGasEstimation) && (tx.gasPrice == 0)) {
+        // gas estimation tx requested zero gas, so ignore gas funding and pay whatever price is necessary to run
+        originalRequest = originalRequest with {
+            gasEstimationParams: xif let Some(gep) = originalRequest.gasEstimationParams {
+                Some(gep with { ignoreInsufficientGasFunds: true })
+            } else {
+                None<GasEstimationParams>
+            }
+        };
+        tx = tx with { gasPrice: ~0 };
     }
 
     return Some(
