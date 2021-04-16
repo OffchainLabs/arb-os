@@ -2,7 +2,11 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+use accounts::Account;
+use accounts::getGlobalAccountStore;
+use accounts::account_getBalance;
 use accounts::account_setContractInfo;
+use accounts::accountStore_forall;
 
 use chainParameters::chainParams_getOwner;
 use chainParameters::chainParams_setOwner;
@@ -100,6 +104,8 @@ public impure func arbowner_txcall() {
             arbowner_setSecondsPerSend(topFrame, calldata);
         } elseif (funcCode == 0x8ea93643) {
             arbowner_setGasAccountingParams(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_getTotalOfEthBalances) {
+            arbowner_getTotalOfEthBalances(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
@@ -301,6 +307,25 @@ impure func arbowner_setGasAccountingParams(topFrame: EvmCallFrame, calldata: By
     }
 }
 
+impure func arbowner_getTotalOfEthBalances(topFrame: EvmCallFrame, calldata: ByteArray) { // () -> uint
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 150, 0, 0);
+    }
+    let total = unsafecast<uint>(accountStore_forall(
+        getGlobalAccountStore(),
+        unsafecast<func(Account, any) -> any>(totalEthClosure),
+        0
+    ));
+    if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, total))) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 151, 0, 0);
+    }
+}
+
+func totalEthClosure(acct: Account, state: uint) -> uint {
+    return state + account_getBalance(acct);
+}
 
 
 
