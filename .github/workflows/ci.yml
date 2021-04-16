@@ -75,7 +75,7 @@ jobs:
 
       - name: Install npm dependencies
         run: |
-          npm install -g yarn && cd contracts && yarn install
+          sudo npm install -g yarn && cd contracts && yarn install
 
       - name: Make and test ArbOs
         run: make clean && make
