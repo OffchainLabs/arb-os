@@ -2231,7 +2231,7 @@ fn _evm_bad_receipt_revert_test_impl() {
 
     let receipts = machine.runtime_env.get_all_receipt_logs();
     assert_eq!(receipts.len(), total_receipts_before+1);
-    assert_eq!(receipts[total_receipts_before].get_return_code(), Uint256::from_u64(9));
+    assert_eq!(receipts[total_receipts_before].get_return_code(), Uint256::from_u64(10));
 }
 
 pub fn make_logs_for_all_arbos_tests() {
