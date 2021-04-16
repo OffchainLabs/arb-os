@@ -2,7 +2,6 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::compile::miniconstants::ARBOS_VERSION;
 use crate::evm::abi::FunctionTable;
 use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest};
 use crate::evm::preinstalled_contracts::_ArbReplayableTx;
@@ -11,7 +10,8 @@ use crate::uint256::Uint256;
 use ethers_signers::Signer;
 use std::path::Path;
 
-pub use abi::{builtin_contract_path, AbiForContract};
+use crate::compile::miniconstants::init_constant_table;
+pub use abi::{builtin_contract_path, contract_path, AbiForContract};
 pub use benchmarks::make_benchmarks;
 pub use evmtest::run_evm_tests;
 
@@ -211,7 +211,13 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     let arb_bls = ArbBLS::new(&wallet, debug);
 
     let version = arbsys._arbos_version(&mut machine)?;
-    assert_eq!(version, Uint256::from_u64(ARBOS_VERSION));
+    assert_eq!(
+        version,
+        *init_constant_table(Some(Path::new("arb_os/constants.json")))
+            .unwrap()
+            .get("ArbosVersionNumber")
+            .unwrap()
+    );
 
     let tx_count = arbsys.get_transaction_count(&mut machine, my_addr.clone())?;
     assert_eq!(tx_count, Uint256::from_u64(2));

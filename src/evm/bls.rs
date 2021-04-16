@@ -368,7 +368,10 @@ pub fn _generate_bls_key_pair() -> (_BLSPublicKey, _BLSPrivateKey) {
 
 fn _domain_for_sender(sender: Uint256) -> Uint256 {
     Uint256::avm_hash2(
-        init_constant_table().get("BLSSignatureDomainBase").unwrap(),
+        init_constant_table(Some(Path::new("arb_os/constants.json")))
+            .unwrap()
+            .get("BLSSignatureDomainBase")
+            .unwrap(),
         &sender,
     )
 }

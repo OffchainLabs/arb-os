@@ -1109,7 +1109,13 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let wallet2 = machine.runtime_env.new_wallet();
     let arbsys = ArbSys::new(&wallet2, false);
     let arbos_version = arbsys._arbos_version(&mut machine)?;
-    assert_eq!(arbos_version, Uint256::from_u64(ARBOS_VERSION));
+    assert_eq!(
+        arbos_version,
+        *init_constant_table(Some(Path::new("arb_os/constants.json")))
+            .unwrap()
+            .get("ArbosVersionNumber")
+            .unwrap()
+    );
     let arbos_version_orig = arbsys_orig_binding._arbos_version(&mut machine)?;
     assert_eq!(arbos_version, arbos_version_orig);
 
@@ -1386,7 +1392,7 @@ pub fn _evm_test_rate_control(log_to: Option<&Path>, debug: bool) -> Result<(), 
 
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
 
-    let const_table = init_constant_table();
+    let const_table = init_constant_table(Some(Path::new("arb_os/constants.json"))).unwrap();
 
     let (r1, r2) = arbowner._get_fee_recipients(&mut machine)?;
     assert_eq!(&r1, const_table.get("NetFee_defaultRecipient").unwrap());
