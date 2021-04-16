@@ -17,8 +17,9 @@ use std::hash::Hasher;
 use std::io;
 use xformcode::make_uninitialized_tuple;
 
+use crate::compile::miniconstants::init_constant_table;
+use std::path::Path;
 pub use xformcode::{value_from_field_list, TupleTree, TUPLE_SIZE};
-use crate::compile::miniconstants::ARBOS_VERSION;
 
 mod optimize;
 mod striplabels;
@@ -243,7 +244,12 @@ pub fn postlink_compile(
     file_name_chart.extend(program.file_name_chart);
 
     Ok(LinkedProgram {
-        arbos_version: ARBOS_VERSION,
+        arbos_version: init_constant_table(Some(Path::new("arb_os/constants.json")))
+            .unwrap()
+            .get("ArbosVersionNumber")
+            .unwrap()
+            .clone()
+            .trim_to_u64(),
         code: code_final,
         static_val: Value::none(),
         globals: program.globals,
