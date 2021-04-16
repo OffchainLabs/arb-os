@@ -5,14 +5,14 @@ pragma solidity >=0.4.21 <0.7.0;
  */
 interface ArbSys {
     /**
-    * @notice  Get ArbOS version number
-    * @return version number int
+    * @notice Get internal version number identifying an ArbOS build
+    * @return version number as int
      */
     function arbOSVersion() external pure returns (uint);
 
     /**
-    * @notice Get Arbitrum block number (Arbitrum genisis starts at 0, increments with qqq)
-    * @return block number int
+    * @notice Get Arbitrum block number (distinct from L1 block number; Arbitrum genesis block has block number 0)
+    * @return block number as int
      */ 
     function arbBlockNumber() external view returns (uint);
 
