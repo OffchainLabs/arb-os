@@ -26,6 +26,7 @@ use accounts::accountStore_setRetryBuffer;
 use accounts::accountStore_transferEthBalance;
 use accounts::accountStore_destroyAccount;
 use accounts::accountStore_cloneContract;
+use accounts::accountStore_startChangeTracker;
 use accounts::account_setStorageCell;
 use accounts::account_getBalance;
 use accounts::account_setBalance;
@@ -95,7 +96,6 @@ use retrybuffer::RetryBuffer;
 use retrybuffer::RetryableTx;
 
 use tracing::evmTracer_clear;
-use tracing::evmTracer_emitAndClear;
 use tracing::evmTracer_pushCall;
 use tracing::evmTracer_pushReturnRevert;
 use tracing::evmTracer_pushCallAndResultNoExecution;
@@ -259,6 +259,7 @@ public impure func initEvmCallStack(
         request.maxGas,
         request.gasPrice,
     );
+    setGlobalAccountStore(accountStore_startChangeTracker(getGlobalAccountStore()));
 
     if let Some(entryPoint) = account_getStartCodePoint(
         accountStore_get(
@@ -465,6 +466,7 @@ public impure func initEvmCallStackForConstructor(
         request.maxGas,
         request.gasPrice,
     );
+    setGlobalAccountStore(accountStore_startChangeTracker(getGlobalAccountStore()));
 
     globalCurrentTxRequest = request with { isConstructor: true };
     globalCurrentRetryableRequest = None<IncomingRequestAndLogs>;

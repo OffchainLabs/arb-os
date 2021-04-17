@@ -9,6 +9,7 @@ use accounts::AccountStore;
 use accounts::Account;
 use accounts::AccountContractInfo;
 use accounts::AggregatorInfo;
+use accounts::AccountsChangeTracker;
 use decompression::AggregatorDecompressionState;
 use retrybuffer::RetryBuffer;
 use std::bls::BLSKey;
@@ -52,6 +53,7 @@ public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade
         ),
         retryBuffer: oldAcctStore.retryBuffer,
         numContracts: oldAcctStore.numContracts,
+        changeTracker: None<AccountsChangeTracker>,
     };
     return acctStore;
 }
