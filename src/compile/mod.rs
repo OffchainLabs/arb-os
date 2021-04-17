@@ -49,6 +49,8 @@ pub struct CompileStruct {
     pub format: Option<String>,
     #[clap(short, long)]
     pub inline: bool,
+    #[clap(short, long)]
+    pub consts_file: Option<String>,
 }
 
 ///Represents the contents of a source file after parsing.
@@ -95,7 +97,11 @@ impl CompileStruct {
         let mut compiled_progs = Vec::new();
         for filename in &self.input {
             let path = Path::new(filename);
-            match compile_from_file(path, &mut file_name_chart, self.inline) {
+            let constants_path = match &self.consts_file {
+                Some(path) => Some(Path::new(path)),
+                None => None,
+            };
+            match compile_from_file(path, &mut file_name_chart, self.inline, constants_path) {
                 Ok(idk) => idk,
                 Err(mut e) => {
                     e.description = format!("Compile error: {}", e.description);
@@ -325,6 +331,7 @@ pub fn compile_from_file(
     path: &Path,
     file_name_chart: &mut BTreeMap<u64, String>,
     inline: bool,
+    constants_path: Option<&Path>,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let library = path
         .parent()
@@ -344,7 +351,14 @@ pub fn compile_from_file(
         })
         .unwrap_or(None);
     if path.is_dir() {
-        compile_from_folder(path, library, "main", file_name_chart, inline)
+        compile_from_folder(
+            path,
+            library,
+            "main",
+            file_name_chart,
+            inline,
+            constants_path,
+        )
     } else if let (Some(parent), Some(file_name)) = (path.parent(), path.file_stem()) {
         compile_from_folder(
             parent,
@@ -354,6 +368,7 @@ pub fn compile_from_file(
             })?,
             file_name_chart,
             inline,
+            constants_path,
         )
     } else {
         Err(CompileError::new(
@@ -387,8 +402,10 @@ pub fn compile_from_folder(
     main: &str,
     file_name_chart: &mut BTreeMap<u64, String>,
     inline: bool,
+    constants_path: Option<&Path>,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
-    let (mut programs, import_map) = create_program_tree(folder, library, main, file_name_chart)?;
+    let (mut programs, import_map) =
+        create_program_tree(folder, library, main, file_name_chart, constants_path)?;
     resolve_imports(&mut programs, &import_map)?;
     //Conversion of programs from `HashMap` to `Vec` for typechecking
     let type_tree = create_type_tree(&programs);
@@ -436,6 +453,7 @@ fn create_program_tree(
     library: Option<&str>,
     main: &str,
     file_name_chart: &mut BTreeMap<u64, String>,
+    constants_path: Option<&Path>,
 ) -> Result<
     (
         HashMap<Vec<String>, Module>,
@@ -486,7 +504,7 @@ fn create_program_tree(
         file_name_chart.insert(file_id, path_display(&name));
         let mut string_table = StringTable::new();
         let (imports, funcs, named_types, global_vars, hm) = typecheck::sort_top_level_decls(
-            &parse_from_source(source, file_id, &name, &mut string_table)?,
+            &parse_from_source(source, file_id, &name, &mut string_table, constants_path)?,
         );
         paths.append(&mut imports.iter().map(|imp| imp.path.clone()).collect());
         import_map.insert(name.clone(), imports);
@@ -689,11 +707,12 @@ pub fn parse_from_source(
     file_id: u64,
     file_path: &[String],
     string_table: &mut StringTable,
+    constants_path: Option<&Path>,
 ) -> Result<Vec<TopLevelDecl>, CompileError> {
     let comment_re = regex::Regex::new(r"//.*").unwrap();
     let source = comment_re.replace_all(&source, "");
     let lines = Lines::new(source.bytes());
-    let mut constants = init_constant_table();
+    let mut constants = init_constant_table(constants_path)?;
     DeclsParser::new()
         .parse(
             string_table,

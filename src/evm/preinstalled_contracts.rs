@@ -2,9 +2,9 @@ use super::*;
 use crate::compile::miniconstants::init_constant_table;
 use crate::run::{load_from_file, Machine, RuntimeEnvironment};
 use crate::uint256::Uint256;
+use crate::upload::CodeUploader;
 use ethers_signers::{Signer, Wallet};
 use std::path::Path;
-use crate::upload::CodeUploader;
 
 pub struct _ArbInfo {
     pub contract_abi: AbiForContract,
@@ -358,10 +358,7 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
-    pub fn _get_uploaded_code_hash(
-        &self,
-        machine: &mut Machine,
-    ) -> Result<Uint256, ethabi::Error> {
+    pub fn _get_uploaded_code_hash(&self, machine: &mut Machine) -> Result<Uint256, ethabi::Error> {
         let (receipts, _) = self.contract_abi.call_function(
             self.my_address.clone(),
             "getUploadedCodeHash",
@@ -370,7 +367,9 @@ impl<'a> _ArbOwner<'a> {
             Uint256::zero(),
             self.debug,
         )?;
-        Ok(Uint256::from_bytes(&receipts[receipts.len()-1].get_return_data()))
+        Ok(Uint256::from_bytes(
+            &receipts[receipts.len() - 1].get_return_data(),
+        ))
     }
 
     pub fn _finish_code_upload_as_arbos_upgrade(
@@ -1105,15 +1104,18 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     }
 
     let expected_code_hash = arbowner._get_uploaded_code_hash(&mut machine)?;
-    arbowner._finish_code_upload_as_arbos_upgrade(
-        &mut machine,
-        expected_code_hash,
-    )?;
+    arbowner._finish_code_upload_as_arbos_upgrade(&mut machine, expected_code_hash)?;
 
     let wallet2 = machine.runtime_env.new_wallet();
     let arbsys = ArbSys::new(&wallet2, false);
     let arbos_version = arbsys._arbos_version(&mut machine)?;
-    assert_eq!(arbos_version, Uint256::from_u64(ARBOS_VERSION));
+    assert_eq!(
+        arbos_version,
+        *init_constant_table(Some(Path::new("arb_os/constants.json")))
+            .unwrap()
+            .get("ArbosVersionNumber")
+            .unwrap()
+    );
     let arbos_version_orig = arbsys_orig_binding._arbos_version(&mut machine)?;
     assert_eq!(arbos_version, arbos_version_orig);
 
@@ -1272,10 +1274,7 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
     arbowner._continue_code_upload(&mut machine, mcode)?;
 
     let expected_code_hash = arbowner._get_uploaded_code_hash(&mut machine)?;
-    arbowner._finish_code_upload_as_arbos_upgrade(
-        &mut machine,
-        expected_code_hash,
-    )?;
+    arbowner._finish_code_upload_as_arbos_upgrade(&mut machine, expected_code_hash)?;
 
     arbowner._set_seconds_per_send(&mut machine, Uint256::from_u64(10))?;
 
@@ -1393,7 +1392,7 @@ pub fn _evm_test_rate_control(log_to: Option<&Path>, debug: bool) -> Result<(), 
 
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
 
-    let const_table = init_constant_table();
+    let const_table = init_constant_table(Some(Path::new("arb_os/constants.json"))).unwrap();
 
     let (r1, r2) = arbowner._get_fee_recipients(&mut machine)?;
     assert_eq!(&r1, const_table.get("NetFee_defaultRecipient").unwrap());
