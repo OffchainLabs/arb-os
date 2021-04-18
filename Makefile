@@ -11,6 +11,7 @@ UPGRADETESTDIR = upgradetests
 ACSRCDIR = $(CONTRACTDIR)/builtin
 ACBUILDDIR = $(ARTIFACTDIR)/builtin
 ARBOS = $(ARBOSDIR)/arbos.mexe
+ARBOS = $(ARBOSDIR)/arbos.mexe
 
 TEMPLATES = $(ARBOSDIR)/contractTemplates.mini
 TESTFILES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/biguinttest.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe $(STDDIR)/sha256test.mexe $(STDDIR)/ripemd160test.mexe minitests/codeloadtest.mexe $(STDDIR)/fixedpointtest.mexe $(STDDIR)/blstest.mexe
@@ -120,11 +121,6 @@ $(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
 
 $(ARBOSDIR)/arbos.mexe: $(TESTCONTRACTS) $(ARBOSDIR) $(STDDIR) $(BUILTINDIR) $(TEMPLATES) src/compile/miniconstants.rs
 	$(CARGORUN) compile "arb_os" -o "arb_os/arbos.mexe" $(COMPILEFLAGS)
-
-upgrade: $(ARBOSDIR)/upgrade.mini
-
-$(ARBOSDIR)/upgrade.mini: upgradeConfig.toml
-	$(CARGORUN) gen-upgrade-code arb_os/arbos.mexe arb_os/arbos.mexe arb_os/upgrade.mini upgradeGlobals upgradeConfig.toml
 
 $(TESTCONTRACTSPURE): $(TCSRCDIR)
 	(cd contracts; yarn build)
