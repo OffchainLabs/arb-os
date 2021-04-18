@@ -6,6 +6,8 @@
 
 use crate::compile::CompileStruct;
 use crate::link::LinkedProgram;
+use crate::pos::try_display_location;
+use crate::upload::CodeUploader;
 use clap::Clap;
 use compile::CompileError;
 use contracttemplates::generate_contract_template_file_or_die;
@@ -14,6 +16,7 @@ use run::{
     profile_gen_from_file, replay_from_testlog_file, run_from_file, ProfilerMode,
     RuntimeEnvironment,
 };
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
 use std::io::Read;
@@ -32,6 +35,7 @@ pub mod pos;
 mod run;
 mod stringtable;
 mod uint256;
+mod upload;
 
 ///Command line options for run subcommand.
 #[derive(Clap, Debug)]
@@ -96,6 +100,11 @@ struct GenUpgrade {
     config_file: Option<String>,
 }
 
+#[derive(Clap, Debug)]
+struct SerializeUpgrade {
+    input: String,
+}
+
 ///Main enum for command line arguments.
 #[derive(Clap, Debug)]
 enum Args {
@@ -110,19 +119,23 @@ enum Args {
     Reformat(Reformat),
     EvmTests(EvmTests),
     GenUpgradeCode(GenUpgrade),
+    SerializeUpgrade(SerializeUpgrade),
 }
 
 fn main() -> Result<(), CompileError> {
+    let mut print_time = true;
     let start_time = Instant::now();
     let matches = Args::parse();
 
     match matches {
-        Args::Compile(compile) => {
-            let mut output = get_output(compile.output.clone()).unwrap();
-            compile
-                .invoke()?
-                .to_output(&mut *output, compile.format.as_deref());
-        }
+        Args::Compile(compile) => match do_compile(compile) {
+            Ok(_) => {}
+            Err((err, file_name_chart)) => println!(
+                "{}\n{}",
+                err,
+                try_display_location(err.location, &file_name_chart, true)
+            ),
+        },
 
         Args::Run(run) => {
             let filename = run.input;
@@ -171,7 +184,15 @@ fn main() -> Result<(), CompileError> {
         }
 
         Args::MakeBenchmarks => {
-            evm::benchmarks::make_benchmarks();
+            evm::make_benchmarks().map_err(|e| {
+                CompileError::new(
+                    match e {
+                        ethabi::Error::Other(desc) => desc,
+                        other => format!("{}", other),
+                    },
+                    None,
+                )
+            })?;
         }
 
         Args::MakeTemplates => {
@@ -232,7 +253,7 @@ fn main() -> Result<(), CompileError> {
             let mut num_failures = 0u64;
             for path_name in paths.iter() {
                 let path = Path::new(path_name);
-                let (ns, nf) = evm::evmtest::run_evm_tests(
+                let (ns, nf) = evm::run_evm_tests(
                     path,
                     if options.savelogs {
                         Some(Path::new("evm-test-logs/"))
@@ -254,14 +275,29 @@ fn main() -> Result<(), CompileError> {
                 println!("Successfully generated code");
             }
         }
+        Args::SerializeUpgrade(up) => {
+            let the_json = CodeUploader::_new_from_file(Path::new(&up.input))._to_json();
+            print!("{}", the_json.unwrap());
+            print_time = false;
+        }
     }
     let total_time = Instant::now() - start_time;
-    println!(
-        "Finished in {}.{:0>3} seconds.",
-        total_time.as_secs(),
-        total_time.subsec_millis()
-    );
+    if print_time {
+        println!(
+            "Finished in {}.{:0>3} seconds.",
+            total_time.as_secs(),
+            total_time.subsec_millis()
+        );
+    }
 
+    Ok(())
+}
+
+fn do_compile(compile: CompileStruct) -> Result<(), (CompileError, BTreeMap<u64, String>)> {
+    let mut output = get_output(compile.output.clone()).unwrap();
+    compile
+        .invoke()?
+        .to_output(&mut *output, compile.format.as_deref());
     Ok(())
 }
 

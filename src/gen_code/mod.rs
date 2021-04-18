@@ -65,8 +65,8 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
         "// This file is machine-generated. Don't edit it unless you know what you're doing."
     )
     .unwrap();
-    let mut input_fields = get_globals_from_file(&from)?;
-    let mut output_fields = get_globals_from_file(&to)?;
+    let (mut input_fields, old_arbos_version) = get_globals_and_version_from_file(&from)?;
+    let (mut output_fields, _) = get_globals_and_version_from_file(&to)?;
     output_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
     input_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
     let mut intersection: HashSet<&StructField> = input_fields
@@ -119,7 +119,7 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
     writeln!(code, "").unwrap();
     writeln!(
         code,
-        "public {}func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> GlobalsAfterUpgrade {{",
+        "public {}func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> (GlobalsAfterUpgrade, uint) {{",
         if map.data.contains("_jump_table") {
             ""
         } else {
@@ -168,20 +168,25 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
         )
         .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     }
-    writeln!(code, "    return struct {{")
+    writeln!(code, "    return (struct {{")
         .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     for field in output_fields {
         writeln!(code, "        {}: {},", field.name, field.name)
             .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     }
-    writeln!(code, "    }};")
+    writeln!(code, "    }}, {});", old_arbos_version)
         .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     writeln!(code, "}}")
         .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
+
+    // generate a dummy function, so we don't end up with an empty code file, which is an error
+    writeln!(code, "\n\nfunc __dummy__() {{ return; }}\n\n")
+        .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
+
     Ok(())
 }
 
-fn get_globals_from_file(path: &Path) -> Result<Vec<StructField>, GenCodeError> {
+fn get_globals_and_version_from_file(path: &Path) -> Result<(Vec<StructField>, u64), GenCodeError> {
     let mut file = File::open(&path).map_err(|_| {
         GenCodeError::new(format!(
             "Could not create file \"{}\"",
@@ -214,7 +219,7 @@ fn get_globals_from_file(path: &Path) -> Result<Vec<StructField>, GenCodeError> 
             fields.push(StructField::new(global.name, tipe))
         }
     }
-    Ok(fields)
+    Ok((fields, globals.arbos_version))
 }
 
 fn type_decl_string(type_name: &String, tipe: &Type) -> String {
