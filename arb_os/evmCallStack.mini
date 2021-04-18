@@ -27,6 +27,7 @@ use accounts::accountStore_transferEthBalance;
 use accounts::accountStore_destroyAccount;
 use accounts::accountStore_cloneContract;
 use accounts::accountStore_createOrAddCodeRef;
+use accounts::accountStore_codeRefExists;
 use accounts::account_setStorageCell;
 use accounts::account_getBalance;
 use accounts::account_setBalance;
@@ -53,6 +54,8 @@ use std::bytearray::bytearray_copy;
 use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_set256;
 use std::bytestream::bytestream_new;
+
+use std::keccak::keccak256;
 
 use std::storageMap::storageMap_new;
 
@@ -754,7 +757,12 @@ public impure func evmCallStack_returnFromCall(
     } else {
         // top-level call completed; will need to return to external caller
         if (success) {
-            if (globalCurrentTxRequest.isConstructor) {
+            if ( globalCurrentTxRequest.isConstructor
+                 && !accountStore_codeRefExists(
+                        topFrame.accountStore,
+                        keccak256(returnData, 0, bytearray_size(returnData)),
+                    )
+            ) {
                 // contract code takes up space, so charge 1 storage for each 32 bytes of EVM code
                 evmCallStack_addStorageCharge( (bytearray_size(returnData) + 31) / 32 );
                 topFrame = globalCallStack?;
