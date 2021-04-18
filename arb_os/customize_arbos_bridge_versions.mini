@@ -8,6 +8,7 @@ use accounts::AccountStore;
 use accounts::Account;
 use accounts::AccountContractInfo;
 use accounts::AggregatorInfo;
+use accounts::CodeRef;
 use decompression::AggregatorDecompressionState;
 use retrybuffer::RetryBuffer;
 use std::bls::BLSKey;
