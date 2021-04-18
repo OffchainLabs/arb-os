@@ -13,7 +13,6 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-
 #[derive(Clone, Default, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ConstantsFile {
     pub arbos_version: u64,

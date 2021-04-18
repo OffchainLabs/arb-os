@@ -2203,15 +2203,22 @@ fn _evm_bad_receipt_revert_test_impl() {
     let my_addr = Uint256::from_u64(1025);
 
     let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add")).unwrap();
-    let _ = add_contract.deploy(&[], &mut machine, Uint256::zero(), None, false).unwrap();
-    let (receipts, _) = add_contract.call_function(
-        my_addr.clone(),
-        "add",
-        &[ethabi::Token::Uint(Uint256::one().to_u256()), ethabi::Token::Uint(Uint256::one().to_u256())],
-        &mut machine,
-        Uint256::zero(),
-        false,
-    ).unwrap();
+    let _ = add_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .unwrap();
+    let (receipts, _) = add_contract
+        .call_function(
+            my_addr.clone(),
+            "add",
+            &[
+                ethabi::Token::Uint(Uint256::one().to_u256()),
+                ethabi::Token::Uint(Uint256::one().to_u256()),
+            ],
+            &mut machine,
+            Uint256::zero(),
+            false,
+        )
+        .unwrap();
     assert_eq!(receipts.len(), 1);
     assert!(receipts[0].succeeded());
     let _ = machine.run(None);
@@ -2230,8 +2237,11 @@ fn _evm_bad_receipt_revert_test_impl() {
     let _ = machine.run(None);
 
     let receipts = machine.runtime_env.get_all_receipt_logs();
-    assert_eq!(receipts.len(), total_receipts_before+1);
-    assert_eq!(receipts[total_receipts_before].get_return_code(), Uint256::from_u64(10));
+    assert_eq!(receipts.len(), total_receipts_before + 1);
+    assert_eq!(
+        receipts[total_receipts_before].get_return_code(),
+        Uint256::from_u64(10)
+    );
 }
 
 pub fn make_logs_for_all_arbos_tests() {
