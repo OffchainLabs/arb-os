@@ -747,7 +747,7 @@ fn handle_function(
     let sig = m.function_section().unwrap().entries()[idx].type_ref();
     let ftype = get_func_type(m, sig);
 
-    println!("func start label {}", label);
+    // println!("func start label {}", label);
 
     let mut res: Vec<Instruction> = Vec::new();
     let mut stack: Vec<Control> = Vec::new();
@@ -773,15 +773,17 @@ fn handle_function(
 
     stack.push(def.clone());
 
+    /*
     eprintln!(
         "Got function with {:?} ops, {:?} locals, {} params, {} rets",
         func.code().elements().len(),
         count_locals(func),
         ftype.params().len(),
         rets
-    );
+    );*/
 
     for (idx_inf, op) in func.code().elements().iter().enumerate() {
+        /*
         eprintln!(
             "handling ptr {} frames {}; {:?} ... label {} len {}",
             ptr,
@@ -790,6 +792,7 @@ fn handle_function(
             label,
             res.len()
         );
+        */
         let cur_len = res.len();
         res.push(debug_op(format!("{:?} level {} func {} idx {}", *op, ptr, idx, idx_inf)));
         match &*op {
@@ -820,10 +823,12 @@ fn handle_function(
                 let else_label = label;
                 let end_label = label + 1;
                 let rets = block_len(&bt);
+                /*
                 eprintln!(
                     "Level if {} rets {} end label {} else label {}",
                     ptr, rets, end_label, else_label
                 );
+                */
                 stack.push(Control {
                     level: ptr + rets,
                     rets: rets,
@@ -838,10 +843,11 @@ fn handle_function(
             }
             Else => {
                 let mut c: Control = stack.pop().unwrap();
+                /*
                 eprintln!(
                     "Level else {} end label {} else label {} rets {}",
                     c.level, c.target, c.else_label, c.rets
-                );
+                );*/
                 ptr = c.level - c.rets;
                 jump(&mut res, c.target);
                 res.push(mk_label(c.else_label));
@@ -888,7 +894,7 @@ fn handle_function(
             }
             Br(x) => {
                 let c = &stack[stack.len() - (*x as usize) - 1];
-                eprintln!("Debug br {:?} {}", c, c.level);
+                // eprintln!("Debug br {:?} {}", c, c.level);
                 adjust_stack(&mut res, ptr - c.level, c.rets);
                 ptr = ptr - c.rets;
                 jump(&mut res, c.target);
@@ -896,7 +902,7 @@ fn handle_function(
             BrIf(x) => {
                 let c = &stack[stack.len() - (*x as usize) - 1];
                 res.push(debug_op(format!("Debug brif {:?} ptr {} next level: {} + {}", c, ptr, c.level, c.rets)));
-                eprintln!("Debug brif {:?} ptr {} next level: {} + {}", c, ptr, c.level, c.rets);
+                // eprintln!("Debug brif {:?} ptr {} next level: {} + {}", c, ptr, c.level, c.rets);
                 let continue_label = label;
                 let end_label = label + 1;
                 label = label + 2;
@@ -946,12 +952,14 @@ fn handle_function(
             // Just keep the expression stack
             Call(x) => {
                 let ftype = find_func_type(m, *x);
+                /*
                 println!(
                     "calling {} with type {:?} return label {}",
                     x,
                     ftype,
                     label + 1
                 );
+                */
                 let return_label = label;
                 label = label + 1;
                 // push new frame to aux stack
@@ -975,13 +983,14 @@ fn handle_function(
             }
             CallIndirect(x, _) => {
                 let ftype = get_func_type(m, *x);
+                /*
                 println!(
                     "call indirect {} with type {:?} return label {} hash {}",
                     x,
                     ftype,
                     label + 1,
                     hash_ftype(&ftype)
-                );
+                );*/
                 let return_label = label;
                 label = label + 1;
                 // Save func ptr
@@ -1014,7 +1023,7 @@ fn handle_function(
             }
             Return => {
                 let c = &stack[0];
-                println!("return {} level {} rets {}", ptr, c.level, c.rets);
+                // println!("return {} level {} rets {}", ptr, c.level, c.rets);
                 adjust_stack(&mut res, ptr - c.level, c.rets);
                 ptr = ptr - c.rets;
                 jump(&mut res, c.target);
@@ -1634,16 +1643,18 @@ pub fn resolve_labels(arr: Vec<Instruction>) -> (Vec<Instruction>, Value) {
         match inst.opcode {
             Opcode::Label(Label::Evm(num)) => {
                 tab.push(idx);
-                println!("Found label {} -> {}", num, int_from_usize(tab.len() - 1));
+                // println!("Found label {} -> {}", num, int_from_usize(tab.len() - 1));
                 labels.insert(Label::Evm(num), int_from_usize(tab.len() - 1));
             }
             Opcode::Label(Label::WasmFunc(num)) => {
                 tab.push(idx);
+                /*
                 println!(
                     "Found func label {} -> {}",
                     num,
                     int_from_usize(tab.len() - 1)
                 );
+                */
                 labels.insert(Label::WasmFunc(num), int_from_usize(tab.len() - 1));
             }
             _ => {}
@@ -1654,12 +1665,12 @@ pub fn resolve_labels(arr: Vec<Instruction>) -> (Vec<Instruction>, Value) {
         // handle error
         res.push(inst_replace_labels(inst.clone(), &labels).unwrap());
     }
-    println!("Labels {}", tab.len());
+    // println!("Labels {}", tab.len());
     (res, table_to_tuple(&tab, 0, 0, LEVEL - 1))
 }
 
 fn init_value(_m: &Module, expr: &InitExpr) -> usize {
-    eprintln!("init {:?}", expr);
+    // eprintln!("init {:?}", expr);
     match expr.code()[0] {
         I32Const(a) => a as usize,
         F32Const(a) => a as usize,
@@ -1678,7 +1689,7 @@ fn find_function(m: &Module, name: &str) -> Option<u32> {
         None => None,
         Some(sec) => {
             for e in sec.entries() {
-                println!("Export {}: {:?}", e.field(), e.internal());
+                // println!("Export {}: {:?}", e.field(), e.internal());
                 if e.field() == name {
                     if let Internal::Function(arg) = *e.internal() {
                         return Some(arg);
@@ -1935,11 +1946,13 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
 
     let code_section = module.code_section().unwrap(); // Part of the module with functions code
 
+    /*
     println!(
         "Function count in wasm file: {}, {} imports",
         code_section.bodies().len(),
         imports.len()
     );
+    */
     let f_count = code_section.bodies().len() + imports.len();
     let mut init = vec![];
     let max_memory = 1 << 20;
@@ -2030,7 +2043,7 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
             handle_function(&module, f, idx, label, calli, memory_offset, max_memory);
         init.append(&mut res);
         label = n_label;
-        println!("Gas {:?}", avm_gas);
+        // println!("Gas {:?}", avm_gas);
     }
 
     for (idx, f) in get_func_imports(&module).iter().enumerate() {
@@ -2176,7 +2189,8 @@ pub fn load(buffer: &[u8], param: &[u8]) -> Vec<Instruction> {
     file2.write_all(serde_json::to_string(&has_label_buf).unwrap().as_bytes()).unwrap();
 */
     let mut a = vec![];
-    a.push(push_value(int_from_usize(param.len())));
+    // a.push(push_value(int_from_usize(param.len())));
+    a.push(push_value(int_from_usize(10000)));
     a.push(push_value(Value::new_buffer(param.to_vec())));
     a.push(push_value(tab));
     for i in 3..res.len() {

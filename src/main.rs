@@ -169,8 +169,13 @@ fn main() -> Result<(), CompileError> {
                 file_name_chart: BTreeMap::new(),
             };
             let mut machine = Machine::new(program, env);
+            /*
+            for i in 0..100 {
+                machine.start_at_zero();
+                machine.run(Some(CodePt::new_internal(code_len - 1)));
+            }*/
             machine.start_at_zero();
-            machine.run(Some(CodePt::new_internal(code_len - 1)));
+            let used = machine.run(Some(CodePt::new_internal(code_len - 1)));
             // machine.debug(Some(CodePt::new_internal(code_len - 1)));
             let len = machine.stack.nth(0);
             let buf = machine.stack.nth(1);
@@ -183,7 +188,7 @@ fn main() -> Result<(), CompileError> {
                         // println!("{}", buf.read_byte(i));
                         res.push(buf.read_byte(i))
                     }
-                    println!("Gas used {}, Result {}", 1000000 - gl.to_usize().unwrap(), hex::encode(res));
+                    println!("WASM Gas used {}, Gas used {}, Result {}", 1000000 - gl.to_usize().unwrap(), used, hex::encode(res));
                 }
                 _ => println!("Unexpected output")
             };

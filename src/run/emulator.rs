@@ -2202,6 +2202,7 @@ impl Machine {
                         self.wasm_instances.push(instance);
                         self.stack.push(Value::WasmCodePoint(Box::new(val), self.wasm_instances.len() - 1));
                         self.incr_pc();
+                        println!("Prepared");
 
                         // Testing: push table, then jump to code point
                         /*
