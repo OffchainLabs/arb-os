@@ -50,6 +50,7 @@ type AccountContractInfo = struct {
 
 type AggregatorInfo = struct {
     decompressionState: option<AggregatorDecompressionState>,
+    feeCollector: address,    // address to pay this aggregator's fees to (could be, e.g., aggregator's cold wallet)
 }
 
 // globalAccountStore is the authoritative source of info on accounts that exist on this chain
@@ -261,7 +262,47 @@ public func account_setAggregatorDecompressionState(
     maybeState: option<AggregatorDecompressionState>,
 ) -> Account {
     return account with {
-        aggregatorInfo: Some(struct { decompressionState: maybeState })
+        aggregatorInfo: Some(
+            xif let Some(aggInfo) = account.aggregatorInfo {
+                aggInfo with {
+                    decompressionState: maybeState
+                }
+            } else {
+                struct {
+                    decompressionState: maybeState,
+                    feeCollector: account.addr,
+                }
+            }
+        )
+    };
+}
+
+public func accountStore_feeCollectorForAggregator(acctStore: AccountStore, agg: address) -> address {
+    return account_getFeeCollector(accountStore_get(acctStore, agg));
+}
+
+public func account_getFeeCollector(account: Account) -> address {
+    return xif let Some(aggInfo) = account.aggregatorInfo {
+        aggInfo.feeCollector
+    } else {
+        account.addr
+    };
+}
+
+public func account_setFeeCollector(account: Account, newCollector: address) -> Account {
+    return account with {
+        aggregatorInfo: Some(
+            xif let Some(aggInfo) = account.aggregatorInfo {
+                aggInfo with {
+                    feeCollector: newCollector
+                }
+            } else {
+                struct {
+                    decompressionState: None<AggregatorDecompressionState>,
+                    feeCollector: newCollector,
+                }
+            }
+        )
     };
 }
 

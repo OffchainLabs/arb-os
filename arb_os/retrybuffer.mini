@@ -401,7 +401,7 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
     return ret;
 }
 
-public impure func redeemRetryableTxInTx(txToRedeem: uint) -> bool {
+public impure func redeemRetryableTxInTx(txToRedeem: uint) -> (bool, ByteArray) {
     let rbuf = retryBuffer_trimTwo(getRetryBufferInCurrentContext());
     return xif let Some(rtx) = retryBuffer_get(rbuf, txToRedeem) {
         xif let Some(rb) = retryBuffer_delete(rbuf, txToRedeem, false) {
@@ -411,10 +411,10 @@ public impure func redeemRetryableTxInTx(txToRedeem: uint) -> bool {
             evmCallStack_callRetryableTxAndReturn(rtx)
         } else {
             setRetryBufferInCurrentContext(rbuf);
-            false
+            (false, bytearray_new(0))
         }
     } else {
         setRetryBufferInCurrentContext(rbuf);
-        false
+        (false, bytearray_new(0))
     };
 }

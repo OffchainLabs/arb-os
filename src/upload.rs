@@ -2,25 +2,19 @@
  * Copyright 2021, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::abi::{AbiForContract, ArbSys, _ArbOwner};
-use crate::evm::test_contract_path;
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, Instruction};
-use crate::run::load_from_file;
-use crate::uint256::Uint256;
-use ethers_signers::Signer;
 use rustc_hex::ToHex;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use crate::compile::miniconstants::ARBOS_VERSION;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct CodeUploader {
     build_buffer: Vec<u8>,
-    instructions: Vec<Vec<u8>>,
+    pub instructions: Vec<Vec<u8>>,
     num_so_far: usize,
     num_total: usize,
 }
@@ -233,3 +227,4 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
 
     Ok(())
 }
+

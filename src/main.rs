@@ -7,6 +7,7 @@
 use crate::compile::CompileStruct;
 use crate::link::LinkedProgram;
 use crate::pos::try_display_location;
+use crate::upload::CodeUploader;
 use clap::Clap;
 use compile::CompileError;
 use contracttemplates::generate_contract_template_file_or_die;
@@ -21,7 +22,6 @@ use std::io;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use crate::run::upload::CodeUploader;
 
 mod compile;
 mod contracttemplates;
@@ -35,6 +35,7 @@ pub mod pos;
 mod run;
 mod stringtable;
 mod uint256;
+mod upload;
 
 ///Command line options for run subcommand.
 #[derive(Clap, Debug)]
@@ -100,7 +101,7 @@ struct GenUpgrade {
 }
 
 #[derive(Clap, Debug)]
-struct SerializeUpgrade{
+struct SerializeUpgrade {
     input: String,
 }
 
@@ -183,7 +184,15 @@ fn main() -> Result<(), CompileError> {
         }
 
         Args::MakeBenchmarks => {
-            evm::benchmarks::make_benchmarks();
+            evm::make_benchmarks().map_err(|e| {
+                CompileError::new(
+                    match e {
+                        ethabi::Error::Other(desc) => desc,
+                        other => format!("{}", other),
+                    },
+                    None,
+                )
+            })?;
         }
 
         Args::MakeTemplates => {
@@ -244,7 +253,7 @@ fn main() -> Result<(), CompileError> {
             let mut num_failures = 0u64;
             for path_name in paths.iter() {
                 let path = Path::new(path_name);
-                let (ns, nf) = evm::evmtest::run_evm_tests(
+                let (ns, nf) = evm::run_evm_tests(
                     path,
                     if options.savelogs {
                         Some(Path::new("evm-test-logs/"))

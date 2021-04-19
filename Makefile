@@ -10,6 +10,7 @@ UPGRADETESTDIR = upgradetests
 ACSRCDIR = $(CONTRACTDIR)/builtin
 ACBUILDDIR = $(ARTIFACTDIR)/builtin
 ARBOS = $(ARBOSDIR)/arbos.mexe
+ARBOS = $(ARBOSDIR)/arbos.mexe
 
 TEMPLATES = $(ARBOSDIR)/contractTemplates.mini
 TESTFILES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/biguinttest.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe $(STDDIR)/sha256test.mexe $(STDDIR)/ripemd160test.mexe minitests/codeloadtest.mexe $(STDDIR)/fixedpointtest.mexe $(STDDIR)/blstest.mexe
@@ -18,8 +19,8 @@ TESTCONTRACTS = $(ACBUILDDIR)/ArbSys.sol/ArbSys.json $(TESTCONTRACTSPURE)
 UPGRADEFILES = $(UPGRADETESTDIR)/regcopy_old.mexe $(UPGRADETESTDIR)/regcopy_new.mexe $(UPGRADETESTDIR)/upgrade1_old.mexe $(UPGRADETESTDIR)/upgrade1_new.mexe $(UPGRADETESTDIR)/upgrade2_new.mexe
 ARBOSCONTRACTS = $(ACBUILDDIR)/ArbAddressTable.sol/ArbAddressTable.json $(ACBUILDDIR)/ArbBLS.sol/ArbBLS.json $(ACBUILDDIR)/ArbFunctionTable.sol/ArbFunctionTable.json $(ACBUILDDIR)/ArbInfo.sol/ArbInfo.json $(ACBUILDDIR)/ArbOwner.sol/ArbOwner.json $(ACBUILDDIR)/ArbSys.sol/ArbSys.json $(ACBUILDDIR)/ArbosTest.sol/ArbosTest.json $(ACBUILDDIR)/ArbRetryable.sol/ArbRetryable.json
 
-COMPILEFLAGS =
-COMPILEFLAGSNOINLINE =
+COMPILEFLAGS = -c "arb_os/constants.json"
+COMPILEFLAGSNOINLINE = -c "arb_os/constants.json"
 
 
 all: $(ARBOSCONTRACTS) $(TESTFILES) $(TESTCONTRACTS) $(TEMPLATES) $(UPGRADEFILES) arbos upgrade test
@@ -103,11 +104,11 @@ $(UPGRADETESTDIR)/upgrade2_new.mexe: compiler $(UPGRADETESTDIR)/upgrade2_old.mex
 
 $(ARBOSDIR)/arbos-upgrade.mexe: compiler $(TESTCONTRACTS) $(ARBOSDIR) $(STDDIR) $(BUILTINDIR) $(TEMPLATES) src/compile/miniconstants.rs
 	cp $(ARBOSDIR)/dummy_version_bridge.mini $(ARBOSDIR)/bridge_arbos_versions.mini
-	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe"
+	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe" $(COMPILEFLAGS)
 	$(CARGORUN) gen-upgrade-code $(ARBOSDIR)/arbos_before.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/bridge_arbos_versions.mini customize_arbos_bridge_versions $(ARBOSDIR)/upgrade.toml
-	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe"
+	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe" $(COMPILEFLAGS)
 	$(CARGORUN) gen-upgrade-code $(ARBOSDIR)/arbos_before.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/bridge_arbos_versions.mini customize_arbos_bridge_versions $(ARBOSDIR)/upgrade.toml
-	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe"
+	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe" $(COMPILEFLAGS)
 	cp $(ARBOSDIR)/bridge_arbos_versions.mini $(ARBOSDIR)/save_bridge_for_debugging.mini
 	cp $(ARBOSDIR)/dummy_version_bridge.mini $(ARBOSDIR)/bridge_arbos_versions.mini
 
@@ -120,11 +121,6 @@ $(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
 
 $(ARBOSDIR)/arbos.mexe: compiler $(TESTCONTRACTS) $(ARBOSDIR) $(STDDIR) $(BUILTINDIR) $(TEMPLATES) src/compile/miniconstants.rs
 	$(CARGORUN) compile "arb_os" -o "arb_os/arbos.mexe" $(COMPILEFLAGS)
-
-upgrade: $(ARBOSDIR)/upgrade.mini
-
-$(ARBOSDIR)/upgrade.mini: compiler upgradeConfig.toml
-	$(CARGORUN) gen-upgrade-code arb_os/arbos.mexe arb_os/arbos.mexe arb_os/upgrade.mini upgradeGlobals upgradeConfig.toml
 
 $(TESTCONTRACTSPURE): $(TCSRCDIR)
 	(cd contracts; yarn build)

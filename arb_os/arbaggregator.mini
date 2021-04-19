@@ -8,6 +8,8 @@ use accounts::accountStore_get;
 use accounts::accountStore_set;
 use accounts::account_setAggregatorToPay;
 use accounts::account_getAggregatorToPayAsOption;
+use accounts::account_getFeeCollector;
+use accounts::account_setFeeCollector;
 
 use chainParameters::chainParams_getDefaultAggregator;
 use chainParameters::chainParams_setDefaultAggregator;
@@ -39,14 +41,18 @@ public impure func arbaggregator_txcall() {
             evmOp_revert_knownPc(0, 0, 0);
         }
         let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
-        if (funcCode == 0x52f10740) {
+        if (funcCode == const::funcCode_ArbAggregator_getPreferredAggregator) {
             arbaggregator_getPreferredAggregator(topFrame, calldata);
-        } elseif (funcCode == 0x6e928a6e) {
+        } elseif (funcCode == const::funcCode_ArbAggregator_setPreferredAggregator) {
             arbaggregator_setPreferredAggregator(topFrame, calldata);
-        } elseif (funcCode == 0x875883f2) {
+        } elseif (funcCode == const::funcCode_ArbAggregator_getDefaultAggregator) {
             arbaggregator_getDefaultAggregator(topFrame, calldata);
-        } elseif (funcCode == 0x0ffd6650) {
+        } elseif (funcCode == const::funcCode_ArbAggregator_setDefaultAggregator) {
             arbaggregator_setDefaultAggregator(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbAggregator_getFeeCollector) {
+            arbaggregator_getFeeCollector(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbAggregator_setFeeCollector) {
+            arbaggregator_setFeeCollector(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownPc(1, 0, 0);
@@ -129,5 +135,38 @@ impure func arbaggregator_setDefaultAggregator(topFrame: EvmCallFrame, calldata:
     }
     let newDefaultAgg = address(bytearray_get256(calldata, 4));
     chainParams_setDefaultAggregator(newDefaultAgg);
+    evmOp_return(0, 0);
+}
+
+impure func arbaggregator_getFeeCollector(topFrame: EvmCallFrame, calldata: ByteArray) {  // (address) -> address
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(50, 0, 0);
+    }
+    let aggregator = address(bytearray_get256(calldata, 4));
+    let feeCollector = account_getFeeCollector(evmCallStack_getAccountInCurrentContext(aggregator));
+    let mem = bytearray_set256(bytearray_new(0), 0, uint(feeCollector));
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownPc(51, 0, 0);
+    }
+}
+
+impure func arbaggregator_setFeeCollector(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, address)
+    let caller = evmCallFrame_getCaller(topFrame);
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownPc(60, 0, 0);
+    }
+    let aggregator = address(bytearray_get256(calldata, 4));
+    let newCollector = address(bytearray_get256(calldata, 36));
+
+    let aggAcct = evmCallStack_getAccountInCurrentContext(aggregator);
+    let oldCollector = account_getFeeCollector(aggAcct);
+
+    if ((caller != address(0)) && (Some(caller) != chainParams_getOwner()) && (caller != oldCollector)) {
+        evmOp_revert_knownPc(61, 0, 0);
+    }
+    evmCallStack_setAccountInCurrentContext(aggregator, account_setFeeCollector(aggAcct, newCollector));
+
     evmOp_return(0, 0);
 }
