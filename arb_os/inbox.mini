@@ -175,6 +175,10 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
             pendingMessage: None<IncomingRequest>
         } with {
             arbBlockNum: inbox.arbBlockNum + 1
+        } with {
+            ethBlockNum: pendingMsg.ethBlockNumber
+        } with {
+            timestamp: pendingMsg.timestamp
         };
 
         return xif (pendingMsg.kind != const::L1MessageType_endOfBlock) {
