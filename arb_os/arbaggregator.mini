@@ -163,7 +163,7 @@ impure func arbaggregator_setFeeCollector(topFrame: EvmCallFrame, calldata: Byte
     let aggAcct = evmCallStack_getAccountInCurrentContext(aggregator);
     let oldCollector = account_getFeeCollector(aggAcct);
 
-    if ((caller != address(0)) && (Some(caller) != chainParams_getOwner()) && (caller != oldCollector)) {
+    if ((caller != address(0)) && (caller != chainParams_getOwner()) && (caller != oldCollector)) {
         evmOp_revert_knownPc(61, 0, 0);
     }
     evmCallStack_setAccountInCurrentContext(aggregator, account_setFeeCollector(aggAcct, newCollector));

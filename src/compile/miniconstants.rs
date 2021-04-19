@@ -12,6 +12,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use keccak_hash::keccak;
+
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ConstantsFile {
@@ -60,6 +62,18 @@ pub fn init_constant_table(
 
     for (s, u) in consts.hex {
         ret.insert(s.to_string(), Uint256::from_string_hex(&u).unwrap());
+    }
+
+    for (s, i) in consts.parameters_int {
+        let mut ss = s.as_bytes();
+        ret.insert("Atom_Param_".to_owned() + &s, Uint256::from_bytes(keccak(&mut ss).as_bytes()));
+        ret.insert("Default_Param_".to_owned() + &s,Uint256::from_u64(i));
+    }
+
+    for (s, i) in consts.parameters_hex {
+        let mut ss = s.as_bytes();
+        ret.insert("Atom_Param_".to_owned() + &s, Uint256::from_bytes(keccak(&mut ss).as_bytes()));
+        ret.insert("Default_Param_".to_owned() + &s,Uint256::from_string_hex(&i).unwrap());
     }
 
     for builtin in consts.contract {
