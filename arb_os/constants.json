@@ -197,6 +197,7 @@
     "TxResultCode_formatError": 6,
     "TxResultCode_insufficientBalance": 4,
     "TxResultCode_insufficientGasForBaseFee": 9,
+    "TxResultCode_invalidEVMCode": 11,
     "TxResultCode_belowMinimumTxGas": 10,
     "TxResultCode_noGasFunds": 3,
     "TxResultCode_revert": 1,

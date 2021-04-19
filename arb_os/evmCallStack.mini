@@ -256,16 +256,14 @@ public impure func initEvmCallStack(
         globalCurrentTxRequest = request;
         globalCurrentRetryableRequest = None<IncomingRequestAndLogs>;
 
-        let (startTxResult, acctStore, _) = xif(request.maxGas < const::Charging_MinArbGasForContractTx) {
-            let gaccts = getGlobalAccountStore();
-            (const::TxResultCode_belowMinimumTxGas, gaccts, gaccts, )
+        let (startTxResult, acctStore) = xif(request.maxGas < const::Charging_MinArbGasForContractTx) {
+            (const::TxResultCode_belowMinimumTxGas, getGlobalAccountStore())
         } else {
             gasAccounting_startTxCharges(
             	request.maxGas, 
             	request.gasPrice, 
             	request.gasPayer, 
             	getGlobalAccountStore(), 
-            	None<AccountStore>
             )
         };
 
@@ -435,8 +433,6 @@ public impure func initEvmCallStack(
 
 public impure func initEvmCallStackForConstructor(
     code: ByteArray,
-    evmJumpTable: map<uint, impure func()>,
-    startPoint: impure func(),
     request: TxRequestData,
     chargeForCallvalue: bool,
 ) {
@@ -450,27 +446,14 @@ public impure func initEvmCallStackForConstructor(
 
     // Create an accountStore with the caller's sequence number incremented; will decide later whether to commit it
     let acctStore = getGlobalAccountStore();
-    let acctStoreAfterIncrement = accountStore_set(
+    acctStore = accountStore_set(
         acctStore,
         request.caller,
         account_incrSeqNum(
             accountStore_get(acctStore, request.caller)
         )
     );
-
-    // Create a new account to run the constructor code.
-    acctStore = accountStore_set(
-        acctStoreAfterIncrement,   // start with this, so it is permanent if the current tx commits
-        request.calleeAddr,
-        account_setContractInfo(
-            pristineAccount(request.calleeAddr),
-            code,
-            evmJumpTable,
-            startPoint,
-            storageMap_new(),
-            true,
-        )
-    );
+    let acctStoreWithSeqNumIncr = acctStore;
 
     if let Some(uas) = ethTransferOrGrant(
         acctStore,
@@ -481,45 +464,72 @@ public impure func initEvmCallStackForConstructor(
     ) {
         acctStore = uas;
 
-        let (startTxResult, uAcctStoreAfterInc, uAcctStore) = xif(request.maxGas < const::Charging_MinArbGasForContractTx) {
-            (const::TxResultCode_belowMinimumTxGas, acctStoreAfterIncrement, acctStore)
+        let (startTxResult, uAcctStore) = xif(request.maxGas < const::Charging_MinArbGasForContractTx) {
+            (const::TxResultCode_belowMinimumTxGas, acctStore)
         } else {
             gasAccounting_startTxCharges(
                 request.maxGas, 
                 request.gasPrice, 
                 request.gasPayer, 
-                acctStoreAfterIncrement,
-                Some(acctStore)
+                acctStore,
             )
         };
 
         if (startTxResult == const::TxResultCode_success) {
-            setGlobalAccountStore(uAcctStoreAfterInc);   // commit the incremented sequence number
-            acctStore = uAcctStore;
+            setGlobalAccountStore(acctStoreWithSeqNumIncr);   // commit the incremented sequence number
 
-            globalCallStack = Some(struct {
-                runningAs: request.calleeAddr,
-                runningCodeFrom: request.calleeAddr,
-                accountStore: acctStore,
-                runningAsAccount: accountStore_get(acctStore, request.calleeAddr),
-                caller: request.caller,
-                static: false,
-                calldata: request.calldata,
-                callvalue: request.value,
-                returnInfo: None<ReturnInfo>,
-                memory: bytearray_new(0),
-                storageDelta: int(0),
-                revertOnStorageWrite: false,
-                evmLogs: evmlogs_empty(),
-                selfDestructQueue: queue_new(),
-                resumeInfo: None<ResumeInfo>,
-                sendQueue: queue_new(),
-                sendOnFailure: None<ByteArray>,
-                parent: None<EvmCallFrame>
-            });
+            if let Some(res) = translateEvmCodeSegment(bytestream_new(code), false) {
+                let (startPoint, evmJumpTable, _) = res;
 
-            startPoint();  // start executing the call; should never return
-            panic;
+                // Create a new account to run the constructor code.
+                acctStore = uAcctStore;
+                acctStore = accountStore_set(
+                    acctStore,
+                    request.calleeAddr,
+                    account_setContractInfo(
+                        accountStore_get(acctStore, request.calleeAddr),
+                        code,
+                        evmJumpTable,
+                        startPoint,
+                        storageMap_new(),
+                        true,
+                    )
+                );
+
+                globalCallStack = Some(struct {
+                    runningAs: request.calleeAddr,
+                    runningCodeFrom: request.calleeAddr,
+                    accountStore: acctStore,
+                    runningAsAccount: accountStore_get(acctStore, request.calleeAddr),
+                    caller: request.caller,
+                    static: false,
+                    calldata: request.calldata,
+                    callvalue: request.value,
+                    returnInfo: None<ReturnInfo>,
+                    memory: bytearray_new(0),
+                    storageDelta: int(0),
+                    revertOnStorageWrite: false,
+                    evmLogs: evmlogs_empty(),
+                    selfDestructQueue: queue_new(),
+                    resumeInfo: None<ResumeInfo>,
+                    sendQueue: queue_new(),
+                    sendOnFailure: None<ByteArray>,
+                    parent: None<EvmCallFrame>
+                });
+
+                startPoint();  // start executing the call; should never return
+                panic;
+            } else {
+                emitTxReceipt(
+                    request.incomingRequest,
+                    const::TxResultCode_invalidEVMCode,
+                    None<ByteArray>,
+                    None<EvmLogs>,
+                    None<GasUsage>,
+                    request.feeStats,
+                );
+                evmCallStack_callHitError(29);
+            }
         } else {
             // can't pay for gas error
             emitTxReceipt(
