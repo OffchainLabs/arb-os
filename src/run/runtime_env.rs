@@ -49,9 +49,7 @@ impl RuntimeEnvironment {
         )
     }
 
-    pub fn _new_options(
-        chain_address: Uint256,
-    ) -> Self {
+    pub fn _new_options(chain_address: Uint256) -> Self {
         RuntimeEnvironment::new_with_blocknum_timestamp(
             chain_address,
             Uint256::from_u64(100_000),
@@ -94,10 +92,7 @@ impl RuntimeEnvironment {
             compressor: TxCompressor::new(),
             charging_policy: charging_policy.clone(),
             num_wallets: 0,
-            chain_init_message: RuntimeEnvironment::get_params_bytes(
-                owner,
-                chain_id,
-            ),
+            chain_init_message: RuntimeEnvironment::get_params_bytes(owner, chain_id),
         };
 
         ret.send_chain_init_message();
@@ -105,17 +100,10 @@ impl RuntimeEnvironment {
     }
 
     pub fn send_chain_init_message(&mut self) {
-        self.insert_l1_message(
-            4,
-            Uint256::zero(),
-            &self.chain_init_message.clone(),
-        );
+        self.insert_l1_message(4, Uint256::zero(), &self.chain_init_message.clone());
     }
 
-    fn get_params_bytes(
-        owner: Option<Uint256>,
-        chain_id: u64,
-    ) -> Vec<u8> {
+    fn get_params_bytes(owner: Option<Uint256>, chain_id: u64) -> Vec<u8> {
         let mut buf = Vec::new();
         let params_to_set = vec![
             ("ChainOwner", owner.clone().unwrap_or(Uint256::zero())),

@@ -2,8 +2,14 @@
  * Copyright 2021, Offchain Labs, Inc. All rights reserved.
  */
 
+use crate::evm::abi::ArbSys;
+use crate::evm::preinstalled_contracts::_ArbOwner;
+use crate::evm::{test_contract_path, AbiForContract};
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, Instruction};
+use crate::run::load_from_file;
+use crate::uint256::Uint256;
+use ethers_signers::Signer;
 use rustc_hex::ToHex;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -195,7 +201,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
         Uint256::from_u64(4)
     );
 
-    arbowner._give_ownership(&mut machine, my_addr, true)?;
+    arbowner._give_ownership(&mut machine, my_addr, None)?;
 
     let uploader = CodeUploader::_new_from_file(Path::new("arb_os/arbos-upgrade.mexe"));
     arbowner._start_code_upload(&mut machine)?;
@@ -213,18 +219,13 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     }
 
     let expected_code_hash = arbowner._get_uploaded_code_hash(&mut machine)?;
-    arbowner._finish_code_upload_as_arbos_upgrade(
-        &mut machine,
-        expected_code_hash,
-    )?;
+    arbowner._finish_code_upload_as_arbos_upgrade(&mut machine, expected_code_hash)?;
 
     let wallet2 = machine.runtime_env.new_wallet();
     let arbsys = ArbSys::new(&wallet2, false);
     let arbos_version = arbsys._arbos_version(&mut machine)?;
-    assert_eq!(arbos_version, Uint256::from_u64(ARBOS_VERSION));
     let arbos_version_orig = arbsys_orig_binding._arbos_version(&mut machine)?;
     assert_eq!(arbos_version, arbos_version_orig);
 
     Ok(())
 }
-

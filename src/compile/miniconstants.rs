@@ -20,6 +20,8 @@ pub struct ConstantsFile {
     hex: BTreeMap<String, String>,
     contract_folder: String,
     contract: BTreeSet<String>,
+    parameters_int: BTreeMap<String, u64>,
+    parameters_hex: BTreeMap<String, String>,
 }
 
 ///Creates a fixed list of globally accessible constants.

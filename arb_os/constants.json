@@ -216,5 +216,7 @@
     "ArbOwner",
     "ArbRetryableTx",
     "ArbStatistics"
-  ]
+  ],
+  "parameters_int": { "dummy1":  13 },
+  "parameters_hex": { "dummy2": "abcd" },
 }

@@ -15,12 +15,12 @@ pub use abi::{builtin_contract_path, contract_path, AbiForContract};
 pub use benchmarks::make_benchmarks;
 pub use evmtest::run_evm_tests;
 
-mod abi;
+pub mod abi;
 mod benchmarks;
 #[cfg(test)]
 mod bls;
 mod evmtest;
-mod preinstalled_contracts;
+pub mod preinstalled_contracts;
 
 #[derive(Clone)]
 pub struct CallInfo<'a> {
@@ -198,9 +198,7 @@ pub fn _evm_tx_with_deposit(
     Ok(true)
 }
 
-pub fn _evm_block_num_consistency_test(
-    debug: bool,
-) -> Result<(), ethabi::Error> {
+pub fn _evm_block_num_consistency_test(debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
