@@ -602,6 +602,7 @@ public impure func accountStore_createOrAddCodeRef(
     AccountStore,
     impure func(),
     map<uint, impure func()>,
+    bool,
 )> {
     let codeHash = keccak256(code, 0, bytearray_size(code));
     return xif let Some(codeRef) = acctStore.codeRefTable[codeHash] {
@@ -609,6 +610,7 @@ public impure func accountStore_createOrAddCodeRef(
             accountStore_addCodeRef(acctStore, codeHash)?,
             codeRef.startCodePoint,
             codeRef.evmJumpTable,
+            false,
         ))
     } else {
         let (startCodePoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(code), false)?;
@@ -616,6 +618,7 @@ public impure func accountStore_createOrAddCodeRef(
             accountStore_createCodeRef(acctStore, code, evmJumpTable, startCodePoint),
             unsafecast<impure func()>(startCodePoint),
             unsafecast<map<uint, impure func()>>(evmJumpTable),
+            true,
         ))
     };
 }

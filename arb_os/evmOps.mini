@@ -1055,7 +1055,7 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
                 if let Some(contractCode) = evmCallStack_getTopFrameReturnData() {
                     let astore = evmCallStack_getAccountStoreInCurrentContext();
                     if let Some(res) = accountStore_createOrAddCodeRef(astore, contractCode) {
-                        let (uastore, startPoint2, evmJumpTable2) = res;
+                        let (uastore, startPoint2, evmJumpTable2, _) = res;
                         evmCallStack_setAccountStoreInCurrentContext(uastore);
                         if let Some(oldAcct) = evmCallStack_getAccount(newAddress) {
                             let storage = storageMap_new();
