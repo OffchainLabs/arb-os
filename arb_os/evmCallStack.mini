@@ -769,6 +769,7 @@ public impure func evmCallStack_returnFromCall(
         // top-level call completed; will need to return to external caller
         if (success) {
             let (entryPoint, evmJumpTable) = xif (globalCurrentTxRequest.isConstructor) {
+                let _ = gasAccounting_resumeTxCharges(leftoverGas);
                 let (uAcctStore, ep, ejt, created) = accountStore_createOrAddCodeRef(topFrame.accountStore, returnData)?;
                 globalCallStack = Some(topFrame with { accountStore: uAcctStore });
                 if (created) {
