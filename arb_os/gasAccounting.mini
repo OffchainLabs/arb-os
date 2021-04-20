@@ -99,8 +99,11 @@ type CongestionState = struct {
 
 type PricingParameters = struct {
     l1GasPerL2Tx: uint,
+    arbGasPerL2Tx: uint,
     l1GasPerL1CalldataUnit: uint,
+    arbGasPerL1CalldataUnit: uint,
     l1GasPerStorage: uint,
+    arbGasPerStorage: uint,
     arbGasDivisor: uint,      // base ArbGas price is L1 gas price / arbGasDivisor
 }
 
@@ -145,8 +148,11 @@ public impure func gasAccounting_init() {    // initialize on boot, before we ha
 
     let pricingParams = struct {
         l1GasPerL2Tx: const::Charging_DefaultL1GasPerL2Tx,
+        arbGasPerL2Tx: const::Charging_DefaultArbGasPerL2Tx,
         l1GasPerL1CalldataUnit: const::Charging_DefaultL1GasPerCalldataUnit,
+        arbGasPerL1CalldataUnit: const::Charging_DefaultArbGasPerCalldataUnit,
         l1GasPerStorage: const::Charging_DefaultL1GasPerStorage,
+        arbGasPerStorage: const::Charging_DefaultArbGasPerStorage,
         arbGasDivisor: const::Charging_DefaultArbGasDivisor,
     };
 
@@ -246,14 +252,21 @@ impure func setPrices(
         let l1GasPrice = getL1GasPriceEstimate();
         let perArbGasBase = l1GasPrice / params.arbGasDivisor;
         let perArbGasCongestion = congestionState.congestionPriceWei;
+        let perArbGasTotal = perArbGasBase + perArbGasCongestion;
         (
             struct {
-                perL2Tx: fixedPoint_mulByUintTrunc(feeConfig.baseFeeMultiplier, params.l1GasPerL2Tx * l1GasPrice),
-                perL1CalldataUnit: fixedPoint_mulByUintTrunc(feeConfig.baseFeeMultiplier, params.l1GasPerL1CalldataUnit * l1GasPrice),
-                perStorageCell: params.l1GasPerStorage * l1GasPrice,
+                perL2Tx: fixedPoint_mulByUintTrunc(
+                    feeConfig.baseFeeMultiplier,
+                    params.l1GasPerL2Tx * l1GasPrice + params.arbGasPerL2Tx * perArbGasTotal,
+                ),
+                perL1CalldataUnit: fixedPoint_mulByUintTrunc(
+                    feeConfig.baseFeeMultiplier,
+                    params.l1GasPerL1CalldataUnit * l1GasPrice + params.arbGasPerL1CalldataUnit * perArbGasTotal,
+                ),
+                perStorageCell: params.l1GasPerStorage * l1GasPrice + params.arbGasPerStorage * perArbGasTotal,
                 perArbGasBase: perArbGasBase,
                 perArbGasCongestion: perArbGasCongestion,
-                perArbGasTotal: perArbGasBase + perArbGasCongestion,
+                perArbGasTotal: perArbGasTotal,
             },
             oldRetryablePrices
         )
@@ -344,8 +357,11 @@ public impure func gasAccounting_setFeesEnabled(enabled: bool) {
 
 public impure func gasAccounting_setChargingParams(
     l1GasPerL2Tx: uint,
-    l1GasPerL2CalldataUnit: uint,
+    arbGasPerL2Tx: uint,
+    l1GasPerL1CalldataUnit: uint,
+    arbGasPerL1CalldataUnit: uint,
     l1GasPerStorage: uint,
+    arbGasPerStorage: uint,
     arbGasDivisor: uint,
     netFeeRecipient: address,
     congestionFeeRecipient: address,
@@ -353,8 +369,11 @@ public impure func gasAccounting_setChargingParams(
     gasAccountingInfo = gasAccountingInfo with {
         pricingParams: struct {
             l1GasPerL2Tx: l1GasPerL2Tx,
-            l1GasPerL1CalldataUnit: l1GasPerL2CalldataUnit,
+            arbGasPerL2Tx: arbGasPerL2Tx,
+            l1GasPerL1CalldataUnit: l1GasPerL1CalldataUnit,
+            arbGasPerL1CalldataUnit: arbGasPerL1CalldataUnit,
             l1GasPerStorage: l1GasPerStorage,
+            arbGasPerStorage: arbGasPerStorage,
             arbGasDivisor: arbGasDivisor,
         }
     } with {

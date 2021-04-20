@@ -77,7 +77,9 @@ At present. the following options are supported:
 * Option 2: set charging parameters: 
   * speed limit per second (uint); 
   * L1 gas per L2 tx (uint); 
+  * ArbGas per L2 tx (uint);
   * L1 gas per L2 calldata unit (uint) [a non-zero calldata byte is 16 units; a zero calldata byte is 4 units]; 
+  * ArbGas per L2 calldata unit (uint);
   * L1 gas per storage unit allocated (uint); 
   * ratio of L1 gas price to base ArbGas price; 
   * network fee recipient (address encoded as uint); 
