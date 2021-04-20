@@ -455,7 +455,6 @@ public impure func initEvmCallStackForConstructor(
             accountStore_get(acctStore, request.caller)
         )
     );
-    let acctStoreWithSeqNumIncr = acctStore;
 
     if let Some(uas) = ethTransferOrGrant(
         acctStore,
@@ -476,15 +475,15 @@ public impure func initEvmCallStackForConstructor(
                 acctStore,
             )
         };
+        acctStore = uAcctStore;
 
         if (startTxResult == const::TxResultCode_success) {
-            setGlobalAccountStore(acctStoreWithSeqNumIncr);   // commit the incremented sequence number
+            setGlobalAccountStore(acctStore);   // commit the incremented sequence number
 
             if let Some(res) = translateEvmCodeSegment(bytestream_new(code), false) {
                 let (startPoint, evmJumpTable, _) = res;
 
                 // Create a new account to run the constructor code.
-                acctStore = uAcctStore;
                 acctStore = accountStore_set(
                     acctStore,
                     request.calleeAddr,
