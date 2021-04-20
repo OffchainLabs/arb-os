@@ -259,12 +259,14 @@ public impure func initEvmCallStack(
         let (startTxResult, acctStore) = xif(request.maxGas < const::Charging_MinArbGasForContractTx) {
             (const::TxResultCode_belowMinimumTxGas, getGlobalAccountStore())
         } else {
-            gasAccounting_startTxCharges(
+            let (res, astore) = gasAccounting_startTxCharges(
             	request.maxGas, 
             	request.gasPrice, 
             	request.gasPayer, 
             	getGlobalAccountStore(), 
-            )
+            );
+            setGlobalAccountStore(astore);
+            (res, astore)
         };
 
         if (startTxResult == const::TxResultCode_success) {
