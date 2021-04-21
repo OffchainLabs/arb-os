@@ -923,6 +923,7 @@ impl ArbosReceipt {
             6 => "message format error",
             7 => "cannot deploy at address",
             8 => "exceeded tx gas limit",
+            9 => "below minimum ArbGas for contract tx",
             _ => "unknown error",
         }
         .to_string()

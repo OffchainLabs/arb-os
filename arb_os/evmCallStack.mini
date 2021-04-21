@@ -1,5 +1,5 @@
 //
-// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
 //
 
 use inbox::IncomingRequest;
@@ -263,16 +263,25 @@ public impure func initEvmCallStack(
     if let Some(entryPoint) = account_getStartCodePoint(
         accountStore_get(
             getGlobalAccountStore(),
-            request.calleeAddr,
+            request.calleeAddr
         )
     ) {
-        let (startTxResult, acctStore, _) = gasAccounting_startTxCharges(
-            request.maxGas,
-            request.gasPrice,
-            request.gasPayer,
-            getGlobalAccountStore(),
-            None<AccountStore>,
-        );
+        globalCurrentTxRequest = request;
+        globalCurrentRetryableRequest = None<IncomingRequestAndLogs>;
+
+        let (startTxResult, acctStore, _) = xif(request.maxGas < const::Charging_MinArbGasForContractTx) {
+            let gaccts = getGlobalAccountStore();
+            (const::TxResultCode_belowMinimumTxGas, gaccts, gaccts, )
+        } else {
+            gasAccounting_startTxCharges(
+            	request.maxGas, 
+            	request.gasPrice, 
+            	request.gasPayer, 
+            	getGlobalAccountStore(), 
+            	None<AccountStore>
+            )
+        };
+
         if (startTxResult == const::TxResultCode_success) {
             setGlobalAccountStore(acctStore);
             if (request.seqNum != None<uint>) {
@@ -502,13 +511,18 @@ public impure func initEvmCallStackForConstructor(
     ) {
         acctStore = uas;
 
-        let (startTxResult, uAcctStoreAfterInc, uAcctStore) = gasAccounting_startTxCharges(
-            request.maxGas,
-            request.gasPrice,
-            request.gasPayer,
-            acctStoreAfterIncrement,
-            Some(acctStore),
-        );
+        let (startTxResult, uAcctStoreAfterInc, uAcctStore) = xif(request.maxGas < const::Charging_MinArbGasForContractTx) {
+            (const::TxResultCode_belowMinimumTxGas, acctStoreAfterIncrement, acctStore)
+        } else {
+            gasAccounting_startTxCharges(
+                request.maxGas, 
+                request.gasPrice, 
+                request.gasPayer, 
+                acctStoreAfterIncrement,
+                Some(acctStore)
+            )
+        };
+
         if (startTxResult == const::TxResultCode_success) {
             setGlobalAccountStore(uAcctStoreAfterInc);   // commit the incremented sequence number
             acctStore = uAcctStore;
@@ -990,7 +1004,8 @@ public impure func evmCallStack_returnFromCall(
             );
         }
 
-        // Now discard any AVM stack contents and jump back to the main run loop.
+        // Now discard any EVM and AVM stack contents and jump back to the main run loop.
+        globalCallStack = None<EvmCallFrame>;
         emptyAvmStack();
         restoreAuxStackAndCall(
             xif let Some(target) = jumpTargetIfTxEnd { target } else { mainRunLoop },
