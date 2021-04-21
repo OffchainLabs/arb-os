@@ -9,6 +9,7 @@ use accounts::Account;
 use accounts::AccountContractInfo;
 use accounts::AggregatorInfo;
 use accounts::CodeRef;
+use accounts::escrowStore_new;
 use decompression::AggregatorDecompressionState;
 use retrybuffer::RetryBuffer;
 use std::bls::BLSKey;
@@ -53,6 +54,7 @@ public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade
         retryBuffer: oldAcctStore.retryBuffer,
         numContracts: oldAcctStore.numContracts,
         codeRefTable: newmap<bytes32, CodeRef>,
+        escrowStore: escrowStore_new(),
     };
     return acctStore;
 }
