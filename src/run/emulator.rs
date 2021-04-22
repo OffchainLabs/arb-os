@@ -1354,6 +1354,7 @@ impl Machine {
     fn run_one_dont_catch_errors(&mut self, _debug: bool) -> Result<bool, ExecutionError> {
         if let MachineState::Running(pc) = self.state {
             if let Some(insn) = self.code.get_insn(pc) {
+                let stack_len = self.stack.num_items();
                 if let Some(val) = &insn.immediate {
                     self.stack.push(val.clone());
                 }
@@ -1367,8 +1368,9 @@ impl Machine {
                         return Err(ExecutionError::new("Out of ArbGas", &self.state, None));
                     }
                 }
-                if let Some(_) = insn.debug_str {
+                if let Some(str) = &insn.debug_str {
                     self.counter = self.counter + 1;
+                    // println!("{}, stack sz {}", str, stack_len);
                     if self.counter % 100000 == 0 {
                         println!("Wasm instruction {}", self.counter);
                     }

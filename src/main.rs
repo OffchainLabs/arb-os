@@ -160,7 +160,8 @@ fn main() -> Result<(), CompileError> {
 
             let code = wasm::load(&buffer, &param);
             let code_len = code.len();
-            let env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+            println!("Code length {}", code_len);
+            let env = RuntimeEnvironment::new(Uint256::from_usize(11110000), None);
             let program = LinkedProgram {
                 code: code,
                 static_val: Value::new_tuple(vec![]),
@@ -176,7 +177,7 @@ fn main() -> Result<(), CompileError> {
             }*/
             machine.start_at_zero();
             let used = machine.run(Some(CodePt::new_internal(code_len - 1)));
-            // machine.debug(Some(CodePt::new_internal(code_len - 1)));
+            // let used = machine.debug(Some(CodePt::new_internal(code_len - 1)));
             let len = machine.stack.nth(0);
             let buf = machine.stack.nth(1);
             let gas_left = machine.stack.nth(2);

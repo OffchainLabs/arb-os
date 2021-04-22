@@ -27,11 +27,13 @@ fn block_len(bt: &BlockType) -> usize {
     }
 }
 
+/*
 fn count_locals(func: &FuncBody) -> usize {
     func.locals()
         .iter()
         .fold(0, |sum, x| sum + x.count() as usize)
 }
+*/
 
 fn get_func_type(m: &Module, sig: u32) -> &FunctionType {
     match m.type_section().unwrap().types()[sig as usize] {
@@ -1260,6 +1262,12 @@ fn handle_function(
             }
 
             I32Rotl => {
+                res.push(simple_op(AVMOpcode::Swap1));
+                res.push(immed_op(
+                    AVMOpcode::BitwiseAnd,
+                    Value::Int(Uint256::from_usize(0xffffffff)),
+                ));
+                res.push(simple_op(AVMOpcode::Swap1));
                 make_rotl(&mut res, 32);
                 res.push(immed_op(
                     AVMOpcode::BitwiseAnd,
@@ -1268,6 +1276,12 @@ fn handle_function(
                 ptr = ptr - 1;
             }
             I32Rotr => {
+                res.push(simple_op(AVMOpcode::Swap1));
+                res.push(immed_op(
+                    AVMOpcode::BitwiseAnd,
+                    Value::Int(Uint256::from_usize(0xffffffff)),
+                ));
+                res.push(simple_op(AVMOpcode::Swap1));
                 make_rotr(&mut res, 32);
                 res.push(immed_op(
                     AVMOpcode::BitwiseAnd,
@@ -1665,7 +1679,7 @@ pub fn resolve_labels(arr: Vec<Instruction>) -> (Vec<Instruction>, Value) {
         // handle error
         res.push(inst_replace_labels(inst.clone(), &labels).unwrap());
     }
-    // println!("Labels {}", tab.len());
+    println!("Labels {}", tab.len());
     (res, table_to_tuple(&tab, 0, 0, LEVEL - 1))
 }
 
@@ -1701,7 +1715,7 @@ fn find_function(m: &Module, name: &str) -> Option<u32> {
     }
 }
 
-pub fn get_answer64(answer: wasmtime::Func) -> i32 {
+pub fn get_answer(answer: wasmtime::Func) -> i32 {
     let answer = answer.get0::<i32>().unwrap();
 
     match answer() {
@@ -1709,89 +1723,6 @@ pub fn get_answer64(answer: wasmtime::Func) -> i32 {
         Err(_) => 0,
     }
 }
-
-pub fn get_answer32(answer: wasmtime::Func, param: i64) -> i32 {
-    let answer = answer.get1::<i64, i32>().unwrap();
-
-    let result = answer(param as i64).unwrap();
-    result
-}
-
-/*
-pub fn run_jit(buffer: &[u8], data: &[u8]) -> i64 {
-    use std::cell::RefCell;
-    use std::rc::Rc;
-    use wasmtime::*;
-    let engine = Engine::default();
-    let store = Store::new(&engine);
-
-    let module = Module::from_binary(&engine, &buffer).unwrap();
-
-    let buf = Buffer::new(data.to_vec());
-
-    let cell = Rc::new(RefCell::new(buf));
-    let cell2 = cell.clone();
-
-    let len = Rc::new(RefCell::new(4));
-    let len2 = len.clone();
-
-    //    cell2.replace_with(|buf| buf.set_byte(2, 111));
-
-    let read_func = Func::wrap(&store, move |offset: i32, a: i32| {
-        let ret = cell.borrow().read_byte(offset as usize) as i32;
-        // println!("read {} {} {}", a, offset, ret);
-        ret
-    });
-
-    let write_func = Func::wrap(&store, move |offset: i32, a: i32, v: i32| {
-        // println!("write {} {} {}", offset, v, a);
-        cell2.replace_with(|buf| buf.set_byte(offset as usize, v as u8));
-    });
-
-    let len_func = Func::wrap(&store, move || len.borrow().clone() as i32);
-
-    let set_len_func = Func::wrap(&store, move |nlen: i32| len2.replace_with(|_| nlen));
-
-    let error_func = Func::wrap(&store, || {
-        panic!("Unknown import");
-    });
-
-    let mut imports = vec![];
-
-    for f in module.imports() {
-        match (f.ty(), f.name()) {
-            (ExternType::Func(_), Some(name)) => {
-                if name.contains("read") {
-                    imports.push(read_func.clone().into())
-                } else if name.contains("write") {
-                    imports.push(write_func.clone().into())
-                } else if name.contains("len") {
-                    imports.push(len_func.clone().into())
-                } else if name.contains("set") {
-                    imports.push(set_len_func.clone().into())
-                } else {
-                    imports.push(error_func.clone().into())
-                }
-            }
-            (ExternType::Func(_), None) => imports.push(error_func.clone().into()),
-            _ => {}
-        }
-    }
-
-    let instance = Instance::new(&store, &module, &imports).unwrap();
-
-    let res = match instance.get_func("test") {
-        Some(f) => get_answer64(f) as i64,
-        None => 0,
-    };
-    /*
-    match instance.get_func("main") {
-        Some(f) => return get_answer32(f, param) as i64,
-        None => {},
-    };*/
-    return res;
-}
-*/
 
 pub struct JitWasm {
     instance: wasmtime::Instance,
@@ -1848,7 +1779,7 @@ impl JitWasm {
             [ValType::I32].iter().cloned(),
             [].iter().cloned(),
         );
-        let gas_func = Func::new(&store, callback_type, move |_, args, results| {
+        let gas_func = Func::new(&store, callback_type, move |_, args, _results| {
             let gas_used = args[0].unwrap_i32();
             let gas = gas1.borrow().clone();
             if gas_used > gas {
@@ -1860,16 +1791,6 @@ impl JitWasm {
             }
         });
     
-/*        let gas_func = Func::new(&store, move |gas_used: i32| {
-            gas1.replace_with(|gas| {
-                if gas_used > *gas {
-                    *gas - gas_used
-                } else {
-
-                }
-            });
-        });*/
-
         let error_func = Func::wrap(&store, || {
             panic!("Unknown import");
         });
@@ -1913,8 +1834,8 @@ impl JitWasm {
         self.len_cell.replace_with(|_len| len as i32);
         self.gas_cell.replace_with(|_gas| 1000000);
 
-        let res = match self.instance.get_func("test") {
-            Some(f) => get_answer64(f) as i64,
+        let _res = match self.instance.get_func("test") {
+            Some(f) => get_answer(f) as i64,
             None => 0,
         };
 
@@ -1967,10 +1888,9 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
     init.push(simple_op(AVMOpcode::AuxPush));
 
     // Initialize register
-    // init.push(immed_op(AVMOpcode::Rset, Value::new_tuple(vec![Value::new_buffer(vec![]), int_from_usize(0)])));
     init.push(push_value(Value::new_tuple(vec![
         Value::new_buffer(vec![]), // memory
-        int_from_usize(0), // memory limit
+        int_from_usize(0), // call table
         Value::new_buffer(vec![123, 234, 12]), // IO buffer
         int_from_usize(3), // IO len
         int_from_usize(1000000), // gas left
@@ -1982,7 +1902,7 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
 
     // Construct initial memory with globals
     init.push(simple_op(AVMOpcode::NewBuffer));
-    init.push(push_value(int_from_usize(1024)));
+    init.push(push_value(int_from_usize(17)));
     init.push(set64_from_buffer(0));
     let mut globals = 1;
     if let Some(sec) = module.global_section() {
@@ -2039,7 +1959,7 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
     for (idx, f) in code_section.bodies().iter().enumerate() {
         // function return will be in the stack
         init.push(mk_func_label(idx + imports.len()));
-        let (mut res, n_label, avm_gas) =
+        let (mut res, n_label, _avm_gas) =
             handle_function(&module, f, idx, label, calli, memory_offset, max_memory);
         init.append(&mut res);
         label = n_label;
@@ -2153,10 +2073,10 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
     init
 }
 
-use std::fs::File;
-use std::io::Write;
-
 pub fn load(buffer: &[u8], param: &[u8]) -> Vec<Instruction> {
+    // use std::fs::File;
+    // use std::io::Write;
+    
     let init = process_wasm(buffer);
     let mut op_buf = vec![];
     let mut immed_buf = vec![];
@@ -2189,8 +2109,8 @@ pub fn load(buffer: &[u8], param: &[u8]) -> Vec<Instruction> {
     file2.write_all(serde_json::to_string(&has_label_buf).unwrap().as_bytes()).unwrap();
 */
     let mut a = vec![];
-    // a.push(push_value(int_from_usize(param.len())));
-    a.push(push_value(int_from_usize(10000)));
+    a.push(push_value(int_from_usize(param.len())));
+    // a.push(push_value(int_from_usize(10000)));
     a.push(push_value(Value::new_buffer(param.to_vec())));
     a.push(push_value(tab));
     for i in 3..res.len() {
