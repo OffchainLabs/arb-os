@@ -105,7 +105,7 @@ This message type encodes an L2 transaction that is funded by calldata provided 
 
 **Message type 9: Send tx to retry buffer**
 
-This message type delivers a transaction, which will be placed in the L2 retry buffer, rather than being executed immediately. 
+This message type encodes and delivers an L2 transaction; if gas is provided, it will be executed immediately. If no gas is provided or the execution reverts, it will be placed in the L2 retry buffer.
 
 Type-specific data:
 
@@ -134,6 +134,21 @@ Then, if the caller's L2 balance (after the L1-to-L2 deposit has occurred) is at
   * a transaction is immediately created, as if the sender had called RetryableTx.redeem(retryableTxId), with callvalue 0 and the specified maxgas and gasprice, and with transaction ID keccak256(submissionID, uint(1)). The credit-back address pays for the transaction's gas.
 
 Otherwise, ArbOS will emit a transaction receipt reporting a failure code, with no return data.
+
+**Message type 10: L2 batch, out-of-band processing for gas estimation**
+
+This message type can't be sent to the chain but is only used by Arbitrum nodes to estimate gas usage of submitted transactions.
+
+The type-specific data consists of:
+
+* 3 (byte)
+* aggregator address (address encoded as uint)
+* an L2 message of subtype 7
+
+This executes the enclosed L2 message, with two deviations from the normal semantics.
+
+* The aggregator address specified in the message is considered to be the aggregator that submitted this message.
+* The transaction signature on the L2 message is ignored, and the enclosed transaction is treated as if it carried a valid signature by the sender of this L1 message.
 
 ## L2 messages
 
@@ -175,7 +190,7 @@ An L2 message consists of:
 
 The L2 messages in a batch will be separated, and treated as if each had arrived separately, in the order in which they appear in the batch.
 
-The enclosed L2 message may not have subtype 5 (sequencer batch).  All other subtypes are allowed.
+The enclosed L2 message may have any valid subtype are allowed.
 
 **Subtype 4: signed tx from user** has subtype-specific data that is identical to the standard Ethereum encoded transaction format. The subtype-specific data consists of an RLP-encoded list containing:
 

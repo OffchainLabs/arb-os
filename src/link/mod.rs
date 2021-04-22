@@ -18,6 +18,8 @@ use std::hash::Hasher;
 use std::io;
 use xformcode::make_uninitialized_tuple;
 
+use crate::compile::miniconstants::init_constant_table;
+use std::path::Path;
 pub use xformcode::{value_from_field_list, TupleTree, TUPLE_SIZE};
 
 mod optimize;
@@ -57,6 +59,8 @@ impl SerializableTypeTree {
 /// This is typically constructed via the `postlink_compile` function.
 #[derive(Serialize, Deserialize)]
 pub struct LinkedProgram {
+    #[serde(default)]
+    pub arbos_version: u64,
     pub code: Vec<Instruction<AVMOpcode>>,
     pub static_val: Value,
     pub globals: Vec<GlobalVarDecl>,
@@ -271,6 +275,12 @@ pub fn postlink_compile(
     file_name_chart.extend(program.file_name_chart.clone());
 
     Ok(LinkedProgram {
+        arbos_version: init_constant_table(Some(Path::new("arb_os/constants.json")))
+            .unwrap()
+            .get("ArbosVersionNumber")
+            .unwrap()
+            .clone()
+            .trim_to_u64(),
         code: code_final,
         static_val: Value::none(),
         globals: program.globals.clone(),

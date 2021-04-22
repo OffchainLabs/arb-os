@@ -12,16 +12,20 @@ use std::path::Path;
 
 mod integration;
 
-fn test_from_file(path: &Path) {
-    let res = run_from_file(path, vec![], false);
+fn test_from_file_with_args_and_return(path: &Path, args: Vec<Value>, ret: Value) {
+    let res = run_from_file(path, args, false);
     match res {
         Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
+            assert_eq!(res[0], ret);
         }
         Err(e) => {
             panic!("{:?}", e);
         }
     }
+}
+
+fn test_from_file(path: &Path) {
+    test_from_file_with_args_and_return(path, vec![], Value::Int(Uint256::zero()));
 }
 
 #[test]
@@ -157,44 +161,24 @@ fn encode_list3(testvec: (Uint256, Vec<u8>, Uint256)) -> Vec<u8> {
 }
 
 fn test_rlp_uint(ui: Uint256, correct_result: Vec<u8>) {
-    let path = Path::new("stdlib/rlptest.mexe");
-    let res = run_from_file(
-        path,
+    test_from_file_with_args_and_return(
+        Path::new("stdlib/rlptest.mexe"),
         vec![Value::Int(Uint256::zero()), Value::Int(ui)],
-        false,
+        _bytestack_from_bytes(&correct_result),
     );
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], _bytestack_from_bytes(&correct_result));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
 }
 
 fn test_rlp_bytearray(input: Vec<u8>, correct_result: Vec<u8>) {
-    let path = Path::new("stdlib/rlptest.mexe");
-    let res = run_from_file(
-        path,
+    test_from_file_with_args_and_return(
+        Path::new("stdlib/rlptest.mexe"),
         vec![Value::Int(Uint256::one()), _bytestack_from_bytes(&input)],
-        false,
+        _bytestack_from_bytes(&correct_result),
     );
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], _bytestack_from_bytes(&correct_result));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
 }
 
-#[cfg(test)]
 fn test_rlp_list3(testvec: (Uint256, Vec<u8>, Uint256), correct_result: Vec<u8>) {
-    let path = Path::new("stdlib/rlptest.mexe");
-    let res = run_from_file(
-        path,
+    test_from_file_with_args_and_return(
+        Path::new("stdlib/rlptest.mexe"),
         vec![
             Value::Int(Uint256::from_usize(2)),
             Value::new_tuple(vec![
@@ -203,16 +187,8 @@ fn test_rlp_list3(testvec: (Uint256, Vec<u8>, Uint256), correct_result: Vec<u8>)
                 Value::Int(testvec.2),
             ]),
         ],
-        false,
+        _bytestack_from_bytes(&correct_result),
     );
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], _bytestack_from_bytes(&correct_result));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
 }
 
 #[test]
@@ -279,30 +255,6 @@ fn test_arbsys_direct() {
 }
 
 #[test]
-fn test_arbowner() {
-    match crate::evm::_evm_test_arbowner(None, false) {
-        Ok(()) => {}
-        Err(e) => panic!("{:?}", e),
-    }
-}
-
-#[test]
-fn test_arbgasinfo() {
-    match crate::evm::_evm_test_arbgasinfo(None, false) {
-        Ok(()) => {}
-        Err(e) => panic!("{:?}", e),
-    }
-}
-
-#[test]
-fn test_arbaggregator() {
-    match crate::evm::_evm_test_arbaggregator(None, false) {
-        Ok(()) => {}
-        Err(e) => panic!("{:?}", e),
-    }
-}
-
-#[test]
 fn test_rate_control() {
     //FIXME crate::evm::_evm_test_rate_control(None, false).unwrap();
 }
@@ -325,22 +277,6 @@ fn test_evm_add_code() {
 #[test]
 pub fn test_crosscontract_call_with_constructors() {
     match crate::evm::evm_xcontract_call_with_constructors(None, false, false) {
-        Ok(result) => assert_eq!(result, true),
-        Err(e) => panic!("error {}", e),
-    }
-}
-
-#[test]
-pub fn test_gas_charging_underfunded() {
-    match crate::evm::_evm_run_with_gas_charging(None, Uint256::_from_gwei(20), false, false) {
-        Ok(result) => assert_eq!(result, false),
-        Err(e) => panic!("error {}", e),
-    }
-}
-
-#[test]
-pub fn test_gas_charging_fully_funded() {
-    match crate::evm::_evm_run_with_gas_charging(None, Uint256::_from_eth(1), false, false) {
         Ok(result) => assert_eq!(result, true),
         Err(e) => panic!("error {}", e),
     }
@@ -378,11 +314,6 @@ pub fn _test_crosscontract_call_using_compressed_batch() {
 }
 
 #[test]
-fn test_payment_to_self() {
-    let _ = crate::evm::_evm_payment_to_self(None, false).unwrap();
-}
-
-#[test]
 fn test_payment_to_empty_address() {
     crate::evm::evm_payment_to_empty_address(None, false);
 }
@@ -390,16 +321,6 @@ fn test_payment_to_empty_address() {
 #[test]
 fn test_underfunded_nested_call() {
     assert!(crate::evm::_underfunded_nested_call_test(None, false).is_ok());
-}
-
-#[test]
-fn test_bls_registry() {
-    crate::evm::bls::_evm_test_bls_registry(None, false);
-}
-
-#[test]
-fn test_rollup_tracker() {
-    crate::run::rolluptest::_do_rollup_tracker_ops();
 }
 
 fn test_call_to_precompile5(
@@ -499,7 +420,7 @@ fn reinterpret_register() {
 
 #[test]
 fn small_upgrade() {
-    use crate::run::upload::CodeUploader;
+    use crate::upload::CodeUploader;
     let mut machine = load_from_file(Path::new("upgradetests/upgrade1_old.mexe"));
     let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade1_new.mexe"));
     let code_bytes = uploader._to_flat_vec();
@@ -521,7 +442,7 @@ fn small_upgrade() {
 
 #[test]
 fn small_upgrade_auto_remap() {
-    use crate::run::upload::CodeUploader;
+    use crate::upload::CodeUploader;
 
     let mut machine = load_from_file(Path::new("upgradetests/upgrade2_old.mexe"));
     let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade2_new.mexe"));
