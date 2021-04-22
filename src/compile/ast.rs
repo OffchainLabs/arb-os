@@ -404,6 +404,50 @@ impl Type {
         }
     }
 
+    pub fn mismatch_string(&self, rhs: &Type, type_tree: &TypeTree) -> Option<String> {
+        let (left, right) = (
+            &self.get_representation(type_tree).ok()?,
+            &rhs.get_representation(type_tree).ok()?,
+        );
+        self.first_mismatch(rhs, type_tree, HashSet::new())
+            .map(|mismatch| {
+                format!(
+                    "{}{}",
+                    {
+                        //This will be a lot simpler to write in 1.53 when or-patterns syntax stabilizes
+                        match left {
+                            Type::Any
+                            | Type::Void
+                            | Type::Uint
+                            | Type::Int
+                            | Type::Bool
+                            | Type::Bytes32
+                            | Type::EthAddress
+                            | Type::Buffer
+                            | Type::Every => String::new(),
+                            _ => match right {
+                                Type::Any
+                                | Type::Void
+                                | Type::Uint
+                                | Type::Int
+                                | Type::Bool
+                                | Type::Bytes32
+                                | Type::EthAddress
+                                | Type::Buffer
+                                | Type::Every => String::new(),
+                                _ => format!(
+                                    "\nleft: {}\nright {}\nFirst mismatch: ",
+                                    left.display(),
+                                    right.display()
+                                ),
+                            },
+                        }
+                    },
+                    mismatch
+                )
+            })
+    }
+
     ///Returns a tuple containing `Type`s default value and a `bool` representing whether use of
     /// that default is type-safe.
     // TODO: have this resolve nominal types

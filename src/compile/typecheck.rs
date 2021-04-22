@@ -1053,10 +1053,10 @@ fn typecheck_statement<'a>(
                     } else {
                         Err(new_type_error(
                             format!(
-                                "mismatched types in assignment statement expected {}, got {}, first mismatch: {}",
-                                var_type.get_representation(type_tree)?.display(),
-                                tc_expr.get_type().get_representation(type_tree)?.display(),
-                                var_type.first_mismatch(&tc_expr.get_type(), type_tree, HashSet::new()).expect("Did not find mismatch"),
+                                "mismatched types in assignment statement {}",
+                                var_type
+                                    .mismatch_string(&tc_expr.get_type(), type_tree)
+                                    .expect("Did not find mismatch")
                             ),
                             debug_info.location,
                         ))
