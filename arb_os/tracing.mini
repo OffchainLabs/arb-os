@@ -62,9 +62,10 @@ public impure func evmTracer_pushCall(
     gas: uint,
     gasPrice: uint,
 ) {
+    let (size, buf) = bytearray_toSizeAndBuffer(calldata);
     evmTracer_push(
         const::TraceEvent_call,
-        (callType, calldata, callvalue, from, to, gas, gasPrice),
+        (callType, size, buf, callvalue, from, to, gas, gasPrice),
     );
 }
 
@@ -73,9 +74,10 @@ public impure func evmTracer_pushReturnRevert(
     returndata: ByteArray,
     gasUsed: uint,
 ) {
+    let (size, buf) = bytearray_toSizeAndBuffer(calldata);
     evmTracer_push(
         const::TraceEvent_returnOrRevert,
-        (resultCode, returndata, gasUsed),
+        (resultCode, size, buf, gasUsed),
     );
 }
 
@@ -89,7 +91,8 @@ public impure func evmTracer_pushCallAndResultNoExecution(
     gasPrice: uint,
     resultCode: uint,
 ) {
-    evmTracer_pushCall(callType, calldata, callvalue, from, to, gas, gasPrice);
+    let (size, buf) = bytearray_toSizeAndBuffer(calldata);
+    evmTracer_pushCall(callType, size, buf, callvalue, from, to, gas, gasPrice);
     evmTracer_pushReturnRevert(resultCode, bytearray_new(0), 0);
 }
 
@@ -97,9 +100,10 @@ public impure func evmTracer_pushCreate(
     code: ByteArray,
     addr: address,
 ) {
+    let (size, buf) = bytearray_toSizeAndBuffer(calldata);
     evmTracer_push(
         const::TraceEvent_create,
-        (code, addr),
+        (size, buf, addr),
     );
 }
 
@@ -109,8 +113,9 @@ public impure func evmTracer_pushCreate2(
     salt: uint,
     createdAddr: address,
 ) {
+    let (size, buf) = bytearray_toSizeAndBuffer(calldata);
     evmTracer_push(
         const::TraceEvent_create2,
-        (code, currentAddr, salt, createdAddr),
+        (size, buf, currentAddr, salt, createdAddr),
     );
 }
