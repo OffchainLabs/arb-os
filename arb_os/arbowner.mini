@@ -17,6 +17,7 @@ use evmCallStack::evmCallStack_setAccount;
 use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallStack_stackDepth;
 use evmCallStack::evmCallStack_returnFromCall;
+use evmCallStack::evmCallStack_transferEthFromCurrent;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert;
@@ -27,12 +28,12 @@ use pluggables::installPluggable;
 use pluggables::callPluggable;
 use pluggables::bindContractAddressToPluggable;
 
-use gasAccounting::gasAccounting_addToReserveInCurrentContext;
 use gasAccounting::gasAccounting_setFeesEnabled;
 use gasAccounting::gasAccounting_getFeeRecipients;
 use gasAccounting::gasAccounting_setFeeRecipients;
 use gasAccounting::setFairGasPriceSender;
 use gasAccounting::setGasAccountingParams;
+use gasAccounting::getAddressForReserveFundsDeposit;
 
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
@@ -122,7 +123,9 @@ impure func arbowner_addToReserveFunds(topFrame: EvmCallFrame, calldata: ByteArr
     }
     let callvalue = evmCallFrame_getCallvalue(topFrame);
     if (callvalue > 0) {
-        gasAccounting_addToReserveInCurrentContext(callvalue);
+        if (evmCallStack_transferEthFromCurrent(getAddressForReserveFundsDeposit(), callvalue) == None<()>) {
+            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 51, 0, 0);
+        }
     }
     evmOp_return(0, 0);
 }

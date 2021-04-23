@@ -564,13 +564,27 @@ public func accountStore_addToEscrow(acctStore: AccountStore, key: uint, payer: 
         let oldValue = storageMap_get(acctStore.escrowStore.escrowedValues, key);
         Some(
             accountStore_set(acctStore, payer, acct with { ethBalance: acct.ethBalance-amount }) with {
-                escrowStore: struct {
-                    nextKey: key + 1,
-                    escrowedValues: storageMap_set(acctStore.escrowStore.escrowedValues, key, oldValue+amount),
+                escrowStore: acctStore.escrowStore with {
+                    escrowedValues: storageMap_set(acctStore.escrowStore.escrowedValues, key, oldValue+amount)
                 }
             }
         )
     };
+}
+
+public func accountStore_addToEscrowUpToMax(acctStore: AccountStore, key: uint, payer: address, maxAmount: uint) -> (AccountStore, uint) {
+    let acct = accountStore_get(acctStore, payer);
+    let balance = account_getEthBalance(acct);
+    let amount = xif (balance < maxAmount) { balance } else { maxAmount };
+    let oldValue = storageMap_get(acctStore.escrowStore.escrowedValues, key);
+    return (
+        accountStore_set(acctStore, payer, acct with { ethBalance: acct.ethBalance-amount }) with {
+            escrowStore: acctStore.escrowStore with {
+                escrowedValues: storageMap_set(acctStore.escrowStore.escrowedValues, key, oldValue+amount)
+            }
+        },
+        amount,
+    );
 }
 
 public func accountStore_payFromEscrow(acctStore: AccountStore, key: uint, recipient: address, amount: uint) -> option<AccountStore> {

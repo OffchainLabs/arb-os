@@ -23,7 +23,6 @@ use accounts::account_hasContract;
 
 use accounts::account_incrSeqNum;
 use accounts::account_getNextSeqNum;
-use accounts::account_addToEthBalance;
 use accounts::account_getStartCodePoint;
 
 use evmCallStack::initEvmCallStack;

@@ -77,7 +77,7 @@ use gasAccounting::gasAccounting_pauseTxCharges;
 use gasAccounting::gasAccounting_resumeTxCharges;
 use gasAccounting::gasAccounting_getGasChargeAmountInArbGas;
 use gasAccounting::txFeeStats_zero;
-use gasAccounting::gasAccounting_addToReserveInAcctStore;
+use gasAccounting::getAddressForReserveFundsDeposit;
 use gasAccounting::deferredPayments_apply;
 
 use codeSegment::translateEvmCodeSegment;
@@ -1460,28 +1460,19 @@ public impure func evmCallStack_selfDestructCurrentAccount(recipient: address) {
     if let Some(topFrame) = globalCallStack {
         let destructee = topFrame.runningAs;
         let amount = account_getBalance(topFrame.runningAsAccount);
-
-        // take amount from the current running account
-        topFrame = topFrame with { runningAsAccount: account_setBalance(topFrame.runningAsAccount, 0) };
-
         if (amount > 0) {
             // give amount to the correct party, according to the yellow paper's rules
-            let recipientAcct = accountStore_get(topFrame.accountStore, recipient);
-            if (recipient == topFrame.runningAs) {
+            if (recipient == destructee) {
                 // yellow paper says to burn the funds; we'll give them to the chain's reserve fund
-                topFrame = topFrame with {
-                    accountStore: gasAccounting_addToReserveInAcctStore(topFrame.accountStore, amount)
-                };
-            } else {
-                // give funds to recipient
-                topFrame = topFrame with {
-                    accountStore: accountStore_set(
-                        topFrame.accountStore,
-                        recipient,
-                        account_addToEthBalance(recipientAcct, amount)
-                    )
-                };
+                recipient = getAddressForReserveFundsDeposit();
             }
+            topFrame = xif let Some(tf) = evmCallFrame_transferEth(topFrame, destructee, recipient, amount) {
+                tf
+            } else {
+                evmCallStack_callHitError(30);
+                //NOTREACHED
+                topFrame
+            };
         }
 
         globalCallStack = Some(
@@ -1524,6 +1515,21 @@ public func evmCallFrame_getAccount(frame: EvmCallFrame, addr: address) -> Accou
         frame.runningAsAccount
     } else {
         accountStore_get(frame.accountStore, addr)
+    };
+}
+
+public func evmCallFrame_transferEth(frame: EvmCallFrame, from: address, to: address, amount: uint) -> option<EvmCallFrame> {
+    return xif ((from == frame.runningAs) || (to == frame.runningAs)) {
+        // runningAs account is involved, so we need to save and restore the cached copy of it
+        let acctStore = accountStore_set(frame.accountStore, frame.runningAs, frame.runningAsAccount);
+        acctStore = accountStore_transferEthBalance(acctStore, from, to, amount)?;
+        Some(frame with {
+            accountStore: acctStore
+        } with {
+            runningAsAccount: accountStore_get(acctStore, frame.runningAs)
+        })
+    } else {
+        Some(frame with { accountStore: accountStore_transferEthBalance(frame.accountStore, from, to, amount)? })
     };
 }
 
