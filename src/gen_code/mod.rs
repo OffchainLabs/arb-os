@@ -72,12 +72,10 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
         "// This file is machine-generated. Don't edit it unless you know what you're doing."
     )
     .unwrap();
-    //FixMe
-    let (mut input_fields, old_arbos_version) = get_globals_and_version_from_file(&from)?;
-    let (mut output_fields, _) = get_globals_and_version_from_file(&to)?;
     writeln!(code, "").unwrap();
-    let (mut input_fields, in_recursers, in_tree) = get_globals_from_file(&from)?;
-    let (mut output_fields, out_recursers, out_tree) = get_globals_from_file(&to)?;
+    let (mut input_fields, in_recursers, in_tree, old_arbos_version) =
+        get_globals_and_version_from_file(&from)?;
+    let (mut output_fields, out_recursers, out_tree, _) = get_globals_and_version_from_file(&to)?;
     output_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
     input_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
     let mut intersection: HashSet<&StructField> = input_fields
@@ -200,7 +198,6 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
     Ok(())
 }
 
-fn get_globals_and_version_from_file(path: &Path) -> Result<(Vec<StructField>, u64), GenCodeError> {
 fn expand_things(code: &mut File, mut recursers: HashSet<Type>, type_tree: TypeTree) -> () {
     let mut total_recursers = recursers.clone();
     while !recursers.is_empty() {
@@ -226,9 +223,9 @@ fn expand_things(code: &mut File, mut recursers: HashSet<Type>, type_tree: TypeT
     }
 }
 
-fn get_globals_from_file(
+fn get_globals_and_version_from_file(
     path: &Path,
-) -> Result<(Vec<StructField>, HashSet<Type>, TypeTree), GenCodeError> {
+) -> Result<(Vec<StructField>, HashSet<Type>, TypeTree, u64), GenCodeError> {
     let mut file = File::open(&path).map_err(|_| {
         GenCodeError::new(format!(
             "Could not create file \"{}\"",
@@ -269,8 +266,7 @@ fn get_globals_from_file(
         }
     }
     let real_stuff = Rc::get_mut(&mut stuff).unwrap().clone().into_inner();
-    Ok((fields, real_stuff, type_tree))
-    Ok((fields, globals.arbos_version))
+    Ok((fields, real_stuff, type_tree, globals.arbos_version))
 }
 
 fn type_decl_string(type_name: &String, tipe: &Type) -> String {
