@@ -16,7 +16,18 @@ interface ArbOwner {
 
     function setSecondsPerSend(uint blocksPerSend) external;
 
-    // To upgrade ArbOS, the ower calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload 
+    // Run a tx that is signed by some address A, but with the tx's gas limit supplied by the owner.
+    // This allows the owner to force execution of a keyless deployer, even if the deployer doesn't request
+    //       enough (L2) gas to run
+    // signedTx must be a compressed ECDSA-signed transaction, signed by requiredSigner,
+    //       with callvalue equal to the callvalue of this ArbOwner tx
+    // if forcedNonce != MaxUint, set signedTx.signer.nonce equal to forcedNonce before trying to run the tx
+    // if signedTx fails, this tx will fail with the same result code and returndata
+    // if this tx returns successfully, it will return returndata produced by  signedTx
+    // no receipt is produced for signedTx; the only receipt is for this call to runTxWithExtraGas
+    function runTxWithExtraGas(bytes calldata signedTx, address requiredSigner, uint forcedNonce) external payable;
+
+    // To upgrade ArbOS, the owner calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload
     // the code to be installed as the upgrade, then calls finishArbosUpgrade to complete the upgrade and start executing the new code.
     function startCodeUpload() external;
     function continueCodeUpload(bytes calldata marshalledCode) external;

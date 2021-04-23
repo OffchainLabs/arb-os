@@ -416,6 +416,37 @@ impl<'a> _ArbOwner<'a> {
             Err(ethabi::Error::from("reverted"))
         }
     }
+
+    pub fn _run_tx_with_extra_gas(
+        &self,
+        machine: &mut Machine,
+        signed_tx: &[u8],
+        required_signer: Uint256,
+        forced_nonce: Option<Uint256>,
+    ) -> Result<Vec<u8>, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "runTxWithExtraGas",
+            &[
+                ethabi::Token::Bytes(signed_tx.to_vec()),
+                ethabi::Token::Address(required_signer.to_h160()),
+                ethabi::Token::Uint(forced_nonce.unwrap_or(Uint256::max_int()).to_u256()),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(receipts[0].get_return_data())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
 }
 
 pub struct _ArbGasInfo<'a> {
