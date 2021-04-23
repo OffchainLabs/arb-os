@@ -4,7 +4,6 @@
 
 use crate::evm::abi::FunctionTable;
 use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest};
-use crate::evm::preinstalled_contracts::_ArbReplayableTx;
 use crate::run::{load_from_file, load_from_file_and_env, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use ethers_signers::Signer;
