@@ -2166,8 +2166,12 @@ impl Machine {
                         self.total_gas_usage = self.total_gas_usage.sub(&gas256).unwrap();
                         self.arb_gas_remaining = self.arb_gas_remaining.add(&gas256);
 
-                        self.stack.push(Value::Int(Uint256::from_usize(len)));
-                        self.stack.push(Value::Buffer(nbuf));
+                        let values = vec![
+                            Value::Int(Uint256::from_usize(len)),
+                            Value::Buffer(nbuf),
+                        ];
+
+                        self.stack.push(Value::new_tuple(values));
                         self.incr_pc();
                         Ok(true)
                     }
