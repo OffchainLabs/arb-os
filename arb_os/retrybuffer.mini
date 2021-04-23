@@ -9,14 +9,17 @@ use accounts::accountStore_set;
 use accounts::accountStore_getRetryBuffer;
 use accounts::accountStore_setRetryBuffer;
 use accounts::accountStore_transferEthBalance;
+use accounts::accountStore_newEscrow;
+use accounts::accountStore_payFromEscrow;
 use accounts::account_addToEthBalance;
-use accounts::account_deductFromEthBalance;
 
+use evmCallStack::evmCallStack_isEmpty;
 use evmCallStack::evmCallStack_getAccountInCurrentContext;
 use evmCallStack::evmCallStack_setAccountInCurrentContext;
 use evmCallStack::getRetryBufferInCurrentContext;
 use evmCallStack::setRetryBufferInCurrentContext;
 use evmCallStack::evmCallStack_callRetryableTxAndReturn;
+use evmCallStack::evmCallStack_transferEthFromEscrow;
 
 use evmlogs::EvmLogs;
 
@@ -62,6 +65,7 @@ type RetryableTx = struct {
     sender: address,
     destination: address,
     callvalue: uint,
+    callvalueEscrowKey: uint,
     beneficiary: address,
     calldata: ByteArray,
     expiryTime: uint,
@@ -147,6 +151,7 @@ impure func retryBuffer_insertNew(
     sender: address,
     destination: address,
     callvalue: uint,
+    callvalueEscrowKey: uint,
     beneficiary: address,
     calldata: ByteArray,
     l1Message: IncomingRequest,
@@ -156,6 +161,7 @@ impure func retryBuffer_insertNew(
         sender: sender,
         destination: destination,
         callvalue: callvalue,
+        callvalueEscrowKey: callvalueEscrowKey,
         beneficiary: beneficiary,
         calldata: calldata,
         expiryTime: inbox_currentTimestamp() + rbuf.txLifetimeSeconds,
@@ -218,14 +224,20 @@ public impure func retryBuffer_delete(rbuf: RetryBuffer, txId: uint, withRefund:
         //         and attempts to delete it again will be no-ops
 
         if (withRefund) {
-            // credit the callvalue back to the beneficiary
-            evmCallStack_setAccountInCurrentContext(
-                rtx.beneficiary,
-                account_addToEthBalance(
-                    evmCallStack_getAccountInCurrentContext(rtx.beneficiary),
-                    rtx.callvalue,
-                )
-            );
+            // credit the escrowed callvalue back to the beneficiary
+            if (evmCallStack_isEmpty()) {
+                if let Some(astore) = accountStore_payFromEscrow(
+                    getGlobalAccountStore(),
+                    rtx.callvalueEscrowKey,
+                    rtx.beneficiary,
+                    rtx.callvalue
+                ) {
+                    setGlobalAccountStore(astore);
+                }  // else something went badly wrong and we can't refund the callvalue
+            } else {
+                // try to refund from the escrow, ignoring errors (which should never happen)
+                let _ = evmCallStack_transferEthFromEscrow(rtx.callvalueEscrowKey, rtx.beneficiary, rtx.callvalue);
+            }
         }
 
         Some(rbuf)
@@ -254,7 +266,7 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
     let rbuffer = retryBuffer_trimTwo(getGlobalAccountStore().retryBuffer);
     let acctStore = getGlobalAccountStore() with { retryBuffer: rbuffer };
 
-    // deposited funds go into the sender's account
+    // deposited funds from L1 go into the sender's account
     if (deposit > 0) {
         acctStore = accountStore_set(
             acctStore,
@@ -269,31 +281,22 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
     let ret = xif (submissionFee <= maxSubmissionCost) {
         let totalDue = callvalue + maxSubmissionCost;
 
-        xif let Some(senderAcct) = account_deductFromEthBalance(accountStore_get(acctStore, sender), totalDue) {
+        xif let Some(res) = accountStore_newEscrow(acctStore, sender, totalDue) {
+            let (uAcctStore, escrowKey) = res;
+            acctStore = uAcctStore;
+
             // We took maxSubmissionCost + callvalue from the sender.
             // We will distribute those funds as follows:
             //       submissionFee to the subFeeRecipient
             //       maxSubmissionCost-submissionFee to the creditBack address
             //       callvalue to the retryableTx we will create
 
-            acctStore = accountStore_set(acctStore, sender, senderAcct);
             if (submissionFee > 0) {
-                acctStore = accountStore_set(
-                    acctStore,
-                    subFeeRecipient,
-                    account_addToEthBalance(accountStore_get(acctStore, subFeeRecipient), submissionFee)
-                );
+                acctStore = accountStore_payFromEscrow(acctStore, escrowKey, subFeeRecipient, submissionFee)?;
             }
 
             if (submissionFee < maxSubmissionCost) {
-                acctStore = accountStore_set(
-                    acctStore,
-                    creditBack,
-                    account_addToEthBalance(
-                        accountStore_get(acctStore, creditBack),
-                        maxSubmissionCost - submissionFee
-                    )
-                );
+                acctStore = accountStore_payFromEscrow(acctStore, escrowKey, creditBack, maxSubmissionCost - submissionFee)?;
             }
 
             // Create a new retryable tx, holding the callvalue
@@ -303,6 +306,7 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
                 sender,
                 destination,
                 callvalue,
+                escrowKey,
                 beneficiary,
                 calldata,
                 req

@@ -699,7 +699,7 @@ public impure func evmOp_callAndReturn(
     argsLength: uint,
     retOffset: uint,
     retLength: uint,
-    chargeForCallvalue: bool
+    callvalueEscrowKey: option<uint>,  // escrow key that supplies the callvalue (otherwise caller supplies it)
 ) -> bool {
     let savedAuxStack = snapshotAuxStack();
 
@@ -732,7 +732,7 @@ public impure func evmOp_callAndReturn(
         retLength,
         resumeCodePoint,
         Some(savedAuxStack),
-        chargeForCallvalue,
+        callvalueEscrowKey,
     );
     return xif let Some(success) = res {
         success
@@ -788,7 +788,7 @@ public impure func evmOp_call(
         retLength,
         resumeCodePoint,
         None<Stack>,
-        true,
+        None<uint>,
     );
     return xif let Some(success) = res {
         success
@@ -829,7 +829,7 @@ public impure func evmOp_callcode(
         retLength,
         resumeCodePoint,
         None<Stack>,
-        true,
+        None<uint>,
     );
     return xif let Some(success) = res {
         success
@@ -869,7 +869,7 @@ public impure func evmOp_delegatecall(
          retLength,
          resumeCodePoint,
          None<Stack>,
-         true,
+         None<uint>,
      );
     return xif let Some(success) = res {
         success
@@ -909,7 +909,7 @@ public impure func evmOp_staticcall(
         retLength,
         resumeCodePoint,
         None<Stack>,
-        true,
+        None<uint>,
     );
     return xif let Some(success) = res {
         success
@@ -1048,7 +1048,7 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
                 0,
                 0,           // don't copy returndata back into caller's memory
                 0,
-                true,
+                None<uint>,
             );
 
             if (constructorSucceeded) {

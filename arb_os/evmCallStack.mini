@@ -28,11 +28,10 @@ use accounts::accountStore_destroyAccount;
 use accounts::accountStore_cloneContract;
 use accounts::accountStore_createOrAddCodeRef;
 use accounts::accountStore_codeRefExists;
+use accounts::accountStore_getEscrowBalance;
+use accounts::accountStore_payFromEscrow;
 use accounts::account_setStorageCell;
 use accounts::account_getBalance;
-use accounts::account_setBalance;
-use accounts::account_deductFromEthBalance;
-use accounts::account_addToEthBalance;
 use accounts::account_getAllStorage;
 use accounts::account_getStartCodePoint;
 use accounts::account_setContractInfo;
@@ -199,6 +198,10 @@ public impure func evmCallStack_makeEmpty() {
     globalCallStack = None<EvmCallFrame>;
 }
 
+public impure func evmCallStack_isEmpty() -> bool {
+    return globalCallStack == None<EvmCallFrame>;
+}
+
 public impure func evmCallStack_addStorageCharge(units: uint) {
     if let Some(topFrame) = globalCallStack {
         globalCallStack = Some(
@@ -244,7 +247,7 @@ public impure func initEvmCallStack(
     callKind: uint,
     request: TxRequestData,
     sendOnFailure: option<ByteArray>,
-    chargeForCallvalue: bool,
+    callvalueEscrowKey: option<uint>,
 ) {
     // Set up the call frame for a top-level call, and launch the call's execution.
     if let Some(entryPoint) = account_getStartCodePoint(
@@ -273,7 +276,12 @@ public impure func initEvmCallStack(
             setGlobalAccountStore(acctStore);
             if (request.seqNum != None<uint>) {
                 // increment the caller's sequence number, if caller has sufficient balance
-                if ( (!chargeForCallvalue) || (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value) ){
+                if (xif let Some(key) = callvalueEscrowKey {
+                        accountStore_getEscrowBalance(acctStore, key)
+                    } else {
+                        account_getBalance(accountStore_get(acctStore, request.caller))
+                    }
+                    >= request.value) {
                     setGlobalAccountStore(
                         accountStore_set(
                             acctStore,
@@ -296,7 +304,7 @@ public impure func initEvmCallStack(
                 request.caller,
                 request.calleeAddr,
                 request.value,
-                chargeForCallvalue,
+                callvalueEscrowKey,
             ) {
                 globalCallStack = Some(struct {
                     runningAs: request.calleeAddr,
@@ -368,7 +376,12 @@ public impure func initEvmCallStack(
         if (request.seqNum != None<uint>) {
             // increment the caller's sequence number, if caller has sufficient balance
             let acctStore = getGlobalAccountStore();
-            if ((!chargeForCallvalue) || (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value)) {
+            if (xif let Some(key) = callvalueEscrowKey {
+                    accountStore_getEscrowBalance(acctStore, key)
+                } else {
+                    account_getBalance(accountStore_get(acctStore, request.caller))
+                }
+                >= request.value) {
                 setGlobalAccountStore(
                     accountStore_set(
                         acctStore,
@@ -388,7 +401,7 @@ public impure func initEvmCallStack(
                 request.caller,
                 request.calleeAddr,
                 request.value,
-                chargeForCallvalue
+                callvalueEscrowKey,
             ) {
                 if (callKind != const::EVMCallType_staticcall) {  // commit the transfer, unless it's a static call
                     setGlobalAccountStore(globalAS);
@@ -436,7 +449,7 @@ public impure func initEvmCallStack(
 public impure func initEvmCallStackForConstructor(
     code: ByteArray,
     request: TxRequestData,
-    chargeForCallvalue: bool,
+    callvalueEscrowKey: option<uint>,
 ) {
     // Set up the call frame for a top-level constructor call, and launch the call's execution.
     // This is called in the context of a new account.
@@ -461,7 +474,7 @@ public impure func initEvmCallStackForConstructor(
         request.caller,
         request.calleeAddr,
         request.value,
-        chargeForCallvalue,
+        callvalueEscrowKey,
     ) {
         acctStore = uas;
 
@@ -567,9 +580,9 @@ public impure func evmCallStack_doCall(
     argsLength: uint,
     retOffset: uint,
     retLength: uint,
-    resumeCodePoint: func(),         // jump to this to resume the caller
-    resumeAuxStack: option<Stack>,   // aux stack contents to restore on resume, if any
-    chargeForCallvalue: bool,        // whether we need to charge caller for callvalue (i.e., not already charged)
+    resumeCodePoint: func(),          // jump to this to resume the caller
+    resumeAuxStack: option<Stack>,    // aux stack contents to restore on resume, if any
+    callvalueEscrowKey: option<uint>, // escrow key that supplies the callvalue (otherwise caller supplies it)
 ) -> option<bool> {   // returns Some(success) if succeed/fail, or None on error
     let topFrame = globalCallStack?;
     let callee = accountStore_get(topFrame.accountStore, calleeAddr);
@@ -623,7 +636,7 @@ public impure func evmCallStack_doCall(
                 callerAddr,
                 calleeAddr,
                 balance,
-                chargeForCallvalue,
+                callvalueEscrowKey,
             ) {
                 updatedAcctStore = uas;
             } else {
@@ -674,16 +687,10 @@ public impure func evmCallStack_doCall(
         // no code at that address, so just do eth transfer
         if (balance > 0) {
             return Some(
-                xif (chargeForCallvalue) {
-                    evmCallStack_transferEthFromCurrent(calleeAddr, balance) == Some(())
+                xif let Some(escrowKey) = callvalueEscrowKey {
+                    evmCallStack_transferEthFromEscrow(escrowKey, calleeAddr, balance) == Some(())
                 } else {
-                    evmCallStack_setAccount(
-                        calleeAddr,
-                        account_addToEthBalance(
-                            evmCallStack_getAccount(calleeAddr)?,
-                            balance
-                        )
-                    )
+                    evmCallStack_transferEthFromCurrent(calleeAddr, balance) == Some(())
                 }
             );
         } else {
@@ -979,7 +986,7 @@ public impure func evmCallStack_callRetryableTxAndReturn(rtx: RetryableTx) -> (b
             bytearray_size(rtx.calldata),
             0,
             0,
-            false,    // don't charge for callvalue, because we already took it when rtx was created
+            Some(rtx.callvalueEscrowKey),
         );
 
         xif let Some(newTopFrame) = globalCallStack {
@@ -1012,18 +1019,13 @@ func ethTransferOrGrant(
     payer: address,
     recipient: address,
     amount: uint,
-    chargePayer: bool
+    callvalueEscrowKey: option<uint>,
 ) -> option<AccountStore> {
-    return xif (chargePayer) {
-       accountStore_transferEthBalance(acctStore, payer, recipient, amount)
-   } else {
-       // payer already paid for the amount, so just credit it to the recipient
-       Some(accountStore_set(
-           acctStore,
-           recipient,
-           account_addToEthBalance(accountStore_get(acctStore, recipient), amount),
-       ))
-   };
+    return xif let Some(escrowKey) = callvalueEscrowKey {
+        accountStore_payFromEscrow(acctStore, escrowKey, recipient, amount)
+    } else {
+        accountStore_transferEthBalance(acctStore, payer, recipient, amount)
+    };
 }
 
 func storageReclaimedForSDQ(topFrame: EvmCallFrame) -> uint {
@@ -1338,20 +1340,12 @@ public impure func evmCallStack_setAccountStoreInCurrentContext(acctStore: Accou
 }
 
 public impure func evmCallStack_transferEthInCurrentContext(from: address, to: address, amount: uint) -> option<()> {
-    return xif (from == to) {
-        Some(())  // self-transfer is a no-op
+    if let Some(topFrame) = globalCallStack {
+        globalCallStack = Some(evmCallFrame_transferEth(topFrame, from, to, amount)?);
     } else {
-        xif let Some(updatedFrom) = account_deductFromEthBalance(evmCallStack_getAccountInCurrentContext(from), amount) {
-            evmCallStack_setAccountInCurrentContext(from, updatedFrom);
-            evmCallStack_setAccountInCurrentContext(
-                to,
-                account_addToEthBalance(evmCallStack_getAccountInCurrentContext(to), amount)
-            );
-            Some(())
-        } else {
-            None<()>
-        }
-    };
+        setGlobalAccountStore(accountStore_transferEthBalance(getGlobalAccountStore(), from, to, amount)?);
+    }
+    return Some(());
 }
 
 public impure func evmCallStack_changeNumAccounts(delta: int) {
@@ -1398,35 +1392,29 @@ public impure func evmCallStack_transferEthFromCurrent(
     dest: address,
     amount: uint,
 ) -> option<()> {
-    // Try to transfer eth from the current account to dest.
-    // Return Some(()) if transfer succeeds, or None otherwise.
-
     let topFrame = globalCallStack?;
-    if (topFrame.runningAs == dest) {
-        return None;   // can't do a self-transfer
-    }
-    let curAcct = topFrame.runningAsAccount;
-    let curBalance = account_getBalance(curAcct);
-    if (curBalance < amount) {
-        return None;   // insufficient funds
-    }
-    topFrame = topFrame with {
-        runningAsAccount: account_setBalance(curAcct, curBalance-amount)
-    };
-    let otherAcct = accountStore_get(topFrame.accountStore, dest);
-    topFrame = topFrame with {
-        accountStore: accountStore_set(
-            topFrame.accountStore,
-            dest,
-            account_setBalance(
-                otherAcct,
-                account_getBalance(otherAcct) + amount
-            )
-        )
-    };
-    globalCallStack = Some(topFrame);
+    globalCallStack = Some(evmCallFrame_transferEth(topFrame, topFrame.runningAs, dest, amount)?);
     return Some(());
 }
+
+public impure func evmCallStack_transferEthFromEscrow(escrowKey: uint, to: address, amount: uint) -> option<()> {
+    let topFrame = globalCallStack?;
+    if (to == topFrame.runningAs) {
+        let acctStore = accountStore_set(topFrame.accountStore, topFrame.runningAs, topFrame.runningAsAccount);
+        acctStore = accountStore_payFromEscrow(acctStore, escrowKey, to, amount)?;
+        globalCallStack = Some(topFrame with {
+            accountStore: acctStore
+        } with {
+            runningAsAccount: accountStore_get(acctStore, topFrame.runningAs)
+        });
+    } else {
+        globalCallStack = Some(topFrame with {
+            accountStore: accountStore_payFromEscrow(topFrame.accountStore, escrowKey, to, amount)?
+        });
+    }
+    return Some(());
+}
+
 
 public impure func evmCallStack_setTopFrameStorageCell(offset: uint, value: uint) -> option<()> {
     let topFrame = globalCallStack?;

@@ -168,7 +168,7 @@ public impure func handleL2Request(
             initEvmCallStackForConstructor(
                 codeBytes,
                 request,
-                true,
+                None<uint>,
             );  // should never return
         }
     } else {
@@ -178,7 +178,7 @@ public impure func handleL2Request(
             callKind = const::EVMCallType_staticcall;
         }
 
-        initEvmCallStack(callKind, request, None<ByteArray>, true);  // should never return
+        initEvmCallStack(callKind, request, None<ByteArray>, None<uint>);  // should never return
     }
 
     return panic;   // this should never be reached

@@ -536,7 +536,7 @@ public func accountStore_transferEthBalance(
 
 public func accountStore_newEscrow(acctStore: AccountStore, payer: address, amount: uint) -> option<(AccountStore, uint)> {
     return xif (amount == 0) {
-        None<(AccountStore, uint)>
+        Some((acctStore, const::EscrowStoreID_txGas))
     } else {
         let acct = accountStore_get(acctStore, payer);
         xif (acct.ethBalance < amount) {
@@ -554,6 +554,10 @@ public func accountStore_newEscrow(acctStore: AccountStore, payer: address, amou
             ))
         }
     };
+}
+
+public func accountStore_getEscrowBalance(acctStore: AccountStore, key: uint) -> uint {
+    return storageMap_get(acctStore.escrowStore.escrowedValues, key);
 }
 
 public func accountStore_addToEscrow(acctStore: AccountStore, key: uint, payer: address, amount: uint) -> option<AccountStore> {
