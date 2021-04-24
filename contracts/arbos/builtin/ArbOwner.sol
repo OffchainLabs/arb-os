@@ -25,7 +25,7 @@ interface ArbOwner {
     // if signedTx fails, this tx will fail with the same result code and returndata
     // if this tx returns successfully, it will return the returndata produced by signedTx
     // no receipt is produced for signedTx; the only receipt is for this call to runTxWithExtraGas
-    function runTxWithExtraGas(bytes calldata signedTxMsg, address requiredSigner, uint forcedNonce) external payable;
+    function runTxWithExtraGas(bytes calldata signedTxMsg, uint gas, address requiredSigner, uint forcedNonce) external payable;
 
     // To upgrade ArbOS, the owner calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload
     // the code to be installed as the upgrade, then calls finishArbosUpgrade to complete the upgrade and start executing the new code.

@@ -319,16 +319,17 @@ impure func arbowner_setGasAccountingParams(topFrame: EvmCallFrame, calldata: By
 // function runTxWithExtraGas(bytes calldata signedTx, address requiredSigner, uint forcedNonce) external payable;
 impure func arbowner_runTxWithExtraGas(topFrame: EvmCallFrame, calldata: ByteArray) {
     let calldataSize = bytearray_size(calldata);
-    if (calldataSize < 4+4*32) {
+    if (calldataSize < 4+5*32) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 150, 0, 0);
     }
-    let requiredSigner = address(bytearray_get256(calldata, 4+32));
-    let forcedNonce = bytearray_get256(calldata, 4+2*32);
-    let txDataSize = bytearray_get256(calldata, 4+3*32);
-    if (calldataSize != 4 + 32 * (4 + (txDataSize+31)/32)) {
+    let gasToProvide = bytearray_get256(calldata, 4+32);
+    let requiredSigner = address(bytearray_get256(calldata, 4+2*32));
+    let forcedNonce = bytearray_get256(calldata, 4+3*32);
+    let txDataSize = bytearray_get256(calldata, 4+4*32);
+    if (calldataSize != 4 + 32 * (5 + (txDataSize+31)/32)) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 151, 0, 0);
     }
-    let txData = bytearray_extract(calldata, 4+4*32, txDataSize);
+    let txData = bytearray_extract(calldata, 4+5*32, txDataSize);
     let callvalue = evmCallFrame_getCallvalue(topFrame);
 
     if (forcedNonce != ~0) {
@@ -368,7 +369,7 @@ impure func arbowner_runTxWithExtraGas(topFrame: EvmCallFrame, calldata: ByteArr
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 154, 0, 0);
         }
         let callSucceeded = evmOp_callAndReturn(
-            1000000000,   // give up to a billion ArbGas
+            gasToProvide,
             tx.calleeAddr,
             callvalue,
             0,

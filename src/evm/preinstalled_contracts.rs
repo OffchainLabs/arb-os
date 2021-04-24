@@ -421,6 +421,7 @@ impl<'a> _ArbOwner<'a> {
         &self,
         machine: &mut Machine,
         compressed_signed_tx: &[u8],
+        gas_to_provide: Uint256,
         required_signer: Uint256,
         forced_nonce: Option<Uint256>,
     ) -> Result<Vec<u8>, ethabi::Error> {
@@ -429,6 +430,7 @@ impl<'a> _ArbOwner<'a> {
             "runTxWithExtraGas",
             &[
                 ethabi::Token::Bytes(compressed_signed_tx.to_vec()),
+                ethabi::Token::Uint(gas_to_provide.to_u256()),
                 ethabi::Token::Address(required_signer.to_h160()),
                 ethabi::Token::Uint(forced_nonce.unwrap_or(Uint256::max_uint()).to_u256()),
             ],
@@ -1367,6 +1369,7 @@ pub fn _evm_test_tx_with_extra_gas(log_to: Option<&Path>, debug: bool) -> Result
     let returndata = arbowner._run_tx_with_extra_gas(
         &mut machine,
         &compressed_signed_tx,
+        Uint256::from_u64(1_000_000_000),
         my_addr.clone(),
         None,
     )?;
