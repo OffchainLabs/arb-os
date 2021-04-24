@@ -193,7 +193,7 @@ impl Uint256 {
         }
     }
 
-    pub fn max_int() -> Self {
+    pub fn max_uint() -> Self {
         Uint256 {
             val: BigUint::new(vec![0xffff_ffff; 8]),
         }
@@ -357,7 +357,7 @@ impl Uint256 {
         let num = if raw_num > 256 { 256 } else { raw_num };
         let mut val = (self.val.clone() >> num);
         if need_fill {
-            val = val + (Uint256::max_int().val << (256 - num))
+            val = val + (Uint256::max_uint().val << (256 - num))
         }
         Uint256 {
             val: Uint256::trim(&val).0,
