@@ -386,21 +386,21 @@ impure func arbowner_runTxWithExtraGas(topFrame: EvmCallFrame, calldata: ByteArr
                     evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 156, 0, 0);
                 }
             } else {
-                evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 156, 0, 0);
+                evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 157, 0, 0);
             }
         } else {
             if let Some(retData) = evmCallStack_getTopFrameReturnData() {
                 if (evmCallStack_setTopFrameMemory(tx.calldata)) {
-                    evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 157, 0, bytearray_size(retData));
+                    evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 158, 0, bytearray_size(retData));
                 } else {
-                    evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 158, 0, 0);
+                    evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 159, 0, 0);
                 }
             } else {
-                evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 159, 0, 0);
+                evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 160, 0, 0);
             }
         }
     } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 160, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 161, 0, 0);
     }
 }
 
