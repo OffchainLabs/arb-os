@@ -1337,7 +1337,10 @@ fn test_run_tx_with_extra_gas() {
     }
 }
 
-pub fn _evm_test_tx_with_extra_gas(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
+pub fn _evm_test_tx_with_extra_gas(
+    log_to: Option<&Path>,
+    debug: bool,
+) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
@@ -1347,7 +1350,10 @@ pub fn _evm_test_tx_with_extra_gas(log_to: Option<&Path>, debug: bool) -> Result
     let arbowner = _ArbOwner::_new(&wallet, debug);
 
     let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
-    if add_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug).is_err() {
+    if add_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, debug)
+        .is_err()
+    {
         panic!("unexpected failure deploying Add contract");
     }
 
