@@ -420,17 +420,17 @@ impl<'a> _ArbOwner<'a> {
     pub fn _run_tx_with_extra_gas(
         &self,
         machine: &mut Machine,
-        signed_tx: &[u8],
+        compressed_signed_tx: &[u8],
         required_signer: Uint256,
         forced_nonce: Option<Uint256>,
     ) -> Result<Vec<u8>, ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
+            Uint256::zero(),
             "runTxWithExtraGas",
             &[
-                ethabi::Token::Bytes(signed_tx.to_vec()),
+                ethabi::Token::Bytes(compressed_signed_tx.to_vec()),
                 ethabi::Token::Address(required_signer.to_h160()),
-                ethabi::Token::Uint(forced_nonce.unwrap_or(Uint256::max_int()).to_u256()),
+                ethabi::Token::Uint(forced_nonce.unwrap_or(Uint256::max_uint()).to_u256()),
             ],
             machine,
             Uint256::zero(),
@@ -1315,6 +1315,63 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
         Uint256::from_u64(6_000_000_000),
         Uint256::from_u64(1_000_000_000),
     )?;
+
+    if let Some(path) = log_to {
+        machine
+            .runtime_env
+            .recorder
+            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
+            .unwrap();
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_run_tx_with_extra_gas() {
+    match _evm_test_tx_with_extra_gas(None, false) {
+        Ok(()) => {}
+        Err(e) => panic!("{:?}", e),
+    }
+}
+
+pub fn _evm_test_tx_with_extra_gas(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let arbowner = _ArbOwner::_new(&wallet, debug);
+
+    let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
+    if add_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug).is_err() {
+        panic!("unexpected failure deploying Add contract");
+    }
+
+    let (compressed_signed_tx, _) = machine.runtime_env.make_compressed_and_signed_l2_message(
+        Uint256::zero(),
+        Uint256::from_u64(10),
+        add_contract.address.clone(),
+        Uint256::zero(),
+        &add_contract._generate_calldata_for_function(
+            "add",
+            &[
+                ethabi::Token::Uint(Uint256::one().to_u256()),
+                ethabi::Token::Uint(Uint256::one().to_u256()),
+            ],
+        )?,
+        &wallet,
+    );
+
+    let returndata = arbowner._run_tx_with_extra_gas(
+        &mut machine,
+        &compressed_signed_tx,
+        my_addr.clone(),
+        None,
+    )?;
+    assert_eq!(returndata.len(), 32);
+    assert_eq!(Uint256::from_bytes(&returndata), Uint256::from_u64(2));
 
     if let Some(path) = log_to {
         machine

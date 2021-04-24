@@ -30,6 +30,7 @@ use evmOps::evmOp_return;
 use evmOps::evmOp_revert;
 use evmOps::evmOp_revert_knownCodePc;
 use evmOps::evmOp_callAndReturn;
+use evmOps::evmOp_returndatasize;
 
 use pluggables::ModuleFunction;
 use pluggables::installPluggable;
@@ -321,10 +322,10 @@ impure func arbowner_runTxWithExtraGas(topFrame: EvmCallFrame, calldata: ByteArr
     if (calldataSize < 4+4*32) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 150, 0, 0);
     }
-    let forcedNonce = bytearray_get256(calldata, 4+32);
-    let requiredSigner = address(bytearray_get256(calldata, 4+2*32));
+    let requiredSigner = address(bytearray_get256(calldata, 4+32));
+    let forcedNonce = bytearray_get256(calldata, 4+2*32);
     let txDataSize = bytearray_get256(calldata, 4+3*32);
-    if (calldataSize != 4+4*32+txDataSize) {
+    if (calldataSize != 4 + 32 * (4 + (txDataSize+31)/32)) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 151, 0, 0);
     }
     let txData = bytearray_extract(calldata, 4+4*32, txDataSize);
@@ -355,6 +356,7 @@ impure func arbowner_runTxWithExtraGas(topFrame: EvmCallFrame, calldata: ByteArr
     };
 
     if let Some(tx) = decompressAndVerifyEcdsaSignedTx(txData, fakeIncomingRequest) {
+
         if (tx.caller != requiredSigner) {
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 152, 0, 0);
         }
@@ -367,7 +369,7 @@ impure func arbowner_runTxWithExtraGas(topFrame: EvmCallFrame, calldata: ByteArr
         }
         let callSucceeded = evmOp_callAndReturn(
             1000000000,   // give up to a billion ArbGas
-            requiredSigner,
+            tx.calleeAddr,
             callvalue,
             0,
             bytearray_size(tx.calldata),
@@ -377,7 +379,7 @@ impure func arbowner_runTxWithExtraGas(topFrame: EvmCallFrame, calldata: ByteArr
         );
         if (callSucceeded) {
             if let Some(retData) = evmCallStack_getTopFrameReturnData() {
-                if (evmCallStack_setTopFrameMemory(tx.calldata)) {
+                if (evmCallStack_setTopFrameMemory(retData)) {
                     evmOp_return(0, bytearray_size(retData));
                 } else {
                     evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 156, 0, 0);
