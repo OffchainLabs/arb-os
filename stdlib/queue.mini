@@ -36,7 +36,7 @@ public func boundedQueue_put(q: BoundedQueue, val: any) -> BoundedQueue {
     } else {
         let putIndex = q.nextPut;
         q with { nextPut: (putIndex+1) % q.capacity }
-            with { contents: q.contents with { [putIndex] = val } }
+          with { contents: q.contents with { [putIndex] = val } }
     };
 }
 
@@ -45,7 +45,8 @@ public func boundedQueue_get(q: BoundedQueue) -> option<(BoundedQueue, any)> {
         None<(BoundedQueue, any)>
     } else {
         Some((
-            q with { nextGet: (q.nextGet+1) % q.capacity },
+            q with { nextGet: (q.nextGet+1) % q.capacity }
+              with { contents: q.contents with { [q.nextGet] = () } },
             q.contents[q.nextGet],
         ))
     };
@@ -133,35 +134,47 @@ public func queue_discardOne(q: Queue) -> Queue {
     };
 }
 
-type QueueStack = option<any>
+type QueueStack = option<QueueStackCell>
 type QueueStackCell = struct {
     head: Queue,
     rest: QueueStack,
 }
 
 public func queuestack_new() -> QueueStack {
-    return None<any>;
+    return None<QueueStackCell>;
 }
 
 public func queuestack_push(qs: QueueStack, q: Queue) -> QueueStack {
     return Some(
-        unsafecast<any>(
-            struct {
-                head: q,
-                rest: qs,
-            }
-        )
+        struct {
+            head: q,
+            rest: queuestack_stripEmpties(qs),
+        }
     );
+}
+
+func queuestack_stripEmpties(qs: QueueStack) -> QueueStack {
+    return xloop {
+        if let Some(cell) = unsafecast<option<QueueStackCell>>(qs) {   // cast is safe but compiler doesn't know that
+            if (queue_isEmpty(cell.head)) {
+                qs = cell.rest;
+            } else {
+                return qs;
+            }
+        } else {
+            return qs;
+        }
+    };
 }
 
 public func queuestack_get(qs: QueueStack) -> option<(QueueStack, any)> {
     return xloop {
-        let cell = unsafecast<QueueStackCell>(qs?);
+        let cell = qs?;
         if let Some(res) = queue_get(cell.head) {
             let (uq, item) = res;
             return Some((
                 queuestack_push(cell.rest, uq),
-                item
+                item,
             ));
         } else {
             qs = cell.rest;
