@@ -31,6 +31,7 @@ use evmOps::evmOp_revert;
 use evmOps::evmOp_revert_knownCodePc;
 use evmOps::evmOp_callAndReturn;
 use evmOps::evmOp_returndatasize;
+use evmOps::doCreationOpcode;
 
 use pluggables::ModuleFunction;
 use pluggables::installPluggable;
@@ -64,6 +65,8 @@ use std::avmcodebuilder::avmCodeBuilder_getCodeHash;
 use std::avmcodebuilder::avmCodeBuilder_finish;
 
 use std::bytestream::bytestream_new;
+
+use std::rlp::keccakOfRlpEncodedUintPair;
 
 use std::storageMap::storageMap_new;
 
@@ -113,8 +116,8 @@ public impure func arbowner_txcall() {
             arbowner_setSecondsPerSend(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_setGasAccountingParams) {
             arbowner_setGasAccountingParams(topFrame, calldata);
-        } elseif (funcCode == const::funcCode_ArbOwner_runTxWithExtraGas) {
-            arbowner_runTxWithExtraGas(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_deployContract) {
+            arbowner_deployContract(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
@@ -316,93 +319,38 @@ impure func arbowner_setGasAccountingParams(topFrame: EvmCallFrame, calldata: By
     }
 }
 
-// function runTxWithExtraGas(bytes calldata signedTx, address requiredSigner, uint forcedNonce) external payable;
-impure func arbowner_runTxWithExtraGas(topFrame: EvmCallFrame, calldata: ByteArray) {
+// function deployContract(bytes calldata constructorData, address deemedSender, uint deemedNonce) external payable returns(address);
+impure func arbowner_deployContract(topFrame: EvmCallFrame, calldata: ByteArray) {
     let calldataSize = bytearray_size(calldata);
-    if (calldataSize < 4+5*32) {
+    if (calldataSize < 4+4*32) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 150, 0, 0);
     }
-    let gasToProvide = bytearray_get256(calldata, 4+32);
-    let requiredSigner = address(bytearray_get256(calldata, 4+2*32));
-    let forcedNonce = bytearray_get256(calldata, 4+3*32);
-    let txDataSize = bytearray_get256(calldata, 4+4*32);
-    if (calldataSize != 4 + 32 * (5 + (txDataSize+31)/32)) {
+    let deemedSender = address(bytearray_get256(calldata, 4+32));
+    let deemedNonce = bytearray_get256(calldata, 4+2*32);
+    let constructorDataSize = bytearray_get256(calldata, 4+3*32);
+    if (calldataSize != 4 + 32 * (4 + (constructorDataSize+31)/32)) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 151, 0, 0);
     }
-    let txData = bytearray_extract(calldata, 4+5*32, txDataSize);
+    let constructorData = bytearray_extract(calldata, 4+4*32, constructorDataSize);
     let callvalue = evmCallFrame_getCallvalue(topFrame);
 
-    if (forcedNonce != ~0) {
-        evmCallStack_setAccountInCurrentContext(
-            requiredSigner,
-            account_setNextSeqNum(evmCallStack_getAccountInCurrentContext(requiredSigner), forcedNonce)
-        );
+    if( ! evmCallStack_setTopFrameMemory(constructorData) ) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 152, 0, 0);
     }
 
-    let fakeIncomingRequest = struct {   // fake an incoming request, because the decompressor expects one
-        kind: const::L1MessageType_L2,
-        arbBlockNumber: inbox_currentArbBlockNumber(),
-        ethBlockNumber: inbox_currentEthBlockNumber(),
-        timestamp: inbox_currentTimestamp(),
-        sender: requiredSigner,
-        requestId: ~0,
-        msgData: txData,
-        provenance: struct {
-            l1SeqNum: ~0,
-            parentRequestId: ~0,
-            indexInParent: 0,
-        },
-        aggregator: None<AggregatorInfo>,
-        adminMode: false,
-    };
+    let deployAddress = address(keccakOfRlpEncodedUintPair(uint(deemedSender), deemedNonce));
 
-    if let Some(tx) = decompressAndVerifyEcdsaSignedTx(txData, fakeIncomingRequest) {
+    if (doCreationOpcode(callvalue, 0, constructorDataSize, deployAddress) == address(0)) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 153, 0, 0);
+    }
 
-        if (tx.caller != requiredSigner) {
-            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 152, 0, 0);
-        }
-        if (tx.value != callvalue) {
-            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 153, 0, 0);
-        }
-
-        if ( ! evmCallStack_setTopFrameMemory(tx.calldata)) {
-            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 154, 0, 0);
-        }
-        let callSucceeded = evmOp_callAndReturn(
-            gasToProvide,
-            tx.calleeAddr,
-            callvalue,
-            0,
-            bytearray_size(tx.calldata),
-            0,
-            0,
-            true,
-        );
-        if (callSucceeded) {
-            if let Some(retData) = evmCallStack_getTopFrameReturnData() {
-                if (evmCallStack_setTopFrameMemory(retData)) {
-                    evmOp_return(0, bytearray_size(retData));
-                } else {
-                    evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 156, 0, 0);
-                }
-            } else {
-                evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 157, 0, 0);
-            }
-        } else {
-            if let Some(retData) = evmCallStack_getTopFrameReturnData() {
-                if (evmCallStack_setTopFrameMemory(tx.calldata)) {
-                    evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 158, 0, bytearray_size(retData));
-                } else {
-                    evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 159, 0, 0);
-                }
-            } else {
-                evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 160, 0, 0);
-            }
-        }
+    if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, uint(deployAddress)))) {
+        evmOp_return(0, 32);
     } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 161, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 154, 0, 0);
     }
 }
+
 
 
 

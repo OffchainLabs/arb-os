@@ -417,22 +417,20 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
-    pub fn _run_tx_with_extra_gas(
+    pub fn _deploy_contract(
         &self,
         machine: &mut Machine,
-        compressed_signed_tx: &[u8],
-        gas_to_provide: Uint256,
-        required_signer: Uint256,
-        forced_nonce: Option<Uint256>,
-    ) -> Result<Vec<u8>, ethabi::Error> {
+        constructor_data: &[u8],
+        deemed_address: Uint256,
+        deemed_nonce: Uint256,
+    ) -> Result<Uint256, ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
             Uint256::zero(),
-            "runTxWithExtraGas",
+            "deployContract",
             &[
-                ethabi::Token::Bytes(compressed_signed_tx.to_vec()),
-                ethabi::Token::Uint(gas_to_provide.to_u256()),
-                ethabi::Token::Address(required_signer.to_h160()),
-                ethabi::Token::Uint(forced_nonce.unwrap_or(Uint256::max_uint()).to_u256()),
+                ethabi::Token::Bytes(constructor_data.to_vec()),
+                ethabi::Token::Address(deemed_address.to_h160()),
+                ethabi::Token::Uint(deemed_nonce.to_u256()),
             ],
             machine,
             Uint256::zero(),
@@ -444,7 +442,7 @@ impl<'a> _ArbOwner<'a> {
         }
 
         if receipts[0].succeeded() {
-            Ok(receipts[0].get_return_data())
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
         } else {
             Err(ethabi::Error::from("reverted"))
         }
@@ -1350,37 +1348,43 @@ pub fn _evm_test_tx_with_extra_gas(
     let arbowner = _ArbOwner::_new(&wallet, debug);
 
     let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
-    if add_contract
-        .deploy(&[], &mut machine, Uint256::zero(), None, debug)
-        .is_err()
-    {
-        panic!("unexpected failure deploying Add contract");
-    }
+    let constructor_data = if let Some(constructor) = add_contract.contract.constructor() {
+        match constructor.encode_input(add_contract.code_bytes.clone(), &[]) {
+            Ok(aug_code) => aug_code,
+            Err(e) => {
+                panic!("couldn't encode data for constructor: {:?}", e);
+            }
+        }
+    } else {
+        add_contract.code_bytes.clone()
+    };
 
-    let (compressed_signed_tx, _) = machine.runtime_env.make_compressed_and_signed_l2_message(
-        Uint256::zero(),
-        Uint256::from_u64(10),
-        add_contract.address.clone(),
-        Uint256::zero(),
-        &add_contract._generate_calldata_for_function(
-            "add",
-            &[
-                ethabi::Token::Uint(Uint256::one().to_u256()),
-                ethabi::Token::Uint(Uint256::one().to_u256()),
-            ],
-        )?,
-        &wallet,
-    );
-
-    let returndata = arbowner._run_tx_with_extra_gas(
+    let deploy_addr = arbowner._deploy_contract(
         &mut machine,
-        &compressed_signed_tx,
-        Uint256::from_u64(1_000_000_000),
-        my_addr.clone(),
-        None,
+        &constructor_data,
+        Uint256::from_u64(41389147891),
+        Uint256::from_u64(417813478913111),
     )?;
-    assert_eq!(returndata.len(), 32);
-    assert_eq!(Uint256::from_bytes(&returndata), Uint256::from_u64(2));
+
+    add_contract.bind_interface_to_address(deploy_addr.clone());
+
+    let (receipts, _) = add_contract.call_function(
+        my_addr.clone(),
+        "add",
+        &[
+            ethabi::Token::Uint(Uint256::one().to_u256()),
+            ethabi::Token::Uint(Uint256::one().to_u256()),
+        ],
+        &mut machine,
+        Uint256::zero(),
+        debug,
+    )?;
+    assert_eq!(receipts.len(), 1);
+    assert!(receipts[0].succeeded());
+    assert_eq!(
+        receipts[0].get_return_data(),
+        Uint256::from_u64(2).to_bytes_be()
+    );
 
     if let Some(path) = log_to {
         machine
