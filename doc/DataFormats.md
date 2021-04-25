@@ -107,7 +107,7 @@ This message type encodes an L2 transaction that is funded by calldata provided 
 
 **Message type 9: Send tx to retry buffer**
 
-This message type delivers a transaction, which will be placed in the L2 retry buffer, rather than being executed immediately. 
+This message type encodes and delivers an L2 transaction; if gas is provided, it will be executed immediately. If no gas is provided or the execution reverts, it will be placed in the L2 retry buffer.
 
 Type-specific data:
 
