@@ -2245,11 +2245,15 @@ fn check_debugprint_for_malformed_trace_info(r1: &Value) {
 fn check_validity_of_trace_info(val: &Value) {
     let mut val = val;
     let mut nesting = 0;
-    while(! val.is_none()) {
+    while (!val.is_none()) {
         if let Value::Tuple(tup) = val {
             assert_eq!(tup.len(), 2);
             if let Value::Tuple(tup2) = &tup[0] {
-                let typecode = if let Value::Int(ui) = &tup2[0] { ui } else { panic!() };
+                let typecode = if let Value::Int(ui) = &tup2[0] {
+                    ui
+                } else {
+                    panic!()
+                };
                 if typecode == &Uint256::zero() {
                     nesting = nesting + 1;
                 } else if typecode == &Uint256::one() {
@@ -2268,7 +2272,6 @@ fn check_validity_of_trace_info(val: &Value) {
     }
     assert_eq!(nesting, 0);
 }
-
 
 fn tuple_keccak(intup: Vec<Value>, state: &MachineState) -> Result<Vec<Value>, ExecutionError> {
     let mask64 = Uint256::from_u64(((1 << 32) + 1) * ((1 << 32) - 1));
