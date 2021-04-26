@@ -970,6 +970,7 @@ pub enum AVMOpcode {
     SetBuffer256,
     CompileWasm,
     RunWasm,
+    MakeWasm,
 }
 
 impl MiniProperties for Opcode {
@@ -1078,6 +1079,7 @@ impl Opcode {
             "setbuffer8" => Opcode::AVMOpcode(AVMOpcode::SetBuffer8),
             "setbuffer64" => Opcode::AVMOpcode(AVMOpcode::SetBuffer64),
             "setbuffer256" => Opcode::AVMOpcode(AVMOpcode::SetBuffer256),
+            "makewasm" => Opcode::AVMOpcode(AVMOpcode::MakeWasm),
             "runwasm" => Opcode::AVMOpcode(AVMOpcode::RunWasm),
             "compilewasm" => Opcode::AVMOpcode(AVMOpcode::CompileWasm),
             _ => {
@@ -1159,6 +1161,7 @@ impl Opcode {
             Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => "setbuffer8",
             Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => "setbuffer64",
             Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => "setbuffer256",
+            Opcode::AVMOpcode(AVMOpcode::MakeWasm) => "makewasm",
             Opcode::AVMOpcode(AVMOpcode::RunWasm) => "runwasm",
             Opcode::AVMOpcode(AVMOpcode::CompileWasm) => "compilewasm",
             _ => "Unknown",
@@ -1250,6 +1253,7 @@ impl Opcode {
             0xa6 => Some(Opcode::AVMOpcode(AVMOpcode::SetBuffer256)),
             0xa7 => Some(Opcode::AVMOpcode(AVMOpcode::RunWasm)),
             0xa8 => Some(Opcode::AVMOpcode(AVMOpcode::CompileWasm)),
+            0xa9 => Some(Opcode::AVMOpcode(AVMOpcode::MakeWasm)),
             _ => None,
         }
     }
@@ -1339,6 +1343,7 @@ impl Opcode {
             Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => Some(0xa6),
             Opcode::AVMOpcode(AVMOpcode::RunWasm) => Some(0xa7),
             Opcode::AVMOpcode(AVMOpcode::CompileWasm) => Some(0xa8),
+            Opcode::AVMOpcode(AVMOpcode::MakeWasm) => Some(0xa9),
 
             _ => None,
         }

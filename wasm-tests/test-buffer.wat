@@ -7,7 +7,7 @@
     (import "env" "setlen_buffer" (func (type 3)))
     (import "env" "read_buffer" (func (type 0)))
     (import "env" "write_buffer" (func (type 2)))
-    (func (export "main") (param i64) (result i32)
+    (func (export "test") (result i32)
        (call 3 (i32.const 0) (i32.const 222))
        (i32.const 0)
     )

@@ -1772,6 +1772,7 @@ impl JitWasm {
         });
 
         let write_func = Func::wrap(&store, move |offset: i32, v: i32| {
+            println!("write buffer {} {}", offset, v);
             cell2.replace_with(|buf| buf.set_byte(offset as usize, v as u8));
         });
 
@@ -1864,8 +1865,8 @@ impl JitWasm {
 
         let instance = Instance::new(&store, &module, &imports).unwrap();
 
-        let memory = instance.get_memory("memory").expect("expected memory not found");
-        memory_cell.replace_with(|_prev| Some(memory));
+        let memory = instance.get_memory("memory");
+        memory_cell.replace_with(|_prev| memory);
 
         return JitWasm {
             instance,

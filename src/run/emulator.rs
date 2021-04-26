@@ -1307,6 +1307,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => 100,
                 Opcode::AVMOpcode(AVMOpcode::RunWasm) => 1000000,
                 Opcode::AVMOpcode(AVMOpcode::CompileWasm) => 100,
+                Opcode::AVMOpcode(AVMOpcode::MakeWasm) => 100,
                 _ => return None,
             })
         } else {
@@ -2218,6 +2219,24 @@ impl Machine {
                             self.state = MachineState::Running(code_pt);
                         }
                         */
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::MakeWasm) => {
+                        let offset = self.stack.pop_usize(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
+                        let tab = self.stack.pop(&self.state)?;
+                        let code_pt = self.stack.pop(&self.state)?;
+                        let mut vec = vec![];
+                        for i in 0..offset {
+                            vec.push(buf.read_byte(i));
+                        }
+                        let val = Value::new_tuple(vec![code_pt, tab.clone()]);
+                        let instance = JitWasm::new(&vec);
+                        self.wasm_instances.push(instance);
+                        self.stack.push(Value::WasmCodePoint(Box::new(val), self.wasm_instances.len() - 1));
+                        self.incr_pc();
+                        println!("Made wasm codepoint");
+
                         Ok(true)
                     }
                     Opcode::GetLocal |  // these opcodes are for intermediate use in compilation only

@@ -22,7 +22,7 @@ impure func main() {
     let compiled = asm(ln, buf,) any { compilewasm };
 
 	let code_buf = #include "/home/sami/arb-os/wasm-tests/test-buffer.wasm";
-	let code_len = 143;
+	let code_len = 138;
 
     let (res_len, res_buf) = asm(code_len,code_buf,compiled,) (int, buffer) { runwasm };
     debug(res_buf);
@@ -73,10 +73,15 @@ impure func main() {
 
 	let table = make_table(list_rev, list_idx);
 
+	let wasm_cp = asm(code_len, code_buf, segment, table) any { makewasm };
+
 	debug(999999);
 
-	// segment(table, \x112233, 3);
-	asm(segment, table, \x112233, 3, ) any { jump };
+    let (res2_len, res2_buf) = asm(3, \x090909, wasm_cp, ) (int, buffer) { runwasm };
+    debug(res2_buf);
+
+	// Works:
+	// asm(segment, table, \x112233, 3, ) any { jump };
 
 }
 
