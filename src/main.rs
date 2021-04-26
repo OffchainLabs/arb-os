@@ -156,8 +156,6 @@ fn main() -> Result<(), CompileError> {
             let mut buffer = Vec::<u8>::new();
             file.read_to_end(&mut buffer).unwrap();
 
-            // wasm::run_jit(&buffer, param as i64);
-
             let code = wasm::load(&buffer, &param);
             let code_len = code.len();
             println!("Code length {}", code_len);

@@ -1715,10 +1715,8 @@ fn find_function(m: &Module, name: &str) -> Option<u32> {
     }
 }
 
-pub fn get_answer(answer: wasmtime::Func) -> i32 {
-    let answer = answer.get0::<i32>().unwrap();
-
-    match answer() {
+pub fn get_answer(answer: wasmtime::TypedFunc<(), (i32)>) -> i32 {
+    match answer.call(()) {
         Ok(result) => result as i32,
         Err(_) => 0,
     }
@@ -1751,9 +1749,13 @@ impl JitWasm {
 
         let buf = Buffer::new(vec![]);
 
+        let memory_cell : Rc<RefCell<std::option::Option<Memory>>> = Rc::new(RefCell::new(None));
+        let memory_cell2 = memory_cell.clone();
+
         let cell = Rc::new(RefCell::new(buf));
         let cell1 = cell.clone();
         let cell2 = cell.clone();
+        let cell3 = cell.clone();
 
         let len_cell = Rc::new(RefCell::new(4));
         let len1 = len_cell.clone();
@@ -1769,6 +1771,23 @@ impl JitWasm {
 
         let write_func = Func::wrap(&store, move |offset: i32, v: i32| {
             cell2.replace_with(|buf| buf.set_byte(offset as usize, v as u8));
+        });
+
+        let rvec_func = Func::wrap(&store, move |ptr: i32, offset: i32, len: i32| {
+            let buf = cell3.borrow();
+            match &*memory_cell2.borrow() {
+                None => println!("warning, no memory"),
+                Some(memory) => {
+                    let mut tmp = vec![];
+                    for i in offset..offset+len {
+                        tmp.push(buf.read_byte(i as usize));
+                    }
+                    println!("{:?}", tmp);
+                    memory.write(ptr as usize, &tmp).expect("cannot write memory");
+                }
+            }
+
+            // cell3.replace_with(|buf| buf.set_byte(offset as usize, v as u8));
         });
 
         let len_func = Func::wrap(&store, move || len1.borrow().clone() as i32);
@@ -1810,6 +1829,8 @@ impl JitWasm {
                         imports.push(set_len_func.clone().into())
                     } else if name.contains("usegas") {
                         imports.push(gas_func.clone().into())
+                    } else if name.contains("rvec") {
+                        imports.push(rvec_func.clone().into())
                     } else {
                         imports.push(error_func.clone().into())
                     }
@@ -1820,6 +1841,9 @@ impl JitWasm {
         }
 
         let instance = Instance::new(&store, &module, &imports).unwrap();
+
+        let memory = instance.get_memory("memory").expect("expected memory not found");
+        memory_cell.replace_with(|_prev| Some(memory));
 
         return JitWasm {
             instance,
@@ -1834,9 +1858,9 @@ impl JitWasm {
         self.len_cell.replace_with(|_len| len as i32);
         self.gas_cell.replace_with(|_gas| 1000000);
 
-        let _res = match self.instance.get_func("test") {
-            Some(f) => get_answer(f) as i64,
-            None => 0,
+        let _res = match self.instance.get_typed_func::<(),(i32)>("test") {
+            Ok(f) => get_answer(f) as i64,
+            Err(_) => 0,
         };
 
         (
@@ -2017,6 +2041,7 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
             init.push(simple_op(AVMOpcode::Minus));
             set_gas_left(&mut init);
         }
+
         // Return from function
         init.push(get_return_pc());
         get_return_from_table(&mut init);
