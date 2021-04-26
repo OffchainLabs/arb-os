@@ -1751,11 +1751,13 @@ impl JitWasm {
 
         let memory_cell : Rc<RefCell<std::option::Option<Memory>>> = Rc::new(RefCell::new(None));
         let memory_cell2 = memory_cell.clone();
+        let memory_cell3 = memory_cell.clone();
 
         let cell = Rc::new(RefCell::new(buf));
         let cell1 = cell.clone();
         let cell2 = cell.clone();
         let cell3 = cell.clone();
+        let cell4 = cell.clone();
 
         let len_cell = Rc::new(RefCell::new(4));
         let len1 = len_cell.clone();
@@ -1786,8 +1788,26 @@ impl JitWasm {
                     memory.write(ptr as usize, &tmp).expect("cannot write memory");
                 }
             }
+        });
 
-            // cell3.replace_with(|buf| buf.set_byte(offset as usize, v as u8));
+        let wvec_func = Func::wrap(&store, move |ptr: i32, offset: i32, len: i32| {
+            match &*memory_cell3.borrow() {
+                None => println!("warning, no memory"),
+                Some(memory) => {
+                    let mut tmp = vec![0; len as usize];
+                    memory.read(ptr as usize, &mut tmp).expect("cannot read memory");
+                    println!("{:?}", tmp);
+
+                    cell4.replace_with(|buf| {
+                        let mut res = buf.clone();
+                        for i in 0..len {
+                            res = res.set_byte((offset+i) as usize, tmp[i as usize]);
+                        }
+                        res
+                    });
+
+                }
+            }
         });
 
         let len_func = Func::wrap(&store, move || len1.borrow().clone() as i32);
@@ -1831,6 +1851,8 @@ impl JitWasm {
                         imports.push(gas_func.clone().into())
                     } else if name.contains("rvec") {
                         imports.push(rvec_func.clone().into())
+                    } else if name.contains("wvec") {
+                        imports.push(wvec_func.clone().into())
                     } else {
                         imports.push(error_func.clone().into())
                     }
