@@ -1512,7 +1512,7 @@ fn typecheck_expr(
                                     HashSet::new(),
                                 ) {
                                     return Err(new_type_error(
-                                        format!("wrong argument type in function call, expected \"{}\", got \"{}\"", resolved_arg_type.get_representation(type_tree)?.display(), tc_args[i].get_type().get_representation(type_tree)?.display()),
+                                        format!("wrong argument type in function call, {}", resolved_arg_type.mis, tc_args[i].get_type().get_representation(type_tree)?.display()),
                                         loc,
                                     ));
                                 }

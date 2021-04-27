@@ -14,7 +14,7 @@ use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct GenCodeError {
-    reason: String,
+    pub(crate) reason: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
