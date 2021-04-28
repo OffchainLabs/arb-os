@@ -28,12 +28,12 @@ mod xformcode;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SerializableTypeTree {
-    inner: HashMap<String, Type>,
+    inner: BTreeMap<String, Type>,
 }
 
 impl SerializableTypeTree {
     pub fn from_type_tree(tree: TypeTree) -> Self {
-        let mut inner = HashMap::new();
+        let mut inner = BTreeMap::new();
         for ((path, id), tipe) in tree.into_iter() {
             inner.insert(format!("{}, {}", comma_list(&path), id), tipe);
         }
