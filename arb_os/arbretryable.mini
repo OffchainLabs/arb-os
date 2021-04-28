@@ -243,6 +243,10 @@ impure func arbRetryable_getSubmissionPrice(topFrame: EvmCallFrame, calldata: By
     }
 }
 
+impure func arbRetryable_emitTicketCreated(topFrame: EvmCallFrame, txId: uint) {
+    evmOp_log2(0, 0, const::eventTopic_ArbRetryableTx_TicketCreated, txId);
+}
+
 impure func arbRetryable_emitLifetimeExtended(topFrame: EvmCallFrame, txId: uint, newTimeout: uint) -> option<()> {
     let savedMem = evmCallFrame_getMemory(topFrame);
     let mem = bytearray_set256(bytearray_new(0), 0, newTimeout);
