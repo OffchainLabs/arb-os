@@ -203,7 +203,14 @@ fn expand_things(code: &mut File, mut recursers: HashSet<Type>, type_tree: TypeT
     let mut total_recursers = recursers.clone();
     while !recursers.is_empty() {
         let mut new_recursers = HashSet::new();
-        for thing in recursers {
+        let mut vec_recursers = recursers.iter().collect::<Vec<_>>();
+        vec_recursers.sort_by(|lower, higher| {
+            lower
+                .display_separator("_")
+                .0
+                .cmp(&higher.display_separator("_").0)
+        });
+        for thing in vec_recursers {
             writeln!(code, "type {} = {}", thing.display_separator("_").0, {
                 if let Type::Nominal(a, b) = thing.clone() {
                     let (displayed, subtypes) =
