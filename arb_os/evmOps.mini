@@ -1006,7 +1006,7 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
     return panic;
 }
 
-impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress: address) -> address {
+public impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress: address) -> address {
     // make sure there isn't already an account at the given address
     if let Some(acct) = evmCallStack_getAccount(newAddress) {
         if (account_hasContract(acct)) {
