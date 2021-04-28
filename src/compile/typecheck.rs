@@ -907,9 +907,10 @@ fn typecheck_statement<'a>(
             } else {
                 Err(new_type_error(
                     format!(
-                        "return statement has wrong type, expected: \"{}\", got: \"{}\"",
-                        return_type.get_representation(type_tree)?.display(),
-                        tc_expr.get_type().get_representation(type_tree)?.display()
+                        "return statement has wrong type, {}",
+                        return_type
+                            .mismatch_string(&tc_expr.get_type(), type_tree)
+                            .unwrap()
                     ),
                     debug_info.location,
                 ))

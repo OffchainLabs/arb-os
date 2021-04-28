@@ -9,6 +9,7 @@ use std::fmt::Formatter;
 use std::fs::{File, OpenOptions};
 use std::io::Read;
 use std::io::Write;
+use std::mem;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -248,9 +249,15 @@ fn get_globals_and_version_from_file(
 
     let type_tree = globals.type_tree.into_type_tree();
 
-    let mut stuff = Rc::new(RefCell::new(HashSet::new()));
+    let mut state = (
+        vec![],
+        Rc::new(RefCell::new(HashSet::new())),
+        Rc::new(RefCell::new(HashSet::new())),
+    );
 
     let mut fields = vec![];
+
+    let mut old_state = state.clone();
     for global in globals.globals {
         if global.name_id != usize::max_value() {
             let mut tipe = global.tipe;
@@ -259,13 +266,43 @@ fn get_globals_and_version_from_file(
                     .get(&(file_path.clone(), id))
                     .cloned()
                     .unwrap_or(Type::Any);
-            } else {
-                tipe.recursive_apply(replace_nominal, &type_tree, &mut (vec![], stuff.clone()));
             }
+            tipe.recursive_apply(replace_nominal, &type_tree, &mut state);
+
             fields.push(StructField::new(global.name, tipe))
         }
     }
-    let real_stuff = Rc::get_mut(&mut stuff).unwrap().clone().into_inner();
+    loop {
+        if state == old_state {
+            break;
+        }
+        old_state = state.clone();
+        let mut new_types = HashSet::new();
+        let cool_temp = state
+            .1
+            .borrow()
+            .difference(&*old_state.1.borrow())
+            .cloned()
+            .collect::<Vec<_>>();
+        for diff in cool_temp {
+            let new_type = {
+                let mut new = if let Type::Nominal(file_path, id) = diff {
+                    type_tree
+                        .get(&(file_path.clone(), id))
+                        .cloned()
+                        .unwrap_or(Type::Any)
+                } else {
+                    diff.clone()
+                };
+                new.recursive_apply(replace_nominal, &type_tree, &mut state);
+                new
+            };
+            new_types.insert(new_type);
+        }
+        (&mut *(*state.1).borrow_mut()).extend(new_types);
+    }
+    mem::drop(old_state);
+    let real_stuff = Rc::get_mut(&mut state.2).unwrap().clone().into_inner();
     Ok((fields, real_stuff, type_tree, globals.arbos_version))
 }
 
@@ -280,20 +317,25 @@ fn let_string(name: &String, expr: &String) -> String {
 fn replace_nominal(
     node: &mut TypeCheckedNode,
     state: &TypeTree,
-    mut_state: &mut (Vec<Type>, Rc<RefCell<HashSet<Type>>>),
+    mut_state: &mut (
+        Vec<Type>,
+        Rc<RefCell<HashSet<Type>>>,
+        Rc<RefCell<HashSet<Type>>>,
+    ),
 ) -> bool {
     match node {
         TypeCheckedNode::Type(tipe) => {
-            if **tipe == Type::Option(Box::new(Type::Nominal(vec!["pluggables".to_string()], 1))) {
-                panic!("this does show up")
-            }
             if mut_state.0.iter().any(|thing| thing == *tipe) {
-                let mut to_render = mut_state.1.borrow_mut();
+                let to_render = &mut *(*mut_state.1).borrow_mut();
+                to_render.insert(tipe.clone());
+                let to_render = &mut *(*mut_state.2).borrow_mut();
                 to_render.insert(tipe.clone());
                 return false;
             }
             if let Type::Nominal(path, id) = tipe {
                 mut_state.0.push(Type::Nominal(path.clone(), *id));
+                let to_render = &mut *(*mut_state.2).borrow_mut();
+                to_render.insert(Type::Nominal(path.clone(), *id));
                 **tipe = state
                     .get(&(path.clone(), *id))
                     .cloned()
