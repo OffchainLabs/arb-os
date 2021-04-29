@@ -91,7 +91,11 @@ impure func arbRetryable_redeem(topFrame: EvmCallFrame, calldata: ByteArray) {  
             evmOp_revert_knownPc(12, 0, 0);
         }
     } else {
-        evmOp_revert_knownPc(13, 0, 0);
+        if (evmCallStack_setTopFrameMemory(returnData)) {
+            evmOp_revert_knownPc(13, 0, bytearray_size(returnData));
+        } else {
+            evmOp_revert_knownPc(14, 0, 0);
+        }
     }
 }
 
@@ -237,6 +241,10 @@ impure func arbRetryable_getSubmissionPrice(topFrame: EvmCallFrame, calldata: By
     } else {
         evmOp_revert_knownPc(81, 0, 0);
     }
+}
+
+impure func arbRetryable_emitTicketCreated(topFrame: EvmCallFrame, txId: uint) {
+    evmOp_log2(0, 0, const::eventTopic_ArbRetryableTx_TicketCreated, txId);
 }
 
 impure func arbRetryable_emitLifetimeExtended(topFrame: EvmCallFrame, txId: uint, newTimeout: uint) -> option<()> {

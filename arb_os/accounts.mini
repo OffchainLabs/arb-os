@@ -9,7 +9,9 @@ use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_setByte;
+use std::bytestream::bytestream_new;
 use std::bls::BLSKey;
+use std::keccak::keccak256;
 use std::storageMap::StorageMap;
 use std::storageMap::storageMap_new;
 use std::storageMap::storageMap_size;
@@ -19,8 +21,10 @@ use std::storageMap::storageMap_set;
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsSize;
 use core::kvs::builtin_kvsForall;
+use core::kvs::builtin_kvsDelete;
 
 use chainParameters::chainParams_getDefaultAggregator;
+use codeSegment::translateEvmCodeSegment;
 use decompression::AggregatorDecompressionState;
 use evmCallStack::evmCallStack_addStorageCharge;
 
@@ -29,6 +33,21 @@ type AccountStore = struct {
     accounts: map<address, Account>,
     retryBuffer: RetryBuffer,
     numContracts: uint,
+    codeRefTable: map<bytes32, CodeRef>,
+}
+
+// CodeRefs are reference-counted, but accuracy of the reference count only affects performance, not correctness.
+// If we drop a CodeRef too early, the result is that we might recompile some EVM code that we already compiled,
+//      and use one more code segment than we needed to.
+// If we keep a CodeRef longer than necessary, the result is that we keep state that could have been
+//      dropped, so the machine state is larger than it needed to be.
+// Operations on the code ref table are designed to be safe, so that nothing bad happens if the refcounts are
+//      inaccurate.
+type CodeRef = struct {
+    refCount: uint,
+    code: ByteArray,
+    evmJumpTable: map<uint, impure func()>,
+    startCodePoint: impure func(),
 }
 
 type Account = struct {
@@ -66,6 +85,7 @@ public impure func accountStore_init() {   // This must be called first!
         accounts: newmap<address, Account>,
         retryBuffer: retryBuffer_new(),
         numContracts: 0,
+        codeRefTable: newmap<bytes32, CodeRef>,
     };
 }
 
@@ -129,6 +149,12 @@ public func accountStore_changeNumContracts(acctStore: AccountStore, delta: int)
 }
 
 public func accountStore_destroyAccount(acctStore: AccountStore, addrToDestroy: address) -> AccountStore {
+    if let Some(contractInfo) = accountStore_get(acctStore, addrToDestroy).contractInfo {
+        acctStore = accountStore_dropCodeRef(
+            acctStore,
+            keccak256(contractInfo.code, 0, bytearray_size(contractInfo.code))
+        );
+    }
     return accountStore_set(acctStore, addrToDestroy, pristineAccount(addrToDestroy));
 }
 
@@ -245,6 +271,10 @@ public func account_incrSeqNum(account: Account) -> Account {
 
 public func account_getNextSeqNum(account: Account) -> uint {
     return account.nextSeqNum;
+}
+
+public func account_setNextSeqNum(account: Account, num: uint) -> Account {
+    return account with { nextSeqNum: num };
 }
 
 public func account_getAggregatorDecompressionState(account: Account) -> option<AggregatorDecompressionState> {
@@ -586,5 +616,93 @@ public impure func accountStore_forall(acctStore: AccountStore, closure: impure 
 func asfaClosure(_: any, acct: Account, wrappedState: asfa_wrappedState) -> asfa_wrappedState {
     return wrappedState with {
         innerState: wrappedState.innerClosure(acct, wrappedState.innerState)
+    };
+}
+
+public func accountStore_codeRefExists(acctStore: AccountStore, codeHash: bytes32) -> bool {
+    return acctStore.codeRefTable[codeHash] != None<CodeRef>;
+}
+
+public impure func accountStore_createOrAddCodeRef(
+    acctStore: AccountStore,
+    code: ByteArray
+) -> option<(
+    AccountStore,
+    impure func(),
+    map<uint, impure func()>,
+    bool,
+)> {
+    let codeHash = keccak256(code, 0, bytearray_size(code));
+    return xif let Some(codeRef) = acctStore.codeRefTable[codeHash] {
+        Some((
+            accountStore_addCodeRef(acctStore, codeHash)?,
+            codeRef.startCodePoint,
+            codeRef.evmJumpTable,
+            false,
+        ))
+    } else {
+        let (startCodePoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(code), false);
+        Some((
+            accountStore_createCodeRef(acctStore, code, evmJumpTable, startCodePoint),
+            unsafecast<impure func()>(startCodePoint),
+            unsafecast<map<uint, impure func()>>(evmJumpTable),
+            true,
+        ))
+    };
+}
+
+public func accountStore_addCodeRef(acctStore: AccountStore, codeHash: bytes32) -> option<AccountStore> {
+    // returns None if coderef doesn't exist
+
+    let codeRef = acctStore.codeRefTable[codeHash]?;
+    return Some(
+        acctStore with {
+            codeRefTable: acctStore.codeRefTable with {
+                [codeHash] = codeRef with {
+                    refCount: codeRef.refCount + 1
+                }
+            }
+        }
+    );
+}
+
+public func accountStore_createCodeRef(
+    acctStore: AccountStore,
+    code: ByteArray,
+    evmJumpTable: map<uint, impure func()>,
+    startCodePoint: impure func(),
+) -> AccountStore {
+    let codeHash = keccak256(code, 0, bytearray_size(code));
+    return acctStore with {
+        codeRefTable: acctStore.codeRefTable with {
+            [codeHash] = struct {
+                refCount: 1,
+                code: code,
+                evmJumpTable: evmJumpTable,
+                startCodePoint: startCodePoint,
+            }
+        }
+    };
+}
+
+public func accountStore_dropCodeRef(acctStore: AccountStore, codeHash: bytes32) -> AccountStore {
+    // this is a no-op if coderef doesn't exist
+
+    return xif let Some(codeRef) = acctStore.codeRefTable[codeHash] {
+        acctStore with {
+            codeRefTable: xif (codeRef.refCount == 1) {
+                unsafecast<map<bytes32, CodeRef>>(
+                    builtin_kvsDelete(unsafecast<Kvs>(acctStore.codeRefTable), uint(codeHash))
+                )
+            } else {
+                acctStore.codeRefTable with {
+                    [codeHash] = codeRef with {
+                        refCount: codeRef.refCount - 1
+                    }
+                }
+            }
+        }
+    } else {
+        acctStore
     };
 }

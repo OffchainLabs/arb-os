@@ -12,6 +12,8 @@ use chainParameters::chainParams_getOwner;
 use chainParameters::chainParams_setOwner;
 use chainParameters::chainParams_setSecondsPerSend;
 
+use decompression::decompressAndVerifyEcdsaSignedTx;
+
 use evmCallStack::EvmCallFrame;
 use evmCallStack::evmCallStack_topFrame;
 use evmCallStack::evmCallStack_callHitError;
@@ -23,10 +25,16 @@ use evmCallStack::evmCallStack_setAccount;
 use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallStack_stackDepth;
 use evmCallStack::evmCallStack_returnFromCall;
+use evmCallStack::evmCallStack_getAccountInCurrentContext;
+use evmCallStack::evmCallStack_setAccountInCurrentContext;
+use evmCallStack::evmCallStack_getTopFrameReturnData;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert;
 use evmOps::evmOp_revert_knownCodePc;
+use evmOps::evmOp_callAndReturn;
+use evmOps::evmOp_returndatasize;
+use evmOps::doCreationOpcode;
 
 use pluggables::ModuleFunction;
 use pluggables::installPluggable;
@@ -39,6 +47,11 @@ use gasAccounting::gasAccounting_getFeeRecipients;
 use gasAccounting::gasAccounting_setFeeRecipients;
 use gasAccounting::setFairGasPriceSender;
 use gasAccounting::setGasAccountingParams;
+
+use inbox::AggregatorInfo;
+use inbox::inbox_currentArbBlockNumber;
+use inbox::inbox_currentEthBlockNumber;
+use inbox::inbox_currentTimestamp;
 
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
@@ -55,6 +68,8 @@ use std::avmcodebuilder::avmCodeBuilder_getCodeHash;
 use std::avmcodebuilder::avmCodeBuilder_finish;
 
 use std::bytestream::bytestream_new;
+
+use std::rlp::keccakOfRlpEncodedUintPair;
 
 use std::storageMap::storageMap_new;
 
@@ -78,34 +93,36 @@ public impure func arbowner_txcall() {
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 1, 0, 0);
         }
         let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
-        if (funcCode == 0xe3a0a148) {
+        if (funcCode == const::funcCode_ArbOwner_giveOwnership) {
             arbowner_giveOwnership(topFrame, calldata);
-        } elseif (funcCode == 0x31acdf5e) {
+        } elseif (funcCode == const::funcCode_ArbOwner_startCodeUpload) {
             arbowner_startCodeUpload(topFrame, calldata);
-        } elseif (funcCode == 0x56331f75) {
+        } elseif (funcCode == const::funcCode_ArbOwner_continueCodeUpload) {
             arbowner_continueCodeUpload(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_getUploadedCodeHash) {
             arbowner_getUploadedCodeHash(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_finishCodeUploadAsArbosUpgrade) {
            arbowner_finishCodeUploadAsArbosUpgrade(topFrame, calldata);
-        } elseif (funcCode == 0xf4f4e136) {
+        } elseif (funcCode == const::funcCode_ArbOwner_finishCodeUploadAsPluggable) {
            arbowner_finishCodeUploadAsPluggable(topFrame, calldata);
-        } elseif (funcCode == 0xc3bf429d) {
+        } elseif (funcCode == const::funcCode_ArbOwner_addToReserveFunds) {
             arbowner_addToReserveFunds(topFrame, calldata);
-        } elseif (funcCode == 0xa901dd92) {
+        } elseif (funcCode == const::funcCode_ArbOwner_setFeesEnabled) {
             arbowner_setFeesEnabled(topFrame, calldata);
-        } elseif (funcCode == 0x08df6923) {
+        } elseif (funcCode == const::funcCode_ArbOwner_getFeeRecipients) {
             arbowner_getFeeRecipients(topFrame, calldata);
-        } elseif (funcCode == 0xc6cabb40) {
+        } elseif (funcCode == const::funcCode_ArbOwner_setFeeRecipients) {
             arbowner_setFeeRecipients(topFrame, calldata);
-        } elseif (funcCode == 0xba7f4cc6) {
+        } elseif (funcCode == const::funcCode_ArbOwner_setFairGasPriceSender) {
             arbowner_setFairGasPriceSender(topFrame, calldata);
-        } elseif (funcCode == 0x29854f47) {
+        } elseif (funcCode == const::funcCode_ArbOwner_setSecondsPerSend) {
             arbowner_setSecondsPerSend(topFrame, calldata);
-        } elseif (funcCode == 0x8ea93643) {
+        } elseif (funcCode == const::funcCode_ArbOwner_setGasAccountingParams) {
             arbowner_setGasAccountingParams(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_getTotalOfEthBalances) {
             arbowner_getTotalOfEthBalances(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_deployContract) {
+            arbowner_deployContract(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
@@ -325,6 +342,38 @@ impure func arbowner_getTotalOfEthBalances(topFrame: EvmCallFrame, calldata: Byt
 
 func totalEthClosure(acct: Account, state: uint) -> uint {
     return state + account_getBalance(acct);
+}
+
+// function deployContract(bytes calldata constructorData, address deemedSender, uint deemedNonce) external payable returns(address);
+impure func arbowner_deployContract(topFrame: EvmCallFrame, calldata: ByteArray) {
+    let calldataSize = bytearray_size(calldata);
+    if (calldataSize < 4+4*32) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 160, 0, 0);
+    }
+    let deemedSender = address(bytearray_get256(calldata, 4+32));
+    let deemedNonce = bytearray_get256(calldata, 4+2*32);
+    let constructorDataSize = bytearray_get256(calldata, 4+3*32);
+    if (calldataSize != 4 + 32 * (4 + (constructorDataSize+31)/32)) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 161, 0, 0);
+    }
+    let constructorData = bytearray_extract(calldata, 4+4*32, constructorDataSize);
+    let callvalue = evmCallFrame_getCallvalue(topFrame);
+
+    if( ! evmCallStack_setTopFrameMemory(constructorData) ) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 162, 0, 0);
+    }
+
+    let deployAddress = address(keccakOfRlpEncodedUintPair(uint(deemedSender), deemedNonce));
+
+    if (doCreationOpcode(callvalue, 0, constructorDataSize, deployAddress) == address(0)) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 163, 0, 0);
+    }
+
+    if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, uint(deployAddress)))) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 164, 0, 0);
+    }
 }
 
 
