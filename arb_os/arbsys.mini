@@ -433,29 +433,26 @@ impure func arbsys_getPcTable(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) <= 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 60, 0, 0);
     }
-    if let Some(pcTable) = pcTableForCode(bytearray_extract(calldata, 4, bytearray_size(calldata)-4)) {
-        let mem = evmCallStack_getTopFrameMemoryOrDie();
-        mem = bytearray_set256(mem, 0, 64);
-        let offset = 64;
-        loop {
-            if let Some(res) = stack_pop(pcTable) {
-                let (upct, item) = res;
-                pcTable = upct;
-                let (evmPc, avmCpHash) = unsafecast<(uint, bytes32)>(item);
-                mem = bytearray_set256(
-                    bytearray_set256(mem, offset, evmPc),
-                    offset+32,
-                    uint(avmCpHash),
-                );
-                offset = offset + 64;
-            } else {
-                // done reading data, finish building returndata then return
-                mem = bytearray_set256(mem, 32, (offset-64)/32);
-                evmOp_return(0, offset);
-            }
+    let pcTable = pcTableForCode(bytearray_extract(calldata, 4, bytearray_size(calldata)-4));
+    let mem = evmCallStack_getTopFrameMemoryOrDie();
+    mem = bytearray_set256(mem, 0, 64);
+    let offset = 64;
+    loop {
+        if let Some(res) = stack_pop(pcTable) {
+            let (upct, item) = res;
+            pcTable = upct;
+            let (evmPc, avmCpHash) = unsafecast<(uint, bytes32)>(item);
+            mem = bytearray_set256(
+                bytearray_set256(mem, offset, evmPc),
+                offset+32,
+                uint(avmCpHash),
+            );
+            offset = offset + 64;
+        } else {
+            // done reading data, finish building returndata then return
+            mem = bytearray_set256(mem, 32, (offset-64)/32);
+            evmOp_return(0, offset);
         }
-    } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 61, 0, 0);
     }
 }
 
