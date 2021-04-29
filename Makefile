@@ -30,86 +30,86 @@ upgrade: $(ARBOSDIR)/upgrade.json
 contracts: $(TESTCONTRACTS) $(ARBOSCONTRACTS)
 
 $(ARBOSDIR)/contractTemplates.mini: $(ARBOSCONTRACTS)
-	$(CARGORUN) make-templates
+	$(CARGORUNRELEASE) make-templates
 
 $(BUILTINDIR)/kvstest.mexe: $(BUILTINDIR)/kvstest.mini
-	$(CARGORUN) compile $(BUILTINDIR)/kvstest.mini -o $(BUILTINDIR)/kvstest.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile $(BUILTINDIR)/kvstest.mini -o $(BUILTINDIR)/kvstest.mexe $(COMPILEFLAGS) -t
 
 $(STDDIR)/queuetest.mexe: $(STDDIR)/queuetest.mini
-	$(CARGORUN) compile $(STDDIR)/queuetest.mini -o $(STDDIR)/queuetest.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile $(STDDIR)/queuetest.mini -o $(STDDIR)/queuetest.mexe $(COMPILEFLAGS) -t
 
 $(BUILTINDIR)/arraytest.mexe: $(BUILTINDIR)/arraytest.mini
-	$(CARGORUN) compile $(BUILTINDIR)/arraytest.mini -o $(BUILTINDIR)/arraytest.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile $(BUILTINDIR)/arraytest.mini -o $(BUILTINDIR)/arraytest.mexe $(COMPILEFLAGS) -t
 
 $(BUILTINDIR)/globaltest.mexe: $(BUILTINDIR)/globaltest.mini
-	$(CARGORUN) compile $(BUILTINDIR)/globaltest.mini -o $(BUILTINDIR)/globaltest.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile $(BUILTINDIR)/globaltest.mini -o $(BUILTINDIR)/globaltest.mexe $(COMPILEFLAGS) -t
 
 $(STDDIR)/priorityqtest.mexe: $(STDDIR)/priorityqtest.mini
-	$(CARGORUN) compile $(STDDIR)/priorityqtest.mini -o $(STDDIR)/priorityqtest.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile $(STDDIR)/priorityqtest.mini -o $(STDDIR)/priorityqtest.mexe $(COMPILEFLAGS) -t
 
 $(STDDIR)/storageMapTest.mexe: $(STDDIR)/storageMapTest.mini
-	$(CARGORUN) compile $(STDDIR)/storageMapTest.mini -o $(STDDIR)/storageMapTest.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile $(STDDIR)/storageMapTest.mini -o $(STDDIR)/storageMapTest.mexe $(COMPILEFLAGS) -t
 
 $(STDDIR)/bytearraytest.mexe: $(STDDIR)/bytearraytest.mini
-	$(CARGORUN) compile $(STDDIR)/bytearraytest.mini -o $(STDDIR)/bytearraytest.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile $(STDDIR)/bytearraytest.mini -o $(STDDIR)/bytearraytest.mexe $(COMPILEFLAGS) -t
 
 $(STDDIR)/blstest.mexe: $(BUILTINMAOS) $(STDDIR)/blstest.mini $(STDDIR)
-	$(CARGORUN) compile $(STDDIR)/blstest.mini $(STDLIB) -o $(STDDIR)/blstest.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile $(STDDIR)/blstest.mini $(STDLIB) -o $(STDDIR)/blstest.mexe $(COMPILEFLAGS) -t
 
 $(STDDIR)/fixedpointtest.mexe: $(STDDIR)/fixedpointtest.mini $(STDDIR)/fixedpoint.mini
-	$(CARGORUN) compile $(STDDIR)/fixedpointtest.mini -o $(STDDIR)/fixedpointtest.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile $(STDDIR)/fixedpointtest.mini -o $(STDDIR)/fixedpointtest.mexe $(COMPILEFLAGS) -t
 
 $(STDDIR)/bytearraybench.mexe: $(BUILTINMAOS) $(STDDIR)/bytearraybench.mini $(STDLIB)
-	$(CARGORUN) compile $(STDDIR)/bytearraybench.mini $(STDLIB) -o $(STDDIR)/bytearraybench.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile $(STDDIR)/bytearraybench.mini $(STDLIB) -o $(STDDIR)/bytearraybench.mexe $(COMPILEFLAGS) -t
 
 $(STDDIR)/bufferopcodetest.mexe: $(BUILTINMAOS) $(STDDIR)/bufferopcodetest.mini
-	$(CARGORUN) compile $(STDDIR)/bufferopcodetest.mini -o $(STDDIR)/bufferopcodetest.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile $(STDDIR)/bufferopcodetest.mini -o $(STDDIR)/bufferopcodetest.mexe $(COMPILEFLAGS) -t
 
 minitests/codeloadtest.mexe: minitests/codeloadtest.mini
-	$(CARGORUN) compile minitests/codeloadtest.mini -o minitests/codeloadtest.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile minitests/codeloadtest.mini -o minitests/codeloadtest.mexe $(COMPILEFLAGS) -t
 
 $(STDDIR)/keccaktest.mexe: $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mini $(STDDIR)/bytearray.mini $(STDDIR)/expandingIntArray.mini
-	$(CARGORUN) compile $(STDDIR)/keccaktest.mini -o $(STDDIR)/keccaktest.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile $(STDDIR)/keccaktest.mini -o $(STDDIR)/keccaktest.mexe $(COMPILEFLAGS) -t
 
 $(STDDIR)/biguinttest.mexe: $(STDDIR)/biguinttest.mini $(STDDIR)/biguint.mini
-	$(CARGORUN) compile $(STDDIR)/biguinttest.mini -o $(STDDIR)/biguinttest.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile $(STDDIR)/biguinttest.mini -o $(STDDIR)/biguinttest.mexe $(COMPILEFLAGS) -t
 
 $(STDDIR)/sha256test.mexe: $(STDDIR)/sha256test.mini $(STDDIR)/sha256.mini
-	$(CARGORUN) compile $(STDDIR)/sha256test.mini -o $(STDDIR)/sha256test.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile $(STDDIR)/sha256test.mini -o $(STDDIR)/sha256test.mexe $(COMPILEFLAGS) -t
 
 $(STDDIR)/ripemd160test.mexe: $(STDDIR)/ripemd160test.mini $(STDDIR)/ripemd160.mini
-	$(CARGORUN) compile $(STDDIR)/ripemd160test.mini -o $(STDDIR)/ripemd160test.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile $(STDDIR)/ripemd160test.mini -o $(STDDIR)/ripemd160test.mexe $(COMPILEFLAGS) -t
 
 $(STDDIR)/rlptest.mexe: $(BUILTINMAOS) $(STDDIR)/rlptest.mini
-	$(CARGORUN) compile $(STDDIR)/rlptest.mini -o $(STDDIR)/rlptest.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile $(STDDIR)/rlptest.mini -o $(STDDIR)/rlptest.mexe $(COMPILEFLAGS) -t
 
 $(UPGRADETESTDIR)/regcopy_old.mexe: $(UPGRADETESTDIR)/regcopy_old.mini
-	$(CARGORUN) compile $(UPGRADETESTDIR)/regcopy_old.mini -o $(UPGRADETESTDIR)/regcopy_old.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile $(UPGRADETESTDIR)/regcopy_old.mini -o $(UPGRADETESTDIR)/regcopy_old.mexe $(COMPILEFLAGS) -t
 
 $(UPGRADETESTDIR)/regcopy_new.mexe: $(UPGRADETESTDIR)/regcopy_new.mini
-	$(CARGORUN) compile $(UPGRADETESTDIR)/regcopy_new.mini -o $(UPGRADETESTDIR)/regcopy_new.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile $(UPGRADETESTDIR)/regcopy_new.mini -o $(UPGRADETESTDIR)/regcopy_new.mexe $(COMPILEFLAGS) -t
 
 $(UPGRADETESTDIR)/upgrade1_old.mexe: $(UPGRADETESTDIR)/upgrade1_old.mini $(STDDIR)/avmcodebuilder.mini
-	$(CARGORUN) compile $(UPGRADETESTDIR)/upgrade1_old.mini -o $(UPGRADETESTDIR)/upgrade1_old.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile $(UPGRADETESTDIR)/upgrade1_old.mini -o $(UPGRADETESTDIR)/upgrade1_old.mexe $(COMPILEFLAGS) -t
 
 $(UPGRADETESTDIR)/upgrade1_new.mexe: $(UPGRADETESTDIR)/upgrade1_new.mini
-	$(CARGORUN) compile $(UPGRADETESTDIR)/upgrade1_new.mini -o $(UPGRADETESTDIR)/upgrade1_new.mexe $(COMPILEFLAGSNOINLINE)
+	$(CARGORUNRELEASE) compile $(UPGRADETESTDIR)/upgrade1_new.mini -o $(UPGRADETESTDIR)/upgrade1_new.mexe $(COMPILEFLAGSNOINLINE)
 
 $(UPGRADETESTDIR)/upgrade2_old.mexe: $(UPGRADETESTDIR)/upgrade2_old.mini $(STDDIR)/avmcodebuilder.mini
-	$(CARGORUN) compile $(UPGRADETESTDIR)/upgrade2_old.mini -o $(UPGRADETESTDIR)/upgrade2_old.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile $(UPGRADETESTDIR)/upgrade2_old.mini -o $(UPGRADETESTDIR)/upgrade2_old.mexe $(COMPILEFLAGS) -t
 
 $(UPGRADETESTDIR)/upgrade2_new.mexe: $(UPGRADETESTDIR)/upgrade2_old.mexe $(UPGRADETESTDIR)/upgrade2_new.mini $(UPGRADETESTDIR)/impl2.mini $(UPGRADETESTDIR)/upgrade2.toml
-	$(CARGORUN) compile $(UPGRADETESTDIR)/upgrade2_new.mini -o $(UPGRADETESTDIR)/upgrade2_new.mexe $(COMPILEFLAGSNOINLINE)
-	$(CARGORUN) gen-upgrade-code $(UPGRADETESTDIR)/upgrade2_old.mexe $(UPGRADETESTDIR)/upgrade2_new.mexe $(UPGRADETESTDIR)/bridge2.mini impl2 $(UPGRADETESTDIR)/upgrade2.toml
-	$(CARGORUN) compile $(UPGRADETESTDIR)/upgrade2_new.mini -o $(UPGRADETESTDIR)/upgrade2_new.mexe $(COMPILEFLAGSNOINLINE)
+	$(CARGORUNRELEASE) compile $(UPGRADETESTDIR)/upgrade2_new.mini -o $(UPGRADETESTDIR)/upgrade2_new.mexe $(COMPILEFLAGSNOINLINE)
+	$(CARGORUNRELEASE) gen-upgrade-code $(UPGRADETESTDIR)/upgrade2_old.mexe $(UPGRADETESTDIR)/upgrade2_new.mexe $(UPGRADETESTDIR)/bridge2.mini impl2 $(UPGRADETESTDIR)/upgrade2.toml
+	$(CARGORUNRELEASE) compile $(UPGRADETESTDIR)/upgrade2_new.mini -o $(UPGRADETESTDIR)/upgrade2_new.mexe $(COMPILEFLAGSNOINLINE)
 
 $(ARBOSDIR)/arbos-upgrade.mexe: $(TESTCONTRACTS) $(ARBOSDIR) $(STDDIR) $(BUILTINDIR) $(TEMPLATES) src/compile/miniconstants.rs
 	cp $(ARBOSDIR)/dummy_version_bridge.mini $(ARBOSDIR)/bridge_arbos_versions.mini
-	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe" $(COMPILEFLAGS)
-	$(CARGORUN) gen-upgrade-code $(ARBOSDIR)/arbos_before.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/bridge_arbos_versions.mini customize_arbos_bridge_versions $(ARBOSDIR)/upgrade.toml
-	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe" $(COMPILEFLAGS)
-	$(CARGORUN) gen-upgrade-code $(ARBOSDIR)/arbos_before.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/bridge_arbos_versions.mini customize_arbos_bridge_versions $(ARBOSDIR)/upgrade.toml
-	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe" $(COMPILEFLAGS)
+	$(CARGORUNRELEASE) compile "arb_os" -o "arb_os/arbos-upgrade.mexe" $(COMPILEFLAGS)
+	$(CARGORUNRELEASE) gen-upgrade-code $(ARBOSDIR)/arbos_before.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/bridge_arbos_versions.mini customize_arbos_bridge_versions $(ARBOSDIR)/upgrade.toml
+	$(CARGORUNRELEASE) compile "arb_os" -o "arb_os/arbos-upgrade.mexe" $(COMPILEFLAGS)
+	$(CARGORUNRELEASE) gen-upgrade-code $(ARBOSDIR)/arbos_before.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/bridge_arbos_versions.mini customize_arbos_bridge_versions $(ARBOSDIR)/upgrade.toml
+	$(CARGORUNRELEASE) compile "arb_os" -o "arb_os/arbos-upgrade.mexe" $(COMPILEFLAGS)
 	cp $(ARBOSDIR)/bridge_arbos_versions.mini $(ARBOSDIR)/save_bridge_for_debugging.mini
 	cp $(ARBOSDIR)/dummy_version_bridge.mini $(ARBOSDIR)/bridge_arbos_versions.mini
 
@@ -117,10 +117,10 @@ $(ARBOSDIR)/upgrade.json: $(ARBOSDIR)/arbos-upgrade.mexe
 	cargo run -- serialize-upgrade $(ARBOSDIR)/arbos-upgrade.mexe >$(ARBOSDIR)/upgrade.json
 
 $(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
-	$(CARGORUN) compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe $(COMPILEFLAGS) -t
+	$(CARGORUNRELEASE) compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe $(COMPILEFLAGS) -t
 
 $(ARBOSDIR)/arbos.mexe: $(TESTCONTRACTS) $(ARBOSDIR) $(STDDIR) $(BUILTINDIR) $(TEMPLATES) src/compile/miniconstants.rs
-	$(CARGORUN) compile "arb_os" -o "arb_os/arbos.mexe" $(COMPILEFLAGS)
+	$(CARGORUNRELEASE) compile "arb_os" -o "arb_os/arbos.mexe" $(COMPILEFLAGS)
 
 $(TESTCONTRACTSPURE): $(TCSRCDIR)
 	(cd contracts; yarn build)
