@@ -113,8 +113,8 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
             .map_err(|_| GenCodeError::new("Failed to write use statement".to_string()))?;
     }
     writeln!(code).map_err(|_| GenCodeError::new("Failed to write empty line".to_string()))?;
-    expand_things(&mut code, in_recursers, in_tree);
-    expand_things(&mut code, out_recursers, out_tree);
+    write_subtypes(&mut code, in_recursers, in_tree)?;
+    write_subtypes(&mut code, out_recursers, out_tree)?;
     writeln!(code).map_err(|_| GenCodeError::new("Failed to write empty line".to_string()))?;
     writeln!(
         code,
@@ -199,36 +199,41 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
     Ok(())
 }
 
-fn expand_things(code: &mut File, mut recursers: HashSet<Type>, type_tree: TypeTree) -> () {
-    let mut total_recursers = recursers.clone();
-    while !recursers.is_empty() {
-        let mut new_recursers = HashSet::new();
-        let mut vec_recursers = recursers.iter().collect::<Vec<_>>();
-        vec_recursers.sort_by(|lower, higher| {
+fn write_subtypes(
+    code: &mut File,
+    mut subtypes: HashSet<Type>,
+    type_tree: TypeTree,
+) -> Result<(), GenCodeError> {
+    let mut total_subtypes = subtypes.clone();
+    while !subtypes.is_empty() {
+        let mut new_subtypes = HashSet::new();
+        let mut vec_subtypes = subtypes.iter().collect::<Vec<_>>();
+        vec_subtypes.sort_by(|lower, higher| {
             lower
                 .display_separator("_")
                 .0
                 .cmp(&higher.display_separator("_").0)
         });
-        for thing in vec_recursers {
-            writeln!(code, "type {} = {}", thing.display_separator("_").0, {
-                if let Type::Nominal(a, b) = thing.clone() {
+        for subtype in vec_subtypes {
+            writeln!(code, "type {} = {}", subtype.display_separator("_").0, {
+                if let Type::Nominal(a, b) = subtype.clone() {
                     let (displayed, subtypes) =
                         type_tree.get(&(a, b)).unwrap().display_separator("_");
-                    new_recursers.extend(subtypes);
+                    new_subtypes.extend(subtypes);
                     displayed
                 } else {
-                    unimplemented!()
+                    return Err(GenCodeError::new(format!(
+                        "Encountered non nominal type in subtypes list: \"{}\"",
+                        subtype.display()
+                    )));
                 }
             })
             .unwrap();
         }
-        recursers = new_recursers
-            .difference(&total_recursers)
-            .cloned()
-            .collect();
-        total_recursers.extend(new_recursers);
+        subtypes = new_subtypes.difference(&total_subtypes).cloned().collect();
+        total_subtypes.extend(new_subtypes);
     }
+    Ok(())
 }
 
 fn get_globals_and_version_from_file(
