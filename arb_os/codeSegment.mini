@@ -69,28 +69,15 @@ use evmOps::evmOp_timestamp;
 use evmOps::evmOp_create;
 use evmOps::evmOp_create2;
 
+use std::avmcodebuilder::AvmCodePoint;
+use std::avmcodebuilder::pushInstruction;
+use std::avmcodebuilder::pushInstructionImm;
+use std::avmcodebuilder::pushValue;
 
-// An AVM CodePoint, that is, a place that AVM code can jump to, is represented as a func()
-type AvmCodePoint = impure func()
 
-impure func pushInstruction(opcode: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
-    // Push an instruction onto the beginning of a code segment, and return the resulting CodePoint.
-    return asm(opcode, restOfCode) AvmCodePoint { pushinsn };
-}
-
-impure func pushInstructionImm(opcode: uint, val: any, restOfCode: AvmCodePoint) -> AvmCodePoint {
-    // Push an instruction (with immediate value) onto the beginning of a code segment, and return the resulting CodePoint.
-    return asm(opcode, val, restOfCode) AvmCodePoint { pushinsnimm };
-}
-
-impure func pushValue(val: any, restOfCode: AvmCodePoint) -> AvmCodePoint {
-    // Push a noop (with immediate value) onto the beginning of a code segment, and return the resulting CodePoint.
-    return asm(const::AVM_nop, val, restOfCode) AvmCodePoint { pushinsnimm };
-}
-
-public impure func pcTableForCode(code: ByteArray) -> option<Stack> {
-    let (code, _, pcTable) = translateEvmCodeSegment(bytestream_new(code), true)?;
-    return Some(stack_push(pcTable, (0, code)));
+public impure func pcTableForCode(code: ByteArray) -> Stack {
+    let (code, _, pcTable) = translateEvmCodeSegment(bytestream_new(code), true);
+    return stack_push(pcTable, (0, code));
 }
 
 type EvmInstruction = struct {
@@ -116,11 +103,11 @@ func evmInstructionStack_pop(s: EvmInstructionStack) -> option<(EvmInstructionSt
 
 var unreachableMask: uint;
 
-impure func parseEvmCodeSegment(bs: ByteStream) -> option<EvmInstructionStack> {
+impure func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
     let stack = evmInstructionStack_new();
     let evmPc = 0;
     let reachable = true;
-    loop {
+    return xloop {
         if let Some(res) = bytestream_getByte(bs) {
             let (ubs, opcode) = res;
             bs = ubs;
@@ -162,11 +149,11 @@ impure func parseEvmCodeSegment(bs: ByteStream) -> option<EvmInstructionStack> {
                 }
                 evmPc = evmPc + 1;
             }
-            if ((unreachableMask & asm(opcode, 1) uint { shl }) != 0) {    reachable = false;    }
+            if ((unreachableMask & asm(opcode, 1) uint { shl }) != 0) { reachable = false;    }
         } else {
-            return Some(stack);
+            return stack;
         }
-    }
+    };
 }
 
 public impure func codeSegment_init() {
@@ -208,7 +195,7 @@ impure func generateCodeForEvmSegment(
     let evmJumpTable = newmap<uint, AvmCodePoint>;
     let pcTable = stack_new();
 
-    loop {
+    return xloop {
         if let Some(res) = evmInstructionStack_pop(insns) {
             let invalidInstruction = false;
             let (uinsns, insn) = res;
@@ -292,7 +279,7 @@ impure func generateCodeForEvmSegment(
                                 } elseif (opcode == 0x39) { // CODECOPY
                                     code = pushEvmInsnCall(const::EvmOp_codecopy, code);
                                 } elseif (opcode == 0x3a) { // GASPRICE
-                                    code = pushValue(1, code);
+                                    code = pushEvmInsnCall(const::EvmOp_gasprice, code);
                                 } else {
                                     invalidInstruction = true;
                                 }
@@ -318,10 +305,7 @@ impure func generateCodeForEvmSegment(
                         if (opcode < 0x45) {
                             if (opcode < 0x43) {
                                 if (opcode == 0x40) { // BLOCKHASH
-                                    code = pushInstruction(
-                                        const::AVM_pop,
-                                        pushValue(0, code),
-                                    );
+                                    code = pushEvmInsnCall(const::EvmOp_blockhash, code);
                                 } elseif (opcode == 0x41) { // COINBASE
                                     code = pushValue(0, code);
                                 } elseif (opcode == 0x42) { // TIMESTAMP
@@ -340,7 +324,7 @@ impure func generateCodeForEvmSegment(
                             }
                         } else {
                             if (opcode == 0x45) { // GASLIMIT
-                                code = pushValue(getGasLimitPerTx(), code);
+                                code = pushEvmInsnCall(const::EvmOp_gaslimit, code);
                             } elseif (opcode == 0x46) { // CHAINID
                                 code = pushEvmInsnCall(const::EvmOp_chainId, code);
                             } elseif (opcode == 0x47) { // SELFBALANCE
@@ -424,7 +408,7 @@ impure func generateCodeForEvmSegment(
                 if (opcode < 0xe1) {
                     if (opcode < 0xa0) {
                         if (opcode < 0x90) {
-                            if (opcode == 0x80) {  // DUP1 -- note that DUPn in EVM corresponds to DUP(n-1) in AvmCodePoint
+                            if (opcode == 0x80) {  // DUP1 -- note that DUPn in EVM corresponds to DUP(n-1) in AVM
                                 code = pushInstruction(const::AVM_dup0, code);
                             } elseif (opcode == 0x81) {  // DUP2
                                 code = pushInstruction(const::AVM_dup1, code);
@@ -525,14 +509,14 @@ impure func generateCodeForEvmSegment(
         } else {
             return (code, evmJumpTable, pcTable);
         }
-    }
+    };
 }
 
 public impure func translateEvmCodeSegment(
     bs: ByteStream,
     makePcTable: bool,
-) -> option<(AvmCodePoint, map<uint, AvmCodePoint>, Stack)> {
-    return Some(generateCodeForEvmSegment(parseEvmCodeSegment(bs)?, makePcTable));
+) -> (AvmCodePoint, map<uint, AvmCodePoint>, Stack) {
+    return generateCodeForEvmSegment(parseEvmCodeSegment(bs), makePcTable);
 }
 
 impure func pushEvmInsnDenomCheck(
@@ -579,10 +563,10 @@ impure func pushDupn(
     // Generate code for a dupN pseudo-operation.
     // AVM supports this only for N <= 2, whereas EVM can ask for larger ones.
     // Note that N here uses the AVM semantics, which is off-by-one from the EVM semantics.
-    if (n <= 2) {
-        return pushInstruction(0x40+n, restOfCode);  //dup_n
+    return xif (n <= 2) {
+        pushInstruction(0x40+n, restOfCode)  //dup_n
     } else {
-        return pushInstruction(
+        pushInstruction(
             const::AVM_auxpush,
             pushDupn(
                 n-1,
@@ -594,8 +578,8 @@ impure func pushDupn(
                     )
                 )
             )
-        );
-    }
+        )
+    };
 }
 
 impure func pushSwapn(
@@ -604,10 +588,10 @@ impure func pushSwapn(
 ) -> AvmCodePoint {
     // Generate code for a swapN pseudo-operation.
     // AVM supports this only for N <= 2, whereas EVM can ask for larger ones.
-    if (n == 2) {
-        return pushInstruction(const::AVM_swap2, restOfCode);
+    return xif (n == 2) {
+        pushInstruction(const::AVM_swap2, restOfCode)
     } else {
-        return pushInstruction(
+        pushInstruction(
             const::AVM_swap1,
             pushInstruction(
                 const::AVM_auxpush,
@@ -622,8 +606,8 @@ impure func pushSwapn(
                     )
                 )
             )
-        );
-    }
+        )
+    };
 }
 
 impure func pushEvmInsnCall(evmOpNum: uint, code: AvmCodePoint) -> AvmCodePoint {
@@ -654,157 +638,4 @@ func isKnownOpcode(opcode: uint) -> bool {  // return true iff opcode is a known
         || ( (opcode >= 0xf0) && (opcode <= 0xf5) )
         || (opcode == 0xfa)
         || ( (opcode == 0xfd) && (opcode <= 0xff) );
-}
-
-type AvmCodeBuilder = struct {
-    requireSafe: bool,
-    code: AvmCodePoint,
-    size: uint,
-    codeMap: map<uint, AvmCodePoint>,
-}
-
-public impure func avmCodeBuilder_new(requireSafe: bool) -> AvmCodeBuilder {
-    let code = asm() AvmCodePoint { errcodept };
-    return struct {
-        requireSafe: requireSafe,
-        code: code,
-        size: 1,
-        codeMap: newmap<uint, AvmCodePoint> with { [0] = code },
-    };
-}
-
-public impure func avmCodeBuilder_append(builder: AvmCodeBuilder, stream: ByteStream) -> option<AvmCodeBuilder> {
-    let requireSafe = builder.requireSafe;
-    let code = builder.code;
-    let size = builder.size;
-    let codeMap = builder.codeMap;
-
-    while( ! bytestream_atEof(stream) ) {
-        let (ustr, insn) = bytestream_getByte(stream)?;
-        if ( requireSafe && !isSafeInstruction(insn) ) {
-            return None;
-        }
-        stream = ustr;
-        let (ustr, hasImm) = bytestream_getByte(stream)?;
-        stream = ustr;
-        if (hasImm == 0) {
-            code = pushInstruction(insn, code);
-        } else {
-            let (ustr, val) = unmarshalValue(stream, codeMap)?;
-            stream = ustr;
-            code = pushInstructionImm(insn, val, code);
-        }
-        codeMap = codeMap with { [size] = code };
-        size = size+1;
-    }
-
-    return Some(struct {
-        requireSafe: requireSafe,
-        code: code,
-        size: size,
-        codeMap: codeMap,
-    });
-}
-
-public func avmCodeBuilder_finish(builder: AvmCodeBuilder) -> AvmCodePoint {
-    return builder.code;
-}
-
-func isSafeInstruction(insn: uint) -> bool {
-    return (insn != const::AVM_rset)
-        && (insn != const::AVM_errset)
-        && ((insn < 0x60) || (insn > 0x7f));   // various unsafe instructions
-}
-
-func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> option<(ByteStream, any)> {
-    let (ustr, kind) = bytestream_getByte(stream)?;
-    stream = ustr;
-    if (kind == 0) {  // integer
-        let (ustr, val) = rlp_decodeUint(stream)?;
-        return Some((ustr, val));
-    } elseif (kind == 1) { // codepoint
-        let (ustr, idx) = rlp_decodeUint(stream)?;
-        if let Some(codePt) = codeMap[idx] {
-            return Some((ustr, codePt));
-        } else {
-            return None;
-        }
-    } elseif (kind == 10) {   // 0-tuple
-        return Some((stream, ()));
-    } elseif (kind == 11) {   // 1-tuple
-        let (ustr, x) = unmarshalValue(stream, codeMap)?;
-        return Some((ustr, (x,)));
-    } elseif (kind == 12) {   // 2-tuple
-        let val = unsafecast<[2]any>((0,0));
-        let i = 0;
-        while (i < 2) {
-            let (ustr, x) = unmarshalValue(stream, codeMap)?;
-            stream = ustr;
-            val = val with { [i] = x };
-            i = i+1;
-        }
-        return Some((stream, val));
-    } elseif (kind == 13) {   // 3-tuple
-        let val = unsafecast<[3]any>((0,0,0));
-        let i = 0;
-        while (i < 3) {
-            let (ustr, x) = unmarshalValue(stream, codeMap)?;
-            stream = ustr;
-            val = val with { [i] = x };
-            i = i+1;
-        }
-        return Some((stream, val));
-    } elseif (kind == 14) {   // 4-tuple
-        let val = unsafecast<[4]any>((0,0,0,0));
-        let i = 0;
-        while (i < 4) {
-            let (ustr, x) = unmarshalValue(stream, codeMap)?;
-            stream = ustr;
-            val = val with { [i] = x };
-            i = i+1;
-        }
-        return Some((stream, val));
-    } elseif (kind == 15) {   // 5-tuple
-        let val = unsafecast<[5]any>((0,0,0,0,0));
-        let i = 0;
-        while (i < 5) {
-            let (ustr, x) = unmarshalValue(stream, codeMap)?;
-            stream = ustr;
-            val = val with { [i] = x };
-            i = i+1;
-        }
-        return Some((stream, val));
-    } elseif (kind == 16) {   // 6-tuple
-        let val = unsafecast<[6]any>((0,0,0,0,0,0));
-        let i = 0;
-        while (i < 6) {
-            let (ustr, x) = unmarshalValue(stream, codeMap)?;
-            stream = ustr;
-            val = val with { [i] = x };
-            i = i+1;
-        }
-        return Some((stream, val));
-    } elseif (kind == 17) {   // 7-tuple
-        let val = unsafecast<[7]any>((0,0,0,0,0,0,0));
-        let i = 0;
-        while (i < 7) {
-            let (ustr, x) = unmarshalValue(stream, codeMap)?;
-            stream = ustr;
-            val = val with { [i] = x };
-            i = i+1;
-        }
-        return Some((stream, val));
-    } elseif (kind == 18) {   // 8-tuple
-        let val = unsafecast<[8]any>((0,0,0,0,0,0,0,0));
-        let i = 0;
-        while (i < 8) {
-            let (ustr, x) = unmarshalValue(stream, codeMap)?;
-            stream = ustr;
-            val = val with { [i] = x };
-            i = i+1;
-        }
-        return Some((stream, val));
-    } else {
-        return None;
-    }
 }

@@ -36,48 +36,58 @@ use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
+use std::bytearray::bytearray_toSizeAndBuffer;
+use std::bytearray::bytearray_fromSizeAndBuffer;
 
 use std::sha256::sha256_byteArray;
 use std::ripemd160::ripemd160_byteArray;
 
 use arbsys::arbsys_txcall;
 use arbowner::arbowner_txcall;
+use arbgasinfo::arbgasinfo_txcall;
 use arbosTest::arbosTest_txcall;
 use arbsys::arbAddressTable_txcall;
 use arbsys::arbBLS_txcall;
 use arbsys::arbFunctionTable_txcall;
+use arbaggregator::arbaggregator_txcall;
+use arbretryable::arbretryable_txcall;
+use arbstatistics::arbStatistics_txcall;
 
 
-public impure func precompiles_init(acctStore: AccountStore) -> option<AccountStore> {
+public impure func precompiles_init(acctStore: AccountStore, isUpgrade: bool) -> option<AccountStore> {
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x01),
         makeTrampoline(precompile_0x01),
         false,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x02),
         makeTrampoline(precompile_0x02),
         false,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x03),
         makeTrampoline(precompile_0x03),
         false,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x04),
         makeTrampoline(precompile_0x04),
         false,
+        isUpgrade,
     )?;
 
     installPluggable(
         const::PluggableModuleID_precompile_0x05,
         unsafecast<ModuleFunction>(precompile_0x05_pluggable),
-        false,
+        isUpgrade,
     )?;
     acctStore = accountStore_set(
         acctStore,
@@ -94,54 +104,105 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
         address(0x06),
         makeTrampoline(precompile_0x06),
         false,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x07),
         makeTrampoline(precompile_0x07),
         false,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x08),
         makeTrampoline(precompile_0x08),
         false,
+        isUpgrade,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(0x09),
+        makeTrampoline(precompile_0x09),
+        false,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbSys),
         makeTrampoline(arbsys_txcall),
         true,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbosTest),
         makeTrampoline(arbosTest_txcall),
         true,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbAddressTable),
         makeTrampoline(arbAddressTable_txcall),
         true,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbBLS),
         makeTrampoline(arbBLS_txcall),
         true,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbFunctionTable),
         makeTrampoline(arbFunctionTable_txcall),
         true,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbOwner),
         makeTrampoline(arbowner_txcall),
         true,
+        isUpgrade,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(const::Address_ArbGasInfo),
+        makeTrampoline(arbgasinfo_txcall),
+        true,
+        isUpgrade,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(const::Address_ArbAggregator),
+        makeTrampoline(arbaggregator_txcall),
+        true,
+        isUpgrade,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(const::Address_ArbRetryableTx),
+        makeTrampoline(arbretryable_txcall),
+        true,
+        isUpgrade,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(const::Address_ArbStatistics),
+        makeTrampoline(arbStatistics_txcall),
+        true,
+        isUpgrade,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(const::Address_ReservedForEthBridge),
+        makeTrampoline(revertPrecompile),
+        true,
+        isUpgrade,
     )?;
     return Some(acctStore);
 }
@@ -288,13 +349,14 @@ func precompile_0x05_pluggable(
     let exp = bytearray_extract(calldata, 96+baseLen, expLen);
     let mod = bytearray_extract(calldata, 96+baseLen+expLen, modLen);
 
-    if let Some(result) = biguint_modexp(
+    return xif let Some(result) = biguint_modexp(
         biguint_fromBytes(base),
         biguint_fromBytes(exp),
         biguint_fromBytes(mod),
     ) {
         let mem = biguint_toBytes(result);
         let memSize = bytearray_size(mem);
+
         if (memSize > modLen) {
             mem = bytearray_extract(mem, memSize-modLen, modLen);
         } elseif (memSize < modLen) {
@@ -306,10 +368,10 @@ func precompile_0x05_pluggable(
                 memSize
             );
         }
-        return ((true, mem), ());
+        ((true, mem), ())
     } else {
-        return ((true, bytearray_extract(bytearray_new(0), 0, modLen)), ());
-    }
+        ((true, bytearray_extract(bytearray_new(0), 0, modLen)), ())
+    };
 }
 
 public impure func precompile_0x06() {  // ecadd
@@ -380,7 +442,6 @@ public impure func precompile_0x08() { // ecpairing
             let offset = 0;
             while (numPts > 0) {
                 acc = (
-                    acc,
                     (
                         bytearray_get256(calldata, offset),
                         bytearray_get256(calldata, offset+32),
@@ -389,6 +450,7 @@ public impure func precompile_0x08() { // ecpairing
                         bytearray_get256(calldata, offset+5*32),
                         bytearray_get256(calldata, offset+4*32)
                     ),
+                    acc,
                 );
                 offset = offset + 6*32;
                 numPts = numPts - 1;
@@ -408,5 +470,39 @@ public impure func precompile_0x08() { // ecpairing
         }
     }
 
+    evmOp_revert_knownPc(0, 0, 0);
+}
+
+public impure func precompile_0x09() { // Blake2
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        if (bytearray_size(calldata) != 213) {
+            evmOp_revert_knownPc(0, 0, 0);
+        }
+
+        let numRounds = asm(256-32, bytearray_get256(calldata, 0)) uint { shr };
+        if (numRounds > 0xffff) {
+            evmOp_revert_knownPc(1, 0, 0);
+        }
+
+        let (_, inputBuf) = bytearray_toSizeAndBuffer(calldata);
+
+        if (getbuffer8(inputBuf, 212) > 1) {   // last byte of input must be 0 or 1
+            evmOp_revert_knownPc(2, 0, 0);
+        }
+
+        let outputBuf = asm(inputBuf,) buffer { blake2f };
+        let mem = bytearray_fromSizeAndBuffer(64, outputBuf);
+        if (evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_return(0, 64);
+        } else {
+            evmOp_revert_knownPc(3, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownPc(4, 0, 0);
+    }
+}
+
+public impure func revertPrecompile() {
     evmOp_revert_knownPc(0, 0, 0);
 }

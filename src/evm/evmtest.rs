@@ -3,7 +3,7 @@
  */
 
 use crate::evm::abi::ArbosTest;
-use crate::run::{load_from_file, Machine, RuntimeEnvironment};
+use crate::run::{load_from_file_and_env, Machine, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 use std::io;
@@ -198,7 +198,7 @@ fn start_test(blocknum: Uint256, timestamp: Uint256) -> (Machine, ArbosTest) {
         None,
         None,
     );
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
     let arbos_test = ArbosTest::new(false);
@@ -230,7 +230,10 @@ fn do_call(
                 machine
                     .runtime_env
                     .recorder
-                    .to_file(Path::new(&this_log_path))
+                    .to_file(
+                        Path::new(&this_log_path),
+                        machine.get_total_gas_usage().to_u64().unwrap(),
+                    )
                     .unwrap();
             }
 

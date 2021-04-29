@@ -35,8 +35,8 @@ public func sha256hasher_pushByte(h: Sha256Hasher, b: uint) -> Sha256Hasher {
     let newBuffer = h.buf with {
         [word] = h.buf[word] ^ asm(248-8*(h.offset % 32), b&0xff) uint { shl }
     };
-    if (h.offset >= 63) {
-        return h with {
+    return xif (h.offset >= 63) {
+        h with {
             accumulator: asm(h.accumulator, newBuffer[0], newBuffer[1]) bytes32 { sha256f }
         } with {
             buf: unsafecast<[2]uint>((0,0))
@@ -44,30 +44,30 @@ public func sha256hasher_pushByte(h: Sha256Hasher, b: uint) -> Sha256Hasher {
             offset: 0
         } with {
             totalSizeBits: 8 + h.totalSizeBits
-        };
+        }
     } else {
-        return h with {
+        h with {
             buf: newBuffer
         } with {
             offset: h.offset+1
         } with {
             totalSizeBits: 8 + h.totalSizeBits
-        };
-    }
+        }
+    };
 }
 
 public func sha256hasher_push256(h: Sha256Hasher, val: uint) -> Sha256Hasher {
     let offset = h.offset;
-    if (offset == 0) {
-        return h with {
+    return xif (offset == 0) {
+        h with {
             buf: h.buf with { [0] = val }
         } with {
             offset: 32
         } with {
             totalSizeBits: 256+h.totalSizeBits
-        };
+        }
     } elseif (offset == 32) {
-        return h with {
+        h with {
             accumulator: asm(h.accumulator, h.buf[0], val) bytes32 { sha256f }
         } with {
             buf: unsafecast<[2]uint>((0,0))
@@ -75,9 +75,9 @@ public func sha256hasher_push256(h: Sha256Hasher, val: uint) -> Sha256Hasher {
             offset: 0
         } with {
             totalSizeBits: 256+h.totalSizeBits
-        };
+        }
     } elseif (offset < 32) {
-        return h with {
+        h with {
             buf: h.buf with {
                 [0] = h.buf[0] | asm(8*offset, val) uint { shr }
             } with {
@@ -87,10 +87,10 @@ public func sha256hasher_push256(h: Sha256Hasher, val: uint) -> Sha256Hasher {
             offset: 32+offset
         } with {
             totalSizeBits: 256+h.totalSizeBits
-        };
+        }
     } else {
         offset = offset-32;
-        return h with {
+        h with {
             accumulator: asm(
                 h.accumulator,
                 h.buf[0],
@@ -105,8 +105,8 @@ public func sha256hasher_push256(h: Sha256Hasher, val: uint) -> Sha256Hasher {
             offset: offset
         } with {
             totalSizeBits: 256+h.totalSizeBits
-        };
-    }
+        }
+    };
 }
 
 public func sha256hasher_finish(h: Sha256Hasher) -> bytes32 {

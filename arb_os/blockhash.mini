@@ -1,0 +1,42 @@
+//
+// Copyright 2021, Offchain Labs, Inc. All rights reserved.
+//
+
+var blockhashes: struct {
+    latestBlockNum: uint,
+    oldHashes: [256]bytes32,
+};
+
+public impure func blockhash_init() {
+    blockhashes = struct {
+        latestBlockNum: 0,
+        oldHashes: newfixedarray(256, bytes32(0)),
+    };
+}
+
+public impure func blockhash_getForBlock(blockNum: uint) -> option<bytes32> {
+    return xif (blockNum > blockhashes.latestBlockNum) {
+        None<bytes32>
+    } elseif (blockNum < blockhashes.latestBlockNum-255) {
+        None<bytes32>
+    } else {
+        Some(blockhashes.oldHashes[blockNum % 256])
+    };
+}
+
+public impure func blockhash_submitHash(arbBlockNum: uint, ethBlockNum: uint, inboxAccumHash: bytes32) {
+    let b = xif(ethBlockNum+255 > blockhashes.latestBlockNum) {
+        blockhashes.latestBlockNum - 255
+    } else {
+        ethBlockNum
+    };
+    while (b <= ethBlockNum) {
+        blockhashes = blockhashes with {
+            oldHashes: blockhashes.oldHashes with { [b % 256] = hash(bytes32(b), inboxAccumHash) }
+        };
+        b = b + 1;
+    }
+    blockhashes = blockhashes with {
+        latestBlockNum: ethBlockNum
+    };
+}

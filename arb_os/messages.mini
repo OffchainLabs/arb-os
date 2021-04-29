@@ -31,15 +31,14 @@ use evmCallStack::initEvmCallStackForConstructor;
 use evmCallStack::evmCallStack_runningCodeFromAccount;
 
 use gasAccounting::GasUsage;
+use gasAccounting::TxFeeStats;
 
 use output::emitTxReceipt;
 
-use tokens::tokens_erc20deposit;
-use tokens::tokens_erc721deposit;
+use retrybuffer::RetryableTx;
 
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
-use std::bytearray::bytearray_marshalFull;
 use std::bytearray::bytearray_extract;
 
 use std::bytestream::bytestream_new;
@@ -56,76 +55,6 @@ use inbox::IncomingRequest;
 
 use gasAccounting::GasUsage;
 
-
-public impure func handleL1Request(
-    msg: IncomingRequest
-) -> option<()> {   // return None if error; otherwise return Some(()) or do a tx and never return from here
-    // Parse an incoming message and do appropriate computations
-    let inStream = bytestream_new(msg.msgData);
-
-    if (msg.kind == const::L1MessageType_ethDeposit) {
-        // ethdeposit message
-        let (bs, destination) = bytestream_get256(inStream)?;
-        inStream = bs;
-
-        let (bs, amount) = bytestream_get256(inStream)?;
-        inStream = bs;
-
-        let globalAS = getGlobalAccountStore();
-        let destAccount = accountStore_get(globalAS, address(destination));
-        destAccount = account_addToEthBalance(destAccount, amount);
-        setGlobalAccountStore(
-            accountStore_set(
-                globalAS,
-                address(destination),
-                destAccount
-            )
-        );
-        return Some(());
-    } elseif (msg.kind == const::L1MessageType_erc20Deposit) {
-        // ERC20 deposit message
-        let (bs, tokenAddress) = bytestream_get256(inStream)?;
-        inStream = bs;
-
-        let (bs, payeeAddress) = bytestream_get256(inStream)?;
-        inStream = bs;
-
-        let (bs, amount) = bytestream_get256(inStream)?;
-        inStream = bs;
-
-        tokens_erc20deposit(
-            address(tokenAddress),
-            address(payeeAddress),
-            amount,
-            msg
-        )?;  // should never return
-
-        return None;
-    } elseif (msg.kind == const::L1MessageType_erc721Deposit) {
-         // ERC721 deposit message
-         let (bs, tokenAddress) = bytestream_get256(inStream)?;
-         inStream = bs;
-
-         let (bs, payeeAddress) = bytestream_get256(inStream)?;
-         inStream = bs;
-
-         let (bs, id) = bytestream_get256(inStream)?;
-         inStream = bs;
-
-         tokens_erc721deposit(
-             address(tokenAddress),
-             address(payeeAddress),
-             id,
-             msg
-         )?;  // should never return
-
-         return None;
-    } else {
-        // not a valid message type
-        // (This should not have been called if msg.kind == const::L1MessageType_L2.)
-        return None;
-    }
-}
 
 impure func verifyAndIncrSequenceNum(addr: address, seqNum: uint) -> option<()> {
     // Verify the sequence number on a message.
@@ -167,11 +96,14 @@ type TxRequestData = struct {
     seqNum: option<uint>,
     caller: address,
     calleeAddr: address,
+    gasPayer: address,
     value: uint,
     calldata: ByteArray,
     nonMutating: bool,
     isConstructor: bool,
     incomingRequest: IncomingRequest,
+    feeStats: TxFeeStats,
+    fromRetryable: option<RetryableTx>,
 }
 
 public impure func handleL2Request(
@@ -188,7 +120,8 @@ public impure func handleL2Request(
                 const::TxResultCode_badSequenceNum,
                 None<ByteArray>,
                 None<EvmLogs>,
-                None<GasUsage>
+                None<GasUsage>,
+                request.feeStats,
             );
             return Some(());
         }
@@ -203,38 +136,40 @@ public impure func handleL2Request(
                 const::TxResultCode_revert,
                 None<ByteArray>,
                 None<EvmLogs>,
-                None<GasUsage>
-                );
+                None<GasUsage>,
+                request.feeStats,
+            );
             return Some(());
         }
 
         let codeBytes = request.calldata;
         request = request with { calldata: bytearray_new(0) };
-        let (codept, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(codeBytes), false)?;
 
         if (request.seqNum == None<uint>) {
             request = request with { seqNum: Some(fetchAndIncrSequenceNum(request.caller)) };
         }
-        if (request.incomingRequest.kind == const::L1MessageType_buddyDeploy) {
-            // it's a buddy contract deployment; hardwire the new contract address
-            request = request with { calleeAddr: request.caller };
-        } else {
-            // ordinary contract deploy; use the standard formula to calculate new contract address
-            request = request with {
-                calleeAddr: address(keccakOfRlpEncodedUintPair(uint(request.caller), request.seqNum?))
-            };
-        }
+
+        request = request with {
+            calleeAddr: address(keccakOfRlpEncodedUintPair(uint(request.caller), request.seqNum?))
+        };
 
         if (account_hasContract(accountStore_get(getGlobalAccountStore(), request.calleeAddr))) {
             // there's already an account at that address, revert the call
-            emitTxReceipt(request.incomingRequest, 7, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            // should never happen -- this is just defensive code
+            emitTxReceipt(
+                request.incomingRequest,
+                const::TxResultCode_cannotDeployAtAddress,
+                None<ByteArray>,
+                None<EvmLogs>,
+                None<GasUsage>,
+                request.feeStats,
+            );
             return Some(());
         } else {
             initEvmCallStackForConstructor(
                 codeBytes,
-                evmJumpTable,
-                codept,
-                request
+                request,
+                true,
             );  // should never return
         }
     } else {
@@ -244,12 +179,8 @@ public impure func handleL2Request(
             callKind = const::EVMCallType_staticcall;
         }
 
-        initEvmCallStack(
-            callKind,
-            request,
-            None<(uint, address, ByteArray)>,
-        );  // should never return
+        initEvmCallStack(callKind, request, None<ByteArray>, true);  // should never return
     }
 
-    panic;   // this should never be reached
+    return panic;   // this should never be reached
 }

@@ -5,6 +5,8 @@
 //!Contains types and utilities for constructing the mini AST
 
 use super::typecheck::{new_type_error, TypeError};
+use crate::compile::ast::TypeMismatch::FuncArgLength;
+use crate::compile::typecheck::{AbstractSyntaxTree, PropertiesList, TypeCheckedNode};
 use crate::link::{value_from_field_list, TUPLE_SIZE};
 use crate::mavm::{Instruction, Value};
 use crate::pos::Location;
@@ -12,6 +14,8 @@ use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::fmt;
+use std::fmt::Formatter;
 
 ///This is a map of the types at a given location, with the Vec<String> representing the module path
 ///and the usize representing the stringID of the type at that location.
@@ -55,7 +59,7 @@ impl From<Option<Location>> for DebugInfo {
 #[derive(Debug, Clone)]
 pub enum TopLevelDecl {
     TypeDecl(TypeDecl),
-    FuncDecl(FuncDecl),
+    FuncDecl(Func),
     VarDecl(GlobalVarDecl),
     UseDecl(Vec<String>, String),
 }
@@ -88,10 +92,42 @@ pub enum Type {
     Nominal(Vec<String>, StringId),
     Func(bool, Vec<Type>, Box<Type>),
     Map(Box<Type>, Box<Type>),
-    Imported(StringId),
     Any,
     Every,
     Option(Box<Type>),
+}
+
+impl AbstractSyntaxTree for Type {
+    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
+        match self {
+            Type::Void
+            | Type::Uint
+            | Type::Int
+            | Type::Bool
+            | Type::Bytes32
+            | Type::EthAddress
+            | Type::Buffer
+            | Type::Any
+            | Type::Every
+            | Type::Nominal(_, _) => vec![],
+            Type::Tuple(types) => types.iter_mut().map(|t| TypeCheckedNode::Type(t)).collect(),
+            Type::Array(tipe) | Type::FixedArray(tipe, _) | Type::Option(tipe) => {
+                vec![TypeCheckedNode::Type(tipe)]
+            }
+            Type::Struct(fields) => fields
+                .iter_mut()
+                .map(|field| TypeCheckedNode::Type(&mut field.tipe))
+                .collect(),
+            Type::Func(_, args, ret) => vec![TypeCheckedNode::Type(ret)]
+                .into_iter()
+                .chain(args.iter_mut().map(|t| TypeCheckedNode::Type(t)))
+                .collect(),
+            Type::Map(key, value) => vec![TypeCheckedNode::Type(key), TypeCheckedNode::Type(value)],
+        }
+    }
+    fn is_pure(&mut self) -> bool {
+        true
+    }
 }
 
 impl Type {
@@ -139,7 +175,7 @@ impl Type {
             return true;
         }
         match self {
-            Type::Any => true,
+            Type::Any => *rhs != Type::Void,
             Type::Void
             | Type::Uint
             | Type::Int
@@ -147,7 +183,6 @@ impl Type {
             | Type::Bytes32
             | Type::EthAddress
             | Type::Buffer
-            | Type::Imported(_)
             | Type::Every => (self == rhs),
             Type::Tuple(tvec) => {
                 if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
@@ -193,9 +228,10 @@ impl Type {
             }
             Type::Func(is_impure, args, ret) => {
                 if let Type::Func(is_impure2, args2, ret2) = rhs {
+                    //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
                     (*is_impure || !is_impure2)
-                        && arg_vectors_assignable(args, args2, type_tree, seen.clone())
-                        && (ret2.assignable(ret, type_tree, seen)) // note: rets in reverse order
+                        && arg_vectors_assignable(args2, args, type_tree, seen.clone())
+                        && (ret.assignable(ret2, type_tree, seen))
                 } else {
                     false
                 }
@@ -220,6 +256,196 @@ impl Type {
                 }
             }
         }
+    }
+
+    pub fn first_mismatch(
+        &self,
+        rhs: &Self,
+        type_tree: &TypeTree,
+        mut seen: HashSet<(Type, Type)>,
+    ) -> Option<TypeMismatch> {
+        if *rhs == Type::Every {
+            return None;
+        }
+        match self {
+            Type::Any => {
+                if *rhs != Type::Void {
+                    None
+                } else {
+                    Some(TypeMismatch::Type(Type::Any, Type::Void))
+                }
+            }
+            Type::Void
+            | Type::Uint
+            | Type::Int
+            | Type::Bool
+            | Type::Bytes32
+            | Type::EthAddress
+            | Type::Buffer
+            | Type::Every => {
+                if self == rhs {
+                    None
+                } else {
+                    Some(TypeMismatch::Type(self.clone(), rhs.clone()))
+                }
+            }
+            Type::Tuple(tvec) => {
+                if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
+                    for (index, (left, right)) in tvec.iter().zip(tvec2.iter()).enumerate() {
+                        if let Some(inner) = left.first_mismatch(right, type_tree, seen.clone()) {
+                            return Some(TypeMismatch::Tuple(index, Box::new(inner)));
+                        }
+                    }
+                    if tvec.len() != tvec2.len() {
+                        return Some(TypeMismatch::TupleLength(tvec.len(), tvec2.len()));
+                    }
+                    None
+                } else {
+                    Some(TypeMismatch::Type(self.clone(), rhs.clone()))
+                }
+            }
+            Type::Array(t) => {
+                if let Ok(Type::Array(t2)) = rhs.get_representation(type_tree) {
+                    t.first_mismatch(&t2, type_tree, seen)
+                        .map(|mismatch| TypeMismatch::ArrayMismatch(Box::new(mismatch)))
+                } else {
+                    Some(TypeMismatch::Type(self.clone(), rhs.clone()))
+                }
+            }
+            Type::FixedArray(t, s) => {
+                if let Ok(Type::FixedArray(t2, s2)) = rhs.get_representation(type_tree) {
+                    if let Some(inner) = t.first_mismatch(&t2, type_tree, seen) {
+                        Some(TypeMismatch::ArrayMismatch(Box::new(inner)))
+                    } else if *s != s2 {
+                        Some(TypeMismatch::ArrayLength(*s, s2))
+                    } else {
+                        None
+                    }
+                } else {
+                    Some(TypeMismatch::Type(self.clone(), rhs.clone()))
+                }
+            }
+            Type::Struct(fields) => {
+                if let Ok(Type::Struct(fields2)) = rhs.get_representation(type_tree) {
+                    field_vectors_mismatch(fields, &fields2, type_tree, seen)
+                } else {
+                    Some(TypeMismatch::Type(self.clone(), rhs.clone()))
+                }
+            }
+            Type::Nominal(_, _) => {
+                match (
+                    self.get_representation(type_tree),
+                    rhs.get_representation(type_tree),
+                ) {
+                    (Ok(left), Ok(right)) => {
+                        if seen.insert((self.clone(), rhs.clone())) {
+                            left.first_mismatch(&right, type_tree, seen)
+                        } else {
+                            None
+                        }
+                    }
+                    (Ok(_), Err(_)) => Some(TypeMismatch::UnresolvedRight(self.clone())),
+                    (Err(_), Ok(_)) => Some(TypeMismatch::UnresolvedLeft(rhs.clone())),
+                    (Err(_), Err(_)) => {
+                        Some(TypeMismatch::UnresolvedBoth(self.clone(), rhs.clone()))
+                    }
+                }
+            }
+            Type::Func(is_impure, args, ret) => {
+                if let Type::Func(is_impure2, args2, ret2) = rhs {
+                    for (index, (left, right)) in args.iter().zip(args2.iter()).enumerate() {
+                        if let Some(inner) = left.first_mismatch(right, type_tree, seen.clone()) {
+                            return Some(TypeMismatch::FuncArg(index, Box::new(inner)));
+                        }
+                    }
+                    if args.len() != args2.len() {
+                        return Some(FuncArgLength(args.len(), args2.len()));
+                    }
+                    if let Some(inner) = ret.first_mismatch(ret2, type_tree, seen) {
+                        return Some(TypeMismatch::FuncReturn(Box::new(inner)));
+                    }
+                    if !is_impure && *is_impure2 {
+                        return Some(TypeMismatch::Purity);
+                    }
+                    None
+                } else {
+                    Some(TypeMismatch::Type(self.clone(), rhs.clone()))
+                }
+            }
+            Type::Map(key1, val1) => {
+                if let Type::Map(key2, val2) = rhs {
+                    if let Ok(val2) = val2.get_representation(type_tree) {
+                        key1.first_mismatch(key2, type_tree, seen.clone())
+                            .map(|mismatch| (true, mismatch))
+                            .or_else(|| {
+                                val1.first_mismatch(&val2, type_tree, seen)
+                                    .map(|mismatch| (false, mismatch))
+                            })
+                            .map(|(is_key, mismatch)| TypeMismatch::Map {
+                                is_key,
+                                inner: Box::new(mismatch),
+                            })
+                    } else {
+                        Some(TypeMismatch::Type(self.clone(), rhs.clone()))
+                    }
+                } else {
+                    Some(TypeMismatch::Type(self.clone(), rhs.clone()))
+                }
+            }
+            Type::Option(inner) => {
+                if let Ok(Type::Option(inner2)) = rhs.get_representation(type_tree) {
+                    inner
+                        .first_mismatch(&inner2, type_tree, seen)
+                        .map(|mismatch| TypeMismatch::Option(Box::new(mismatch)))
+                } else {
+                    Some(TypeMismatch::Type(self.clone(), rhs.clone()))
+                }
+            }
+        }
+    }
+
+    pub fn mismatch_string(&self, rhs: &Type, type_tree: &TypeTree) -> Option<String> {
+        let (left, right) = (
+            &self.get_representation(type_tree).ok()?,
+            &rhs.get_representation(type_tree).ok()?,
+        );
+        self.first_mismatch(rhs, type_tree, HashSet::new())
+            .map(|mismatch| {
+                format!(
+                    "{}{}",
+                    {
+                        //This will be a lot simpler to write in 1.53 when or-patterns syntax stabilizes
+                        match left {
+                            Type::Any
+                            | Type::Void
+                            | Type::Uint
+                            | Type::Int
+                            | Type::Bool
+                            | Type::Bytes32
+                            | Type::EthAddress
+                            | Type::Buffer
+                            | Type::Every => String::new(),
+                            _ => match right {
+                                Type::Any
+                                | Type::Void
+                                | Type::Uint
+                                | Type::Int
+                                | Type::Bool
+                                | Type::Bytes32
+                                | Type::EthAddress
+                                | Type::Buffer
+                                | Type::Every => String::new(),
+                                _ => format!(
+                                    "\nleft: {}\nright {}\nFirst mismatch: ",
+                                    left.display(),
+                                    right.display()
+                                ),
+                            },
+                        }
+                    },
+                    mismatch
+                )
+            })
     }
 
     ///Returns a tuple containing `Type`s default value and a `bool` representing whether use of
@@ -273,9 +499,7 @@ impl Type {
                 }
                 (value_from_field_list(vals), is_safe)
             }
-            Type::Map(_, _) | Type::Func(_, _, _) | Type::Imported(_) | Type::Nominal(_, _) => {
-                (Value::none(), false)
-            }
+            Type::Map(_, _) | Type::Func(_, _, _) | Type::Nominal(_, _) => (Value::none(), false),
             Type::Any => (Value::none(), true),
             Type::Every => (Value::none(), false),
             Type::Option(_) => (Value::new_tuple(vec![Value::Int(Uint256::zero())]), true),
@@ -283,6 +507,10 @@ impl Type {
     }
 
     pub fn display(&self) -> String {
+        self.display_indented(0)
+    }
+
+    fn display_indented(&self, indent_level: usize) -> String {
         match self {
             Type::Void => "void".to_string(),
             Type::Uint => "uint".to_string(),
@@ -295,18 +523,28 @@ impl Type {
                 let mut out = "(".to_string();
                 for s in subtypes {
                     //This should be improved by removing the final trailing comma.
-                    out.push_str(&(s.display() + ", "));
+                    out.push_str(&(s.display_indented(indent_level) + ", "));
                 }
                 out.push(')');
                 out
             }
-            Type::Array(t) => format!("[]{}", t.display()),
-            Type::FixedArray(t, size) => format!("[{}]{}", size, t.display()),
+            Type::Array(t) => format!("[]{}", t.display_indented(indent_level)),
+            Type::FixedArray(t, size) => format!("[{}]{}", size, t.display_indented(indent_level)),
             Type::Struct(fields) => {
                 let mut out = "struct {\n".to_string();
+                for _ in 0..indent_level {
+                    out.push_str("    ");
+                }
                 for field in fields {
                     //This should indent further when dealing with sub-structs
-                    out.push_str(&format!("    {}: {},\n", field.name, field.tipe.display()));
+                    out.push_str(&format!(
+                        "    {}: {},\n",
+                        field.name,
+                        field.tipe.display_indented(indent_level + 1)
+                    ));
+                    for _ in 0..indent_level {
+                        out.push_str("    ");
+                    }
                 }
                 out.push('}');
                 out
@@ -326,22 +564,25 @@ impl Type {
                 }
                 out.push_str("func(");
                 for arg in args {
-                    out.push_str(&(arg.display() + ", "));
+                    out.push_str(&(arg.display_indented(indent_level) + ", "));
                 }
                 out.push(')');
                 if **ret != Type::Void {
                     out.push_str(" -> ");
-                    out.push_str(&ret.display());
+                    out.push_str(&ret.display_indented(indent_level));
                 }
                 out
             }
             Type::Map(key, val) => {
-                format!("map<{},{}>", key.display(), val.display())
+                format!(
+                    "map<{},{}>",
+                    key.display_indented(indent_level),
+                    val.display_indented(indent_level)
+                )
             }
-            Type::Imported(id) => format!("imported({})", id),
             Type::Any => "any".to_string(),
             Type::Every => "every".to_string(),
-            Type::Option(t) => format!("option<{}>", t.display()),
+            Type::Option(t) => format!("option<{}>", t.display_indented(indent_level)),
         }
     }
 }
@@ -375,19 +616,38 @@ pub fn arg_vectors_assignable(
             .all(|(t1, t2)| t1.assignable(t2, type_tree, seen.clone()))
 }
 
+pub fn field_vectors_mismatch(
+    tvec1: &[StructField],
+    tvec2: &[StructField],
+    type_tree: &TypeTree,
+    seen: HashSet<(Type, Type)>,
+) -> Option<TypeMismatch> {
+    for (t1, t2) in tvec1.iter().zip(tvec2.iter()) {
+        if let Some(mismatch) = t1.tipe.first_mismatch(&t2.tipe, type_tree, seen.clone()) {
+            return Some(TypeMismatch::FieldType(t1.name.clone(), Box::new(mismatch)));
+        }
+        if t1.name != t2.name {
+            return Some(TypeMismatch::FieldName(t1.name.clone(), t2.name.clone()));
+        }
+    }
+    if tvec1.len() != tvec2.len() {
+        return Some(TypeMismatch::Length(tvec1.len(), tvec2.len()));
+    }
+    None
+}
+
 ///Identical to `type_vectors_assignable` but using StructField slices as inputs and comparing their
 /// inner types.
-pub fn field_vectors_assignable(
+fn field_vectors_assignable(
     tvec1: &[StructField],
     tvec2: &[StructField],
     type_tree: &TypeTree,
     seen: HashSet<(Type, Type)>,
 ) -> bool {
     tvec1.len() == tvec2.len()
-        && tvec1
-            .iter()
-            .zip(tvec2)
-            .all(|(t1, t2)| t1.tipe.assignable(&t2.tipe, type_tree, seen.clone()))
+        && tvec1.iter().zip(tvec2).all(|(t1, t2)| {
+            t1.tipe.assignable(&t2.tipe, type_tree, seen.clone()) && t1.name == t2.name
+        })
 }
 
 impl PartialEq for Type {
@@ -410,7 +670,6 @@ impl PartialEq for Type {
             (Type::Func(i1, a1, r1), Type::Func(i2, a2, r2)) => {
                 (i1 == i2) && type_vectors_equal(&a1, &a2) && (*r1 == *r2)
             }
-            (Type::Imported(n1), Type::Imported(n2)) => (n1 == n2),
             (Type::Nominal(p1, id1), Type::Nominal(p2, id2)) => (p1, id1) == (p2, id2),
             (Type::Option(x), Type::Option(y)) => *x == *y,
             (_, _) => false,
@@ -426,6 +685,87 @@ fn type_vectors_equal(v1: &[Type], v2: &[Type]) -> bool {
 ///Returns true if the contents of the slices are equal
 fn struct_field_vectors_equal(f1: &[StructField], f2: &[StructField]) -> bool {
     f1 == f2
+}
+
+#[derive(Debug)]
+pub enum TypeMismatch {
+    Type(Type, Type),
+    FieldName(String, String),
+    FieldType(String, Box<TypeMismatch>),
+    UnresolvedRight(Type),
+    UnresolvedLeft(Type),
+    UnresolvedBoth(Type, Type),
+    Length(usize, usize),
+    ArrayMismatch(Box<TypeMismatch>),
+    ArrayLength(usize, usize),
+    Tuple(usize, Box<TypeMismatch>),
+    TupleLength(usize, usize),
+    FuncArg(usize, Box<TypeMismatch>),
+    FuncArgLength(usize, usize),
+    FuncReturn(Box<TypeMismatch>),
+    Map {
+        is_key: bool,
+        inner: Box<TypeMismatch>,
+    },
+    Option(Box<TypeMismatch>),
+    Purity,
+}
+
+impl fmt::Display for TypeMismatch {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                TypeMismatch::Type(left, right) =>
+                    format!("expected {} got {}", left.display(), right.display()),
+                TypeMismatch::FieldType(name, problem) =>
+                    format!("in field \"{}\": {}", name, problem),
+                TypeMismatch::FieldName(left, right) =>
+                    format!("expected field name \"{}\", got \"{}\"", left, right),
+                TypeMismatch::UnresolvedRight(tipe) =>
+                    format!("could not resolve right-hand type \"{}\"", tipe.display()),
+                TypeMismatch::UnresolvedLeft(tipe) =>
+                    format!("could not resolve left-hand type \"{}\"", tipe.display()),
+                TypeMismatch::UnresolvedBoth(left, right) => format!(
+                    "could not resolve both right hand type \"{}\" and left hand type\"{}\"",
+                    left.display(),
+                    right.display()
+                ),
+                TypeMismatch::Length(left, right) => format!(
+                    "structs of different lengths: expected length {} got length {}",
+                    left, right
+                ),
+                TypeMismatch::ArrayLength(left, right) => format!(
+                    "arrays of different lengths: expected length {} got length {}",
+                    left, right
+                ),
+                TypeMismatch::ArrayMismatch(mismatch) =>
+                    format!("inner array type mismatch {}", mismatch),
+                TypeMismatch::Tuple(index, mismatch) =>
+                    format!("in tuple field {}: {}", index + 1, mismatch),
+                TypeMismatch::TupleLength(left, right) => format!(
+                    "tuples of different lengths: expected length {} got length {}",
+                    left, right
+                ),
+                TypeMismatch::FuncArg(index, mismatch) =>
+                    format!("in function argument {}: {}", index + 1, mismatch),
+                TypeMismatch::FuncArgLength(left, right) => format!(
+                    "left func has {} args but right func has {} args",
+                    left, right
+                ),
+                TypeMismatch::FuncReturn(mismatch) =>
+                    format!("in function return type: {}", mismatch),
+                TypeMismatch::Map { is_key, inner } => format!(
+                    "in map {}: {}",
+                    if *is_key { "key" } else { "value" },
+                    inner
+                ),
+                TypeMismatch::Option(mismatch) => format!("in inner option type: {}", mismatch),
+                TypeMismatch::Purity => format!("assigning impure function to pure function"),
+            }
+        )
+    }
 }
 
 ///Field of a struct, contains field name and underlying type.
@@ -460,47 +800,19 @@ pub fn new_func_arg(name: StringId, tipe: Type, debug_info: DebugInfo) -> FuncAr
 ///Represents a declaration of a global mini variable.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GlobalVarDecl {
-    pub name: StringId,
+    pub name_id: StringId,
+    pub name: String,
     pub tipe: Type,
     pub location: Option<Location>,
 }
 
 impl GlobalVarDecl {
-    pub fn new(name: StringId, tipe: Type, location: Option<Location>) -> Self {
+    pub fn new(name_id: StringId, name: String, tipe: Type, location: Option<Location>) -> Self {
         GlobalVarDecl {
+            name_id,
             name,
             tipe,
             location,
-        }
-    }
-}
-
-///Represents an import of a mini function from another source file or external location.
-/// is_impure, arg_types, and ret_type are assumed to correspond to the associated elements of tipe,
-/// this must be upheld by users of this type.
-#[derive(Debug, Clone)]
-pub struct ImportFuncDecl {
-    pub name: StringId,
-    pub is_impure: bool,
-    pub arg_types: Vec<Type>,
-    pub ret_type: Type,
-    pub tipe: Type,
-}
-
-impl ImportFuncDecl {
-    ///Identical to new but takes a `Vec` of `Type` instead of a `Vec` of `FuncArg`
-    pub fn new_types(
-        name: StringId,
-        is_impure: bool,
-        arg_types: Vec<Type>,
-        ret_type: Type,
-    ) -> Self {
-        ImportFuncDecl {
-            name,
-            is_impure,
-            arg_types: arg_types.clone(),
-            ret_type: ret_type.clone(),
-            tipe: Type::Func(is_impure, arg_types, Box::new(ret_type)),
         }
     }
 }
@@ -515,18 +827,18 @@ pub enum FuncDeclKind {
 ///Represents a top level function declaration.  The is_impure, args, and ret_type fields are
 /// assumed to be derived from tipe, and this must be upheld by the user of this type.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct FuncDecl {
+pub struct Func<T = Statement> {
     pub name: StringId,
-    pub is_impure: bool,
     pub args: Vec<FuncArg>,
     pub ret_type: Type,
-    pub code: Vec<Statement>,
+    pub code: Vec<T>,
     pub tipe: Type,
     pub kind: FuncDeclKind,
-    pub location: Option<Location>,
+    pub debug_info: DebugInfo,
+    pub properties: PropertiesList,
 }
 
-impl FuncDecl {
+impl Func {
     pub fn new(
         name: StringId,
         is_impure: bool,
@@ -541,9 +853,8 @@ impl FuncDecl {
         for arg in args.iter() {
             arg_types.push(arg.tipe.clone());
         }
-        FuncDecl {
+        Func {
             name,
-            is_impure,
             args: args_vec,
             ret_type: ret_type.clone(),
             code,
@@ -553,7 +864,8 @@ impl FuncDecl {
             } else {
                 FuncDeclKind::Private
             },
-            location,
+            debug_info: DebugInfo::from(location),
+            properties: PropertiesList { pure: !is_impure },
         }
     }
 }
@@ -569,34 +881,43 @@ pub struct Statement {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum StatementKind {
     Noop(),
-    Panic(),
     ReturnVoid(),
     Return(Expr),
     Break(Option<Expr>, Option<String>),
     Expression(Expr),
     Let(MatchPattern, Expr),
     Assign(StringId, Expr),
-    Loop(Vec<Statement>),
     While(Expr, Vec<Statement>),
-    If(IfArm),
-    IfLet(StringId, Expr, Vec<Statement>, Option<Vec<Statement>>),
     Asm(Vec<Instruction>, Vec<Expr>),
     DebugPrint(Expr),
 }
 
-///Either a single identifier or a tuple of identifiers, used in mini let bindings.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum MatchPattern {
-    Simple(StringId),
-    Tuple(Vec<MatchPattern>),
+pub struct MatchPattern<T = ()> {
+    pub(crate) kind: MatchPatternKind<MatchPattern<T>>,
+    pub(crate) cached: T,
 }
 
-///Represents an arm of an If-Else chain, is Cond(condition, block, possible_else, location) if it
-/// contains a condition, and Catchall(block, location) if it is an else block.
+///Either a single identifier or a tuple of identifiers, used in mini let bindings.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum IfArm {
-    Cond(Expr, Vec<Statement>, Option<Box<IfArm>>, DebugInfo),
-    Catchall(Vec<Statement>, DebugInfo),
+pub enum MatchPatternKind<T> {
+    Simple(StringId),
+    Tuple(Vec<T>),
+}
+
+impl<T> MatchPattern<T> {
+    pub fn new_simple(id: StringId, cached: T) -> Self {
+        Self {
+            kind: MatchPatternKind::Simple(id),
+            cached,
+        }
+    }
+    pub fn new_tuple(id: Vec<MatchPattern<T>>, cached: T) -> Self {
+        Self {
+            kind: MatchPatternKind::Tuple(id),
+            cached,
+        }
+    }
 }
 
 ///Represents a constant mini value of type Option<T> for some type T.
@@ -685,7 +1006,7 @@ pub enum ExprKind {
     Constant(Constant),
     OptionInitializer(Box<Expr>),
     FunctionCall(Box<Expr>, Vec<Expr>),
-    CodeBlock(Vec<Statement>, Option<Box<Expr>>),
+    CodeBlock(CodeBlock),
     ArrayOrMapRef(Box<Expr>, Box<Expr>),
     StructInitializer(Vec<FieldInitializer>),
     Tuple(Vec<Expr>),
@@ -696,7 +1017,11 @@ pub enum ExprKind {
     StructMod(Box<Expr>, String, Box<Expr>),
     UnsafeCast(Box<Expr>, Type),
     Asm(Type, Vec<Instruction>, Vec<Expr>),
+    Panic,
     Try(Box<Expr>),
+    If(Box<Expr>, CodeBlock, Option<CodeBlock>),
+    IfLet(StringId, Box<Expr>, CodeBlock, Option<CodeBlock>),
+    Loop(Vec<Statement>),
     NewBuffer,
 }
 
@@ -782,13 +1107,25 @@ pub enum TrinaryOp {
 
 ///Used in StructInitializer expressions to map expressions to fields of the struct.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct FieldInitializer {
+pub struct FieldInitializer<T = Expr> {
     pub name: String,
-    pub value: Expr,
+    pub value: T,
 }
 
-impl FieldInitializer {
-    pub fn new(name: String, value: Expr) -> Self {
+impl<T> FieldInitializer<T> {
+    pub fn new(name: String, value: T) -> Self {
         FieldInitializer { name, value }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CodeBlock {
+    pub body: Vec<Statement>,
+    pub ret_expr: Option<Box<Expr>>,
+}
+
+impl CodeBlock {
+    pub fn new(body: Vec<Statement>, ret_expr: Option<Box<Expr>>) -> Self {
+        Self { body, ret_expr }
     }
 }

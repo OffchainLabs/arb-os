@@ -1,0 +1,14 @@
+
+use bridge2::GlobalsBeforeUpgrade;
+
+public func set_newGlobal1_onUpgrade(input: GlobalsBeforeUpgrade) -> option<int> {
+    return input.global2;
+}
+
+public func set_newGlobal2_onUpgrade(input: GlobalsBeforeUpgrade) -> uint {
+    return input.global1;
+}
+
+public func set_newGlobal3_onUpgrade(input: GlobalsBeforeUpgrade) -> (uint, uint) {
+    return (17, 39);
+}

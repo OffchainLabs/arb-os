@@ -2,22 +2,30 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
+use crate::evm::test_contract_path;
 use crate::mavm::Value;
-use crate::run::{ArbosReceipt, Machine};
+use crate::run::{load_from_file, ArbosReceipt, Machine};
 use crate::uint256::Uint256;
 use ethers_core::utils::keccak256;
 use ethers_signers::Signer;
 use ethers_signers::Wallet;
 use std::{fs::File, io::Read, path::Path};
 
+pub fn contract_path(folder: &str, contract_name: &str) -> String {
+    format!("{}/{}.sol/{}.json", folder, contract_name, contract_name)
+}
+
 pub fn builtin_contract_path(contract_name: &str) -> String {
-    format!("contracts/arbos/build/contracts/{}.json", contract_name)
+    format!(
+        "contracts/artifacts/arbos/builtin/{}.sol/{}.json",
+        contract_name, contract_name
+    )
 }
 
 #[derive(Debug, Clone)]
 pub struct AbiForContract {
-    code_bytes: Vec<u8>,
-    contract: ethabi::Contract,
+    pub code_bytes: Vec<u8>,
+    pub contract: ethabi::Contract,
     pub address: Uint256,
     name: String,
 }
@@ -25,58 +33,34 @@ pub struct AbiForContract {
 impl AbiForContract {
     pub fn new_from_file(filename: &str) -> Result<Self, ethabi::Error> {
         let path = Path::new(filename);
-        let mut file = match File::open(path) {
-            Ok(f) => f,
-            Err(e) => {
-                return Err(ethabi::Error::from(e.to_string()));
-            }
-        };
+        let mut file = File::open(path).map_err(|e| ethabi::Error::from(e.to_string()))?;
         let mut s = String::new();
-        s = match file.read_to_string(&mut s) {
-            Err(why) => {
-                return Err(ethabi::Error::from(why.to_string()));
-            }
-            Ok(_) => s,
-        };
+        file.read_to_string(&mut s)
+            .map_err(|e| ethabi::Error::from(e.to_string()))?;
 
-        let parse_result: Result<serde_json::Value, serde_json::Error> = serde_json::from_str(&s);
-        let json_from_file = match parse_result {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(ethabi::Error::from(e.to_string()));
-            }
-        };
+        let json_from_file = serde_json::from_str::<serde_json::Value>(&s)
+            .map_err(|e| ethabi::Error::from(e.to_string()))?;
 
         if let serde_json::Value::Object(fields) = json_from_file {
-            let json_abi = match fields.get("abi") {
-                Some(val) => val,
-                None => {
-                    return Err(ethabi::Error::from("no abi key in json"));
-                }
-            };
+            let json_abi = fields
+                .get("abi")
+                .ok_or_else(|| ethabi::Error::from("no abi key in json"))?;
 
-            let contract: ethabi::Contract = match serde_json::from_value(json_abi.clone()) {
-                Ok(c) => c,
-                Err(e) => {
-                    return Err(ethabi::Error::from(e.to_string()));
-                }
-            };
+            let contract: ethabi::Contract = serde_json::from_value(json_abi.clone())
+                .map_err(|e| ethabi::Error::from(e.to_string()))?;
 
-            let name = match &fields.get("contractName") {
-                Some(serde_json::Value::String(s)) => s,
-                _ => {
-                    return Err(ethabi::Error::from("no name key in json"));
-                }
-            };
+            let name = fields
+                .get("contractName")
+                .ok_or_else(|| ethabi::Error::from("no name key in json"))?;
 
-            let decoded_insns = match &fields.get("bytecode") {
-                Some(val) => {
-                    let code_str = val.as_str().unwrap().to_string();
-                    hex::decode(&code_str[2..]).unwrap()
-                }
-                None => {
-                    return Err(ethabi::Error::from("no code key in json"));
-                }
+            let decoded_insns = {
+                let code_str = fields
+                    .get("bytecode")
+                    .ok_or_else(|| ethabi::Error::from("no code key in json"))?
+                    .as_str()
+                    .unwrap()
+                    .to_string();
+                hex::decode(&code_str[2..]).unwrap()
             };
 
             Ok(AbiForContract {
@@ -96,11 +80,9 @@ impl AbiForContract {
         machine: &mut Machine,
         payment: Uint256,
         advance_time: Option<Uint256>,
-        address_for_buddy: Option<Uint256>,
         debug: bool,
     ) -> Result<Uint256, Option<ArbosReceipt>> {
         let initial_logs_len = machine.runtime_env.get_all_receipt_logs().len();
-        let initial_sends_len = machine.runtime_env.get_all_sends().len();
         let augmented_code = if let Some(constructor) = self.contract.constructor() {
             match constructor.encode_input(self.code_bytes.clone(), args) {
                 Ok(aug_code) => aug_code,
@@ -112,31 +94,15 @@ impl AbiForContract {
             self.code_bytes.clone()
         };
 
-        let (request_id, sender_addr) = if let Some(buddy_addr) = address_for_buddy.clone() {
-            (
-                machine.runtime_env.insert_buddy_deploy_message(
-                    buddy_addr.clone(),
-                    Uint256::from_usize(1_000_000_000_000),
-                    Uint256::zero(),
-                    payment,
-                    &augmented_code,
-                ),
-                buddy_addr,
-            )
-        } else {
-            (
-                machine.runtime_env.insert_tx_message(
-                    Uint256::from_u64(1025),
-                    Uint256::from_usize(1_000_000_000_000),
-                    Uint256::zero(),
-                    Uint256::zero(),
-                    payment,
-                    &augmented_code,
-                    false,
-                ),
-                Uint256::from_u64(1025),
-            )
-        };
+        let request_id = machine.runtime_env.insert_tx_message(
+            Uint256::from_u64(1025),
+            Uint256::from_usize(1_000_000_000),
+            Uint256::zero(),
+            Uint256::zero(),
+            payment,
+            &augmented_code,
+            false,
+        );
 
         if let Some(delta_blocks) = advance_time {
             machine
@@ -159,34 +125,12 @@ impl AbiForContract {
             return Err(None);
         }
 
-        if address_for_buddy.is_some() {
-            let sends = machine.runtime_env.get_all_sends();
-            if sends.len() != initial_sends_len + 1 {
-                println!(
-                    "deploy: expected 1 new send, got {}",
-                    sends.len() - initial_sends_len
-                );
-                return Err(None);
-            }
-            if let Value::Tuple(tup) = &sends[sends.len() - 1] {
-                if (tup[0] != Value::Int(Uint256::from_usize(5)))
-                    || (tup[1] != Value::Int(sender_addr))
-                {
-                    println!("deploy: incorrect values in send item");
-                    return Err(None);
-                }
-            } else {
-                println!("malformed send item");
-                return Err(None);
-            }
-        }
-
         let log_item = &logs[logs.len() - 1];
         if !log_item.succeeded() {
             return Err(Some(log_item.clone()));
         }
         if let Value::Tuple(tup2) = log_item.get_request() {
-            assert_eq!(tup2[4], Value::Int(request_id));
+            assert_eq!(tup2[5], Value::Int(request_id));
         } else {
             println!("Malformed ArbOS log item");
             return Err(None);
@@ -224,13 +168,83 @@ impl AbiForContract {
         machine: &mut Machine,
         payment: Uint256,
         debug: bool,
-    ) -> Result<(Vec<ArbosReceipt>, Vec<Value>), ethabi::Error> {
+    ) -> Result<(Vec<ArbosReceipt>, Vec<Vec<u8>>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
         machine.runtime_env.insert_tx_message(
             sender_addr,
-            Uint256::from_usize(1_000_000_000_000),
+            Uint256::from_usize(1_000_000_000),
+            Uint256::zero(),
+            self.address.clone(),
+            payment,
+            &calldata,
+            false,
+        );
+
+        let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
+        let num_sends_before = machine.runtime_env.get_all_sends().len();
+        let _arbgas_used = if debug {
+            machine.debug(None)
+        } else {
+            machine.run(None)
+        };
+        let logs = machine.runtime_env.get_all_receipt_logs();
+        let sends = machine.runtime_env.get_all_sends();
+        Ok((
+            logs[num_logs_before..].to_vec(),
+            sends[num_sends_before..].to_vec(),
+        ))
+    }
+
+    pub fn _send_retryable_tx(
+        &self,
+        sender: Uint256,
+        func_name: &str,
+        args: &[ethabi::Token],
+        machine: &mut Machine,
+        payment: Uint256,
+        max_submission_cost: Uint256,
+        credit_back_address: Option<Uint256>,
+        beneficiary: Option<Uint256>,
+        max_gas_immed: Option<Uint256>,
+        gas_price_immed: Option<Uint256>,
+    ) -> Result<(Uint256, Uint256, Option<Uint256>), ethabi::Error> {
+        let this_function = self.contract.function(func_name)?;
+        let calldata = this_function.encode_input(args).unwrap();
+
+        let (submit_txid, retryable_txid, maybe_redeemid) =
+            machine.runtime_env._insert_retryable_tx_message(
+                sender.clone(),
+                self.address.clone(),
+                payment.clone(),
+                payment,
+                max_submission_cost,
+                credit_back_address.unwrap_or(sender.clone()),
+                beneficiary.unwrap_or(sender),
+                max_gas_immed.unwrap_or(Uint256::zero()),
+                gas_price_immed.unwrap_or(Uint256::zero()),
+                &calldata,
+            );
+
+        Ok((submit_txid, retryable_txid, maybe_redeemid))
+    }
+
+    pub fn _call_function_from_contract(
+        &self,
+        sender_addr: Uint256,
+        func_name: &str,
+        args: &[ethabi::Token],
+        machine: &mut Machine,
+        payment: Uint256,
+        debug: bool,
+    ) -> Result<(Vec<ArbosReceipt>, Vec<Vec<u8>>), ethabi::Error> {
+        let this_function = self.contract.function(func_name)?;
+        let calldata = this_function.encode_input(args).unwrap();
+
+        machine.runtime_env.insert_tx_message_from_contract(
+            sender_addr,
+            Uint256::from_usize(100_000_000),
             Uint256::zero(),
             self.address.clone(),
             payment,
@@ -261,13 +275,13 @@ impl AbiForContract {
         machine: &mut Machine,
         payment: Uint256,
         debug: bool,
-    ) -> Result<(Vec<ArbosReceipt>, Vec<Value>), ethabi::Error> {
+    ) -> Result<(Vec<ArbosReceipt>, Vec<Vec<u8>>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
         machine.runtime_env.insert_tx_message(
             sender_addr,
-            Uint256::from_usize(1_000_000_000_000),
+            Uint256::from_usize(100_000_000),
             Uint256::zero(),
             self.address.clone(),
             payment,
@@ -299,14 +313,14 @@ impl AbiForContract {
         payment: Uint256,
         wallet: &Wallet,
         debug: bool,
-    ) -> Result<(Vec<ArbosReceipt>, Vec<Value>), ethabi::Error> {
+    ) -> Result<(Vec<ArbosReceipt>, Vec<Vec<u8>>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
         let (tx_contents, _tx_id_bytes) =
             machine.runtime_env.make_compressed_and_signed_l2_message(
                 Uint256::zero(),
-                Uint256::from_usize(1_000_000_000_000),
+                Uint256::from_usize(100_000_000),
                 self.address.clone(),
                 payment,
                 &calldata,
@@ -334,7 +348,6 @@ impl AbiForContract {
     pub fn add_function_call_to_batch(
         &self,
         batch: &mut Vec<u8>,
-        sender_addr: Uint256,
         func_name: &str,
         args: &[ethabi::Token],
         machine: &mut Machine,
@@ -344,16 +357,17 @@ impl AbiForContract {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
-        let tx_id_bytes = machine.runtime_env.append_signed_tx_message_to_batch(
-            batch,
-            sender_addr,
-            Uint256::from_usize(1_000_000_000_000),
-            Uint256::zero(),
-            self.address.clone(),
-            payment,
-            calldata,
-            &wallet,
-        );
+        let tx_id_bytes = machine
+            .runtime_env
+            ._append_compressed_and_signed_tx_message_to_batch(
+                batch,
+                Uint256::from_usize(100_000_000),
+                Uint256::zero(),
+                self.address.clone(),
+                payment,
+                calldata,
+                &wallet,
+            );
 
         Ok((Uint256::from_bytes(&tx_id_bytes)))
     }
@@ -374,7 +388,7 @@ impl AbiForContract {
             .runtime_env
             ._append_compressed_and_signed_tx_message_to_batch(
                 batch,
-                Uint256::from_usize(1_000_000_000_000),
+                Uint256::from_usize(100_000_000),
                 Uint256::zero(),
                 self.address.clone(),
                 payment,
@@ -411,6 +425,41 @@ impl AbiForContract {
         );
         Ok(())
     }
+    pub fn new_deployed(
+        machine: &mut Machine,
+        path: &str,
+        args: &[ethabi::Token],
+        payment: Uint256,
+        advance_time: Option<Uint256>,
+        debug: bool,
+    ) -> Result<AbiForContract, ethabi::Error> {
+        match AbiForContract::new_from_file(path) {
+            Ok(mut contract) => {
+                let result = contract.deploy(args, machine, payment, advance_time, debug);
+                if let Ok(contract_addr) = result {
+                    assert_ne!(contract_addr, Uint256::zero());
+                    Ok(contract)
+                } else {
+                    Err(ethabi::Error::from("deploy failed"))
+                }
+            }
+            Err(e) => Err(ethabi::Error::from(format!(
+                "error loading contract: {:?}",
+                e
+            ))),
+        }
+    }
+}
+
+pub fn deploy_add(machine: &mut Machine) -> Result<AbiForContract, ethabi::Error> {
+    AbiForContract::new_deployed(
+        machine,
+        &test_contract_path("Add"),
+        &[],
+        Uint256::zero(),
+        None,
+        false,
+    )
 }
 
 #[test]
@@ -540,35 +589,15 @@ impl<'a> ArbSys<'a> {
             _ => panic!(),
         }
     }
-}
 
-pub struct _ArbInfo {
-    pub contract_abi: AbiForContract,
-    debug: bool,
-}
-
-impl _ArbInfo {
-    pub fn _new(debug: bool) -> Self {
-        let mut contract_abi =
-            AbiForContract::new_from_file(&builtin_contract_path("ArbInfo")).unwrap();
-        contract_abi.bind_interface_to_address(Uint256::from_u64(101));
-        _ArbInfo {
-            contract_abi,
-            debug,
-        }
-    }
-
-    pub fn _get_balance(
-        &self,
-        machine: &mut Machine,
-        addr: &Uint256,
-    ) -> Result<Uint256, ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            Uint256::from_u64(1112),
-            "getBalance",
-            &[ethabi::Token::Address(addr.to_h160())],
+    pub fn is_top_level_call(&self, machine: &mut Machine) -> Result<bool, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function_compressed(
+            self.my_address.clone(),
+            "isTopLevelCall",
+            &[],
             machine,
             Uint256::zero(),
+            self._wallet,
             self.debug,
         )?;
 
@@ -577,14 +606,7 @@ impl _ArbInfo {
         }
 
         if receipts[0].succeeded() {
-            let return_vals = ethabi::decode(
-                &[ethabi::ParamType::Uint(256)],
-                &receipts[0].get_return_data(),
-            )?;
-            match return_vals[0] {
-                ethabi::Token::Uint(ui) => Ok(Uint256::from_u256(&ui)),
-                _ => panic!(),
-            }
+            Ok(receipts[0].get_return_data() == Uint256::zero().to_bytes_be())
         } else {
             Err(ethabi::Error::from("reverted"))
         }
@@ -1017,435 +1039,6 @@ impl<'a> ArbFunctionTable<'a> {
     }
 }
 
-pub struct _ArbOwner<'a> {
-    pub contract_abi: AbiForContract,
-    wallet: &'a Wallet,
-    my_address: Uint256,
-    debug: bool,
-}
-
-impl<'a> _ArbOwner<'a> {
-    pub fn _new(wallet: &'a Wallet, debug: bool) -> Self {
-        let mut contract_abi =
-            AbiForContract::new_from_file(&builtin_contract_path("ArbOwner")).unwrap();
-        contract_abi.bind_interface_to_address(Uint256::from_u64(107));
-        _ArbOwner {
-            contract_abi,
-            wallet,
-            my_address: Uint256::from_bytes(wallet.address().as_bytes()),
-            debug,
-        }
-    }
-
-    pub fn _give_ownership(
-        &self,
-        machine: &mut Machine,
-        new_owner: Uint256,
-        old_owner: Option<Uint256>,
-    ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            old_owner.unwrap_or(self.my_address.clone()),
-            "giveOwnership",
-            &[ethabi::Token::Address(new_owner.to_h160())],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(())
-        } else {
-            Err(ethabi::Error::from("reverted"))
-        }
-    }
-
-    pub fn _add_to_reserve_funds(
-        &self,
-        machine: &mut Machine,
-        amount: Uint256,
-    ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
-            "addToReserveFunds",
-            &[],
-            machine,
-            amount,
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(())
-        } else {
-            Err(ethabi::Error::from("reverted"))
-        }
-    }
-
-    pub fn _get_fee_recipient(&self, machine: &mut Machine) -> Result<Uint256, ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
-            "getFeeRecipient",
-            &[],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if !receipts[0].succeeded() {
-            return Err(ethabi::Error::from("reverted"));
-        }
-
-        let return_vals = ethabi::decode(
-            &[ethabi::ParamType::Address],
-            &receipts[0].get_return_data(),
-        )?;
-
-        match &return_vals[0] {
-            ethabi::Token::Address(addr) => Ok(Uint256::from_bytes(addr.as_bytes())),
-            _ => panic!(),
-        }
-    }
-
-    pub fn _set_fee_recipient(
-        &self,
-        machine: &mut Machine,
-        recipient: Uint256,
-    ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
-            "setFeeRecipient",
-            &[ethabi::Token::Address(recipient.to_h160())],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(())
-        } else {
-            Err(ethabi::Error::from("reverted"))
-        }
-    }
-
-    pub fn _get_fee_rates(
-        &self,
-        machine: &mut Machine,
-    ) -> Result<(Uint256, Uint256, Uint256, Uint256), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
-            "getFeeRates",
-            &[],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if !receipts[0].succeeded() {
-            return Err(ethabi::Error::from("reverted"));
-        }
-
-        let return_vals = ethabi::decode(
-            &[
-                ethabi::ParamType::Uint(256),
-                ethabi::ParamType::Uint(256),
-                ethabi::ParamType::Uint(256),
-                ethabi::ParamType::Uint(256),
-            ],
-            &receipts[0].get_return_data(),
-        )?;
-
-        match (
-            &return_vals[0],
-            &return_vals[1],
-            &return_vals[2],
-            &return_vals[3],
-        ) {
-            (
-                ethabi::Token::Uint(ui0),
-                ethabi::Token::Uint(ui1),
-                ethabi::Token::Uint(ui2),
-                ethabi::Token::Uint(ui3),
-            ) => Ok((
-                Uint256::from_u256(&ui0),
-                Uint256::from_u256(&ui1),
-                Uint256::from_u256(&ui2),
-                Uint256::from_u256(&ui3),
-            )),
-            _ => panic!(),
-        }
-    }
-
-    pub fn _set_fee_rates(
-        &self,
-        machine: &mut Machine,
-        num1: Uint256,
-        denom1: Uint256,
-        num2: Uint256,
-        denom2: Uint256,
-    ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
-            "setFeeRates",
-            &[
-                ethabi::Token::Uint(num1.to_u256()),
-                ethabi::Token::Uint(denom1.to_u256()),
-                ethabi::Token::Uint(num2.to_u256()),
-                ethabi::Token::Uint(denom2.to_u256()),
-            ],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(())
-        } else {
-            Err(ethabi::Error::from("reverted"))
-        }
-    }
-
-    pub fn _change_sequencer(
-        &self,
-        machine: &mut Machine,
-        sequencer_addr: Uint256,
-        delay_blocks: Uint256,
-        delay_seconds: Uint256,
-    ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
-            "changeSequencer",
-            &[
-                ethabi::Token::Address(sequencer_addr.to_h160()),
-                ethabi::Token::Uint(delay_blocks.to_u256()),
-                ethabi::Token::Uint(delay_seconds.to_u256()),
-            ],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(())
-        } else {
-            Err(ethabi::Error::from("reverted"))
-        }
-    }
-
-    pub fn _get_fee_maxes(
-        &self,
-        machine: &mut Machine,
-    ) -> Result<(Uint256, Uint256, Uint256, Uint256), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
-            "getFeeMaxes",
-            &[],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if !receipts[0].succeeded() {
-            return Err(ethabi::Error::from("reverted"));
-        }
-
-        let return_vals = ethabi::decode(
-            &[
-                ethabi::ParamType::Uint(256),
-                ethabi::ParamType::Uint(256),
-                ethabi::ParamType::Uint(256),
-                ethabi::ParamType::Uint(256),
-            ],
-            &receipts[0].get_return_data(),
-        )?;
-
-        match (
-            &return_vals[0],
-            &return_vals[1],
-            &return_vals[2],
-            &return_vals[3],
-        ) {
-            (
-                ethabi::Token::Uint(ui0),
-                ethabi::Token::Uint(ui1),
-                ethabi::Token::Uint(ui2),
-                ethabi::Token::Uint(ui3),
-            ) => Ok((
-                Uint256::from_u256(&ui0),
-                Uint256::from_u256(&ui1),
-                Uint256::from_u256(&ui2),
-                Uint256::from_u256(&ui3),
-            )),
-            _ => panic!(),
-        }
-    }
-
-    pub fn _set_fee_maxes(
-        &self,
-        machine: &mut Machine,
-        num1: Uint256,
-        denom1: Uint256,
-        num2: Uint256,
-        denom2: Uint256,
-    ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
-            "setFeeMaxes",
-            &[
-                ethabi::Token::Uint(num1.to_u256()),
-                ethabi::Token::Uint(denom1.to_u256()),
-                ethabi::Token::Uint(num2.to_u256()),
-                ethabi::Token::Uint(denom2.to_u256()),
-            ],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(())
-        } else {
-            Err(ethabi::Error::from("reverted"))
-        }
-    }
-
-    pub fn _start_code_upload(&self, machine: &mut Machine) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function_compressed(
-            self.my_address.clone(),
-            "startCodeUpload",
-            &[],
-            machine,
-            Uint256::zero(),
-            self.wallet,
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(())
-        } else {
-            Err(ethabi::Error::from("reverted"))
-        }
-    }
-
-    pub fn _continue_code_upload(
-        &self,
-        machine: &mut Machine,
-        marshalled_code: Vec<u8>,
-    ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
-            "continueCodeUpload",
-            &[ethabi::Token::Bytes(marshalled_code)],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(())
-        } else {
-            Err(ethabi::Error::from("reverted"))
-        }
-    }
-
-    pub fn _finish_code_upload_as_arbos_upgrade(
-        &self,
-        machine: &mut Machine,
-    ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
-            "finishCodeUploadAsArbosUpgrade",
-            &[],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Err(ethabi::Error::from(
-                "should have reverted but actually succeeded",
-            ))
-        } else {
-            Ok(())
-        }
-    }
-
-    pub fn _finish_code_upload_as_pluggable(
-        &self,
-        machine: &mut Machine,
-        id: Uint256,
-        keep_state: bool,
-    ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
-            "finishCodeUploadAsPluggable",
-            &[
-                ethabi::Token::Uint(id.to_u256()),
-                ethabi::Token::Bool(keep_state),
-            ],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(())
-        } else {
-            Err(ethabi::Error::from("reverted"))
-        }
-    }
-}
-
 pub struct ArbosTest {
     pub contract_abi: AbiForContract,
     debug: bool,
@@ -1480,6 +1073,8 @@ impl ArbosTest {
             Some(code),
             Some(storage),
         )?;
+        let _ = machine.runtime_env.get_and_incr_seq_num(&Uint256::zero());
+        let _ = machine.runtime_env.get_and_incr_seq_num(&Uint256::zero());
         self.call(machine, Uint256::zero(), addr.clone(), calldata, balance)?;
         self._get_marshalled_storage(machine, addr)
     }
@@ -1533,7 +1128,7 @@ impl ArbosTest {
         );
         let _tx_id = machine.runtime_env.insert_tx_message(
             caller_addr,
-            Uint256::from_usize(1000000000),
+            Uint256::from_usize(1_000_000_000),
             Uint256::zero(),
             callee_addr,
             callvalue,
@@ -1550,18 +1145,18 @@ impl ArbosTest {
         let logs = machine.runtime_env.get_all_receipt_logs();
         let sends = machine.runtime_env.get_all_sends();
 
-        if (logs.len() != num_logs_before + 1) || (sends.len() != num_sends_before) {
+        if (logs.len() != num_logs_before + 2) || (sends.len() != num_sends_before) {
             return Err(ethabi::Error::from("wrong number of receipts or sends"));
         }
-        if !logs[num_logs_before].succeeded() {
+        if !logs[num_logs_before + 1].succeeded() {
             println!(
                 "arbosTest.run revert code {}",
-                logs[num_logs_before].get_return_code()
+                logs[num_logs_before + 1].get_return_code()
             );
             return Err(ethabi::Error::from("reverted"));
         }
 
-        Ok(logs[num_logs_before].get_return_data())
+        Ok(logs[num_logs_before + 1].get_return_data())
     }
 
     pub fn get_account_info(
@@ -1622,6 +1217,77 @@ impl ArbosTest {
             Err(ethabi::Error::from("reverted"))
         }
     }
+}
+
+pub struct _ArbStatistics {
+    pub contract_abi: AbiForContract,
+    debug: bool,
+}
+
+impl _ArbStatistics {
+    pub fn _new(debug: bool) -> Self {
+        let mut contract_abi =
+            AbiForContract::new_from_file(&builtin_contract_path("ArbStatistics")).unwrap();
+        contract_abi.bind_interface_to_address(Uint256::from_u64(111));
+        _ArbStatistics {
+            contract_abi,
+            debug,
+        }
+    }
+
+    pub fn _get_stats(
+        &self,
+        machine: &mut Machine,
+    ) -> Result<(Uint256, Uint256, Uint256, Uint256, Uint256, Uint256), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "getStats",
+            &[],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            println!("{} receipts, {} sends", receipts.len(), sends.len());
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            let retdata = receipts[0].get_return_data();
+            Ok((
+                Uint256::from_bytes(&retdata[0..32]),
+                Uint256::from_bytes(&retdata[32..64]),
+                Uint256::from_bytes(&retdata[64..96]),
+                Uint256::from_bytes(&retdata[96..128]),
+                Uint256::from_bytes(&retdata[128..160]),
+                Uint256::from_bytes(&retdata[160..192]),
+            ))
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+}
+
+#[test]
+fn test_arb_statistics() {
+    assert!(_test_arb_stats().is_ok());
+}
+
+fn _test_arb_stats() -> Result<(), ethabi::Error> {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+
+    let arbstats = _ArbStatistics::_new(false);
+
+    let (arb_blocknum, num_accounts, storage, _arbgas, txs, contracts) =
+        arbstats._get_stats(&mut machine)?;
+
+    assert_eq!(arb_blocknum, Uint256::from_u64(0));
+    assert_eq!(num_accounts, Uint256::from_u64(22));
+    assert_eq!(storage, Uint256::from_u64(0));
+    // assert_eq!(_arbgas, Uint256::from_u64(1_490_972));  // disable this because it will vary over versions
+    assert_eq!(txs, Uint256::from_u64(0));
+    assert_eq!(contracts, Uint256::from_u64(19));
+    Ok(())
 }
 
 struct FunctionTableItem {

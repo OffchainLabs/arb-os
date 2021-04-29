@@ -50,7 +50,7 @@ fn simple_op(op: AVMOpcode) -> Instruction {
 }
 
 fn debug_op(str: String) -> Instruction {
-    Instruction::debug(str)
+    Instruction::debug(str, Opcode::AVMOpcode(AVMOpcode::Noop))
 }
 
 fn immed_op(op: AVMOpcode, v: Value) -> Instruction {
@@ -1747,7 +1747,7 @@ impl JitWasm {
 
         let module = Module::from_binary(&engine, &buffer).unwrap();
 
-        let buf = Buffer::new(vec![]);
+        let buf = Buffer::from_bytes(vec![]);
 
         let memory_cell : Rc<RefCell<std::option::Option<Memory>>> = Rc::new(RefCell::new(None));
         let memory_cell2 = memory_cell.clone();
@@ -1767,13 +1767,13 @@ impl JitWasm {
         let gas1 = gas_cell.clone();
 
         let read_func = Func::wrap(&store, move |offset: i32| {
-            let ret = cell1.borrow().read_byte(offset as usize) as i32;
+            let ret = cell1.borrow().read_byte(offset as u128) as i32;
             ret
         });
 
         let write_func = Func::wrap(&store, move |offset: i32, v: i32| {
             println!("write buffer {} {}", offset, v);
-            cell2.replace_with(|buf| buf.set_byte(offset as usize, v as u8));
+            cell2.replace_with(|buf| buf.set_byte(offset as u128, v as u8));
         });
 
         let rvec_func = Func::wrap(&store, move |ptr: i32, offset: i32, len: i32| {
@@ -1783,7 +1783,7 @@ impl JitWasm {
                 Some(memory) => {
                     let mut tmp = vec![];
                     for i in offset..offset+len {
-                        tmp.push(buf.read_byte(i as usize));
+                        tmp.push(buf.read_byte(i as u128));
                     }
                     println!("{:?}", tmp);
                     memory.write(ptr as usize, &tmp).expect("cannot write memory");
@@ -1802,7 +1802,7 @@ impl JitWasm {
                     cell4.replace_with(|buf| {
                         let mut res = buf.clone();
                         for i in 0..len {
-                            res = res.set_byte((offset+i) as usize, tmp[i as usize]);
+                            res = res.set_byte((offset+i) as u128, tmp[i as usize]);
                         }
                         res
                     });
