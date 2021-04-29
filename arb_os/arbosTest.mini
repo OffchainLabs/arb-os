@@ -96,19 +96,15 @@ impure func arbosTest_installAccount(topFrame: EvmCallFrame, calldata: ByteArray
         let marshalledStorage = bytearray_extract(calldata, storageOffset+32, storageSize);
 
         if let Some(initStorage) = storageMap_deserialize(marshalledStorage) {
-            if let Some(res) = translateEvmCodeSegment(bytestream_new(code), false) {
-                let (startCodePoint, evmJumpTable, pcTable) = res;
-                acct = account_setContractInfo(
-                    acct,
-                    code,
-                    evmJumpTable,
-                    startCodePoint,
-                    initStorage,
-                    false,
-                );
-            } else {
-                evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 12, 0, 0);
-            }
+            let (startCodePoint, evmJumpTable, pcTable) = translateEvmCodeSegment(bytestream_new(code), false);
+            acct = account_setContractInfo(
+                acct,
+                code,
+                evmJumpTable,
+                startCodePoint,
+                initStorage,
+                false,
+            );
         } else {
             evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 12, 0, 0);
         }

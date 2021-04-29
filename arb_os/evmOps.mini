@@ -1024,59 +1024,58 @@ public impure func doCreationOpcode(value: uint, offset: uint, length: uint, new
         offset,
         length
     );
-    if let Some(res) = translateEvmCodeSegment(bytestream_new(constructorCode), false) {
-        let (startPoint, evmJumpTable, _) = res;
 
-        // Create a new account to run the constructor code.
-        if (evmCallStack_setAccount(
-                newAddress,
-                account_setContractInfo(
-                    pristineAccount(newAddress),
-                    constructorCode,
-                    evmJumpTable,
-                    startPoint,
-                    storageMap_new(),
-                    true,
-                )
-            )
-        ) {
-            let constructorSucceeded = evmOp_callAndReturn(
-                1000000000,  // gas allocation
-                newAddress,
-                value,
-                0,           // no calldata passed to constructor
-                0,
-                0,           // don't copy returndata back into caller's memory
-                0,
+    let (startPoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(constructorCode), false);
+
+    // Create a new account to run the constructor code.
+    if (evmCallStack_setAccount(
+            newAddress,
+            account_setContractInfo(
+                pristineAccount(newAddress),
+                constructorCode,
+                evmJumpTable,
+                startPoint,
+                storageMap_new(),
                 true,
-            );
+            )
+        )
+    ) {
+        let constructorSucceeded = evmOp_callAndReturn(
+            1000000000,  // gas allocation
+            newAddress,
+            value,
+            0,           // no calldata passed to constructor
+            0,
+            0,           // don't copy returndata back into caller's memory
+            0,
+            true,
+        );
 
-            if (constructorSucceeded) {
-                if let Some(contractCode) = evmCallStack_getTopFrameReturnData() {
-                    let astore = evmCallStack_getAccountStoreInCurrentContext();
-                    if let Some(res) = accountStore_createOrAddCodeRef(astore, contractCode) {
-                        let (uastore, startPoint2, evmJumpTable2, _) = res;
-                        evmCallStack_setAccountStoreInCurrentContext(uastore);
-                        if let Some(oldAcct) = evmCallStack_getAccount(newAddress) {
-                            let storage = storageMap_new();
-                            if let Some(st) = account_getAllStorage(oldAcct) {
-                                storage = st;
-                            }
-                            if (evmCallStack_setAccount(
-                                    newAddress,
-                                    account_setContractInfo(
-                                        oldAcct,
-                                        contractCode,
-                                        evmJumpTable2,
-                                        startPoint2,
-                                        storage,
-                                        true,
-                                    )
+        if (constructorSucceeded) {
+            if let Some(contractCode) = evmCallStack_getTopFrameReturnData() {
+                let astore = evmCallStack_getAccountStoreInCurrentContext();
+                if let Some(res) = accountStore_createOrAddCodeRef(astore, contractCode) {
+                    let (uastore, startPoint2, evmJumpTable2, _) = res;
+                    evmCallStack_setAccountStoreInCurrentContext(uastore);
+                    if let Some(oldAcct) = evmCallStack_getAccount(newAddress) {
+                        let storage = storageMap_new();
+                        if let Some(st) = account_getAllStorage(oldAcct) {
+                            storage = st;
+                        }
+                        if (evmCallStack_setAccount(
+                                newAddress,
+                                account_setContractInfo(
+                                    oldAcct,
+                                    contractCode,
+                                    evmJumpTable2,
+                                    startPoint2,
+                                    storage,
+                                    true,
                                 )
-                            ) {
-                                evmCallStack_changeNumAccounts(int(1));
-                                return newAddress;
-                            }
+                            )
+                        ) {
+                            evmCallStack_changeNumAccounts(int(1));
+                            return newAddress;
                         }
                     }
                 }

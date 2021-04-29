@@ -617,7 +617,7 @@ public impure func accountStore_createOrAddCodeRef(
             false,
         ))
     } else {
-        let (startCodePoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(code), false)?;
+        let (startCodePoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(code), false);
         Some((
             accountStore_createCodeRef(acctStore, code, evmJumpTable, startCodePoint),
             unsafecast<impure func()>(startCodePoint),
