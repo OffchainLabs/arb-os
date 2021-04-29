@@ -459,18 +459,14 @@ public impure func gasAccounting_startTxCharges(
     gasPrice: uint,
     payer: address,
     acctStore: AccountStore,
-    maybeAltAcctStore: option<AccountStore>,
 ) -> (
     uint,          // const::TxResultCode_success if success, otherwise an error code
     AccountStore,  // acctStore, with payments deducted
-    AccountStore   // altAcctStore if it exists, or a copy of acctStore otherwise, with payments deducted
 ) {
     // Start charging a new Tx for ArbGas usage
     // The caller should already have verified that the payer has enough funds, but we'll return None if not.
 
     let _ = switchToChargingOS();   // call this in case we're somehow still charging a tx; ignore return value
-
-    let altAcctStore = xif let Some(aas) = maybeAltAcctStore { aas } else { acctStore };
 
     let gasForComputation = xif (maxGas < gasAccountingParams.TxGasLimit) {
         maxGas
@@ -484,17 +480,9 @@ public impure func gasAccounting_startTxCharges(
         accountStore_get(acctStore, payer),
         weiToHold
     ) {
-        if let Some(acct2) = account_deductFromEthBalance(
-            accountStore_get(altAcctStore, payer),
-            weiToHold
-        ) {
-            acctStore = accountStore_set(acctStore, payer, acct);
-            altAcctStore = accountStore_set(altAcctStore, payer, acct2);
-        } else {
-            return (const::TxResultCode_noGasFunds, acctStore, altAcctStore);
-        }
+        acctStore = accountStore_set(acctStore, payer, acct);
     } else {
-        return (const::TxResultCode_noGasFunds, acctStore, altAcctStore);
+        return (const::TxResultCode_noGasFunds, acctStore);
     }
 
     let gasUsedByOS = (~0) - asm() uint { getgas };
@@ -517,7 +505,7 @@ public impure func gasAccounting_startTxCharges(
     arbStatistics_addToGasUsed(gasUsedByOS);
 
     asm(gasForComputation,) { setgas };
-    return (const::TxResultCode_success, acctStore, altAcctStore);
+    return (const::TxResultCode_success, acctStore);
 }
 
 public impure func gasAccounting_endTxCharges(
