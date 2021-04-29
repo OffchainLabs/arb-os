@@ -261,11 +261,7 @@ fn get_globals_and_version_from_file(
 
     let type_tree = globals.type_tree.into_type_tree();
 
-    let mut state = (
-        vec![],
-        Rc::new(RefCell::new(HashSet::new())),
-        Rc::new(RefCell::new(HashSet::new())),
-    );
+    let mut state = (vec![], Rc::new(RefCell::new(HashSet::new())));
 
     let mut fields = vec![];
 
@@ -314,8 +310,8 @@ fn get_globals_and_version_from_file(
         (&mut *(*state.1).borrow_mut()).extend(new_types);
     }
     mem::drop(old_state);
-    let real_stuff = Rc::get_mut(&mut state.2).unwrap().clone().into_inner();
-    Ok((fields, real_stuff, type_tree, globals.arbos_version))
+    let subtypes = Rc::get_mut(&mut state.1).unwrap().clone().into_inner();
+    Ok((fields, subtypes, type_tree, globals.arbos_version))
 }
 
 fn type_decl_string(type_name: &String, tipe: &Type) -> String {
@@ -329,24 +325,18 @@ fn let_string(name: &String, expr: &String) -> String {
 fn replace_nominal(
     node: &mut TypeCheckedNode,
     state: &TypeTree,
-    mut_state: &mut (
-        Vec<Type>,
-        Rc<RefCell<HashSet<Type>>>,
-        Rc<RefCell<HashSet<Type>>>,
-    ),
+    mut_state: &mut (Vec<Type>, Rc<RefCell<HashSet<Type>>>),
 ) -> bool {
     match node {
         TypeCheckedNode::Type(tipe) => {
             if mut_state.0.iter().any(|thing| thing == *tipe) {
                 let to_render = &mut *(*mut_state.1).borrow_mut();
                 to_render.insert(tipe.clone());
-                let to_render = &mut *(*mut_state.2).borrow_mut();
-                to_render.insert(tipe.clone());
                 return false;
             }
             if let Type::Nominal(path, id) = tipe {
                 mut_state.0.push(Type::Nominal(path.clone(), *id));
-                let to_render = &mut *(*mut_state.2).borrow_mut();
+                let to_render = &mut *(*mut_state.1).borrow_mut();
                 to_render.insert(Type::Nominal(path.clone(), *id));
                 **tipe = state
                     .get(&(path.clone(), *id))
