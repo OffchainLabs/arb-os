@@ -88,7 +88,7 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
     let (ustr, numPayloadBytes) = bytestream_get64(stream)?;
     stream = ustr;
     return xif (optionId == const::InitOption_setChargingParams) {
-        if (numPayloadBytes != 7*32) {
+        if (numPayloadBytes != 10*32) {
             // unexpected payload size; discard the payload and ignore this option
             return bytestream_skipBytes(stream, numPayloadBytes);
         }
