@@ -3,8 +3,7 @@
  */
 
 use crate::evm::abi::FunctionTable;
-use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest};
-use crate::evm::preinstalled_contracts::_ArbReplayableTx;
+use crate::evm::preinstalled_contracts::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbosTest, ArbSys, _ArbReplayableTx, _preinstalled_contract_address};
 use crate::run::{load_from_file, load_from_file_and_env, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use ethers_signers::Signer;
@@ -490,7 +489,7 @@ pub fn _evm_test_callback(log_to: Option<&Path>, debug: bool) -> Result<(), etha
                 .unwrap()
         )
     );
-    assert_eq!(evmlogs[2].addr, Uint256::from_u64(100)); // log was emitted by ArbSys
+    assert_eq!(evmlogs[2].addr, _preinstalled_contract_address(0)); // log was emitted by ArbSys
     assert_eq!(evmlogs[2].vals[2], Uint256::zero()); // unique ID = 0
     let batch_number = &evmlogs[2].vals[3];
     assert_eq!(batch_number, &Uint256::zero());
@@ -506,7 +505,7 @@ pub fn _evm_test_callback(log_to: Option<&Path>, debug: bool) -> Result<(), etha
                 .unwrap()
         )
     );
-    assert_eq!(evmlogs[6].addr, Uint256::from_u64(100)); // log was emitted by ArbSys
+    assert_eq!(evmlogs[6].addr, _preinstalled_contract_address(0)); // log was emitted by ArbSys
     assert_eq!(evmlogs[6].vals[2], Uint256::one()); // unique ID = 1
     let batch_number = &evmlogs[6].vals[3];
     assert_eq!(batch_number, &Uint256::zero());

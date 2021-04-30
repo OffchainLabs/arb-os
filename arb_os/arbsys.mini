@@ -460,6 +460,7 @@ impure func arbsys_isTopLevelCall(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 70, 0, 0);
     }
+    asm(evmCallStack_stackDepth(),) { debugprint };
     let mem = bytearray_set256(
         bytearray_new(0),
         0,

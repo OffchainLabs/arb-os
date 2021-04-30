@@ -20,20 +20,20 @@ contract Add {
     }
 
     function getSeqNum() public view returns (uint) {
-        uint256 txCount = ArbSys(address(100)).getTransactionCount(msg.sender);
+        uint256 txCount = ArbSys(address(0xa4b0500000000000000000000000000000000000)).getTransactionCount(msg.sender);
         return txCount;
     }
 
     function withdrawMyEth() public payable {
-	ArbSys(address(100)).withdrawEth.value(msg.value)(address(1025));
+	ArbSys(address(0xa4b0500000000000000000000000000000000000)).withdrawEth.value(msg.value)(address(1025));
     }
 
     function withdraw5000() public {
-	ArbSys(address(100)).withdrawEth.value(5000)(address(1025));
+	ArbSys(address(0xa4b0500000000000000000000000000000000000)).withdrawEth.value(5000)(address(1025));
     }
 
     function isTopLevel() public returns (bool) {
-        return ArbSys(address(100)).isTopLevelCall();
+        return ArbSys(address(0xa4b0500000000000000000000000000000000000)).isTopLevelCall();
     }
 
     function isNotTopLevel() public returns (bool) {
