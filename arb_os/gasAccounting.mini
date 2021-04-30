@@ -865,12 +865,6 @@ public impure func getNextRequestFromCongestionAuction() -> (
                     return (const::TxResultCode_insufficientGasForBaseFee, tx);
                 }
 
-                if let Some(gep) = tx.incomingRequest.gasEstimationParams {
-                    if (tx.maxGas > gep.computeGasLimit) {
-                        tx = tx with { maxGas: gep.computeGasLimit };
-                    }
-                }
-
                 // compute the number of ArbGas units corresponding to the aggregator fee, and deduct them from the tx
                 // round up to the nearest integer number of units -- this will burn the wei that would pay
                 //       for a fractional ArbGas unit (rounding down would credit the user with fractional
@@ -900,6 +894,13 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 };
             }
         }
+
+        if let Some(gep) = tx.incomingRequest.gasEstimationParams {
+            if (tx.maxGas > gep.computeGasLimit) {
+                tx = tx with { maxGas: gep.computeGasLimit };
+            }
+        }
+
         xif (tx.incomingRequest.kind == const::L1MessageType_L2ForGasEstimation) {
             let gasPrice = gasAccountingInfo.currentPrices.perArbGasTotal;
             let gasPayerFunds = account_getBalance(accountStore_get(getGlobalAccountStore(), tx.gasPayer));
