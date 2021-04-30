@@ -835,9 +835,6 @@ public impure func getNextRequestFromCongestionAuction() -> (
         };
 
         if let Some(gep) = tx.incomingRequest.gasEstimationParams {
-            if (tx.maxGas > gep.computeGasLimit) {
-                tx = tx with { maxGas: gep.computeGasLimit };
-            }
             if (gep.ignoreInsufficientGasFunds) {
                 tx = tx with {
                     feeStats: tx.feeStats with {
@@ -866,6 +863,12 @@ public impure func getNextRequestFromCongestionAuction() -> (
                     // we took all of the funds to make a partial payment to the aggregator
                     // now fail the tx
                     return (const::TxResultCode_insufficientGasForBaseFee, tx);
+                }
+
+                if let Some(gep) = tx.incomingRequest.gasEstimationParams {
+                    if (tx.maxGas > gep.computeGasLimit) {
+                        tx = tx with { maxGas: gep.computeGasLimit };
+                    }
                 }
 
                 // compute the number of ArbGas units corresponding to the aggregator fee, and deduct them from the tx
