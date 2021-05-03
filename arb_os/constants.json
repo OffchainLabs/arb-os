@@ -1,5 +1,5 @@
 {
-  "arbos_version": 6,
+  "arbos_version": 10,
   "integer": {
     "AVMSendType_batch": 0,
     "AVM_add": 1,
@@ -92,6 +92,7 @@
     "Charging_DefaultL1GasPerL2Tx": 3700,
     "Charging_DefaultL1GasPerStorage": 2000,
     "Charging_GasPoolDepthSeconds": 60,
+    "Charging_MinArbGasForContractTx": 5000,
     "Charging_RetryableTxRepriceIntervalSeconds": 900,
     "DefaultSecondsPerSend": 900,
     "DefaultSpeedLimitPerSecond": 100000000,
@@ -196,6 +197,7 @@
     "TxResultCode_formatError": 6,
     "TxResultCode_insufficientBalance": 4,
     "TxResultCode_insufficientGasForBaseFee": 9,
+    "TxResultCode_belowMinimumTxGas": 10,
     "TxResultCode_noGasFunds": 3,
     "TxResultCode_revert": 1,
     "TxResultCode_success": 0,

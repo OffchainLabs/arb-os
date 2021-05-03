@@ -1,5 +1,5 @@
 //
-// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+// Copyright 2021, Offchain Labs, Inc. All rights reserved.
 //
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
@@ -12,6 +12,7 @@ use accounts::AccountStore;
 use accounts::Account;
 use accounts::AccountContractInfo;
 use accounts::AggregatorInfo;
+use accounts::CodeRef;
 use decompression::AggregatorDecompressionState;
 use retrybuffer::RetryBuffer;
 use std::bls::BLSKey;
@@ -86,6 +87,7 @@ public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade
         ),
         retryBuffer: oldAcctStore.retryBuffer,
         numContracts: oldAcctStore.numContracts,
+        codeRefTable: newmap<bytes32, CodeRef>,
     };
     return acctStore;
 }
