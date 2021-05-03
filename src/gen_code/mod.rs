@@ -218,7 +218,7 @@ fn write_subtypes(
             writeln!(code, "type {} = {}", subtype.display_separator("_").0, {
                 if let Type::Nominal(a, b) = subtype.clone() {
                     let (displayed, subtypes) =
-                        type_tree.get(&(a, b)).unwrap().display_separator("_");
+                        type_tree.get(&(a, b)).unwrap().0.display_separator("_");
                     new_subtypes.extend(subtypes);
                     displayed
                 } else {
@@ -273,7 +273,8 @@ fn get_globals_and_version_from_file(
                 tipe = type_tree
                     .get(&(file_path.clone(), id))
                     .cloned()
-                    .unwrap_or(Type::Any);
+                    .unwrap_or((Type::Any, String::new()))
+                    .0;
             }
             tipe.recursive_apply(replace_nominal, &type_tree, &mut state);
 
@@ -298,7 +299,8 @@ fn get_globals_and_version_from_file(
                     type_tree
                         .get(&(file_path.clone(), id))
                         .cloned()
-                        .unwrap_or(Type::Any)
+                        .unwrap_or((Type::Any, String::new()))
+                        .0
                 } else {
                     diff.clone()
                 };
@@ -341,7 +343,8 @@ fn replace_nominal(
                 **tipe = state
                     .get(&(path.clone(), *id))
                     .cloned()
-                    .unwrap_or(Type::Any);
+                    .unwrap_or((Type::Any, String::new()))
+                    .0;
             }
             true
         }

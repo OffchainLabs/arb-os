@@ -19,7 +19,7 @@ use std::fmt::Formatter;
 
 ///This is a map of the types at a given location, with the Vec<String> representing the module path
 ///and the usize representing the stringID of the type at that location.
-pub type TypeTree = HashMap<(Vec<String>, usize), Type>;
+pub type TypeTree = HashMap<(Vec<String>, usize), (Type, String)>;
 
 ///Debugging info serialized into mini executables, currently only contains a location.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -143,7 +143,8 @@ impl Type {
                 .ok_or(new_type_error(
                     format!("No type at {:?}, {}", path, id),
                     None,
-                ))?;
+                ))?
+                .0;
         }
         Ok(base_type)
     }

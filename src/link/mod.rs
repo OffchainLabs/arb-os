@@ -28,7 +28,7 @@ mod xformcode;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SerializableTypeTree {
-    inner: BTreeMap<String, Type>,
+    inner: BTreeMap<String, (Type, String)>,
 }
 
 impl SerializableTypeTree {
