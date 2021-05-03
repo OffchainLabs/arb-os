@@ -1439,8 +1439,8 @@ impl Machine {
                 if let Some(str) = &insn.debug_str {
                     self.counter = self.counter + 1;
                     // println!("{}, stack sz {}", str, stack_len);
-                    println!("{}", str);
-                    if self.counter % 100000 == 0 {
+                    // println!("{}", str);
+                    if self.counter % 1000000 == 0 {
                         println!("Wasm instruction {}", self.counter);
                     }
                 };

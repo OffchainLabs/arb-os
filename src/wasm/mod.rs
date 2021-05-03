@@ -1505,6 +1505,10 @@ fn handle_function(
                 label = label + 2;
             }
             i => {
+                println!(" {:?}", i);
+                break;
+            }
+            i => {
                 panic!("Unknown opcode {:?}", i);
             }
         }
@@ -1536,7 +1540,10 @@ pub fn clear_labels(arr: Vec<Instruction>) -> Vec<Instruction> {
     res
 }
 
-fn table_to_tuple(tab: &[usize], prefix: usize, shift: usize, level: usize) -> Value {
+fn table_to_tuple(tab: &[usize], prefix: usize, shift: usize, level: usize, limit: usize) -> Value {
+    if prefix > limit {
+        return int_from_usize(0);
+    }
     if level == 0 {
         let mut v = vec![];
         for i in 0..8 {
@@ -1550,12 +1557,15 @@ fn table_to_tuple(tab: &[usize], prefix: usize, shift: usize, level: usize) -> V
     let mut v = vec![];
     for i in 0..8 {
         let prefix = prefix + (i << shift);
-        v.push(table_to_tuple(tab, prefix, shift + 3, level - 1));
+        v.push(table_to_tuple(tab, prefix, shift + 3, level - 1, limit));
     }
     return Value::new_tuple(v);
 }
 
-fn table_to_tuple2(tab: &[Value], prefix: usize, shift: usize, level: usize) -> Value {
+fn table_to_tuple2(tab: &[Value], prefix: usize, shift: usize, level: usize, limit: usize) -> Value {
+    if prefix > limit {
+        return int_from_usize(0);
+    }
     if level == 0 {
         let mut v = vec![];
         for i in 0..8 {
@@ -1571,13 +1581,13 @@ fn table_to_tuple2(tab: &[Value], prefix: usize, shift: usize, level: usize) -> 
     let mut v = vec![];
     for i in 0..8 {
         let prefix = prefix + (i << shift);
-        v.push(table_to_tuple2(tab, prefix, shift + 3, level - 1));
+        v.push(table_to_tuple2(tab, prefix, shift + 3, level - 1, limit));
     }
     return Value::new_tuple(v);
 }
 
 pub fn make_table(tab: &[Value]) -> Value {
-    table_to_tuple2(tab, 0, 0, LEVEL - 1)
+    table_to_tuple2(tab, 0, 0, LEVEL - 1, tab.len())
 }
 
 fn value_replace_labels(v: Value, label_map: &HashMap<Label, Value>) -> Result<Value, Label> {
@@ -1680,7 +1690,7 @@ pub fn resolve_labels(arr: Vec<Instruction>) -> (Vec<Instruction>, Value) {
         res.push(inst_replace_labels(inst.clone(), &labels).unwrap());
     }
     println!("Labels {}", tab.len());
-    (res, table_to_tuple(&tab, 0, 0, LEVEL - 1))
+    (res, table_to_tuple(&tab, 0, 0, LEVEL - 1, tab.len()))
 }
 
 fn init_value(_m: &Module, expr: &InitExpr) -> usize {
@@ -1772,7 +1782,7 @@ impl JitWasm {
         });
 
         let write_func = Func::wrap(&store, move |offset: i32, v: i32| {
-            println!("write buffer {} {}", offset, v);
+            // println!("write buffer {} {}", offset, v);
             cell2.replace_with(|buf| buf.set_byte(offset as u128, v as u8));
         });
 

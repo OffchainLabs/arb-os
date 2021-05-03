@@ -169,7 +169,11 @@ fn main() -> Result<(), CompileError> {
             for i in 0..code_0.len() {
                 match &code_0[i].opcode {
                     Opcode::AVMOpcode(op) => {
-                        code.push(Instruction::new(op.clone(), code_0[i].immediate.clone(), code_0[i].debug_info.clone()));
+                        code.push(Instruction::new_with_debug(
+                            op.clone(),
+                            code_0[i].immediate.clone(),
+                            code_0[i].debug_info.clone(), 
+                            code_0[i].debug_str.clone()));
                     }
                     _ => {},
                 }

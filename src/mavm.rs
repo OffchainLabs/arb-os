@@ -130,6 +130,15 @@ impl<T> Instruction<T> {
         }
     }
 
+    pub fn new_with_debug(opcode: T, immediate: Option<Value>, debug_info: DebugInfo, debug_str: Option<String>) -> Self {
+        Instruction {
+            opcode,
+            immediate,
+            debug_info,
+            debug_str,
+        }
+    }
+
     pub fn debug(str: String, opcode: T) -> Self {
         Instruction {
             opcode,
