@@ -1539,8 +1539,12 @@ public func evmCallFrame_getResumeCodePoint(frame: EvmCallFrame) -> option<func(
     return Some((frame.resumeInfo?).codePoint);
 }
 
-public func evmCallFrame_getResumeReturnDataNbytes() -> option<uint> {
-    return Some(((globalCallStack?).resumeInfo?).returnDataNbytes);
+public func evmCallFrame_getResumeReturnDataNbytes(frame: EvmCallFrame) -> option<uint> {
+    return Some((frame.resumeInfo?).returnDataNbytes);
+}
+
+public func evmCallFrame_getParentResumeReturnDataNbytes(frame: EvmCallFrame) -> option<uint> {
+    return evmCallFrame_getResumeReturnDataNbytes(frame.parent?);
 }
 
 public func evmCallFrame_getSelfDestructQueue(frame: EvmCallFrame) -> Queue {
