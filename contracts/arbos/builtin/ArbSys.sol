@@ -7,14 +7,20 @@ interface ArbSys {
     /**
     * @notice Get internal version number identifying an ArbOS build
     * @return version number as int
-     */
+    */
     function arbOSVersion() external pure returns (uint);
 
     /**
     * @notice Get Arbitrum block number (distinct from L1 block number; Arbitrum genesis block has block number 0)
     * @return block number as int
-     */ 
+    */ 
     function arbBlockNumber() external view returns (uint);
+
+    /**
+    * @notice Get the expected length of return data for the current call
+    * @return length of bytes expected to be returned in the current call
+    */ 
+    function expectedReturnDataSize() external view returns (uint);
 
     /** 
     * @notice Send given amount of Eth to dest from sender.

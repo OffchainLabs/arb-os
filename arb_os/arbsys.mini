@@ -26,6 +26,7 @@ use evmCallStack::evmCallFrame_runningAsAddress;
 use evmCallStack::evmCallFrame_runningAsAccount;
 use evmCallStack::evmCallFrame_getParent;
 use evmCallStack::evmCallFrame_getCaller;
+use evmCallStack::evmCallFrame_getResumeReturnDataNbytes;
 
 use evmOps::evmOp_log4;
 use evmOps::evmOp_return;
@@ -108,6 +109,8 @@ public impure func arbsys_txcall() {
             arbsys_getPcTable(topFrame, calldata);
         } elseif (funcCode == 0x08bd624c) {
             arbsys_isTopLevelCall(topFrame, calldata);
+        } elseif (funcCode == 0x03ddc726) {
+            arbsys_expectedReturnDataSize(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbSys), 1, 0, 0);
@@ -223,6 +226,21 @@ impure func arbsys_arbBlockNumber(topFrame: EvmCallFrame, calldata: ByteArray) {
         evmOp_return(0, 32);
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 7, 0, 0);
+    }
+}
+
+impure func arbsys_expectedReturnDataSize(topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> uint
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 212, 0, 0);
+    }
+    if let Some(resumeReturnDataNbytes) = evmCallFrame_getResumeReturnDataNbytes(topFrame) {
+        if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, resumeReturnDataNbytes))) {
+            evmOp_return(0, 32);
+        } else {
+            evmOp_revert_knownCodePc(address(const::Address_ArbSys), 213, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 214, 0, 0);
     }
 }
 
