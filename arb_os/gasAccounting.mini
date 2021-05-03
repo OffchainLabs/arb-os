@@ -862,7 +862,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
                     // sender didn't have enough gas funds
                     // we took all of the funds to make a partial payment to the aggregator
                     // now fail the tx
-                    return (const::TxResultCode_insufficientGasForBaseFee, tx);
+                    return (const::TxResultCode_noGasFunds, tx);
                 }
 
                 // compute the number of ArbGas units corresponding to the aggregator fee, and deduct them from the tx
