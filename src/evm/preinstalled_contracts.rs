@@ -1114,7 +1114,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys_orig_binding._arbos_version(&mut machine)?,
-        Uint256::from_u64(11)
+        Uint256::from_u64(12)
     );
 
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
@@ -1447,7 +1447,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         l2tx, l1calldata, storage, basegas, conggas, totalgas
     );
     assert_eq!(l2tx, Uint256::from_u64(650700098210895));
-    assert_eq!(l1calldata, Uint256::from_u64(2813838262533));
+    assert_eq!(l1calldata, Uint256::from_u64(175864891408));
     assert_eq!(storage, Uint256::from_u64(305851985058000));
     assert_eq!(basegas, Uint256::from_u64(15292599));
     assert!(conggas.is_zero());
@@ -1459,7 +1459,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         l2tx, l1calldata, storage
     );
     assert_eq!(l2tx, Uint256::from_u64(42550001));
-    assert_eq!(l1calldata, Uint256::from_u64(184001));
+    assert_eq!(l1calldata, Uint256::from_u64(11501));
     assert_eq!(storage, Uint256::from_u64(20000001));
 
     let (speed_limit, gas_pool_max, tx_gas_limit) =
