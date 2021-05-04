@@ -20,6 +20,7 @@ use std::storageMap::storageMap_set;
 
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsSize;
+use core::kvs::builtin_kvsForall;
 use core::kvs::builtin_kvsDelete;
 
 use chainParameters::chainParams_getDefaultAggregator;
@@ -594,6 +595,29 @@ public func account_getCode(acct: Account) -> option<ByteArray> {
     return Some((acct.contractInfo?).code);
 }
 
+type asfa_wrappedState = struct {
+    innerClosure: impure func(Account, any) -> any,
+    innerState: any,
+}
+
+public impure func accountStore_forall(acctStore: AccountStore, closure: impure func(Account, any) -> any, startState: any) -> any {
+    let wrappedState = struct {
+        innerClosure: closure,
+        innerState: startState,
+    };
+    wrappedState = unsafecast<asfa_wrappedState>(builtin_kvsForall(
+        unsafecast<Kvs>(acctStore.accounts),
+        unsafecast<func(any, any, any) -> any>(asfaClosure),
+        wrappedState,
+    ));
+    return wrappedState.innerState;
+}
+
+func asfaClosure(_: any, acct: Account, wrappedState: asfa_wrappedState) -> asfa_wrappedState {
+    return wrappedState with {
+        innerState: wrappedState.innerClosure(acct, wrappedState.innerState)
+    };
+}
 
 public func accountStore_codeRefExists(acctStore: AccountStore, codeHash: bytes32) -> bool {
     return acctStore.codeRefTable[codeHash] != None<CodeRef>;
