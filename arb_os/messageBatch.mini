@@ -19,8 +19,10 @@ use std::bytestream::bytestream_skipBytes;
 use std::bytearray::marshalledBytes_firstByte;
 use std::bytearray::marshalledBytes_hash;
 use std::bytestream::bytestream_bytesReadSoFar;
+use std::bytestream::bytestream_getCalldataUnits;
 
 use inbox::IncomingRequest;
+use inbox::GasEstimationParams;
 use gasAccounting::updateBatchSizeEstimate;
 
 use std::rlp::rlp_decodeUint;
@@ -39,18 +41,25 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
         stream = bytestream_skipBytes(stream, 1)?;    // skip past type byte in message
 
         // aggregator credit goes to the original aggregator of the request, if any, otherwise to sender of request
-        let aggregator = xif (msg.kind == const::L1MessageType_L2) {
+        let (aggregator, gasEstimationParams) = xif (msg.kind == const::L1MessageType_L2) {
             let agg = msg.sender;
             if let Some(aggInfo) = msg.aggregator {
                 if let Some(agg2) = aggInfo.aggregator {
                     agg = agg2;
                 }
             }
-            agg
+            (agg, None<GasEstimationParams>)
         } else {
             let (ustr, agg) = bytestream_get256(stream)?;
+            let (ustr, limit) = bytestream_get256(ustr)?;
             stream = ustr;
-            address(agg)
+            (
+                address(agg),
+                Some(struct {
+                    computeGasLimit: limit,
+                    ignoreInsufficientGasFunds: false,
+                })
+            )
         };
 
         Some(
@@ -64,8 +73,10 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
                 } with {
                     aggregator: Some(struct {
                         aggregator: Some(aggregator),
-                        calldataBytes: 0,
+                        calldataUnits: 0,
                     })
+                } with {
+                    gasEstimationParams: gasEstimationParams
                 },
                 stream: stream,
                 numSoFar: 0,
@@ -83,7 +94,7 @@ public impure func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequ
 
     return xif let Some(res) = bytestream_getN(stream, l2MsgLength) {
         let (bs, extractedL2data) = res;
-        let bytesRead = bytestream_bytesReadSoFar(bs) - bytestream_bytesReadSoFar(stream);
+        let streamBeforeCalldata = stream;
         stream = bs;
 
         Some((
@@ -96,7 +107,10 @@ public impure func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequ
             } with {
                 aggregator: Some(struct {
                     aggregator: (batch.template.aggregator?).aggregator,
-                    calldataBytes: bytesRead,
+                    calldataUnits: bytestream_getCalldataUnits(
+                        streamBeforeCalldata,
+                        bytestream_bytesReadSoFar(stream) - bytestream_bytesReadSoFar(streamBeforeCalldata),
+                    ),
                 })
             },
             batch with {
