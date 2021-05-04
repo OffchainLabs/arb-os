@@ -31,6 +31,7 @@ use gasAccounting::getArbGasPrice;
 use gasAccounting::getCurrentBlockGasLimit;
 
 use inbox::IncomingRequest;
+use inbox::GasEstimationParams;
 use inbox::inbox_currentTimestamp;
 
 use messages::TxRequestData;
@@ -471,9 +472,10 @@ func makeFakeIncomingRequest(
         },
         aggregator: Some(struct {
             aggregator: None<address>,
-            calldataBytes: 0,
+            calldataUnits: 0,
         }),
         adminMode: false,
+        gasEstimationParams: None<GasEstimationParams>,
     };
 }
 
