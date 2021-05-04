@@ -596,7 +596,13 @@ fn create_type_tree(program_tree: &HashMap<Vec<String>, Module>) -> TypeTree {
                 .map(|(id, tipe)| {
                     (
                         (path.clone(), *id),
-                        (tipe.clone(), program.string_table.name_from_id(*id).clone()),
+                        (
+                            tipe.clone(),
+                            program_tree
+                                .get(path)
+                                .map(|module| module.string_table.name_from_id(*id).clone())
+                                .unwrap(),
+                        ),
                     )
                 })
                 .collect::<Vec<_>>()
