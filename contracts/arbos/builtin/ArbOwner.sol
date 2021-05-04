@@ -32,5 +32,7 @@ interface ArbOwner {
 
     // Bind an address to a pluggable, so the pluggable can be a contract.
     function bindAddressToPluggable(address addr, uint pluggableId) external;
+
+    function getTotalOfEthBalances() external view returns(uint);
 }
 

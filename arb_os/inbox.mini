@@ -47,6 +47,7 @@ use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_fromSizeAndBuffer;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_getCalldataUnits;
 
 use std::bytestream::ByteStream;
 use std::bytestream::bytestream_new;
@@ -155,6 +156,7 @@ impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, adminMod
         },
         aggregator: None<AggregatorInfo>,
         adminMode: adminMode,
+        gasEstimationParams: None<GasEstimationParams>,
     };
 }
 
@@ -249,6 +251,7 @@ func endOfArbBlockMessage(arbBlockNum: uint, ethBlockNum: uint, timestamp: uint)
         },
         aggregator: None<AggregatorInfo>,
         adminMode: false,
+        gasEstimationParams: None<GasEstimationParams>,
     };
 }
 
@@ -286,6 +289,12 @@ type IncomingRequest = struct {
     provenance: RequestProvenance,
     aggregator: option<AggregatorInfo>,
     adminMode: bool,
+    gasEstimationParams: option<GasEstimationParams>,
+}
+
+type GasEstimationParams = struct {
+    computeGasLimit: uint,
+    ignoreInsufficientGasFunds: bool,
 }
 
 type RequestProvenance = struct {
@@ -296,7 +305,7 @@ type RequestProvenance = struct {
 
 type AggregatorInfo = struct {
     aggregator: option<address>,
-    calldataBytes: uint,
+    calldataUnits: uint,
 }
 
 func hashIncomingRequest(req: IncomingRequest) -> bytes32 {
@@ -365,7 +374,7 @@ public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
                 msg = msg with {
                     aggregator: Some(struct {
                         aggregator: None<address>,
-                        calldataBytes: bytearray_size(msg.msgData),
+                        calldataUnits: bytearray_getCalldataUnits(msg.msgData),
                     })
                 };
 
@@ -414,7 +423,7 @@ public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
                 msg = msg with {
                     aggregator: Some(struct {
                         aggregator: xif let Some(aggInfo) = msg.aggregator { aggInfo.aggregator } else { None<address> },
-                        calldataBytes: bytearray_size(msg.msgData),
+                        calldataUnits: bytearray_getCalldataUnits(msg.msgData),
                     })
                 };
 
