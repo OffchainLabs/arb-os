@@ -77,7 +77,9 @@ At present. the following options are supported:
 * Option 2: set charging parameters: 
   * speed limit per second (uint); 
   * L1 gas per L2 tx (uint); 
-  * L1 gas per L2 calldata byte; 
+  * ArbGas per L2 tx (uint);
+  * L1 gas per L2 calldata unit (uint) [a non-zero calldata byte is 16 units; a zero calldata byte is 4 units]; 
+  * ArbGas per L2 calldata unit (uint);
   * L1 gas per storage unit allocated (uint); 
   * ratio of L1 gas price to base ArbGas price; 
   * network fee recipient (address encoded as uint); 
@@ -143,12 +145,14 @@ The type-specific data consists of:
 
 * 3 (byte)
 * aggregator address (address encoded as uint)
+* limit on computation ArbGas (uint)
 * an L2 message of subtype 7
 
-This executes the enclosed L2 message, with two deviations from the normal semantics.
+This executes the enclosed L2 message, with the following deviations from the normal semantics.
 
 * The aggregator address specified in the message is considered to be the aggregator that submitted this message.
 * The transaction signature on the L2 message is ignored, and the enclosed transaction is treated as if it carried a valid signature by the sender of this L1 message.
+* The ArbGas used for computation will be limited by the supplied limit. (The supplied limit will be ignored if it is larger than the ordinary limit that applies to all transactions.)
 
 ## L2 messages
 
