@@ -166,7 +166,18 @@ impure func retryBuffer_insertNew(
         beneficiary: beneficiary,
         calldata: calldata,
         expiryTime: inbox_currentTimestamp() + rbuf.txLifetimeSeconds,
-        l1Message: l1Message with { requestId: uint(hash(bytes32(l1Message.requestId), bytes32(0))) },
+        l1Message: makeFakeIncomingRequest(
+           l1Message.arbBlockNumber,
+           l1Message.ethBlockNumber,
+           l1Message.timestamp,
+           sender,
+           uint(hash(bytes32(l1Message.requestId), bytes32(0))),
+           0,    // maxGas will be filled in when ticket is redeemed
+           0,    // gasPrice will be filled in when ticket is redeemed
+           destination,
+           callvalue,
+           calldata,
+        ),
     };
 
     return (retryBuffer_insert(rbuf, newTx), newTx.txId);
