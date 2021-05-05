@@ -194,7 +194,7 @@ An L2 message consists of:
 
 The L2 messages in a batch will be separated, and treated as if each had arrived separately, in the order in which they appear in the batch.
 
-The enclosed L2 message may have any valid subtype are allowed.
+The enclosed L2 message may have any valid subtype.
 
 **Subtype 4: signed tx from user** has subtype-specific data that is identical to the standard Ethereum encoded transaction format. The subtype-specific data consists of an RLP-encoded list containing:
 
@@ -368,5 +368,4 @@ Currently only one type is supported: an L2-to-L1 call, which has send type 3.  
 * timestamp (uint)
 * callvalue (uint)
 * calldata (sequence of bytes)
-
 
