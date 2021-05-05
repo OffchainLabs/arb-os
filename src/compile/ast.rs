@@ -509,16 +509,18 @@ impl Type {
     }
 
     pub fn display(&self) -> String {
-        self.display_indented(0, "::", None, &TypeTree::new()).0
+        self.display_indented(0, "::", None, false, &TypeTree::new())
+            .0
     }
 
     pub fn display_separator(
         &self,
         separator: &str,
         prefix: Option<&str>,
+        include_pathname: bool,
         type_tree: &TypeTree,
     ) -> (String, HashSet<(Type, String)>) {
-        self.display_indented(0, separator, prefix, type_tree)
+        self.display_indented(0, separator, prefix, include_pathname, type_tree)
     }
 
     fn display_indented(
@@ -526,6 +528,7 @@ impl Type {
         indent_level: usize,
         separator: &str,
         prefix: Option<&str>,
+        include_pathname: bool,
         type_tree: &TypeTree,
     ) -> (String, HashSet<(Type, String)>) {
         let mut type_set = HashSet::new();
@@ -541,8 +544,13 @@ impl Type {
                 let mut out = "(".to_string();
                 for s in subtypes {
                     //This should be improved by removing the final trailing comma.
-                    let (displayed, subtypes) =
-                        s.display_indented(indent_level, separator, prefix, type_tree);
+                    let (displayed, subtypes) = s.display_indented(
+                        indent_level,
+                        separator,
+                        prefix,
+                        include_pathname,
+                        type_tree,
+                    );
                     out.push_str(&(displayed + ", "));
                     type_set.extend(subtypes);
                 }
@@ -550,13 +558,23 @@ impl Type {
                 (out, type_set)
             }
             Type::Array(t) => {
-                let (displayed, subtypes) =
-                    t.display_indented(indent_level, separator, prefix, type_tree);
+                let (displayed, subtypes) = t.display_indented(
+                    indent_level,
+                    separator,
+                    prefix,
+                    include_pathname,
+                    type_tree,
+                );
                 (format!("[]{}", displayed), subtypes)
             }
             Type::FixedArray(t, size) => {
-                let (displayed, subtypes) =
-                    t.display_indented(indent_level, separator, prefix, type_tree);
+                let (displayed, subtypes) = t.display_indented(
+                    indent_level,
+                    separator,
+                    prefix,
+                    include_pathname,
+                    type_tree,
+                );
                 (format!("[{}]{}", size, displayed), subtypes)
             }
             Type::Struct(fields) => {
@@ -566,10 +584,13 @@ impl Type {
                 }
                 for field in fields {
                     //This should indent further when dealing with sub-structs
-                    let (displayed, subtypes) =
-                        field
-                            .tipe
-                            .display_indented(indent_level + 1, separator, prefix, type_tree);
+                    let (displayed, subtypes) = field.tipe.display_indented(
+                        indent_level + 1,
+                        separator,
+                        prefix,
+                        include_pathname,
+                        type_tree,
+                    );
                     out.push_str(&format!("    {}: {},\n", field.name, displayed));
                     for _ in 0..indent_level {
                         out.push_str("    ");
@@ -581,8 +602,15 @@ impl Type {
             }
             Type::Nominal(path, id) => {
                 let out = format!(
-                    "{}{}",
+                    "{}{}{}",
                     prefix.unwrap_or(""),
+                    if include_pathname {
+                        path.iter()
+                            .map(|name| name.clone() + "_")
+                            .collect::<String>()
+                    } else {
+                        format!("")
+                    },
                     type_tree
                         .get(&(path.clone(), *id))
                         .map(|(_, name)| name.clone())
@@ -607,15 +635,25 @@ impl Type {
                 }
                 out.push_str("func(");
                 for arg in args {
-                    let (displayed, subtypes) =
-                        arg.display_indented(indent_level, separator, prefix, type_tree);
+                    let (displayed, subtypes) = arg.display_indented(
+                        indent_level,
+                        separator,
+                        prefix,
+                        include_pathname,
+                        type_tree,
+                    );
                     out.push_str(&(displayed + ", "));
                     type_set.extend(subtypes)
                 }
                 out.push(')');
                 if **ret != Type::Void {
-                    let (displayed, subtypes) =
-                        ret.display_indented(indent_level, separator, prefix, type_tree);
+                    let (displayed, subtypes) = ret.display_indented(
+                        indent_level,
+                        separator,
+                        prefix,
+                        include_pathname,
+                        type_tree,
+                    );
                     out.push_str(" -> ");
                     out.push_str(&displayed);
                     type_set.extend(subtypes);
@@ -623,19 +661,34 @@ impl Type {
                 (out, type_set)
             }
             Type::Map(key, val) => {
-                let (key_display, key_subtypes) =
-                    key.display_indented(indent_level, separator, prefix, type_tree);
+                let (key_display, key_subtypes) = key.display_indented(
+                    indent_level,
+                    separator,
+                    prefix,
+                    include_pathname,
+                    type_tree,
+                );
                 type_set.extend(key_subtypes);
-                let (val_display, val_subtypes) =
-                    val.display_indented(indent_level, separator, prefix, type_tree);
+                let (val_display, val_subtypes) = val.display_indented(
+                    indent_level,
+                    separator,
+                    prefix,
+                    include_pathname,
+                    type_tree,
+                );
                 type_set.extend(val_subtypes);
                 (format!("map<{},{}>", key_display, val_display), type_set)
             }
             Type::Any => ("any".to_string(), type_set),
             Type::Every => ("every".to_string(), type_set),
             Type::Option(t) => {
-                let (display, subtypes) =
-                    t.display_indented(indent_level, separator, prefix, type_tree);
+                let (display, subtypes) = t.display_indented(
+                    indent_level,
+                    separator,
+                    prefix,
+                    include_pathname,
+                    type_tree,
+                );
                 (format!("option<{}>", display), subtypes)
             }
         }

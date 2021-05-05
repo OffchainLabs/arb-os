@@ -216,25 +216,33 @@ fn write_subtypes(
     type_tree: &TypeTree,
 ) -> Result<(), GenCodeError> {
     let mut total_subtypes = subtypes.clone();
-    let mut names = HashSet::new();
     while !subtypes.is_empty() {
         let mut new_subtypes = HashSet::new();
         let mut vec_subtypes = subtypes.iter().collect::<Vec<_>>();
         vec_subtypes.sort_by(|(lower, _), (higher, _)| {
             lower
-                .display_separator("_", None, type_tree)
+                .display_separator("_", None, true, type_tree)
                 .0
-                .cmp(&higher.display_separator("_", None, type_tree).0)
+                .cmp(&higher.display_separator("_", None, true, type_tree).0)
         });
         for (subtype, name) in vec_subtypes {
-            if !names.contains(name) {
-                writeln!(code, "type {}{} = {}", prefix.unwrap_or(""), name, {
+            writeln!(
+                code,
+                "type {}{}{} = {}",
+                prefix.unwrap_or(""),
+                if let Type::Nominal(a, _) = subtype.clone() {
+                    a.iter().map(|name| name.clone() + "_").collect::<String>()
+                } else {
+                    format!("")
+                },
+                name,
+                {
                     if let Type::Nominal(a, b) = subtype.clone() {
                         let (displayed, subtypes) = type_tree
                             .get(&(a, b))
                             .unwrap()
                             .0
-                            .display_separator("_", prefix, type_tree);
+                            .display_separator("_", prefix, true, type_tree);
                         new_subtypes.extend(subtypes);
                         displayed
                     } else {
@@ -243,10 +251,9 @@ fn write_subtypes(
                             subtype.display()
                         )));
                     }
-                })
-                .unwrap();
-                names.insert(name.clone());
-            }
+                }
+            )
+            .unwrap();
         }
         subtypes = new_subtypes.difference(&total_subtypes).cloned().collect();
         total_subtypes.extend(new_subtypes);
@@ -344,7 +351,7 @@ fn type_decl_string(
     format!(
         "type {} = {}",
         type_name,
-        tipe.display_separator("_", prefix, type_tree).0
+        tipe.display_separator("_", prefix, true, type_tree).0
     )
 }
 
