@@ -1,8 +1,10 @@
 
 // This file is machine-generated. Don't edit it unless you know what you're doing.
+
 use impl2::set_newGlobal1_onUpgrade;
 use impl2::set_newGlobal2_onUpgrade;
 use impl2::set_newGlobal3_onUpgrade;
+
 
 type GlobalsBeforeUpgrade = struct {
     global1: uint,
