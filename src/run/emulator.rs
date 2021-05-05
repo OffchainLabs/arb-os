@@ -1382,7 +1382,7 @@ impl Machine {
                         self.arb_gas_remaining = remaining;
                         self.total_gas_usage = self.total_gas_usage.add(&gas256);
                     } else {
-                        self.arb_gas_remaining = Uint256::max_int();
+                        self.arb_gas_remaining = Uint256::max_uint();
                         return Err(ExecutionError::new("Out of ArbGas", &self.state, None));
                     }
                     gas_remaining_before

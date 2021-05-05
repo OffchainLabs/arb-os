@@ -146,7 +146,6 @@ public impure func handleL2Request(
 
         let codeBytes = request.calldata;
         request = request with { calldata: bytearray_new(0) };
-        let (codept, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(codeBytes), false)?;
 
         if (request.seqNum == None<uint>) {
             request = request with { seqNum: Some(fetchAndIncrSequenceNum(request.caller)) };
@@ -172,8 +171,6 @@ public impure func handleL2Request(
         } else {
             initEvmCallStackForConstructor(
                 codeBytes,
-                evmJumpTable,
-                codept,
                 request,
                 true,
             );  // should never return
