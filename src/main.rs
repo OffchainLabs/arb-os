@@ -22,7 +22,7 @@ use run::{
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
-use std::io::Read;
+use std::io::{Read,Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -109,6 +109,8 @@ struct WasmRun {
     input: Vec<String>,
     #[clap(short, long)]
     param: Option<String>,
+    #[clap(short, long)]
+    param_file: Option<String>,
 }
 
 #[derive(Clap, Debug)]
@@ -218,12 +220,18 @@ fn main() -> Result<(), CompileError> {
         Args::WasmRun(fname) => {
             let filenames: Vec<_> = fname.input.clone();
             if (filenames.len() != 1) {
-                println!("no input");
+                println!("no input {:?}", filenames);
                 return Ok(());
             }
-            let param = match fname.param {
-                Some(p) => hex::decode(p).unwrap(),
-                None => vec![],
+            let param = match (fname.param, fname.param_file) {
+                (Some(p), _) => hex::decode(p).unwrap(),
+                (_, Some(file)) => {
+                    let mut file = File::open(&file).unwrap();
+                    let mut buffer = Vec::<u8>::new();
+                    file.read_to_end(&mut buffer).unwrap();
+                    buffer
+                }
+                _ => vec![],
             };
             let mut file = File::open(&filenames[0]).unwrap();
             let mut buffer = Vec::<u8>::new();
@@ -242,7 +250,14 @@ fn main() -> Result<(), CompileError> {
             for i in 0..len {
                 res.push(buf.read_byte(i as u128))
             }
-            println!("Gas used {}, Result {}, Extra {}", 1000000 - gas_left, hex::encode(res), hex::encode(extra));
+            if extra.len() > 1000 {
+                println!("Gas used {}, Result {}, Extra len {}", 1000000 - gas_left, hex::encode(res), extra.len());
+            } else {
+                println!("Gas used {}, Result {}, Extra {}", 1000000 - gas_left, hex::encode(res), hex::encode(&extra));
+            }
+            let mut file = File::create("/home/sami/extra.bin").unwrap();
+            file.write_all(&extra).unwrap();
+            println!("Wrote extra.bin");
         }
         Args::Compile(compile) => match do_compile(compile) {
             Ok(_) => {}
