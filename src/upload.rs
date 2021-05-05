@@ -16,6 +16,7 @@ use std::fmt;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use crate::compile::miniconstants::init_constant_table;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct CodeUploader {
@@ -196,12 +197,15 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbowner = _ArbOwner::_new(&wallet, false);
 
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
-    assert_eq!(
-        arbsys_orig_binding._arbos_version(&mut machine)?,
-        Uint256::from_u64(4)
-    );
+    match init_constant_table(Some(Path::new("arb_os/constants.json"))) {
+        Ok(t) => match t.get("ArbosVersionNumber") {
+            Some(val) => assert_eq!(&arbsys_orig_binding._arbos_version(&mut machine)?, val),
+            None => { return Err(ethabi::Error::from("could not find ArbosVersionNumber")) },
+        },
+        Err(e) => { return Err(ethabi::Error::from(e.to_string())); }
+    }
 
-    arbowner._give_ownership(&mut machine, my_addr, None)?;
+    arbowner._give_ownership(&mut machine, my_addr, true)?;
 
     let uploader = CodeUploader::_new_from_file(Path::new("arb_os/arbos-upgrade.mexe"));
     arbowner._start_code_upload(&mut machine)?;

@@ -96,9 +96,7 @@ public impure func arbowner_txcall() {
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 1, 0, 0);
         }
         let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
-        if (funcCode == const::funcCode_ArbOwner_giveOwnership) {
-            arbowner_giveOwnership(topFrame, calldata);
-        } elseif (funcCode == const::funcCode_ArbOwner_startCodeUpload) {
+        if (funcCode == const::funcCode_ArbOwner_startCodeUpload) {
             arbowner_startCodeUpload(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_continueCodeUpload) {
             arbowner_continueCodeUpload(topFrame, calldata);
@@ -126,14 +124,6 @@ public impure func arbowner_txcall() {
         // this shouldn't happen -- should always be called in an EVM tx
         evmCallStack_callHitError(22);
     }
-}
-
-impure func arbowner_giveOwnership(topFrame: EvmCallFrame, calldata: ByteArray) {  // (address)
-    if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 10, 0, 0);
-    }
-    chainParams_setOwner(address(bytearray_get256(calldata, 4)));
-    evmOp_return(0, 0);
 }
 
 impure func arbowner_addToReserveFunds(topFrame: EvmCallFrame, calldata: ByteArray) { // () payable

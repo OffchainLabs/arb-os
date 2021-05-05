@@ -234,7 +234,7 @@
     "SecondsPerSend": 1800,
     "ChainOwner": 0,
     "L1GasPerL2Tx": 57000,
-    "L1GasPerL2CalldataUnit": 1,
+    "L1GasPerL1CalldataUnit": 1,
     "L1GasPerStorage": 2000,
     "ArbGasDivisor": 10000,
     "NonzeroBalanceCallStipend": 20000,

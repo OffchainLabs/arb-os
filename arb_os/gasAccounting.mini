@@ -155,11 +155,18 @@ public impure func gasAccounting_notifyParamsChanged() {
 impure func setupParameters(isInit: bool) {
     setGasAccountingParamsFromSpeedLimit(chainParams_getOrDie(const::Atom_Param_SpeedLimitPerSecond));
 
+    let l1GasPerL2Tx = chainParams_getOrDie(const::Atom_Param_L1GasPerL2Tx);
+    let l1GasPerL1CalldataUnit = chainParams_getOrDie(const::Atom_Param_L1GasPerL1CalldataUnit);
+    let l1GasPerStorage = chainParams_getOrDie(const::Atom_Param_L1GasPerStorage);
+    let arbGasDivisor = chainParams_getOrDie(const::Atom_Param_ArbGasDivisor);
     let pricingParams = struct {
-        l1GasPerL2Tx: chainParams_getOrDie(const::Atom_Param_L1GasPerL2Tx),
-        l1GasPerL1Calldata: chainParams_getOrDie(const::Atom_Param_L1GasPerL2CalldataUnit),
-        l1GasPerStorage: chainParams_getOrDie(const::Atom_Param_L1GasPerStorage),
-        arbGasDivisor: chainParams_getOrDie(const::Atom_Param_ArbGasDivisor),
+        l1GasPerL2Tx: l1GasPerL2Tx,
+        arbGasPerL2Tx: l1GasPerL2Tx * arbGasDivisor,
+        l1GasPerL1CalldataUnit: l1GasPerL1CalldataUnit,
+        arbGasPerL1CalldataUnit: l1GasPerL1CalldataUnit * arbGasDivisor,
+        l1GasPerStorage: l1GasPerStorage,
+        arbGasPerStorage: l1GasPerStorage * arbGasDivisor,
+        arbGasDivisor: arbGasDivisor,
     };
 
     let congestionState = initCongestionState(isInit);

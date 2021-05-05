@@ -1140,87 +1140,6 @@ impl ArbosTest {
         }
     }
 
-    pub fn _set_chain_parameter(
-        &self,
-        machine: &mut Machine,
-        param_name: &str,
-        value: Uint256,
-        force_owner: bool, // force the message to come from address zero, which is an owner
-    ) -> Result<(), ethabi::Error> {
-        let param_id = _param_id_from_name(param_name);
-        let (receipts, _sends) = self.contract_abi.call_function(
-            if force_owner {
-                Uint256::zero()
-            } else {
-                Uint256::from_u64(42894528) // any old address
-            },
-            "setChainParameter",
-            &[
-                ethabi::Token::Uint(param_id.to_u256()),
-                ethabi::Token::Uint(value.to_u256()),
-            ],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(())
-        } else {
-            Err(ethabi::Error::from(format!(
-                "tx failed: {}",
-                receipts[0]._get_return_code_text()
-            )))
-        }
-    }
-
-    pub fn _get_chain_parameter(
-        &self,
-        machine: &mut Machine,
-        param_name: &str,
-        force_owner: bool, // force the message to come from address zero, which is an owner
-    ) -> Result<Uint256, ethabi::Error> {
-        let param_id = _param_id_from_name(param_name);
-        let (receipts, _sends) = self.contract_abi.call_function(
-            if force_owner {
-                Uint256::zero()
-            } else {
-                Uint256::from_u64(980509782534089) // any old address
-            },
-            "getChainParameter",
-            &[ethabi::Token::Uint(param_id.to_u256())],
-            machine,
-            Uint256::zero(),
-            false,
-        )?;
-        let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
-        let num_sends_before = machine.runtime_env.get_all_sends().len();
-        let _arbgas_used = if self.debug {
-            machine.debug(None)
-        } else {
-            machine.run(None)
-        };
-        let logs = machine.runtime_env.get_all_receipt_logs();
-        let sends = machine.runtime_env.get_all_sends();
-
-        if (logs.len() != num_logs_before + 2) || (sends.len() != num_sends_before) {
-            return Err(ethabi::Error::from("wrong number of receipts or sends"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
-        } else {
-            Err(ethabi::Error::from(format!(
-                "tx failed: {}",
-                receipts[0]._get_return_code_text()
-            )))
-        }
-    }
-
     pub fn call(
         &self,
         machine: &mut Machine,
@@ -1297,18 +1216,6 @@ impl ArbosTest {
             );
             Err(ethabi::Error::from("reverted"))
         }
-    }
-
-    pub fn _set_gas_accounting_params(
-        &self,
-        machine: &mut Machine,
-        speed_limit: Uint256,
-        gas_pool_max: Uint256,
-        tx_gas_limit: Uint256,
-    ) -> Result<(), ethabi::Error> {
-        self._set_chain_parameter(machine, "SpeedLimitPerSecond", speed_limit, true)?;
-        self._set_chain_parameter(machine, "GasPoolMax", gas_pool_max, true)?;
-        self._set_chain_parameter(machine, "TxGasLimit", tx_gas_limit, true)
     }
 
     pub fn _start_code_upload(&self, machine: &mut Machine) -> Result<(), ethabi::Error> {
@@ -1415,10 +1322,6 @@ impl ArbosTest {
             Err(ethabi::Error::from("reverted"))
         }
     }
-}
-
-fn _param_id_from_name(name: &str) -> Uint256 {
-    Uint256::from_bytes(&keccak256(name.as_bytes()))
 }
 
 pub struct _ArbGasInfo<'a> {
