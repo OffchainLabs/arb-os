@@ -17,6 +17,7 @@ use evmCallStack::evmCallStack_setAccountInCurrentContext;
 use evmCallStack::getRetryBufferInCurrentContext;
 use evmCallStack::setRetryBufferInCurrentContext;
 use evmCallStack::evmCallStack_callRetryableTxAndReturn;
+use evmCallStack::evmCallStack_currentTxRequestGasBid;
 
 use evmlogs::EvmLogs;
 use evmlogs::evmlogs_empty;
@@ -515,8 +516,8 @@ public impure func redeemRetryableTxInTx(txToRedeem: uint) -> (bool, ByteArray) 
                 rtx with {
                     l1Message: adjustGasInfoInFakeIncomingRequest(
                         rtx.l1Message,
-                        getArbGasPrice(),
-                        getCurrentBlockGasLimit(),
+                        evmCallStack_currentTxRequestGasBid(),
+                        63 * (asm() uint { getgas }) / 64,  // inner tx will get approximately this much gas
                     )
                 }
             )

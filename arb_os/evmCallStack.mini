@@ -199,6 +199,10 @@ public impure func evmCallStack_makeEmpty() {
     globalCallStack = None<EvmCallFrame>;
 }
 
+public impure func evmCallStack_currentTxRequestGasBid() -> uint {
+    return globalCurrentTxRequest.gasPrice;
+}
+
 public impure func evmCallStack_addStorageCharge(units: uint) {
     if let Some(topFrame) = globalCallStack {
         globalCallStack = Some(
