@@ -17,16 +17,22 @@ use evmCallStack::evmCallStack_setAccountInCurrentContext;
 use evmCallStack::getRetryBufferInCurrentContext;
 use evmCallStack::setRetryBufferInCurrentContext;
 use evmCallStack::evmCallStack_callRetryableTxAndReturn;
+use evmCallStack::evmCallStack_currentTxRequestGasBid;
 
 use evmlogs::EvmLogs;
+use evmlogs::evmlogs_empty;
+use evmlogs::evmlogs_appendAny;
 
 use gasAccounting::GasUsage;
 use gasAccounting::txFeeStats_zero;
 use gasAccounting::getFeesForRetryableTx;
 use gasAccounting::getRetryableTxPrice;
 use gasAccounting::txFeeStats_zero;
+use gasAccounting::getArbGasPrice;
+use gasAccounting::getCurrentBlockGasLimit;
 
 use inbox::IncomingRequest;
+use inbox::GasEstimationParams;
 use inbox::inbox_currentTimestamp;
 
 use messages::TxRequestData;
@@ -38,7 +44,9 @@ use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_copy;
 
 use std::keccak::keccak256;
 
@@ -159,7 +167,18 @@ impure func retryBuffer_insertNew(
         beneficiary: beneficiary,
         calldata: calldata,
         expiryTime: inbox_currentTimestamp() + rbuf.txLifetimeSeconds,
-        l1Message: l1Message with { requestId: uint(hash(bytes32(l1Message.requestId), bytes32(0))) },
+        l1Message: makeFakeIncomingRequest(
+           l1Message.arbBlockNumber,
+           l1Message.ethBlockNumber,
+           l1Message.timestamp,
+           sender,
+           uint(hash(bytes32(l1Message.requestId), bytes32(0))),
+           0,    // maxGas will be filled in when ticket is redeemed
+           0,    // gasPrice will be filled in when ticket is redeemed
+           destination,
+           callvalue,
+           calldata,
+        ),
     };
 
     return (retryBuffer_insert(rbuf, newTx), newTx.txId);
@@ -309,11 +328,20 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
             );
             acctStore = accountStore_setRetryBuffer(acctStore, rbuf);
 
+            let logs = evmlogs_appendAny(
+               evmlogs_empty(),
+               (
+                   const::Address_ArbRetryableTx,
+                   (0, newbuffer()),
+                   const::eventTopic_ArbRetryableTx_TicketCreated,
+                   txId,
+               ),
+           );
             emitTxReceipt(
                 req,
                 const::TxResultCode_success,
                 Some(bytearray_set256(bytearray_new(0), 0, txId)),
-                None<EvmLogs>,
+                Some(logs),
                 None<GasUsage>,
                 feeStats,
             );
@@ -336,6 +364,7 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
                         );
                         immediateCalldata = bytearray_set256(immediateCalldata, 4, txId);
 
+                        let requestId = uint(hash(bytes32(req.requestId), bytes32(1)));
                         Some(
                             struct {
                                 maxGas: maxGasForImmediate,
@@ -348,7 +377,18 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
                                 calldata: immediateCalldata,
                                 nonMutating: false,
                                 isConstructor: false,
-                                incomingRequest: req with { requestId: uint(hash(bytes32(req.requestId), bytes32(1))) },
+                                incomingRequest: makeFakeIncomingRequest(
+                                    req.arbBlockNumber,
+                                    req.ethBlockNumber,
+                                    req.timestamp,
+                                    sender,
+                                    requestId,
+                                    maxGasForImmediate,
+                                    gasPriceForImmediate,
+                                    address(const::Address_ArbRetryableTx),
+                                    0,
+                                    immediateCalldata,
+                                ),
                                 feeStats: txFeeStats_zero(),
                                 fromRetryable: Some(rtx),
                             }
@@ -391,6 +431,80 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
     return ret;
 }
 
+func makeFakeIncomingRequest(
+    arbBlockNumber: uint,
+    ethBlockNumber: uint,
+    timestamp: uint,
+    sender: address,
+    requestId: uint,
+    maxGas: uint,
+    gasPrice: uint,
+    calleeAddr: address,
+    callvalue: uint,
+    calldata: ByteArray,
+) -> IncomingRequest {
+    return struct {
+        kind: const::L1MessageType_L2,
+        arbBlockNumber: arbBlockNumber,
+        ethBlockNumber: ethBlockNumber,
+        timestamp: timestamp,
+        sender: sender,
+        requestId: requestId,
+        msgData: bytearray_copy(
+            calldata,
+            0,
+            bytearray_set256(
+                bytearray_set256(
+                    bytearray_set256(
+                        bytearray_set256(
+                            bytearray_setByte(
+                                bytearray_new(0),
+                                0,
+                                const::L2MessageType_unsignedContractTx,
+                            ),
+                            1,
+                            maxGas,
+                        ),
+                        1+32,
+                        gasPrice,
+                    ),
+                    1+2*32,
+                    uint(calleeAddr),
+                ),
+                1+3*32,
+                callvalue,
+            ),
+            1+4*32,
+            bytearray_size(calldata),
+        ),
+        provenance: struct {
+            l1SeqNum: requestId,
+            parentRequestId: 0,
+            indexInParent: ~0,
+        },
+        aggregator: Some(struct {
+            aggregator: None<address>,
+            calldataUnits: 0,
+        }),
+        adminMode: false,
+        gasEstimationParams: None<GasEstimationParams>,
+    };
+}
+
+func adjustGasInfoInFakeIncomingRequest(req: IncomingRequest, maxGas: uint, gasPrice: uint) -> IncomingRequest {
+    return req with {
+        msgData: bytearray_set256(
+            bytearray_set256(
+                req.msgData,
+                1,
+                maxGas,
+            ),
+            1+32,
+            gasPrice,
+        )
+    };
+}
+
 public impure func redeemRetryableTxInTx(txToRedeem: uint) -> (bool, ByteArray) {
     let rbuf = retryBuffer_trimTwo(getRetryBufferInCurrentContext());
     return xif let Some(rtx) = retryBuffer_get(rbuf, txToRedeem) {
@@ -398,7 +512,15 @@ public impure func redeemRetryableTxInTx(txToRedeem: uint) -> (bool, ByteArray) 
             // we just deleted the tx, without a credit-back to the beneficiary
             // note that this delete will be discarded if the tx reverts
             setRetryBufferInCurrentContext(rb);
-            evmCallStack_callRetryableTxAndReturn(rtx)
+            evmCallStack_callRetryableTxAndReturn(
+                rtx with {
+                    l1Message: adjustGasInfoInFakeIncomingRequest(
+                        rtx.l1Message,
+                        63 * (asm() uint { getgas }) / 64,  // inner tx will get approximately this much gas
+                        evmCallStack_currentTxRequestGasBid(),
+                    )
+                }
+            )
         } else {
             setRetryBufferInCurrentContext(rbuf);
             (false, bytearray_new(0))
