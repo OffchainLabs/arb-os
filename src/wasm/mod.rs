@@ -1505,10 +1505,6 @@ fn handle_function(
                 label = label + 2;
             }
             i => {
-                println!(" {:?}", i);
-                break;
-            }
-            i => {
                 panic!("Unknown opcode {:?}", i);
             }
         }
@@ -1737,6 +1733,7 @@ pub struct JitWasm {
     cell: std::rc::Rc<std::cell::RefCell<Buffer>>,
     len_cell: std::rc::Rc<std::cell::RefCell<i32>>,
     gas_cell: std::rc::Rc<std::cell::RefCell<i32>>,
+    extra_cell: std::rc::Rc<std::cell::RefCell<Vec<u8>>>,
 }
 
 use std::fmt;
@@ -1763,6 +1760,9 @@ impl JitWasm {
         let memory_cell2 = memory_cell.clone();
         let memory_cell3 = memory_cell.clone();
 
+        let extra_cell : Rc<RefCell<Vec<u8>>> = Rc::new(RefCell::new(vec![]));
+        let extra_cell1 = extra_cell.clone();
+
         let cell = Rc::new(RefCell::new(buf));
         let cell1 = cell.clone();
         let cell2 = cell.clone();
@@ -1784,6 +1784,17 @@ impl JitWasm {
         let write_func = Func::wrap(&store, move |offset: i32, v: i32| {
             // println!("write buffer {} {}", offset, v);
             cell2.replace_with(|buf| buf.set_byte(offset as u128, v as u8));
+        });
+
+        let extra_write_func = Func::wrap(&store, move |offset: i32, v: i32| {
+            // println!("write buffer {} {}", offset, v);
+            let mut vec = extra_cell1.borrow_mut();
+            let offset = offset as usize;
+            if vec.len() <= offset {
+                vec.resize(offset+1, 0)
+            }
+            vec[offset as usize] = v as u8;
+            // replace_with(|buf| buf.set_byte(offset as u128, v as u8));
         });
 
         let rvec_func = Func::wrap(&store, move |ptr: i32, offset: i32, len: i32| {
@@ -1864,6 +1875,8 @@ impl JitWasm {
                         imports.push(rvec_func.clone().into())
                     } else if name.contains("wvec") {
                         imports.push(wvec_func.clone().into())
+                    } else if name.contains("wextra") {
+                        imports.push(extra_write_func.clone().into())
                     } else {
                         imports.push(error_func.clone().into())
                     }
@@ -1883,10 +1896,11 @@ impl JitWasm {
             cell,
             len_cell,
             gas_cell,
+            extra_cell,
         };
     }
 
-    pub fn run(&self, buf: Buffer, len: usize) -> (Buffer, usize, u64) {
+    pub fn run(&self, buf: Buffer, len: usize) -> (Buffer, Vec<u8>, usize, u64) {
         self.cell.replace_with(|_buf| buf);
         self.len_cell.replace_with(|_len| len as i32);
         self.gas_cell.replace_with(|_gas| 1000000);
@@ -1898,6 +1912,7 @@ impl JitWasm {
 
         (
             self.cell.borrow().clone(),
+            self.extra_cell.borrow().clone(),
             self.len_cell.borrow().clone() as usize,
             self.gas_cell.borrow().clone() as u64,
         )

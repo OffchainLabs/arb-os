@@ -237,12 +237,12 @@ fn main() -> Result<(), CompileError> {
                 let (buf, len; _) = a.run(buf.clone(), param.len());
             }
             */
-            let (buf, len, gas_left) = a.run(buf, param.len());
+            let (buf, extra, len, gas_left) = a.run(buf, param.len());
             let mut res = vec![];
             for i in 0..len {
                 res.push(buf.read_byte(i as u128))
             }
-            println!("Gas used {}, Result {}", 1000000 - gas_left, hex::encode(res));
+            println!("Gas used {}, Result {}, Extra {}", 1000000 - gas_left, hex::encode(res), hex::encode(extra));
         }
         Args::Compile(compile) => match do_compile(compile) {
             Ok(_) => {}

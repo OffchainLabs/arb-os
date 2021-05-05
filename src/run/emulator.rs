@@ -1436,7 +1436,7 @@ impl Machine {
                 } else {
                     self.arb_gas_remaining.clone()
                 };
-                if let Some(str) = &insn.debug_str {
+                if let Some(_str) = &insn.debug_str {
                     self.counter = self.counter + 1;
                     // println!("{}, stack sz {}", str, stack_len);
                     // println!("{}", str);
@@ -2285,7 +2285,7 @@ impl Machine {
                         let buf = self.stack.pop_buffer(&self.state)?;
                         let (_, idx) = self.stack.pop_wasm_codepoint(&self.state)?;
                         // println!("Going to run JIT");
-                        let (nbuf, len, gas_left) = self.wasm_instances[idx].run(buf, arg);
+                        let (nbuf, _, len, gas_left) = self.wasm_instances[idx].run(buf, arg);
 
                         let gas256 = Uint256::from_u64(gas_left);
                         self.total_gas_usage = self.total_gas_usage.sub(&gas256).unwrap();
