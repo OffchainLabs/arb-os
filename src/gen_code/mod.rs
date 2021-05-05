@@ -113,13 +113,18 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
             .map_err(|_| GenCodeError::new("Failed to write use statement".to_string()))?;
     }
     writeln!(code).map_err(|_| GenCodeError::new("Failed to write empty line".to_string()))?;
-    write_subtypes(&mut code, in_recursers, &in_tree)?;
-    write_subtypes(&mut code, out_recursers, &out_tree)?;
+    write_subtypes(&mut code, in_recursers, Some("before__"), &in_tree)?;
+    write_subtypes(&mut code, out_recursers, Some("after__"), &out_tree)?;
     writeln!(code).map_err(|_| GenCodeError::new("Failed to write empty line".to_string()))?;
     writeln!(
         code,
         "{}",
-        type_decl_string(&"GlobalsBeforeUpgrade".to_string(), &input_struct, &in_tree)
+        type_decl_string(
+            &"GlobalsBeforeUpgrade".to_string(),
+            &input_struct,
+            Some("before__"),
+            &in_tree
+        )
     )
     .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     writeln!(code, "").unwrap();
@@ -129,6 +134,7 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
         type_decl_string(
             &"GlobalsAfterUpgrade".to_string(),
             &output_struct,
+            Some("after__"),
             &out_tree
         )
     )
@@ -206,36 +212,41 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
 fn write_subtypes(
     code: &mut File,
     mut subtypes: HashSet<(Type, String)>,
+    prefix: Option<&str>,
     type_tree: &TypeTree,
 ) -> Result<(), GenCodeError> {
     let mut total_subtypes = subtypes.clone();
+    let mut names = HashSet::new();
     while !subtypes.is_empty() {
         let mut new_subtypes = HashSet::new();
         let mut vec_subtypes = subtypes.iter().collect::<Vec<_>>();
         vec_subtypes.sort_by(|(lower, _), (higher, _)| {
             lower
-                .display_separator("_", type_tree)
+                .display_separator("_", None, type_tree)
                 .0
-                .cmp(&higher.display_separator("_", type_tree).0)
+                .cmp(&higher.display_separator("_", None, type_tree).0)
         });
         for (subtype, name) in vec_subtypes {
-            writeln!(code, "type {} = {}", name, {
-                if let Type::Nominal(a, b) = subtype.clone() {
-                    let (displayed, subtypes) = type_tree
-                        .get(&(a, b))
-                        .unwrap()
-                        .0
-                        .display_separator("_", type_tree);
-                    new_subtypes.extend(subtypes);
-                    displayed
-                } else {
-                    return Err(GenCodeError::new(format!(
-                        "Encountered non nominal type in subtypes list: \"{}\"",
-                        subtype.display()
-                    )));
-                }
-            })
-            .unwrap();
+            if !names.contains(name) {
+                writeln!(code, "type {}{} = {}", prefix.unwrap_or(""), name, {
+                    if let Type::Nominal(a, b) = subtype.clone() {
+                        let (displayed, subtypes) = type_tree
+                            .get(&(a, b))
+                            .unwrap()
+                            .0
+                            .display_separator("_", prefix, type_tree);
+                        new_subtypes.extend(subtypes);
+                        displayed
+                    } else {
+                        return Err(GenCodeError::new(format!(
+                            "Encountered non nominal type in subtypes list: \"{}\"",
+                            subtype.display()
+                        )));
+                    }
+                })
+                .unwrap();
+                names.insert(name.clone());
+            }
         }
         subtypes = new_subtypes.difference(&total_subtypes).cloned().collect();
         total_subtypes.extend(new_subtypes);
@@ -324,11 +335,16 @@ fn get_globals_and_version_from_file(
     Ok((fields, subtypes, type_tree, globals.arbos_version))
 }
 
-fn type_decl_string(type_name: &String, tipe: &Type, type_tree: &TypeTree) -> String {
+fn type_decl_string(
+    type_name: &String,
+    tipe: &Type,
+    prefix: Option<&str>,
+    type_tree: &TypeTree,
+) -> String {
     format!(
         "type {} = {}",
         type_name,
-        tipe.display_separator("_", type_tree).0
+        tipe.display_separator("_", prefix, type_tree).0
     )
 }
 

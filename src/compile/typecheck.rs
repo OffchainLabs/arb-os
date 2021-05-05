@@ -910,7 +910,7 @@ fn typecheck_statement<'a>(
                         "return statement has wrong type, {}",
                         return_type
                             .mismatch_string(&tc_expr.get_type(), type_tree)
-                            .unwrap()
+                            .unwrap_or("failed to resolve type name".to_string())
                     ),
                     debug_info.location,
                 ))
