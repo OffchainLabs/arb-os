@@ -112,11 +112,10 @@ $(ARBOSDIR)/arbos-upgrade.mexe: compiler $(TESTCONTRACTS) $(ARBOSDIR) $(STDDIR) 
 	cp $(ARBOSDIR)/bridge_arbos_versions.mini $(ARBOSDIR)/save_bridge_for_debugging.mini
 	cp $(ARBOSDIR)/dummy_version_bridge.mini $(ARBOSDIR)/bridge_arbos_versions.mini
 
+$(ARBOSDIR)/upgrade.json: compiler $(ARBOSDIR)/arbos-upgrade.mexe
+	$(CARGORUN) serialize-upgrade $(ARBOSDIR)/arbos-upgrade.mexe >$(ARBOSDIR)/upgrade.json
 
-$(ARBOSDIR)/upgrade.json: $(ARBOSDIR)/arbos-upgrade.mexe
-	cargo run -- serialize-upgrade $(ARBOSDIR)/arbos-upgrade.mexe >$(ARBOSDIR)/upgrade.json
-
-$(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
+$(BUILTINDIR)/maptest.mexe: compiler $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
 	$(CARGORUN) compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe $(COMPILEFLAGS) -t
 
 $(ARBOSDIR)/arbos.mexe: compiler $(TESTCONTRACTS) $(ARBOSDIR) $(STDDIR) $(BUILTINDIR) $(TEMPLATES) src/compile/miniconstants.rs
@@ -128,6 +127,9 @@ $(TESTCONTRACTSPURE): $(TCSRCDIR)
 $(ARBOSCONTRACTS): $(ACSRCDIR)
 	(cd contracts; yarn build)
 
+compiler:
+	cargo build --release
+
 run: compiler
 	$(CARGORUN) run "arb_os/arbos.mexe"
 
@@ -135,6 +137,8 @@ test:
 	cargo test --release 
 
 evmtest: compiler $(ARBOS)
+
+evmtest: $(ARBOS)
 	$(CARGORUN) evm-tests
 
 evmtestlogs: compiler $(ARBOS)
@@ -152,8 +156,6 @@ evmdebug: compiler all
 
 benchmark: compiler $(TEMPLATES) $(ARBOS)
 	$(CARGORUN) make-benchmarks
-
-compiler: ./target/release/mini
 
 ./target/release/mini: src/* src/*/*
 	cargo build --release

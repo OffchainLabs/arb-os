@@ -141,7 +141,7 @@ impure func initializePreinstalls(isUpgrade: bool) -> option<()> {
     let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
         bytestream_new(code),
         false
-    )?;
+    );
     acctStore = xif (isUpgrade) {
         accountStore_upgradeContractFromEvmCode(
             acctStore,

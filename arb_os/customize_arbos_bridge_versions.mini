@@ -1,78 +1,9 @@
 //
-// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+// Copyright 2021, Offchain Labs, Inc. All rights reserved.
 //
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 
-use accounts::AccountStore;
-use accounts::Account;
-use accounts::AccountContractInfo;
-use accounts::AggregatorInfo;
-use decompression::AggregatorDecompressionState;
-use retrybuffer::RetryBuffer;
-use std::bls::BLSKey;
-
-use core::kvs::Kvs;
-use core::kvs::builtin_kvsForall;
-
-
-type OldAccountStore = struct {
-    accounts: map<address, OldAccount>,
-    retryBuffer: RetryBuffer,
-    numContracts: uint,
-}
-
-type OldAccount = struct {
-    addr: address,
-    blsKey: option<BLSKey>,
-    nextSeqNum: uint,
-    ethBalance: uint,
-    contractInfo: option<AccountContractInfo>,
-    aggregatorInfo: option<OldAggregatorInfo>,
-    aggregatorToPay: option<address>,
-}
-
-type OldAggregatorInfo = struct {
-    decompressionState: option<AggregatorDecompressionState>,
-}
-
-
 public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> any {
-    let oldAcctStore = unsafecast<OldAccountStore>(input_globals.globalAccountStore);
-
-    let acctStore = unsafecast<AccountStore>(());  // force compiler to typecheck the following assignment
-    acctStore = struct {
-        accounts: unsafecast<map<address, Account>>(
-            builtin_kvsForall(
-                unsafecast<Kvs>(oldAcctStore.accounts),
-                unsafecast<func(any, any, any) -> any>(acctClosure),
-                newmap<address, Account>,
-            )
-        ),
-        retryBuffer: oldAcctStore.retryBuffer,
-        numContracts: oldAcctStore.numContracts,
-    };
-    return acctStore;
+    return input_globals.globalAccountStore;
 }
-
-public func acctClosure(addr: address, acct: OldAccount, state: map<address, Account>) -> map<address, Account> {
-    let updatedAcct = unsafecast<Account>(());   // force compiler to typecheck the following assignment
-    updatedAcct = struct {
-        addr: acct.addr,
-        blsKey: acct.blsKey,
-        nextSeqNum: acct.nextSeqNum,
-        ethBalance: acct.ethBalance,
-        contractInfo: acct.contractInfo,
-        aggregatorInfo: xif let Some(oai) = acct.aggregatorInfo {
-            Some(struct{
-                decompressionState: oai.decompressionState,
-                feeCollector: acct.addr,
-            })
-        } else {
-            None<AggregatorInfo>
-        },
-        aggregatorToPay: acct.aggregatorToPay,
-    };
-    return state with { [acct.addr] = updatedAcct };
-}
-

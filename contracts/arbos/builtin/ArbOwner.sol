@@ -6,7 +6,13 @@ interface ArbOwner {
 
     function addToReserveFunds() external payable;
 
-    // To upgrade ArbOS, the ower calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload 
+    // Deploy a contract on the chain
+    // The contract is deployed as if it was submitted by deemedSender with deemedNonce
+    // Reverts if there is already a contract at that address
+    // Returns the address of the deployed contract
+    function deployContract(bytes calldata constructorData, address deemedSender, uint deemedNonce) external payable returns(address);
+
+    // To upgrade ArbOS, the owner calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload
     // the code to be installed as the upgrade, then calls finishArbosUpgrade to complete the upgrade and start executing the new code.
     function startCodeUpload() external;
     function continueCodeUpload(bytes calldata marshalledCode) external;
@@ -20,5 +26,7 @@ interface ArbOwner {
     // Get and set chain parameters
     function getChainParameter(uint which) external view returns(uint);
     function setChainParameter(uint which, uint value) external;
+
+    function getTotalOfEthBalances() external view returns(uint);
 }
 
