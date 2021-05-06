@@ -335,6 +335,9 @@ public impure func gasAccounting_getPricesInArbGas() -> (uint, uint, uint) {  //
 }
 
 public impure func gasAccounting_setFeesEnabled(enabled: bool) {
+    gasAccountingInfo = gasAccountingInfo with {
+        feeConfig: gasAccountingInfo.feeConfig with { enabled: enabled }
+    };
     let (gasPrices, retryablePrices) = setPrices(
         gasAccountingInfo.feeConfig,
         gasAccountingInfo.pricingParams,
@@ -342,8 +345,6 @@ public impure func gasAccounting_setFeesEnabled(enabled: bool) {
         gasAccountingInfo.retryablePrices,
     );
     gasAccountingInfo = gasAccountingInfo with {
-        feeConfig: gasAccountingInfo.feeConfig with { enabled: enabled }
-    } with {
         currentPrices: gasPrices
     } with {
         retryablePrices: retryablePrices
