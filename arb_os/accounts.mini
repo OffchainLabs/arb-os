@@ -720,11 +720,11 @@ func serializeStorageDiffs(
 }
 
 type asfa_wrappedState = struct {
-    innerClosure: impure func(Account, any) -> any,
+    innerClosure: func(Account, any) -> any,
     innerState: any,
 }
 
-public impure func accountStore_forall(acctStore: AccountStore, closure: impure func(Account, any) -> any, startState: any) -> any {
+public func accountStore_forall(acctStore: AccountStore, closure: func(Account, any) -> any, startState: any) -> any {
     let wrappedState = struct {
         innerClosure: closure,
         innerState: startState,

@@ -846,68 +846,65 @@ public impure func evmCallStack_returnFromCall(
                     // Constructor call was successful, so finish setting up the account.
                     // The constructor's returndata is EVM code for the contract.
                     // Compile that EVM code into AVM, and substitute that in as the code for the contract.
-                    if let Some(res) = translateEvmCodeSegment(bytestream_new(returnData), false) {
-                        let (entryPoint, evmJumpTable, _) = res;
+                    let (entryPoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(returnData), false);
 
-                        // Use the storage left over by the constructor.
-                        let storageMap = storageMap_new();
-                        if let Some(sm) = account_getAllStorage(topFrame.runningAsAccount) {
-                            storageMap = sm;
-                        } else {
-                            // Somehow the constructor didn't have storage; report error and recover.
-                            emitTxReceipt(
-                                globalCurrentTxRequest.incomingRequest,
-                                const::TxResultCode_formatError,
-                                None<ByteArray>,
-                                None<EvmLogs>,
-                                Some(gasUsage),
-                                feeStats,
-                                true,
-                            );
-                            evmCallStack_callHitError(5);  // should never return
-                            panic;
-                        }
-
-                        // Update the global account store
-                        setGlobalAccountStore(
-                            deferredPayments_apply(
-                                accountStore_set(
-                                    topFrame.accountStore,
-                                    topFrame.runningAs,
-                                    account_setContractInfo(
-                                        topFrame.runningAsAccount,
-                                        returnData,
-                                        evmJumpTable,
-                                        entryPoint,
-                                        storageMap,
-                                        true,
-                                    )
-                                ),
-                                deferredPayments,
-                            )
-                        );
-
-                        returnData = bytearray_set256(
-                            bytearray_new(0),
-                            0,
-                            uint(topFrame.runningAs)
-                        );
-
-                        // emit queued sends
-                        let updatedEvmLogs = sendQueuedMessages(topFrame.sendQueue, topFrame.evmLogs);
-
-                        // Emit log item reporting success
+                    // Use the storage left over by the constructor.
+                    let storageMap = storageMap_new();
+                    if let Some(sm) = account_getAllStorage(topFrame.runningAsAccount) {
+                        storageMap = sm;
+                    } else {
+                        // Somehow the constructor didn't have storage; report error and recover.
                         emitTxReceipt(
                             globalCurrentTxRequest.incomingRequest,
-                            const::TxResultCode_success,
-                            Some(returnData),
-                            Some(updatedEvmLogs),
+                            const::TxResultCode_formatError,
+                            None<ByteArray>,
+                            None<EvmLogs>,
                             Some(gasUsage),
                             feeStats,
-                            true,
+                            false,
                         );
+                        evmCallStack_callHitError(5);  // should never return
+                        panic;
                     }
 
+                    // Update the global account store
+                    setGlobalAccountStore(
+                        deferredPayments_apply(
+                            accountStore_set(
+                                topFrame.accountStore,
+                                topFrame.runningAs,
+                                account_setContractInfo(
+                                    topFrame.runningAsAccount,
+                                    returnData,
+                                    evmJumpTable,
+                                    entryPoint,
+                                    storageMap,
+                                    true,
+                                )
+                            ),
+                            deferredPayments,
+                        )
+                    );
+
+                    returnData = bytearray_set256(
+                        bytearray_new(0),
+                        0,
+                        uint(topFrame.runningAs)
+                    );
+
+                    // emit queued sends
+                    let updatedEvmLogs = sendQueuedMessages(topFrame.sendQueue, topFrame.evmLogs);
+
+                    // Emit log item reporting success
+                    emitTxReceipt(
+                        globalCurrentTxRequest.incomingRequest,
+                        const::TxResultCode_success,
+                        Some(returnData),
+                        Some(updatedEvmLogs),
+                        Some(gasUsage),
+                        feeStats,
+                        true,
+                    );
 
                     // Use the storage left over by the constructor.
                     let storageMap = storageMap_new();
@@ -964,6 +961,7 @@ public impure func evmCallStack_returnFromCall(
                         Some(updatedEvmLogs),
                         Some(gasUsage),
                         feeStats,
+                        true,
                     );
 
                     // increment global contract count
