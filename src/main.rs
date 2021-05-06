@@ -105,6 +105,12 @@ struct WasmTest {
 
 ///Command line options for wasm-test subcommand.
 #[derive(Clap, Debug)]
+struct WasmSuite {
+    input: Vec<String>,
+}
+
+///Command line options for wasm-test subcommand.
+#[derive(Clap, Debug)]
 struct WasmRun {
     input: Vec<String>,
     #[clap(short, long)]
@@ -141,9 +147,51 @@ enum Args {
     Reformat(Reformat),
     EvmTests(EvmTests),
     WasmTest(WasmTest),
+    WasmSuite(WasmSuite),
     WasmRun(WasmRun),
     GenUpgradeCode(GenUpgrade),
     SerializeUpgrade(SerializeUpgrade),
+}
+
+fn run_test(buffer: &[u8], prev_memory: &Buffer, test_args: &[u64], entry: &String) -> (Buffer, u64) {
+    let code_0 = wasm::make_test(buffer, prev_memory, test_args, entry);
+    let mut code = vec![];
+    for i in 0..code_0.len() {
+        match &code_0[i].opcode {
+            Opcode::AVMOpcode(op) => {
+                code.push(Instruction::new_with_debug(
+                    op.clone(),
+                    code_0[i].immediate.clone(),
+                    code_0[i].debug_info.clone(), 
+                    code_0[i].debug_str.clone()));
+            }
+            _ => {},
+        }
+    }
+    let code_len = code.len();
+    println!("Code length {}", code_len);
+    let env = RuntimeEnvironment::new(Uint256::from_usize(11110000), None);
+    let program = LinkedProgram {
+        code: code,
+        static_val: Value::new_tuple(vec![]),
+        arbos_version: 10,
+        globals: vec![],
+        file_name_chart: BTreeMap::new(),
+    };
+    let mut machine = Machine::new(program, env);
+    machine.start_at_zero();
+    // let _used = machine.run(Some(CodePt::new_internal(code_len - 1)));
+    let _used = machine.debug(Some(CodePt::new_internal(code_len - 1)));
+    let buf = machine.stack.nth(0);
+    let res = machine.stack.nth(1);
+    println!("buf {:?} res {:?}", buf, res);
+    match (buf, res) {
+        (Some(Value::Buffer(buf)), Some(Value::Int(gl))) => {
+            (buf.clone(), gl.to_u64().unwrap())
+        }
+        _ => panic!("Unexpected output")
+    }
+
 }
 
 fn main() -> Result<(), CompileError> {
@@ -152,6 +200,37 @@ fn main() -> Result<(), CompileError> {
     let matches = Args::parse();
 
     match matches {
+        Args::WasmSuite(fname) => {
+            let filenames: Vec<_> = fname.input.clone();
+            if (filenames.len() != 1) {
+                println!("no input");
+                return Ok(());
+            }
+            let buffer = std::fs::read_to_string(&filenames[0]).unwrap();
+            let json = json::parse(&buffer).unwrap();
+            // println!("laoded {}", json::stringify(json))
+            // get commands
+            let mut module_buffer = Vec::<u8>::new();
+            for cmd in json["commands"].members() {
+                if cmd["type"] == "module" {
+                    let mut file = File::open(format!("wasm-suite/{}", &cmd["filename"].as_str().unwrap())).unwrap();
+                    let mut buffer = Vec::<u8>::new();
+                    file.read_to_end(&mut buffer).unwrap();
+                    module_buffer = buffer;
+                } else if cmd["type"] == "assert_return" {
+                    // println!("{:?}", cmd);
+                    if cmd["action"]["type"] == "invoke" {
+                        let entry = cmd["action"]["field"].as_str().unwrap();
+                        let mut args = vec![];
+                        for arg in cmd["action"]["args"].members() {
+                            args.push(arg["value"].as_str().unwrap().parse::<u64>().unwrap())
+                        }
+                        println!("{:?}", args);
+                        let (mem, asd) = run_test(&module_buffer, &Buffer::from_bytes(vec![]), &args, & entry.to_string());
+                    }
+                }
+            }
+        }
         Args::WasmTest(fname) => {
             let filenames: Vec<_> = fname.input.clone();
             if (filenames.len() != 1) {

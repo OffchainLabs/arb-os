@@ -1932,23 +1932,7 @@ fn get_func_imports(m: &Module) -> Vec<&ImportEntry> {
 }
 
 pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
-    let module = parity_wasm::deserialize_buffer::<Module>(buffer).unwrap();
-    assert!(module.code_section().is_some());
-
-    let imports = get_func_imports(&module);
-
-    let code_section = module.code_section().unwrap(); // Part of the module with functions code
-
-    /*
-    println!(
-        "Function count in wasm file: {}, {} imports",
-        code_section.bodies().len(),
-        imports.len()
-    );
-    */
-    let f_count = code_section.bodies().len() + imports.len();
     let mut init = vec![];
-    let max_memory = 1 << 20;
 
     // These might become replaced
     init.push(simple_op(AVMOpcode::Noop));
@@ -1971,6 +1955,77 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(2)));
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(3)));
     init.push(simple_op(AVMOpcode::Rset));
+
+    process_wasm_inner(buffer, &mut init, &vec![2], &"test".to_string());
+
+    init.push(simple_op(AVMOpcode::Rget));
+    init.push(immed_op(AVMOpcode::Tget, int_from_usize(4)));
+    init.push(simple_op(AVMOpcode::Rget));
+    init.push(immed_op(AVMOpcode::Tget, int_from_usize(2)));
+    init.push(simple_op(AVMOpcode::Rget));
+    init.push(immed_op(AVMOpcode::Tget, int_from_usize(3)));
+    init.push(simple_op(AVMOpcode::AuxPop));
+    init.push(simple_op(AVMOpcode::Pop));
+    init.push(simple_op(AVMOpcode::AuxPop));
+    init.push(simple_op(AVMOpcode::Rset));
+    init.push(simple_op(AVMOpcode::Noop));
+
+    init
+
+}
+
+fn process_test(buffer: &[u8], test_args: &[u64], entry: &String) -> Vec<Instruction> {
+    let mut init = vec![];
+
+    // These might become replaced
+    init.push(simple_op(AVMOpcode::Noop));
+    init.push(simple_op(AVMOpcode::Noop));
+    init.push(simple_op(AVMOpcode::Noop));
+
+    // Save register
+    init.push(simple_op(AVMOpcode::Rget));
+    init.push(simple_op(AVMOpcode::AuxPush));
+
+    // Initialize register
+    init.push(push_value(Value::new_tuple(vec![
+        Value::new_buffer(vec![]), // memory
+        int_from_usize(0), // call table
+        Value::new_buffer(vec![123, 234, 12]), // IO buffer
+        int_from_usize(3), // IO len
+        int_from_usize(1000000), // gas left
+    ])));
+    init.push(immed_op(AVMOpcode::Tset, int_from_usize(0)));
+    init.push(immed_op(AVMOpcode::Tset, int_from_usize(1)));
+    init.push(simple_op(AVMOpcode::Rset));
+
+    process_wasm_inner(buffer, &mut init, test_args, entry);
+
+    // return value is in expression stack?
+
+    init.push(simple_op(AVMOpcode::Rget));
+    init.push(immed_op(AVMOpcode::Tget, int_from_usize(0)));
+    // Pop frame?
+    init.push(simple_op(AVMOpcode::AuxPop));
+    init.push(simple_op(AVMOpcode::Pop));
+    init.push(simple_op(AVMOpcode::AuxPop));
+    init.push(simple_op(AVMOpcode::Rset));
+    init.push(simple_op(AVMOpcode::Noop));
+
+    init
+
+}
+
+fn process_wasm_inner(buffer: &[u8], init: &mut Vec<Instruction>, test_args: &[u64], entry: &String) {
+    let module = parity_wasm::deserialize_buffer::<Module>(buffer).unwrap();
+    assert!(module.code_section().is_some());
+
+    let imports = get_func_imports(&module);
+
+    let code_section = module.code_section().unwrap(); // Part of the module with functions code
+
+    let f_count = code_section.bodies().len() + imports.len();
+    let max_memory = 1 << 20;
+
 
     // Construct initial memory with globals
     init.push(simple_op(AVMOpcode::NewBuffer));
@@ -2006,7 +2061,7 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
         }
     }
 
-    set_memory(&mut init);
+    set_memory(init);
 
     // Put initial frame to aux stack
     init.push(push_frame(Value::new_tuple(vec![
@@ -2014,15 +2069,17 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
         Value::Label(Label::WasmFunc(f_count + 1)),
     ])));
 
-    // Add test argument to the frame
-    init.push(get_frame());
-    init.push(push_value(Value::Int(Uint256::from_usize(2))));
-    init.push(set64_from_buffer(0));
-    init.push(set_frame());
+    // Add test arguments to the frame
+    for arg in test_args {
+        init.push(get_frame());
+        init.push(push_value(Value::Int(Uint256::from_u64(*arg))));
+        init.push(set64_from_buffer(0));
+        init.push(set_frame());
+    }
 
     // Here we should have jump to the correct function
-    if let Some(f) = find_function(&module, "test") {
-        call_jump(&mut init, f);
+    if let Some(f) = find_function(&module, entry) {
+        call_jump(init, f);
     }
 
     let mut label = 2;
@@ -2043,7 +2100,7 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
         if f.field().contains("read") {
             init.push(debug_op("Read".to_string()));
             // Get buffer
-            get_buffer(&mut init);
+            get_buffer(init);
             // Get param
             init.push(get_frame());
             init.push(get64_from_buffer(0));
@@ -2052,42 +2109,42 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
         if f.field().contains("write") {
             init.push(debug_op("Write".to_string()));
             // Get buffer
-            get_buffer(&mut init);
+            get_buffer(init);
             // Get params
             init.push(get_frame());
             init.push(get64_from_buffer(1));
             init.push(get_frame());
             init.push(get64_from_buffer(0));
             init.push(simple_op(AVMOpcode::SetBuffer8));
-            set_buffer(&mut init);
+            set_buffer(init);
         }
         if f.field().contains("getlen") {
-            get_buffer_len(&mut init);
+            get_buffer_len(init);
         }
         if f.field().contains("setlen") {
             init.push(get_frame());
             init.push(get64_from_buffer(0));
-            set_buffer_len(&mut init);
+            set_buffer_len(init);
         }
         if f.field().contains("usegas") {
             let ok_label = label;
             label = label + 1;
             init.push(get_frame());
             init.push(get64_from_buffer(0));
-            get_gas_left(&mut init);
+            get_gas_left(init);
             init.push(simple_op(AVMOpcode::GreaterThan));
-            cjump(&mut init, ok_label);
+            cjump(init, ok_label);
 
             init.push(push_value(int_from_usize(0)));
-            set_gas_left(&mut init);
-            call_jump(&mut init, (f_count + 1) as u32);
+            set_gas_left(init);
+            call_jump(init, (f_count + 1) as u32);
 
             init.push(mk_label(ok_label));
             init.push(get_frame());
             init.push(get64_from_buffer(0));
-            get_gas_left(&mut init);
+            get_gas_left(init);
             init.push(simple_op(AVMOpcode::Minus));
-            set_gas_left(&mut init);
+            set_gas_left(init);
         }
         if f.field().contains("rvec") {
             let start_label = label;
@@ -2108,11 +2165,11 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
             init.push(get_frame());
             init.push(get64_from_buffer(2));
             init.push(simple_op(AVMOpcode::LessThan));
-            cjump(&mut init, end_label);
+            cjump(init, end_label);
 
             init.push(debug_op("Rvec loop".to_string()));
             // Read from IO
-            get_buffer(&mut init);
+            get_buffer(init);
             init.push(get_frame());
             init.push(get64_from_buffer(1)); // offset
             init.push(simple_op(AVMOpcode::GetBuffer8));
@@ -2120,7 +2177,7 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
             init.push(get_frame());
             init.push(get64_from_buffer(0)); // pointer
             init.push(simple_op(AVMOpcode::Swap1));
-            generate_store(&mut init, 0, memory_offset, 1);
+            generate_store(init, 0, memory_offset, 1);
 
             // increment counters
             init.push(get_frame());
@@ -2151,7 +2208,7 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
             init.push(set64_from_buffer(0));
             init.push(set_frame());
 
-            jump(&mut init, start_label);
+            jump(init, start_label);
             
             init.push(mk_label(end_label));
         }
@@ -2174,20 +2231,20 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
             init.push(get_frame());
             init.push(get64_from_buffer(2));
             init.push(simple_op(AVMOpcode::LessThan));
-            cjump(&mut init, end_label);
+            cjump(init, end_label);
 
             init.push(debug_op("Wvec loop".to_string()));
             // Read from memory
             init.push(get_frame());
             init.push(get64_from_buffer(0)); // pointer
-            generate_load(&mut init, 0, memory_offset, 1);
+            generate_load(init, 0, memory_offset, 1);
             // Write to IO
-            get_buffer(&mut init);
+            get_buffer(init);
             init.push(simple_op(AVMOpcode::Swap1));
             init.push(get_frame());
             init.push(get64_from_buffer(1)); // offset
             init.push(simple_op(AVMOpcode::SetBuffer8));
-            set_buffer(&mut init);
+            set_buffer(init);
 
             // increment counters
             init.push(get_frame());
@@ -2218,14 +2275,14 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
             init.push(set64_from_buffer(0));
             init.push(set_frame());
 
-            jump(&mut init, start_label);
+            jump(init, start_label);
             
             init.push(mk_label(end_label));
         }
 
         // Return from function
         init.push(get_return_pc());
-        get_return_from_table(&mut init);
+        get_return_from_table(init);
         init.push(simple_op(AVMOpcode::Jump));
     }
 
@@ -2249,12 +2306,12 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
                 init.push(push_value(Value::Int(Uint256::from_usize(idx + offset))));
                 init.push(simple_op(AVMOpcode::Equal));
                 init.push(simple_op(AVMOpcode::IsZero));
-                cjump(&mut init, next_label);
+                cjump(init, next_label);
                 // We will call this function now or fail
                 init.push(simple_op(AVMOpcode::Pop));
                 init.push(push_value(Value::Int(hash_ftype(&ftype))));
                 init.push(simple_op(AVMOpcode::Equal));
-                call_cjump(&mut init, *f_idx as u32);
+                call_cjump(init, *f_idx as u32);
                 init.push(simple_op(AVMOpcode::Panic));
                 init.push(mk_label(next_label));
             }
@@ -2264,61 +2321,34 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
     // Cleaning up
     init.push(mk_func_label(f_count + 1));
     init.push(debug_op("Cleaning up".to_string()));
-    init.push(simple_op(AVMOpcode::Rget));
-    init.push(immed_op(AVMOpcode::Tget, int_from_usize(4)));
-    init.push(simple_op(AVMOpcode::Rget));
-    init.push(immed_op(AVMOpcode::Tget, int_from_usize(2)));
-    init.push(simple_op(AVMOpcode::Rget));
-    init.push(immed_op(AVMOpcode::Tget, int_from_usize(3)));
-    init.push(simple_op(AVMOpcode::AuxPop));
-    init.push(simple_op(AVMOpcode::Pop));
-    init.push(simple_op(AVMOpcode::AuxPop));
-    init.push(simple_op(AVMOpcode::Rset));
-    init.push(simple_op(AVMOpcode::Noop));
-
-    init
 }
 
 pub fn load(buffer: &[u8], param: &[u8]) -> Vec<Instruction> {
-    // use std::fs::File;
-    // use std::io::Write;
     
     let init = process_wasm(buffer);
-    let mut op_buf = vec![];
-    let mut immed_buf = vec![];
-    let mut has_immed_buf = vec![];
-    let mut has_label_buf = vec![];
-    for inst in init.iter() {
-        op_buf.push(get_inst(inst));
-        if has_immed(inst) {
-            has_immed_buf.push(1u8)
-        } else {
-            has_immed_buf.push(0u8)
-        }
-        if has_label(inst) {
-            has_label_buf.push(1u8)
-        } else {
-            has_label_buf.push(0u8)
-        }
-        immed_buf.push(get_immed(inst));
-    }
 
     let (res, tab) = resolve_labels(init);
-    // println!("Table {}", tab);
     let res = clear_labels(res);
-    // println!("Code {}", );
-    /*
-    let str = serde_json::to_string(&res).unwrap();
-    let mut file = File::create("foo.json").unwrap();
-    file.write_all(&str.as_bytes()).unwrap();
-    let mut file2 = File::create("labels.json").unwrap();
-    file2.write_all(serde_json::to_string(&has_label_buf).unwrap().as_bytes()).unwrap();
-*/
     let mut a = vec![];
     a.push(push_value(int_from_usize(param.len())));
     // a.push(push_value(int_from_usize(10000)));
     a.push(push_value(Value::new_buffer(param.to_vec())));
     a.push(push_value(tab));
+    for i in 3..res.len() {
+        a.push(res[i].clone());
+    }
+    a
+}
+
+pub fn make_test(buffer: &[u8], prev_memory: &Buffer, test_args: &[u64], entry: &String) -> Vec<Instruction> {
+    
+    let init = process_test(buffer, test_args, entry);
+
+    let (res, tab) = resolve_labels(init);
+    let res = clear_labels(res);
+    let mut a = vec![];
+    a.push(push_value(tab));
+    a.push(push_value(Value::Buffer(prev_memory.clone())));
     for i in 3..res.len() {
         a.push(res[i].clone());
     }
