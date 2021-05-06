@@ -180,8 +180,8 @@ fn run_test(buffer: &[u8], prev_memory: &Buffer, test_args: &[u64], entry: &Stri
     };
     let mut machine = Machine::new(program, env);
     machine.start_at_zero();
-    // let _used = machine.run(Some(CodePt::new_internal(code_len - 1)));
-    let _used = machine.debug(Some(CodePt::new_internal(code_len - 1)));
+    let _used = machine.run(Some(CodePt::new_internal(code_len - 1)));
+    // let _used = machine.debug(Some(CodePt::new_internal(code_len - 1)));
     let buf = machine.stack.nth(0);
     let res = machine.stack.nth(1);
     println!("buf {:?} res {:?}", buf, res);
@@ -193,6 +193,15 @@ fn run_test(buffer: &[u8], prev_memory: &Buffer, test_args: &[u64], entry: &Stri
     }
 
 }
+
+fn parse_list(lst: &json::JsonValue) -> Vec<u64> {
+    let mut args = vec![];
+    for arg in lst.members() {
+        args.push(arg["value"].as_str().unwrap().parse::<u64>().unwrap())
+    }
+    args
+}
+
 
 fn main() -> Result<(), CompileError> {
     let mut print_time = true;
@@ -221,12 +230,11 @@ fn main() -> Result<(), CompileError> {
                     // println!("{:?}", cmd);
                     if cmd["action"]["type"] == "invoke" {
                         let entry = cmd["action"]["field"].as_str().unwrap();
-                        let mut args = vec![];
-                        for arg in cmd["action"]["args"].members() {
-                            args.push(arg["value"].as_str().unwrap().parse::<u64>().unwrap())
-                        }
-                        println!("{:?}", args);
+                        let args = parse_list(&cmd["action"]["args"]);
+                        // println!("{:?}", args);
                         let (mem, asd) = run_test(&module_buffer, &Buffer::from_bytes(vec![]), &args, & entry.to_string());
+                        let expected = parse_list(&cmd["expected"]);
+                        println!("expected {:?}", expected);
                     }
                 }
             }
