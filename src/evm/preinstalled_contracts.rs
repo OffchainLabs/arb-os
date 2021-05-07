@@ -1114,7 +1114,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys_orig_binding._arbos_version(&mut machine)?,
-        Uint256::from_u64(4)
+        Uint256::from_u64(12)
     );
 
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
@@ -1446,10 +1446,10 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         "L2 tx {}, L1 calldata {}, L2 storage {}, base gas {}, congestion gas {}, total gas {}",
         l2tx, l1calldata, storage, basegas, conggas, totalgas
     );
-    assert_eq!(l2tx, Uint256::from_u64(642483725000000));
-    assert_eq!(l1calldata, Uint256::from_u64(2778308000000));
-    assert_eq!(storage, Uint256::from_u64(301990000000000));
-    assert_eq!(basegas, Uint256::from_u64(15099500));
+    assert_eq!(l2tx, Uint256::from_u64(658993125000000));
+    assert_eq!(l1calldata, Uint256::from_u64(178106250000));
+    assert_eq!(storage, Uint256::from_u64(309750000000000));
+    assert_eq!(basegas, Uint256::from_u64(15487500));
     assert!(conggas.is_zero());
     assert_eq!(basegas.add(&conggas), totalgas);
 
@@ -1459,7 +1459,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         l2tx, l1calldata, storage
     );
     assert_eq!(l2tx, Uint256::from_u64(42550000));
-    assert_eq!(l1calldata, Uint256::from_u64(184000));
+    assert_eq!(l1calldata, Uint256::from_u64(11500));
     assert_eq!(storage, Uint256::from_u64(20000000));
 
     let (speed_limit, gas_pool_max, tx_gas_limit) =
@@ -1641,19 +1641,19 @@ pub fn _insert_create_node(
     buf.extend(height_l1.to_bytes_be());
     buf.extend(height_l1.add(deadline_l1_delta).to_bytes_be());
     buf.extend(asserter.to_bytes_be());
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None, None);
 }
 
 pub fn _insert_confirm_node(rt_env: &mut RuntimeEnvironment, height_l2: &Uint256) {
     let mut buf = vec![1u8];
     buf.extend(height_l2.to_bytes_be());
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None, None);
 }
 
 pub fn _insert_reject_node(rt_env: &mut RuntimeEnvironment, height_l2: &Uint256) {
     let mut buf = vec![2u8];
     buf.extend(height_l2.to_bytes_be());
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None, None);
 }
 
 pub fn _insert_new_stake(
@@ -1670,18 +1670,18 @@ pub fn _insert_new_stake(
             .unwrap_or(rt_env.current_block_num.clone())
             .to_bytes_be(),
     );
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None, None);
 }
 
 pub fn _insert_claim_node(rt_env: &mut RuntimeEnvironment, height_l2: &Uint256, claimer: &Uint256) {
     let mut buf = vec![4u8];
     buf.extend(height_l2.to_bytes_be());
     buf.extend(claimer.to_bytes_be());
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None, None);
 }
 
 pub fn _insert_rollup_debug(rt_env: &mut RuntimeEnvironment) {
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &[255u8]);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &[255u8], None, None);
 }
 
 #[test]

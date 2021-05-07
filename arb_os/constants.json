@@ -1,5 +1,5 @@
 {
-  "arbos_version": 10,
+  "arbos_version": 13,
   "integer": {
     "AVMSendType_batch": 0,
     "AVM_add": 1,
@@ -88,9 +88,12 @@
     "ArbitrumNonZeroBalanceCallStipend": 20000,
     "Charging_AssumedBatchCostL1Gas": 50000,
     "Charging_DefaultArbGasDivisor": 10000,
-    "Charging_DefaultL1GasPerCalldataByte": 16,
+    "Charging_DefaultArbGasPerL2Tx": 0,
+    "Charging_DefaultArbGasPerCalldataUnit": 0,
+    "Charging_DefaultL1GasPerCalldataUnit": 1,
     "Charging_DefaultL1GasPerL2Tx": 3700,
     "Charging_DefaultL1GasPerStorage": 2000,
+    "Charging_DefaultArbGasPerStorage": 0,
     "Charging_GasPoolDepthSeconds": 60,
     "Charging_MinArbGasForContractTx": 5000,
     "Charging_RetryableTxRepriceIntervalSeconds": 900,

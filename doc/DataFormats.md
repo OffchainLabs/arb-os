@@ -77,7 +77,9 @@ At present. the following options are supported:
 * Option 2: set charging parameters: 
   * speed limit per second (uint); 
   * L1 gas per L2 tx (uint); 
-  * L1 gas per L2 calldata byte; 
+  * ArbGas per L2 tx (uint);
+  * L1 gas per L2 calldata unit (uint) [a non-zero calldata byte is 16 units; a zero calldata byte is 4 units]; 
+  * ArbGas per L2 calldata unit (uint);
   * L1 gas per storage unit allocated (uint); 
   * ratio of L1 gas price to base ArbGas price; 
   * network fee recipient (address encoded as uint); 
@@ -91,9 +93,9 @@ All other options are ignored at present.
 
 [This is no longer supported.]
 
-##### Message type 6: reserved
+##### Message type 6: end of Arbitrum block
 
-This message type is reserved for internal use by ArbOS. It should never appear in the inbox.
+A message of this type directs ArbOS to end the current Arbitrum block and start a new one. All integer or address fields (other than the message type) should be zero, and the buffer should be empty.
 
 **Message type 7: L2 transaction funded by L1**
 
@@ -143,12 +145,14 @@ The type-specific data consists of:
 
 * 3 (byte)
 * aggregator address (address encoded as uint)
+* limit on computation ArbGas (uint)
 * an L2 message of subtype 7
 
-This executes the enclosed L2 message, with two deviations from the normal semantics.
+This executes the enclosed L2 message, with the following deviations from the normal semantics.
 
 * The aggregator address specified in the message is considered to be the aggregator that submitted this message.
 * The transaction signature on the L2 message is ignored, and the enclosed transaction is treated as if it carried a valid signature by the sender of this L1 message.
+* The ArbGas used for computation will be limited by the supplied limit. (The supplied limit will be ignored if it is larger than the ordinary limit that applies to all transactions.)
 
 ## L2 messages
 
@@ -190,7 +194,7 @@ An L2 message consists of:
 
 The L2 messages in a batch will be separated, and treated as if each had arrived separately, in the order in which they appear in the batch.
 
-The enclosed L2 message may have any valid subtype are allowed.
+The enclosed L2 message may have any valid subtype.
 
 **Subtype 4: signed tx from user** has subtype-specific data that is identical to the standard Ethereum encoded transaction format. The subtype-specific data consists of an RLP-encoded list containing:
 
@@ -364,5 +368,4 @@ Currently only one type is supported: an L2-to-L1 call, which has send type 3.  
 * timestamp (uint)
 * callvalue (uint)
 * calldata (sequence of bytes)
-
 

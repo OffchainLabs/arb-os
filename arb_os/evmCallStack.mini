@@ -199,6 +199,10 @@ public impure func evmCallStack_makeEmpty() {
     globalCallStack = None<EvmCallFrame>;
 }
 
+public impure func evmCallStack_currentTxRequestGasBid() -> uint {
+    return globalCurrentTxRequest.gasPrice;
+}
+
 public impure func evmCallStack_addStorageCharge(units: uint) {
     if let Some(topFrame) = globalCallStack {
         globalCallStack = Some(
@@ -841,13 +845,7 @@ public impure func evmCallStack_returnFromCall(
 
                         if let Some(reqAndLogs) = globalCurrentRetryableRequest {
                             emitTxReceipt(
-                                reqAndLogs.req with {
-                                    arbBlockNumber: inbox_currentArbBlockNumber()
-                                } with {
-                                    ethBlockNumber: inbox_currentEthBlockNumber()
-                                } with {
-                                    timestamp: inbox_currentTimestamp()
-                                },
+                                reqAndLogs.req,
                                 const::TxResultCode_success,
                                 Some(returnData),
                                 Some(reqAndLogs.evmLogs),
@@ -957,7 +955,16 @@ public impure func evmCallStack_callRetryableTxAndReturn(rtx: RetryableTx) -> (b
         };
         globalCallStack = Some(theFrame);
 
-        globalCurrentRetryableRequest = Some(struct { req: rtx.l1Message, evmLogs: evmlogs_empty(), });
+        globalCurrentRetryableRequest = Some(struct {
+            req: rtx.l1Message with {
+                arbBlockNumber: inbox_currentArbBlockNumber()
+            } with {
+                ethBlockNumber: inbox_currentEthBlockNumber()
+            } with {
+                timestamp: inbox_currentTimestamp()
+            },
+            evmLogs: evmlogs_empty(),
+        });
 
         let retCode = evmOp_callAndReturn(
             1000000000000000000,    // give all of our gas to the callee

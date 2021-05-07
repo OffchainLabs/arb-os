@@ -2,6 +2,12 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+use accounts::Account;
+use accounts::getGlobalAccountStore;
+use accounts::account_getBalance;
+use accounts::account_setContractInfo;
+use accounts::accountStore_forall;
+
 use chainParameters::chainParams_getOwner;
 use chainParameters::chainParams_setOwner;
 use chainParameters::chainParams_setSecondsPerSend;
@@ -42,7 +48,6 @@ use gasAccounting::gasAccounting_setFeeRecipients;
 use gasAccounting::setFairGasPriceSender;
 use gasAccounting::setGasAccountingParams;
 
-use inbox::AggregatorInfo;
 use inbox::inbox_currentArbBlockNumber;
 use inbox::inbox_currentEthBlockNumber;
 use inbox::inbox_currentTimestamp;
@@ -113,6 +118,8 @@ public impure func arbowner_txcall() {
             arbowner_setSecondsPerSend(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_setGasAccountingParams) {
             arbowner_setGasAccountingParams(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_getTotalOfEthBalances) {
+            arbowner_getTotalOfEthBalances(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_deployContract) {
             arbowner_deployContract(topFrame, calldata);
         } else {
@@ -316,40 +323,57 @@ impure func arbowner_setGasAccountingParams(topFrame: EvmCallFrame, calldata: By
     }
 }
 
+impure func arbowner_getTotalOfEthBalances(topFrame: EvmCallFrame, calldata: ByteArray) { // () -> uint
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 150, 0, 0);
+    }
+    let total = unsafecast<uint>(accountStore_forall(
+        getGlobalAccountStore(),
+        unsafecast<func(Account, any) -> any>(totalEthClosure),
+        0
+    ));
+    if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, total))) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 151, 0, 0);
+    }
+}
+
+func totalEthClosure(acct: Account, state: uint) -> uint {
+    return state + account_getBalance(acct);
+}
+
 // function deployContract(bytes calldata constructorData, address deemedSender, uint deemedNonce) external payable returns(address);
 impure func arbowner_deployContract(topFrame: EvmCallFrame, calldata: ByteArray) {
     let calldataSize = bytearray_size(calldata);
     if (calldataSize < 4+4*32) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 150, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 160, 0, 0);
     }
     let deemedSender = address(bytearray_get256(calldata, 4+32));
     let deemedNonce = bytearray_get256(calldata, 4+2*32);
     let constructorDataSize = bytearray_get256(calldata, 4+3*32);
     if (calldataSize != 4 + 32 * (4 + (constructorDataSize+31)/32)) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 151, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 161, 0, 0);
     }
     let constructorData = bytearray_extract(calldata, 4+4*32, constructorDataSize);
     let callvalue = evmCallFrame_getCallvalue(topFrame);
 
     if( ! evmCallStack_setTopFrameMemory(constructorData) ) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 152, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 162, 0, 0);
     }
 
     let deployAddress = address(keccakOfRlpEncodedUintPair(uint(deemedSender), deemedNonce));
 
     if (doCreationOpcode(callvalue, 0, constructorDataSize, deployAddress) == address(0)) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 153, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 163, 0, 0);
     }
 
     if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, uint(deployAddress)))) {
         evmOp_return(0, 32);
     } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 154, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 164, 0, 0);
     }
 }
-
-
-
 
 
 

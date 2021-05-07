@@ -929,14 +929,7 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
     let sequencer_addr = Uint256::from_usize(1337);
-    let mut rt_env = RuntimeEnvironment::_new_options(
-        Uint256::from_usize(1111),
-        Some((
-            sequencer_addr.clone(),
-            Uint256::from_u64(20),
-            Uint256::from_u64(20 * 30),
-        )),
-    );
+    let mut rt_env = RuntimeEnvironment::_new_options(Uint256::from_usize(1111));
 
     let wallet = rt_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1064,14 +1057,7 @@ pub fn _evm_xcontract_call_sequencer_slow_path(
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
     let sequencer_addr = Uint256::from_usize(1337);
-    let mut rt_env = RuntimeEnvironment::_new_options(
-        Uint256::from_usize(1111),
-        Some((
-            sequencer_addr.clone(),
-            Uint256::from_u64(20),
-            Uint256::from_u64(20 * 30),
-        )),
-    );
+    let mut rt_env = RuntimeEnvironment::_new_options(Uint256::from_usize(1111));
 
     let wallet = rt_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1316,14 +1302,7 @@ pub fn _evm_xcontract_call_sequencer_reordering(
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
     let sequencer_addr = Uint256::from_usize(1337);
-    let mut rt_env = RuntimeEnvironment::_new_options(
-        Uint256::from_usize(1111),
-        Some((
-            sequencer_addr.clone(),
-            Uint256::from_u64(20),
-            Uint256::from_u64(20 * 30),
-        )),
-    );
+    let mut rt_env = RuntimeEnvironment::_new_options(Uint256::from_usize(1111));
 
     let wallet = rt_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());

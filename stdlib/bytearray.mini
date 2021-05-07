@@ -56,6 +56,10 @@ public func bytearray_toSizeAndBuffer(ba: ByteArray) -> (uint, buffer) {
     return (size, buf);
 }
 
+public func bytearray_getCalldataUnits(ba: ByteArray) -> uint {
+    return buffer_getCalldataUnits(ba.contents, ba.sliceOffset, ba.size);
+}
+
 type MarshalledBytes = struct {
     nbytes: uint,
     contents: MarshalledBytesCell,
@@ -339,5 +343,19 @@ public func bytearray_wrap_slice(cont: buffer, offset: uint, size: uint) -> Byte
         sliceOffset: offset,
         contents: cont,
     };
+}
+
+public func buffer_getCalldataUnits(buf: buffer, offset: uint, nbytes: uint) -> uint {
+    let units = 0;
+    let i = 0;
+    while (i < nbytes) {
+        if (getbuffer8(buf, offset+i) == 0) {
+            units = units + 4;
+        } else {
+            units = units + 16;
+        }
+        i = i+1;
+    }
+    return units;
 }
 
