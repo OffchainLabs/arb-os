@@ -1766,7 +1766,6 @@ fn find_memory_size(m: &Module) -> u32 {
         None => 0,
         Some(sec) => {
             for e in sec.entries() {
-                println!("Mme limits {:?}", e.limits());
                 return e.limits().initial();
             }
             0
@@ -2080,9 +2079,9 @@ fn process_wasm_inner(buffer: &[u8], init: &mut Vec<Instruction>, test_args: &[u
     let max_memory = 1 << 20;
 
     // Construct initial memory with globals
-    init.push(simple_op(AVMOpcode::NewBuffer));
-
     let memory_offset = if init_memory {
+        init.push(simple_op(AVMOpcode::NewBuffer));
+
         let mem_size = find_memory_size(&module);
 
         init.push(push_value(int_from_u32(mem_size)));
@@ -2122,14 +2121,7 @@ fn process_wasm_inner(buffer: &[u8], init: &mut Vec<Instruction>, test_args: &[u
     } else {
         let mut globals = 1;
         if let Some(sec) = module.global_section() {
-            for g in sec.entries().iter() {
-                init.push(push_value(Value::Int(Uint256::from_usize(init_value(
-                    &module,
-                    g.init_expr(),
-                )))));
-                init.push(set64_from_buffer(globals));
-                globals = globals + 1;
-            }
+            globals += sec.entries().len();
         }
 
         // Add initial memory segments
