@@ -12,6 +12,7 @@ use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_buffer;
 use std::bytearray::bytearray_slice;
 use std::bytearray::bytearray_wrap_slice;
+use std::bytearray::buffer_getCalldataUnits;
 
 
 type ByteStream = struct {
@@ -36,6 +37,10 @@ public func bytestream_atEof(bs: ByteStream) -> bool {
 
 public func bytestream_bytesReadSoFar(bs: ByteStream) -> uint {
     return bs.currentOffset;
+}
+
+public func bytestream_getCalldataUnits(bs: ByteStream, nbytes: uint) -> uint {
+    return buffer_getCalldataUnits(bs.buf, bs.slice, nbytes);
 }
 
 public func bytestream_bytesRemaining(bs: ByteStream) -> uint {

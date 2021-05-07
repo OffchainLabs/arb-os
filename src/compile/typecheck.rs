@@ -907,9 +907,10 @@ fn typecheck_statement<'a>(
             } else {
                 Err(new_type_error(
                     format!(
-                        "return statement has wrong type, expected: \"{}\", got: \"{}\"",
-                        return_type.get_representation(type_tree)?.display(),
-                        tc_expr.get_type().get_representation(type_tree)?.display()
+                        "return statement has wrong type, {}",
+                        return_type
+                            .mismatch_string(&tc_expr.get_type(), type_tree)
+                            .unwrap_or("failed to resolve type name".to_string())
                     ),
                     debug_info.location,
                 ))
@@ -951,9 +952,14 @@ fn typecheck_statement<'a>(
                     {
                         return Err(new_type_error(
                             format!(
-                                "mismatched types in break statement expected {:?}, got {:?}",
-                                te.map(|te| te.get_type()).unwrap_or(Type::Tuple(vec![])),
-                                tipe
+                                "mismatched types in break statement {}",
+                                te.map(|te| te.get_type())
+                                    .unwrap_or(Type::Tuple(vec![]))
+                                    .mismatch_string(
+                                        &tipe.clone().unwrap_or(Type::Tuple(vec![])),
+                                        type_tree
+                                    )
+                                    .expect("Did not find type mismatch")
                             ),
                             debug_info.location,
                         ));
@@ -1053,35 +1059,39 @@ fn typecheck_statement<'a>(
                     } else {
                         Err(new_type_error(
                             format!(
-                                "mismatched types in assignment statement expected {}, got {}",
-                                var_type.get_representation(type_tree)?.display(),
-                                tc_expr.get_type().get_representation(type_tree)?.display()
+                                "mismatched types in assignment statement {}",
+                                var_type
+                                    .mismatch_string(&tc_expr.get_type(), type_tree)
+                                    .expect("Did not find mismatch")
                             ),
                             debug_info.location,
                         ))
                     }
                 }
-                None => {
-                    match global_vars.get(&*name) {
-                        Some((var_type, idx)) => {
-                            if var_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
-                                Ok((
-                                    TypeCheckedStatementKind::AssignGlobal(*idx, tc_expr),
-                                    vec![],
-                                ))
-                            } else {
-                                Err(new_type_error(
-                                format!("mismatched types in assignment statement expected {}, got {}", var_type.get_representation(type_tree)?.display(), tc_expr.get_type().get_representation(type_tree)?.display()),
+                None => match global_vars.get(&*name) {
+                    Some((var_type, idx)) => {
+                        if var_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
+                            Ok((
+                                TypeCheckedStatementKind::AssignGlobal(*idx, tc_expr),
+                                vec![],
+                            ))
+                        } else {
+                            Err(new_type_error(
+                                format!(
+                                    "mismatched types in assignment statement {}",
+                                    var_type
+                                        .mismatch_string(&tc_expr.get_type(), type_tree)
+                                        .expect("Did not find type mismatch")
+                                ),
                                 debug_info.location,
                             ))
-                            }
                         }
-                        None => Err(new_type_error(
-                            "assignment to non-existent variable".to_string(),
-                            debug_info.location,
-                        )),
                     }
-                }
+                    None => Err(new_type_error(
+                        "assignment to non-existent variable".to_string(),
+                        debug_info.location,
+                    )),
+                },
             }
         }
         StatementKind::While(cond, body) => {
@@ -1512,7 +1522,12 @@ fn typecheck_expr(
                                     HashSet::new(),
                                 ) {
                                     return Err(new_type_error(
-                                        format!("wrong argument type in function call, expected \"{}\", got \"{}\"", resolved_arg_type.get_representation(type_tree)?.display(), tc_args[i].get_type().get_representation(type_tree)?.display()),
+                                        format!(
+                                            "wrong argument type in function call, {}",
+                                            resolved_arg_type
+                                                .mismatch_string(&tc_args[i].get_type(), type_tree)
+                                                .expect("Did not find a mismatch")
+                                        ),
                                         loc,
                                     ));
                                 }
@@ -1613,9 +1628,9 @@ fn typecheck_expr(
                         } else {
                             Err(new_type_error(
                                 format!(
-                                    "invalid key value in map lookup, expected \"{}\", got \"{}\"",
-                                    kt.display(),
-                                    tc_idx.get_type().display()
+                                    "invalid key value in map lookup, {}",
+                                    kt.mismatch_string(&tc_idx.get_type(), type_tree)
+                                        .expect("Did not find type mismatch")
                                 ),
                                 loc,
                             ))
@@ -1761,7 +1776,11 @@ fn typecheck_expr(
                             }
                         } else {
                             Err(new_type_error(
-                                format!("mismatched types in array modifier, expected \"{}\", got \"{}\"", t.display(), tc_val.get_type().display()),
+                                format!(
+                                    "mismatched types in array modifier, {}",
+                                    t.mismatch_string(&tc_val.get_type(), type_tree)
+                                        .expect("Did not find type mismatch")
+                                ),
                                 loc,
                             ))
                         }
@@ -1796,13 +1815,21 @@ fn typecheck_expr(
                                 ))
                             } else {
                                 Err(new_type_error(
-                                    format!("invalid value type for map modifier, expected \"{}\", got \"{}\"", vt.display(), tc_val.get_type().display()),
+                                    format!(
+                                        "invalid value type for map modifier, {}",
+                                        vt.mismatch_string(&tc_val.get_type(), type_tree)
+                                            .expect("Did not find type mismatch")
+                                    ),
                                     loc,
                                 ))
                             }
                         } else {
                             Err(new_type_error(
-                                format!("invalid key type for map modifier, expected \"{}\", got \"{}\"", kt.display(), tc_index.get_type().display()),
+                                format!(
+                                    "invalid key type for map modifier, {}",
+                                    kt.mismatch_string(&tc_index.get_type(), type_tree)
+                                        .expect("Did not find type mismatch")
+                                ),
                                 loc,
                             ))
                         }
@@ -1852,7 +1879,13 @@ fn typecheck_expr(
                                 ))
                             } else {
                                 Err(new_type_error(
-                                    format!("incorrect value type in struct modifier, expected \"{}\", found \"{}\"", fields[index].tipe.display(), tc_val.get_type().display()),
+                                    format!(
+                                        "incorrect value type in struct modifier, {}",
+                                        fields[index]
+                                            .tipe
+                                            .mismatch_string(&tc_val.get_type(), type_tree)
+                                            .expect("Did not find type mismatch")
+                                    ),
                                     loc,
                                 ))
                             }

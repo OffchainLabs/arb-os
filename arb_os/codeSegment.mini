@@ -75,9 +75,9 @@ use std::avmcodebuilder::pushInstructionImm;
 use std::avmcodebuilder::pushValue;
 
 
-public impure func pcTableForCode(code: ByteArray) -> option<Stack> {
-    let (code, _, pcTable) = translateEvmCodeSegment(bytestream_new(code), true)?;
-    return Some(stack_push(pcTable, (0, code)));
+public impure func pcTableForCode(code: ByteArray) -> Stack {
+    let (code, _, pcTable) = translateEvmCodeSegment(bytestream_new(code), true);
+    return stack_push(pcTable, (0, code));
 }
 
 type EvmInstruction = struct {
@@ -103,7 +103,7 @@ func evmInstructionStack_pop(s: EvmInstructionStack) -> option<(EvmInstructionSt
 
 var unreachableMask: uint;
 
-impure func parseEvmCodeSegment(bs: ByteStream) -> option<EvmInstructionStack> {
+impure func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
     let stack = evmInstructionStack_new();
     let evmPc = 0;
     let reachable = true;
@@ -151,7 +151,7 @@ impure func parseEvmCodeSegment(bs: ByteStream) -> option<EvmInstructionStack> {
             }
             if ((unreachableMask & asm(opcode, 1) uint { shl }) != 0) { reachable = false;    }
         } else {
-            return Some(stack);
+            return stack;
         }
     };
 }
@@ -515,8 +515,8 @@ impure func generateCodeForEvmSegment(
 public impure func translateEvmCodeSegment(
     bs: ByteStream,
     makePcTable: bool,
-) -> option<(AvmCodePoint, map<uint, AvmCodePoint>, Stack)> {
-    return Some(generateCodeForEvmSegment(parseEvmCodeSegment(bs)?, makePcTable));
+) -> (AvmCodePoint, map<uint, AvmCodePoint>, Stack) {
+    return generateCodeForEvmSegment(parseEvmCodeSegment(bs), makePcTable);
 }
 
 impure func pushEvmInsnDenomCheck(

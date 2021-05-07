@@ -22,12 +22,12 @@ interface ArbRetryableTx {
     function getLifetime() external view returns(uint);
 
     /**
-    * @notice Return the timestamp when txId will age out, or zero if txId does not exist.
-    * The timestamp could be in the past, because aged-out txs might not be discarded immediately.
-    * @param txId unique identifier of retryable message: keccak256(keccak256(ArbchainId, inbox-sequence-number), uint(0) )
-    * @return timestamp for txn's deadline  
+    * @notice Return the timestamp when ticketId will age out, or zero if ticketId does not exist.
+    * The timestamp could be in the past, because aged-out tickets might not be discarded immediately.
+    * @param ticketId unique ticket identifier
+    * @return timestamp for ticket's deadline
     */
-    function getTimeout(bytes32 txId) external view returns(uint);
+    function getTimeout(bytes32 ticketId) external view returns(uint);
 
     /** 
     * @notice Return the price, in wei, of submitting a new retryable tx with a given calldata size.
@@ -37,38 +37,39 @@ interface ArbRetryableTx {
     function getSubmissionPrice(uint calldataSize) external view returns (uint, uint);
 
     /** 
-     * @notice Return the price, in wei, of extending the lifetime of txId by an additional lifetime period. Revert if txId doesn't exist.
-     * @param txId unique identifier of retryable message: keccak256(keccak256(ArbchainId, inbox-sequence-number), uint(0) )
+     * @notice Return the price, in wei, of extending the lifetime of ticketId by an additional lifetime period. Revert if ticketId doesn't exist.
+     * @param ticketId unique ticket identifier
      * @return (price, nextUpdateTimestamp). Price is guaranteed not to change until nextUpdateTimestamp.
     */
-    function getKeepalivePrice(bytes32 txId) external view returns(uint, uint);
+    function getKeepalivePrice(bytes32 ticketId) external view returns(uint, uint);
 
     /** 
-    @notice Deposits callvalue into the sender's L2 account, then adds one lifetime period to the life of txId.
+    @notice Deposits callvalue into the sender's L2 account, then adds one lifetime period to the life of ticketId.
     * If successful, emits LifetimeExtended event.
-    * Revert if txId does not exist, or if the timeout of txId is already at least one lifetime in the future, or if the sender has insufficient funds (after the deposit).
-    * @param txId unique identifier of retryable message: keccak256(keccak256(ArbchainId, inbox-sequence-number), uint(0) )
-    * @return New timeout of txId.
+    * Revert if ticketId does not exist, or if the timeout of ticketId is already at least one lifetime period in the future, or if the sender has insufficient funds (after the deposit).
+    * @param ticketId unique ticket identifier
+    * @return New timeout of ticketId.
     */
-    function keepalive(bytes32 txId) external payable returns(uint);
+    function keepalive(bytes32 ticketId) external payable returns(uint);
 
     /**
-    * @notice Return the beneficiary of txId.
-    * Revert if txId doesn't exist.
-    * @param txId unique identifier of retryable message: keccak256(keccak256(ArbchainId, inbox-sequence-number), uint(0) )
-    * @return address of beneficiary for transaction 
+    * @notice Return the beneficiary of ticketId.
+    * Revert if ticketId doesn't exist.
+    * @param ticketId unique ticket identifier
+    * @return address of beneficiary for ticket
     */
-    function getBeneficiary(bytes32 txId) external view returns (address);
+    function getBeneficiary(bytes32 ticketId) external view returns (address);
 
     /** 
-    @notice Cancel txId and refund its callvalue to its beneficiary.
-    * Revert if txId doesn't exist, or if called by anyone other than txId's beneficiary.
-    @param txId unique identifier of retryable message: keccak256(keccak256(ArbchainId, inbox-sequence-number), uint(0) )
+    * @notice Cancel ticketId and refund its callvalue to its beneficiary.
+    * Revert if ticketId doesn't exist, or if called by anyone other than ticketId's beneficiary.
+    * @param ticketId unique ticket identifier
     */
-    function cancel(bytes32 txId) external;
+    function cancel(bytes32 ticketId) external;
 
-    event LifetimeExtended(bytes32 indexed txId, uint newTimeout);
-    event Redeemed(bytes32 indexed txId);
-    event Canceled(bytes32 indexed txId);
+    event TicketCreated(bytes32 indexed ticketId);
+    event LifetimeExtended(bytes32 indexed ticketId, uint newTimeout);
+    event Redeemed(bytes32 indexed ticketId);
+    event Canceled(bytes32 indexed ticketId);
 }
 

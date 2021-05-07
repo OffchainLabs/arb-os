@@ -416,6 +416,37 @@ impl<'a> _ArbOwner<'a> {
             Err(ethabi::Error::from("reverted"))
         }
     }
+
+    pub fn _deploy_contract(
+        &self,
+        machine: &mut Machine,
+        constructor_data: &[u8],
+        deemed_address: Uint256,
+        deemed_nonce: Uint256,
+    ) -> Result<Uint256, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "deployContract",
+            &[
+                ethabi::Token::Bytes(constructor_data.to_vec()),
+                ethabi::Token::Address(deemed_address.to_h160()),
+                ethabi::Token::Uint(deemed_nonce.to_u256()),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
 }
 
 pub struct _ArbGasInfo<'a> {
@@ -1083,7 +1114,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys_orig_binding._arbos_version(&mut machine)?,
-        Uint256::from_u64(9)
+        Uint256::from_u64(12)
     );
 
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
@@ -1297,6 +1328,76 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
 }
 
 #[test]
+fn test_run_tx_with_extra_gas() {
+    match _evm_test_tx_with_extra_gas(None, false) {
+        Ok(()) => {}
+        Err(e) => panic!("{:?}", e),
+    }
+}
+
+pub fn _evm_test_tx_with_extra_gas(
+    log_to: Option<&Path>,
+    debug: bool,
+) -> Result<(), ethabi::Error> {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let arbowner = _ArbOwner::_new(&wallet, debug);
+
+    let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
+    let constructor_data = if let Some(constructor) = add_contract.contract.constructor() {
+        match constructor.encode_input(add_contract.code_bytes.clone(), &[]) {
+            Ok(aug_code) => aug_code,
+            Err(e) => {
+                panic!("couldn't encode data for constructor: {:?}", e);
+            }
+        }
+    } else {
+        add_contract.code_bytes.clone()
+    };
+
+    let deploy_addr = arbowner._deploy_contract(
+        &mut machine,
+        &constructor_data,
+        Uint256::from_u64(41389147891),
+        Uint256::from_u64(417813478913111),
+    )?;
+
+    add_contract.bind_interface_to_address(deploy_addr.clone());
+
+    let (receipts, _) = add_contract.call_function(
+        my_addr.clone(),
+        "add",
+        &[
+            ethabi::Token::Uint(Uint256::one().to_u256()),
+            ethabi::Token::Uint(Uint256::one().to_u256()),
+        ],
+        &mut machine,
+        Uint256::zero(),
+        debug,
+    )?;
+    assert_eq!(receipts.len(), 1);
+    assert!(receipts[0].succeeded());
+    assert_eq!(
+        receipts[0].get_return_data(),
+        Uint256::from_u64(2).to_bytes_be()
+    );
+
+    if let Some(path) = log_to {
+        machine
+            .runtime_env
+            .recorder
+            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
+            .unwrap();
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_arbgasinfo() {
     match _evm_test_arbgasinfo(None, false) {
         Ok(()) => {}
@@ -1345,10 +1446,10 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         "L2 tx {}, L1 calldata {}, L2 storage {}, base gas {}, congestion gas {}, total gas {}",
         l2tx, l1calldata, storage, basegas, conggas, totalgas
     );
-    assert_eq!(l2tx, Uint256::from_u64(642483725000000));
-    assert_eq!(l1calldata, Uint256::from_u64(2778308000000));
-    assert_eq!(storage, Uint256::from_u64(301990000000000));
-    assert_eq!(basegas, Uint256::from_u64(15099500));
+    assert_eq!(l2tx, Uint256::from_u64(658993125000000));
+    assert_eq!(l1calldata, Uint256::from_u64(178106250000));
+    assert_eq!(storage, Uint256::from_u64(309750000000000));
+    assert_eq!(basegas, Uint256::from_u64(15487500));
     assert!(conggas.is_zero());
     assert_eq!(basegas.add(&conggas), totalgas);
 
@@ -1358,7 +1459,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         l2tx, l1calldata, storage
     );
     assert_eq!(l2tx, Uint256::from_u64(42550000));
-    assert_eq!(l1calldata, Uint256::from_u64(184000));
+    assert_eq!(l1calldata, Uint256::from_u64(11500));
     assert_eq!(storage, Uint256::from_u64(20000000));
 
     let (speed_limit, gas_pool_max, tx_gas_limit) =
@@ -1540,19 +1641,19 @@ pub fn _insert_create_node(
     buf.extend(height_l1.to_bytes_be());
     buf.extend(height_l1.add(deadline_l1_delta).to_bytes_be());
     buf.extend(asserter.to_bytes_be());
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None, None);
 }
 
 pub fn _insert_confirm_node(rt_env: &mut RuntimeEnvironment, height_l2: &Uint256) {
     let mut buf = vec![1u8];
     buf.extend(height_l2.to_bytes_be());
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None, None);
 }
 
 pub fn _insert_reject_node(rt_env: &mut RuntimeEnvironment, height_l2: &Uint256) {
     let mut buf = vec![2u8];
     buf.extend(height_l2.to_bytes_be());
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None, None);
 }
 
 pub fn _insert_new_stake(
@@ -1569,18 +1670,18 @@ pub fn _insert_new_stake(
             .unwrap_or(rt_env.current_block_num.clone())
             .to_bytes_be(),
     );
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None, None);
 }
 
 pub fn _insert_claim_node(rt_env: &mut RuntimeEnvironment, height_l2: &Uint256, claimer: &Uint256) {
     let mut buf = vec![4u8];
     buf.extend(height_l2.to_bytes_be());
     buf.extend(claimer.to_bytes_be());
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None, None);
 }
 
 pub fn _insert_rollup_debug(rt_env: &mut RuntimeEnvironment) {
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &[255u8]);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &[255u8], None, None);
 }
 
 #[test]
