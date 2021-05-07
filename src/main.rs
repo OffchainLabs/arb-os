@@ -153,8 +153,8 @@ enum Args {
     SerializeUpgrade(SerializeUpgrade),
 }
 
-fn run_test(buffer: &[u8], prev_memory: &Buffer, test_args: &[u64], entry: &String) -> (Buffer, u64) {
-    let code_0 = wasm::make_test(buffer, prev_memory, test_args, entry);
+fn run_test(buffer: &[u8], prev_memory: &Buffer, test_args: &[u64], entry: &String, init: bool, debug: bool) -> (Buffer, u64) {
+    let code_0 = wasm::make_test(buffer, prev_memory, test_args, entry, init);
     let mut code = vec![];
     for i in 0..code_0.len() {
         match &code_0[i].opcode {
@@ -169,7 +169,7 @@ fn run_test(buffer: &[u8], prev_memory: &Buffer, test_args: &[u64], entry: &Stri
         }
     }
     let code_len = code.len();
-    println!("Code length {}", code_len);
+    // println!("Code length {}", code_len);
     let env = RuntimeEnvironment::new(Uint256::from_usize(11110000), None);
     let program = LinkedProgram {
         code: code,
@@ -180,16 +180,25 @@ fn run_test(buffer: &[u8], prev_memory: &Buffer, test_args: &[u64], entry: &Stri
     };
     let mut machine = Machine::new(program, env);
     machine.start_at_zero();
-    let _used = machine.run(Some(CodePt::new_internal(code_len - 1)));
-    // let _used = machine.debug(Some(CodePt::new_internal(code_len - 1)));
+    if debug {
+        machine.debug(Some(CodePt::new_internal(code_len - 1)))
+    } else {
+        machine.run(Some(CodePt::new_internal(code_len - 1)))
+    };
     let buf = machine.stack.nth(0);
     let res = machine.stack.nth(1);
-    println!("buf {:?} res {:?}", buf, res);
+    // println!("buf {:?} res {:?}", buf, res);
     match (buf, res) {
         (Some(Value::Buffer(buf)), Some(Value::Int(gl))) => {
             (buf.clone(), gl.to_u64().unwrap())
         }
-        _ => panic!("Unexpected output")
+        (Some(Value::Buffer(buf)), None) => {
+            (buf.clone(), 0)
+        }
+        _ => {
+            println!("Bad output");
+            (prev_memory.clone(), 0)
+        }
     }
 
 }
@@ -220,21 +229,34 @@ fn main() -> Result<(), CompileError> {
             // println!("laoded {}", json::stringify(json))
             // get commands
             let mut module_buffer = Vec::<u8>::new();
+            let mut cur_file = "".to_string();
+            let mut cur_memory = Buffer::from_bytes(vec![]);
+            let mut init = true;
             for cmd in json["commands"].members() {
                 if cmd["type"] == "module" {
                     let mut file = File::open(format!("wasm-suite/{}", &cmd["filename"].as_str().unwrap())).unwrap();
                     let mut buffer = Vec::<u8>::new();
                     file.read_to_end(&mut buffer).unwrap();
                     module_buffer = buffer;
+                    init = true;
+                    cur_file = cmd["filename"].as_str().unwrap().to_string();
                 } else if cmd["type"] == "assert_return" {
                     // println!("{:?}", cmd);
                     if cmd["action"]["type"] == "invoke" {
                         let entry = cmd["action"]["field"].as_str().unwrap();
                         let args = parse_list(&cmd["action"]["args"]);
                         // println!("{:?}", args);
-                        let (mem, asd) = run_test(&module_buffer, &Buffer::from_bytes(vec![]), &args, & entry.to_string());
+                        let (mem, result) = run_test(&module_buffer, &cur_memory, &args, &entry.to_string(), init, false);
                         let expected = parse_list(&cmd["expected"]);
-                        println!("expected {:?}", expected);
+                        // println!("expected {:?}", expected);
+                        if expected.len() > 0 {
+                            if expected[0] != result {
+                                println!("At file {} with {}({:?}): Expected {}, Got {}", cur_file, entry, args, expected[0], result);
+                                run_test(&module_buffer, &cur_memory, &args, &entry.to_string(), init, true);
+                            }
+                        }
+                        cur_memory = mem;
+                        init = false;
                     }
                 }
             }
