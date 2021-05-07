@@ -794,9 +794,11 @@ fn handle_function(
         rets
     );*/
 
+    let mut unreachable = false;
+
     for (idx_inf, op) in func.code().elements().iter().enumerate() {
         /*
-        eprintln!(
+        println!(
             "handling ptr {} frames {}; {:?} ... label {} len {}",
             ptr,
             stack.len(),
@@ -807,6 +809,42 @@ fn handle_function(
         */
         let cur_len = res.len();
         res.push(debug_op(format!("{:?} level {} func {} idx {}", *op, ptr, idx, idx_inf)));
+        if unreachable {
+            if *op == End {
+                if stack.len() == 0 {
+                    break;
+                }
+                let c: Control = stack.pop().unwrap();
+                bptr = bptr - 1;
+                if c.is_ite {
+                    if c.else_label != 0 {
+                        res.push(mk_label(c.else_label));
+                    }
+                }
+                if !c.is_loop {
+                    res.push(mk_label(c.target));
+                }
+                if c.level != ptr {
+                    println!("End block mismatch {} != {} rets {}", ptr, c.level, c.rets);
+                    // panic!("End block mismatch");
+                }
+                ptr = c.level;
+                unreachable = false;
+                continue;
+            } else if *op == Else {
+                let mut c: Control = stack.pop().unwrap();
+                ptr = c.level - c.rets;
+                jump(&mut res, c.target);
+                res.push(mk_label(c.else_label));
+                c.else_label = 0;
+                stack.push(c);
+                unreachable = false;
+                continue
+            } else {
+                continue
+            }
+        }
+
         match &*op {
             Nop => res.push(simple_op(AVMOpcode::Noop)),
             Unreachable => {
@@ -906,15 +944,16 @@ fn handle_function(
             }
             Br(x) => {
                 let c = &stack[stack.len() - (*x as usize) - 1];
-                // eprintln!("Debug br {:?} {}", c, c.level);
+                // println!("Debug br {:?} {}", c, c.level);
                 adjust_stack(&mut res, ptr - c.level, c.rets);
                 ptr = ptr - c.rets;
+                unreachable = true;
                 jump(&mut res, c.target);
             }
             BrIf(x) => {
                 let c = &stack[stack.len() - (*x as usize) - 1];
                 res.push(debug_op(format!("Debug brif {:?} ptr {} next level: {} + {}", c, ptr, c.level, c.rets)));
-                // eprintln!("Debug brif {:?} ptr {} next level: {} + {}", c, ptr, c.level, c.rets);
+                // println!("Debug brif {:?} ptr {} next level: {} + {}", c, ptr, c.level, c.rets);
                 let continue_label = label;
                 let end_label = label + 1;
                 label = label + 2;
