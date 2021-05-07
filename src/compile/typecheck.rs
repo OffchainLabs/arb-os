@@ -193,96 +193,108 @@ fn strip_returns(to_strip: &mut TypeCheckedNode, _state: &(), _mut_state: &mut (
 fn inline(
     to_do: &mut TypeCheckedNode,
     state: &(&Vec<TypeCheckedFunc>, &Vec<ImportedFunc>, &StringTable),
-    _mut_state: &mut (),
+    _mut_state: &mut bool,
 ) -> bool {
     if let TypeCheckedNode::Statement(stat) = to_do {
-        stat.debug_info.attributes.inline
-    } else if let TypeCheckedNode::Expression(exp) = to_do {
-        if let TypeCheckedExpr {
-            kind: TypeCheckedExprKind::FunctionCall(name, args, _, _),
-            debug_info: _,
-        } = exp
-        {
-            let (code, block_exp) = if let TypeCheckedExpr {
-                kind: TypeCheckedExprKind::FuncRef(id, _),
+        *_mut_state = stat.debug_info.attributes.inline
+    }
+    if *_mut_state {
+        if let TypeCheckedNode::Expression(exp) = to_do {
+            if let TypeCheckedExpr {
+                kind: TypeCheckedExprKind::FunctionCall(name, args, _, _),
                 debug_info: _,
-            } = **name
+            } = exp
             {
-                let found_func = state.0.iter().find(|func| func.name == id);
-                if let Some(func) = found_func {
-                    let mut code: Vec<_> = if func.args.len() == 0 {
-                        vec![]
-                    } else {
-                        vec![TypeCheckedStatement {
-                            kind: TypeCheckedStatementKind::Let(
-                                TypeCheckedMatchPattern::new_tuple(
-                                    func.args
-                                        .iter()
-                                        .map(|arg| {
-                                            TypeCheckedMatchPattern::new_simple(
-                                                arg.name,
-                                                arg.tipe.clone(),
-                                            )
-                                        })
-                                        .collect(),
-                                    Type::Tuple(
-                                        func.args.iter().map(|arg| arg.tipe.clone()).collect(),
-                                    ),
-                                ),
-                                TypeCheckedExpr {
-                                    kind: TypeCheckedExprKind::Tuple(
-                                        args.iter()
-                                            .cloned()
-                                            .map(|mut expr| {
-                                                expr.recursive_apply(strip_returns, &(), &mut ());
-                                                expr
+                let (code, block_exp) = if let TypeCheckedExpr {
+                    kind: TypeCheckedExprKind::FuncRef(id, _),
+                    debug_info: _,
+                } = **name
+                {
+                    let found_func = state.0.iter().find(|func| func.name == id);
+                    if let Some(func) = found_func {
+                        let mut code: Vec<_> = if func.args.len() == 0 {
+                            vec![]
+                        } else {
+                            vec![TypeCheckedStatement {
+                                kind: TypeCheckedStatementKind::Let(
+                                    TypeCheckedMatchPattern::new_tuple(
+                                        func.args
+                                            .iter()
+                                            .map(|arg| {
+                                                TypeCheckedMatchPattern::new_simple(
+                                                    arg.name,
+                                                    arg.tipe.clone(),
+                                                )
                                             })
                                             .collect(),
                                         Type::Tuple(
                                             func.args.iter().map(|arg| arg.tipe.clone()).collect(),
                                         ),
                                     ),
-                                    debug_info: DebugInfo::default(),
-                                },
-                            ),
-                            debug_info: DebugInfo::default(),
-                        }]
-                    };
-                    code.append(&mut func.code.clone());
-                    let last = code.pop();
-                    let block_exp = match last {
-                        Some(TypeCheckedStatement {
-                            kind: TypeCheckedStatementKind::Return(mut exp),
-                            debug_info: _,
-                        }) => Some(Box::new({
-                            exp.recursive_apply(strip_returns, &(), &mut ());
-                            exp
-                        })),
-                        _ => {
-                            if let Some(statement) = last {
-                                code.push(statement);
+                                    TypeCheckedExpr {
+                                        kind: TypeCheckedExprKind::Tuple(
+                                            args.iter()
+                                                .cloned()
+                                                .map(|mut expr| {
+                                                    expr.recursive_apply(
+                                                        strip_returns,
+                                                        &(),
+                                                        &mut (),
+                                                    );
+                                                    expr
+                                                })
+                                                .collect(),
+                                            Type::Tuple(
+                                                func.args
+                                                    .iter()
+                                                    .map(|arg| arg.tipe.clone())
+                                                    .collect(),
+                                            ),
+                                        ),
+                                        debug_info: DebugInfo::default(),
+                                    },
+                                ),
+                                debug_info: DebugInfo::default(),
+                            }]
+                        };
+                        code.append(&mut func.code.clone());
+                        let last = code.pop();
+                        let block_exp = match last {
+                            Some(TypeCheckedStatement {
+                                kind: TypeCheckedStatementKind::Return(mut exp),
+                                debug_info: _,
+                            }) => Some(Box::new({
+                                exp.recursive_apply(strip_returns, &(), &mut ());
+                                exp
+                            })),
+                            _ => {
+                                if let Some(statement) = last {
+                                    code.push(statement);
+                                }
+                                None
                             }
-                            None
-                        }
-                    };
-                    (Some(code), block_exp)
+                        };
+                        (Some(code), block_exp)
+                    } else {
+                        (None, None)
+                    }
                 } else {
                     (None, None)
+                };
+                if let Some(mut code) = code {
+                    for statement in code.iter_mut().rev() {
+                        statement.recursive_apply(strip_returns, &(), &mut ())
+                    }
+                    exp.kind = TypeCheckedExprKind::CodeBlock(TypeCheckedCodeBlock::new(
+                        code,
+                        block_exp,
+                        Some("_inline".to_string()),
+                    ));
                 }
+                false
             } else {
-                (None, None)
-            };
-            if let Some(mut code) = code {
-                for statement in code.iter_mut().rev() {
-                    statement.recursive_apply(strip_returns, &(), &mut ())
-                }
-                exp.kind = TypeCheckedExprKind::CodeBlock(TypeCheckedCodeBlock::new(
-                    code,
-                    block_exp,
-                    Some("_inline".to_string()),
-                ));
+                true
             }
-            false
         } else {
             true
         }
@@ -298,7 +310,7 @@ impl TypeCheckedFunc {
         imported_funcs: &Vec<ImportedFunc>,
         string_table: &StringTable,
     ) {
-        self.recursive_apply(inline, &(funcs, imported_funcs, string_table), &mut ());
+        self.recursive_apply(inline, &(funcs, imported_funcs, string_table), &mut false);
     }
 }
 
