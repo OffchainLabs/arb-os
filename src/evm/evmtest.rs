@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::abi::ArbosTest;
+use crate::evm::preinstalled_contracts::ArbosTest;
 use crate::run::{load_from_file_and_env, Machine, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use std::collections::HashMap;
