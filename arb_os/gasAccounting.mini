@@ -1158,8 +1158,13 @@ impure func getL1GasPriceEstimate() -> uint {
 
 public impure func updateL1GasPriceEstimate(sender: address, price: uint) {
     if (sender == globalL1GasPriceEstimator.fairGasPriceSender) {
+        if (price > 5 * globalL1GasPriceEstimator.estimateWei) {
+            price = 5 * globalL1GasPriceEstimator.estimateWei;
+        } elseif (price < globalL1GasPriceEstimator.estimateWei / 5) {
+            price = globalL1GasPriceEstimator.estimateWei / 5;
+        }
         globalL1GasPriceEstimator = globalL1GasPriceEstimator with {
-            estimateWei: (price + 99 * globalL1GasPriceEstimator.estimateWei) / 100
+            estimateWei: (price + 19 * globalL1GasPriceEstimator.estimateWei) / 20
         };
     }
 }
