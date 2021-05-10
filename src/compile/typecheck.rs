@@ -220,11 +220,7 @@ fn inline(
     _mut_state: &mut InliningMode,
 ) -> bool {
     if let TypeCheckedNode::Statement(stat) = to_do {
-        *_mut_state = if stat.debug_info.attributes.inline {
-            InliningMode::Always
-        } else {
-            InliningMode::Auto
-        }
+        *_mut_state = stat.debug_info.attributes.inline;
     }
     if let TypeCheckedNode::Expression(exp) = to_do {
         if let TypeCheckedExpr {
@@ -239,12 +235,7 @@ fn inline(
             {
                 let found_func = state.0.iter().find(|func| func.name == id);
                 if let Some(func) = found_func {
-                    if _mut_state.and(&if func.debug_info.attributes.inline {
-                        InliningMode::Always
-                    } else {
-                        InliningMode::Auto
-                    }) != InliningMode::Always
-                    {
+                    if _mut_state.and(&func.debug_info.attributes.inline) != InliningMode::Always {
                         return false;
                     }
                     let mut code: Vec<_> = if func.args.len() == 0 {

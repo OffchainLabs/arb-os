@@ -6,6 +6,7 @@
 use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVarDecl, Type, CodeBlock,
 StructField, FuncArg, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant,
 OptionConst, FieldInitializer, new_func_arg, new_type_decl};
+use crate::compile::InliningMode;
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
 use crate::pos::BytePos;
@@ -80,7 +81,8 @@ Attributes: Attributes = {
    <names: (<IdentString> ",")*> => {let mut attribs = Attributes::default(); for name in names {
        match name.as_ref() {
            "breakpoint" => attribs.breakpoint = true,
-           "inline" => attribs.inline = true,
+           "inline" => attribs.inline = InliningMode::Always,
+           "no-inline" => attribs.inline = InliningMode::Never,
            _ => {}
        }
    }; attribs},
