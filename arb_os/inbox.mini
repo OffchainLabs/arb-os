@@ -94,6 +94,12 @@ public impure func inbox_init() {
     };
 }
 
+public impure func emitGenesisBlockReceipt() {
+    outputStats_endOfBlock(globalInbox.arbBlockNum, globalInbox.ethBlockNum, globalInbox.timestamp);
+    blockhash_submitHash(globalInbox.arbBlockNum, globalInbox.ethBlockNum, globalInbox.inboxHashAccumulator);
+    globalInbox = globalInbox with { arbBlockNum: globalInbox.arbBlockNum + 1 };
+}
+
 public impure func inbox_get() -> IncomingRequest {
     // Get the next message, in order of arrival.
     // If no messages have arrived, this will block until one arrives.

@@ -1976,7 +1976,7 @@ fn _test_arb_stats() -> Result<(), ethabi::Error> {
     let (arb_blocknum, num_accounts, storage, _arbgas, txs, contracts) =
         arbstats._get_stats(&mut machine)?;
 
-    assert_eq!(arb_blocknum, Uint256::from_u64(0));
+    assert_eq!(arb_blocknum, Uint256::from_u64(1));
     assert_eq!(num_accounts, Uint256::from_u64(22));
     assert_eq!(storage, Uint256::from_u64(0));
     // assert_eq!(_arbgas, Uint256::from_u64(1_490_972));  // disable this because it will vary over versions
