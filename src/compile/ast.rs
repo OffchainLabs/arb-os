@@ -846,7 +846,7 @@ impl Func {
         ret_type: Type,
         code: Vec<Statement>,
         exported: bool,
-        location: Option<Location>,
+        debug_info: DebugInfo,
     ) -> Self {
         let mut arg_types = Vec::new();
         let args_vec = args.to_vec();
@@ -864,7 +864,7 @@ impl Func {
             } else {
                 FuncDeclKind::Private
             },
-            debug_info: DebugInfo::from(location),
+            debug_info,
             properties: PropertiesList { pure: !is_impure },
         }
     }
