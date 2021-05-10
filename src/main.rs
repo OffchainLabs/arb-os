@@ -241,7 +241,7 @@ fn main() -> Result<(), CompileError> {
                     init = true;
                     cur_file = cmd["filename"].as_str().unwrap().to_string();
                 } else if cmd["type"] == "assert_return" {
-                    // println!("{:?}", cmd);
+                    println!("{:?}", cmd);
                     if cmd["action"]["type"] == "invoke" {
                         let entry = cmd["action"]["field"].as_str().unwrap();
                         let args = parse_list(&cmd["action"]["args"]);
