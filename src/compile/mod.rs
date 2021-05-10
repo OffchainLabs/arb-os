@@ -26,7 +26,7 @@ use typecheck::TypeCheckedFunc;
 
 pub use ast::{DebugInfo, GlobalVarDecl, StructField, TopLevelDecl, Type};
 pub use source::Lines;
-pub use typecheck::{AbstractSyntaxTree, TypeCheckedNode};
+pub use typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNode};
 
 mod ast;
 mod codegen;

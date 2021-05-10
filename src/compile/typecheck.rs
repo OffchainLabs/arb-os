@@ -189,14 +189,42 @@ fn strip_returns(to_strip: &mut TypeCheckedNode, _state: &(), _mut_state: &mut (
     true
 }
 
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[repr(u32)]
+pub enum InliningMode {
+    Always,
+    Auto,
+    Never,
+}
+
+impl Default for InliningMode {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
+impl InliningMode {
+    fn and(&self, other: &InliningMode) -> InliningMode {
+        *if *self == InliningMode::Auto {
+            other
+        } else {
+            self
+        }
+    }
+}
+
 ///Used to inline an AST node
 fn inline(
     to_do: &mut TypeCheckedNode,
     state: &(&Vec<TypeCheckedFunc>, &Vec<ImportedFunc>, &StringTable),
-    _mut_state: &mut bool,
+    _mut_state: &mut InliningMode,
 ) -> bool {
     if let TypeCheckedNode::Statement(stat) = to_do {
-        *_mut_state = stat.debug_info.attributes.inline
+        *_mut_state = if stat.debug_info.attributes.inline {
+            InliningMode::Always
+        } else {
+            InliningMode::Auto
+        }
     }
     if let TypeCheckedNode::Expression(exp) = to_do {
         if let TypeCheckedExpr {
@@ -211,7 +239,12 @@ fn inline(
             {
                 let found_func = state.0.iter().find(|func| func.name == id);
                 if let Some(func) = found_func {
-                    if !func.debug_info.attributes.inline && !*_mut_state {
+                    if _mut_state.and(&if func.debug_info.attributes.inline {
+                        InliningMode::Always
+                    } else {
+                        InliningMode::Auto
+                    }) != InliningMode::Always
+                    {
                         return false;
                     }
                     let mut code: Vec<_> = if func.args.len() == 0 {
@@ -302,7 +335,11 @@ impl TypeCheckedFunc {
         imported_funcs: &Vec<ImportedFunc>,
         string_table: &StringTable,
     ) {
-        self.recursive_apply(inline, &(funcs, imported_funcs, string_table), &mut false);
+        self.recursive_apply(
+            inline,
+            &(funcs, imported_funcs, string_table),
+            &mut InliningMode::Auto,
+        );
     }
 }
 
