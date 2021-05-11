@@ -83,13 +83,27 @@ public func keccak_permutation(s: [7]uint) -> [7]uint {
 }
 
 public func flipEndian64(x: uint) -> uint {
-    x = ((x & 0xffffffff) * 0x100000000) | ((x / 0x100000000) & 0xffffffff);
-    x = ((x & 0xffff0000ffff) * 0x10000) | ((x / 0x10000) & 0xffff0000ffff);
-    x = ((x & 0xff00ff00ff00ff) * 0x100) | ((x / 0x100) & 0xff00ff00ff00ff);
+    x = (0xff00ff00ff00ff00 & asm(  8, x) uint { shl }) | (0x00ff00ff00ff00ff & asm(  8, x) uint { shr });
+    x = (0xffff0000ffff0000 & asm( 16, x) uint { shl }) | (0x0000ffff0000ffff & asm( 16, x) uint { shr });
+    x = (0xffffffff00000000 & asm( 32, x) uint { shl }) | (0x00000000ffffffff & asm( 32, x) uint { shr });
     return x;
 }
 
 public func flipEndian256(x: uint) -> uint {
+    x =   (0xff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00 & asm(  8, x) uint { shl })
+        | (0x00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff & asm(  8, x) uint { shr });
+    x =   (0xffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000 & asm( 16, x) uint { shl })
+        | (0x0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff & asm( 16, x) uint { shr });
+    x =   (0xffffffff00000000ffffffff00000000ffffffff00000000ffffffff00000000 & asm( 32, x) uint { shl })
+        | (0x00000000ffffffff00000000ffffffff00000000ffffffff00000000ffffffff & asm( 32, x) uint { shr });
+    x =   (0xffffffffffffffff0000000000000000ffffffffffffffff0000000000000000 & asm( 64, x) uint { shl })
+        | (0x0000000000000000ffffffffffffffff0000000000000000ffffffffffffffff & asm( 64, x) uint { shr });
+    x =   (0xffffffffffffffffffffffffffffffff00000000000000000000000000000000 & asm(128, x) uint { shl })
+        | (0x00000000000000000000000000000000ffffffffffffffffffffffffffffffff & asm(128, x) uint { shr });
+    return x;
+}
+
+public func flipEndian256_save(x: uint) -> uint {
     let acc = 0;
     let i = 0;
     while (i < 4) {
