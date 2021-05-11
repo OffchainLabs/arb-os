@@ -30,6 +30,7 @@ use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_init;
 use inbox::inbox_init;
 use inbox::inbox_get;
+use inbox::emitGenesisBlockReceipt;
 use messages::TxRequestData;
 use output::output_init;
 use output::txReceipts_init;
@@ -94,6 +95,9 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         if (initializePreinstalls(false) == None<()>) {
             panic;   // don't try to run without preinstalls and precompiles
         }
+
+        // advance the Arbitrum block number, and emit a block receipt
+        emitGenesisBlockReceipt();
     }
 
     // initialize any customizations here

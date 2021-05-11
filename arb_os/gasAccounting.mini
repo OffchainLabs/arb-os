@@ -586,15 +586,20 @@ public impure func gasAccounting_endTxCharges(
         if (refund > 0) {
             payments = deferredPayments_add(payments, txState.refundTo, refund);
         }
+        let basePrice = gasAccountingInfo.currentPrices.perArbGasBase;
+        if (basePrice > txState.price) {
+            basePrice = txState.price;
+        }
         payments = deferredPayments_add(
             payments,
             gasAccountingInfo.feeConfig.forNetwork,
-            computeGasUsed * gasAccountingInfo.currentPrices.perArbGasBase + storageGasUsed * txState.price,
+            computeGasUsed * basePrice + storageGasUsed * txState.price,
         );
+        let congestionPrice = txState.price - basePrice;
         payments = deferredPayments_add(
             payments,
             gasAccountingInfo.feeConfig.forCongestion,
-            computeGasUsed * gasAccountingInfo.currentPrices.perArbGasCongestion,
+            computeGasUsed * congestionPrice,
         );
     }
 
