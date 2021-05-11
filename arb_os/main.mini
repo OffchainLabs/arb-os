@@ -8,7 +8,6 @@ use accounts::accountStore_init;
 use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
 use accounts::accountStore_createAccountFromEvmCode;
-use accounts::accountStore_removeChangeTracker;
 use arbstatistics::arbStatistics_init;
 use accounts::accountStore_upgradeContractFromEvmCode;
 use arbstatistics::arbStatistics_init;
@@ -74,7 +73,6 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         errorHandler_init();
         evmOps_init();
         evmTracer_clear();
-        setGlobalAccountStore(accountStore_removeChangeTracker(getGlobalAccountStore()));
 
         if (initializePreinstalls(true) == None<()>) {
             panic;   // don't try to run without preinstalls and precompiles

@@ -39,7 +39,6 @@ type AccountStore = struct {
     accounts: map<address, Account>,
     retryBuffer: RetryBuffer,
     numContracts: uint,
-    changeTracker: option<AccountsChangeTracker>,
     codeRefTable: map<bytes32, CodeRef>,
 }
 
@@ -92,7 +91,6 @@ public impure func accountStore_init() {   // This must be called first!
         accounts: newmap<address, Account>,
         retryBuffer: retryBuffer_new(),
         numContracts: 0,
-        changeTracker: None<AccountsChangeTracker>,
         codeRefTable: newmap<bytes32, CodeRef>,
     };
 }
@@ -131,16 +129,8 @@ public func accountStore_set(
     addr: address, 
     acct: Account
 ) -> AccountStore {
-    return xif let Some(ct) = acctStore.changeTracker {
-        acctStore with {
-            accounts: acctStore.accounts with { [addr] = acct }
-        } with {
-            changeTracker: Some(accountsChangeTracker_add(ct, addr))
-        }
-    } else {
-        acctStore with {
-            accounts: acctStore.accounts with { [addr] = acct }
-        }
+    return acctStore with {
+        accounts: acctStore.accounts with { [addr] = acct }
     };
 }
 
@@ -609,114 +599,6 @@ public func account_getCodeSize(acct: Account) -> uint {
 
 public func account_getCode(acct: Account) -> option<ByteArray> {
     return Some((acct.contractInfo?).code);
-}
-
-type AccountsChangeTracker = struct {
-    oldAccounts: map<address, Account>,
-    changed: map<address, ()>,
-}
-
-func accountsChangeTracker_new(oldAccounts: map<address, Account>) -> AccountsChangeTracker {
-    return struct {
-        oldAccounts: oldAccounts,
-        changed: newmap<address, ()>,
-    };
-}
-
-func accountsChangeTracker_add(act: AccountsChangeTracker, addr: address) -> AccountsChangeTracker {
-    return act with {
-        changed: act.changed with { [addr] = () }
-    };
-}
-
-public func accountStore_startChangeTracker(acctStore: AccountStore) -> AccountStore {
-    return acctStore with { changeTracker: Some(accountsChangeTracker_new(acctStore.accounts)) };
-}
-
-public func accountStore_removeChangeTracker(acctStore: AccountStore) -> AccountStore {
-    return acctStore with { changeTracker: None<AccountsChangeTracker> };
-}
-
-type asstcState = struct {
-    oldAccounts: map<address, Account>,
-    newAccounts: map<address, Account>,
-    outBuf: OutputBuffer,
-}
-
-public func accountStore_serializeTrackedChanges(acctStore: AccountStore) -> OutputBuffer {
-    let out = outputBuffer_new();
-    return xif let Some(tracker) = acctStore.changeTracker {
-        let state = struct {
-            oldAccounts: tracker.oldAccounts,
-            newAccounts: acctStore.accounts,
-            outBuf: out,
-        };
-        state = unsafecast<asstcState>(builtin_kvsForall(
-            unsafecast<Kvs>(tracker.changed),
-            unsafecast<func(any, any, any) -> any>(asstcClosure),
-            state
-        ));
-        state.outBuf
-    } else {
-        out
-    };
-}
-
-func asstcClosure(addr: address, _: any, state: asstcState) -> asstcState {
-    let oldAcct = xif let Some(a) = state.oldAccounts[addr] { a } else { pristineAccount(addr) };
-    let newAcct = xif let Some(a) = state.newAccounts[addr] { a } else { pristineAccount(addr) };
-    return state with { outBuf: serializeAcctDiffs(state.outBuf, oldAcct, newAcct) };
-}
-
-func serializeAcctDiffs(outBuf: OutputBuffer, oldAcct: Account, newAcct: Account) -> OutputBuffer {
-    outBuf = outputBuffer_appendByte(outBuf, 0);
-    outBuf = outputBuffer_append256(outBuf, uint(oldAcct.addr));
-
-    if (oldAcct.nextSeqNum != newAcct.nextSeqNum) {
-        outBuf = outputBuffer_appendByte(outBuf, 2);
-        outBuf = outputBuffer_append256(outBuf, oldAcct.nextSeqNum);
-        outBuf = outputBuffer_append256(outBuf, newAcct.nextSeqNum);
-    }
-
-    if (oldAcct.ethBalance != newAcct.ethBalance) {
-        outBuf = outputBuffer_appendByte(outBuf, 3);
-        outBuf = outputBuffer_append256(outBuf, oldAcct.ethBalance);
-        outBuf = outputBuffer_append256(outBuf, newAcct.ethBalance);
-    }
-
-    let oldStorage = xif let Some(ci) = oldAcct.contractInfo { ci.storage } else { storageMap_new() };
-    let newStorage = xif let Some(ci) = newAcct.contractInfo { ci.storage } else { storageMap_new() };
-    if ((storageMap_size(oldStorage) > 0) || (storageMap_size(newStorage) > 0)) {
-        outBuf = outputBuffer_appendByte(outBuf, 4);
-        outBuf = serializeStorageDiffs(outBuf, 6, oldStorage, newStorage);
-        outBuf = outputBuffer_appendByte(outBuf, 5);
-    }
-
-    outBuf = outputBuffer_appendByte(outBuf, 1);
-
-    return outBuf;
-}
-
-func serializeStorageDiffs(
-    outBuf: OutputBuffer,
-    prefixByte: uint,
-    oldStorage: StorageMap,
-    newStorage: StorageMap
-) -> OutputBuffer {
-    let diff = storageMap_diff(oldStorage, newStorage);
-    return xloop {
-        if let Some(res) = stack_pop(diff) {
-            let (udiff, item) = res;
-            diff = udiff;
-            let (index, oldVal, newVal) = unsafecast<(uint, uint, uint)>(item);
-            outBuf = outputBuffer_appendByte(outBuf, prefixByte);
-            outBuf = outputBuffer_append256(outBuf, index);
-            outBuf = outputBuffer_append256(outBuf, oldVal);
-            outBuf = outputBuffer_append256(outBuf, newVal);
-        } else {
-            return outBuf;
-        }
-    };
 }
 
 type asfa_wrappedState = struct {
