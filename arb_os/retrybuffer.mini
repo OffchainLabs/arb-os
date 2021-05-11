@@ -344,7 +344,6 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
                 Some(logs),
                 None<GasUsage>,
                 feeStats,
-                false,
             );
 
             xif ((maxGasForImmediate > 0) && (maxGasForImmediate*gasPriceForImmediate >= gasPriceForImmediate)) { // 2nd check avoids overflow
@@ -411,7 +410,6 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
                 None<EvmLogs>,
                 None<GasUsage>,
                 feeStats,
-                false,
             );
             None<TxRequestData>
         }
@@ -424,7 +422,6 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
             None<EvmLogs>,
             None<GasUsage>,
             feeStats,
-            false,
         );
         None<TxRequestData>
     };

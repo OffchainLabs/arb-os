@@ -126,7 +126,6 @@ public impure func mainRunLoop() {
                     None<EvmLogs>,
                     None<GasUsage>,
                     request.feeStats,
-                    false,
                 );
             }
         } else {
@@ -138,7 +137,6 @@ public impure func mainRunLoop() {
                 None<EvmLogs>,
                 None<GasUsage>,
                 request.feeStats,
-                false,
             );
         }
     }
