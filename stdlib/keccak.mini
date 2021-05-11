@@ -103,17 +103,6 @@ public func flipEndian256(x: uint) -> uint {
     return x;
 }
 
-public func flipEndian256_save(x: uint) -> uint {
-    let acc = 0;
-    let i = 0;
-    while (i < 4) {
-        acc = 0x10000000000000000 * acc + flipEndian64(x & 0xffffffffffffffff);
-        x = x / 0x10000000000000000;
-        i = i+1;
-    }
-    return acc;
-}
-
 type Hasher = struct {
     accumulator: [7]uint,
     offset: uint,
