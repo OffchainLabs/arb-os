@@ -335,6 +335,9 @@ public impure func gasAccounting_getPricesInArbGas() -> (uint, uint, uint) {  //
 }
 
 public impure func gasAccounting_setFeesEnabled(enabled: bool) {
+    gasAccountingInfo = gasAccountingInfo with {
+        feeConfig: gasAccountingInfo.feeConfig with { enabled: enabled }
+    };
     let (gasPrices, retryablePrices) = setPrices(
         gasAccountingInfo.feeConfig,
         gasAccountingInfo.pricingParams,
@@ -342,8 +345,6 @@ public impure func gasAccounting_setFeesEnabled(enabled: bool) {
         gasAccountingInfo.retryablePrices,
     );
     gasAccountingInfo = gasAccountingInfo with {
-        feeConfig: gasAccountingInfo.feeConfig with { enabled: enabled }
-    } with {
         currentPrices: gasPrices
     } with {
         retryablePrices: retryablePrices
@@ -585,15 +586,20 @@ public impure func gasAccounting_endTxCharges(
         if (refund > 0) {
             payments = deferredPayments_add(payments, txState.refundTo, refund);
         }
+        let basePrice = gasAccountingInfo.currentPrices.perArbGasBase;
+        if (basePrice > txState.price) {
+            basePrice = txState.price;
+        }
         payments = deferredPayments_add(
             payments,
             gasAccountingInfo.feeConfig.forNetwork,
-            computeGasUsed * gasAccountingInfo.currentPrices.perArbGasBase + storageGasUsed * txState.price,
+            computeGasUsed * basePrice + storageGasUsed * txState.price,
         );
+        let congestionPrice = txState.price - basePrice;
         payments = deferredPayments_add(
             payments,
             gasAccountingInfo.feeConfig.forCongestion,
-            computeGasUsed * gasAccountingInfo.currentPrices.perArbGasCongestion,
+            computeGasUsed * congestionPrice,
         );
     }
 
@@ -1157,8 +1163,13 @@ impure func getL1GasPriceEstimate() -> uint {
 
 public impure func updateL1GasPriceEstimate(sender: address, price: uint) {
     if (sender == globalL1GasPriceEstimator.fairGasPriceSender) {
+        if (price > 5 * globalL1GasPriceEstimator.estimateWei) {
+            price = 5 * globalL1GasPriceEstimator.estimateWei;
+        } elseif (price < globalL1GasPriceEstimator.estimateWei / 5) {
+            price = globalL1GasPriceEstimator.estimateWei / 5;
+        }
         globalL1GasPriceEstimator = globalL1GasPriceEstimator with {
-            estimateWei: (price + 99 * globalL1GasPriceEstimator.estimateWei) / 100
+            estimateWei: (price + 19 * globalL1GasPriceEstimator.estimateWei) / 20
         };
     }
 }

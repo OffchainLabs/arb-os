@@ -1918,6 +1918,9 @@ impl Machine {
                             }
                             None => {
                                 self.arb_gas_remaining = gas_remaining_before;
+                                if insn.immediate.is_some() {
+                                    let _ = self.stack.pop(&self.state);
+                                }
                                 Ok(false) // machine is blocked, waiting for message
                             }
                         }

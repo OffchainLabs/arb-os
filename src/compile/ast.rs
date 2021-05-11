@@ -6,6 +6,7 @@
 
 use super::typecheck::{new_type_error, TypeError};
 use crate::compile::ast::TypeMismatch::FuncArgLength;
+use crate::compile::path_display;
 use crate::compile::typecheck::{AbstractSyntaxTree, PropertiesList, TypeCheckedNode};
 use crate::link::{value_from_field_list, TUPLE_SIZE};
 use crate::mavm::{Instruction, Value};
@@ -19,7 +20,7 @@ use std::fmt::Formatter;
 
 ///This is a map of the types at a given location, with the Vec<String> representing the module path
 ///and the usize representing the stringID of the type at that location.
-pub type TypeTree = HashMap<(Vec<String>, usize), Type>;
+pub type TypeTree = HashMap<(Vec<String>, usize), (Type, String)>;
 
 ///Debugging info serialized into mini executables, currently only contains a location.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -143,7 +144,8 @@ impl Type {
                 .ok_or(new_type_error(
                     format!("No type at {:?}, {}", path, id),
                     None,
-                ))?;
+                ))?
+                .0;
         }
         Ok(base_type)
     }
@@ -507,29 +509,74 @@ impl Type {
     }
 
     pub fn display(&self) -> String {
-        self.display_indented(0)
+        self.display_indented(0, "::", None, false, &TypeTree::new())
+            .0
     }
 
-    fn display_indented(&self, indent_level: usize) -> String {
+    pub fn display_separator(
+        &self,
+        separator: &str,
+        prefix: Option<&str>,
+        include_pathname: bool,
+        type_tree: &TypeTree,
+    ) -> (String, HashSet<(Type, String)>) {
+        self.display_indented(0, separator, prefix, include_pathname, type_tree)
+    }
+
+    fn display_indented(
+        &self,
+        indent_level: usize,
+        separator: &str,
+        prefix: Option<&str>,
+        include_pathname: bool,
+        type_tree: &TypeTree,
+    ) -> (String, HashSet<(Type, String)>) {
+        let mut type_set = HashSet::new();
         match self {
-            Type::Void => "void".to_string(),
-            Type::Uint => "uint".to_string(),
-            Type::Int => "int".to_string(),
-            Type::Bool => "bool".to_string(),
-            Type::Bytes32 => "bytes32".to_string(),
-            Type::EthAddress => "address".to_string(),
-            Type::Buffer => "buffer".to_string(),
+            Type::Void => ("void".to_string(), type_set),
+            Type::Uint => ("uint".to_string(), type_set),
+            Type::Int => ("int".to_string(), type_set),
+            Type::Bool => ("bool".to_string(), type_set),
+            Type::Bytes32 => ("bytes32".to_string(), type_set),
+            Type::EthAddress => ("address".to_string(), type_set),
+            Type::Buffer => ("buffer".to_string(), type_set),
             Type::Tuple(subtypes) => {
                 let mut out = "(".to_string();
                 for s in subtypes {
                     //This should be improved by removing the final trailing comma.
-                    out.push_str(&(s.display_indented(indent_level) + ", "));
+                    let (displayed, subtypes) = s.display_indented(
+                        indent_level,
+                        separator,
+                        prefix,
+                        include_pathname,
+                        type_tree,
+                    );
+                    out.push_str(&(displayed + ", "));
+                    type_set.extend(subtypes);
                 }
                 out.push(')');
-                out
+                (out, type_set)
             }
-            Type::Array(t) => format!("[]{}", t.display_indented(indent_level)),
-            Type::FixedArray(t, size) => format!("[{}]{}", size, t.display_indented(indent_level)),
+            Type::Array(t) => {
+                let (displayed, subtypes) = t.display_indented(
+                    indent_level,
+                    separator,
+                    prefix,
+                    include_pathname,
+                    type_tree,
+                );
+                (format!("[]{}", displayed), subtypes)
+            }
+            Type::FixedArray(t, size) => {
+                let (displayed, subtypes) = t.display_indented(
+                    indent_level,
+                    separator,
+                    prefix,
+                    include_pathname,
+                    type_tree,
+                );
+                (format!("[{}]{}", size, displayed), subtypes)
+            }
             Type::Struct(fields) => {
                 let mut out = "struct {\n".to_string();
                 for _ in 0..indent_level {
@@ -537,25 +584,49 @@ impl Type {
                 }
                 for field in fields {
                     //This should indent further when dealing with sub-structs
-                    out.push_str(&format!(
-                        "    {}: {},\n",
-                        field.name,
-                        field.tipe.display_indented(indent_level + 1)
-                    ));
+                    let (displayed, subtypes) = field.tipe.display_indented(
+                        indent_level + 1,
+                        separator,
+                        prefix,
+                        include_pathname,
+                        type_tree,
+                    );
+                    out.push_str(&format!("    {}: {},\n", field.name, displayed));
                     for _ in 0..indent_level {
                         out.push_str("    ");
                     }
+                    type_set.extend(subtypes);
                 }
                 out.push('}');
-                out
+                (out, type_set)
             }
             Type::Nominal(path, id) => {
-                let mut out = String::new();
-                for path_item in path {
-                    out.push_str(&format!("{}::", path_item))
-                }
-                out.push_str(&format!("{}", id));
-                out
+                let out = format!(
+                    "{}{}{}",
+                    prefix.unwrap_or(""),
+                    if include_pathname {
+                        path.iter()
+                            .map(|name| name.clone() + "_")
+                            .collect::<String>()
+                    } else {
+                        format!("")
+                    },
+                    type_tree
+                        .get(&(path.clone(), *id))
+                        .map(|(_, name)| name.clone())
+                        .unwrap_or(format!(
+                            "Failed to resolve type name: {}",
+                            path_display(path)
+                        ))
+                );
+                type_set.insert((
+                    self.clone(),
+                    type_tree
+                        .get(&(path.clone(), *id))
+                        .map(|d| d.1.clone())
+                        .unwrap_or_else(|| "bad".to_string()),
+                ));
+                (out, type_set)
             }
             Type::Func(impure, args, ret) => {
                 let mut out = String::new();
@@ -564,25 +635,62 @@ impl Type {
                 }
                 out.push_str("func(");
                 for arg in args {
-                    out.push_str(&(arg.display_indented(indent_level) + ", "));
+                    let (displayed, subtypes) = arg.display_indented(
+                        indent_level,
+                        separator,
+                        prefix,
+                        include_pathname,
+                        type_tree,
+                    );
+                    out.push_str(&(displayed + ", "));
+                    type_set.extend(subtypes)
                 }
                 out.push(')');
                 if **ret != Type::Void {
+                    let (displayed, subtypes) = ret.display_indented(
+                        indent_level,
+                        separator,
+                        prefix,
+                        include_pathname,
+                        type_tree,
+                    );
                     out.push_str(" -> ");
-                    out.push_str(&ret.display_indented(indent_level));
+                    out.push_str(&displayed);
+                    type_set.extend(subtypes);
                 }
-                out
+                (out, type_set)
             }
             Type::Map(key, val) => {
-                format!(
-                    "map<{},{}>",
-                    key.display_indented(indent_level),
-                    val.display_indented(indent_level)
-                )
+                let (key_display, key_subtypes) = key.display_indented(
+                    indent_level,
+                    separator,
+                    prefix,
+                    include_pathname,
+                    type_tree,
+                );
+                type_set.extend(key_subtypes);
+                let (val_display, val_subtypes) = val.display_indented(
+                    indent_level,
+                    separator,
+                    prefix,
+                    include_pathname,
+                    type_tree,
+                );
+                type_set.extend(val_subtypes);
+                (format!("map<{},{}>", key_display, val_display), type_set)
             }
-            Type::Any => "any".to_string(),
-            Type::Every => "every".to_string(),
-            Type::Option(t) => format!("option<{}>", t.display_indented(indent_level)),
+            Type::Any => ("any".to_string(), type_set),
+            Type::Every => ("every".to_string(), type_set),
+            Type::Option(t) => {
+                let (display, subtypes) = t.display_indented(
+                    indent_level,
+                    separator,
+                    prefix,
+                    include_pathname,
+                    type_tree,
+                );
+                (format!("option<{}>", display), subtypes)
+            }
         }
     }
 }
