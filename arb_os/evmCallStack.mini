@@ -276,18 +276,16 @@ public impure func initEvmCallStack(
         if (startTxResult == const::TxResultCode_success) {
             setGlobalAccountStore(acctStore);
             if (request.seqNum != None<uint>) {
-                // increment the caller's sequence number, if caller has sufficient balance
-                if ( (!chargeForCallvalue) || (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value) ){
-                    setGlobalAccountStore(
-                        accountStore_set(
-                            acctStore,
-                            request.caller,
-                            account_incrSeqNum(
-                                accountStore_get(acctStore, request.caller)
-                            )
+                // increment the caller's sequence number
+                setGlobalAccountStore(
+                    accountStore_set(
+                        acctStore,
+                        request.caller,
+                        account_incrSeqNum(
+                            accountStore_get(acctStore, request.caller)
                         )
-                    );
-                }
+                    )
+                );
             }
 
             globalCurrentTxRequest = request;
@@ -370,19 +368,17 @@ public impure func initEvmCallStack(
         // no contract at this address, so treat tx as a simple eth transfer
 
         if (request.seqNum != None<uint>) {
-            // increment the caller's sequence number, if caller has sufficient balance
+            // increment the caller's sequence number
             let acctStore = getGlobalAccountStore();
-            if ((!chargeForCallvalue) || (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value)) {
-                setGlobalAccountStore(
-                    accountStore_set(
-                        acctStore,
-                        request.caller,
-                        account_incrSeqNum(
-                            accountStore_get(acctStore, request.caller)
-                        )
+            setGlobalAccountStore(
+                accountStore_set(
+                    acctStore,
+                    request.caller,
+                    account_incrSeqNum(
+                        accountStore_get(acctStore, request.caller)
                     )
-                );
-            }
+                )
+            );
         }
 
         if (request.value > 0) {
@@ -450,7 +446,7 @@ public impure func initEvmCallStackForConstructor(
     globalCurrentTxRequest = request with { isConstructor: true };
     globalCurrentRetryableRequest = None<IncomingRequestAndLogs>;
 
-    // Create an accountStore with the caller's sequence number incremented; will decide later whether to commit it
+    // Create an accountStore with the caller's sequence number incremented, and commit it
     let acctStore = getGlobalAccountStore();
     acctStore = accountStore_set(
         acctStore,
@@ -459,6 +455,7 @@ public impure func initEvmCallStackForConstructor(
             accountStore_get(acctStore, request.caller)
         )
     );
+    setGlobalAccountStore(acctStore);
 
     if let Some(uas) = ethTransferOrGrant(
         acctStore,
