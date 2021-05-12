@@ -484,6 +484,28 @@ public impure func initEvmCallStackForConstructor(
         if (startTxResult == const::TxResultCode_success) {
             setGlobalAccountStore(acctStore);   // commit the incremented sequence number
 
+            // set up a fake stack frame, so errors in translateEvmCodeSegment cause failure receipts
+            globalCallStack = Some(struct {
+                runningAs: request.calleeAddr,
+                runningCodeFrom: request.calleeAddr,
+                accountStore: acctStore,
+                runningAsAccount: accountStore_get(acctStore, request.calleeAddr),
+                caller: request.caller,
+                static: false,
+                calldata: request.calldata,
+                callvalue: request.value,
+                returnInfo: None<ReturnInfo>,
+                memory: bytearray_new(0),
+                storageDelta: int(0),
+                revertOnStorageWrite: false,
+                evmLogs: evmlogs_empty(),
+                selfDestructQueue: queue_new(),
+                resumeInfo: None<ResumeInfo>,
+                sendQueue: queue_new(),
+                sendOnFailure: None<ByteArray>,
+                parent: None<EvmCallFrame>
+            });
+
             let (startPoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(code), false);
 
             // Create a new account to run the constructor code.
