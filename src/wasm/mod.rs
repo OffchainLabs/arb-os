@@ -854,6 +854,7 @@ fn handle_function(
                 }
                 let c: &Control = &stack[stack.len()-1];
                 ptr = c.level;
+                unreachable = true;
             },
             Block(bt) => {
                 let end_label = label;
