@@ -379,6 +379,7 @@ public impure func initEvmCallStack(
                     )
                 )
             );
+            setGlobalAccountStore(acctStore);
         }
 
         if (request.value > 0) {
