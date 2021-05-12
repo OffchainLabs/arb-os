@@ -290,7 +290,8 @@ type IncomingRequest = struct {
 
 type GasEstimationParams = struct {
     computeGasLimit: uint,
-    ignoreInsufficientGasFunds: bool,
+    ignoreGasPrice: bool,
+    ignoreMaxGas: bool,
 }
 
 type RequestProvenance = struct {

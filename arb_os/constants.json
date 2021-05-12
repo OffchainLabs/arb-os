@@ -201,6 +201,7 @@
     "TxResultCode_insufficientBalance": 4,
     "TxResultCode_insufficientGasForBaseFee": 9,
     "TxResultCode_belowMinimumTxGas": 10,
+    "TxResultCode_gasPriceTooLow": 11,
     "TxResultCode_noGasFunds": 3,
     "TxResultCode_revert": 1,
     "TxResultCode_success": 0,
