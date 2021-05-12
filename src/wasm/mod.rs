@@ -1088,6 +1088,7 @@ fn handle_function(
                 adjust_stack(&mut res, ptr - c.level, c.rets);
                 ptr = ptr - c.rets;
                 jump(&mut res, c.target);
+                unreachable = true;
             }
             Select => {
                 let else_label = label;
@@ -1657,12 +1658,13 @@ fn handle_function(
                 res.push(simple_op(AVMOpcode::Dup0));
                 res.push(immed_op(
                     AVMOpcode::GreaterThan,
-                    Value::Int(Uint256::from_usize(max_memory)),
+                    Value::Int(Uint256::from_usize(max_memory+1)),
                 ));
                 cjump(&mut res, ok_label);
                 res.push(simple_op(AVMOpcode::Pop));
                 res.push(simple_op(AVMOpcode::Pop));
                 res.push(push_value(Value::Int(Uint256::from_usize(0xffffffff)))); // -1 when error
+                jump(&mut res, end_label);
                 res.push(mk_label(ok_label));
                 get_memory(&mut res);
                 res.push(simple_op(AVMOpcode::Swap1));
@@ -1884,6 +1886,21 @@ fn find_memory_size(m: &Module) -> u32 {
         Some(sec) => {
             for e in sec.entries() {
                 return e.limits().initial();
+            }
+            0
+        }
+    }
+}
+
+fn find_memory_max(m: &Module) -> u32 {
+    match m.memory_section() {
+        None => 0,
+        Some(sec) => {
+            for e in sec.entries() {
+                match e.limits().maximum() {
+                    None => return 0x10000,
+                    Some(max) => return max,
+                }
             }
             0
         }
@@ -2193,7 +2210,7 @@ fn process_wasm_inner(buffer: &[u8], init: &mut Vec<Instruction>, test_args: &[u
     let code_section = module.code_section().unwrap(); // Part of the module with functions code
 
     let f_count = code_section.bodies().len() + imports.len();
-    let max_memory = 1 << 20;
+    let max_memory = find_memory_max(&module) as usize;
 
     // Construct initial memory with globals
     let memory_offset = if init_memory {
