@@ -912,6 +912,9 @@ public impure func getNextRequestFromCongestionAuction() -> (
             }
         }
 
+        if (tx.maxGas < const::Charging_MinArbGasForContractTx) {
+            tx = tx with { maxGas: const::Charging_MinArbGasForContractTx };
+        }
         if (tx.maxGas > gasAccountingParams.TxGasLimit) {
             tx = tx with { maxGas: gasAccountingParams.TxGasLimit };
         }
