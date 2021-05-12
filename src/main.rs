@@ -107,6 +107,8 @@ struct WasmTest {
 #[derive(Clap, Debug)]
 struct WasmSuite {
     input: Vec<String>,
+    #[clap(short, long)]
+    debug: bool,
 }
 
 ///Command line options for wasm-test subcommand.
@@ -153,7 +155,7 @@ enum Args {
     SerializeUpgrade(SerializeUpgrade),
 }
 
-fn run_test(buffer: &[u8], prev_memory: &Buffer, test_args: &[u64], entry: &String, init: bool, debug: bool) -> (Buffer, u64) {
+fn run_test(buffer: &[u8], prev_memory: &Buffer, test_args: &[u64], entry: &String, init: bool, debug: bool) -> (Buffer, Option<u64>) {
     let code_0 = wasm::make_test(buffer, prev_memory, test_args, entry, init);
     let mut code = vec![];
     for i in 0..code_0.len() {
@@ -187,17 +189,25 @@ fn run_test(buffer: &[u8], prev_memory: &Buffer, test_args: &[u64], entry: &Stri
     };
     let buf = machine.stack.nth(0);
     let res = machine.stack.nth(1);
-    // println!("buf {:?} res {:?}", buf, res);
+    println!("buf {:?} res {:?}", buf, res);
     match (buf, res) {
         (Some(Value::Buffer(buf)), Some(Value::Int(gl))) => {
-            (buf.clone(), gl.to_u64().unwrap())
+            (buf.clone(), Some(gl.to_u64().unwrap()))
         }
         (Some(Value::Buffer(buf)), None) => {
-            (buf.clone(), 0)
+            (buf.clone(), Some(0))
+        }
+        (Some(Value::Int(err)), _) => {
+            println!("{:?}", err);
+            if err == Uint256::from_signed_string("-1").unwrap() {
+                (prev_memory.clone(), None)
+            } else {
+                (prev_memory.clone(), Some(0))
+            }
         }
         _ => {
             println!("Bad output");
-            (prev_memory.clone(), 0)
+            (prev_memory.clone(), Some(0))
         }
     }
 
@@ -250,10 +260,24 @@ fn main() -> Result<(), CompileError> {
                         let expected = parse_list(&cmd["expected"]);
                         // println!("expected {:?}", expected);
                         if expected.len() > 0 {
-                            if expected[0] != result {
-                                println!("At file {} with {}({:?}): Expected {}, Got {}", cur_file, entry, args, expected[0], result);
+                            if Some(expected[0]) != result {
+                                println!("At file {} with {}({:?}): Expected {}, Got {:?}", cur_file, entry, args, expected[0], result);
                                 run_test(&module_buffer, &cur_memory, &args, &entry.to_string(), init, true);
                             }
+                        }
+                        cur_memory = mem;
+                        init = false;
+                    }
+                } else if cmd["type"] == "assert_trap" {
+                    println!("{:?}", cmd);
+                    if cmd["action"]["type"] == "invoke" {
+                        let entry = cmd["action"]["field"].as_str().unwrap();
+                        let args = parse_list(&cmd["action"]["args"]);
+                        // println!("{:?}", args);
+                        let (mem, result) = run_test(&module_buffer, &cur_memory, &args, &entry.to_string(), init, false);
+                        if result != None {
+                            println!("At file {} with {}({:?}): Expected trap, Got {:?}", cur_file, entry, args, result);
+                            run_test(&module_buffer, &cur_memory, &args, &entry.to_string(), init, true);
                         }
                         cur_memory = mem;
                         init = false;

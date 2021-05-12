@@ -848,7 +848,8 @@ fn handle_function(
         match &*op {
             Nop => res.push(simple_op(AVMOpcode::Noop)),
             Unreachable => {
-                res.push(simple_op(AVMOpcode::Panic));
+                // res.push(simple_op(AVMOpcode::Panic));
+                jump(&mut res, 1);
                 if stack.len() == 0 {
                     break;
                 }
@@ -2489,6 +2490,7 @@ fn process_wasm_inner(buffer: &[u8], init: &mut Vec<Instruction>, test_args: &[u
 
     // Error handling
     init.push(mk_label(1));
+    init.push(push_value(Value::Int(Uint256::from_signed_string("-1").unwrap())));
     init.push(simple_op(AVMOpcode::Panic));
     // Indirect calls
     init.push(mk_func_label(f_count));
