@@ -850,9 +850,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
             }
         }
 
-        if (tx.gasPrice == 0) {
-            tx = tx with { gasPrice: gasAccountingInfo.currentPrices.perArbGasTotal };
-        } elseif (tx.gasPrice < gasAccountingInfo.currentPrices.perArbGasTotal) {
+        if ((tx.gasPrice != 0) && (tx.gasPrice < gasAccountingInfo.currentPrices.perArbGasTotal) ) {
             return (const::TxResultCode_gasPriceTooLow, tx);
         }
 
