@@ -840,19 +840,23 @@ public impure func getNextRequestFromCongestionAuction() -> (
             feeStats: txFeeStats_setPrices(tx.feeStats, prices)
         };
 
-        let ignoreGasLimits = xif let Some(gep) = tx.incomingRequest.gasEstimationParams {
-            xif (gep.ignoreInsufficientGasFunds) {
-                tx = tx with {
-                    feeStats: tx.feeStats with {
-                        noFeeGasEstimationMode: true
-                    }
-                };
-                true
-            } else {
-                false
-            }
+        let (ignoreGasPrice, ignoreMaxGas, estimationCompGasLimit) = xif let Some(gep) = tx.incomingRequest.gasEstimationParams {
+            (
+                xif (gep.ignoreGasPrice) {
+                    tx = tx with {
+                        feeStats: tx.feeStats with {
+                            noFeeGasEstimationMode: true
+                        }
+                    };
+                    true
+                } else {
+                    false
+                },
+                gep.ignoreMaxGas,
+                gep.computeGasLimit,
+            )
         } else {
-            false
+            (false, false, 0)
         };
 
         if ((tx.gasPrice != 0) && (tx.gasPrice < gasAccountingInfo.currentPrices.perArbGasTotal) ) {
@@ -885,8 +889,13 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 //       for a fractional ArbGas unit (rounding down would credit the user with fractional
                 //       ETH that we don't have)
                 let roundedUpGasDelta = (feeStats.weiPaid.tx + feeStats.weiPaid.calldataUnit + prices.perArbGasTotal - 1) / prices.perArbGasTotal;
-                if (ignoreGasLimits) {
-                    tx = tx with { maxGas: gasAccountingParams.TxGasLimit };
+                if (ignoreMaxGas) {
+                    tx = tx with { maxGas: xif (estimationCompGasLimit < gasAccountingParams.TxGasLimit) {
+                            estimationCompGasLimit
+                        } else {
+                            gasAccountingParams.TxGasLimit
+                        }
+                    };
                 } elseif (tx.maxGas > roundedUpGasDelta) {
                     tx = tx with { maxGas: tx.maxGas - roundedUpGasDelta };
                 } else {
@@ -912,17 +921,8 @@ public impure func getNextRequestFromCongestionAuction() -> (
             }
         }
 
-        if (tx.maxGas < const::Charging_MinArbGasForContractTx) {
-            tx = tx with { maxGas: const::Charging_MinArbGasForContractTx };
-        }
         if (tx.maxGas > gasAccountingParams.TxGasLimit) {
             tx = tx with { maxGas: gasAccountingParams.TxGasLimit };
-        }
-
-        if let Some(gep) = tx.incomingRequest.gasEstimationParams {
-            if (tx.maxGas > gep.computeGasLimit) {
-                tx = tx with { maxGas: gep.computeGasLimit };
-            }
         }
 
         xif (tx.incomingRequest.kind == const::L1MessageType_L2ForGasEstimation) {
@@ -932,7 +932,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 (const::TxResultCode_insufficientBalance, tx)
             } else {
                 let affordableGas = (gasPayerFunds - tx.value) / tx.feeStats.price.compute;
-                if (tx.maxGas > affordableGas) {
+                if ( (! ignoreMaxGas) && (tx.maxGas > affordableGas) ) {
                     tx = tx with { maxGas: affordableGas };
                 }
                 (const::TxResultCode_success, tx)
@@ -945,6 +945,17 @@ public impure func getNextRequestFromCongestionAuction() -> (
         }
     } else {
         // fees are disabled, or this tx isn't chargeable, so just approve it, but set the units in feeStats first
+        if let Some(gep) = tx.incomingRequest.gasEstimationParams {
+            let maxGas = xif(gep.ignoreMaxGas) {
+                gasAccountingParams.TxGasLimit
+            } else {
+                tx.maxGas
+            };
+            if (maxGas > gep.computeGasLimit) {
+                maxGas = gep.computeGasLimit;
+            }
+            tx = tx with { maxGas: maxGas };
+        }
         (
             const::TxResultCode_success,
             tx with {
