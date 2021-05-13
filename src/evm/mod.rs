@@ -1834,7 +1834,7 @@ pub fn evm_eval_sha256(log_to: Option<&Path>, debug: bool) {
 
     let tx_id = machine.runtime_env.insert_tx_message(
         my_addr,
-        Uint256::from_u64(1000000000),
+        Uint256::from_u64(10000000),
         Uint256::zero(),
         Uint256::from_u64(2), // sha256 precompile
         Uint256::from_u64(0),
@@ -1849,6 +1849,7 @@ pub fn evm_eval_sha256(log_to: Option<&Path>, debug: bool) {
     };
 
     let receipts = machine.runtime_env.get_all_receipt_logs();
+    println!("result code: {}", receipts[0].get_return_code());
     assert_eq!(receipts.len(), 1);
     assert_eq!(receipts[0].get_request_id(), tx_id);
     assert!(receipts[0].succeeded());
