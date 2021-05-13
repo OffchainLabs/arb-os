@@ -277,16 +277,15 @@ public impure func initEvmCallStack(
             setGlobalAccountStore(acctStore);
             if (request.seqNum != None<uint>) {
                 // increment the caller's sequence number
-                setGlobalAccountStore(
-                    accountStore_set(
-                        acctStore,
-                        request.caller,
-                        account_incrSeqNum(
-                            accountStore_get(acctStore, request.caller)
-                        )
+                acctStore = accountStore_set(
+                    acctStore,
+                    request.caller,
+                    account_incrSeqNum(
+                        accountStore_get(acctStore, request.caller)
                     )
                 );
             }
+            setGlobalAccountStore(acctStore);
 
             globalCurrentTxRequest = request;
             globalCurrentRetryableRequest = None<IncomingRequestAndLogs>;
