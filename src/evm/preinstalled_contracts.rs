@@ -1114,7 +1114,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys_orig_binding._arbos_version(&mut machine)?,
-        Uint256::from_u64(14)
+        Uint256::from_u64(16),
     );
 
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
@@ -1449,7 +1449,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
     assert_eq!(l2tx, Uint256::from_u64(658993125000000));
     assert_eq!(l1calldata, Uint256::from_u64(178106250000));
     assert_eq!(storage, Uint256::from_u64(309750000000000));
-    assert_eq!(basegas, Uint256::from_u64(15487500));
+    assert_eq!(basegas, Uint256::from_u64(1548750000));
     assert!(conggas.is_zero());
     assert_eq!(basegas.add(&conggas), totalgas);
 
@@ -1458,9 +1458,9 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         "L2 tx / ag {}, L1 calldata / ag {}, L2 storage / ag {}",
         l2tx, l1calldata, storage
     );
-    assert_eq!(l2tx, Uint256::from_u64(42550000));
-    assert_eq!(l1calldata, Uint256::from_u64(11500));
-    assert_eq!(storage, Uint256::from_u64(20000000));
+    assert_eq!(l2tx, Uint256::from_u64(425500));
+    assert_eq!(l1calldata, Uint256::from_u64(115));
+    assert_eq!(storage, Uint256::from_u64(200000));
 
     let (speed_limit, gas_pool_max, tx_gas_limit) =
         arbgasinfo._get_gas_accounting_params(&mut machine)?;
@@ -1468,9 +1468,9 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         "speed limit {}, pool max {}, tx gas limit {}",
         speed_limit, gas_pool_max, tx_gas_limit
     );
-    assert_eq!(speed_limit, Uint256::from_u64(100_000_000));
-    assert_eq!(gas_pool_max, Uint256::from_u64(6_000_000_000));
-    assert_eq!(tx_gas_limit, Uint256::from_u64(1_000_000_000));
+    assert_eq!(speed_limit, Uint256::from_u64(1_000_000));
+    assert_eq!(gas_pool_max, Uint256::from_u64(60_000_000));
+    assert_eq!(tx_gas_limit, Uint256::from_u64(10_000_000));
 
     if let Some(path) = log_to {
         machine
