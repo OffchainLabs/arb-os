@@ -512,18 +512,25 @@ public func rlp_decodeAddress(bs: ByteStream) -> option<(ByteStream, address)> {
 
 public func bytesNeededToRepresentUint(val: uint) -> uint {
     let ret = 0;
-    let bytes = 16;
-    while (bytes > 0) {
-        let threshold = asm(8*bytes, 1) uint { shl };
-        if (val >= threshold) {
-            ret = ret + bytes;
-            val = val / threshold;
-        }
-        bytes = bytes / 2;
+    if (val >= 0x100000000000000000000000000000000) {
+        ret = ret + 16;
+        val = val / 0x100000000000000000000000000000000;
     }
-    return xif (val == 0) {
-        ret
-    } else {
-        ret+1
-    };
+    if (val >= 0x10000000000000000) {
+        ret = ret + 8;
+        val = val / 0x10000000000000000;
+    }
+    if (val >= 0x100000000) {
+        ret = ret + 4;
+        val = val / 0x100000000;
+    }
+    if (val >= 0x10000) {
+        ret = ret + 2;
+        val = val / 0x10000;
+    }
+    if (val >= 0x100) {
+        ret = ret + 1;
+        val = val / 0x100;
+    }
+    return xif (val == 0) { ret } else { ret+1 };
 }
