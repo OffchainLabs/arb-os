@@ -121,10 +121,10 @@ $(ARBOSDIR)/arbos.mexe: compiler $(TESTCONTRACTS) $(ARBOSDIR) $(STDDIR) $(BUILTI
 	$(CARGORUN) compile "arb_os" -o "arb_os/arbos.mexe" $(COMPILEFLAGS)
 
 $(TESTCONTRACTSPURE): $(TCSRCDIR)
-	(cd contracts; yarn build)
+	(cd contracts; yarn install; yarn build)
 
 $(ARBOSCONTRACTS): $(ACSRCDIR)
-	(cd contracts; yarn build)
+	(cd contracts; yarn install; yarn build)
 
 compiler:
 	cargo build --release
