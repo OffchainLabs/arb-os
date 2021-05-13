@@ -57,7 +57,8 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
                 address(agg),
                 Some(struct {
                     computeGasLimit: limit,
-                    ignoreInsufficientGasFunds: false,
+                    ignoreGasPrice: false,
+                    ignoreMaxGas: false,
                 })
             )
         };
