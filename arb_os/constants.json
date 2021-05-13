@@ -189,7 +189,7 @@
     "ProtoEvent_rejectNode": 2,
     "RetryBuffer_DefaultLifetimeSeconds": 604800,
     "SecondsPerBlockDenominator": 1,
-    "SecondsPerBlockNumerator": 2,
+    "SecondsPerBlockNumerator": 4,
     "SendType_sendTxToL1": 3,
     "Sequencer_deltaSeconds": 0,
     "Sequencer_maxDelaySeconds": 983040,
