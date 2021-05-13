@@ -274,7 +274,6 @@ public impure func initEvmCallStack(
         };
 
         if (startTxResult == const::TxResultCode_success) {
-            setGlobalAccountStore(acctStore);
             if (request.seqNum != None<uint>) {
                 // increment the caller's sequence number
                 acctStore = accountStore_set(
@@ -369,13 +368,11 @@ public impure func initEvmCallStack(
         if (request.seqNum != None<uint>) {
             // increment the caller's sequence number
             let acctStore = getGlobalAccountStore();
-            setGlobalAccountStore(
-                accountStore_set(
-                    acctStore,
-                    request.caller,
-                    account_incrSeqNum(
-                        accountStore_get(acctStore, request.caller)
-                    )
+            acctStore = accountStore_set(
+                acctStore,
+                request.caller,
+                account_incrSeqNum(
+                    accountStore_get(acctStore, request.caller)
                 )
             );
             setGlobalAccountStore(acctStore);
