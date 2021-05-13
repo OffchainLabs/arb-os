@@ -1,5 +1,5 @@
 {
-  "arbos_version": 15,
+  "arbos_version": 16,
   "integer": {
     "AVMSendType_batch": 0,
     "AVM_add": 1,
@@ -199,6 +199,7 @@
     "TxResultCode_congestion": 2,
     "TxResultCode_exceededTxGasLimit": 8,
     "TxResultCode_formatError": 6,
+    "TxResultCode_gasPriceTooLow": 11,
     "TxResultCode_insufficientBalance": 4,
     "TxResultCode_insufficientGasForBaseFee": 9,
     "TxResultCode_belowMinimumTxGas": 10,
