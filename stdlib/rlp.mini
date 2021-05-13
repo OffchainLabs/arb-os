@@ -16,6 +16,7 @@ use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_copy;
+use std::bytearray::bytearray_fromSizeAndBuffer;
 
 use std::bytestream::bytestream_getByte;
 use std::bytestream::bytestream_get256;
@@ -75,6 +76,24 @@ public func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray
             offset = offset+1;
         }
         (ba, origLen+1)
+    };
+}
+
+public func rlp_encodeUintFresh(val: uint) -> ByteArray {
+    return xif (val == 0) {
+        bytearray_fromSizeAndBuffer(1, setbuffer8(newbuffer(), 0, 0x80))
+    } elseif (val <= 0x7f) {
+        bytearray_fromSizeAndBuffer(1, setbuffer8(newbuffer(), 0, val))
+    } else {
+        let length = bytesNeededToRepresentUint(val);
+        bytearray_fromSizeAndBuffer(
+            1+length,
+            setbuffer256(
+                setbuffer8(newbuffer(), 0, 0x80+length),
+                1,
+                asm(256-8*length, val) uint { shl }
+            ),
+        )
     };
 }
 
@@ -304,23 +323,23 @@ public func rlp_encodeMessageInfo(
     let encodedPieces = newarray<ByteArray>(9);
 
     encodedPieces = encodedPieces with {
-        [0] = rlp_encodeUint(seqNum, bytearray_new(0), 0).0
+        [0] = rlp_encodeUintFresh(seqNum)
     } with {
-        [1] = rlp_encodeUint(gasPrice, bytearray_new(0), 0).0
+        [1] = rlp_encodeUintFresh(gasPrice)
     } with {
-        [2] = rlp_encodeUint(gasLimit, bytearray_new(0), 0).0
+        [2] = rlp_encodeUintFresh(gasLimit)
     } with {
         [3] = rlp_encodeAddress(to, bytearray_new(0), 0).0
     } with {
-        [4] = rlp_encodeUint(value, bytearray_new(0), 0).0
+        [4] = rlp_encodeUintFresh(value)
     } with {
         [5] = rlp_encodeBytes(data, 0, bytearray_size(data), bytearray_new(0), 0).0
     } with {
-        [6] = rlp_encodeUint(v, bytearray_new(0), 0).0
+        [6] = rlp_encodeUintFresh(v)
     } with {
-        [7] = rlp_encodeUint(r, bytearray_new(0), 0).0
+        [7] = rlp_encodeUintFresh(r)
     } with {
-        [8] = rlp_encodeUint(s, bytearray_new(0), 0).0
+        [8] = rlp_encodeUintFresh(s)
     };
 
     return xif let Some(res) = rlp_encodeList(encodedPieces, 0, 9, bytearray_new(0), 0) {
