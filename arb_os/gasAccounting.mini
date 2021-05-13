@@ -649,7 +649,7 @@ public impure func gasAccounting_extraCharge(wei: uint) {
     // it's safe to assess the charge after doing the thing, if the cost of the thing will be eliminated on revert
 
     let gasLeft = asm() uint { getgas } / const::Charging_ArbGasPerAvmGas;
-    if (gasLeft >= asm (1, 255) uint { shl }) {
+    if (gasLeft >= asm (1, 255) uint { shl } / const::Charging_ArbGasPerAvmGas) {
         return;   // we're not currently charging a tx, so don't assess a charge
     }
 
