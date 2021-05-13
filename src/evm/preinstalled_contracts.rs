@@ -1114,7 +1114,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys_orig_binding._arbos_version(&mut machine)?,
-        Uint256::from_u64(12)
+        Uint256::from_u64(14)
     );
 
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
@@ -1976,7 +1976,7 @@ fn _test_arb_stats() -> Result<(), ethabi::Error> {
     let (arb_blocknum, num_accounts, storage, _arbgas, txs, contracts) =
         arbstats._get_stats(&mut machine)?;
 
-    assert_eq!(arb_blocknum, Uint256::from_u64(0));
+    assert_eq!(arb_blocknum, Uint256::from_u64(1));
     assert_eq!(num_accounts, Uint256::from_u64(22));
     assert_eq!(storage, Uint256::from_u64(0));
     // assert_eq!(_arbgas, Uint256::from_u64(1_490_972));  // disable this because it will vary over versions
