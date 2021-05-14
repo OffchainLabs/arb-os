@@ -930,7 +930,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 (const::TxResultCode_insufficientBalance, tx)
             } else {
                 let affordableGas = (gasPayerFunds - tx.value) / tx.feeStats.price.compute;
-                if ( (! ignoreMaxGas) && (tx.maxGas > affordableGas) ) {
+                if (tx.maxGas > affordableGas) {
                     tx = tx with { maxGas: affordableGas };
                 }
                 (const::TxResultCode_success, tx)
