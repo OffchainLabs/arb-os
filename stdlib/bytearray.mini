@@ -315,12 +315,22 @@ public func bytearray_copy(
         toOffset = 32+toOffset;
         nbytes = nbytes-32;
     }
-    while (nbytes > 0) {
-        let val = getbuffer8(fromContents, fromOffset);
-        toContents = setbuffer8(toContents, toOffset, val);
-        fromOffset = 1+fromOffset;
-        toOffset = 1+toOffset;
-        nbytes = nbytes-1;
+    if (toOffset < (const::MaxByteArraySize-32)) {
+        let val = getbuffer256(fromContents, fromOffset);
+        let mask = (~0) - (asm(8*nbytes, ~0) uint { shr });
+        toContents = setbuffer256(
+            toContents,
+            toOffset,
+            (mask & val) | ((~mask) & getbuffer256(toContents, toOffset))
+        );
+    } else {
+        while (nbytes > 0) {
+            let val = getbuffer8(fromContents, fromOffset);
+            toContents = setbuffer8(toContents, toOffset, val);
+            fromOffset = 1+fromOffset;
+            toOffset = 1+toOffset;
+            nbytes = nbytes-1;
+        }
     }
     return to with { contents: toContents };
 }
