@@ -18,6 +18,10 @@ use lalrpop_util::ParseError;
 
 grammar(stringtable: &mut StringTable, file_info: &Lines, filename: u64, current_path: &[String], constants: &mut HashMap<String, Uint256>);
 
+extern {
+    type Error = String;
+}
+
 pub Decls: Vec<TopLevelDecl> = {
 	<a: ("#![" <Attributes> "]")?><mut i:ImportDecl*> <mut n:NonImportDecl+> => {
         i.append(&mut n);
@@ -86,14 +90,21 @@ Statement: Statement = {
 }
 
 Attributes: Attributes = {
-   <names: (<IdentString> ",")*> => {let mut attribs = Attributes::default(); for name in names {
+   <lno: @L> <names: (<IdentString> ",")*> =>? {let mut attribs = Attributes::default(); for name in names {
        match name.as_ref() {
            "breakpoint" => attribs.breakpoint = true,
            "inline" => attribs.inline = InliningMode::Always,
            "noinline" => attribs.inline = InliningMode::Never,
-           _ => {}
+           unrecognized => return Err(ParseError::User {
+            error:
+                format!("Unrecognized attribute \"{}\" {}, in file: {}",
+                    unrecognized,
+                    file_info.location(BytePos::from(lno), filename)
+                        .map(|loc| format!("{}", loc)).unwrap_or("Unknown location".to_string()),
+                        filename)
+            }),
        }
-   }; attribs},
+   }; Ok(attribs)},
 }
 
 StatementKind: StatementKind = {
@@ -365,7 +376,7 @@ ConstVal: Uint256 = {
             Some(i) => Ok(i.clone()),
             None => {
                 println!("Unrecognized constant name: {}", <>);
-                Err(ParseError::User { error: "unrecognized constant name" })
+                Err(ParseError::User { error: format!("unrecognized constant name") })
             }
         }
     },
@@ -374,7 +385,7 @@ ConstVal: Uint256 = {
             Some(i) => Ok(i.clone()),
             None => {
                 println!("Unrecognized constant name: {}", <>);
-                Err(ParseError::User { error: "unrecognized constant name" })
+                Err(ParseError::User { error: format!("unrecognized constant name") })
             }
         }
     }
