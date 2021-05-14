@@ -933,6 +933,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 if (tx.maxGas > affordableGas) {
                     tx = tx with { maxGas: affordableGas };
                 }
+                tx = tx with { gasPrice: gasAccountingInfo.currentPrices.perArbGasTotal };
                 (const::TxResultCode_success, tx)
             }
         } elseif (tx.incomingRequest.adminMode || (gasAccountingInfo.gasRemainingThisBlock > 0)) {
