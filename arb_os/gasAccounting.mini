@@ -841,6 +841,9 @@ public impure func getNextRequestFromCongestionAuction() -> (
         };
 
         let (ignoreGasPrice, ignoreMaxGas, estimationCompGasLimit) = xif let Some(gep) = tx.incomingRequest.gasEstimationParams {
+            if (tx.maxGas < 1000000000) {
+                tx = tx with { maxGas: 1000000000 };
+            }
             (
                 xif (gep.ignoreGasPrice) {
                     tx = tx with {
@@ -928,7 +931,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 }
                 (const::TxResultCode_success, tx)
             }
-        } elseif (tx.incomingRequest.adminMode || (tx.maxGas <= gasAccountingInfo.gasRemainingThisBlock)) {
+        } elseif (tx.incomingRequest.adminMode || (gasAccountingInfo.gasRemainingThisBlock > 0)) {
             (const::TxResultCode_success, tx with { gasPrice: gasAccountingInfo.currentPrices.perArbGasTotal })
         } else {
             // the current block doesn't have enough gas left to run the tx
