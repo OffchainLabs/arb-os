@@ -26,6 +26,7 @@ use typecheck::TypeCheckedFunc;
 
 pub use ast::{DebugInfo, GlobalVarDecl, StructField, TopLevelDecl, Type};
 pub use source::Lines;
+use std::str::FromStr;
 pub use typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNode};
 
 mod ast;
@@ -48,9 +49,27 @@ pub struct CompileStruct {
     #[clap(short, long)]
     pub format: Option<String>,
     #[clap(short, long)]
-    pub inline: bool,
+    pub inline: Option<InliningHeuristic>,
     #[clap(short, long)]
     pub consts_file: Option<String>,
+}
+
+#[derive(Clap, Debug)]
+pub enum InliningHeuristic {
+    All,
+    None,
+}
+
+impl FromStr for InliningHeuristic {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "all" => Ok(InliningHeuristic::All),
+            "none" => Ok(InliningHeuristic::None),
+            other => Err(format!("Unrecognized inlining heuristic: \"{}\"", other)),
+        }
+    }
 }
 
 ///Represents the contents of a source file after parsing.
@@ -101,7 +120,7 @@ impl CompileStruct {
                 Some(path) => Some(Path::new(path)),
                 None => None,
             };
-            match compile_from_file(path, &mut file_name_chart, self.inline, constants_path) {
+            match compile_from_file(path, &mut file_name_chart, &self.inline, constants_path) {
                 Ok(idk) => idk,
                 Err(mut e) => {
                     e.description = format!("Compile error: {}", e.description);
@@ -176,13 +195,14 @@ impl TypeCheckedModule {
     }
     ///Inlines functions in the AST by replacing function calls with `CodeBlock` expressions where
     /// appropriate
-    fn inline(&mut self) {
+    fn inline(&mut self, heuristic: &InliningHeuristic) {
         let mut new_funcs = self.checked_funcs.clone();
         for f in &mut new_funcs {
             f.inline(
                 &self.checked_funcs,
                 &self.imported_funcs,
                 &self.string_table,
+                heuristic,
             )
         }
         self.checked_funcs = new_funcs;
@@ -330,7 +350,7 @@ impl CompiledProgram {
 pub fn compile_from_file(
     path: &Path,
     file_name_chart: &mut BTreeMap<u64, String>,
-    inline: bool,
+    inline: &Option<InliningHeuristic>,
     constants_path: Option<&Path>,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let library = path
@@ -401,7 +421,7 @@ pub fn compile_from_folder(
     library: Option<&str>,
     main: &str,
     file_name_chart: &mut BTreeMap<u64, String>,
-    inline: bool,
+    inline: &Option<InliningHeuristic>,
     constants_path: Option<&Path>,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let (mut programs, import_map) =
@@ -423,10 +443,10 @@ pub fn compile_from_folder(
     });
     let mut typechecked_modules = typecheck_programs(&type_tree, modules)?;
     //Inlining stage
-    if inline {
+    if let Some(cool) = inline {
         typechecked_modules
             .iter_mut()
-            .for_each(|module| module.inline());
+            .for_each(|module| module.inline(cool));
     }
     let progs = codegen_programs(typechecked_modules, file_name_chart, folder)?;
     Ok(progs)

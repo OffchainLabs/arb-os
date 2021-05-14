@@ -10,6 +10,7 @@ use super::ast::{
     Type, TypeTree, UnaryOp,
 };
 use crate::compile::ast::FieldInitializer;
+use crate::compile::InliningHeuristic;
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::Location;
@@ -216,7 +217,12 @@ impl InliningMode {
 ///Used to inline an AST node
 fn inline(
     to_do: &mut TypeCheckedNode,
-    state: &(&Vec<TypeCheckedFunc>, &Vec<ImportedFunc>, &StringTable),
+    state: &(
+        &Vec<TypeCheckedFunc>,
+        &Vec<ImportedFunc>,
+        &StringTable,
+        &InliningHeuristic,
+    ),
     _mut_state: &mut InliningMode,
 ) -> bool {
     if let TypeCheckedNode::Statement(stat) = to_do {
@@ -235,7 +241,16 @@ fn inline(
             {
                 let found_func = state.0.iter().find(|func| func.name == id);
                 if let Some(func) = found_func {
-                    if _mut_state.and(&func.debug_info.attributes.inline) != InliningMode::Always {
+                    if match state.3 {
+                        InliningHeuristic::All => {
+                            _mut_state.and(&func.debug_info.attributes.inline)
+                                == InliningMode::Never
+                        }
+                        InliningHeuristic::None => {
+                            _mut_state.and(&func.debug_info.attributes.inline)
+                                != InliningMode::Always
+                        }
+                    } {
                         return false;
                     }
                     let mut code: Vec<_> = if func.args.len() == 0 {
@@ -325,10 +340,11 @@ impl TypeCheckedFunc {
         funcs: &Vec<TypeCheckedFunc>,
         imported_funcs: &Vec<ImportedFunc>,
         string_table: &StringTable,
+        heuristic: &InliningHeuristic,
     ) {
         self.recursive_apply(
             inline,
-            &(funcs, imported_funcs, string_table),
+            &(funcs, imported_funcs, string_table, heuristic),
             &mut InliningMode::Auto,
         );
     }
