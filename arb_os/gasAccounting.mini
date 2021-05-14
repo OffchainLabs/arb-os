@@ -898,19 +898,17 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 //       for a fractional ArbGas unit (rounding down would credit the user with fractional
                 //       ETH that we don't have)
                 let roundedUpGasDelta = (feeStats.weiPaid.tx + feeStats.weiPaid.calldataUnit + prices.perArbGasTotal - 1) / prices.perArbGasTotal;
-                if ( ! ignoreMaxGas) {
-                    if (tx.maxGas > roundedUpGasDelta) {
-                        tx = tx with { maxGas: tx.maxGas - roundedUpGasDelta };
-                    } else {
-                        tx = tx with {
-                            feeStats: tx.feeStats with {
-                                units: tx.feeStats.units with {
-                                    calldataUnit: aggInfo.calldataUnits
-                                }
+                if (tx.maxGas > roundedUpGasDelta) {
+                    tx = tx with { maxGas: tx.maxGas - roundedUpGasDelta };
+                } else {
+                    tx = tx with {
+                        feeStats: tx.feeStats with {
+                            units: tx.feeStats.units with {
+                                calldataUnit: aggInfo.calldataUnits
                             }
-                        };
-                        return (const::TxResultCode_insufficientGasForBaseFee, tx);
-                    }
+                        }
+                    };
+                    return (const::TxResultCode_insufficientGasForBaseFee, tx);
                 }
             } else {
                 tx = tx with {
