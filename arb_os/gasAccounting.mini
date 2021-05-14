@@ -856,7 +856,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 },
                 xif (gep.ignoreMaxGas) {
                     tx = tx with {
-                        maxGas: account_getBalance(accountStore_get(getGlobalAccountStore(), tx.gasPayer)) / (1+prices.perArbGasTotal)
+                        maxGas: account_getBalance(accountStore_get(getGlobalAccountStore(), tx.gasPayer)) / gasAccountingInfo.currentPrices.perArbGasTotal
                     };
                     true
                 } else {
@@ -929,11 +929,11 @@ public impure func getNextRequestFromCongestionAuction() -> (
             xif (tx.value >= gasPayerFunds) {
                 (const::TxResultCode_insufficientBalance, tx)
             } else {
-                let affordableGas = (gasPayerFunds - tx.value) / tx.feeStats.price.compute;
-                if (tx.maxGas > affordableGas) {
+                let affordableGas = (gasPayerFunds - tx.value) / gasPrice;
+                if ((tx.maxGas == 0) || (tx.maxGas > affordableGas)) {
                     tx = tx with { maxGas: affordableGas };
                 }
-                tx = tx with { gasPrice: gasAccountingInfo.currentPrices.perArbGasTotal };
+                tx = tx with { gasPrice: gasPrice };
                 (const::TxResultCode_success, tx)
             }
         } elseif (tx.incomingRequest.adminMode || (gasAccountingInfo.gasRemainingThisBlock > 0)) {
