@@ -32,6 +32,8 @@ use evmCallStack::evmCallStack_getAccountInCurrentContext;
 use evmCallStack::evmCallStack_setAccountInCurrentContext;
 use evmCallStack::evmCallStack_transferEthInCurrentContext;
 
+use inbox::GasEstimationParams;
+
 use messages::TxRequestData;
 
 use std::bytearray::bytearray_new;
@@ -841,8 +843,8 @@ public impure func getNextRequestFromCongestionAuction() -> (
         };
 
         let (ignoreGasPrice, ignoreMaxGas, estimationCompGasLimit) = xif let Some(gep) = tx.incomingRequest.gasEstimationParams {
-            if (tx.maxGas < 1000000000) {
-                tx = tx with { maxGas: 1000000000 };
+            if (tx.maxGas == 0) {
+                tx = tx with { maxGas: 100000000000000000 };
             }
             (
                 xif (gep.ignoreGasPrice) {
@@ -939,6 +941,11 @@ public impure func getNextRequestFromCongestionAuction() -> (
         }
     } else {
         // fees are disabled, or this tx isn't chargeable, so just approve it, but set the units in feeStats first
+        if let Some(_) = tx.incomingRequest.gasEstimationParams {
+            if (tx.maxGas == 0) {
+                tx = tx with { maxGas: 100000000000000000 };
+            }
+        }
         (
             const::TxResultCode_success,
             tx with {
