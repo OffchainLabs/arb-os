@@ -584,26 +584,24 @@ public impure func gasAccounting_endTxCharges(
     let payments = deferredPayments_new();
 
     let refund = (txState.originalMax - totalGasUsed) * txState.price;
-    if ( ! feeStats.noFeeGasEstimationMode ) {
-        if (refund > 0) {
-            payments = deferredPayments_add(payments, txState.refundTo, refund);
-        }
-        let basePrice = gasAccountingInfo.currentPrices.perArbGasBase;
-        if (basePrice > txState.price) {
-            basePrice = txState.price;
-        }
-        payments = deferredPayments_add(
-            payments,
-            gasAccountingInfo.feeConfig.forNetwork,
-            computeGasUsed * basePrice + storageGasUsed * txState.price,
-        );
-        let congestionPrice = txState.price - basePrice;
-        payments = deferredPayments_add(
-            payments,
-            gasAccountingInfo.feeConfig.forCongestion,
-            computeGasUsed * congestionPrice,
-        );
+    if (refund > 0) {
+        payments = deferredPayments_add(payments, txState.refundTo, refund);
     }
+    let basePrice = gasAccountingInfo.currentPrices.perArbGasBase;
+    if (basePrice > txState.price) {
+        basePrice = txState.price;
+    }
+    payments = deferredPayments_add(
+        payments,
+        gasAccountingInfo.feeConfig.forNetwork,
+        computeGasUsed * basePrice + storageGasUsed * txState.price,
+    );
+    let congestionPrice = txState.price - basePrice;
+    payments = deferredPayments_add(
+        payments,
+        gasAccountingInfo.feeConfig.forCongestion,
+        computeGasUsed * congestionPrice,
+    );
 
     gasAccountingInfo = gasAccountingInfo with {
         congestionState: gasAccountingInfo.congestionState with {
@@ -868,7 +866,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
             (false, false, 0)
         };
 
-        if ((tx.gasPrice != 0) && (tx.gasPrice < gasAccountingInfo.currentPrices.perArbGasTotal) ) {
+        if ((tx.gasPrice != 0) && (tx.gasPrice < prices.perArbGasTotal) ) {
             return (const::TxResultCode_gasPriceTooLow, tx);
         }
 
