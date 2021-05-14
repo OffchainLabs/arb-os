@@ -843,9 +843,6 @@ public impure func getNextRequestFromCongestionAuction() -> (
         };
 
         let (ignoreGasPrice, ignoreMaxGas, estimationCompGasLimit) = xif let Some(gep) = tx.incomingRequest.gasEstimationParams {
-            if (tx.maxGas == 0) {
-                tx = tx with { maxGas: 100000000000000000 };
-            }
             (
                 xif (gep.ignoreGasPrice) {
                     tx = tx with {
@@ -857,7 +854,14 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 } else {
                     false
                 },
-                gep.ignoreMaxGas,
+                xif (gep.ignoreMaxGas) {
+                    tx = tx with {
+                        maxGas: account_getBalance(accountStore_get(getGlobalAccountStore(), tx.gasPayer)) / (1+prices.perArbGasTotal)
+                    };
+                    true
+                } else {
+                    false
+                },
                 gep.computeGasLimit,
             )
         } else {
