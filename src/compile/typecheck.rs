@@ -204,7 +204,7 @@ impl Default for InliningMode {
 }
 
 impl InliningMode {
-    fn and(&self, other: &InliningMode) -> InliningMode {
+    pub fn and(&self, other: &InliningMode) -> InliningMode {
         *if *self == InliningMode::Auto {
             other
         } else {

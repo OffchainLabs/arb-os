@@ -19,7 +19,15 @@ use lalrpop_util::ParseError;
 grammar(stringtable: &mut StringTable, file_info: &Lines, filename: u64, current_path: &[String], constants: &mut HashMap<String, Uint256>);
 
 pub Decls: Vec<TopLevelDecl> = {
-	<mut i:ImportDecl*> <mut n:NonImportDecl+> => {i.append(&mut n);i},
+	<a: ("#![" <Attributes> "]")?><mut i:ImportDecl*> <mut n:NonImportDecl+> => {
+        i.append(&mut n);
+        for decl in &mut i {
+            if let (TopLevelDecl::FuncDecl(func), Some(attr)) = (decl, a) {
+                func.debug_info.attributes.inline = func.debug_info.attributes.inline.and(&attr.inline);
+            }
+        };
+        i
+        },
 }
 
 ImportDecl: TopLevelDecl = {
@@ -82,7 +90,7 @@ Attributes: Attributes = {
        match name.as_ref() {
            "breakpoint" => attribs.breakpoint = true,
            "inline" => attribs.inline = InliningMode::Always,
-           "no-inline" => attribs.inline = InliningMode::Never,
+           "noinline" => attribs.inline = InliningMode::Never,
            _ => {}
        }
    }; attribs},
