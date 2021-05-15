@@ -827,7 +827,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
         };
     }
 
-    return xif ((tx.incomingRequest.sender != address(0)) && gasAccountingInfo.feeConfig.enabled) {
+    return xif ((tx.incomingRequest.sender != address(0)) && gasAccountingInfo.feeConfig.enabled && (! tx.incomingRequest.adminMode)) {
         if let Some(txSeqNum) = tx.seqNum {
             if (txSeqNum != account_getNextSeqNum(accountStore_get(getGlobalAccountStore(), tx.caller))) {
                 // don't charge the user if sequence number is wrong
@@ -934,7 +934,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 tx = tx with { gasPrice: gasPrice };
                 (const::TxResultCode_success, tx)
             }
-        } elseif (tx.incomingRequest.adminMode || (gasAccountingInfo.gasRemainingThisBlock > 0)) {
+        } elseif (tx.incomingRequest.adminMode || (gasAccountingInfo.gasRemainingThisBlock > 0) || (estimationCompGasLimit > 0)) {
             (const::TxResultCode_success, tx with { gasPrice: gasAccountingInfo.currentPrices.perArbGasTotal })
         } else {
             // the current block doesn't have enough gas left to run the tx
