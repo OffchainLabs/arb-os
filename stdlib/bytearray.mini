@@ -360,16 +360,26 @@ public func buffer_getCalldataUnits(buf: buffer, offset: uint, nbytes: uint) -> 
     let i = 0;
     while (i+32 <= nbytes) {
         let x = getbuffer256(buf, offset+i);
+
+        // now we want to count the non-zero bytes in x
+        // first, make the low-order bit of each byte be 1 iff the byte was nonzero, and 0 if the byte was zero
         x = x | asm(1, x) uint { shr };
         x = x | asm(2, x) uint { shr };
         x = x | asm(4, x) uint { shr };
+
+        // now mask off the other bits, so each byte is 1 iff it was originally nonzero, 0 otherwise
         x = x & 0x0101010101010101010101010101010101010101010101010101010101010101;
+
+        // now add tree-wise, so the low-order byte of x gets the sum of the current bytes
         x = x + asm(8, x) uint { shr };
         x = x + asm(16, x) uint { shr };
         x = x + asm(32, x) uint { shr };
         x = x + asm(64, x) uint { shr };
         x = x + asm(128, x) uint { shr };
+
+        // finally discard all but the low-order byte, and add it into the cumulative count of non-zeroes
         nonzeroes = nonzeroes + (0xff & x);
+
         i = i+32;
     }
     while (i < nbytes) {
