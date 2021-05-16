@@ -388,6 +388,6 @@ public func buffer_getCalldataUnits(buf: buffer, offset: uint, nbytes: uint) -> 
         }
         i = i+1;
     }
-    return 4*nbytes + 12*nonzeroes;
+    return 4*nbytes + 8*nonzeroes;
 }
 
