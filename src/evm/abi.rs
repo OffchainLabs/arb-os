@@ -96,7 +96,7 @@ impl AbiForContract {
 
         let request_id = machine.runtime_env.insert_tx_message(
             Uint256::from_u64(1025),
-            Uint256::from_usize(1_000_000_000),
+            Uint256::from_usize(10_000_000),
             Uint256::zero(),
             Uint256::zero(),
             payment,
@@ -174,7 +174,7 @@ impl AbiForContract {
 
         machine.runtime_env.insert_tx_message(
             sender_addr,
-            Uint256::from_usize(1_000_000_000),
+            Uint256::from_usize(10_000_000),
             Uint256::zero(),
             self.address.clone(),
             payment,
@@ -1128,7 +1128,7 @@ impl ArbosTest {
         );
         let _tx_id = machine.runtime_env.insert_tx_message(
             caller_addr,
-            Uint256::from_usize(1_000_000_000),
+            Uint256::from_usize(10_000_000),
             Uint256::zero(),
             callee_addr,
             callvalue,

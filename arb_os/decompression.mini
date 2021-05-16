@@ -258,16 +258,29 @@ public impure func decompressAndVerifyEcdsaSignedTx(
             };
         }
     }
-    if ( (originalRequest.kind == const::L1MessageType_L2ForGasEstimation) && (tx.gasPrice == 0)) {
-        // gas estimation tx requested zero gas, so ignore gas funding and pay whatever price is necessary to run
-        originalRequest = originalRequest with {
-            gasEstimationParams: xif let Some(gep) = originalRequest.gasEstimationParams {
-                Some(gep with { ignoreInsufficientGasFunds: true })
-            } else {
-                None<GasEstimationParams>
-            }
-        };
-        tx = tx with { gasPrice: ~0 };
+    if (originalRequest.kind == const::L1MessageType_L2ForGasEstimation) {
+        if (tx.gasPrice == 0) {
+            // gas estimation tx requested zero gas, so ignore gas funding and pay whatever price is necessary to run
+            originalRequest = originalRequest with {
+                gasEstimationParams: xif let Some(gep) = originalRequest.gasEstimationParams {
+                    Some(gep with { ignoreGasPrice: true })
+                } else {
+                    None<GasEstimationParams>
+                }
+            };
+            tx = tx with { gasPrice: ~0 };
+        }
+        if (tx.gasLimit == 0) {
+            // gas estimation tx requested zero maxGas, so ignore use max gas allowed
+            originalRequest = originalRequest with {
+                gasEstimationParams: xif let Some(gep) = originalRequest.gasEstimationParams {
+                    Some(gep with { ignoreMaxGas: true })
+                } else {
+                    None<GasEstimationParams>
+                }
+            };
+            tx = tx with { gasLimit: ~0 };
+        }
     }
 
     return Some(

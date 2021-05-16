@@ -130,8 +130,8 @@ public impure func inbox_get() -> IncomingRequest {
     };
 }
 
-impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, adminMode: bool) -> IncomingRequest {
-    if (! adminMode) {
+impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, fromSideload: bool) -> IncomingRequest {
+    if (! fromSideload) {
         updateL1GasPriceEstimate(newMsgRaw.sender, newMsgRaw.gasPriceL1);
     }
 
@@ -156,7 +156,7 @@ impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, adminMod
             indexInParent: ~0,
         },
         aggregator: None<AggregatorInfo>,
-        adminMode: adminMode,
+        adminMode: fromSideload && (newMsgRaw.kind != const::L1MessageType_L2ForGasEstimation),
         gasEstimationParams: None<GasEstimationParams>,
     };
 }
@@ -290,7 +290,8 @@ type IncomingRequest = struct {
 
 type GasEstimationParams = struct {
     computeGasLimit: uint,
-    ignoreInsufficientGasFunds: bool,
+    ignoreGasPrice: bool,
+    ignoreMaxGas: bool,
 }
 
 type RequestProvenance = struct {
