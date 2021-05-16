@@ -280,7 +280,7 @@ func testCalldataUnitCounting() -> uint {
     }
 
     buf = setbuffer256(buf, 3, ~0);
-    if (buffer_getCalldataUnits(buf, 0, 37) != (12*32 + 4*5)) {
+    if (buffer_getCalldataUnits(buf, 0, 37) != (16*32 + 4*5)) {
         return 10002;
     }
 
