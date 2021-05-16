@@ -37,7 +37,7 @@ public func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32 {
     }
 
     // Build a bytearray to hold the final block
-    let lastBlock = bytearray_extract(ba, offset, nbytes);
+    let lastBlock = bytearray_copy(ba, offset, bytearray_new(0), 0, nbytes);
 
     // Add padding to fill the final block
     if (nbytes == 135) {
