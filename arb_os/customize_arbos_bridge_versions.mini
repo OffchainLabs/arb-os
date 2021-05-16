@@ -5,6 +5,11 @@
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 use accounts::AccountStore;
 
+use evmCallStack::EvmCallFrame;
+use evmCallStack::IncomingRequestAndLogs;
+use inbox::Inbox;
+use messages::TxRequestData;
+
 
 public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> AccountStore {
     return unsafecast<AccountStore>(input_globals.globalAccountStore);
