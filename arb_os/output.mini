@@ -9,6 +9,8 @@ use evmlogs::EvmLogs;
 
 use arbstatistics::arbStatistics_addTxReceipt;
 
+use tracing::evmTracer_emitAndClear;
+
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_marshalFull;
@@ -46,7 +48,6 @@ use gasAccounting::TxFeeStats;
 use gasAccounting::gasAccounting_summaryToPublish;
 
 use tracing::evmTracer_pushReturnRevert;
-use tracing::evmTracer_emitAndClear;
 
 
 // PerBlockReceiptData is different from OutputStatistics for now; might want to unify
@@ -236,6 +237,7 @@ public impure func emitTxReceipt(
     maybeEvmLogs: option<EvmLogs>,
     gasUsage: option<GasUsage>,
     feeStats: TxFeeStats,
+    emitTracingInfo: bool,
 ) {
     arbStatistics_addTxReceipt();
 
@@ -280,6 +282,10 @@ public impure func emitTxReceipt(
         ),
         feeStats,
     ),) { log };
+
+    if (emitTracingInfo) {
+        evmTracer_emitAndClear();
+    }
 }
 
 var globalOutbox: struct {

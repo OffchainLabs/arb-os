@@ -345,6 +345,7 @@ public impure func initEvmCallStack(
                     setGlobalAccountStore(
                         deferredPayments_apply(getGlobalAccountStore(), payments)
                     );
+                    evmTracer_pushReturnRevert(const::TxResultCode_insufficientBalance, bytearray_new(0), 0);
                     emitTxReceipt(
                         request.incomingRequest,
                         const::TxResultCode_insufficientBalance,
@@ -352,9 +353,11 @@ public impure func initEvmCallStack(
                         None<EvmLogs>,
                         Some(gasUsage),
                         feeStats,
+                        true,
                     );
                 } else {
                     // unknown error type
+                    evmTracer_pushReturnRevert(const::TxResultCode_unknownFailure, bytearray_new(0), 0);
                     emitTxReceipt(
                         request.incomingRequest,
                         const::TxResultCode_unknownFailure,
@@ -362,12 +365,14 @@ public impure func initEvmCallStack(
                         None<EvmLogs>,
                         None<GasUsage>,
                         request.feeStats,
+                        true,
                     );
                 }
                 evmCallStack_callHitError(1);
             }
         } else {
             // can't pay for gas error
+            evmTracer_pushReturnRevert(startTxResult, bytearray_new(0), 0);
             emitTxReceipt(
                 request.incomingRequest,
                 startTxResult,
@@ -375,6 +380,7 @@ public impure func initEvmCallStack(
                 None<EvmLogs>,
                 None<GasUsage>,
                 request.feeStats,
+                true,
             );
             evmCallStack_callHitError(2);
         }
@@ -408,6 +414,7 @@ public impure func initEvmCallStack(
                 }
 
                 // report success
+                evmTracer_pushReturnRevert(const::TxResultCode_success, bytearray_new(0), 0);
                 emitTxReceipt(
                     request.incomingRequest,
                     const::TxResultCode_success,
@@ -415,11 +422,13 @@ public impure func initEvmCallStack(
                     None<EvmLogs>,
                     None<GasUsage>,
                     request.feeStats,
+                    true,
                 );
                 emptyAvmStack();
                 cleanAvmAuxStackAndCall(mainRunLoop, true);  // should never return
             } else {
                 // insufficient balance error
+                evmTracer_pushReturnRevert(const::TxResultCode_insufficientBalance, bytearray_new(0), 0);
                 emitTxReceipt(
                     request.incomingRequest,
                     const::TxResultCode_insufficientBalance,
@@ -427,11 +436,13 @@ public impure func initEvmCallStack(
                     None<EvmLogs>,
                     None<GasUsage>,
                     request.feeStats,
+                    true,
                 );
                 evmCallStack_callHitError(3);
             }
         } else {
             // tx is transfer of 0 Eth, so just report success
+            evmTracer_pushReturnRevert(const::TxResultCode_success, bytearray_new(0), 0);
             emitTxReceipt(
                 request.incomingRequest,
                 const::TxResultCode_success,
@@ -439,6 +450,7 @@ public impure func initEvmCallStack(
                 None<EvmLogs>,
                 None<GasUsage>,
                 request.feeStats,
+                true,
             );
             emptyAvmStack();
             cleanAvmAuxStackAndCall(mainRunLoop, true);  // should never return
@@ -568,6 +580,7 @@ public impure func initEvmCallStackForConstructor(
             panic;
         } else {
             // can't pay for gas error
+            evmTracer_pushReturnRevert(startTxResult, bytearray_new(0), 0);
             emitTxReceipt(
                 request.incomingRequest,
                 startTxResult,
@@ -575,11 +588,13 @@ public impure func initEvmCallStackForConstructor(
                 None<EvmLogs>,
                 None<GasUsage>,
                 request.feeStats,
+                true,
             );
             evmCallStack_callHitError(15);
         }
     } else {
         // caller doesn't have the funds to provide callvalue
+        evmTracer_pushReturnRevert(const::TxResultCode_insufficientBalance, bytearray_new(0), 0);
         emitTxReceipt(
             request.incomingRequest,
             const::TxResultCode_insufficientBalance,
@@ -587,6 +602,7 @@ public impure func initEvmCallStackForConstructor(
             None<EvmLogs>,
             None<GasUsage>,
             request.feeStats,
+            true,
         );
         evmCallStack_callHitError(4);  // should never return
         panic;
@@ -851,9 +867,6 @@ public impure func evmCallStack_returnFromCall(
             if (completed) {
                 if (globalCurrentTxRequest.isConstructor) {
                     // Constructor call was successful, so finish setting up the account.
-                    // The constructor's returndata is EVM code for the contract.
-                    // Compile that EVM code into AVM, and substitute that in as the code for the contract.
-                    let (entryPoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(returnData), false);
 
                     // Use the storage left over by the constructor.
                     let storageMap = storageMap_new();
@@ -861,6 +874,7 @@ public impure func evmCallStack_returnFromCall(
                         storageMap = sm;
                     } else {
                         // Somehow the constructor didn't have storage; report error and recover.
+                        evmTracer_pushReturnRevert(const::TxResultCode_formatError, bytearray_new(0), gasUsage.gasUsed);
                         emitTxReceipt(
                             globalCurrentTxRequest.incomingRequest,
                             const::TxResultCode_formatError,
@@ -868,6 +882,7 @@ public impure func evmCallStack_returnFromCall(
                             None<EvmLogs>,
                             Some(gasUsage),
                             feeStats,
+                            true,
                         );
                         evmCallStack_callHitError(5);  // should never return
                         panic;
@@ -915,6 +930,7 @@ public impure func evmCallStack_returnFromCall(
                         Some(updatedEvmLogs),
                         Some(gasUsage),
                         feeStats,
+                        true,
                     );
 
                     // increment global contract count
@@ -932,6 +948,7 @@ public impure func evmCallStack_returnFromCall(
                                 Some(reqAndLogs.evmLogs),
                                 None<GasUsage>,
                                 txFeeStats_zero(),
+                                false,
                             );
                             returnData = bytearray_new(0);   // outer tx should have no returndata
                             globalCurrentRetryableRequest = None<IncomingRequestAndLogs>;
@@ -981,6 +998,7 @@ public impure func evmCallStack_returnFromCall(
                         Some(updatedEvmLogs),
                         Some(gasUsage),
                         feeStats,
+                        true,
                     );
                 }
             } else {
@@ -997,6 +1015,7 @@ public impure func evmCallStack_returnFromCall(
                     None<EvmLogs>,
                     Some(gasUsage),
                     feeStats,
+                    true,
                 );
                 setGlobalAccountStore(deferredPayments_apply(getGlobalAccountStore(), deferredPayments));
             }
@@ -1019,6 +1038,7 @@ public impure func evmCallStack_returnFromCall(
                 None<EvmLogs>,
                 Some(gasUsage),
                 feeStats,
+                true,
             );
         }
 
