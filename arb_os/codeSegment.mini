@@ -15,6 +15,7 @@ use std::bytestream::bytestream_bytesRemaining;
 use std::bytestream::bytestream_truncate;
 use std::bytestream::bytestream_getByte;
 use std::bytestream::bytestream_get64;
+use std::bytestream::bytestream_getPartialWord;
 use std::bytestream::bytestream_skipBytes;
 use std::stack::stack_new;
 use std::stack::stack_push;
@@ -116,15 +117,22 @@ impure func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
             if ((opcode >= 0x60) && (opcode <= 0x7f)) {
                 // it's a pushN instruction; unmarshal the immediate value and push it
                 let bytesRemaining = opcode - 0x5f;
-                let imm = 0;
-                while (bytesRemaining > 0) {
-                    if let Some(res) = bytestream_getByte(bs) {
-                        let (ubs, val) = res;
-                        bs = ubs;
-                        imm = 256*imm + val;
+                let imm = xif let Some(res) = bytestream_getPartialWord(bs, bytesRemaining) {
+                    let (ubs, v) = res;
+                    bs = ubs;
+                    v
+                } else {
+                    let val = 0;
+                    while (bytesRemaining > 0) {
+                        if let Some(res) = bytestream_getByte(bs) {
+                            let (ubs, v) = res;
+                            bs = ubs;
+                            val = 256*val + v;
+                        }
+                        bytesRemaining = bytesRemaining-1;
                     }
-                    bytesRemaining = bytesRemaining-1;
-                }
+                    val
+                };
                 if (reachable) {
                     stack = evmInstructionStack_push(
                         stack,
