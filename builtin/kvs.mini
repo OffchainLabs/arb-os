@@ -57,7 +57,6 @@ public func builtin_kvsSize(kvs: Kvs) -> uint {
 public func builtin_kvsGet(kvs: Kvs, key: any) -> option<any> {
     let hashedKey = uint(hash(key));
     let s = kvs.tree;
-    let reductionFactor = 1;
     return xloop {
         if (s == unsafecast<KvsNode>(0)) {
             // empty subtree
@@ -71,8 +70,8 @@ public func builtin_kvsGet(kvs: Kvs, key: any) -> option<any> {
             }
         } else {
             // still at an internal node of the tree; walk downward and try again
-            s = unsafecast<KvsNode>(s[(hashedKey/reductionFactor) & 0x7]);
-            reductionFactor = reductionFactor * 8;
+            s = unsafecast<KvsNode>(s[hashedKey & 0x7]);
+            hashedKey = hashedKey / 8;
         }
     };
 }
