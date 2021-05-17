@@ -970,7 +970,12 @@ public impure func evmOp_create(value: uint, offset: uint, length: uint) -> addr
             return address(0);
         }
         let newAddress = address(keccakOfRlpEncodedUintPair(uint(myAddr), seqNum));
-        let ret = doCreationOpcode(value, offset, length, newAddress);
+        let constructorCode = bytearray_extract(
+            evmCallStack_getTopFrameMemoryOrDie(),
+            offset,
+            length
+        );
+        let ret = doCreationOpcode(value, constructorCode, newAddress);
         return ret;
     }
 
@@ -999,14 +1004,19 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
             ))
         );
         let newAddress = address(keccak256(newAddrBuf, 0, 85));
-        return doCreationOpcode(value, offset, length, newAddress);
+        let constructorCode = bytearray_extract(
+            evmCallStack_getTopFrameMemoryOrDie(),
+            offset,
+            length
+        );
+        return doCreationOpcode(value, constructorCode, newAddress);
     }
 
     evm_runtimePanic(31);
     return panic;
 }
 
-public impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress: address) -> address {
+public impure func doCreationOpcode(value: uint, constructorCode: ByteArray, newAddress: address) -> address {
     // make sure there isn't already an account at the given address
     if let Some(acct) = evmCallStack_getAccount(newAddress) {
         if (account_hasContract(acct)) {
@@ -1018,12 +1028,6 @@ public impure func doCreationOpcode(value: uint, offset: uint, length: uint, new
         evm_runtimePanic(32);
         panic;
     }
-
-    let constructorCode = bytearray_extract(
-        evmCallStack_getTopFrameMemoryOrDie(),
-        offset,
-        length
-    );
 
     let (startPoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(constructorCode), false);
 
