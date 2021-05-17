@@ -61,10 +61,11 @@ public impure func evmTracer_pushCall(
     to: address,
     gas: uint,
     gasPrice: uint,
+    evmPC: uint,
 ) {
     evmTracer_push(
         const::TraceEvent_call,
-        (callType, calldata, callvalue, from, to, gas, gasPrice, ~0),
+        (callType, calldata, callvalue, from, to, gas, gasPrice, evmPC),
     );
 }
 
@@ -72,10 +73,11 @@ public impure func evmTracer_pushReturnRevert(
     resultCode: uint,
     returndata: ByteArray,
     gasUsed: uint,
+    evmPC: uint,
 ) {
     evmTracer_push(
         const::TraceEvent_returnOrRevert,
-        (resultCode, returndata, gasUsed, ~0),
+        (resultCode, returndata, gasUsed, evmPC),
     );
 }
 
@@ -88,18 +90,20 @@ public impure func evmTracer_pushCallAndResultNoExecution(
     gas: uint,
     gasPrice: uint,
     resultCode: uint,
+    callEvmPC: uint,
 ) {
-    evmTracer_pushCall(callType, calldata, callvalue, from, to, gas, gasPrice);
-    evmTracer_pushReturnRevert(resultCode, bytearray_new(0), 0);
+    evmTracer_pushCall(callType, calldata, callvalue, from, to, gas, gasPrice, callEvmPC);
+    evmTracer_pushReturnRevert(resultCode, bytearray_new(0), 0, ~0);
 }
 
 public impure func evmTracer_pushCreate(
     code: ByteArray,
     addr: address,
+    evmPC: uint,
 ) {
     evmTracer_push(
         const::TraceEvent_create,
-        (code, addr, ~0),
+        (code, addr, evmPC),
     );
 }
 
@@ -108,9 +112,10 @@ public impure func evmTracer_pushCreate2(
     currentAddr: address,
     salt: uint,
     createdAddr: address,
+    evmPC: uint,
 ) {
     evmTracer_push(
         const::TraceEvent_create2,
-        (code, currentAddr, salt, createdAddr, ~0),
+        (code, currentAddr, salt, createdAddr, evmPC),
     );
 }

@@ -58,7 +58,7 @@ impure func arbgasinfo_getPricesInWei(topFrame: EvmCallFrame, calldata: ByteArra
     mem = bytearray_set256(mem, 4*32, gasPricesWei.4);
     mem = bytearray_set256(mem, 5*32, gasPricesWei.5);
     if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, 6*32);
+        evmOp_return(11, 0, 6*32);
     } else {
         evmOp_revert_knownPc(11, 0, 0);
     }
@@ -74,7 +74,7 @@ impure func arbgasinfo_getPricesInArbGas(topFrame: EvmCallFrame, calldata: ByteA
     mem = bytearray_set256(mem, 1*32, gasPricesWei.1);
     mem = bytearray_set256(mem, 2*32, gasPricesWei.2);
     if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, 3*32);
+        evmOp_return(21, 0, 3*32);
     } else {
         evmOp_revert_knownPc(21, 0, 0);
     }
@@ -90,7 +90,7 @@ impure func arbgasinfo_getGasAccountingParams(topFrame: EvmCallFrame, calldata: 
     mem = bytearray_set256(mem, 1*32, params.1);
     mem = bytearray_set256(mem, 2*32, params.2);
     if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, 3*32);
+        evmOp_return(31, 0, 3*32);
     } else {
         evmOp_revert_knownPc(31, 0, 0);
     }

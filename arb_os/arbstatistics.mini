@@ -57,7 +57,7 @@ impure func arbStatistics_getStats(topFrame: EvmCallFrame, calldata: ByteArray) 
     let mem = bytearray_set256(mem, 5*32, accountStore_getNumContracts(getGlobalAccountStore()));
 
     if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, bytearray_size(mem));
+        evmOp_return(12, 0, bytearray_size(mem));
     } else {
         evmOp_revert_knownPc(12, 0, 0);
     }

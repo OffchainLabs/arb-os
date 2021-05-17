@@ -11,7 +11,7 @@ use evmCallStack::evmCallFrame_getCalldata;
 
 use evmOps::getEvmOpJumpTable;
 use evmOps::evmOp_return;
-use evmOps::evmOp_revert;
+use evmOps::evmOp_revert_knownPc;
 
 use core::array::array;
 use core::array::array_resize;
@@ -142,12 +142,12 @@ impure func entryPointForPluggableContract(id: uint) {
             let (success, resultData) = unsafecast<(bool, ByteArray)>(retVal);
             if (evmCallStack_setTopFrameMemory(resultData)) {
                 if (success) {
-                    evmOp_return(0, bytearray_size(resultData));
+                    evmOp_return(~0, 0, bytearray_size(resultData));
                 } else {
-                    evmOp_revert(0, bytearray_size(resultData));
+                    evmOp_revert_knownPc(~0, 0, bytearray_size(resultData));
                 }
             }
         }
     }
-    evmOp_revert(0, 0);
+    evmOp_revert_knownPc(~0, 0, 0);
 }

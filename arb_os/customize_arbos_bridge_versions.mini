@@ -22,3 +22,7 @@ public func set_globalCallStack_onUpgrade(input_globals: GlobalsBeforeUpgrade) -
 public func set_currentEvmTracer_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> EvmTracer {
     return unsafecast<EvmTracer>(0);   // will be properly initialized later
 }
+
+public func set_evmOpJumpTable_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> [const::NumEvmOps]impure func() {
+    return unsafecast<[const::NumEvmOps]impure func()>(input_globals.evmOpJumpTable);  // will be properly initialized later
+}

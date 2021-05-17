@@ -265,6 +265,7 @@ public impure func initEvmCallStack(
         request.calleeAddr,
         request.maxGas,
         request.gasPrice,
+        ~0,
     );
 
     if let Some(entryPoint) = account_getStartCodePoint(
@@ -345,7 +346,7 @@ public impure func initEvmCallStack(
                     setGlobalAccountStore(
                         deferredPayments_apply(getGlobalAccountStore(), payments)
                     );
-                    evmTracer_pushReturnRevert(const::TxResultCode_insufficientBalance, bytearray_new(0), 0);
+                    evmTracer_pushReturnRevert(const::TxResultCode_insufficientBalance, bytearray_new(0), 0, ~0);
                     emitTxReceipt(
                         request.incomingRequest,
                         const::TxResultCode_insufficientBalance,
@@ -357,7 +358,7 @@ public impure func initEvmCallStack(
                     );
                 } else {
                     // unknown error type
-                    evmTracer_pushReturnRevert(const::TxResultCode_unknownFailure, bytearray_new(0), 0);
+                    evmTracer_pushReturnRevert(const::TxResultCode_unknownFailure, bytearray_new(0), 0, ~0);
                     emitTxReceipt(
                         request.incomingRequest,
                         const::TxResultCode_unknownFailure,
@@ -372,7 +373,7 @@ public impure func initEvmCallStack(
             }
         } else {
             // can't pay for gas error
-            evmTracer_pushReturnRevert(startTxResult, bytearray_new(0), 0);
+            evmTracer_pushReturnRevert(startTxResult, bytearray_new(0), 0, ~0);
             emitTxReceipt(
                 request.incomingRequest,
                 startTxResult,
@@ -414,7 +415,7 @@ public impure func initEvmCallStack(
                 }
 
                 // report success
-                evmTracer_pushReturnRevert(const::TxResultCode_success, bytearray_new(0), 0);
+                evmTracer_pushReturnRevert(const::TxResultCode_success, bytearray_new(0), 0, ~0);
                 emitTxReceipt(
                     request.incomingRequest,
                     const::TxResultCode_success,
@@ -428,7 +429,7 @@ public impure func initEvmCallStack(
                 cleanAvmAuxStackAndCall(mainRunLoop, true);  // should never return
             } else {
                 // insufficient balance error
-                evmTracer_pushReturnRevert(const::TxResultCode_insufficientBalance, bytearray_new(0), 0);
+                evmTracer_pushReturnRevert(const::TxResultCode_insufficientBalance, bytearray_new(0), 0, ~0);
                 emitTxReceipt(
                     request.incomingRequest,
                     const::TxResultCode_insufficientBalance,
@@ -442,7 +443,7 @@ public impure func initEvmCallStack(
             }
         } else {
             // tx is transfer of 0 Eth, so just report success
-            evmTracer_pushReturnRevert(const::TxResultCode_success, bytearray_new(0), 0);
+            evmTracer_pushReturnRevert(const::TxResultCode_success, bytearray_new(0), 0, ~0);
             emitTxReceipt(
                 request.incomingRequest,
                 const::TxResultCode_success,
@@ -477,6 +478,7 @@ public impure func initEvmCallStackForConstructor(
         request.calleeAddr,
         request.maxGas,
         request.gasPrice,
+        ~0,
     );
 
     globalCurrentTxRequest = request with { isConstructor: true };
@@ -580,7 +582,7 @@ public impure func initEvmCallStackForConstructor(
             panic;
         } else {
             // can't pay for gas error
-            evmTracer_pushReturnRevert(startTxResult, bytearray_new(0), 0);
+            evmTracer_pushReturnRevert(startTxResult, bytearray_new(0), 0, ~0);
             emitTxReceipt(
                 request.incomingRequest,
                 startTxResult,
@@ -594,7 +596,7 @@ public impure func initEvmCallStackForConstructor(
         }
     } else {
         // caller doesn't have the funds to provide callvalue
-        evmTracer_pushReturnRevert(const::TxResultCode_insufficientBalance, bytearray_new(0), 0);
+        evmTracer_pushReturnRevert(const::TxResultCode_insufficientBalance, bytearray_new(0), 0, ~0);
         emitTxReceipt(
             request.incomingRequest,
             const::TxResultCode_insufficientBalance,
@@ -621,6 +623,7 @@ public impure func evmCallStack_doCall(
     resumeCodePoint: func(),         // jump to this to resume the caller
     resumeAuxStack: option<Stack>,   // aux stack contents to restore on resume, if any
     chargeForCallvalue: bool,        // whether we need to charge caller for callvalue (i.e., not already charged)
+    evmPC: uint,
 ) -> option<bool> {   // returns Some(success) if succeed/fail, or None on error
     let topFrame = globalCallStack?;
     let callee = accountStore_get(topFrame.accountStore, calleeAddr);
@@ -728,6 +731,7 @@ public impure func evmCallStack_doCall(
             newTopFrame.runningCodeFrom,
             gas,
             globalCurrentTxRequest.gasPrice,
+            evmPC,
         );
 
         // jump to the called code's startCodePoint -- this should never return
@@ -759,6 +763,7 @@ public impure func evmCallStack_doCall(
             gas,
             globalCurrentTxRequest.gasPrice,
             xif (success) { const::TxResultCode_success } else { const::TxResultCode_revert },
+            evmPC,
         );
         return Some(success);
     }
@@ -772,6 +777,7 @@ public impure func evmCallStack_returnFromCall(
     returnOffset: uint,
     returnLength: uint,
     jumpTargetIfTxEnd: option<impure func()>,
+    evmPC: uint,
 ) -> option<()> {
     // A call just completed. Commit its effects as appropriate, and return control to its caller.
 
@@ -823,6 +829,7 @@ public impure func evmCallStack_returnFromCall(
             xif (success) { const::TxResultCode_success } else { const::TxResultCode_revert },
             returnData,
             resumeInfo.givenGas + resumeInfo.savedGas - leftoverGas,
+            evmPC,
         );
 
         // ready to return to caller
@@ -874,7 +881,12 @@ public impure func evmCallStack_returnFromCall(
                         storageMap = sm;
                     } else {
                         // Somehow the constructor didn't have storage; report error and recover.
-                        evmTracer_pushReturnRevert(const::TxResultCode_formatError, bytearray_new(0), gasUsage.gasUsed);
+                        evmTracer_pushReturnRevert(
+                            const::TxResultCode_formatError,
+                            bytearray_new(0),
+                            gasUsage.gasUsed,
+                            evmPC
+                        );
                         emitTxReceipt(
                             globalCurrentTxRequest.incomingRequest,
                             const::TxResultCode_formatError,
@@ -917,6 +929,7 @@ public impure func evmCallStack_returnFromCall(
                         const::TxResultCode_success,
                         returnData,
                         gasUsage.gasUsed,
+                        evmPC,
                     );
 
                     // emit queued sends
@@ -988,6 +1001,7 @@ public impure func evmCallStack_returnFromCall(
                         const::TxResultCode_success,
                         returnData,
                         gasUsage.gasUsed,
+                        evmPC,
                     );
 
                     // Emit a log item reporting success
@@ -1006,6 +1020,7 @@ public impure func evmCallStack_returnFromCall(
                     const::TxResultCode_revert,
                     returnData,
                     gasUsage.gasUsed,
+                    evmPC,
                 );
                 // Emit a log item reporting failure
                 emitTxReceipt(
@@ -1030,6 +1045,7 @@ public impure func evmCallStack_returnFromCall(
                 const::TxResultCode_revert,
                 returnData,
                 gasUsage.gasUsed,
+                evmPC,
             );
             emitTxReceipt(
                 globalCurrentTxRequest.incomingRequest,
@@ -1055,7 +1071,7 @@ public impure func evmCallStack_returnFromCall(
     };
 }
 
-public impure func evmCallStack_callRetryableTxAndReturn(rtx: RetryableTx) -> (bool, ByteArray) {
+public impure func evmCallStack_callRetryableTxAndReturn(evmPC: uint, rtx: RetryableTx) -> (bool, ByteArray) {
     let ret = false;
     return xif let Some(topFrame) = globalCallStack {
         // Save parts of the callframe, then overwrite them before making the call,
@@ -1092,6 +1108,7 @@ public impure func evmCallStack_callRetryableTxAndReturn(rtx: RetryableTx) -> (b
             0,
             0,
             false,    // don't charge for callvalue, because we already took it when rtx was created
+            evmPC,
         );
 
         xif let Some(newTopFrame) = globalCallStack {
@@ -1673,7 +1690,7 @@ public func evmCallFrame_getParent(frame: EvmCallFrame) -> option<EvmCallFrame> 
 
 public impure func evmCallStack_callHitError(errInfo: any) {
     asm((664, errInfo),) { debugprint };
-    if (evmCallStack_returnFromCall(false, 0, 0, None<impure func()>) == None<()>) {
+    if (evmCallStack_returnFromCall(false, 0, 0, None<impure func()>, ~0) == None<()>) {
         // something has gone seriously wrong with the evmCallStack
         // recover by clearing the evmCallStack, refunding unused gas, and jumping back to the error handler
         globalCallStack = None<EvmCallFrame>;

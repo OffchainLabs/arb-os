@@ -78,7 +78,7 @@ impure func arbaggregator_getPreferredAggregator(topFrame: EvmCallFrame, calldat
     };
     let mem = bytearray_set256(bytearray_set256(bytearray_new(0), 0, uint(prefAgg)), 32, uint(isDefault));
     if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, 2*32);
+        evmOp_return(11, 0, 2*32);
     } else {
         evmOp_revert_knownPc(11, 0, 0);
     }
@@ -110,7 +110,7 @@ impure func arbaggregator_setPreferredAggregator(topFrame: EvmCallFrame, calldat
             newVal,
         )
     );
-    evmOp_return(0, 0);
+    evmOp_return(21, 0, 0);
 }
 
 impure func arbaggregator_getDefaultAggregator(topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> address
@@ -119,7 +119,7 @@ impure func arbaggregator_getDefaultAggregator(topFrame: EvmCallFrame, calldata:
     }
     let mem = bytearray_set256(bytearray_new(0), 0, uint(chainParams_getDefaultAggregator()));
     if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, 32);
+        evmOp_return(31, 0, 32);
     } else {
         evmOp_revert_knownPc(31, 0, 0);
     }
@@ -135,7 +135,7 @@ impure func arbaggregator_setDefaultAggregator(topFrame: EvmCallFrame, calldata:
     }
     let newDefaultAgg = address(bytearray_get256(calldata, 4));
     chainParams_setDefaultAggregator(newDefaultAgg);
-    evmOp_return(0, 0);
+    evmOp_return(42, 0, 0);
 }
 
 impure func arbaggregator_getFeeCollector(topFrame: EvmCallFrame, calldata: ByteArray) {  // (address) -> address
@@ -146,7 +146,7 @@ impure func arbaggregator_getFeeCollector(topFrame: EvmCallFrame, calldata: Byte
     let feeCollector = account_getFeeCollector(evmCallStack_getAccountInCurrentContext(aggregator));
     let mem = bytearray_set256(bytearray_new(0), 0, uint(feeCollector));
     if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, 32);
+        evmOp_return(51, 0, 32);
     } else {
         evmOp_revert_knownPc(51, 0, 0);
     }
@@ -168,5 +168,5 @@ impure func arbaggregator_setFeeCollector(topFrame: EvmCallFrame, calldata: Byte
     }
     evmCallStack_setAccountInCurrentContext(aggregator, account_setFeeCollector(aggAcct, newCollector));
 
-    evmOp_return(0, 0);
+    evmOp_return(62, 0, 0);
 }

@@ -12,7 +12,6 @@ use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallFrame_getCalldata;
 
 use evmOps::evmOp_return;
-use evmOps::evmOp_revert;
 use evmOps::evmOp_revert_knownPc;
 
 use accounts::getGlobalAccountStore;
@@ -236,7 +235,7 @@ public impure func precompile_0x01() {  // ecrecover
             bytearray_set256(bytearray_new(0), 0, uint(addr))
         );
         if (success) {
-            evmOp_return(0, 32);
+            evmOp_return(0, 0, 32);
         }
     }
 
@@ -252,7 +251,7 @@ public impure func precompile_0x02() {  // sha256
             bytearray_new(0), 0, uint(result))
         );
         if (success) {
-            evmOp_return(0, 32);
+            evmOp_return(0, 0, 32);
         }
     }
 
@@ -267,7 +266,7 @@ public impure func precompile_0x03() {  // ripemd160
             bytearray_set256(bytearray_new(0), 0, uint(result))
         );
         if (success) {
-            evmOp_return(0, 32);
+            evmOp_return(0, 0, 32);
         }
     }
 
@@ -279,7 +278,7 @@ public impure func precompile_0x04() {  // identity function
         let calldata = evmCallFrame_getCalldata(topFrame);
         let success = evmCallStack_setTopFrameMemory(calldata);
         if (success) {
-            evmOp_return(0, bytearray_size(calldata));
+            evmOp_return(~0, 0, bytearray_size(calldata));
         }
     }
 
@@ -317,14 +316,14 @@ public impure func precompile_0x05() {  // modexp
                 );
             }
             if (evmCallStack_setTopFrameMemory(mem)) {
-                evmOp_return(0, modLen);
+                evmOp_return(0, 0, modLen);
             } else {
                 evmOp_revert_knownPc(0, 0, 0);
             }
         } else {
             // modulus was zero, so we return zero
             if (evmCallStack_setTopFrameMemory(bytearray_new(0))) {
-                evmOp_return(0, modLen);
+                evmOp_return(1, 0, modLen);
             } else {
                 evmOp_revert_knownPc(1, 0, 0);
             }
@@ -397,7 +396,7 @@ public impure func precompile_0x06() {  // ecadd
             )
         );
         if (success) {
-            evmOp_return(0, 64);
+            evmOp_return(0, 0, 64);
         }
     }
 
@@ -426,7 +425,7 @@ public impure func precompile_0x07() {  // ecmul
             )
         );
         if (success) {
-            evmOp_return(0, 64);
+            evmOp_return(0, 0, 64);
         }
     }
 
@@ -465,7 +464,7 @@ public impure func precompile_0x08() { // ecpairing
                 )
             );
             if (success) {
-                evmOp_return(0, 32);
+                evmOp_return(0, 0, 32);
             }
         }
     }
@@ -494,7 +493,7 @@ public impure func precompile_0x09() { // Blake2
         let outputBuf = asm(inputBuf,) buffer { blake2f };
         let mem = bytearray_fromSizeAndBuffer(64, outputBuf);
         if (evmCallStack_setTopFrameMemory(mem)) {
-            evmOp_return(0, 64);
+            evmOp_return(3, 0, 64);
         } else {
             evmOp_revert_knownPc(3, 0, 0);
         }

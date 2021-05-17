@@ -111,7 +111,7 @@ impure func arbosTest_installAccount(topFrame: EvmCallFrame, calldata: ByteArray
     }
 
     if (evmCallStack_setAccount(addr, acct)) {
-        evmOp_return(0, 0);
+        evmOp_return(13, 0, 0);
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 13, 0, 0);
     }
@@ -138,12 +138,12 @@ impure func arbosTest_getMarshalledStorage(topFrame: EvmCallFrame, calldata: Byt
         );
         mem = bytearray_copy(marshalledStorage, 0, mem, 64, msSize);
         if (evmCallStack_setTopFrameMemory(marshalledStorage)) {
-            evmOp_return(0, msSize);
+            evmOp_return(22, 0, msSize);
         } else {
             evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 22, 0, 0);
         }
     } else {
-        evmOp_return(0, 0);  // tests expect a report of empty storage if there is no storage
+        evmOp_return(23, 0, 0);  // tests expect a report of empty storage if there is no storage
     }
 }
 
@@ -170,7 +170,7 @@ impure func arbosTest_getAccountInfo(topFrame: EvmCallFrame, calldata: ByteArray
         mem = bytearray_copy(marshalledStorage, 0, mem, 64, msSize);
     }
     if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, bytearray_size(mem));
+        evmOp_return(22, 0, bytearray_size(mem));
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 22, 0, 0);
     }

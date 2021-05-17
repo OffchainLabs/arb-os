@@ -86,7 +86,7 @@ impure func arbRetryable_redeem(topFrame: EvmCallFrame, calldata: ByteArray) {  
     if (success) {
         arbRetryable_emitRedeemed(topFrame, txId);
         if (evmCallStack_setTopFrameMemory(returnData)) {
-            evmOp_return(0, bytearray_size(returnData));
+            evmOp_return(12, 0, bytearray_size(returnData));
         } else {
             evmOp_revert_knownPc(12, 0, 0);
         }
@@ -111,7 +111,7 @@ impure func arbRetryable_getTimeout(topFrame: EvmCallFrame, calldata: ByteArray)
     );
     let mem = bytearray_set256(bytearray_new(0), 0, timeout);
     if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, 32);
+        evmOp_return(21, 0, 32);
     } else {
         evmOp_revert_knownPc(21, 0, 0);
     }
@@ -124,9 +124,9 @@ impure func arbRetryable_getLifetime(topFrame: EvmCallFrame, calldata: ByteArray
 
     let mem = bytearray_set256(bytearray_new(0), 0, retryBuffer_getLifetime(getRetryBufferInCurrentContext()));
     if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, 32);
+        evmOp_return(31, 0, 32);
     } else {
-        evmOp_revert_knownPc(21, 0, 0);
+        evmOp_revert_knownPc(31, 0, 0);
     }
 }
 
@@ -143,7 +143,7 @@ impure func arbRetryable_getKeepalivePrice(topFrame: EvmCallFrame, calldata: Byt
             nextUpdate
         );
         if (evmCallStack_setTopFrameMemory(mem)) {
-            evmOp_return(0, 64);
+            evmOp_return(41, 0, 64);
         } else {
             evmOp_revert_knownPc(41, 0, 0);
         }
@@ -173,7 +173,7 @@ impure func arbRetryable_keepalive(topFrame: EvmCallFrame, calldata: ByteArray) 
         }
         let mem = bytearray_set256(bytearray_new(0), 0, newTimeout);
         if (evmCallStack_setTopFrameMemory(mem)) {
-            evmOp_return(0, 32);
+            evmOp_return(53, 0, 32);
         } else {
             evmOp_revert_knownPc(53, 0, 0);
         }
@@ -190,7 +190,7 @@ impure func arbRetryable_getBeneficiary(topFrame: EvmCallFrame, calldata: ByteAr
     if let Some(bene) = retryBuffer_getBeneficiary(getRetryBufferInCurrentContext(), txId) {
         let mem = bytearray_set256(bytearray_new(0), 0, uint(bene));
         if (evmCallStack_setTopFrameMemory(mem)) {
-            evmOp_return(0, 32);
+            evmOp_return(61, 0, 32);
         } else {
             evmOp_revert_knownPc(61, 0, 0);
         }
@@ -215,7 +215,7 @@ impure func arbRetryable_cancel(topFrame: EvmCallFrame, calldata: ByteArray) {  
         if let Some(updatedRbuf) = retryBuffer_delete(rbuf, txId, true) {
             setRetryBufferInCurrentContext(updatedRbuf);
             arbRetryable_emitCanceled(topFrame, txId);
-            evmOp_return(0, 0);
+            evmOp_return(72, 0, 0);
         } else {
             evmOp_revert_knownPc(72, 0, 0);
         }
@@ -237,7 +237,7 @@ impure func arbRetryable_getSubmissionPrice(topFrame: EvmCallFrame, calldata: By
         nextUpdate
     );
     if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, 64);
+        evmOp_return(81, 0, 64);
     } else {
         evmOp_revert_knownPc(81, 0, 0);
     }

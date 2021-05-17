@@ -516,6 +516,7 @@ public impure func redeemRetryableTxInTx(txToRedeem: uint) -> (bool, ByteArray) 
             // note that this delete will be discarded if the tx reverts
             setRetryBufferInCurrentContext(rb);
             evmCallStack_callRetryableTxAndReturn(
+                ~0,
                 rtx with {
                     l1Message: adjustGasInfoInFakeIncomingRequest(
                         rtx.l1Message,
