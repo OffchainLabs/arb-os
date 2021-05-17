@@ -5,7 +5,18 @@
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 use accounts::AccountStore;
 
+use evmCallStack::EvmCallFrame;
+use messages::TxRequestData;
+
 
 public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> AccountStore {
     return unsafecast<AccountStore>(input_globals.globalAccountStore);
+}
+
+public func set_globalCallStack_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
+    return None<EvmCallFrame>;
+}
+
+public func set_globalCurrentTxRequest_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> TxRequestData {
+    return unsafecast<TxRequestData>(input_globals.globalCurrentTxRequest);
 }

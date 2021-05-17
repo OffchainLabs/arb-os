@@ -574,12 +574,14 @@ public impure func gasAccounting_endTxCharges(
     }
     payments = deferredPayments_add(
         payments,
+        const::EscrowStoreID_txGas,
         gasAccountingInfo.feeConfig.forNetwork,
         computeGasUsed * basePrice + storageGasUsed * txState.price,
     );
     let congestionPrice = txState.price - basePrice;
     payments = deferredPayments_add(
         payments,
+        const::EscrowStoreID_txGas,
         gasAccountingInfo.feeConfig.forCongestion,
         computeGasUsed * congestionPrice,
     );
