@@ -276,7 +276,10 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
         debug,
     )?;
     let evm_logs_noret = return_receipts_uint_noret[0]._get_evm_logs();
-    println!("expectedReturnUintNoReturn log: {:?}", evm_logs_noret[0].data.to_ascii_uppercase());
+    println!(
+        "expectedReturnUintNoReturn log: {:?}",
+        evm_logs_noret[0].data.to_ascii_uppercase()
+    );
 
     let (return_receipts_uint, _) = add_contract.call_function(
         my_addr.clone(),
@@ -287,7 +290,10 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
         debug,
     )?;
     let evm_logs_uint = return_receipts_uint[0]._get_evm_logs();
-    println!("expectedReturnUint log: {:?}", evm_logs_uint[0].data.to_ascii_uppercase());
+    println!(
+        "expectedReturnUint log: {:?}",
+        evm_logs_uint[0].data.to_ascii_uppercase()
+    );
 
     let (return_receipts_bool, _) = add_contract.call_function(
         my_addr.clone(),
@@ -298,7 +304,10 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
         debug,
     )?;
     let evm_logs_bool = return_receipts_bool[0]._get_evm_logs();
-    println!("expectedReturnBool log: {:?}", evm_logs_bool[0].data.to_ascii_uppercase());
+    println!(
+        "expectedReturnBool log: {:?}",
+        evm_logs_bool[0].data.to_ascii_uppercase()
+    );
 
     let addr_table_index = arb_address_table.register(&mut machine, my_addr.clone())?;
     let lookup_result = arb_address_table.lookup(&mut machine, my_addr.clone())?;
