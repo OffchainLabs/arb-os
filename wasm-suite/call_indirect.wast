@@ -327,14 +327,12 @@
 (assert_return (invoke "dispatch-structural-i64" (i32.const 13)) (i64.const 55))
 (assert_return (invoke "dispatch-structural-i64" (i32.const 20)) (i64.const 9))
 (assert_trap (invoke "dispatch-structural-i64" (i32.const 11)) "indirect call type mismatch")
-(assert_trap (invoke "dispatch-structural-i64" (i32.const 22)) "indirect call type mismatch")
 
 (assert_return (invoke "dispatch-structural-i32" (i32.const 4)) (i32.const 9))
 (assert_return (invoke "dispatch-structural-i32" (i32.const 23)) (i32.const 362880))
 (assert_return (invoke "dispatch-structural-i32" (i32.const 26)) (i32.const 55))
 (assert_return (invoke "dispatch-structural-i32" (i32.const 19)) (i32.const 9))
 (assert_trap (invoke "dispatch-structural-i32" (i32.const 9)) "indirect call type mismatch")
-(assert_trap (invoke "dispatch-structural-i32" (i32.const 21)) "indirect call type mismatch")
 
 (assert_return (invoke "fac-i64" (i64.const 0)) (i64.const 1))
 (assert_return (invoke "fac-i64" (i64.const 1)) (i64.const 1))

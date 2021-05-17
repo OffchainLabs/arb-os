@@ -189,7 +189,7 @@ fn run_test(buffer: &[u8], prev_memory: &Buffer, test_args: &[u64], entry: &Stri
     };
     let buf = machine.stack.nth(0);
     let res = machine.stack.nth(1);
-    println!("buf {:?} res {:?}", buf, res);
+    // println!("buf {:?} res {:?}", buf, res);
     match (buf, res) {
         (Some(Value::Buffer(buf)), Some(Value::Int(gl))) => {
             (buf.clone(), Some(gl.to_u64().unwrap()))
@@ -274,13 +274,13 @@ fn main() -> Result<(), CompileError> {
                         let entry = cmd["action"]["field"].as_str().unwrap();
                         let args = parse_list(&cmd["action"]["args"]);
                         // println!("{:?}", args);
-                        let (mem, result) = run_test(&module_buffer, &cur_memory, &args, &entry.to_string(), init, false);
+                        let (_mem, result) = run_test(&module_buffer, &cur_memory, &args, &entry.to_string(), init, false);
                         if result != None {
                             println!("At file {} with {}({:?}): Expected trap, Got {:?}", cur_file, entry, args, result);
                             run_test(&module_buffer, &cur_memory, &args, &entry.to_string(), init, true);
                         }
-                        cur_memory = mem;
-                        init = false;
+                        // cur_memory = mem;
+                        // init = false;
                     }
                 }
             }
