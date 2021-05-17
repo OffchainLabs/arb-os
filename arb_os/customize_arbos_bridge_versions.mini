@@ -3,14 +3,22 @@
 //
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
+
 use accounts::AccountStore;
 
 use evmCallStack::EvmCallFrame;
-use evmCallStack::IncomingRequestAndLogs;
-use inbox::Inbox;
-use messages::TxRequestData;
+
+use tracing::EvmTracer;
 
 
 public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> AccountStore {
-    return unsafecast<AccountStore>(input_globals.globalAccountStore);
+    return input_globals.globalAccountStore;
+}
+
+public func set_globalCallStack_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
+    return None<EvmCallFrame>;
+}
+
+public func set_currentEvmTracer_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> EvmTracer {
+    return unsafecast<EvmTracer>(0);   // will be properly initialized later
 }
