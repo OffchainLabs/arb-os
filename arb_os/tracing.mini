@@ -64,7 +64,7 @@ public impure func evmTracer_pushCall(
 ) {
     evmTracer_push(
         const::TraceEvent_call,
-        (callType, calldata, callvalue, from, to, gas, gasPrice),
+        (callType, calldata, callvalue, from, to, gas, gasPrice, ~0),
     );
 }
 
@@ -75,7 +75,7 @@ public impure func evmTracer_pushReturnRevert(
 ) {
     evmTracer_push(
         const::TraceEvent_returnOrRevert,
-        (resultCode, returndata, gasUsed),
+        (resultCode, returndata, gasUsed, ~0),
     );
 }
 
@@ -99,7 +99,7 @@ public impure func evmTracer_pushCreate(
 ) {
     evmTracer_push(
         const::TraceEvent_create,
-        (code, addr),
+        (code, addr, ~0),
     );
 }
 
@@ -111,6 +111,6 @@ public impure func evmTracer_pushCreate2(
 ) {
     evmTracer_push(
         const::TraceEvent_create2,
-        (code, currentAddr, salt, createdAddr),
+        (code, currentAddr, salt, createdAddr, ~0),
     );
 }
