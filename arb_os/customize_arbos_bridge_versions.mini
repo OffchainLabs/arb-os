@@ -7,5 +7,5 @@ use accounts::AccountStore;
 
 
 public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> AccountStore {
-    return unsafecast<AccountStore>(input_globals.globalAccountStore);
+    return input_globals.globalAccountStore;
 }
