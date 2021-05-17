@@ -3,6 +3,14 @@ pragma solidity >=0.4.21 <0.7.0;
 import "./Fibonacci.sol";
 import "../builtin/ArbSys.sol";
 
+interface FibStub {
+    function expectedReturnUint() external returns (uint256);
+    function expectedReturnBool() external returns (bool);
+}
+interface FibStubNoReturn {
+    function expectedReturnUint() external;
+    function expectedReturnBool() external;
+}
 
 contract Add {
     constructor() public payable {}
@@ -39,5 +47,24 @@ contract Add {
     function isNotTopLevel() public returns (bool) {
         Fibonacci fib = new Fibonacci();
         return fib.isTopLevel();
+    }
+
+    function expectedReturnDirect() public returns (uint) {
+        return ArbSys(address(100)).expectedReturnDataSize();
+    }
+
+    function expectedReturnUintNoReturn() public {
+        Fibonacci fib = new Fibonacci();
+        FibStubNoReturn(address(fib)).expectedReturnUint();
+    }
+
+    function expectedReturnUint() public {
+        Fibonacci fib = new Fibonacci();
+        uint256 res = FibStub(address(fib)).expectedReturnUint();
+    }
+
+    function expectedReturnBool() public {
+        Fibonacci fib = new Fibonacci();
+        bool res = FibStub(address(fib)).expectedReturnBool();
     }
 }

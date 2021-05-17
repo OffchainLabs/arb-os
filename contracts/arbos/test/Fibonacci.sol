@@ -40,4 +40,17 @@ uint[] fibseries;
   function isTopLevel() public returns (bool) {
     return ArbSys(address(100)).isTopLevelCall();
   }
+
+  function expectedReturnUint() public returns (bytes memory) {
+    uint256 expectedSize = ArbSys(address(100)).expectedReturnDataSize();
+    emit TestEvent(expectedSize);
+    return hex"11111111";
+  }
+
+  function expectedReturnBool() public returns (bytes memory) {
+    uint256 expectedSize = ArbSys(address(100)).expectedReturnDataSize();
+    emit TestEvent(expectedSize);
+    return hex"11111111";
+  }
+
 }

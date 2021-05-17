@@ -1566,10 +1566,6 @@ public func evmCallFrame_getResumeReturnDataNbytes(frame: EvmCallFrame) -> optio
     return Some((frame.resumeInfo?).returnDataNbytes);
 }
 
-public func evmCallFrame_getParentResumeReturnDataNbytes(frame: EvmCallFrame) -> option<uint> {
-    return evmCallFrame_getResumeReturnDataNbytes(frame.parent?);
-}
-
 public func evmCallFrame_getSelfDestructQueue(frame: EvmCallFrame) -> Queue {
     return frame.selfDestructQueue;
 }

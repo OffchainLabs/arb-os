@@ -26,7 +26,7 @@ use evmCallStack::evmCallFrame_runningAsAddress;
 use evmCallStack::evmCallFrame_runningAsAccount;
 use evmCallStack::evmCallFrame_getParent;
 use evmCallStack::evmCallFrame_getCaller;
-use evmCallStack::evmCallFrame_getParentResumeReturnDataNbytes;
+use evmCallStack::evmCallFrame_getResumeReturnDataNbytes;
 
 use evmOps::evmOp_log4;
 use evmOps::evmOp_return;
@@ -233,14 +233,31 @@ impure func arbsys_expectedReturnDataSize(topFrame: EvmCallFrame, calldata: Byte
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 220, 0, 0);
     }
-    if let Some(resumeReturnDataNbytes) = evmCallFrame_getParentResumeReturnDataNbytes(topFrame) {
-        if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, resumeReturnDataNbytes))) {
+
+    if let Some(parentFrame) = topFrame.parent {
+        if let Some(grandparentFrame) = parentFrame.parent {
+            if let Some(resumeReturnDataNbytes) = evmCallFrame_getResumeReturnDataNbytes(grandparentFrame) {
+                if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, resumeReturnDataNbytes))) {
+                    evmOp_return(0, 32);
+                } else {
+                    evmOp_revert_knownCodePc(address(const::Address_ArbSys), 221, 0, 0);
+                }
+            } else {
+                evmOp_revert_knownCodePc(address(const::Address_ArbSys), 222, 0, 0);
+            }
+        } else {
+            if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, 0))) {
+                evmOp_return(0, 32);
+            } else {
+                evmOp_revert_knownCodePc(address(const::Address_ArbSys), 221, 0, 0);
+            }
+        }
+    } else {
+        if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, 0))) {
             evmOp_return(0, 32);
         } else {
             evmOp_revert_knownCodePc(address(const::Address_ArbSys), 221, 0, 0);
         }
-    } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 222, 0, 0);
     }
 }
 
