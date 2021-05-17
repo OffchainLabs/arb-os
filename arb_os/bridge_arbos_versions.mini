@@ -1,16 +1,2032 @@
 
-// This file is used for bootstrapping the upgrade build process. Don't edit it unless you know what you're doing.
+// This file is machine-generated. Don't edit it unless you know what you're doing.
+
+use customize_arbos_bridge_versions::set_globalAccountStore_onUpgrade;
+use customize_arbos_bridge_versions::set_globalCallStack_onUpgrade;
+use customize_arbos_bridge_versions::set_globalCurrentRetryableRequest_onUpgrade;
+use customize_arbos_bridge_versions::set_globalCurrentTxRequest_onUpgrade;
+use customize_arbos_bridge_versions::set_globalInbox_onUpgrade;
+
+type before__accounts_Account = struct {
+    addr: address,
+    blsKey: option<before__accounts_BLSKey>,
+    nextSeqNum: uint,
+    ethBalance: uint,
+    contractInfo: option<before__accounts_AccountContractInfo>,
+    aggregatorInfo: option<before__accounts_AggregatorInfo>,
+    aggregatorToPay: option<address>,
+}
+type before__accounts_AccountContractInfo = struct {
+    code: before__accounts_ByteArray,
+    evmJumpTable: map<uint,impure func()>,
+    startCodePoint: impure func(),
+    storage: before__accounts_StorageMap,
+}
+type before__accounts_AggregatorDecompressionState = struct {
+    functionTable: before__decompression_FunctionTable,
+}
+type before__accounts_AggregatorInfo = struct {
+    decompressionState: option<before__accounts_AggregatorDecompressionState>,
+    feeCollector: address,
+}
+type before__accounts_BLSKey = struct {
+    ax: uint,
+    ay: uint,
+    bx: uint,
+    by: uint,
+}
+type before__accounts_ByteArray = struct {
+    size: uint,
+    sliceOffset: uint,
+    contents: buffer,
+}
+type before__accounts_CodeRef = struct {
+    refCount: uint,
+    code: before__accounts_ByteArray,
+    evmJumpTable: map<uint,impure func()>,
+    startCodePoint: impure func(),
+}
+type before__accounts_EscrowStore = struct {
+    nextKey: uint,
+    escrowedValues: before__accounts_StorageMap,
+}
+type before__accounts_RetryBuffer = struct {
+    byTxId: map<uint,before__retrybuffer_RetryableTx>,
+    fifo: before__retrybuffer_Queue,
+    txLifetimeSeconds: uint,
+}
+type before__accounts_StorageMap = struct {
+    tree: before__std_storageMap_StorageMapNode,
+    size: uint,
+}
+type before__arbowner_AvmCodeBuilder = struct {
+    requireSafe: bool,
+    code: before__std_avmcodebuilder_AvmCodePoint,
+    size: uint,
+    codeMap: map<uint,before__std_avmcodebuilder_AvmCodePoint>,
+}
+type before__chainParameters_ChainParams = struct {
+    chainAddress: address,
+    gracePeriodBlocks: uint,
+    arbGasSpeedLimitPerSecond: uint,
+    maxExecutionSteps: uint,
+    baseStake: uint,
+    stakingToken: address,
+    owner: address,
+    secondsPerSend: option<uint>,
+    defaultAggregator: address,
+}
+type before__decompression_ExpandingIntArray = struct {
+    size: uint,
+    chunk: uint,
+    contents: [8]any,
+}
+type before__decompression_FunctionTable = []before__decompression_FunctionTableEntry
+type before__decompression_FunctionTableEntry = struct {
+    callDataPrefix: any,
+    maxGas: uint,
+    payable: bool,
+}
+type before__evmCallStack_Account = struct {
+    addr: address,
+    blsKey: option<before__accounts_BLSKey>,
+    nextSeqNum: uint,
+    ethBalance: uint,
+    contractInfo: option<before__accounts_AccountContractInfo>,
+    aggregatorInfo: option<before__accounts_AggregatorInfo>,
+    aggregatorToPay: option<address>,
+}
+type before__evmCallStack_AccountStore = struct {
+    accounts: map<address,before__accounts_Account>,
+    retryBuffer: before__accounts_RetryBuffer,
+    numContracts: uint,
+    codeRefTable: map<bytes32,before__accounts_CodeRef>,
+    escrowStore: before__accounts_EscrowStore,
+}
+type before__evmCallStack_ByteArray = struct {
+    size: uint,
+    sliceOffset: uint,
+    contents: buffer,
+}
+type before__evmCallStack_EvmCallFrame = struct {
+    runningAs: address,
+    runningCodeFrom: address,
+    accountStore: before__evmCallStack_AccountStore,
+    runningAsAccount: before__evmCallStack_Account,
+    caller: address,
+    static: bool,
+    calldata: before__evmCallStack_ByteArray,
+    callvalue: uint,
+    returnInfo: option<before__evmCallStack_ReturnInfo>,
+    memory: before__evmCallStack_ByteArray,
+    storageDelta: int,
+    revertOnStorageWrite: bool,
+    evmLogs: before__evmCallStack_EvmLogs,
+    selfDestructQueue: before__evmCallStack_Queue,
+    resumeInfo: option<before__evmCallStack_ResumeInfo>,
+    sendQueue: before__evmCallStack_Queue,
+    sendOnFailure: option<before__evmCallStack_ByteArray>,
+    parent: option<before__evmCallStack_EvmCallFrame>,
+}
+type before__evmCallStack_EvmLogs = struct {
+    last: any,
+    rest: any,
+}
+type before__evmCallStack_IncomingRequest = struct {
+    kind: uint,
+    arbBlockNumber: uint,
+    ethBlockNumber: uint,
+    timestamp: uint,
+    sender: address,
+    requestId: uint,
+    msgData: before__inbox_ByteArray,
+    provenance: before__inbox_RequestProvenance,
+    aggregator: option<before__inbox_AggregatorInfo>,
+    adminMode: bool,
+    gasEstimationParams: option<before__inbox_GasEstimationParams>,
+}
+type before__evmCallStack_IncomingRequestAndLogs = struct {
+    req: before__evmCallStack_IncomingRequest,
+    evmLogs: before__evmCallStack_EvmLogs,
+}
+type before__evmCallStack_Queue = before__std_queue_BoundedQueue
+type before__evmCallStack_ResumeInfo = struct {
+    codePoint: func(),
+    stackContents: before__evmCallStack_Stack,
+    auxStackContents: option<before__evmCallStack_Stack>,
+    returnDataOffset: uint,
+    returnDataNbytes: uint,
+    callType: uint,
+    savedGas: uint,
+}
+type before__evmCallStack_ReturnInfo = struct {
+    data: before__evmCallStack_ByteArray,
+    status: bool,
+}
+type before__evmCallStack_Stack = option<before__std_stack_StackCell>
+type before__gasAccounting_CongestionState = struct {
+    gasPool: int,
+    lastArbBlockNumSeen: uint,
+    lastTimestampSeen: uint,
+    congestionPriceWei: uint,
+}
+type before__gasAccounting_FeeConfig = struct {
+    enabled: bool,
+    forNetwork: address,
+    forCongestion: address,
+    baseFeeMultiplier: before__gasAccounting_FixedPoint,
+    shareForNetFee: before__gasAccounting_FixedPoint,
+}
+type before__gasAccounting_FixedPoint = struct {
+    val: uint,
+    shiftFactor: uint,
+}
+type before__gasAccounting_FourResources = struct {
+    tx: uint,
+    calldataUnit: uint,
+    storage: uint,
+    compute: uint,
+}
+type before__gasAccounting_GasPrices = struct {
+    perL2Tx: uint,
+    perL1CalldataUnit: uint,
+    perStorageCell: uint,
+    perArbGasBase: uint,
+    perArbGasCongestion: uint,
+    perArbGasTotal: uint,
+}
+type before__gasAccounting_PricingParameters = struct {
+    l1GasPerL2Tx: uint,
+    arbGasPerL2Tx: uint,
+    l1GasPerL1CalldataUnit: uint,
+    arbGasPerL1CalldataUnit: uint,
+    l1GasPerStorage: uint,
+    arbGasPerStorage: uint,
+    arbGasDivisor: uint,
+}
+type before__gasAccounting_RetryablePrices = struct {
+    perTx: uint,
+    perCalldataByte: uint,
+    nextUpdateTimestamp: uint,
+}
+type before__gasAccounting_TxGasState = struct {
+    gasInReserve: uint,
+    gasReservedForStorage: uint,
+    originalMax: uint,
+    price: uint,
+    weiHeldForGas: uint,
+    refundTo: address,
+}
+type before__inbox_AggregatorInfo = struct {
+    aggregator: option<address>,
+    calldataUnits: uint,
+}
+type before__inbox_ByteArray = struct {
+    size: uint,
+    sliceOffset: uint,
+    contents: buffer,
+}
+type before__inbox_GasEstimationParams = struct {
+    computeGasLimit: uint,
+    ignoreInsufficientGasFunds: bool,
+}
+type before__inbox_IncomingRequest = struct {
+    kind: uint,
+    arbBlockNumber: uint,
+    ethBlockNumber: uint,
+    timestamp: uint,
+    sender: address,
+    requestId: uint,
+    msgData: before__inbox_ByteArray,
+    provenance: before__inbox_RequestProvenance,
+    aggregator: option<before__inbox_AggregatorInfo>,
+    adminMode: bool,
+    gasEstimationParams: option<before__inbox_GasEstimationParams>,
+}
+type before__inbox_IncomingRequestQueue = struct {
+    q: before__inbox_Queue,
+}
+type before__inbox_IncomingRequestQueueStack = struct {
+    qs: before__inbox_QueueStack,
+}
+type before__inbox_Queue = before__std_queue_BoundedQueue
+type before__inbox_QueueStack = option<before__std_queue_QueueStackCell>
+type before__inbox_RequestProvenance = struct {
+    l1SeqNum: uint,
+    parentRequestId: uint,
+    indexInParent: uint,
+}
+type before__inbox_TxRequestQueue = struct {
+    q: before__inbox_Queue,
+}
+type before__messages_ByteArray = struct {
+    size: uint,
+    sliceOffset: uint,
+    contents: buffer,
+}
+type before__messages_IncomingRequest = struct {
+    kind: uint,
+    arbBlockNumber: uint,
+    ethBlockNumber: uint,
+    timestamp: uint,
+    sender: address,
+    requestId: uint,
+    msgData: before__inbox_ByteArray,
+    provenance: before__inbox_RequestProvenance,
+    aggregator: option<before__inbox_AggregatorInfo>,
+    adminMode: bool,
+    gasEstimationParams: option<before__inbox_GasEstimationParams>,
+}
+type before__messages_RetryableTx = struct {
+    txId: uint,
+    sender: address,
+    destination: address,
+    callvalue: uint,
+    callvalueEscrowKey: uint,
+    beneficiary: address,
+    calldata: before__retrybuffer_ByteArray,
+    expiryTime: uint,
+    l1Message: before__retrybuffer_IncomingRequest,
+}
+type before__messages_TxFeeStats = struct {
+    price: before__gasAccounting_FourResources,
+    units: before__gasAccounting_FourResources,
+    weiPaid: before__gasAccounting_FourResources,
+    paidAggregator: address,
+    noFeeGasEstimationMode: bool,
+}
+type before__output_MerkleTreeBuilder = struct {
+    contents: before__std_merkletree_Queue,
+}
+type before__output_OutputStatistics = struct {
+    totalGasUsed: uint,
+    numTx: uint,
+    numEvmLogs: uint,
+    numLogs: uint,
+    numSends: uint,
+}
+type before__output_PerBlockReceiptData = struct {
+    totalGasUsed: uint,
+    numTx: uint,
+    numEvmLogs: uint,
+}
+type before__pluggables_ModuleFunction = impure func(any, any, bool, impure func(uint, any, ) -> option<any>, ) -> (any, any, )
+type before__pluggables_ModuleState = struct {
+    code: before__pluggables_ModuleFunction,
+    state: any,
+    neverBeenCalled: bool,
+}
+type before__retrybuffer_ByteArray = struct {
+    size: uint,
+    sliceOffset: uint,
+    contents: buffer,
+}
+type before__retrybuffer_IncomingRequest = struct {
+    kind: uint,
+    arbBlockNumber: uint,
+    ethBlockNumber: uint,
+    timestamp: uint,
+    sender: address,
+    requestId: uint,
+    msgData: before__inbox_ByteArray,
+    provenance: before__inbox_RequestProvenance,
+    aggregator: option<before__inbox_AggregatorInfo>,
+    adminMode: bool,
+    gasEstimationParams: option<before__inbox_GasEstimationParams>,
+}
+type before__retrybuffer_Queue = before__std_queue_BoundedQueue
+type before__retrybuffer_RetryableTx = struct {
+    txId: uint,
+    sender: address,
+    destination: address,
+    callvalue: uint,
+    callvalueEscrowKey: uint,
+    beneficiary: address,
+    calldata: before__retrybuffer_ByteArray,
+    expiryTime: uint,
+    l1Message: before__retrybuffer_IncomingRequest,
+}
+type before__std_avmcodebuilder_AvmCodePoint = impure func()
+type before__std_merkletree_Queue = before__std_queue_BoundedQueue
+type before__std_queue_Queue = before__std_queue_BoundedQueue
+type before__std_queue_QueueStack = option<before__std_queue_QueueStackCell>
+type before__std_queue_QueueStackCell = struct {
+    head: before__std_queue_Queue,
+    rest: before__std_queue_QueueStack,
+}
+type before__std_stack_StackCell = struct {
+    top: [8]any,
+    num: uint,
+    rest: option<before__std_stack_StackCell>,
+}
+type before__std_storageMap_StorageMapNode = [8]any
+type before__std_queue_BoundedQueue = struct {
+    capacity: uint,
+    nextPut: uint,
+    nextGet: uint,
+    contents: []any,
+}
+type after__accounts_Account = struct {
+    addr: address,
+    blsKey: option<after__accounts_BLSKey>,
+    nextSeqNum: uint,
+    ethBalance: uint,
+    contractInfo: option<after__accounts_AccountContractInfo>,
+    aggregatorInfo: option<after__accounts_AggregatorInfo>,
+    aggregatorToPay: option<address>,
+}
+type after__accounts_AccountContractInfo = struct {
+    code: after__accounts_ByteArray,
+    evmJumpTable: map<uint,impure func()>,
+    startCodePoint: impure func(),
+    storage: after__accounts_StorageMap,
+}
+type after__accounts_AggregatorDecompressionState = struct {
+    functionTable: after__decompression_FunctionTable,
+}
+type after__accounts_AggregatorInfo = struct {
+    decompressionState: option<after__accounts_AggregatorDecompressionState>,
+    feeCollector: address,
+}
+type after__accounts_BLSKey = struct {
+    ax: uint,
+    ay: uint,
+    bx: uint,
+    by: uint,
+}
+type after__accounts_ByteArray = struct {
+    size: uint,
+    sliceOffset: uint,
+    contents: buffer,
+}
+type after__accounts_CodeRef = struct {
+    refCount: uint,
+    code: after__accounts_ByteArray,
+    evmJumpTable: map<uint,impure func()>,
+    startCodePoint: impure func(),
+}
+type after__accounts_EscrowStore = struct {
+    nextKey: uint,
+    escrowedValues: after__accounts_StorageMap,
+}
+type after__accounts_RetryBuffer = struct {
+    byTxId: map<uint,after__retrybuffer_RetryableTx>,
+    fifo: after__retrybuffer_Queue,
+    txLifetimeSeconds: uint,
+}
+type after__accounts_StorageMap = struct {
+    tree: after__std_storageMap_StorageMapNode,
+    size: uint,
+}
+type after__arbowner_AvmCodeBuilder = struct {
+    requireSafe: bool,
+    code: after__std_avmcodebuilder_AvmCodePoint,
+    size: uint,
+    codeMap: map<uint,after__std_avmcodebuilder_AvmCodePoint>,
+}
+type after__chainParameters_ChainParams = struct {
+    chainAddress: address,
+    gracePeriodBlocks: uint,
+    arbGasSpeedLimitPerSecond: uint,
+    maxExecutionSteps: uint,
+    baseStake: uint,
+    stakingToken: address,
+    owner: address,
+    secondsPerSend: option<uint>,
+    defaultAggregator: address,
+}
+type after__decompression_ExpandingIntArray = struct {
+    size: uint,
+    chunk: uint,
+    contents: [8]any,
+}
+type after__decompression_FunctionTable = []after__decompression_FunctionTableEntry
+type after__decompression_FunctionTableEntry = struct {
+    callDataPrefix: any,
+    maxGas: uint,
+    payable: bool,
+}
+type after__evmCallStack_Account = struct {
+    addr: address,
+    blsKey: option<after__accounts_BLSKey>,
+    nextSeqNum: uint,
+    ethBalance: uint,
+    contractInfo: option<after__accounts_AccountContractInfo>,
+    aggregatorInfo: option<after__accounts_AggregatorInfo>,
+    aggregatorToPay: option<address>,
+}
+type after__evmCallStack_AccountStore = struct {
+    accounts: map<address,after__accounts_Account>,
+    retryBuffer: after__accounts_RetryBuffer,
+    numContracts: uint,
+    codeRefTable: map<bytes32,after__accounts_CodeRef>,
+    escrowStore: after__accounts_EscrowStore,
+}
+type after__evmCallStack_ByteArray = struct {
+    size: uint,
+    sliceOffset: uint,
+    contents: buffer,
+}
+type after__evmCallStack_EvmCallFrame = struct {
+    runningAs: address,
+    runningCodeFrom: address,
+    accountStore: after__evmCallStack_AccountStore,
+    runningAsAccount: after__evmCallStack_Account,
+    caller: address,
+    static: bool,
+    calldata: after__evmCallStack_ByteArray,
+    callvalue: uint,
+    returnInfo: option<after__evmCallStack_ReturnInfo>,
+    memory: after__evmCallStack_ByteArray,
+    storageDelta: int,
+    revertOnStorageWrite: bool,
+    evmLogs: after__evmCallStack_EvmLogs,
+    selfDestructQueue: after__evmCallStack_Queue,
+    resumeInfo: option<after__evmCallStack_ResumeInfo>,
+    sendQueue: after__evmCallStack_Queue,
+    sendOnFailure: option<after__evmCallStack_ByteArray>,
+    parent: option<after__evmCallStack_EvmCallFrame>,
+}
+type after__evmCallStack_EvmLogs = struct {
+    last: any,
+    rest: any,
+}
+type after__evmCallStack_IncomingRequest = struct {
+    kind: uint,
+    arbBlockNumber: uint,
+    ethBlockNumber: uint,
+    timestamp: uint,
+    sender: address,
+    requestId: uint,
+    msgData: after__inbox_ByteArray,
+    provenance: after__inbox_RequestProvenance,
+    aggregator: option<after__inbox_AggregatorInfo>,
+    adminMode: bool,
+    gasEstimationParams: option<after__inbox_GasEstimationParams>,
+}
+type after__evmCallStack_IncomingRequestAndLogs = struct {
+    req: after__evmCallStack_IncomingRequest,
+    evmLogs: after__evmCallStack_EvmLogs,
+}
+type after__evmCallStack_Queue = after__std_queue_BoundedQueue
+type after__evmCallStack_ResumeInfo = struct {
+    codePoint: func(),
+    stackContents: after__evmCallStack_Stack,
+    auxStackContents: option<after__evmCallStack_Stack>,
+    returnDataOffset: uint,
+    returnDataNbytes: uint,
+    callType: uint,
+    savedGas: uint,
+}
+type after__evmCallStack_ReturnInfo = struct {
+    data: after__evmCallStack_ByteArray,
+    status: bool,
+}
+type after__evmCallStack_Stack = option<after__std_stack_StackCell>
+type after__gasAccounting_CongestionState = struct {
+    gasPool: int,
+    lastArbBlockNumSeen: uint,
+    lastTimestampSeen: uint,
+    congestionPriceWei: uint,
+}
+type after__gasAccounting_FeeConfig = struct {
+    enabled: bool,
+    forNetwork: address,
+    forCongestion: address,
+    baseFeeMultiplier: after__gasAccounting_FixedPoint,
+    shareForNetFee: after__gasAccounting_FixedPoint,
+}
+type after__gasAccounting_FixedPoint = struct {
+    val: uint,
+    shiftFactor: uint,
+}
+type after__gasAccounting_FourResources = struct {
+    tx: uint,
+    calldataUnit: uint,
+    storage: uint,
+    compute: uint,
+}
+type after__gasAccounting_GasPrices = struct {
+    perL2Tx: uint,
+    perL1CalldataUnit: uint,
+    perStorageCell: uint,
+    perArbGasBase: uint,
+    perArbGasCongestion: uint,
+    perArbGasTotal: uint,
+}
+type after__gasAccounting_PricingParameters = struct {
+    l1GasPerL2Tx: uint,
+    arbGasPerL2Tx: uint,
+    l1GasPerL1CalldataUnit: uint,
+    arbGasPerL1CalldataUnit: uint,
+    l1GasPerStorage: uint,
+    arbGasPerStorage: uint,
+    arbGasDivisor: uint,
+}
+type after__gasAccounting_RetryablePrices = struct {
+    perTx: uint,
+    perCalldataByte: uint,
+    nextUpdateTimestamp: uint,
+}
+type after__gasAccounting_TxGasState = struct {
+    gasInReserve: uint,
+    gasReservedForStorage: uint,
+    originalMax: uint,
+    price: uint,
+    weiHeldForGas: uint,
+    refundTo: address,
+}
+type after__inbox_AggregatorInfo = struct {
+    aggregator: option<address>,
+    calldataUnits: uint,
+}
+type after__inbox_ByteArray = struct {
+    size: uint,
+    sliceOffset: uint,
+    contents: buffer,
+}
+type after__inbox_GasEstimationParams = struct {
+    computeGasLimit: uint,
+    ignoreGasPrice: bool,
+    ignoreMaxGas: bool,
+}
+type after__inbox_IncomingRequest = struct {
+    kind: uint,
+    arbBlockNumber: uint,
+    ethBlockNumber: uint,
+    timestamp: uint,
+    sender: address,
+    requestId: uint,
+    msgData: after__inbox_ByteArray,
+    provenance: after__inbox_RequestProvenance,
+    aggregator: option<after__inbox_AggregatorInfo>,
+    adminMode: bool,
+    gasEstimationParams: option<after__inbox_GasEstimationParams>,
+}
+type after__inbox_IncomingRequestQueue = struct {
+    q: after__inbox_Queue,
+}
+type after__inbox_IncomingRequestQueueStack = struct {
+    qs: after__inbox_QueueStack,
+}
+type after__inbox_Queue = after__std_queue_BoundedQueue
+type after__inbox_QueueStack = option<after__std_queue_QueueStackCell>
+type after__inbox_RequestProvenance = struct {
+    l1SeqNum: uint,
+    parentRequestId: uint,
+    indexInParent: uint,
+}
+type after__inbox_TxRequestQueue = struct {
+    q: after__inbox_Queue,
+}
+type after__messages_ByteArray = struct {
+    size: uint,
+    sliceOffset: uint,
+    contents: buffer,
+}
+type after__messages_IncomingRequest = struct {
+    kind: uint,
+    arbBlockNumber: uint,
+    ethBlockNumber: uint,
+    timestamp: uint,
+    sender: address,
+    requestId: uint,
+    msgData: after__inbox_ByteArray,
+    provenance: after__inbox_RequestProvenance,
+    aggregator: option<after__inbox_AggregatorInfo>,
+    adminMode: bool,
+    gasEstimationParams: option<after__inbox_GasEstimationParams>,
+}
+type after__messages_RetryableTx = struct {
+    txId: uint,
+    sender: address,
+    destination: address,
+    callvalue: uint,
+    callvalueEscrowKey: uint,
+    beneficiary: address,
+    calldata: after__retrybuffer_ByteArray,
+    expiryTime: uint,
+    l1Message: after__retrybuffer_IncomingRequest,
+}
+type after__messages_TxFeeStats = struct {
+    price: after__gasAccounting_FourResources,
+    units: after__gasAccounting_FourResources,
+    weiPaid: after__gasAccounting_FourResources,
+    paidAggregator: address,
+    noFeeGasEstimationMode: bool,
+}
+type after__output_MerkleTreeBuilder = struct {
+    contents: after__std_merkletree_Queue,
+}
+type after__output_OutputStatistics = struct {
+    totalGasUsed: uint,
+    numTx: uint,
+    numEvmLogs: uint,
+    numLogs: uint,
+    numSends: uint,
+}
+type after__output_PerBlockReceiptData = struct {
+    totalGasUsed: uint,
+    numTx: uint,
+    numEvmLogs: uint,
+}
+type after__pluggables_ModuleFunction = impure func(any, any, bool, impure func(uint, any, ) -> option<any>, ) -> (any, any, )
+type after__pluggables_ModuleState = struct {
+    code: after__pluggables_ModuleFunction,
+    state: any,
+    neverBeenCalled: bool,
+}
+type after__retrybuffer_ByteArray = struct {
+    size: uint,
+    sliceOffset: uint,
+    contents: buffer,
+}
+type after__retrybuffer_IncomingRequest = struct {
+    kind: uint,
+    arbBlockNumber: uint,
+    ethBlockNumber: uint,
+    timestamp: uint,
+    sender: address,
+    requestId: uint,
+    msgData: after__inbox_ByteArray,
+    provenance: after__inbox_RequestProvenance,
+    aggregator: option<after__inbox_AggregatorInfo>,
+    adminMode: bool,
+    gasEstimationParams: option<after__inbox_GasEstimationParams>,
+}
+type after__retrybuffer_Queue = after__std_queue_BoundedQueue
+type after__retrybuffer_RetryableTx = struct {
+    txId: uint,
+    sender: address,
+    destination: address,
+    callvalue: uint,
+    callvalueEscrowKey: uint,
+    beneficiary: address,
+    calldata: after__retrybuffer_ByteArray,
+    expiryTime: uint,
+    l1Message: after__retrybuffer_IncomingRequest,
+}
+type after__std_avmcodebuilder_AvmCodePoint = impure func()
+type after__std_merkletree_Queue = after__std_queue_BoundedQueue
+type after__std_queue_Queue = after__std_queue_BoundedQueue
+type after__std_queue_QueueStack = option<after__std_queue_QueueStackCell>
+type after__std_queue_QueueStackCell = struct {
+    head: after__std_queue_Queue,
+    rest: after__std_queue_QueueStack,
+}
+type after__std_stack_StackCell = struct {
+    top: [8]any,
+    num: uint,
+    rest: option<after__std_stack_StackCell>,
+}
+type after__std_storageMap_StorageMapNode = [8]any
+type after__std_queue_BoundedQueue = struct {
+    capacity: uint,
+    nextPut: uint,
+    nextGet: uint,
+    contents: []any,
+}
 
 type GlobalsBeforeUpgrade = struct {
-    unused: uint,
+    moduleManager: struct {
+        capacity: uint,
+        modules: []option<struct {
+            code: impure func(any, any, bool, impure func(uint, any, ) -> option<any>, ) -> (any, any, ),
+            state: any,
+            neverBeenCalled: bool,
+        }>,
+    },
+    globalBlockReceiptData: struct {
+        data: struct {
+            totalGasUsed: uint,
+            numTx: uint,
+            numEvmLogs: uint,
+        },
+        statsThisBlock: struct {
+            totalGasUsed: uint,
+            numTx: uint,
+            numEvmLogs: uint,
+            numLogs: uint,
+            numSends: uint,
+        },
+        statsAllTime: struct {
+            totalGasUsed: uint,
+            numTx: uint,
+            numEvmLogs: uint,
+            numLogs: uint,
+            numSends: uint,
+        },
+        lastBlockNum: uint,
+        nextSendTime: uint,
+    },
+    logsQueuedForEndOfBlock: before__std_queue_BoundedQueue,
+    globalOutbox: struct {
+        batch: struct {
+            contents: before__std_queue_BoundedQueue,
+        },
+        batchNumber: uint,
+        numInBatch: uint,
+    },
+    globalInbox: struct {
+        queue: struct {
+            q: before__std_queue_BoundedQueue,
+        },
+        arbBlockNum: uint,
+        ethBlockNum: uint,
+        timestamp: uint,
+        atStartOfBlock: bool,
+        inboxHashAccumulator: bytes32,
+        pendingMessage: option<struct {
+            kind: uint,
+            arbBlockNumber: uint,
+            ethBlockNumber: uint,
+            timestamp: uint,
+            sender: address,
+            requestId: uint,
+            msgData: struct {
+                size: uint,
+                sliceOffset: uint,
+                contents: buffer,
+            },
+            provenance: struct {
+                l1SeqNum: uint,
+                parentRequestId: uint,
+                indexInParent: uint,
+            },
+            aggregator: option<struct {
+                aggregator: option<address>,
+                calldataUnits: uint,
+            }>,
+            adminMode: bool,
+            gasEstimationParams: option<struct {
+                computeGasLimit: uint,
+                ignoreInsufficientGasFunds: bool,
+            }>,
+        }>,
+    },
+    globalInputQueue: struct {
+        txQ: struct {
+            q: before__std_queue_BoundedQueue,
+        },
+        batchQ: struct {
+            qs: option<struct {
+                head: before__std_queue_BoundedQueue,
+                rest: option<before__std_queue_QueueStackCell>,
+            }>,
+        },
+    },
+    gasAccountingInfo: struct {
+        txState: option<struct {
+            gasInReserve: uint,
+            gasReservedForStorage: uint,
+            originalMax: uint,
+            price: uint,
+            weiHeldForGas: uint,
+            refundTo: address,
+        }>,
+        feeConfig: struct {
+            enabled: bool,
+            forNetwork: address,
+            forCongestion: address,
+            baseFeeMultiplier: struct {
+                val: uint,
+                shiftFactor: uint,
+            },
+            shareForNetFee: struct {
+                val: uint,
+                shiftFactor: uint,
+            },
+        },
+        currentPrices: struct {
+            perL2Tx: uint,
+            perL1CalldataUnit: uint,
+            perStorageCell: uint,
+            perArbGasBase: uint,
+            perArbGasCongestion: uint,
+            perArbGasTotal: uint,
+        },
+        gasRemainingThisBlock: uint,
+        congestionState: struct {
+            gasPool: int,
+            lastArbBlockNumSeen: uint,
+            lastTimestampSeen: uint,
+            congestionPriceWei: uint,
+        },
+        speedLimitPerSecond: uint,
+        pricingParams: struct {
+            l1GasPerL2Tx: uint,
+            arbGasPerL2Tx: uint,
+            l1GasPerL1CalldataUnit: uint,
+            arbGasPerL1CalldataUnit: uint,
+            l1GasPerStorage: uint,
+            arbGasPerStorage: uint,
+            arbGasDivisor: uint,
+        },
+        gasAllocatedToThisBlock: uint,
+        retryablePrices: struct {
+            perTx: uint,
+            perCalldataByte: uint,
+            nextUpdateTimestamp: uint,
+        },
+    },
+    gasAccountingParams: struct {
+        SpeedLimitPerSecond: uint,
+        GasPoolMax: uint,
+        TxGasLimit: uint,
+    },
+    globalL1GasPriceEstimator: struct {
+        estimateWei: uint,
+        fairGasPriceSender: address,
+    },
+    evmOpJumpTable: [47]impure func(),
+    globalCallStack: option<struct {
+        runningAs: address,
+        runningCodeFrom: address,
+        accountStore: struct {
+            accounts: map<address,struct {
+                addr: address,
+                blsKey: option<struct {
+                    ax: uint,
+                    ay: uint,
+                    bx: uint,
+                    by: uint,
+                }>,
+                nextSeqNum: uint,
+                ethBalance: uint,
+                contractInfo: option<struct {
+                    code: struct {
+                        size: uint,
+                        sliceOffset: uint,
+                        contents: buffer,
+                    },
+                    evmJumpTable: map<uint,impure func()>,
+                    startCodePoint: impure func(),
+                    storage: struct {
+                        tree: [8]any,
+                        size: uint,
+                    },
+                }>,
+                aggregatorInfo: option<struct {
+                    decompressionState: option<struct {
+                        functionTable: []struct {
+                            callDataPrefix: any,
+                            maxGas: uint,
+                            payable: bool,
+                        },
+                    }>,
+                    feeCollector: address,
+                }>,
+                aggregatorToPay: option<address>,
+            }>,
+            retryBuffer: struct {
+                byTxId: map<uint,struct {
+                    txId: uint,
+                    sender: address,
+                    destination: address,
+                    callvalue: uint,
+                    callvalueEscrowKey: uint,
+                    beneficiary: address,
+                    calldata: struct {
+                        size: uint,
+                        sliceOffset: uint,
+                        contents: buffer,
+                    },
+                    expiryTime: uint,
+                    l1Message: struct {
+                        kind: uint,
+                        arbBlockNumber: uint,
+                        ethBlockNumber: uint,
+                        timestamp: uint,
+                        sender: address,
+                        requestId: uint,
+                        msgData: struct {
+                            size: uint,
+                            sliceOffset: uint,
+                            contents: buffer,
+                        },
+                        provenance: struct {
+                            l1SeqNum: uint,
+                            parentRequestId: uint,
+                            indexInParent: uint,
+                        },
+                        aggregator: option<struct {
+                            aggregator: option<address>,
+                            calldataUnits: uint,
+                        }>,
+                        adminMode: bool,
+                        gasEstimationParams: option<struct {
+                            computeGasLimit: uint,
+                            ignoreInsufficientGasFunds: bool,
+                        }>,
+                    },
+                }>,
+                fifo: before__std_queue_BoundedQueue,
+                txLifetimeSeconds: uint,
+            },
+            numContracts: uint,
+            codeRefTable: map<bytes32,struct {
+                refCount: uint,
+                code: struct {
+                    size: uint,
+                    sliceOffset: uint,
+                    contents: buffer,
+                },
+                evmJumpTable: map<uint,impure func()>,
+                startCodePoint: impure func(),
+            }>,
+            escrowStore: struct {
+                nextKey: uint,
+                escrowedValues: struct {
+                    tree: [8]any,
+                    size: uint,
+                },
+            },
+        },
+        runningAsAccount: struct {
+            addr: address,
+            blsKey: option<struct {
+                ax: uint,
+                ay: uint,
+                bx: uint,
+                by: uint,
+            }>,
+            nextSeqNum: uint,
+            ethBalance: uint,
+            contractInfo: option<struct {
+                code: struct {
+                    size: uint,
+                    sliceOffset: uint,
+                    contents: buffer,
+                },
+                evmJumpTable: map<uint,impure func()>,
+                startCodePoint: impure func(),
+                storage: struct {
+                    tree: [8]any,
+                    size: uint,
+                },
+            }>,
+            aggregatorInfo: option<struct {
+                decompressionState: option<struct {
+                    functionTable: []struct {
+                        callDataPrefix: any,
+                        maxGas: uint,
+                        payable: bool,
+                    },
+                }>,
+                feeCollector: address,
+            }>,
+            aggregatorToPay: option<address>,
+        },
+        caller: address,
+        static: bool,
+        calldata: struct {
+            size: uint,
+            sliceOffset: uint,
+            contents: buffer,
+        },
+        callvalue: uint,
+        returnInfo: option<struct {
+            data: struct {
+                size: uint,
+                sliceOffset: uint,
+                contents: buffer,
+            },
+            status: bool,
+        }>,
+        memory: struct {
+            size: uint,
+            sliceOffset: uint,
+            contents: buffer,
+        },
+        storageDelta: int,
+        revertOnStorageWrite: bool,
+        evmLogs: struct {
+            last: any,
+            rest: any,
+        },
+        selfDestructQueue: before__std_queue_BoundedQueue,
+        resumeInfo: option<struct {
+            codePoint: func(),
+            stackContents: option<struct {
+                top: [8]any,
+                num: uint,
+                rest: option<before__std_stack_StackCell>,
+            }>,
+            auxStackContents: option<option<struct {
+                top: [8]any,
+                num: uint,
+                rest: option<before__std_stack_StackCell>,
+            }>>,
+            returnDataOffset: uint,
+            returnDataNbytes: uint,
+            callType: uint,
+            savedGas: uint,
+        }>,
+        sendQueue: before__std_queue_BoundedQueue,
+        sendOnFailure: option<struct {
+            size: uint,
+            sliceOffset: uint,
+            contents: buffer,
+        }>,
+        parent: option<before__evmCallStack_EvmCallFrame>,
+    }>,
+    globalCurrentTxRequest: struct {
+        maxGas: uint,
+        gasPrice: uint,
+        seqNum: option<uint>,
+        caller: address,
+        calleeAddr: address,
+        gasPayer: address,
+        value: uint,
+        calldata: struct {
+            size: uint,
+            sliceOffset: uint,
+            contents: buffer,
+        },
+        nonMutating: bool,
+        isConstructor: bool,
+        incomingRequest: struct {
+            kind: uint,
+            arbBlockNumber: uint,
+            ethBlockNumber: uint,
+            timestamp: uint,
+            sender: address,
+            requestId: uint,
+            msgData: struct {
+                size: uint,
+                sliceOffset: uint,
+                contents: buffer,
+            },
+            provenance: struct {
+                l1SeqNum: uint,
+                parentRequestId: uint,
+                indexInParent: uint,
+            },
+            aggregator: option<struct {
+                aggregator: option<address>,
+                calldataUnits: uint,
+            }>,
+            adminMode: bool,
+            gasEstimationParams: option<struct {
+                computeGasLimit: uint,
+                ignoreInsufficientGasFunds: bool,
+            }>,
+        },
+        feeStats: struct {
+            price: struct {
+                tx: uint,
+                calldataUnit: uint,
+                storage: uint,
+                compute: uint,
+            },
+            units: struct {
+                tx: uint,
+                calldataUnit: uint,
+                storage: uint,
+                compute: uint,
+            },
+            weiPaid: struct {
+                tx: uint,
+                calldataUnit: uint,
+                storage: uint,
+                compute: uint,
+            },
+            paidAggregator: address,
+            noFeeGasEstimationMode: bool,
+        },
+        fromRetryable: option<struct {
+            txId: uint,
+            sender: address,
+            destination: address,
+            callvalue: uint,
+            callvalueEscrowKey: uint,
+            beneficiary: address,
+            calldata: struct {
+                size: uint,
+                sliceOffset: uint,
+                contents: buffer,
+            },
+            expiryTime: uint,
+            l1Message: struct {
+                kind: uint,
+                arbBlockNumber: uint,
+                ethBlockNumber: uint,
+                timestamp: uint,
+                sender: address,
+                requestId: uint,
+                msgData: struct {
+                    size: uint,
+                    sliceOffset: uint,
+                    contents: buffer,
+                },
+                provenance: struct {
+                    l1SeqNum: uint,
+                    parentRequestId: uint,
+                    indexInParent: uint,
+                },
+                aggregator: option<struct {
+                    aggregator: option<address>,
+                    calldataUnits: uint,
+                }>,
+                adminMode: bool,
+                gasEstimationParams: option<struct {
+                    computeGasLimit: uint,
+                    ignoreInsufficientGasFunds: bool,
+                }>,
+            },
+        }>,
+    },
+    globalCurrentRetryableRequest: option<struct {
+        req: struct {
+            kind: uint,
+            arbBlockNumber: uint,
+            ethBlockNumber: uint,
+            timestamp: uint,
+            sender: address,
+            requestId: uint,
+            msgData: struct {
+                size: uint,
+                sliceOffset: uint,
+                contents: buffer,
+            },
+            provenance: struct {
+                l1SeqNum: uint,
+                parentRequestId: uint,
+                indexInParent: uint,
+            },
+            aggregator: option<struct {
+                aggregator: option<address>,
+                calldataUnits: uint,
+            }>,
+            adminMode: bool,
+            gasEstimationParams: option<struct {
+                computeGasLimit: uint,
+                ignoreInsufficientGasFunds: bool,
+            }>,
+        },
+        evmLogs: struct {
+            last: any,
+            rest: any,
+        },
+    }>,
+    inErrorHandler: bool,
+    globalIndexedAddressTable: struct {
+        byIndex: struct {
+            size: uint,
+            chunk: uint,
+            contents: [8]any,
+        },
+        byAddress: map<address,uint>,
+        size: uint,
+    },
+    unreachableMask: uint,
+    globalChainParams: option<struct {
+        chainAddress: address,
+        gracePeriodBlocks: uint,
+        arbGasSpeedLimitPerSecond: uint,
+        maxExecutionSteps: uint,
+        baseStake: uint,
+        stakingToken: address,
+        owner: address,
+        secondsPerSend: option<uint>,
+        defaultAggregator: address,
+    }>,
+    blockhashes: struct {
+        latestBlockNum: uint,
+        oldHashes: [256]bytes32,
+    },
+    arbStats: struct {
+        storage: uint,
+        arbGasUsed: uint,
+        numTxReceipts: uint,
+    },
+    upgradeInProgress: option<struct {
+        requireSafe: bool,
+        code: impure func(),
+        size: uint,
+        codeMap: map<uint,impure func()>,
+    }>,
+    globalAccountStore: struct {
+        accounts: map<address,struct {
+            addr: address,
+            blsKey: option<struct {
+                ax: uint,
+                ay: uint,
+                bx: uint,
+                by: uint,
+            }>,
+            nextSeqNum: uint,
+            ethBalance: uint,
+            contractInfo: option<struct {
+                code: struct {
+                    size: uint,
+                    sliceOffset: uint,
+                    contents: buffer,
+                },
+                evmJumpTable: map<uint,impure func()>,
+                startCodePoint: impure func(),
+                storage: struct {
+                    tree: [8]any,
+                    size: uint,
+                },
+            }>,
+            aggregatorInfo: option<struct {
+                decompressionState: option<struct {
+                    functionTable: []struct {
+                        callDataPrefix: any,
+                        maxGas: uint,
+                        payable: bool,
+                    },
+                }>,
+                feeCollector: address,
+            }>,
+            aggregatorToPay: option<address>,
+        }>,
+        retryBuffer: struct {
+            byTxId: map<uint,struct {
+                txId: uint,
+                sender: address,
+                destination: address,
+                callvalue: uint,
+                callvalueEscrowKey: uint,
+                beneficiary: address,
+                calldata: struct {
+                    size: uint,
+                    sliceOffset: uint,
+                    contents: buffer,
+                },
+                expiryTime: uint,
+                l1Message: struct {
+                    kind: uint,
+                    arbBlockNumber: uint,
+                    ethBlockNumber: uint,
+                    timestamp: uint,
+                    sender: address,
+                    requestId: uint,
+                    msgData: struct {
+                        size: uint,
+                        sliceOffset: uint,
+                        contents: buffer,
+                    },
+                    provenance: struct {
+                        l1SeqNum: uint,
+                        parentRequestId: uint,
+                        indexInParent: uint,
+                    },
+                    aggregator: option<struct {
+                        aggregator: option<address>,
+                        calldataUnits: uint,
+                    }>,
+                    adminMode: bool,
+                    gasEstimationParams: option<struct {
+                        computeGasLimit: uint,
+                        ignoreInsufficientGasFunds: bool,
+                    }>,
+                },
+            }>,
+            fifo: before__std_queue_BoundedQueue,
+            txLifetimeSeconds: uint,
+        },
+        numContracts: uint,
+        codeRefTable: map<bytes32,struct {
+            refCount: uint,
+            code: struct {
+                size: uint,
+                sliceOffset: uint,
+                contents: buffer,
+            },
+            evmJumpTable: map<uint,impure func()>,
+            startCodePoint: impure func(),
+        }>,
+        escrowStore: struct {
+            nextKey: uint,
+            escrowedValues: struct {
+                tree: [8]any,
+                size: uint,
+            },
+        },
+    },
+    _jump_table: any,
 }
 
 type GlobalsAfterUpgrade = struct {
-    unused: uint,
+    moduleManager: struct {
+        capacity: uint,
+        modules: []option<struct {
+            code: impure func(any, any, bool, impure func(uint, any, ) -> option<any>, ) -> (any, any, ),
+            state: any,
+            neverBeenCalled: bool,
+        }>,
+    },
+    globalBlockReceiptData: struct {
+        data: struct {
+            totalGasUsed: uint,
+            numTx: uint,
+            numEvmLogs: uint,
+        },
+        statsThisBlock: struct {
+            totalGasUsed: uint,
+            numTx: uint,
+            numEvmLogs: uint,
+            numLogs: uint,
+            numSends: uint,
+        },
+        statsAllTime: struct {
+            totalGasUsed: uint,
+            numTx: uint,
+            numEvmLogs: uint,
+            numLogs: uint,
+            numSends: uint,
+        },
+        lastBlockNum: uint,
+        nextSendTime: uint,
+    },
+    logsQueuedForEndOfBlock: after__std_queue_BoundedQueue,
+    globalOutbox: struct {
+        batch: struct {
+            contents: after__std_queue_BoundedQueue,
+        },
+        batchNumber: uint,
+        numInBatch: uint,
+    },
+    globalInbox: struct {
+        queue: struct {
+            q: after__std_queue_BoundedQueue,
+        },
+        arbBlockNum: uint,
+        ethBlockNum: uint,
+        timestamp: uint,
+        atStartOfBlock: bool,
+        inboxHashAccumulator: bytes32,
+        pendingMessage: option<struct {
+            kind: uint,
+            arbBlockNumber: uint,
+            ethBlockNumber: uint,
+            timestamp: uint,
+            sender: address,
+            requestId: uint,
+            msgData: struct {
+                size: uint,
+                sliceOffset: uint,
+                contents: buffer,
+            },
+            provenance: struct {
+                l1SeqNum: uint,
+                parentRequestId: uint,
+                indexInParent: uint,
+            },
+            aggregator: option<struct {
+                aggregator: option<address>,
+                calldataUnits: uint,
+            }>,
+            adminMode: bool,
+            gasEstimationParams: option<struct {
+                computeGasLimit: uint,
+                ignoreGasPrice: bool,
+                ignoreMaxGas: bool,
+            }>,
+        }>,
+    },
+    globalInputQueue: struct {
+        txQ: struct {
+            q: after__std_queue_BoundedQueue,
+        },
+        batchQ: struct {
+            qs: option<struct {
+                head: after__std_queue_BoundedQueue,
+                rest: option<after__std_queue_QueueStackCell>,
+            }>,
+        },
+    },
+    gasAccountingInfo: struct {
+        txState: option<struct {
+            gasInReserve: uint,
+            gasReservedForStorage: uint,
+            originalMax: uint,
+            price: uint,
+            weiHeldForGas: uint,
+            refundTo: address,
+        }>,
+        feeConfig: struct {
+            enabled: bool,
+            forNetwork: address,
+            forCongestion: address,
+            baseFeeMultiplier: struct {
+                val: uint,
+                shiftFactor: uint,
+            },
+            shareForNetFee: struct {
+                val: uint,
+                shiftFactor: uint,
+            },
+        },
+        currentPrices: struct {
+            perL2Tx: uint,
+            perL1CalldataUnit: uint,
+            perStorageCell: uint,
+            perArbGasBase: uint,
+            perArbGasCongestion: uint,
+            perArbGasTotal: uint,
+        },
+        gasRemainingThisBlock: uint,
+        congestionState: struct {
+            gasPool: int,
+            lastArbBlockNumSeen: uint,
+            lastTimestampSeen: uint,
+            congestionPriceWei: uint,
+        },
+        speedLimitPerSecond: uint,
+        pricingParams: struct {
+            l1GasPerL2Tx: uint,
+            arbGasPerL2Tx: uint,
+            l1GasPerL1CalldataUnit: uint,
+            arbGasPerL1CalldataUnit: uint,
+            l1GasPerStorage: uint,
+            arbGasPerStorage: uint,
+            arbGasDivisor: uint,
+        },
+        gasAllocatedToThisBlock: uint,
+        retryablePrices: struct {
+            perTx: uint,
+            perCalldataByte: uint,
+            nextUpdateTimestamp: uint,
+        },
+    },
+    gasAccountingParams: struct {
+        SpeedLimitPerSecond: uint,
+        GasPoolMax: uint,
+        TxGasLimit: uint,
+    },
+    globalL1GasPriceEstimator: struct {
+        estimateWei: uint,
+        fairGasPriceSender: address,
+    },
+    evmOpJumpTable: [47]impure func(),
+    globalCallStack: option<struct {
+        runningAs: address,
+        runningCodeFrom: address,
+        accountStore: struct {
+            accounts: map<address,struct {
+                addr: address,
+                blsKey: option<struct {
+                    ax: uint,
+                    ay: uint,
+                    bx: uint,
+                    by: uint,
+                }>,
+                nextSeqNum: uint,
+                ethBalance: uint,
+                contractInfo: option<struct {
+                    code: struct {
+                        size: uint,
+                        sliceOffset: uint,
+                        contents: buffer,
+                    },
+                    evmJumpTable: map<uint,impure func()>,
+                    startCodePoint: impure func(),
+                    storage: struct {
+                        tree: [8]any,
+                        size: uint,
+                    },
+                }>,
+                aggregatorInfo: option<struct {
+                    decompressionState: option<struct {
+                        functionTable: []struct {
+                            callDataPrefix: any,
+                            maxGas: uint,
+                            payable: bool,
+                        },
+                    }>,
+                    feeCollector: address,
+                }>,
+                aggregatorToPay: option<address>,
+            }>,
+            retryBuffer: struct {
+                byTxId: map<uint,struct {
+                    txId: uint,
+                    sender: address,
+                    destination: address,
+                    callvalue: uint,
+                    callvalueEscrowKey: uint,
+                    beneficiary: address,
+                    calldata: struct {
+                        size: uint,
+                        sliceOffset: uint,
+                        contents: buffer,
+                    },
+                    expiryTime: uint,
+                    l1Message: struct {
+                        kind: uint,
+                        arbBlockNumber: uint,
+                        ethBlockNumber: uint,
+                        timestamp: uint,
+                        sender: address,
+                        requestId: uint,
+                        msgData: struct {
+                            size: uint,
+                            sliceOffset: uint,
+                            contents: buffer,
+                        },
+                        provenance: struct {
+                            l1SeqNum: uint,
+                            parentRequestId: uint,
+                            indexInParent: uint,
+                        },
+                        aggregator: option<struct {
+                            aggregator: option<address>,
+                            calldataUnits: uint,
+                        }>,
+                        adminMode: bool,
+                        gasEstimationParams: option<struct {
+                            computeGasLimit: uint,
+                            ignoreGasPrice: bool,
+                            ignoreMaxGas: bool,
+                        }>,
+                    },
+                }>,
+                fifo: after__std_queue_BoundedQueue,
+                txLifetimeSeconds: uint,
+            },
+            numContracts: uint,
+            codeRefTable: map<bytes32,struct {
+                refCount: uint,
+                code: struct {
+                    size: uint,
+                    sliceOffset: uint,
+                    contents: buffer,
+                },
+                evmJumpTable: map<uint,impure func()>,
+                startCodePoint: impure func(),
+            }>,
+            escrowStore: struct {
+                nextKey: uint,
+                escrowedValues: struct {
+                    tree: [8]any,
+                    size: uint,
+                },
+            },
+        },
+        runningAsAccount: struct {
+            addr: address,
+            blsKey: option<struct {
+                ax: uint,
+                ay: uint,
+                bx: uint,
+                by: uint,
+            }>,
+            nextSeqNum: uint,
+            ethBalance: uint,
+            contractInfo: option<struct {
+                code: struct {
+                    size: uint,
+                    sliceOffset: uint,
+                    contents: buffer,
+                },
+                evmJumpTable: map<uint,impure func()>,
+                startCodePoint: impure func(),
+                storage: struct {
+                    tree: [8]any,
+                    size: uint,
+                },
+            }>,
+            aggregatorInfo: option<struct {
+                decompressionState: option<struct {
+                    functionTable: []struct {
+                        callDataPrefix: any,
+                        maxGas: uint,
+                        payable: bool,
+                    },
+                }>,
+                feeCollector: address,
+            }>,
+            aggregatorToPay: option<address>,
+        },
+        caller: address,
+        static: bool,
+        calldata: struct {
+            size: uint,
+            sliceOffset: uint,
+            contents: buffer,
+        },
+        callvalue: uint,
+        returnInfo: option<struct {
+            data: struct {
+                size: uint,
+                sliceOffset: uint,
+                contents: buffer,
+            },
+            status: bool,
+        }>,
+        memory: struct {
+            size: uint,
+            sliceOffset: uint,
+            contents: buffer,
+        },
+        storageDelta: int,
+        revertOnStorageWrite: bool,
+        evmLogs: struct {
+            last: any,
+            rest: any,
+        },
+        selfDestructQueue: after__std_queue_BoundedQueue,
+        resumeInfo: option<struct {
+            codePoint: func(),
+            stackContents: option<struct {
+                top: [8]any,
+                num: uint,
+                rest: option<after__std_stack_StackCell>,
+            }>,
+            auxStackContents: option<option<struct {
+                top: [8]any,
+                num: uint,
+                rest: option<after__std_stack_StackCell>,
+            }>>,
+            returnDataOffset: uint,
+            returnDataNbytes: uint,
+            callType: uint,
+            savedGas: uint,
+        }>,
+        sendQueue: after__std_queue_BoundedQueue,
+        sendOnFailure: option<struct {
+            size: uint,
+            sliceOffset: uint,
+            contents: buffer,
+        }>,
+        parent: option<after__evmCallStack_EvmCallFrame>,
+    }>,
+    globalCurrentTxRequest: struct {
+        maxGas: uint,
+        gasPrice: uint,
+        seqNum: option<uint>,
+        caller: address,
+        calleeAddr: address,
+        gasPayer: address,
+        value: uint,
+        calldata: struct {
+            size: uint,
+            sliceOffset: uint,
+            contents: buffer,
+        },
+        nonMutating: bool,
+        isConstructor: bool,
+        incomingRequest: struct {
+            kind: uint,
+            arbBlockNumber: uint,
+            ethBlockNumber: uint,
+            timestamp: uint,
+            sender: address,
+            requestId: uint,
+            msgData: struct {
+                size: uint,
+                sliceOffset: uint,
+                contents: buffer,
+            },
+            provenance: struct {
+                l1SeqNum: uint,
+                parentRequestId: uint,
+                indexInParent: uint,
+            },
+            aggregator: option<struct {
+                aggregator: option<address>,
+                calldataUnits: uint,
+            }>,
+            adminMode: bool,
+            gasEstimationParams: option<struct {
+                computeGasLimit: uint,
+                ignoreGasPrice: bool,
+                ignoreMaxGas: bool,
+            }>,
+        },
+        feeStats: struct {
+            price: struct {
+                tx: uint,
+                calldataUnit: uint,
+                storage: uint,
+                compute: uint,
+            },
+            units: struct {
+                tx: uint,
+                calldataUnit: uint,
+                storage: uint,
+                compute: uint,
+            },
+            weiPaid: struct {
+                tx: uint,
+                calldataUnit: uint,
+                storage: uint,
+                compute: uint,
+            },
+            paidAggregator: address,
+            noFeeGasEstimationMode: bool,
+        },
+        fromRetryable: option<struct {
+            txId: uint,
+            sender: address,
+            destination: address,
+            callvalue: uint,
+            callvalueEscrowKey: uint,
+            beneficiary: address,
+            calldata: struct {
+                size: uint,
+                sliceOffset: uint,
+                contents: buffer,
+            },
+            expiryTime: uint,
+            l1Message: struct {
+                kind: uint,
+                arbBlockNumber: uint,
+                ethBlockNumber: uint,
+                timestamp: uint,
+                sender: address,
+                requestId: uint,
+                msgData: struct {
+                    size: uint,
+                    sliceOffset: uint,
+                    contents: buffer,
+                },
+                provenance: struct {
+                    l1SeqNum: uint,
+                    parentRequestId: uint,
+                    indexInParent: uint,
+                },
+                aggregator: option<struct {
+                    aggregator: option<address>,
+                    calldataUnits: uint,
+                }>,
+                adminMode: bool,
+                gasEstimationParams: option<struct {
+                    computeGasLimit: uint,
+                    ignoreGasPrice: bool,
+                    ignoreMaxGas: bool,
+                }>,
+            },
+        }>,
+    },
+    globalCurrentRetryableRequest: option<struct {
+        req: struct {
+            kind: uint,
+            arbBlockNumber: uint,
+            ethBlockNumber: uint,
+            timestamp: uint,
+            sender: address,
+            requestId: uint,
+            msgData: struct {
+                size: uint,
+                sliceOffset: uint,
+                contents: buffer,
+            },
+            provenance: struct {
+                l1SeqNum: uint,
+                parentRequestId: uint,
+                indexInParent: uint,
+            },
+            aggregator: option<struct {
+                aggregator: option<address>,
+                calldataUnits: uint,
+            }>,
+            adminMode: bool,
+            gasEstimationParams: option<struct {
+                computeGasLimit: uint,
+                ignoreGasPrice: bool,
+                ignoreMaxGas: bool,
+            }>,
+        },
+        evmLogs: struct {
+            last: any,
+            rest: any,
+        },
+    }>,
+    inErrorHandler: bool,
+    globalIndexedAddressTable: struct {
+        byIndex: struct {
+            size: uint,
+            chunk: uint,
+            contents: [8]any,
+        },
+        byAddress: map<address,uint>,
+        size: uint,
+    },
+    unreachableMask: uint,
+    globalChainParams: option<struct {
+        chainAddress: address,
+        gracePeriodBlocks: uint,
+        arbGasSpeedLimitPerSecond: uint,
+        maxExecutionSteps: uint,
+        baseStake: uint,
+        stakingToken: address,
+        owner: address,
+        secondsPerSend: option<uint>,
+        defaultAggregator: address,
+    }>,
+    blockhashes: struct {
+        latestBlockNum: uint,
+        oldHashes: [256]bytes32,
+    },
+    arbStats: struct {
+        storage: uint,
+        arbGasUsed: uint,
+        numTxReceipts: uint,
+    },
+    upgradeInProgress: option<struct {
+        requireSafe: bool,
+        code: impure func(),
+        size: uint,
+        codeMap: map<uint,impure func()>,
+    }>,
+    globalAccountStore: struct {
+        accounts: map<address,struct {
+            addr: address,
+            blsKey: option<struct {
+                ax: uint,
+                ay: uint,
+                bx: uint,
+                by: uint,
+            }>,
+            nextSeqNum: uint,
+            ethBalance: uint,
+            contractInfo: option<struct {
+                code: struct {
+                    size: uint,
+                    sliceOffset: uint,
+                    contents: buffer,
+                },
+                evmJumpTable: map<uint,impure func()>,
+                startCodePoint: impure func(),
+                storage: struct {
+                    tree: [8]any,
+                    size: uint,
+                },
+            }>,
+            aggregatorInfo: option<struct {
+                decompressionState: option<struct {
+                    functionTable: []struct {
+                        callDataPrefix: any,
+                        maxGas: uint,
+                        payable: bool,
+                    },
+                }>,
+                feeCollector: address,
+            }>,
+            aggregatorToPay: option<address>,
+        }>,
+        retryBuffer: struct {
+            byTxId: map<uint,struct {
+                txId: uint,
+                sender: address,
+                destination: address,
+                callvalue: uint,
+                callvalueEscrowKey: uint,
+                beneficiary: address,
+                calldata: struct {
+                    size: uint,
+                    sliceOffset: uint,
+                    contents: buffer,
+                },
+                expiryTime: uint,
+                l1Message: struct {
+                    kind: uint,
+                    arbBlockNumber: uint,
+                    ethBlockNumber: uint,
+                    timestamp: uint,
+                    sender: address,
+                    requestId: uint,
+                    msgData: struct {
+                        size: uint,
+                        sliceOffset: uint,
+                        contents: buffer,
+                    },
+                    provenance: struct {
+                        l1SeqNum: uint,
+                        parentRequestId: uint,
+                        indexInParent: uint,
+                    },
+                    aggregator: option<struct {
+                        aggregator: option<address>,
+                        calldataUnits: uint,
+                    }>,
+                    adminMode: bool,
+                    gasEstimationParams: option<struct {
+                        computeGasLimit: uint,
+                        ignoreGasPrice: bool,
+                        ignoreMaxGas: bool,
+                    }>,
+                },
+            }>,
+            fifo: after__std_queue_BoundedQueue,
+            txLifetimeSeconds: uint,
+        },
+        numContracts: uint,
+        codeRefTable: map<bytes32,struct {
+            refCount: uint,
+            code: struct {
+                size: uint,
+                sliceOffset: uint,
+                contents: buffer,
+            },
+            evmJumpTable: map<uint,impure func()>,
+            startCodePoint: impure func(),
+        }>,
+        escrowStore: struct {
+            nextKey: uint,
+            escrowedValues: struct {
+                tree: [8]any,
+                size: uint,
+            },
+        },
+    },
+    _jump_table: any,
 }
 
-public func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> (GlobalsAfterUpgrade, uint) {
+public impure func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> (GlobalsAfterUpgrade, uint) {
+    let arbStats = input_globals.arbStats;
+    let blockhashes = input_globals.blockhashes;
+    let evmOpJumpTable = input_globals.evmOpJumpTable;
+    let gasAccountingInfo = input_globals.gasAccountingInfo;
+    let gasAccountingParams = input_globals.gasAccountingParams;
+    let globalBlockReceiptData = input_globals.globalBlockReceiptData;
+    let globalChainParams = input_globals.globalChainParams;
+    let globalIndexedAddressTable = input_globals.globalIndexedAddressTable;
+    let globalInputQueue = input_globals.globalInputQueue;
+    let globalL1GasPriceEstimator = input_globals.globalL1GasPriceEstimator;
+    let globalOutbox = input_globals.globalOutbox;
+    let inErrorHandler = input_globals.inErrorHandler;
+    let logsQueuedForEndOfBlock = input_globals.logsQueuedForEndOfBlock;
+    let moduleManager = input_globals.moduleManager;
+    let unreachableMask = input_globals.unreachableMask;
+    let upgradeInProgress = input_globals.upgradeInProgress;
+    let globalAccountStore = set_globalAccountStore_onUpgrade(input_globals);
+    let globalCallStack = set_globalCallStack_onUpgrade(input_globals);
+    let globalCurrentRetryableRequest = set_globalCurrentRetryableRequest_onUpgrade(input_globals);
+    let globalCurrentTxRequest = set_globalCurrentTxRequest_onUpgrade(input_globals);
+    let globalInbox = set_globalInbox_onUpgrade(input_globals);
+    let _jump_table = (asm() GlobalsAfterUpgrade { rget })._jump_table;
     return (struct {
-        unused: 0,
-    }, 0);
+        moduleManager: moduleManager,
+        globalBlockReceiptData: globalBlockReceiptData,
+        logsQueuedForEndOfBlock: logsQueuedForEndOfBlock,
+        globalOutbox: globalOutbox,
+        globalInbox: globalInbox,
+        globalInputQueue: globalInputQueue,
+        gasAccountingInfo: gasAccountingInfo,
+        gasAccountingParams: gasAccountingParams,
+        globalL1GasPriceEstimator: globalL1GasPriceEstimator,
+        evmOpJumpTable: evmOpJumpTable,
+        globalCallStack: globalCallStack,
+        globalCurrentTxRequest: globalCurrentTxRequest,
+        globalCurrentRetryableRequest: globalCurrentRetryableRequest,
+        inErrorHandler: inErrorHandler,
+        globalIndexedAddressTable: globalIndexedAddressTable,
+        unreachableMask: unreachableMask,
+        globalChainParams: globalChainParams,
+        blockhashes: blockhashes,
+        arbStats: arbStats,
+        upgradeInProgress: upgradeInProgress,
+        globalAccountStore: globalAccountStore,
+        _jump_table: _jump_table,
+    }, 13);
 }
+
+
+func __dummy__() { return; }
+
+
