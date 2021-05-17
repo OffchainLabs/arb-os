@@ -3,7 +3,9 @@
 //
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
+use accounts::AccountStore;
 
-public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> any {
-    return input_globals.globalAccountStore;
+
+public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> AccountStore {
+    return unsafecast<AccountStore>(input_globals.globalAccountStore);
 }

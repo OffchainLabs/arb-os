@@ -271,6 +271,7 @@ fn main() -> Result<(), CompileError> {
             let result = gen_upgrade_code(upgrade);
             if let Err(e) = result {
                 println!("Encountered an error: {}", e);
+                return Err(CompileError::new(e.reason, None));
             } else {
                 println!("Successfully generated code");
             }

@@ -929,14 +929,7 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
     let sequencer_addr = Uint256::from_usize(1337);
-    let mut rt_env = RuntimeEnvironment::_new_options(
-        Uint256::from_usize(1111),
-        Some((
-            sequencer_addr.clone(),
-            Uint256::from_u64(20),
-            Uint256::from_u64(20 * 30),
-        )),
-    );
+    let mut rt_env = RuntimeEnvironment::_new_options(Uint256::from_usize(1111));
 
     let wallet = rt_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1064,14 +1057,7 @@ pub fn _evm_xcontract_call_sequencer_slow_path(
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
     let sequencer_addr = Uint256::from_usize(1337);
-    let mut rt_env = RuntimeEnvironment::_new_options(
-        Uint256::from_usize(1111),
-        Some((
-            sequencer_addr.clone(),
-            Uint256::from_u64(20),
-            Uint256::from_u64(20 * 30),
-        )),
-    );
+    let mut rt_env = RuntimeEnvironment::_new_options(Uint256::from_usize(1111));
 
     let wallet = rt_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1316,14 +1302,7 @@ pub fn _evm_xcontract_call_sequencer_reordering(
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
     let sequencer_addr = Uint256::from_usize(1337);
-    let mut rt_env = RuntimeEnvironment::_new_options(
-        Uint256::from_usize(1111),
-        Some((
-            sequencer_addr.clone(),
-            Uint256::from_u64(20),
-            Uint256::from_u64(20 * 30),
-        )),
-    );
+    let mut rt_env = RuntimeEnvironment::_new_options(Uint256::from_usize(1111));
 
     let wallet = rt_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -2051,7 +2030,7 @@ pub fn evm_eval_sha256(log_to: Option<&Path>, debug: bool) {
 
     let tx_id = machine.runtime_env.insert_tx_message(
         my_addr,
-        Uint256::from_u64(1000000000),
+        Uint256::from_u64(10000000),
         Uint256::zero(),
         Uint256::from_u64(2), // sha256 precompile
         Uint256::from_u64(0),
@@ -2066,6 +2045,7 @@ pub fn evm_eval_sha256(log_to: Option<&Path>, debug: bool) {
     };
 
     let receipts = machine.runtime_env.get_all_receipt_logs();
+    println!("result code: {}", receipts[0].get_return_code());
     assert_eq!(receipts.len(), 1);
     assert_eq!(receipts[0].get_request_id(), tx_id);
     assert!(receipts[0].succeeded());
