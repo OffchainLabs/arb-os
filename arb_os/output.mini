@@ -269,6 +269,10 @@ public impure func emitTxReceipt(
         evmLogs: evmLogs,
     };
 
+    if (emitTracingInfo) {
+        evmTracer_emitAndClear();
+    }
+
     asm((
         const::LogType_txReceipt,
         l1message with {
@@ -282,10 +286,6 @@ public impure func emitTxReceipt(
         ),
         feeStats,
     ),) { log };
-
-    if (emitTracingInfo) {
-        evmTracer_emitAndClear();
-    }
 }
 
 var globalOutbox: struct {
