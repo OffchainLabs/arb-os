@@ -71,6 +71,9 @@ use evmlogs::evmlogs_empty;
 use gasAccounting::getArbGasPrice;
 use gasAccounting::getCurrentBlockGasLimit;
 
+use tracing::evmTracer_pushCreate;
+use tracing::evmTracer_pushCreate2;
+
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_getByte;
@@ -975,6 +978,7 @@ public impure func evmOp_create(value: uint, offset: uint, length: uint) -> addr
             offset,
             length
         );
+        evmTracer_pushCreate(constructorCode, newAddress);
         let ret = doCreationOpcode(value, constructorCode, newAddress);
         return ret;
     }
@@ -1009,6 +1013,7 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
             offset,
             length
         );
+        evmTracer_pushCreate2(constructorCode, myAddr, salt, newAddress);
         return doCreationOpcode(value, constructorCode, newAddress);
     }
 
