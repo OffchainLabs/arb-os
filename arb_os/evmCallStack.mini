@@ -822,7 +822,7 @@ public impure func evmCallStack_returnFromCall(
         evmTracer_pushReturnRevert(
             xif (success) { const::TxResultCode_success } else { const::TxResultCode_revert },
             returnData,
-            resumeInfo.givenGas - leftoverGas,
+            resumeInfo.givenGas + resumeInfo.savedGas - leftoverGas,
         );
 
         // ready to return to caller
