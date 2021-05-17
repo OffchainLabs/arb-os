@@ -172,12 +172,13 @@ impure func retryBuffer_insertNew(
            l1Message.ethBlockNumber,
            l1Message.timestamp,
            sender,
-           uint(hash(bytes32(l1Message.requestId), bytes32(0))),
            0,    // maxGas will be filled in when ticket is redeemed
            0,    // gasPrice will be filled in when ticket is redeemed
            destination,
            callvalue,
            calldata,
+           l1Message.requestId,
+           0,
         ),
     };
 
@@ -364,7 +365,6 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
                         );
                         immediateCalldata = bytearray_set256(immediateCalldata, 4, txId);
 
-                        let requestId = uint(hash(bytes32(req.requestId), bytes32(1)));
                         Some(
                             struct {
                                 maxGas: maxGasForImmediate,
@@ -382,12 +382,13 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
                                     req.ethBlockNumber,
                                     req.timestamp,
                                     sender,
-                                    requestId,
                                     maxGasForImmediate,
                                     gasPriceForImmediate,
                                     address(const::Address_ArbRetryableTx),
                                     0,
                                     immediateCalldata,
+                                    req.requestId,
+                                    1,
                                 ),
                                 feeStats: txFeeStats_zero(),
                                 fromRetryable: Some(rtx),
@@ -436,13 +437,15 @@ func makeFakeIncomingRequest(
     ethBlockNumber: uint,
     timestamp: uint,
     sender: address,
-    requestId: uint,
     maxGas: uint,
     gasPrice: uint,
     calleeAddr: address,
     callvalue: uint,
     calldata: ByteArray,
+    parentRequestId: uint,
+    indexInParent: uint,
 ) -> IncomingRequest {
+    let requestId = uint(hash(bytes32(parentRequestId), bytes32(indexInParent)));
     return struct {
         kind: const::L1MessageType_L2,
         arbBlockNumber: arbBlockNumber,
@@ -479,8 +482,8 @@ func makeFakeIncomingRequest(
         ),
         provenance: struct {
             l1SeqNum: requestId,
-            parentRequestId: 0,
-            indexInParent: ~0,
+            parentRequestId: parentRequestId,
+            indexInParent: indexInParent,
         },
         aggregator: Some(struct {
             aggregator: None<address>,
