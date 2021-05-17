@@ -223,10 +223,10 @@ fn inline(
         &StringTable,
         &InliningHeuristic,
     ),
-    _mut_state: &mut InliningMode,
+    _mut_state: &mut (InliningMode, Vec<usize>),
 ) -> bool {
     if let TypeCheckedNode::Statement(stat) = to_do {
-        *_mut_state = stat.debug_info.attributes.inline;
+        _mut_state.0 = stat.debug_info.attributes.inline;
     }
     if let TypeCheckedNode::Expression(exp) = to_do {
         if let TypeCheckedExpr {
@@ -243,15 +243,20 @@ fn inline(
                 if let Some(func) = found_func {
                     if match state.3 {
                         InliningHeuristic::All => {
-                            _mut_state.and(&func.debug_info.attributes.inline)
+                            _mut_state.0.and(&func.debug_info.attributes.inline)
                                 == InliningMode::Never
                         }
                         InliningHeuristic::None => {
-                            _mut_state.and(&func.debug_info.attributes.inline)
+                            _mut_state.0.and(&func.debug_info.attributes.inline)
                                 != InliningMode::Always
                         }
                     } {
                         return false;
+                    }
+                    if _mut_state.1.iter().any(|id| *id == func.name) {
+                        return false;
+                    } else {
+                        _mut_state.1.push(func.name);
                     }
                     let mut code: Vec<_> = if func.args.len() == 0 {
                         vec![]
@@ -325,7 +330,7 @@ fn inline(
                     Some("_inline".to_string()),
                 ));
             }
-            false
+            true
         } else {
             true
         }
@@ -345,7 +350,7 @@ impl TypeCheckedFunc {
         self.recursive_apply(
             inline,
             &(funcs, imported_funcs, string_table, heuristic),
-            &mut InliningMode::Auto,
+            &mut (InliningMode::Auto, vec![]),
         );
     }
 }
