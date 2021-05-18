@@ -2,6 +2,9 @@
 // Copyright 2021, Offchain Labs, Inc. All rights reserved.
 //
 
+use output::outbox_getEvmTracer;
+use output::outbox_setEvmTracer;
+
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
 
@@ -15,21 +18,19 @@ type EvmTracer = struct {
     recordStack: Stack,
 }
 
-var currentEvmTracer: EvmTracer;
-
-public impure func evmTracer_init() {
-    evmTracer_clear();
+public impure func evmTracer_clear() {
+    outbox_setEvmTracer(evmTracer_new());
 }
 
-public impure func evmTracer_clear() {
-    currentEvmTracer = struct {
+public func evmTracer_new() -> EvmTracer {
+    return struct {
         recordStack: stack_new(),
     };
 }
 
 public impure func evmTracer_emit() {
     let val = unsafecast<any>(());
-    let theStack = currentEvmTracer.recordStack;
+    let theStack = outbox_getEvmTracer().recordStack;
     loop {
         if let Some(res) = stack_pop(theStack) {
             let (us, item) = res;
@@ -48,9 +49,10 @@ public impure func evmTracer_emitAndClear() {
 }
 
 public impure func evmTracer_push(typecode: uint, item: any) {
-    currentEvmTracer = currentEvmTracer with {
-        recordStack: stack_push(currentEvmTracer.recordStack, (typecode, item))
-    };
+    let oldTracer = outbox_getEvmTracer();
+    outbox_setEvmTracer(oldTracer with {
+        recordStack: stack_push(oldTracer.recordStack, (typecode, item))
+    });
 }
 
 public impure func evmTracer_pushCall(

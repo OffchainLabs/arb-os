@@ -42,7 +42,6 @@ use evmOps::evmOp_return;
 
 use evmlogs::EvmLogs;
 
-use tracing::evmTracer_init;
 use tracing::evmTracer_clear;
 
 use gasAccounting::GasUsage;
@@ -91,7 +90,6 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         // now re-do the initializations that set up pointers into the ArbOS code
         errorHandler_init();
         evmOps_init();
-        evmTracer_clear();
         codeSegment_init();
 
         if (initializePreinstalls(true) == None<()>) {
@@ -115,7 +113,6 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         inbox_init();
         accountStore_init();
         txReceipts_init();
-        evmTracer_init();
         rollupTracker_init();
         if (initializePreinstalls(false) == None<()>) {
             panic;   // don't try to run without preinstalls and precompiles

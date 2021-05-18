@@ -47,6 +47,8 @@ use gasAccounting::GasUsage;
 use gasAccounting::TxFeeStats;
 use gasAccounting::gasAccounting_summaryToPublish;
 
+use tracing::EvmTracer;
+use tracing::evmTracer_new;
 use tracing::evmTracer_pushReturnRevert;
 
 
@@ -292,6 +294,7 @@ var globalOutbox: struct {
     batch: MerkleTreeBuilder,
     batchNumber: uint,
     numInBatch: uint,
+    evmTracer: EvmTracer,
 };
 
 impure func outbox_init() {
@@ -299,7 +302,16 @@ impure func outbox_init() {
         batch: merkleTreeBuilder_new(),
         batchNumber: 0,
         numInBatch: 0,
+        evmTracer: evmTracer_new(),
     };
+}
+
+public impure func outbox_getEvmTracer() -> EvmTracer {
+    return globalOutbox.evmTracer;
+}
+
+public impure func outbox_setEvmTracer(tracer: EvmTracer) {
+    globalOutbox = globalOutbox with { evmTracer: tracer };
 }
 
 impure func outbox_isEmpty() -> bool {
@@ -351,6 +363,7 @@ impure func outbox_send() {
         batch: merkleTreeBuilder_new(),
         batchNumber: globalOutbox.batchNumber + 1,
         numInBatch: 0,
+        evmTracer: globalOutbox.evmTracer,
     };
 }
 
