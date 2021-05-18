@@ -104,7 +104,10 @@ func evmInstructionStack_pop(s: EvmInstructionStack) -> option<(EvmInstructionSt
     return Some((us, unsafecast<EvmInstruction>(item)));
 }
 
-var unreachableMask: uint;
+var codeSegGlobals: struct {
+    unreachableMask: uint,
+    dummyAcceptContractCode: AvmCodePoint,
+};
 
 impure func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
     let stack = evmInstructionStack_new();
@@ -159,7 +162,7 @@ impure func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
                 }
                 evmPc = evmPc + 1;
             }
-            if ((unreachableMask & asm(opcode, 1) uint { shl }) != 0) { reachable = false;    }
+            if ((codeSegGlobals.unreachableMask & asm(opcode, 1) uint { shl }) != 0) { reachable = false;    }
         } else {
             return stack;
         }
@@ -167,8 +170,6 @@ impure func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
 }
 
 public impure func codeSegment_init() {
-    dummyAcceptContractCode = makeTrampoline(dummyAcceptFunction);
-
     let mask = 0;
     let opcode = 0;
     while (opcode < 256) {
@@ -177,17 +178,19 @@ public impure func codeSegment_init() {
         }
         opcode = opcode + 1;
     }
-    unreachableMask = mask;
-}
 
-var dummyAcceptContractCode: AvmCodePoint;
+    codeSegGlobals = struct {
+        unreachableMask: mask,
+        dummyAcceptContractCode: makeTrampoline(dummyAcceptFunction),
+    };
+}
 
 impure func dummyAcceptFunction() {
     evmOp_return(0, 0);
 }
 
 public impure func getDummyAcceptContractCode() -> AvmCodePoint {
-    return dummyAcceptContractCode;
+    return codeSegGlobals.dummyAcceptContractCode;
 }
 
 func unreachableAfterOpcode(opcode: uint) -> bool {

@@ -22,8 +22,13 @@ public func set_globalCallStack_onUpgrade(input_globals: GlobalsBeforeUpgrade) -
     return None<EvmCallFrame>;
 }
 
-public func set_dummyAcceptContractCode_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> impure func() {
-    return unsafecast<impure func()>(0);   // will be properly initialized later
+public func set_codeSegGlobals_onUpgrade(
+    input_globals: GlobalsBeforeUpgrade
+) -> struct {
+    unreachableMask: uint,
+    dummyAcceptContractCode: impure func(),
+} {
+    return unsafecast<struct { unreachableMask: uint, dummyAcceptContractCode: impure func() }>(0);   // will be properly initialized later
 }
 
 public func set_globalOutbox_onUpgrade(
