@@ -5,6 +5,7 @@
 use accounts::Account;
 use evmCallStack::EvmCallFrame;
 use evmlogs::EvmLogs;
+use std::avmcodebuilder::AvmCodePoint;
 use std::bytearray::ByteArray;
 use std::bytestream::ByteStream;
 use std::bytearray::MarshalledBytes;
@@ -699,7 +700,8 @@ public impure func evmOp_log4(
     argsLength: uint,
     retOffset: uint,
     retLength: uint,
-    chargeForCallvalue: bool
+    chargeForCallvalue: bool,
+    overrideStartPoint: option<AvmCodePoint>,
 ) -> bool {
     let savedAuxStack = snapshotAuxStack();
 
@@ -733,6 +735,7 @@ public impure func evmOp_log4(
         resumeCodePoint,
         Some(savedAuxStack),
         chargeForCallvalue,
+        overrideStartPoint,
     );
     return xif let Some(success) = res {
         success
@@ -789,6 +792,7 @@ public impure func evmOp_log4(
         resumeCodePoint,
         None<Stack>,
         true,
+        None<impure func()>,
     );
     return xif let Some(success) = res {
         success
@@ -830,6 +834,7 @@ public impure func evmOp_log4(
         resumeCodePoint,
         None<Stack>,
         true,
+        None<impure func()>,
     );
     return xif let Some(success) = res {
         success
@@ -870,6 +875,7 @@ public impure func evmOp_log4(
          resumeCodePoint,
          None<Stack>,
          true,
+         None<impure func()>,
      );
     return xif let Some(success) = res {
         success
@@ -910,6 +916,7 @@ public impure func evmOp_log4(
         resumeCodePoint,
         None<Stack>,
         true,
+        None<impure func()>,
     );
     return xif let Some(success) = res {
         success
@@ -1034,7 +1041,7 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
                 pristineAccount(newAddress),
                 constructorCode,
                 evmJumpTable,
-                startPoint,
+                dummyContractDuringConstructor,
                 storageMap_new(),
                 true,
             )
@@ -1049,6 +1056,7 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
             0,           // don't copy returndata back into caller's memory
             0,
             true,
+            Some(startPoint),  // use constructor's startPoint, even though code isn't installed yet
         );
 
         if (constructorSucceeded) {
@@ -1086,6 +1094,10 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
     // clean up the state and return failure
     let _ = evmCallStack_setAccount(newAddress, pristineAccount(newAddress));
     return address(0);
+}
+
+public impure func dummyContractDuringConstructor() {
+    evmOp_return(0, 0);
 }
 
 impure func evm_error() {

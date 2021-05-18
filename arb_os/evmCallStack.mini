@@ -43,9 +43,12 @@ use accounts::account_isEmpty;
 use accounts::pristineAccount;
 
 use evmOps::evmOp_callAndReturn;
+use evmOps::dummyContractDuringConstructor;
 
 use evmlogs::evmlogs_empty;
 use evmlogs::evmlogs_appendAny;
+
+use std::avmcodebuilder::AvmCodePoint;
 
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
@@ -510,7 +513,7 @@ public impure func initEvmCallStackForConstructor(
                     accountStore_get(acctStore, request.calleeAddr),
                     code,
                     evmJumpTable,
-                    startPoint,
+                    dummyContractDuringConstructor,
                     storageMap_new(),
                     true,
                 )
@@ -578,10 +581,16 @@ public impure func evmCallStack_doCall(
     resumeCodePoint: func(),         // jump to this to resume the caller
     resumeAuxStack: option<Stack>,   // aux stack contents to restore on resume, if any
     chargeForCallvalue: bool,        // whether we need to charge caller for callvalue (i.e., not already charged)
+    overrideStartPoint: option<AvmCodePoint>,
 ) -> option<bool> {   // returns Some(success) if succeed/fail, or None on error
     let topFrame = globalCallStack?;
     let callee = accountStore_get(topFrame.accountStore, calleeAddr);
-    if let Some(startCodePoint) = account_getStartCodePoint(callee) {
+    let maybeStartPoint = xif let Some(osp) = overrideStartPoint {
+        overrideStartPoint
+    } else {
+        account_getStartCodePoint(callee)
+    };
+    if let Some(startCodePoint) = maybeStartPoint {
         // Create a new callframe for a subcall, and transfer execution to it.
         let availableGas = gasAccounting_pauseTxCharges();
         if (balance > 0) {
@@ -991,6 +1000,7 @@ public impure func evmCallStack_callRetryableTxAndReturn(rtx: RetryableTx) -> (b
             0,
             0,
             false,    // don't charge for callvalue, because we already took it when rtx was created
+            None<AvmCodePoint>,
         );
 
         xif let Some(newTopFrame) = globalCallStack {
