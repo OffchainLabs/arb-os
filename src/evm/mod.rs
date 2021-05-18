@@ -36,7 +36,7 @@ pub fn test_contract_path(contract_name: &str) -> String {
     )
 }
 
-pub fn test_contract_path2(parent_name: &str, contract_name: &str) -> String {
+pub fn _test_contract_path2(parent_name: &str, contract_name: &str) -> String {
     format!(
         "contracts/artifacts/arbos/test/{}.sol/{}.json",
         parent_name, contract_name
@@ -2046,7 +2046,7 @@ pub fn _test_constructor_recursion() -> Result<(), ethabi::Error> {
 
     let my_addr = Uint256::from_usize(1025);
 
-    let mut ccontract = AbiForContract::new_from_file(&test_contract_path2(
+    let mut ccontract = AbiForContract::new_from_file(&_test_contract_path2(
         "ReverterFactory",
         "ConstructorCallback2",
     ))?;
