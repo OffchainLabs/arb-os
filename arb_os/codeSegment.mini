@@ -70,6 +70,8 @@ use evmOps::evmOp_timestamp;
 use evmOps::evmOp_create;
 use evmOps::evmOp_create2;
 
+use precompiles::makeTrampoline;
+
 use std::avmcodebuilder::AvmCodePoint;
 use std::avmcodebuilder::pushInstruction;
 use std::avmcodebuilder::pushInstructionImm;
@@ -165,6 +167,8 @@ impure func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
 }
 
 public impure func codeSegment_init() {
+    dummyAcceptContractCode = makeTrampoline(dummyAcceptFunction);
+
     let mask = 0;
     let opcode = 0;
     while (opcode < 256) {
@@ -174,6 +178,16 @@ public impure func codeSegment_init() {
         opcode = opcode + 1;
     }
     unreachableMask = mask;
+}
+
+var dummyAcceptContractCode: AvmCodePoint;
+
+impure func dummyAcceptFunction() {
+    evmOp_return(0, 0);
+}
+
+public impure func getDummyAcceptContractCode() -> AvmCodePoint {
+    return dummyAcceptContractCode;
 }
 
 func unreachableAfterOpcode(opcode: uint) -> bool {

@@ -92,6 +92,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         errorHandler_init();
         evmOps_init();
         evmTracer_clear();
+        codeSegment_init();
 
         if (initializePreinstalls(true) == None<()>) {
             panic;   // don't try to run without preinstalls and precompiles

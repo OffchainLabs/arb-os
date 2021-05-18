@@ -62,6 +62,8 @@ use accounts::account_isEmpty;
 use accounts::account_hasContract;
 use accounts::pristineAccount;
 
+use codeSegment::getDummyAcceptContractCode;
+
 use std::storageMap::storageMap_new;
 
 use evmCallStack::evmCallStack_currentTimestamp;
@@ -1050,7 +1052,7 @@ public impure func doCreationOpcode(value: uint, constructorCode: ByteArray, new
                 pristineAccount(newAddress),
                 constructorCode,
                 evmJumpTable,
-                dummyContractDuringConstructor,
+                getDummyAcceptContractCode(),
                 storageMap_new(),
                 true,
             )
@@ -1103,10 +1105,6 @@ public impure func doCreationOpcode(value: uint, constructorCode: ByteArray, new
     // clean up the state and return failure
     let _ = evmCallStack_setAccount(newAddress, pristineAccount(newAddress));
     return address(0);
-}
-
-public impure func dummyContractDuringConstructor() {
-    evmOp_return(0, 0);
 }
 
 impure func evm_error() {

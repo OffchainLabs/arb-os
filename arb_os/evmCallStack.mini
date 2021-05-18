@@ -42,8 +42,9 @@ use accounts::account_getStorageSize;
 use accounts::account_isEmpty;
 use accounts::pristineAccount;
 
+use codeSegment::getDummyAcceptContractCode;
+
 use evmOps::evmOp_callAndReturn;
-use evmOps::dummyContractDuringConstructor;
 
 use evmlogs::evmlogs_empty;
 use evmlogs::evmlogs_appendAny;
@@ -552,7 +553,7 @@ public impure func initEvmCallStackForConstructor(
                     accountStore_get(acctStore, request.calleeAddr),
                     code,
                     evmJumpTable,
-                    dummyContractDuringConstructor,
+                    getDummyAcceptContractCode(),
                     storageMap_new(),
                     true,
                 )
