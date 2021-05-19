@@ -23,7 +23,6 @@ use std::bytestream::bytestream_getCalldataUnits;
 
 use inbox::IncomingRequest;
 use inbox::GasEstimationParams;
-use gasAccounting::updateBatchSizeEstimate;
 
 use std::rlp::rlp_decodeUint;
 
@@ -89,7 +88,7 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
     };
 }
 
-public impure func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)> {
+public func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)> {
     // returns next message in the batch (and updated batch), or None if no more messages in batch
     let (stream, l2MsgLength) = rlp_decodeUint(batch.stream)?;
 
@@ -121,9 +120,6 @@ public impure func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequ
             }
         ))
     } else {
-        if (batch.numSoFar > 0) {
-            updateBatchSizeEstimate(batch.numSoFar, batch.template.sender);
-        }
         None<(IncomingRequest, MessageBatch)>
     };
 }

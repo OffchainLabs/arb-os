@@ -3,9 +3,44 @@
 //
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
+
 use accounts::AccountStore;
+
+use evmCallStack::EvmCallFrame;
+
+use gasAccounting::GasAccountingInfo;
 
 
 public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> AccountStore {
     return unsafecast<AccountStore>(input_globals.globalAccountStore);
+}
+
+public func set_globalCallStack_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
+    return None<EvmCallFrame>;
+}
+
+public func set_gasAccountingInfo_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> GasAccountingInfo {
+    let old = input_globals.gasAccountingInfo;
+    let l1GasPrice = input_globals.globalL1GasPriceEstimator.estimateWei;
+    return struct {
+        txState: old.txState,
+        feeConfig: old.feeConfig,
+        currentPrices: struct {
+            perL1CalldataUnit: old.pricingParams.l1GasPerL2Tx * l1GasPrice,
+            perStorageCell: old.pricingParams.l1GasPerStorage * l1GasPrice,
+            perArbGasBase: l1GasPrice / old.pricingParams.arbGasDivisor,
+            perArbGasCongestion: old.congestionState.congestionPriceWei,
+            perArbGasTotal: (l1GasPrice / old.pricingParams.arbGasDivisor) + old.congestionState.congestionPriceWei,
+        },
+        gasRemainingThisBlock: old.gasRemainingThisBlock,
+        congestionState: old.congestionState,
+        speedLimitPerSecond: old.speedLimitPerSecond,
+        pricingParams: struct {
+            l1GasPerL1CalldataUnit: old.pricingParams.l1GasPerL1CalldataUnit,
+            l1GasPerStorage: old.pricingParams.l1GasPerStorage,
+            arbGasDivisor: old.pricingParams.arbGasDivisor,
+        },
+        gasAllocatedToThisBlock: old.gasAllocatedToThisBlock,
+        retryablePrices: old.retryablePrices,
+    };
 }

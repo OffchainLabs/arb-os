@@ -472,11 +472,12 @@ impl<'a> _ArbGasInfo<'a> {
     pub fn _get_prices_in_wei(
         &self,
         machine: &mut Machine,
+        aggregator: Uint256,
     ) -> Result<(Uint256, Uint256, Uint256, Uint256, Uint256, Uint256), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
             self.my_address.clone(),
             "getPricesInWei",
-            &[],
+            &[ethabi::Token::Address(aggregator.to_h160())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -535,11 +536,12 @@ impl<'a> _ArbGasInfo<'a> {
     pub fn _get_prices_in_arbgas(
         &self,
         machine: &mut Machine,
+        aggregator: Uint256,
     ) -> Result<(Uint256, Uint256, Uint256), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
             self.my_address.clone(),
             "getPricesInArbGas",
-            &[],
+            &[ethabi::Token::Address(aggregator.to_h160())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -1427,7 +1429,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
     };
 
     let (l2tx, l1calldata, storage, basegas, conggas, totalgas) =
-        arbgasinfo._get_prices_in_wei(&mut machine)?;
+        arbgasinfo._get_prices_in_wei(&mut machine, Uint256::zero())?;
     assert!(l2tx.is_zero());
     assert!(l1calldata.is_zero());
     assert!(storage.is_zero());
@@ -1441,24 +1443,25 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         ._advance_time(Uint256::one(), None, true);
 
     let (l2tx, l1calldata, storage, basegas, conggas, totalgas) =
-        arbgasinfo._get_prices_in_wei(&mut machine)?;
+        arbgasinfo._get_prices_in_wei(&mut machine, Uint256::zero())?;
     println!(
         "L2 tx {}, L1 calldata {}, L2 storage {}, base gas {}, congestion gas {}, total gas {}",
         l2tx, l1calldata, storage, basegas, conggas, totalgas
     );
-    assert_eq!(l2tx, Uint256::from_u64(658993125000000));
+    assert_eq!(l2tx, Uint256::from_u64(619500000000000));
     assert_eq!(l1calldata, Uint256::from_u64(178106250000));
     assert_eq!(storage, Uint256::from_u64(309750000000000));
     assert_eq!(basegas, Uint256::from_u64(1548750000));
     assert!(conggas.is_zero());
     assert_eq!(basegas.add(&conggas), totalgas);
 
-    let (l2tx, l1calldata, storage) = arbgasinfo._get_prices_in_arbgas(&mut machine)?;
+    let (l2tx, l1calldata, storage) =
+        arbgasinfo._get_prices_in_arbgas(&mut machine, Uint256::zero())?;
     println!(
         "L2 tx / ag {}, L1 calldata / ag {}, L2 storage / ag {}",
         l2tx, l1calldata, storage
     );
-    assert_eq!(l2tx, Uint256::from_u64(425500));
+    assert_eq!(l2tx, Uint256::from_u64(400000));
     assert_eq!(l1calldata, Uint256::from_u64(115));
     assert_eq!(storage, Uint256::from_u64(200000));
 

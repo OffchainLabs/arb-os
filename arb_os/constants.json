@@ -91,6 +91,7 @@
     "Charging_DefaultArbGasDivisor": 100,
     "Charging_DefaultArbGasPerL2Tx": 0,
     "Charging_DefaultArbGasPerCalldataUnit": 0,
+    "Charging_DefaultBaseTxFeeL1Gas": 4000,
     "Charging_DefaultL1GasPerCalldataUnit": 1,
     "Charging_DefaultL1GasPerL2Tx": 3700,
     "Charging_DefaultL1GasPerStorage": 2000,
@@ -218,6 +219,7 @@
   "contract_folder": "contracts/artifacts/arbos/builtin",
   "contract": [
     "ArbAggregator",
+    "ArbGasInfo",
     "ArbOwner",
     "ArbRetryableTx",
     "ArbStatistics"
