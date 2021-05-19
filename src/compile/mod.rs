@@ -17,7 +17,7 @@ use miniconstants::init_constant_table;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fmt::{Display, Formatter};
+use std::fmt::{Display, Formatter, Debug};
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
@@ -92,8 +92,8 @@ struct TypeCheckedModule {
 }
 
 impl CompileStruct {
-    pub fn invoke(&self) -> Result<LinkedProgram, (CompileError, BTreeMap<u64, String>)> {
-        let mut file_name_chart = BTreeMap::new();
+    pub fn invoke(&self) -> Result<LinkedProgram, (CompileError, BTreeMap<u64, FileInfo>)> {
+        let mut file_info_chart = BTreeMap::new();
         let mut compiled_progs = Vec::new();
         for filename in &self.input {
             let path = Path::new(filename);
@@ -101,35 +101,35 @@ impl CompileStruct {
                 Some(path) => Some(Path::new(path)),
                 None => None,
             };
-            match compile_from_file(path, &mut file_name_chart, self.inline, constants_path) {
+            match compile_from_file(path, &mut file_info_chart, self.inline, constants_path) {
                 Ok(idk) => idk,
                 Err(mut e) => {
-                    e.description = format!("Compile error: {}", e.description);
-                    return Err((e, file_name_chart));
+                    e.description = format!("{}", e.description);
+                    return Err((e, file_info_chart));
                 }
             }
             .into_iter()
             .for_each(|prog| {
-                file_name_chart.extend(prog.file_name_chart.clone());
+                file_info_chart.extend(prog.file_info_chart.clone());
                 compiled_progs.push(prog)
             });
         }
         let linked_prog = match link(&compiled_progs, self.test_mode) {
             Ok(idk) => idk,
             Err(mut e) => {
-                e.description = format!("Compile error: {}", e.description);
-                return Err((e, file_name_chart));
+                e.description = format!("{}", e.description);
+                return Err((e, file_info_chart));
             }
         };
         postlink_compile(
             linked_prog,
-            file_name_chart.clone(),
+            file_info_chart.clone(),
             self.test_mode,
             self.debug_mode,
         )
         .map_err(|mut e| {
             e.description = format!("Linking error: {}", e.description);
-            (e, file_name_chart)
+            (e, file_info_chart)
         })
     }
 }
@@ -187,6 +187,17 @@ impl TypeCheckedModule {
         }
         self.checked_funcs = new_funcs;
     }
+    ///Reasons about the control flow within the typechecked AST
+    fn flowcheck(&mut self, file_info_chart : &BTreeMap<u64, FileInfo>) {
+        for f in &mut self.checked_funcs.clone() {
+            f.flowcheck(
+                &self.checked_funcs,
+                &self.imported_funcs,
+                &mut self.string_table,
+                file_info_chart,
+            )
+        }
+    }
 }
 
 ///Represents a mini program or module that has been compiled and possibly linked, but has not had
@@ -203,8 +214,8 @@ pub struct CompiledProgram {
     pub globals: Vec<GlobalVarDecl>,
     ///Contains list of offsets of the various modules contained in this program
     pub source_file_map: Option<SourceFileMap>,
-    ///Map from u64 hashes of file names to the `String`s they originate from
-    pub file_name_chart: HashMap<u64, String>,
+    ///Map from u64 hashes of file names to the `String`s, `Path`s, and `Content`s they originate from
+    pub file_info_chart: HashMap<u64, FileInfo>,
     ///Tree of the types
     pub type_tree: TypeTree,
 }
@@ -216,7 +227,7 @@ impl CompiledProgram {
         imported_funcs: Vec<ImportedFunc>,
         globals: Vec<GlobalVarDecl>,
         source_file_map: Option<SourceFileMap>,
-        file_name_chart: HashMap<u64, String>,
+        file_info_chart: HashMap<u64, FileInfo>,
         type_tree: TypeTree,
     ) -> Self {
         CompiledProgram {
@@ -225,7 +236,7 @@ impl CompiledProgram {
             imported_funcs,
             globals,
             source_file_map,
-            file_name_chart,
+            file_info_chart,
             type_tree,
         }
     }
@@ -283,7 +294,7 @@ impl CompiledProgram {
                     new_vec
                 },
                 source_file_map,
-                self.file_name_chart,
+                self.file_info_chart,
                 self.type_tree,
             ),
             max_func_offset,
@@ -334,7 +345,7 @@ impl CompiledProgram {
 /// file, and if debug is set to true, then compiler internal debug information will be printed.
 pub fn compile_from_file(
     path: &Path,
-    file_name_chart: &mut BTreeMap<u64, String>,
+    file_info_chart: &mut BTreeMap<u64, FileInfo>,
     inline: bool,
     constants_path: Option<&Path>,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
@@ -360,7 +371,7 @@ pub fn compile_from_file(
             path,
             library,
             "main",
-            file_name_chart,
+            file_info_chart,
             inline,
             constants_path,
         )
@@ -369,22 +380,29 @@ pub fn compile_from_file(
             parent,
             library,
             file_name.to_str().ok_or_else(|| {
-                CompileError::new(format!("File name {:?} must be UTF-8", file_name), None)
+                CompileError::new(
+                    String::from("Compile error"),
+                    format!("File name {:?} must be UTF-8", file_name),
+                    vec![],
+                    false
+                )
             })?,
-            file_name_chart,
+            file_info_chart,
             inline,
             constants_path,
         )
     } else {
         Err(CompileError::new(
+            String::from("Compile error"),
             format!("Could not parse {} as valid path", path.display()),
-            None,
+            vec![],
+            false
         ))
     }
 }
 
 ///Prints the AST nodes with indentation representing their depth, currently not used.
-fn _print_node(node: &mut TypeCheckedNode, state: &String, mut_state: &mut usize) -> bool {
+pub fn _print_node(node: &mut TypeCheckedNode, state: &String, mut_state: &mut usize) -> bool {
     for _ in 0..*mut_state {
         print!("{}", state);
     }
@@ -398,19 +416,19 @@ fn _print_node(node: &mut TypeCheckedNode, state: &String, mut_state: &mut usize
 ///
 ///The `folder` argument gives the path to the folder, `library` optionally contains a library
 ///prefix attached to the front of all paths, `main` contains the name of the main file in the
-///folder, `file_name_chart` contains a map from the `u64` hashes of file names to the `Strings`
+///folder, `file_info_chart` contains a map from the `u64` hashes of file names to the `Strings`
 ///they represent, useful for formatting errors, and `inline` determines whether inlining is used
 ///when compiling this folder.
 pub fn compile_from_folder(
     folder: &Path,
     library: Option<&str>,
     main: &str,
-    file_name_chart: &mut BTreeMap<u64, String>,
+    file_info_chart: &mut BTreeMap<u64, FileInfo>,
     inline: bool,
     constants_path: Option<&Path>,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let (mut programs, import_map) =
-        create_program_tree(folder, library, main, file_name_chart, constants_path)?;
+        create_program_tree(folder, library, main, file_info_chart, constants_path)?;
     resolve_imports(&mut programs, &import_map)?;
     //Conversion of programs from `HashMap` to `Vec` for typechecking
     let type_tree = create_type_tree(&programs);
@@ -426,14 +444,21 @@ pub fn compile_from_folder(
         out.sort_by(|module1, module2| module2.name.cmp(&module1.name));
         out
     });
-    let mut typechecked_modules = typecheck_programs(&type_tree, modules)?;
-    //Inlining stage
+    let mut typechecked_modules = typecheck_programs(&type_tree, modules, file_info_chart)?;
+
+    // Control flow analysis stage
+    typechecked_modules
+        .iter_mut()
+        .for_each(|module| module.flowcheck(file_info_chart));
+    
+    // Inlining stage
     if inline {
         typechecked_modules
             .iter_mut()
             .for_each(|module| module.inline());
     }
-    let progs = codegen_programs(typechecked_modules, file_name_chart, type_tree, folder)?;
+    
+    let progs = codegen_programs(typechecked_modules, file_info_chart, type_tree, folder)?;
     Ok(progs)
 }
 
@@ -457,7 +482,7 @@ fn create_program_tree(
     folder: &Path,
     library: Option<&str>,
     main: &str,
-    file_name_chart: &mut BTreeMap<u64, String>,
+    file_info_chart: &mut BTreeMap<u64, FileInfo>,
     constants_path: Option<&Path>,
 ) -> Result<
     (
@@ -491,22 +516,32 @@ fn create_program_tree(
         } + ".mini";
         let mut file = File::open(folder.join(path.clone())).map_err(|why| {
             CompileError::new(
+                String::from("Compile error"),
                 format!("Can not open {}/{}: {:?}", folder.display(), path, why),
-                None,
+                vec![],
+                false
             )
         })?;
 
         let mut source = String::new();
         file.read_to_string(&mut source).map_err(|why| {
             CompileError::new(
+                String::from("Compile error"),
                 format!("Can not read {}/{}: {:?}", folder.display(), path, why),
-                None,
+                vec![],
+                false
             )
         })?;
         let mut file_hasher = DefaultHasher::new();
         name.hash(&mut file_hasher);
         let file_id = file_hasher.finish();
-        file_name_chart.insert(file_id, path_display(&name));
+
+        file_info_chart.insert(file_id, FileInfo {
+            name: path_display(&name),
+            path: folder.join(path.clone()).display().to_string(),
+            contents: source.split("\n").map(|x| x.to_string()).collect(),
+        });
+
         let mut string_table = StringTable::new();
         let (imports, funcs, named_types, global_vars, hm) = typecheck::sort_top_level_decls(
             &parse_from_source(source, file_id, &name, &mut string_table, constants_path)?,
@@ -544,23 +579,27 @@ fn resolve_imports(
                 (named_type, imp_func)
             } else {
                 return Err(CompileError::new(
+                    String::from("Compile error: Internal error"),
                     format!(
-                        "Internal error: Can not find target file for import \"{}::{}\"",
+                        "Can not find target file for import \"{}::{}\"",
                         import.path.get(0).cloned().unwrap_or_else(String::new),
                         import.name
                     ),
-                    None,
+                    vec![],
+                    false
                 ));
             };
             //Modifies origin program to include import
             let origin_program = programs.get_mut(name).ok_or_else(|| {
                 CompileError::new(
+                    String::from("Compile error: Internal error"),
                     format!(
-                        "Internal error: Can not find originating file for import \"{}::{}\"",
+                        "Can not find originating file for import \"{}::{}\"",
                         import.path.get(0).cloned().unwrap_or_else(String::new),
                         import.name
                     ),
-                    None,
+                    vec![],
+                    false
                 )
             })?;
             let index = origin_program.string_table.get(import.name.clone());
@@ -574,11 +613,16 @@ fn resolve_imports(
                     &origin_program.string_table,
                 ));
             } else {
-                println!(
-                    "Warning: import \"{}::{}\" does not correspond to a type or function",
-                    import.path.get(0).cloned().unwrap_or_else(String::new),
-                    import.name
-                );
+                CompileError::new(
+                    String::from("Compile warning"),
+                    format!(
+                        "import \"{}::{}\" does not correspond to a type or function",
+                        import.path.get(0).cloned().unwrap_or_else(String::new),
+                        import.name
+                    ),
+                    vec![],
+                    true
+                ).warn(&BTreeMap::new());
             }
         }
     }
@@ -614,6 +658,7 @@ fn create_type_tree(program_tree: &HashMap<Vec<String>, Module>) -> TypeTree {
 fn typecheck_programs(
     type_tree: &TypeTree,
     modules: Vec<Module>,
+    file_info_chart: &mut BTreeMap<u64, FileInfo>,
 ) -> Result<Vec<TypeCheckedModule>, CompileError> {
     let mut typechecked = vec![];
     for Module {
@@ -635,21 +680,30 @@ fn typecheck_programs(
             hm,
             &mut checked_funcs,
             type_tree,
-        )
-        .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
+        ).map_err(|res3| CompileError::new(
+            String::from("Compile error"),
+            res3.reason.to_string(),
+            res3.location.into_iter().collect(),
+            false
+        ))?;
         checked_funcs.iter_mut().for_each(|func| {
             let detected_purity = func.is_pure();
             let declared_purity = func.properties.pure;
-            if !detected_purity && declared_purity {
-                println!(
-                    "Warning: func {} is impure but not marked impure",
-                    string_table.name_from_id(func.name)
-                )
-            } else if detected_purity && !declared_purity {
-                println!(
-                    "Warning: func {} is declared impure but does not contain impure code",
-                    string_table.name_from_id(func.name)
-                )
+            
+            if detected_purity != declared_purity {
+                CompileError::new(
+                    String::from("Compile warning"),
+                    format!(
+                        "func {} {}",
+                        match declared_purity {
+                            true  => "is impure but not marked impure",
+                            false => "is declared impure but does not contain impure code",
+                        },
+                        string_table.name_from_id(func.name)
+                    ),
+                    func.debug_info.location.into_iter().collect(),
+                    true,
+                ).warn(file_info_chart);
             }
         });
         typechecked.push(TypeCheckedModule::new(
@@ -666,7 +720,7 @@ fn typecheck_programs(
 
 fn codegen_programs(
     typechecked_modules: Vec<TypeCheckedModule>,
-    file_name_chart: &mut BTreeMap<u64, String>,
+    file_info_chart: &mut BTreeMap<u64, FileInfo>,
     type_tree: TypeTree,
     folder: &Path,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
@@ -685,9 +739,13 @@ fn codegen_programs(
             &string_table,
             &imported_funcs,
             &global_vars,
-            file_name_chart,
-        )
-        .map_err(|e| CompileError::new(e.reason.to_string(), e.location))?;
+            file_info_chart,
+        ).map_err(|e| CompileError::new(
+            String::from("Compile error"),
+            e.reason.to_string(),
+            e.location.into_iter().collect(),
+            false
+        ))?;
         progs.push(CompiledProgram::new(
             code_out.to_vec(),
             exported_funcs,
@@ -745,32 +803,45 @@ pub fn parse_from_source(
                 token: (offset, _tok, end),
                 expected,
             } => CompileError::new(
+                String::from("Compile error: unexpected token"),
                 format!(
-                    "unexpected token: {}, expected one of: {}",
+                    "{}, expected one of: {}",
                     &source[offset..end],
                     comma_list(&expected),
                 ),
-                Some(lines.location(BytePos::from(offset), file_id).unwrap()),
+                vec![lines.location(BytePos::from(offset), file_id).unwrap()],
+                false
             ),
             ParseError::InvalidToken { location } => CompileError::new(
+                String::from("Compile error"),
                 format!("found invalid token"),
-                lines.location(location.into(), file_id),
+                lines.location(location.into(), file_id).into_iter().collect(),
+                false,
             ),
             ParseError::UnrecognizedEOF { location, expected } => CompileError::new(
+                String::from("Compile error: unexpected end of file"),
                 format!(
-                    "unexpected end of file: expected one of: {}",
+                    "expected one of: {}",
                     comma_list(&expected)
                 ),
-                lines.location(location.into(), file_id),
+                lines.location(location.into(), file_id).into_iter().collect(),
+                false
             ),
             ParseError::ExtraToken {
                 token: (offset, _tok, end),
             } => CompileError::new(
-                format!("extra token: {}", &source[offset..end],),
-                Some(lines.location(BytePos::from(offset), file_id).unwrap()),
+                String::from("Compile error: extra token"),
+                format!("{}", &source[offset..end],),
+                vec![lines.location(BytePos::from(offset), file_id).unwrap()],
+                false
             ),
             ParseError::User { error } => {
-                CompileError::new(format!("custom parsing error: {}", error), None)
+                CompileError::new(
+                    String::from("Compile error: custom parsing error"),
+                    format!("{}", error),
+                    vec![],
+                    false
+                )
             }
         })
 }
@@ -778,10 +849,14 @@ pub fn parse_from_source(
 ///Represents any error encountered during compilation.
 #[derive(Debug, Clone)]
 pub struct CompileError {
+    ///The error title
+    pub title: String,
     ///What the error is.
     pub description: String,
     ///Where the error happened.
-    pub location: Option<Location>,
+    pub locations: Vec<Location>,
+    ///Whether the error should not stop compilation
+    pub is_warning: bool,
 }
 
 impl Display for CompileError {
@@ -791,11 +866,76 @@ impl Display for CompileError {
 }
 
 impl CompileError {
-    pub fn new(description: String, location: Option<Location>) -> Self {
+    
+    pub fn new(title: String, description: String, locations: Vec<Location>, is_warning: bool) -> Self {
         CompileError {
+            title,
             description,
-            location,
+            locations,
+            is_warning,
         }
+    }
+
+    pub fn pretty_fmt(
+        &self,
+        file_info_chart: &BTreeMap<u64, FileInfo>,
+    ) -> String {
+
+        let blue = "\x1b[34;1m";
+        let reset = "\x1b[0;0m";
+
+        let err_color = match self.is_warning {
+            true => "\x1b[33;1m",
+            false => "\x1b[31;1m",
+        };
+
+        let last_line = &self.locations.last();
+
+        let mut pretty = format!(
+            "{}{}{}: {}\n{}    --> {}{}\n",
+            err_color, &self.title, reset, self.description, blue,
+            match last_line {
+                None => String::from("Could not determine location of error"),
+                Some(location) => match file_info_chart.get(&location.file_id) {
+                    None => String::from("file with id ") + &location.file_id.to_string(),
+                    Some(info) => format!(
+                        "{}{} line {}{}{} column {}{}",
+                        info.path, reset, blue, location.line, reset, blue, location.column,
+                    )
+                }
+            },
+            reset
+        );
+
+        pretty += &self.locations.iter().map(
+            |location| match file_info_chart.get(&location.file_id) {
+                None => String::new(),
+                Some(info) => format!(
+                    "     {}|\n{: <4} | {}{}\n",
+                    blue, location.line, reset,
+                    match info.contents.get(location.line.to_usize()) {
+                        None => "could not recover line",
+                        Some(line) => line
+                    }
+                )
+            }
+        ).collect::<String>();
+
+        pretty += &self.locations.last().into_iter().map(
+            |x| 
+            format!(
+                "     {}|{}{:0space$}{}^{}\n", 
+                blue, reset, " ", err_color, reset, space = x.column.to_usize() + 1)
+        ).collect::<String>();
+
+        pretty
+    }
+    
+    pub fn warn(&self, file_info_chart: &BTreeMap<u64, FileInfo>) {
+        eprintln!(
+            "{}",
+            self.pretty_fmt(file_info_chart)
+        );
     }
 }
 
@@ -839,5 +979,29 @@ impl SourceFileMap {
             return self.offsets[self.offsets.len() - 1].1.clone();
         }
         panic!("SourceFileMap: bounds check error");
+    }
+}
+
+///Lists the offset of each source file contained by a CompiledProgram in offsets, and the
+/// instruction directly following the last in the CompiledProgram.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct FileInfo {
+    pub name : String,
+    #[serde(skip)]
+    pub path : String,
+    #[serde(skip)]
+    pub contents : Vec<String>,
+}
+
+impl Debug for FileInfo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self.path)
+    }
+}
+
+impl Display for FileInfo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self.name)
     }
 }

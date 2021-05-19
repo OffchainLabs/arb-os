@@ -6,7 +6,7 @@
 
 use crate::compile::{
     comma_list, CompileError, CompiledProgram, DebugInfo, GlobalVarDecl, SourceFileMap, Type,
-    TypeTree,
+    TypeTree, FileInfo
 };
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::try_display_location;
@@ -65,7 +65,7 @@ pub struct LinkedProgram {
     pub static_val: Value,
     pub globals: Vec<GlobalVarDecl>,
     #[serde(default)]
-    pub file_name_chart: BTreeMap<u64, String>,
+    pub file_info_chart: BTreeMap<u64, FileInfo>,
     pub type_tree: SerializableTypeTree,
 }
 
@@ -85,7 +85,7 @@ impl LinkedProgram {
                         insn,
                         try_display_location(
                             insn.debug_info.location,
-                            &self.file_name_chart,
+                            &self.file_info_chart,
                             false
                         )
                     )
@@ -97,7 +97,7 @@ impl LinkedProgram {
                     writeln!(output, "{}", prog_str).unwrap();
                 }
                 Err(e) => {
-                    println!("failure");
+                    eprintln!("failure");
                     writeln!(output, "json serialization error: {:?}", e).unwrap();
                 }
             },
@@ -209,7 +209,7 @@ impl ExportedFunc {
 /// table to a static value, and combining the file name chart with the associated argument.
 pub fn postlink_compile(
     program: CompiledProgram,
-    mut file_name_chart: BTreeMap<u64, String>,
+    mut file_info_chart: BTreeMap<u64, FileInfo>,
     test_mode: bool,
     debug: bool,
 ) -> Result<LinkedProgram, CompileError> {
@@ -256,8 +256,10 @@ pub fn postlink_compile(
                 Ok(Instruction::new(inner, insn.immediate, insn.debug_info))
             } else {
                 Err(CompileError::new(
+                    String::from("Compile error"),
                     format!("In final output encountered virtual opcode {}", insn.opcode),
-                    insn.debug_info.location,
+                    insn.debug_info.location.into_iter().collect(),
+                    false
                 ))
             }
         })
@@ -272,7 +274,7 @@ pub fn postlink_compile(
         println!("============ after full compile/link =============");
     }
 
-    file_name_chart.extend(program.file_name_chart.clone());
+    file_info_chart.extend(program.file_info_chart.clone());
 
     Ok(LinkedProgram {
         arbos_version: init_constant_table(Some(Path::new("arb_os/constants.json")))
@@ -284,7 +286,7 @@ pub fn postlink_compile(
         code: code_final,
         static_val: Value::none(),
         globals: program.globals.clone(),
-        file_name_chart,
+        file_info_chart,
         type_tree: SerializableTypeTree::from_type_tree(program.type_tree),
     })
 }
@@ -405,10 +407,12 @@ pub fn link(
         if let Some(label) = exports_map.get(&imp.name) {
             label_xlate_map.insert(Label::External(imp.slot_num), label);
         } else {
-            println!(
-                "Warning: {}",
-                CompileError::new(format!("Failed to resolve import \"{}\"", imp.name), None)
-            );
+            CompileError::new(
+                String::from("Compile warning"),
+                format!("Failed to resolve import \"{}\"", imp.name),
+                vec![],
+                true
+            ).warn(&BTreeMap::new());
         }
     }
 
@@ -427,10 +431,18 @@ pub fn link(
             let mut map = HashMap::new();
             let mut file_hasher = DefaultHasher::new();
             file_hasher.write(b"builtin/array.mini");
-            map.insert(file_hasher.finish(), "builtin/array.mini".to_string());
+            map.insert(file_hasher.finish(), FileInfo {
+                name: String::from("builtin/array.mini"),
+                path: String::from("builtin/array.mini"),
+                contents: vec![]  // COME BACK
+            });
             let mut file_hasher = DefaultHasher::new();
             file_hasher.write(b"builtin/kvs.mini");
-            map.insert(file_hasher.finish(), "builtin/kvs.mini".to_string());
+            map.insert(file_hasher.finish(), FileInfo {
+                name: String::from("builtin/kvs.mini"),
+                path: String::from("builtin/kvs.mini"),
+                contents: vec![]  // COME BACK
+            });
             map
         },
         type_tree,

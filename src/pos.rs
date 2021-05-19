@@ -10,6 +10,7 @@ use std::cmp::{self, Ordering};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
+use crate::compile::FileInfo;
 
 macro_rules! pos_struct {
     (#[$doc:meta] pub struct $Pos:ident($T:ty);) => {
@@ -137,23 +138,27 @@ impl fmt::Display for Location {
 impl Location {
     pub fn display_with_file(
         &self,
-        file_name_chart: &BTreeMap<u64, String>,
+        file_name_chart: &BTreeMap<u64, FileInfo>,
         line_break: bool,
     ) -> String {
         format!(
             "{}{}In file: {}",
             self,
             if line_break { "\n" } else { " " },
-            file_name_chart
+            /*file_name_chart
                 .get(&self.file_id)
-                .unwrap_or(&self.file_id.to_string())
+            .unwrap_or(&self.file_id.to_string())*/
+            match &file_name_chart.get(&self.file_id) {
+                None => self.file_id.to_string(),
+                Some(info) => info.name.clone()
+            }
         )
     }
 }
 
 pub fn try_display_location(
     location: Option<Location>,
-    file_name_chart: &BTreeMap<u64, String>,
+    file_name_chart: &BTreeMap<u64, FileInfo>,
     line_break: bool,
 ) -> String {
     location

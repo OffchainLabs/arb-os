@@ -6,10 +6,11 @@
 
 use crate::compile::CompileStruct;
 use crate::link::LinkedProgram;
-use crate::pos::try_display_location;
+//use crate::pos::try_display_location;
 use crate::upload::CodeUploader;
 use clap::Clap;
 use compile::CompileError;
+use compile::FileInfo;
 use contracttemplates::generate_contract_template_file_or_die;
 use gen_code::gen_upgrade_code;
 use run::{
@@ -130,11 +131,7 @@ fn main() -> Result<(), CompileError> {
     match matches {
         Args::Compile(compile) => match do_compile(compile) {
             Ok(_) => {}
-            Err((err, file_name_chart)) => println!(
-                "{}\n{}",
-                err,
-                try_display_location(err.location, &file_name_chart, true)
-            ),
+            Err((err, file_info_chart)) => eprintln!("{}", err.pretty_fmt(&file_info_chart)),
         },
 
         Args::Run(run) => {
@@ -186,11 +183,13 @@ fn main() -> Result<(), CompileError> {
         Args::MakeBenchmarks => {
             evm::make_benchmarks().map_err(|e| {
                 CompileError::new(
+                    String::from("Benchmark error"),
                     match e {
                         ethabi::Error::Other(desc) => desc,
                         other => format!("{}", other),
                     },
-                    None,
+                    vec![],
+                    false,
                 )
             })?;
         }
@@ -204,24 +203,30 @@ fn main() -> Result<(), CompileError> {
             let path = Path::new(&reformat.input);
             let mut file = File::open(path).map_err(|_| {
                 CompileError::new(
+                    String::from("Reformat error: Could not open file"),
                     format!(
-                        "Could not open file: \"{}\"",
+                        "\"{}\"",
                         path.to_str().unwrap_or("non-utf8")
                     ),
-                    None,
+                    vec![],
+                    false
                 )
             })?;
             let mut s = String::new();
             file.read_to_string(&mut s).map_err(|_| {
                 CompileError::new(
+                    String::from("Reformat error"),
                     format!("Failed to read input file \"{}\" to string", reformat.input),
-                    None,
+                    vec![],
+                    false
                 )
             })?;
             let result: LinkedProgram = serde_json::from_str(&s).map_err(|_| {
                 CompileError::new(
+                    String::from("Reformat error"),
                     format!("Could not parse input file \"{}\" as json", reformat.input),
-                    None,
+                    vec![],
+                    false
                 )
             })?;
 
@@ -271,7 +276,7 @@ fn main() -> Result<(), CompileError> {
             let result = gen_upgrade_code(upgrade);
             if let Err(e) = result {
                 println!("Encountered an error: {}", e);
-                return Err(CompileError::new(e.reason, None));
+                return Err(CompileError::new(String::from("Gen upgrade error"), e.reason, vec![], false));
             } else {
                 println!("Successfully generated code");
             }
@@ -294,7 +299,7 @@ fn main() -> Result<(), CompileError> {
     Ok(())
 }
 
-fn do_compile(compile: CompileStruct) -> Result<(), (CompileError, BTreeMap<u64, String>)> {
+fn do_compile(compile: CompileStruct) -> Result<(), (CompileError, BTreeMap<u64, FileInfo>)> {
     let mut output = get_output(compile.output.clone()).unwrap();
     compile
         .invoke()?

@@ -1,0 +1,90 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+var unused_global: uint;
+var used_global: uint;
+
+public func main() {
+    used_global = crazy(5);
+    asm(used_global,) { log };
+}
+
+func crazy(n: uint) -> uint {
+    
+    let (x, y) = (1, 2);
+    let y = { let ux = x + 1; ux};
+    let z = {3};
+    let w = {4};
+    let v = x + x;
+    let u = 8;       // should not warn
+    
+    x = y + 1;       // should not warn
+    x = x + 1;
+    x = w + 1;
+    x = w;
+    
+    if (true) { v = x; } else { v = x; } // shouldn't warn
+    if (true) { v = u; } else { let v = u; }
+    
+    if (true) {
+      z = 1;         // should not warn
+      let z = 2;
+      z = 3;
+      x = z;
+      z = 4;
+    }
+    
+    let (x, y) = (4, xif (2 == 2) { y = 1; y } else { let y = 1; y + 1 });
+    
+    let ret = z;
+    let cond = 4;
+    while (n > x * cond) {
+        ret = ret*n;
+        n = n-1;
+        return ret * y;
+        
+        let loopy = 8;
+        let unreachable_variable = xloop {
+          return loopy;
+          loopy = loopy - 1;
+          loopy = 2;            // should not warn
+        };
+        
+        let z = {{8}};
+        let (z, z) = (1, 8);
+        
+        let unreachable_variable = 2;
+        unreachable_variable = 3;
+        return unreachable_variable;
+        
+        cond = 1;
+    }
+    return v;
+    
+    let _unused_on_purpose = 4;
+    
+    
+    let with_init = newfixedarray(8, 0);
+    let (newSlotContents, returnValue) = (1, 2);
+    struct {
+        bloc: with_init with { [0] = newSlotContents },
+        val: returnValue,
+    };
+    
+    
+    
+    //let x = asm(p0.0, p0.1, p1.0, p1.1) uint { ecadd };
+    let x = asm() uint { };  // pick up the second return value
+    let y = asm() uint { };  // pick up the second return value
+    Some(struct { x: x + 1, y: y });
+    
+    let unreachable_variable = 0;
+    return unreachable_variable;
+}
+
+func unused_function() {}
+func recursive_function() { recursive_function(); }
+
+public func implicit_exporter() -> func() { return implicit_export; }
+func implicit_export() {}

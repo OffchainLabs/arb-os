@@ -36,11 +36,13 @@ pub fn strip_labels(
                 let old_value = label_map.insert(*label, CodePt::new_internal(after_count));
                 if let Some(CodePt::Internal(x)) = old_value {
                     return Err(CompileError::new(
+                        String::from("Compile error: Internal error"),
                         format!(
-                            "Internal error: Duplicate instance of internal label {:?}",
+                            "Duplicate instance of internal label {:?}",
                             x
                         ),
-                        insn.debug_info.location,
+                        insn.debug_info.location.into_iter().collect(),
+                        false
                     ));
                 }
             }
@@ -57,9 +59,12 @@ pub fn strip_labels(
             None => {
                 let insn_in = insn.clone();
                 code_out.push(insn_in.replace_labels(&label_map)
-                    .map_err(|lab| CompileError::new(
-                        format!("Couldn't find a definition for label {:?} contained in instruction {:?}, most likely reference to non-existent frunction", lab, insn),
-                        insn.debug_info.location)
+                              .map_err(|lab| CompileError::new(
+                                  String::from("Compile error"),
+                                  format!("Couldn't find a definition for label {:?} contained in instruction {:?}, most likely reference to non-existent frunction", lab, insn),
+                                  insn.debug_info.location.into_iter().collect(),
+                                  false
+                              )
                     )?
                 );
             }
@@ -74,11 +79,13 @@ pub fn strip_labels(
             }
             None => {
                 return Err(CompileError::new(
+                    String::from("Compile error: strip_labels"),
                     format!(
-                        "strip_labels: lookup failed for jump table item: {:?}",
+                        "lookup failed for jump table item: {:?}",
                         jt_item
                     ),
-                    None,
+                    vec![],
+                    false
                 ));
             }
         }

@@ -5,7 +5,7 @@
 //!Provides utilities for emulation of AVM bytecode.
 
 use super::RuntimeEnvironment;
-use crate::compile::{CompileError, DebugInfo};
+use crate::compile::{CompileError, DebugInfo, FileInfo};
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Value};
 use crate::pos::{try_display_location, Location};
@@ -363,7 +363,7 @@ pub struct ProfilerData {
     data: HashMap<String, BTreeMap<(usize, usize), u64>>,
     stack_tree: HashMap<CodePt, (Vec<ProfilerEvent>, Option<Location>)>,
     unknown_gas: u64,
-    file_name_chart: BTreeMap<u64, String>,
+    file_info_chart: BTreeMap<u64, FileInfo>,
 }
 
 impl ProfilerData {
@@ -374,10 +374,10 @@ impl ProfilerData {
     fn get_mut(
         &mut self,
         loc: &Option<Location>,
-        chart: &BTreeMap<u64, String>,
+        chart: &BTreeMap<u64, FileInfo>,
     ) -> Option<&mut u64> {
         if let Some(loc) = loc {
-            let filename = chart.get(&loc.file_id)?;
+            let filename = &chart.get(&loc.file_id)?.name;
             self.data
                 .get_mut(filename)?
                 .get_mut(&(loc.line.to_usize(), loc.column.to_usize()))
@@ -393,11 +393,11 @@ impl ProfilerData {
         &mut self,
         loc: &Option<Location>,
         gas: u64,
-        chart: &BTreeMap<u64, String>,
+        chart: &BTreeMap<u64, FileInfo>,
     ) -> Option<u64> {
         if let Some(loc) = loc {
             let filename = match chart.get(&loc.file_id) {
-                Some(name) => name,
+                Some(info) => &info.name,
                 None => {
                     let old_unknown_gas = self.unknown_gas;
                     self.unknown_gas = gas;
@@ -453,9 +453,10 @@ impl ProfilerData {
             if let Some(loc) = location {
                 println!(
                     "Func ({}, {}, {}): {}",
-                    self.file_name_chart
-                        .get(&loc.file_id)
-                        .unwrap_or(&"unknown file".to_string()),
+                    match self.file_info_chart.get(&loc.file_id) {
+                        None => "unknown file",
+                        Some(info) => &info.name,
+                    },
                     loc.line,
                     loc.column,
                     in_func_gas
@@ -472,9 +473,10 @@ impl ProfilerData {
                 if let Some(loc) = location {
                     println!(
                         "    Called by ({}, {}, {}), for {}",
-                        self.file_name_chart
-                            .get(&loc.file_id)
-                            .unwrap_or(&"unknown file".to_string()),
+                        match self.file_info_chart.get(&loc.file_id) {
+                            None => "unknown file",
+                            Some(info) => &info.name,
+                        },
                         loc.line,
                         loc.column,
                         gas
@@ -492,9 +494,10 @@ impl ProfilerData {
                 if let Some(loc) = location {
                     println!(
                         "    Calls ({}, {}, {}), for {}",
-                        self.file_name_chart
-                            .get(&loc.file_id)
-                            .unwrap_or(&"unknown file".to_string()),
+                        match self.file_info_chart.get(&loc.file_id) {
+                            None => "unknown file",
+                            Some(info) => &info.name,
+                        },
                         loc.line,
                         loc.column,
                         gas
@@ -702,7 +705,12 @@ impl FromStr for ProfilerMode {
             "never" => Ok(ProfilerMode::Never),
             "always" => Ok(ProfilerMode::Always),
             "post" => Ok(ProfilerMode::PostBoot),
-            _ => Err(CompileError::new("Invalid profiler mode".to_string(), None)),
+            _ => Err(CompileError::new(
+                String::from("Profile error"),
+                String::from("Invalid profiler mode"), 
+                vec![],
+                false
+            )),
         }
     }
 }
@@ -719,7 +727,7 @@ pub struct Machine {
     err_codepoint: CodePt,
     arb_gas_remaining: Uint256,
     pub runtime_env: RuntimeEnvironment,
-    file_name_chart: BTreeMap<u64, String>,
+    file_info_chart: BTreeMap<u64, FileInfo>,
     total_gas_usage: Uint256,
     trace_writer: Option<BufWriter<File>>,
 }
@@ -736,7 +744,7 @@ impl Machine {
             err_codepoint: CodePt::Null,
             arb_gas_remaining: Uint256::zero().bitwise_neg(),
             runtime_env: env,
-            file_name_chart: program.file_name_chart,
+            file_info_chart: program.file_info_chart,
             total_gas_usage: Uint256::zero(),
             trace_writer: None,
         }
@@ -917,7 +925,7 @@ impl Machine {
                     if let Some(location) = code.debug_info.location {
                         let line = location.line.to_usize();
                         let column = location.column.to_usize();
-                        if let Some(filename) = self.file_name_chart.get(&location.file_id) {
+                        if let Some(filename) = self.file_info_chart.get(&location.file_id) {
                             println!(
                                 "Origin: (Line: {}, Column: {}, File: {})",
                                 line, column, filename
@@ -1085,7 +1093,7 @@ impl Machine {
         assert_ne!(mode, ProfilerMode::Never);
         self.call_state(CodePt::new_internal(0), args);
         let mut loc_map = ProfilerData::default();
-        loc_map.file_name_chart = self.file_name_chart.clone();
+        loc_map.file_info_chart = self.file_info_chart.clone();
         loc_map.stack_tree.insert(
             CodePt::new_internal(0),
             (
@@ -1140,10 +1148,10 @@ impl Machine {
     ) {
         let loc = insn.debug_info.location;
         let next_op_gas = self.next_op_gas().unwrap_or(0);
-        if let Some(gas_cost) = loc_map.get_mut(&loc, &self.file_name_chart) {
+        if let Some(gas_cost) = loc_map.get_mut(&loc, &self.file_info_chart) {
             *gas_cost += next_op_gas;
         } else {
-            loc_map.insert(&loc, next_op_gas, &self.file_name_chart);
+            loc_map.insert(&loc, next_op_gas, &self.file_info_chart);
         }
         *total_gas += next_op_gas;
         let alt_stack = self.get_stack_trace().trace;
@@ -2049,7 +2057,7 @@ impl Machine {
                             "{}\n{}",
                             try_display_location(
                                 insn.debug_info.location,
-                                &self.file_name_chart,
+                                &self.file_info_chart,
                                 true
                             ),
                             self.arb_gas_remaining
