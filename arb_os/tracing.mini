@@ -1,0 +1,118 @@
+//
+// Copyright 2021, Offchain Labs, Inc. All rights reserved.
+//
+
+use output::outbox_getEvmTracer;
+use output::outbox_setEvmTracer;
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+
+use std::stack::Stack;
+use std::stack::stack_new;
+use std::stack::stack_push;
+use std::stack::stack_pop;
+
+
+type EvmTracer = struct {
+    recordStack: Stack,
+}
+
+public impure func evmTracer_clear() {
+    outbox_setEvmTracer(evmTracer_new());
+}
+
+public func evmTracer_new() -> EvmTracer {
+    return struct {
+        recordStack: stack_new(),
+    };
+}
+
+public impure func evmTracer_emit() {
+    let val = unsafecast<any>(());
+    let theStack = outbox_getEvmTracer().recordStack;
+    loop {
+        if let Some(res) = stack_pop(theStack) {
+            let (us, item) = res;
+            theStack = us;
+            val = (item, val);
+        } else {
+            asm((20000, val),) { debugprint };
+            return;
+        }
+    }
+}
+
+public impure func evmTracer_emitAndClear() {
+    evmTracer_emit();
+    evmTracer_clear();
+}
+
+public impure func evmTracer_push(typecode: uint, item: any) {
+    let oldTracer = outbox_getEvmTracer();
+    outbox_setEvmTracer(oldTracer with {
+        recordStack: stack_push(oldTracer.recordStack, (typecode, item))
+    });
+}
+
+public impure func evmTracer_pushCall(
+    callType: uint,
+    calldata: ByteArray,
+    callvalue: uint,
+    from: address,
+    to: address,
+    gas: uint,
+    gasPrice: uint,
+) {
+    evmTracer_push(
+        const::TraceEvent_call,
+        (callType, calldata, callvalue, from, to, gas, gasPrice, ~0),
+    );
+}
+
+public impure func evmTracer_pushReturnRevert(
+    resultCode: uint,
+    returndata: ByteArray,
+    gasUsed: uint,
+) {
+    evmTracer_push(
+        const::TraceEvent_returnOrRevert,
+        (resultCode, returndata, gasUsed, ~0),
+    );
+}
+
+public impure func evmTracer_pushCallAndResultNoExecution(
+    callType: uint,
+    calldata: ByteArray,
+    callvalue: uint,
+    from: address,
+    to: address,
+    gas: uint,
+    gasPrice: uint,
+    resultCode: uint,
+) {
+    evmTracer_pushCall(callType, calldata, callvalue, from, to, gas, gasPrice);
+    evmTracer_pushReturnRevert(resultCode, bytearray_new(0), 0);
+}
+
+public impure func evmTracer_pushCreate(
+    code: ByteArray,
+    addr: address,
+) {
+    evmTracer_push(
+        const::TraceEvent_create,
+        (code, addr, ~0),
+    );
+}
+
+public impure func evmTracer_pushCreate2(
+    code: ByteArray,
+    currentAddr: address,
+    salt: uint,
+    createdAddr: address,
+) {
+    evmTracer_push(
+        const::TraceEvent_create2,
+        (code, currentAddr, salt, createdAddr, ~0),
+    );
+}
