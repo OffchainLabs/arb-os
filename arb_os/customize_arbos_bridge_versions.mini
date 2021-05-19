@@ -10,6 +10,13 @@ use evmCallStack::EvmCallFrame;
 
 use gasAccounting::GasAccountingInfo;
 
+use tracing::EvmTracer;
+use tracing::evmTracer_new;
+
+use std::avmcodebuilder::AvmCodePoint;
+
+use std::merkletree::MerkleTreeBuilder;
+
 
 public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> AccountStore {
     return unsafecast<AccountStore>(input_globals.globalAccountStore);
@@ -42,5 +49,33 @@ public func set_gasAccountingInfo_onUpgrade(input_globals: GlobalsBeforeUpgrade)
         },
         gasAllocatedToThisBlock: old.gasAllocatedToThisBlock,
         retryablePrices: old.retryablePrices,
+    };
+}
+
+public func set_codeSegGlobals_onUpgrade(
+    input_globals: GlobalsBeforeUpgrade
+) -> struct {
+    unreachableMask: uint,
+    dummyAcceptContractCode: impure func(),
+} {
+    return struct {
+        unreachableMask: 0,
+        dummyAcceptContractCode: unsafecast<impure func()>(0),     // will initialize this properly later
+    };
+}
+
+public func set_globalOutbox_onUpgrade(
+    input_globals: GlobalsBeforeUpgrade
+) -> struct {
+    batch: MerkleTreeBuilder,
+    batchNumber: uint,
+    numInBatch: uint,
+    evmTracer: EvmTracer,
+} {
+    return struct {
+        batch: input_globals.globalOutbox.batch,
+        batchNumber: input_globals.globalOutbox.batchNumber,
+        numInBatch: input_globals.globalOutbox.numInBatch,
+        evmTracer: evmTracer_new(),
     };
 }
