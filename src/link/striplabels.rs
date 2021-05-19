@@ -37,12 +37,9 @@ pub fn strip_labels(
                 if let Some(CodePt::Internal(x)) = old_value {
                     return Err(CompileError::new(
                         String::from("Compile error: Internal error"),
-                        format!(
-                            "Duplicate instance of internal label {:?}",
-                            x
-                        ),
+                        format!("Duplicate instance of internal label {:?}", x),
                         insn.debug_info.location.into_iter().collect(),
-                        false
+                        false,
                     ));
                 }
             }
@@ -80,12 +77,9 @@ pub fn strip_labels(
             None => {
                 return Err(CompileError::new(
                     String::from("Compile error: strip_labels"),
-                    format!(
-                        "lookup failed for jump table item: {:?}",
-                        jt_item
-                    ),
+                    format!("lookup failed for jump table item: {:?}", jt_item),
                     vec![],
-                    false
+                    false,
                 ));
             }
         }

@@ -707,9 +707,9 @@ impl FromStr for ProfilerMode {
             "post" => Ok(ProfilerMode::PostBoot),
             _ => Err(CompileError::new(
                 String::from("Profile error"),
-                String::from("Invalid profiler mode"), 
+                String::from("Invalid profiler mode"),
                 vec![],
-                false
+                false,
             )),
         }
     }

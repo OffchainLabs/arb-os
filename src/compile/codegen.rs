@@ -8,11 +8,11 @@ use super::ast::{BinaryOp, FuncArg, GlobalVarDecl, TrinaryOp, Type, UnaryOp};
 use super::typecheck::{
     PropertiesList, TypeCheckedExpr, TypeCheckedFunc, TypeCheckedMatchPattern, TypeCheckedStatement,
 };
-use crate::compile::{FileInfo, CompileError};
 use crate::compile::ast::{DebugInfo, MatchPatternKind};
 use crate::compile::typecheck::{
     TypeCheckedCodeBlock, TypeCheckedExprKind, TypeCheckedStatementKind,
 };
+use crate::compile::{CompileError, FileInfo};
 use crate::link::{ImportedFunc, TupleTree, TUPLE_SIZE};
 use crate::mavm::{AVMOpcode, Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::pos::Location;
@@ -444,8 +444,9 @@ fn mavm_codegen_statement(
                             expr.get_type()
                         ),
                         loc.into_iter().collect(),
-                        true
-                    ).pretty_fmt(file_info_chart);
+                        true,
+                    )
+                    .pretty_fmt(file_info_chart);
                 }
             }
             Ok((lg, exp_locals, HashMap::new()))

@@ -5,12 +5,12 @@
 //!
 //! [libsyntax_pos]: https://github.com/rust-lang/rust/blob/master/src/libsyntax_pos/lib.rs
 
+use crate::compile::FileInfo;
 use serde::{Deserialize, Serialize};
 use std::cmp::{self, Ordering};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
-use crate::compile::FileInfo;
 
 macro_rules! pos_struct {
     (#[$doc:meta] pub struct $Pos:ident($T:ty);) => {
@@ -150,7 +150,7 @@ impl Location {
             .unwrap_or(&self.file_id.to_string())*/
             match &file_name_chart.get(&self.file_id) {
                 None => self.file_id.to_string(),
-                Some(info) => info.name.clone()
+                Some(info) => info.name.clone(),
             }
         )
     }

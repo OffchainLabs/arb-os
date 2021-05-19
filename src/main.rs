@@ -204,12 +204,9 @@ fn main() -> Result<(), CompileError> {
             let mut file = File::open(path).map_err(|_| {
                 CompileError::new(
                     String::from("Reformat error: Could not open file"),
-                    format!(
-                        "\"{}\"",
-                        path.to_str().unwrap_or("non-utf8")
-                    ),
+                    format!("\"{}\"", path.to_str().unwrap_or("non-utf8")),
                     vec![],
-                    false
+                    false,
                 )
             })?;
             let mut s = String::new();
@@ -218,7 +215,7 @@ fn main() -> Result<(), CompileError> {
                     String::from("Reformat error"),
                     format!("Failed to read input file \"{}\" to string", reformat.input),
                     vec![],
-                    false
+                    false,
                 )
             })?;
             let result: LinkedProgram = serde_json::from_str(&s).map_err(|_| {
@@ -226,7 +223,7 @@ fn main() -> Result<(), CompileError> {
                     String::from("Reformat error"),
                     format!("Could not parse input file \"{}\" as json", reformat.input),
                     vec![],
-                    false
+                    false,
                 )
             })?;
 
@@ -276,7 +273,12 @@ fn main() -> Result<(), CompileError> {
             let result = gen_upgrade_code(upgrade);
             if let Err(e) = result {
                 println!("Encountered an error: {}", e);
-                return Err(CompileError::new(String::from("Gen upgrade error"), e.reason, vec![], false));
+                return Err(CompileError::new(
+                    String::from("Gen upgrade error"),
+                    e.reason,
+                    vec![],
+                    false,
+                ));
             } else {
                 println!("Successfully generated code");
             }

@@ -59,7 +59,7 @@ pub fn fix_tuple_size(
                                 String::from("Compile error: fix_tuple_size"),
                                 "index too large".to_string(),
                                 debug_info.location.into_iter().collect(),
-                                false
+                                false,
                             ))
                         }
                     }
@@ -68,7 +68,7 @@ pub fn fix_tuple_size(
                         String::from("Compile error: fix_tuple_size"),
                         "TupleGet without immediate arg".to_string(),
                         debug_info.location.into_iter().collect(),
-                        false
+                        false,
                     ));
                 }
             }
@@ -84,7 +84,7 @@ pub fn fix_tuple_size(
                                 String::from("Compile error: fix_tuple_size"),
                                 "TupleSet index too large".to_string(),
                                 debug_info.location.into_iter().collect(),
-                                false
+                                false,
                             ))
                         }
                     }
@@ -93,7 +93,7 @@ pub fn fix_tuple_size(
                         String::from("Compile error: fix_tuple_size"),
                         "TupleSet without immediate arg".to_string(),
                         debug_info.location.into_iter().collect(),
-                        false
+                        false,
                     ));
                 }
             }
@@ -108,7 +108,7 @@ pub fn fix_tuple_size(
                                 String::from("Compile error: fix_tuple_size"),
                                 "index too large".to_string(),
                                 debug_info.location.into_iter().collect(),
-                                false
+                                false,
                             ))
                         }
                     }
@@ -117,7 +117,7 @@ pub fn fix_tuple_size(
                         String::from("Compile error: fix_tuple_size"),
                         "SetLocal without immediate arg".to_string(),
                         debug_info.location.into_iter().collect(),
-                        false
+                        false,
                     ));
                 }
             }
@@ -132,7 +132,7 @@ pub fn fix_tuple_size(
                                 String::from("Compile error: fix_tuple_size"),
                                 "index too large".to_string(),
                                 debug_info.location.into_iter().collect(),
-                                false
+                                false,
                             ))
                         }
                     }
@@ -141,7 +141,7 @@ pub fn fix_tuple_size(
                         String::from("Compile error: fix_tuple_size"),
                         "GetLocal without immediate arg".to_string(),
                         debug_info.location.into_iter().collect(),
-                        false
+                        false,
                     ));
                 }
             }
@@ -408,7 +408,7 @@ impl TupleTree {
                     String::from("Compile error: TupleTree::read_code"),
                     "out-of-bounds read".to_string(),
                     debug_info.location.into_iter().collect(),
-                    false
+                    false,
                 ))
             }
         }
@@ -494,7 +494,7 @@ impl TupleTree {
                 String::from("Compile error: TupleTree::write_code"),
                 "out-of-bounds write".to_string(),
                 debug_info.location.into_iter().collect(),
-                false
+                false,
             ));
         } else {
             code.push(Instruction::from_opcode(

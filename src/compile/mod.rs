@@ -17,7 +17,7 @@ use miniconstants::init_constant_table;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fmt::{Display, Formatter, Debug};
+use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
@@ -188,7 +188,7 @@ impl TypeCheckedModule {
         self.checked_funcs = new_funcs;
     }
     ///Reasons about the control flow within the typechecked AST
-    fn flowcheck(&mut self, file_info_chart : &BTreeMap<u64, FileInfo>) {
+    fn flowcheck(&mut self, file_info_chart: &BTreeMap<u64, FileInfo>) {
         for f in &mut self.checked_funcs.clone() {
             f.flowcheck(
                 &self.checked_funcs,
@@ -384,7 +384,7 @@ pub fn compile_from_file(
                     String::from("Compile error"),
                     format!("File name {:?} must be UTF-8", file_name),
                     vec![],
-                    false
+                    false,
                 )
             })?,
             file_info_chart,
@@ -396,7 +396,7 @@ pub fn compile_from_file(
             String::from("Compile error"),
             format!("Could not parse {} as valid path", path.display()),
             vec![],
-            false
+            false,
         ))
     }
 }
@@ -450,14 +450,14 @@ pub fn compile_from_folder(
     typechecked_modules
         .iter_mut()
         .for_each(|module| module.flowcheck(file_info_chart));
-    
+
     // Inlining stage
     if inline {
         typechecked_modules
             .iter_mut()
             .for_each(|module| module.inline());
     }
-    
+
     let progs = codegen_programs(typechecked_modules, file_info_chart, type_tree, folder)?;
     Ok(progs)
 }
@@ -519,7 +519,7 @@ fn create_program_tree(
                 String::from("Compile error"),
                 format!("Can not open {}/{}: {:?}", folder.display(), path, why),
                 vec![],
-                false
+                false,
             )
         })?;
 
@@ -529,18 +529,21 @@ fn create_program_tree(
                 String::from("Compile error"),
                 format!("Can not read {}/{}: {:?}", folder.display(), path, why),
                 vec![],
-                false
+                false,
             )
         })?;
         let mut file_hasher = DefaultHasher::new();
         name.hash(&mut file_hasher);
         let file_id = file_hasher.finish();
 
-        file_info_chart.insert(file_id, FileInfo {
-            name: path_display(&name),
-            path: folder.join(path.clone()).display().to_string(),
-            contents: source.split("\n").map(|x| x.to_string()).collect(),
-        });
+        file_info_chart.insert(
+            file_id,
+            FileInfo {
+                name: path_display(&name),
+                path: folder.join(path.clone()).display().to_string(),
+                contents: source.split("\n").map(|x| x.to_string()).collect(),
+            },
+        );
 
         let mut string_table = StringTable::new();
         let (imports, funcs, named_types, global_vars, hm) = typecheck::sort_top_level_decls(
@@ -586,7 +589,7 @@ fn resolve_imports(
                         import.name
                     ),
                     vec![],
-                    false
+                    false,
                 ));
             };
             //Modifies origin program to include import
@@ -599,7 +602,7 @@ fn resolve_imports(
                         import.name
                     ),
                     vec![],
-                    false
+                    false,
                 )
             })?;
             let index = origin_program.string_table.get(import.name.clone());
@@ -621,8 +624,9 @@ fn resolve_imports(
                         import.name
                     ),
                     vec![],
-                    true
-                ).warn(&BTreeMap::new());
+                    true,
+                )
+                .warn(&BTreeMap::new());
             }
         }
     }
@@ -680,30 +684,34 @@ fn typecheck_programs(
             hm,
             &mut checked_funcs,
             type_tree,
-        ).map_err(|res3| CompileError::new(
-            String::from("Compile error"),
-            res3.reason.to_string(),
-            res3.location.into_iter().collect(),
-            false
-        ))?;
+        )
+        .map_err(|res3| {
+            CompileError::new(
+                String::from("Compile error"),
+                res3.reason.to_string(),
+                res3.location.into_iter().collect(),
+                false,
+            )
+        })?;
         checked_funcs.iter_mut().for_each(|func| {
             let detected_purity = func.is_pure();
             let declared_purity = func.properties.pure;
-            
+
             if detected_purity != declared_purity {
                 CompileError::new(
                     String::from("Compile warning"),
                     format!(
                         "func {} {}",
                         match declared_purity {
-                            true  => "is impure but not marked impure",
+                            true => "is impure but not marked impure",
                             false => "is declared impure but does not contain impure code",
                         },
                         string_table.name_from_id(func.name)
                     ),
                     func.debug_info.location.into_iter().collect(),
                     true,
-                ).warn(file_info_chart);
+                )
+                .warn(file_info_chart);
             }
         });
         typechecked.push(TypeCheckedModule::new(
@@ -740,12 +748,15 @@ fn codegen_programs(
             &imported_funcs,
             &global_vars,
             file_info_chart,
-        ).map_err(|e| CompileError::new(
-            String::from("Compile error"),
-            e.reason.to_string(),
-            e.location.into_iter().collect(),
-            false
-        ))?;
+        )
+        .map_err(|e| {
+            CompileError::new(
+                String::from("Compile error"),
+                e.reason.to_string(),
+                e.location.into_iter().collect(),
+                false,
+            )
+        })?;
         progs.push(CompiledProgram::new(
             code_out.to_vec(),
             exported_funcs,
@@ -810,22 +821,25 @@ pub fn parse_from_source(
                     comma_list(&expected),
                 ),
                 vec![lines.location(BytePos::from(offset), file_id).unwrap()],
-                false
+                false,
             ),
             ParseError::InvalidToken { location } => CompileError::new(
                 String::from("Compile error"),
                 format!("found invalid token"),
-                lines.location(location.into(), file_id).into_iter().collect(),
+                lines
+                    .location(location.into(), file_id)
+                    .into_iter()
+                    .collect(),
                 false,
             ),
             ParseError::UnrecognizedEOF { location, expected } => CompileError::new(
                 String::from("Compile error: unexpected end of file"),
-                format!(
-                    "expected one of: {}",
-                    comma_list(&expected)
-                ),
-                lines.location(location.into(), file_id).into_iter().collect(),
-                false
+                format!("expected one of: {}", comma_list(&expected)),
+                lines
+                    .location(location.into(), file_id)
+                    .into_iter()
+                    .collect(),
+                false,
             ),
             ParseError::ExtraToken {
                 token: (offset, _tok, end),
@@ -833,16 +847,14 @@ pub fn parse_from_source(
                 String::from("Compile error: extra token"),
                 format!("{}", &source[offset..end],),
                 vec![lines.location(BytePos::from(offset), file_id).unwrap()],
-                false
+                false,
             ),
-            ParseError::User { error } => {
-                CompileError::new(
-                    String::from("Compile error: custom parsing error"),
-                    format!("{}", error),
-                    vec![],
-                    false
-                )
-            }
+            ParseError::User { error } => CompileError::new(
+                String::from("Compile error: custom parsing error"),
+                format!("{}", error),
+                vec![],
+                false,
+            ),
         })
 }
 
@@ -866,8 +878,12 @@ impl Display for CompileError {
 }
 
 impl CompileError {
-    
-    pub fn new(title: String, description: String, locations: Vec<Location>, is_warning: bool) -> Self {
+    pub fn new(
+        title: String,
+        description: String,
+        locations: Vec<Location>,
+        is_warning: bool,
+    ) -> Self {
         CompileError {
             title,
             description,
@@ -876,11 +892,7 @@ impl CompileError {
         }
     }
 
-    pub fn pretty_fmt(
-        &self,
-        file_info_chart: &BTreeMap<u64, FileInfo>,
-    ) -> String {
-
+    pub fn pretty_fmt(&self, file_info_chart: &BTreeMap<u64, FileInfo>) -> String {
         let blue = "\x1b[34;1m";
         let reset = "\x1b[0;0m";
 
@@ -893,7 +905,11 @@ impl CompileError {
 
         let mut pretty = format!(
             "{}{}{}: {}\n{}    --> {}{}\n",
-            err_color, &self.title, reset, self.description, blue,
+            err_color,
+            &self.title,
+            reset,
+            self.description,
+            blue,
             match last_line {
                 None => String::from("Could not determine location of error"),
                 Some(location) => match file_info_chart.get(&location.file_id) {
@@ -901,41 +917,52 @@ impl CompileError {
                     Some(info) => format!(
                         "{}{} line {}{}{} column {}{}",
                         info.path, reset, blue, location.line, reset, blue, location.column,
-                    )
-                }
+                    ),
+                },
             },
             reset
         );
 
-        pretty += &self.locations.iter().map(
-            |location| match file_info_chart.get(&location.file_id) {
+        pretty += &self
+            .locations
+            .iter()
+            .map(|location| match file_info_chart.get(&location.file_id) {
                 None => String::new(),
                 Some(info) => format!(
                     "     {}|\n{: <4} | {}{}\n",
-                    blue, location.line, reset,
+                    blue,
+                    location.line,
+                    reset,
                     match info.contents.get(location.line.to_usize()) {
                         None => "could not recover line",
-                        Some(line) => line
+                        Some(line) => line,
                     }
-                )
-            }
-        ).collect::<String>();
+                ),
+            })
+            .collect::<String>();
 
-        pretty += &self.locations.last().into_iter().map(
-            |x| 
-            format!(
-                "     {}|{}{:0space$}{}^{}\n", 
-                blue, reset, " ", err_color, reset, space = x.column.to_usize() + 1)
-        ).collect::<String>();
+        pretty += &self
+            .locations
+            .last()
+            .into_iter()
+            .map(|x| {
+                format!(
+                    "     {}|{}{:0space$}{}^{}\n",
+                    blue,
+                    reset,
+                    " ",
+                    err_color,
+                    reset,
+                    space = x.column.to_usize() + 1
+                )
+            })
+            .collect::<String>();
 
         pretty
     }
-    
+
     pub fn warn(&self, file_info_chart: &BTreeMap<u64, FileInfo>) {
-        eprintln!(
-            "{}",
-            self.pretty_fmt(file_info_chart)
-        );
+        eprintln!("{}", self.pretty_fmt(file_info_chart));
     }
 }
 
@@ -987,11 +1014,11 @@ impl SourceFileMap {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct FileInfo {
-    pub name : String,
+    pub name: String,
     #[serde(skip)]
-    pub path : String,
+    pub path: String,
     #[serde(skip)]
-    pub contents : Vec<String>,
+    pub contents: Vec<String>,
 }
 
 impl Debug for FileInfo {

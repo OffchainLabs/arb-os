@@ -5,8 +5,8 @@
 //!Provides types and utilities for linking together compiled mini programs
 
 use crate::compile::{
-    comma_list, CompileError, CompiledProgram, DebugInfo, GlobalVarDecl, SourceFileMap, Type,
-    TypeTree, FileInfo
+    comma_list, CompileError, CompiledProgram, DebugInfo, FileInfo, GlobalVarDecl, SourceFileMap,
+    Type, TypeTree,
 };
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::try_display_location;
@@ -259,7 +259,7 @@ pub fn postlink_compile(
                     String::from("Compile error"),
                     format!("In final output encountered virtual opcode {}", insn.opcode),
                     insn.debug_info.location.into_iter().collect(),
-                    false
+                    false,
                 ))
             }
         })
@@ -411,8 +411,9 @@ pub fn link(
                 String::from("Compile warning"),
                 format!("Failed to resolve import \"{}\"", imp.name),
                 vec![],
-                true
-            ).warn(&BTreeMap::new());
+                true,
+            )
+            .warn(&BTreeMap::new());
         }
     }
 
@@ -431,18 +432,24 @@ pub fn link(
             let mut map = HashMap::new();
             let mut file_hasher = DefaultHasher::new();
             file_hasher.write(b"builtin/array.mini");
-            map.insert(file_hasher.finish(), FileInfo {
-                name: String::from("builtin/array.mini"),
-                path: String::from("builtin/array.mini"),
-                contents: vec![]  // COME BACK
-            });
+            map.insert(
+                file_hasher.finish(),
+                FileInfo {
+                    name: String::from("builtin/array.mini"),
+                    path: String::from("builtin/array.mini"),
+                    contents: vec![], // COME BACK
+                },
+            );
             let mut file_hasher = DefaultHasher::new();
             file_hasher.write(b"builtin/kvs.mini");
-            map.insert(file_hasher.finish(), FileInfo {
-                name: String::from("builtin/kvs.mini"),
-                path: String::from("builtin/kvs.mini"),
-                contents: vec![]  // COME BACK
-            });
+            map.insert(
+                file_hasher.finish(),
+                FileInfo {
+                    name: String::from("builtin/kvs.mini"),
+                    path: String::from("builtin/kvs.mini"),
+                    contents: vec![], // COME BACK
+                },
+            );
             map
         },
         type_tree,
