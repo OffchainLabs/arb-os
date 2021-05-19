@@ -23,6 +23,7 @@ use accounts::account_deductFromEthBalance;
 use accounts::accountStore_transferEthBalance;
 use accounts::account_getNextSeqNum;
 use accounts::account_getAggregatorToPay;
+use accounts::account_setBaseTxFeeL1Gas;
 
 use arbstatistics::arbStatistics_addToStorage;
 use arbstatistics::arbStatistics_addToGasUsed;
@@ -306,8 +307,12 @@ public impure func gasAccounting_getPricesInWei(aggregatorAddr: address) -> (uin
 }
 
 impure func gasAccounting_getTxBaseFeeWei(aggregatorAddr: option<address>) -> uint {
+    return getL1GasPriceEstimate() * gasAccounting_getTxBaseFeeL1Gas(aggregatorAddr);
+}
+
+public impure func gasAccounting_getTxBaseFeeL1Gas(aggregatorAddr: option<address>) -> uint {
     return xif (gasAccountingInfo.feeConfig.enabled) {
-        getL1GasPriceEstimate() * xif let Some(addr) = aggregatorAddr {
+        xif let Some(addr) = aggregatorAddr {
             xif let Some(aggInfo) = evmCallStack_getAccountInCurrentContext(addr).aggregatorInfo {
                 aggInfo.baseTxFeeL1Gas
             } else {
@@ -319,6 +324,22 @@ impure func gasAccounting_getTxBaseFeeWei(aggregatorAddr: option<address>) -> ui
     } else {
         0
     };
+}
+
+public impure func gasAccounting_setTxBaseFeeL1Gas(aggregator: address, fee: uint) {
+    if (fee < const::Charging_MinBaseTxFeeL1Gas) {
+        fee = const::Charging_MinBaseTxFeeL1Gas;
+    } elseif (fee > const::Charging_MaxBaseTxFeeL1Gas) {
+        fee = const::Charging_MaxBaseTxFeeL1Gas;
+    }
+
+    evmCallStack_setAccountInCurrentContext(
+        aggregator,
+        account_setBaseTxFeeL1Gas(
+            evmCallStack_getAccountInCurrentContext(aggregator),
+            fee
+        ),
+    );
 }
 
 public impure func getArbGasPrice() -> uint {

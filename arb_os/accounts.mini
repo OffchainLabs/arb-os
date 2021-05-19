@@ -333,6 +333,24 @@ public func account_setFeeCollector(account: Account, newCollector: address) -> 
     };
 }
 
+public func account_setBaseTxFeeL1Gas(account: Account, fee: uint) -> Account {
+    return account with {
+        aggregatorInfo: Some(
+            xif let Some(aggInfo) = account.aggregatorInfo {
+                aggInfo with {
+                    baseTxFeeL1Gas: fee
+                }
+            } else {
+                struct {
+                    decompressionState: None<AggregatorDecompressionState>,
+                    feeCollector: account.addr,
+                    baseTxFeeL1Gas: fee,
+                }
+            }
+        )
+    };
+}
+
 public impure func accountStore_createAccountFromEvmCode(
     store: AccountStore,
     newAddr: address,

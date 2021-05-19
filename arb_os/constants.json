@@ -98,6 +98,8 @@
     "Charging_DefaultArbGasPerStorage": 0,
     "Charging_GasPoolDepthSeconds": 60,
     "Charging_MinArbGasForContractTx": 50,
+    "Charging_MinBaseTxFeeL1Gas": 500,
+    "Charging_MaxBaseTxFeeL1Gas": 50000,
     "Charging_RetryableTxRepriceIntervalSeconds": 900,
     "DefaultSecondsPerSend": 900,
     "DefaultSpeedLimitPerSecond": 1000000,

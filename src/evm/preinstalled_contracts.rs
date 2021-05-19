@@ -803,6 +803,58 @@ impl _ArbAggregator {
             Err(ethabi::Error::from("reverted"))
         }
     }
+
+    pub fn _get_tx_base_fee(
+        &self,
+        machine: &mut Machine,
+        agg_addr: Uint256,
+    ) -> Result<Uint256, ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "getTxBaseFee",
+            &[
+                ethabi::Token::Address(agg_addr.to_h160()),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _set_tx_base_fee(
+        &self,
+        machine: &mut Machine,
+        agg_addr: Uint256,
+        fee: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "setTxBaseFee",
+            &[
+                ethabi::Token::Address(agg_addr.to_h160()),
+                ethabi::Token::Uint(fee.to_u256()),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
 }
 
 pub struct _ArbReplayableTx {
@@ -1416,6 +1468,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
 
     let arbowner = _ArbOwner::_new(&wallet, debug);
     let arbgasinfo = _ArbGasInfo::_new(&wallet, debug);
+    let arbaggregator = _ArbAggregator::_new(debug);
 
     machine.runtime_env.insert_eth_deposit_message(
         my_addr.clone(),
@@ -1474,6 +1527,16 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
     assert_eq!(speed_limit, Uint256::from_u64(1_000_000));
     assert_eq!(gas_pool_max, Uint256::from_u64(60_000_000));
     assert_eq!(tx_gas_limit, Uint256::from_u64(10_000_000));
+
+    let agg_addr = Uint256::from_u64(777);
+    let fee = arbaggregator._get_tx_base_fee(&mut machine, agg_addr.clone()).unwrap();
+    assert_eq!(fee, Uint256::from_u64(4000));
+
+    let new_fee = Uint256::from_u64(8913);
+    arbaggregator._set_tx_base_fee(&mut machine, agg_addr.clone(), new_fee.clone()).unwrap();
+
+    let fee = arbaggregator._get_tx_base_fee(&mut machine, agg_addr.clone()).unwrap();
+    assert_eq!(fee, new_fee);
 
     if let Some(path) = log_to {
         machine
