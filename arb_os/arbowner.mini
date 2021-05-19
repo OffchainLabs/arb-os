@@ -357,13 +357,9 @@ impure func arbowner_deployContract(topFrame: EvmCallFrame, calldata: ByteArray)
     let constructorData = bytearray_extract(calldata, 4+4*32, constructorDataSize);
     let callvalue = evmCallFrame_getCallvalue(topFrame);
 
-    if( ! evmCallStack_setTopFrameMemory(constructorData) ) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 162, 0, 0);
-    }
-
     let deployAddress = address(keccakOfRlpEncodedUintPair(uint(deemedSender), deemedNonce));
 
-    if (doCreationOpcode(callvalue, 0, constructorDataSize, deployAddress) == address(0)) {
+    if (doCreationOpcode(callvalue, constructorData, deployAddress) == address(0)) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 163, 0, 0);
     }
 

@@ -42,6 +42,8 @@ use evmOps::evmOp_return;
 
 use evmlogs::EvmLogs;
 
+use tracing::evmTracer_clear;
+
 use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_init;
 use gasAccounting::getNextRequestFromCongestionAuction;
@@ -88,6 +90,8 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         // now re-do the initializations that set up pointers into the ArbOS code
         errorHandler_init();
         evmOps_init();
+        codeSegment_init();
+
         if (initializePreinstalls(true) == None<()>) {
             panic;   // don't try to run without preinstalls and precompiles
         }
@@ -139,6 +143,7 @@ public impure func mainRunLoop() {
                     None<EvmLogs>,
                     None<GasUsage>,
                     request.feeStats,
+                    false,      // don't emit tracing info because the tx was bogus
                 );
             }
         } else {
@@ -159,6 +164,7 @@ public impure func mainRunLoop() {
                 None<EvmLogs>,
                 None<GasUsage>,
                 request.feeStats,
+                true,
             );
         }
     }

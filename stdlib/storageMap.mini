@@ -1,5 +1,5 @@
 //
-// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
 //
 
 // This is an efficient implementation of an int->int key-value store,
@@ -29,6 +29,10 @@ use std::bytearray::bytearray_set256;
 use std::bytestream::bytestream_new;
 use std::bytestream::bytestream_atEof;
 use std::bytestream::bytestream_get256;
+
+use std::stack::Stack;
+use std::stack::stack_new;
+use std::stack::stack_push;
 
 
 type StorageMap = struct {
@@ -206,6 +210,49 @@ public func storageMap_forall_tree(
         }
         state
    };
+}
+
+type StorageMapDiff_State = struct {
+    diffs: Stack,
+    otherSM: StorageMap,
+    firstOne: bool,
+}
+
+public func storageMap_diff(s0: StorageMap, s1: StorageMap) -> Stack {
+    let res1 = unsafecast<StorageMapDiff_State>(storageMap_forall(
+        s0,
+        unsafecast<func(uint, uint, any) -> any>(smdiffClosure),
+        struct {
+            diffs: stack_new(),
+            otherSM: s1,
+            firstOne: true,
+        }
+    ));
+    res1 = unsafecast<StorageMapDiff_State>(storageMap_forall(
+        s1,
+        unsafecast<func(uint, uint, any) -> any>(smdiffClosure),
+        struct {
+            diffs: res1.diffs,
+            otherSM: s0,
+            firstOne: false
+        }
+    ));
+    return res1.diffs;
+}
+
+func smdiffClosure(k: uint, v: uint, state: StorageMapDiff_State) -> StorageMapDiff_State {
+    let otherVal = storageMap_get(state.otherSM, k);
+    return xif (state.firstOne) {
+        xif (v == otherVal) {
+            state
+        } else {
+            state with { diffs: stack_push(state.diffs, (k, v, otherVal)) }
+        }
+    } elseif (otherVal == 0) {
+        state with { diffs: stack_push(state.diffs, (k, 0, v)) }
+    } else {
+        state
+    };
 }
 
 public func storageMap_serialize(s: StorageMap) -> ByteArray {

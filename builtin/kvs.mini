@@ -194,17 +194,17 @@ public func builtin_kvsDelete(s: Kvs, key: uint) -> Kvs {
 // this will return the state at the end
 // order of traversal is deterministic but weird and subject to change,
 //       so callers are advised not to rely on the ordering
-public impure func builtin_kvsForall(
+public func builtin_kvsForall(
     s: Kvs,
-    closure: impure func(any, any, any) -> any,
+    closure: func(any, any, any) -> any,
     state: any
 ) -> any {
     return kvs_forall_tree(s.tree, closure, state);
 }
 
-impure func kvs_forall_tree(
+func kvs_forall_tree(
     t: KvsNode,
-    closure: impure func(any, any, any) -> any,
+    closure: func(any, any, any) -> any,
     state: any
 ) -> any {
     return xif (t == unsafecast<KvsNode>(0)) {
