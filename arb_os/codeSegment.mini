@@ -530,7 +530,7 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
             }
 
             // uncomment the following line, to get a debugprint before every EVM instruction
-            // code = pushInstructionImm(const::AVM_debugprint, (20000, insn.pc, insn.opcode), code);
+            // code = pushInstructionImm(const::AVM_debugprint, (30000, insn.pc, insn.opcode), code);
         } else {
             return (code, evmJumpTable, pcTable);
         }
