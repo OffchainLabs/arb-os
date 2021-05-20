@@ -1114,6 +1114,21 @@ pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), et
 }
 
 #[test]
+fn _test_immediate_arbos_health_check() {
+    _test_arbos_health_check();
+}
+
+fn _test_arbos_health_check() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+
+    let wallet = machine.runtime_env.new_wallet();
+    let arbowner = _ArbOwner::_new(&wallet, false);
+
+    assert!(arbowner._arbos_health_check(&mut machine).unwrap());
+}
+
+#[test]
 fn _test_upgrade_arbos_to_different_version() {
     _test_upgrade_arbos_over_itself_impl().unwrap();
 }
@@ -1174,6 +1189,8 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbos_version_orig = arbsys_orig_binding._arbos_version(&mut machine)?;
     assert_eq!(arbos_version, arbos_version_orig);
 
+    assert!(arbowner._arbos_health_check(&mut machine).unwrap());
+    
     Ok(())
 }
 

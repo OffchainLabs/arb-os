@@ -445,6 +445,7 @@ public impure func gasAccounting_addToReserveInAcctStore(acctStore: AccountStore
         ),
     );
 }
+
 public impure func gasAccounting_summaryToPublish() -> any {
     // get summary of gas prices and pool at present, for inclusion in block summary log
     let prices = gasAccountingInfo.currentPrices;
