@@ -34,5 +34,7 @@ interface ArbOwner {
     function bindAddressToPluggable(address addr, uint pluggableId) external;
 
     function getTotalOfEthBalances() external view returns(uint);
+
+    function arbosHealthCheck() external view returns(bool);  // problems reported via debugprints
 }
 

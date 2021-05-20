@@ -7,6 +7,7 @@ use accounts::getGlobalAccountStore;
 use accounts::account_getBalance;
 use accounts::account_setContractInfo;
 use accounts::accountStore_forall;
+use accounts::accountStore_healthCheck;
 
 use chainParameters::chainParams_getOwner;
 use chainParameters::chainParams_setOwner;
@@ -31,10 +32,13 @@ use evmCallStack::evmCallStack_getTopFrameReturnData;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert;
+use evmOps::evmOp_revert_knownPc;
 use evmOps::evmOp_revert_knownCodePc;
 use evmOps::evmOp_callAndReturn;
 use evmOps::evmOp_returndatasize;
 use evmOps::doCreationOpcode;
+
+use healthCheck::healthCheck;
 
 use pluggables::ModuleFunction;
 use pluggables::installPluggable;
@@ -122,6 +126,8 @@ public impure func arbowner_txcall() {
             arbowner_getTotalOfEthBalances(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_deployContract) {
             arbowner_deployContract(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_arbosHealthCheck) {
+            arbowner_arbosHealthCheck(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
@@ -368,6 +374,21 @@ impure func arbowner_deployContract(topFrame: EvmCallFrame, calldata: ByteArray)
         evmOp_return(0, 32);
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 164, 0, 0);
+    }
+}
+
+// function arbosHealthCheck() external view returns(bool);  // problems reported via debugprints
+impure func arbowner_arbosHealthCheck(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(170, 0, 0);
+    }
+
+    let ok = (healthCheck() == Some(()));
+
+    if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, uint(ok)))) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownPc(171, 0, 0);
     }
 }
 

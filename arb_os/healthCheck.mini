@@ -1,0 +1,69 @@
+//
+// Copyright 2021, Offchain Labs, Inc. All rights reserved.
+//
+
+use accounts::getGlobalAccountStore;
+use accounts::accountStore_healthCheck;
+
+
+public impure func healthCheck() -> option<()> {
+    accountStore_healthCheck(getGlobalAccountStore())?;
+
+    return Some(());
+}
+
+public func healthCheck_verifyUint(val: any) -> option<()> {
+    return xif ((asm(val,) uint { gettype }) == 0) {
+        Some(())
+    } else {
+        None<()>
+    };
+}
+
+public func healthCheck_verifyAddress(val: any) -> option<()> {
+    healthCheck_verifyUint(val)?;
+    let v = unsafecast<uint>(val);
+    return xif (uint(address(v)) == v) {
+        Some(())
+    } else {
+        None<()>
+    };
+}
+
+public func healthCheck_verifyTuple(val: any, size: uint) -> option<()> {
+    return xif (asm(val,) uint { gettype } == 3){
+        xif (asm(val,) uint { tlen } == size) {
+            Some(())
+        } else {
+            None<()>   // wrong size tuple
+        }
+    } else {
+        None<()>   // not a tuple
+    };
+}
+
+public func healthCheck_verifyOption(val: any, maybeInnerClosure: option<func(any) -> option<()>>) -> option<()> {
+    return xif (unsafecast<option<any>>(val) == None<any>) {
+        Some(())
+    } else {
+        healthCheck_verifyTuple(val, 2)?;
+        let (one, contents) = unsafecast<(any, any)>(val);
+        if (one != unsafecast<any>(1)) {
+            return None<()>;
+        }
+        xif let Some(innerClosure) = maybeInnerClosure {
+            innerClosure(contents)
+        } else {
+            Some(())
+        }
+    };
+}
+
+public func healthCheck_verifyOptionNoRecurse(val: any) -> option<()> {
+    return healthCheck_verifyOption(val, None<func(any) -> option<()>>);
+}
+
+public func healthCheck_verifyMap(val: any) -> option<()> {
+    healthCheck_verifyTuple(val, 2)?;
+    return healthCheck_verifyUint(unsafecast<(any, any)>(val).1);
+}

@@ -34,6 +34,12 @@ use codeSegment::translateEvmCodeSegment;
 use decompression::AggregatorDecompressionState;
 use evmCallStack::evmCallStack_addStorageCharge;
 
+use healthCheck::healthCheck_verifyUint;
+use healthCheck::healthCheck_verifyAddress;
+use healthCheck::healthCheck_verifyTuple;
+use healthCheck::healthCheck_verifyMap;
+use healthCheck::healthCheck_verifyOption;
+use healthCheck::healthCheck_verifyOptionNoRecurse;
 
 type AccountStore = struct {
     accounts: map<address, Account>,
@@ -101,6 +107,42 @@ public impure func getGlobalAccountStore() -> AccountStore {
 
 public impure func setGlobalAccountStore(acctStore: AccountStore) {
     globalAccountStore = acctStore;
+}
+
+public func accountStore_healthCheck(acctStore: AccountStore) -> option<()> {
+    healthCheck_verifyTuple(acctStore, 4)?;
+
+    healthCheck_verifyMap(acctStore.accounts)?;
+    if ( ! unsafecast<bool>(accountStore_forall(acctStore, accountHealthCheckIterator, true)) ) {
+        return None<()>;
+    }
+
+    healthCheck_verifyUint(acctStore.numContracts)?;
+    healthCheck_verifyMap(acctStore.codeRefTable)?;
+
+    return Some(());
+}
+
+func accountHealthCheckIterator(acct: Account, soFar: any) -> any {
+    return xif let Some(_) = account_healthCheck(acct) {
+        soFar
+    } else {
+        false
+    };
+}
+
+func account_healthCheck(acct: Account) -> option<()> {
+    healthCheck_verifyTuple(acct, 7)?;
+    let (addr, blsKey, sn, bal, contInfo, aggInfo, aggToPay) = unsafecast<(any, any, any, any, any, any, any)>(acct);
+    healthCheck_verifyAddress(addr)?;
+    healthCheck_verifyOptionNoRecurse(blsKey)?;
+    healthCheck_verifyUint(sn)?;
+    healthCheck_verifyUint(bal)?;
+    healthCheck_verifyOptionNoRecurse(contInfo)?;
+    healthCheck_verifyOptionNoRecurse(aggInfo)?;
+    healthCheck_verifyOption(aggToPay, Some(healthCheck_verifyAddress))?;
+
+    return Some(());
 }
 
 public func accountStore_get(acctStore: AccountStore, addr: address) -> Account {
