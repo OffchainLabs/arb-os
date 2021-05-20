@@ -9,6 +9,7 @@ use accounts::accountStore_set;
 use accounts::accountStore_getRetryBuffer;
 use accounts::accountStore_setRetryBuffer;
 use accounts::accountStore_transferEthBalance;
+use accounts::account_getBalance;
 use accounts::account_addToEthBalance;
 use accounts::account_deductFromEthBalance;
 
@@ -288,7 +289,6 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
 
     let ret = xif (submissionFee <= maxSubmissionCost) {
         let totalDue = callvalue + maxSubmissionCost;
-
         xif let Some(senderAcct) = account_deductFromEthBalance(accountStore_get(acctStore, sender), totalDue) {
             // We took maxSubmissionCost + callvalue from the sender.
             // We will distribute those funds as follows:
@@ -348,7 +348,9 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
                 true,
             );
 
-            xif ((maxGasForImmediate > 0) && (maxGasForImmediate*gasPriceForImmediate >= gasPriceForImmediate)) { // 2nd check avoids overflow
+            xif (    (maxGasForImmediate > 0)
+                  && (gasPriceForImmediate > 0)
+                  && (maxGasForImmediate*gasPriceForImmediate >= gasPriceForImmediate)) { // the last check avoids overflow
                 xif let Some(rtx) =  retryBuffer_get(accountStore_getRetryBuffer(acctStore), txId) {
                     let tryAutoRedeem = xif let Some(uaStore) = accountStore_transferEthBalance(
                         acctStore,
