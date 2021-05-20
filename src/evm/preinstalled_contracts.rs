@@ -448,10 +448,7 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
-    pub fn _arbos_health_check(
-        &self,
-        machine: &mut Machine,
-    ) -> Result<bool, ethabi::Error> {
+    pub fn _arbos_health_check(&self, machine: &mut Machine) -> Result<bool, ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
             Uint256::zero(),
             "arbosHealthCheck",
@@ -1190,7 +1187,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     assert_eq!(arbos_version, arbos_version_orig);
 
     assert!(arbowner._arbos_health_check(&mut machine).unwrap());
-    
+
     Ok(())
 }
 
