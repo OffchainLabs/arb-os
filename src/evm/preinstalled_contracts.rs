@@ -812,9 +812,7 @@ impl _ArbAggregator {
         let (receipts, sends) = self.contract_abi.call_function(
             Uint256::zero(),
             "getTxBaseFee",
-            &[
-                ethabi::Token::Address(agg_addr.to_h160()),
-            ],
+            &[ethabi::Token::Address(agg_addr.to_h160())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -1529,13 +1527,19 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
     assert_eq!(tx_gas_limit, Uint256::from_u64(10_000_000));
 
     let agg_addr = Uint256::from_u64(777);
-    let fee = arbaggregator._get_tx_base_fee(&mut machine, agg_addr.clone()).unwrap();
+    let fee = arbaggregator
+        ._get_tx_base_fee(&mut machine, agg_addr.clone())
+        .unwrap();
     assert_eq!(fee, Uint256::from_u64(4000));
 
     let new_fee = Uint256::from_u64(8913);
-    arbaggregator._set_tx_base_fee(&mut machine, agg_addr.clone(), new_fee.clone()).unwrap();
+    arbaggregator
+        ._set_tx_base_fee(&mut machine, agg_addr.clone(), new_fee.clone())
+        .unwrap();
 
-    let fee = arbaggregator._get_tx_base_fee(&mut machine, agg_addr.clone()).unwrap();
+    let fee = arbaggregator
+        ._get_tx_base_fee(&mut machine, agg_addr.clone())
+        .unwrap();
     assert_eq!(fee, new_fee);
 
     if let Some(path) = log_to {
