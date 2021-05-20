@@ -60,7 +60,6 @@ public func chainParams_getDefaults() -> map<uint, uint> {
         with { [const::Atom_Param_L1GasPerL1CalldataUnit] = const::Default_Param_L1GasPerL1CalldataUnit }
         with { [const::Atom_Param_L1GasPerStorage] = const::Default_Param_L1GasPerStorage }
         with { [const::Atom_Param_ArbGasDivisor] = const::Default_Param_ArbGasDivisor }
-        with { [const::Atom_Param_NonzeroBalanceCallStipend] = const::Default_Param_NonzeroBalanceCallStipend }
         with { [const::Atom_Param_NetworkFeeShareNumerator] = const::Default_Param_NetworkFeeShareNumerator }
         with { [const::Atom_Param_NetworkFeeShareDenominator] = const::Default_Param_NetworkFeeShareDenominator }
         with { [const::Atom_Param_GasPoolMax] = const::Default_Param_GasPoolMax }
@@ -70,7 +69,7 @@ public func chainParams_getDefaults() -> map<uint, uint> {
         with { [const::Atom_Param_RetryablePricePerByteDenominator] = const::Default_Param_RetryablePricePerByteDenominator }
         with { [const::Atom_Param_RetryableTxRepriceIntervalSeconds] = const::Default_Param_RetryableTxRepriceIntervalSeconds }
         with { [const::Atom_Param_L1GasPriceEstimateGwei] = const::Default_Param_L1GasPriceEstimateGwei }
-        with { [const::Atom_Param_L1GasPriceEstimateWeightDenominator] = const::Default_Param_L1GasPriceEstimateWeightDenominator }
+        with { [const::Atom_Param_L1GasPriceEstimateWeightNumerator] = const::Default_Param_L1GasPriceEstimateWeightNumerator }
         with { [const::Atom_Param_BatchSizeEstimateWeightDenominator] = const::Default_Param_BatchSizeEstimateWeightDenominator }
         with { [const::Atom_Param_RetryableTxLifetimeSeconds] = const::Default_Param_RetryableTxLifetimeSeconds }
         with { [const::Atom_Param_AssumedBatchCostL1Gas] = const::Default_Param_AssumedBatchCostL1Gas }
