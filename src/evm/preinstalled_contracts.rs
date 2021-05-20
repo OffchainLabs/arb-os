@@ -1854,6 +1854,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
         &mut machine,
         Uint256::zero(),
         Uint256::zero(),
+        Uint256::zero(),
         None,
         Some(beneficiary.clone()),
         None,
@@ -1895,6 +1896,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
             ethabi::Token::Uint(Uint256::one().to_u256()),
         ],
         &mut machine,
+        Uint256::zero(),
         Uint256::zero(),
         Uint256::zero(),
         None,
@@ -1950,11 +1952,12 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
         ],
         &mut machine,
         Uint256::zero(),
+        Uint256::_from_eth(100),
         Uint256::zero(),
         None,
         Some(beneficiary.clone()),
         Some(Uint256::from_u64(1_000_000)),
-        Some(Uint256::zero()),
+        Some(Uint256::_from_gwei(5)),
     )?;
     assert!(txid != Uint256::zero());
     assert!(maybe_redeemid.is_some());
@@ -1968,7 +1971,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
 
     let receipts = machine.runtime_env.get_all_receipt_logs();
     let last_receipt = receipts[receipts.len() - 1].clone();
-    assert!(last_receipt.succeeded());
+    assert_eq!(last_receipt.get_return_code(), Uint256::zero());
     assert_eq!(last_receipt.get_request_id(), redeemid);
 
     let second_to_last = receipts[receipts.len() - 2].clone();

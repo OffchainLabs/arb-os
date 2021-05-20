@@ -1038,13 +1038,13 @@ public impure func evmCallStack_returnFromCall(
             }
             evmTracer_pushReturnRevert(
                 const::TxResultCode_revert,
-                returnData,
+                xif (globalCurrentTxRequest.isConstructor) { bytearray_new(0) } else { returnData },
                 gasUsage.gasUsed,
             );
             emitTxReceipt(
                 globalCurrentTxRequest.incomingRequest,
                 const::TxResultCode_revert,
-                Some(returnData),
+                xif (globalCurrentTxRequest.isConstructor) { None<ByteArray> } else { Some(returnData) },
                 None<EvmLogs>,
                 Some(gasUsage),
                 feeStats,
