@@ -1774,11 +1774,7 @@ fn _evm_reverter_factory_test_impl() {
                 false,
             );
             if let Err(maybe_receipt) = result {
-                if let Some(receipt) = maybe_receipt {
-                    if receipt.get_return_data().len() == 0 {
-                        panic!("zero-length returndata")
-                    }
-                } else {
+                if maybe_receipt.is_none() {
                     panic!("deploy failed without receipt");
                 }
             } else {
