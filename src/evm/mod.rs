@@ -39,6 +39,13 @@ pub fn test_contract_path(contract_name: &str) -> String {
     )
 }
 
+pub fn _test_contract_path2(parent_name: &str, contract_name: &str) -> String {
+    format!(
+        "contracts/artifacts/arbos/test/{}.sol/{}.json",
+        parent_name, contract_name
+    )
+}
+
 pub fn evm_xcontract_call_with_constructors(
     log_to: Option<&Path>,
     debug: bool,
@@ -548,201 +555,6 @@ pub fn _evm_test_callback(log_to: Option<&Path>, debug: bool) -> Result<(), etha
     Ok(())
 }
 
-#[test]
-fn test_retryable() {
-    match _test_retryable(None, false) {
-        Ok(()) => {}
-        Err(e) => panic!("{}", e),
-    }
-}
-
-pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
-
-    let my_addr = Uint256::from_u64(1234);
-
-    let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
-    if add_contract
-        .deploy(&[], &mut machine, Uint256::zero(), None, debug)
-        .is_err()
-    {
-        panic!("failed to deploy Add contract");
-    }
-
-    let beneficiary = Uint256::from_u64(9185);
-
-    let (_, txid, _) = add_contract._send_retryable_tx(
-        my_addr.clone(),
-        "add",
-        &[
-            ethabi::Token::Uint(Uint256::one().to_u256()),
-            ethabi::Token::Uint(Uint256::one().to_u256()),
-        ],
-        &mut machine,
-        Uint256::zero(),
-        Uint256::zero(),
-        None,
-        Some(beneficiary.clone()),
-        None,
-        None,
-    )?;
-    assert!(txid != Uint256::zero());
-    let _gas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    };
-
-    let arb_replayable = _ArbReplayableTx::_new(debug);
-    let timeout = arb_replayable._get_timeout(&mut machine, txid.clone())?;
-    assert!(timeout > machine.runtime_env.current_timestamp);
-
-    let (keepalive_price, reprice_time) =
-        arb_replayable._get_keepalive_price(&mut machine, txid.clone())?;
-    assert_eq!(keepalive_price, Uint256::zero());
-    assert!(reprice_time > machine.runtime_env.current_timestamp);
-
-    let keepalive_ret = arb_replayable._keepalive(&mut machine, txid.clone(), keepalive_price)?;
-
-    let new_timeout = arb_replayable._get_timeout(&mut machine, txid.clone())?;
-    assert_eq!(keepalive_ret, new_timeout);
-    assert!(new_timeout > timeout);
-
-    arb_replayable._redeem(&mut machine, txid.clone())?;
-
-    let new_timeout = arb_replayable._get_timeout(&mut machine, txid.clone())?;
-    assert_eq!(new_timeout, Uint256::zero()); // verify that txid has been removed
-
-    // make another one, and have the beneficiary cancel it
-    let (_, txid, _) = add_contract._send_retryable_tx(
-        my_addr.clone(),
-        "add",
-        &[
-            ethabi::Token::Uint(Uint256::one().to_u256()),
-            ethabi::Token::Uint(Uint256::one().to_u256()),
-        ],
-        &mut machine,
-        Uint256::zero(),
-        Uint256::zero(),
-        None,
-        Some(beneficiary.clone()),
-        None,
-        None,
-    )?;
-
-    assert!(txid != Uint256::zero());
-    let _gas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    };
-
-    let out_beneficiary = arb_replayable._get_beneficiary(&mut machine, txid.clone())?;
-    assert_eq!(out_beneficiary, beneficiary);
-
-    arb_replayable._cancel(&mut machine, txid.clone(), beneficiary.clone())?;
-
-    assert_eq!(
-        arb_replayable._get_timeout(&mut machine, txid)?,
-        Uint256::zero()
-    ); // verify txid no longer exists
-
-    let amount_to_pay = Uint256::from_u64(1_000_000);
-    let _txid = machine.runtime_env._insert_retryable_tx_message(
-        my_addr.clone(),
-        Uint256::from_u64(7890245789245), // random non-contract address
-        amount_to_pay.clone(),
-        amount_to_pay.clone(),
-        Uint256::zero(),
-        my_addr.clone(),
-        my_addr.clone(),
-        Uint256::zero(),
-        Uint256::zero(),
-        &[],
-    );
-    let _gas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    };
-    let all_logs = machine.runtime_env.get_all_receipt_logs();
-    let last_log = &all_logs[all_logs.len() - 1];
-    assert!(last_log.succeeded());
-
-    let (_submit_txid, txid, redeemid) = add_contract._send_retryable_tx(
-        my_addr.clone(),
-        "add",
-        &[
-            ethabi::Token::Uint(Uint256::one().to_u256()),
-            ethabi::Token::Uint(Uint256::one().to_u256()),
-        ],
-        &mut machine,
-        Uint256::zero(),
-        Uint256::zero(),
-        None,
-        Some(beneficiary.clone()),
-        Some(Uint256::from_u64(1_000_000)),
-        Some(Uint256::zero()),
-    )?;
-    assert!(txid != Uint256::zero());
-    assert!(redeemid.is_some());
-    let redeemid = redeemid.unwrap();
-
-    let _gas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    };
-
-    let receipts = machine.runtime_env.get_all_receipt_logs();
-    let last_receipt = receipts[receipts.len() - 1].clone();
-    assert!(last_receipt.succeeded());
-    assert_eq!(last_receipt.get_request_id(), redeemid);
-
-    let second_to_last = receipts[receipts.len() - 2].clone();
-    assert!(second_to_last.succeeded());
-    assert_eq!(second_to_last.get_request_id(), txid);
-
-    let num_receipts_before = receipts.len();
-    let (submit_txid, _inner_txid, maybe_redeem_id) =
-        machine.runtime_env._insert_retryable_tx_message(
-            my_addr.clone(),
-            add_contract.address,
-            Uint256::zero(),
-            Uint256::_from_eth(1),
-            Uint256::_from_gwei(1_000_000),
-            my_addr.clone(),
-            my_addr.clone(),
-            Uint256::from_u64(10_000_000),
-            Uint256::zero(),
-            &[],
-        );
-
-    let _gas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    };
-
-    let new_receipts = &machine.runtime_env.get_all_receipt_logs()[num_receipts_before..];
-    assert_eq!(new_receipts.len(), 2);
-    assert!(new_receipts[0].succeeded());
-    assert_eq!(new_receipts[0].get_request_id(), submit_txid);
-    assert!(!new_receipts[1].succeeded());
-    assert_eq!(new_receipts[1].get_request_id(), maybe_redeem_id.unwrap());
-
-    if let Some(path) = log_to {
-        machine
-            .runtime_env
-            .recorder
-            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
-            .unwrap();
-    }
-
-    Ok(())
-}
-
 pub fn evm_test_create(
     log_to: Option<&Path>,
     debug: bool,
@@ -931,14 +743,7 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
     let sequencer_addr = Uint256::from_usize(1337);
-    let mut rt_env = RuntimeEnvironment::_new_options(
-        Uint256::from_usize(1111),
-        Some((
-            sequencer_addr.clone(),
-            Uint256::from_u64(20),
-            Uint256::from_u64(20 * 30),
-        )),
-    );
+    let mut rt_env = RuntimeEnvironment::_new_options(Uint256::from_usize(1111));
 
     let wallet = rt_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1066,14 +871,7 @@ pub fn _evm_xcontract_call_sequencer_slow_path(
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
     let sequencer_addr = Uint256::from_usize(1337);
-    let mut rt_env = RuntimeEnvironment::_new_options(
-        Uint256::from_usize(1111),
-        Some((
-            sequencer_addr.clone(),
-            Uint256::from_u64(20),
-            Uint256::from_u64(20 * 30),
-        )),
-    );
+    let mut rt_env = RuntimeEnvironment::_new_options(Uint256::from_usize(1111));
 
     let wallet = rt_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1318,14 +1116,7 @@ pub fn _evm_xcontract_call_sequencer_reordering(
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
     let sequencer_addr = Uint256::from_usize(1337);
-    let mut rt_env = RuntimeEnvironment::_new_options(
-        Uint256::from_usize(1111),
-        Some((
-            sequencer_addr.clone(),
-            Uint256::from_u64(20),
-            Uint256::from_u64(20 * 30),
-        )),
-    );
+    let mut rt_env = RuntimeEnvironment::_new_options(Uint256::from_usize(1111));
 
     let wallet = rt_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1986,11 +1777,7 @@ fn _evm_reverter_factory_test_impl() {
                 false,
             );
             if let Err(maybe_receipt) = result {
-                if let Some(receipt) = maybe_receipt {
-                    if receipt.get_return_data().len() == 0 {
-                        panic!("zero-length returndata")
-                    }
-                } else {
+                if maybe_receipt.is_none() {
                     panic!("deploy failed without receipt");
                 }
             } else {
@@ -2053,7 +1840,7 @@ pub fn evm_eval_sha256(log_to: Option<&Path>, debug: bool) {
 
     let tx_id = machine.runtime_env.insert_tx_message(
         my_addr,
-        Uint256::from_u64(1000000000),
+        Uint256::from_u64(10000000),
         Uint256::zero(),
         Uint256::from_u64(2), // sha256 precompile
         Uint256::from_u64(0),
@@ -2068,6 +1855,7 @@ pub fn evm_eval_sha256(log_to: Option<&Path>, debug: bool) {
     };
 
     let receipts = machine.runtime_env.get_all_receipt_logs();
+    println!("result code: {}", receipts[0].get_return_code());
     assert_eq!(receipts.len(), 1);
     assert_eq!(receipts[0].get_request_id(), tx_id);
     assert!(receipts[0].succeeded());
@@ -2244,6 +2032,44 @@ fn _evm_bad_receipt_revert_test_impl() {
         receipts[total_receipts_before].get_return_code(),
         Uint256::from_u64(10)
     );
+}
+
+#[test]
+fn evm_test_constructor_recursion() {
+    let _ = _test_constructor_recursion().unwrap();
+}
+
+pub fn _test_constructor_recursion() -> Result<(), ethabi::Error> {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+
+    let my_addr = Uint256::from_usize(1025);
+
+    let mut ccontract = AbiForContract::new_from_file(&_test_contract_path2(
+        "ReverterFactory",
+        "ConstructorCallback2",
+    ))?;
+    if ccontract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .is_err()
+    {
+        panic!("failed to deploy ConstructorCallback contract");
+    }
+
+    let (receipts, _) = ccontract
+        .call_function(
+            my_addr.clone(),
+            "test",
+            &[],
+            &mut machine,
+            Uint256::zero(),
+            false,
+        )
+        .unwrap();
+    assert_eq!(receipts.len(), 1);
+    assert!(receipts[0].succeeded());
+
+    Ok(())
 }
 
 pub fn make_logs_for_all_arbos_tests() {

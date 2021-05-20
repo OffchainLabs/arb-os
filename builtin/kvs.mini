@@ -57,7 +57,6 @@ public func builtin_kvsSize(kvs: Kvs) -> uint {
 public func builtin_kvsGet(kvs: Kvs, key: any) -> option<any> {
     let hashedKey = uint(hash(key));
     let s = kvs.tree;
-    let reductionFactor = 1;
     return xloop {
         if (s == unsafecast<KvsNode>(0)) {
             // empty subtree
@@ -71,8 +70,8 @@ public func builtin_kvsGet(kvs: Kvs, key: any) -> option<any> {
             }
         } else {
             // still at an internal node of the tree; walk downward and try again
-            s = unsafecast<KvsNode>(s[(hashedKey/reductionFactor) & 0x7]);
-            reductionFactor = reductionFactor * 8;
+            s = unsafecast<KvsNode>(s[hashedKey & 0x7]);
+            hashedKey = hashedKey / 8;
         }
     };
 }
@@ -195,17 +194,17 @@ public func builtin_kvsDelete(s: Kvs, key: uint) -> Kvs {
 // this will return the state at the end
 // order of traversal is deterministic but weird and subject to change,
 //       so callers are advised not to rely on the ordering
-public impure func builtin_kvsForall(
+public func builtin_kvsForall(
     s: Kvs,
-    closure: impure func(any, any, any) -> any,
+    closure: func(any, any, any) -> any,
     state: any
 ) -> any {
     return kvs_forall_tree(s.tree, closure, state);
 }
 
-impure func kvs_forall_tree(
+func kvs_forall_tree(
     t: KvsNode,
-    closure: impure func(any, any, any) -> any,
+    closure: func(any, any, any) -> any,
     state: any
 ) -> any {
     return xif (t == unsafecast<KvsNode>(0)) {

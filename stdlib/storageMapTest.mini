@@ -10,6 +10,10 @@ use std::storageMap::storageMap_get;
 use std::storageMap::storageMap_set;
 use std::storageMap::storageMap_delete;
 use std::storageMap::storageMap_forall;
+use std::storageMap::storageMap_diff;
+
+use std::stack::stack_size;
+use std::stack::stack_pop;
 
 
 impure func main() {
@@ -158,7 +162,7 @@ func tests() -> uint {
         return 411;
     }
 
-	return 0;
+	return storageMapDiffTest();
 }
 
 func isSome(x: option<any>) -> bool {
@@ -179,4 +183,38 @@ func getSomeOr(x: option<any>, backupVal: any) -> any {
 
 func sumForKvsIterator(key: uint, value: uint, state: any) -> any {
 	return value + unsafecast<uint>(state);
+}
+
+func storageMapDiffTest() -> uint {
+    let m0 = storageMap_new();
+    m0 = storageMap_set(m0, 13, 5);
+    m0 = storageMap_set(m0, 14, 6);
+
+    let m1 = storageMap_new();
+    m1 = storageMap_set(m1, 13, 6);
+
+    if (stack_size(storageMap_diff(m0, m1)) != 2) {
+        return 50;
+    }
+
+    m1 = storageMap_set(m1, 14, 6);
+    let diff = storageMap_diff(m0, m1);
+    if (stack_size(diff) != 1) {
+        return 60;
+    }
+    if let Some(res) = stack_pop(diff) {
+        if (res.1 != (13, 5, 6)) {
+            return 61;
+        }
+    } else {
+        return 62;
+    }
+
+    m1 = storageMap_set(m1, 99, 99);
+    diff = storageMap_diff(m0, m1);
+    if (stack_size(diff) != 2) {
+        return 70;
+    }
+
+    return 0;
 }

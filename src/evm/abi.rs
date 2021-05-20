@@ -95,7 +95,7 @@ impl AbiForContract {
 
         let request_id = machine.runtime_env.insert_tx_message(
             Uint256::from_u64(1025),
-            Uint256::from_usize(1_000_000_000),
+            Uint256::from_usize(10_000_000),
             Uint256::zero(),
             Uint256::zero(),
             payment,
@@ -173,7 +173,7 @@ impl AbiForContract {
 
         machine.runtime_env.insert_tx_message(
             sender_addr,
-            Uint256::from_usize(1_000_000_000),
+            Uint256::from_usize(10_000_000),
             Uint256::zero(),
             self.address.clone(),
             payment,
@@ -202,7 +202,8 @@ impl AbiForContract {
         func_name: &str,
         args: &[ethabi::Token],
         machine: &mut Machine,
-        payment: Uint256,
+        callvalue: Uint256,
+        deposit: Uint256,
         max_submission_cost: Uint256,
         credit_back_address: Option<Uint256>,
         beneficiary: Option<Uint256>,
@@ -216,8 +217,8 @@ impl AbiForContract {
             machine.runtime_env._insert_retryable_tx_message(
                 sender.clone(),
                 self.address.clone(),
-                payment.clone(),
-                payment,
+                callvalue,
+                deposit,
                 max_submission_cost,
                 credit_back_address.unwrap_or(sender.clone()),
                 beneficiary.unwrap_or(sender),

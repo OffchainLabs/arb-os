@@ -1918,6 +1918,9 @@ impl Machine {
                             }
                             None => {
                                 self.arb_gas_remaining = gas_remaining_before;
+                                if insn.immediate.is_some() {
+                                    let _ = self.stack.pop(&self.state);
+                                }
                                 Ok(false) // machine is blocked, waiting for message
                             }
                         }
@@ -2051,6 +2054,7 @@ impl Machine {
                             ),
                             self.arb_gas_remaining
                         );
+                        check_debugprint_for_malformed_trace_info(&r1);
                         self.incr_pc();
                         Ok(true)
                     }
@@ -2231,6 +2235,45 @@ impl Machine {
             ))
         }
     }
+}
+
+fn check_debugprint_for_malformed_trace_info(r1: &Value) {
+    if let Value::Tuple(tup) = r1 {
+        if (tup.len() == 2) && (tup[0] == Value::Int(Uint256::from_u64(20000))) {
+            check_validity_of_trace_info(&tup[1]);
+        }
+    }
+}
+
+fn check_validity_of_trace_info(val: &Value) {
+    let mut val = val;
+    let mut nesting = 0;
+    while (!val.is_none()) {
+        if let Value::Tuple(tup) = val {
+            assert_eq!(tup.len(), 2);
+            if let Value::Tuple(tup2) = &tup[0] {
+                let typecode = if let Value::Int(ui) = &tup2[0] {
+                    ui
+                } else {
+                    panic!()
+                };
+                if typecode == &Uint256::zero() {
+                    nesting = nesting + 1;
+                } else if typecode == &Uint256::one() {
+                    assert!(nesting > 0);
+                    nesting = nesting - 1;
+                } else {
+                    assert!(typecode <= &Uint256::from_u64(3));
+                }
+            } else {
+                panic!();
+            }
+            val = &tup[1];
+        } else {
+            panic!();
+        }
+    }
+    assert_eq!(nesting, 0);
 }
 
 fn tuple_keccak(intup: Vec<Value>, state: &MachineState) -> Result<Vec<Value>, ExecutionError> {

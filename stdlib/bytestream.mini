@@ -12,6 +12,7 @@ use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_buffer;
 use std::bytearray::bytearray_slice;
 use std::bytearray::bytearray_wrap_slice;
+use std::bytearray::buffer_getCalldataUnits;
 
 
 type ByteStream = struct {
@@ -36,6 +37,10 @@ public func bytestream_atEof(bs: ByteStream) -> bool {
 
 public func bytestream_bytesReadSoFar(bs: ByteStream) -> uint {
     return bs.currentOffset;
+}
+
+public func bytestream_getCalldataUnits(bs: ByteStream, nbytes: uint) -> uint {
+    return buffer_getCalldataUnits(bs.buf, bs.slice, nbytes);
 }
 
 public func bytestream_bytesRemaining(bs: ByteStream) -> uint {
@@ -96,6 +101,21 @@ public func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)> {
         Some((
             bs with { currentOffset: bs.currentOffset+32 },
             getbuffer256(bs.buf, bs.currentOffset+bs.slice)
+        ))
+    };
+}
+
+public func bytestream_getPartialWord(bs: ByteStream, nbytes: uint) -> option<(ByteStream, uint)> {
+    // read part of the next word -- just get the first nbytes bytes of it
+    // nbytes must be <= 32
+    return xif (nbytes > 32) {
+        None<(ByteStream, uint)>
+    } elseif (bs.currentOffset+nbytes > bs.capacity) {
+        None<(ByteStream, uint)>
+    } else {
+        Some((
+            bs with { currentOffset: bs.currentOffset+nbytes },
+            asm(256-8*nbytes, getbuffer256(bs.buf, bs.currentOffset+bs.slice)) uint { shr },
         ))
     };
 }
