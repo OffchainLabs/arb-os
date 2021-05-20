@@ -209,7 +209,7 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
         || (opcode == 0xff); // SELFDESTRUCT
 }
 
-impure func generateCodeForEvmSegment(
+#[noinline, ] impure func generateCodeForEvmSegment(
     insns: EvmInstructionStack,
     makePcTable: bool,
 ) -> (AvmCodePoint, map<uint, AvmCodePoint>, Stack) {
