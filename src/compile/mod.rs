@@ -1043,7 +1043,11 @@ pub struct FileInfo {
 
 impl Debug for FileInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "FileInfo {{path: {:?}, name: {:?}, contents:...}}", self.path, self.name)
+        write!(
+            f,
+            "FileInfo {{path: {:?}, name: {:?}, contents:...}}",
+            self.path, self.name
+        )
     }
 }
 
