@@ -1120,6 +1120,7 @@ pub enum ExprKind {
     NewMap(Type, Type),
     ArrayOrMapMod(Box<Expr>, Box<Expr>, Box<Expr>),
     StructMod(Box<Expr>, String, Box<Expr>),
+    Cast(Box<Expr>, Type),
     UnsafeCast(Box<Expr>, Type),
     Asm(Type, Vec<Instruction>, Vec<Expr>),
     Panic,
