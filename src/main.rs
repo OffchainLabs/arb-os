@@ -6,7 +6,6 @@
 
 use crate::compile::CompileStruct;
 use crate::link::LinkedProgram;
-//use crate::pos::try_display_location;
 use crate::upload::CodeUploader;
 use clap::Clap;
 use compile::CompileError;

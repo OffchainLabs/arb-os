@@ -422,7 +422,7 @@ pub fn compile_from_file(
 }
 
 ///Prints the AST nodes with indentation representing their depth, currently not used.
-pub fn _print_node(node: &mut TypeCheckedNode, state: &String, mut_state: &mut usize) -> bool {
+fn _print_node(node: &mut TypeCheckedNode, state: &String, mut_state: &mut usize) -> bool {
     for _ in 0..*mut_state {
         print!("{}", state);
     }
@@ -721,12 +721,12 @@ fn typecheck_programs(
                 CompileError::new(
                     String::from("Compile warning"),
                     format!(
-                        "func {} {}",
+                        "func \x1b[33;1m{}\x1b[0;0m {}",
+                        string_table.name_from_id(func.name),
                         match declared_purity {
                             true => "is impure but not marked impure",
                             false => "is declared impure but does not contain impure code",
                         },
-                        string_table.name_from_id(func.name)
                     ),
                     func.debug_info.location.into_iter().collect(),
                     true,
@@ -1043,7 +1043,7 @@ pub struct FileInfo {
 
 impl Debug for FileInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "{}", self.path)
+        write!(f, "FileInfo {{path: {:?}, name: {:?}, contents:...}}", self.path, self.name)
     }
 }
 

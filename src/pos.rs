@@ -145,9 +145,6 @@ impl Location {
             "{}{}In file: {}",
             self,
             if line_break { "\n" } else { " " },
-            /*file_name_chart
-                .get(&self.file_id)
-            .unwrap_or(&self.file_id.to_string())*/
             match &file_name_chart.get(&self.file_id) {
                 None => self.file_id.to_string(),
                 Some(info) => info.name.clone(),

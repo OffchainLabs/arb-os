@@ -409,52 +409,74 @@ fn flowcheck_liveliness(
     mut nodes: Vec<TypeCheckedNode>,
     problems: &mut Vec<(Location, StringId)>,
     loop_pass: bool,
-) -> Vec<StringId> {
+) -> (BTreeSet<StringId>, BTreeMap<StringId, Location>) {
+    
     let mut node_iter = nodes.iter_mut();
-    let mut alive = BTreeMap::new(); // values that are alive and need to die in this scope
-    let mut born = BTreeSet::<StringId>::new(); // values brought to life within this scope
-    let mut killed = vec![]; // values this scope has killed
-
+    let mut alive  = BTreeMap::new();              // values that are alive and need to die in this scope
+    let mut reborn = BTreeMap::new();              // values that are brought back to life within this scope
+    let mut born   = BTreeSet::<StringId>::new();  // values brought to life within this scope
+    let mut killed = BTreeSet::<StringId>::new();  // values this scope has killed
+    let mut rescue = BTreeSet::<StringId>::new();  // values from parental scopes we provably must not kill
+    
     // algorithm notes:
     //   anything still alive at the end of scope is unused
     //   scopes return everything they've killed
-    //   we make the simplifying assumption that an assignment before the first let is always used later
+    //   a scope cannot kill that which it overwrites
     //   loops are unrolled to give assignments a second chance to be killed before leaving scope
-    //   conditionals are assumed to be
-
+    //   we assume conditionals could evaluate either true or false
+    //   you can never kill a value that's been reborn since the original value might be used later
+    //   we make no garuntee that all mistakes with the same variable are caught, only that one of them is
+    
+    
+    // it's okay to be alive if you walk out of scope if you've been reborn
+    
+    
+    macro_rules! process {
+        ($child_nodes:expr, $problems:expr, $loop_pass:expr $(,)?) => {
+            let (child_killed, child_reborn) = flowcheck_liveliness($child_nodes, $problems, $loop_pass);
+            for id in child_killed.iter() {
+                alive.remove(id);
+                reborn.remove(id);
+            }
+            for (id, loc) in child_reborn {
+                if born.contains(&id) {
+                    alive.insert(id, loc);
+                } else {
+                    reborn.insert(id, loc);
+                }
+            }
+            //reborn.extend(child_reborn);
+            killed.extend(child_killed);
+        };
+    }
+    
     for node in &mut node_iter {
         let repeat = match node {
             TypeCheckedNode::Statement(stat) => match &mut stat.kind {
                 TypeCheckedStatementKind::AssignLocal(id, expr) => {
-                    let dead = flowcheck_liveliness(
-                        vec![TypeCheckedNode::Expression(expr)],
-                        problems,
-                        false,
-                    );
-                    dead.iter().for_each(|id| {
-                        alive.remove(id);
-                    });
-                    killed.extend(dead);
-
+                    
+                    process!(vec![TypeCheckedNode::Expression(expr)], problems, false);
+                    
                     if let Some(loc) = alive.get(id) {
-                        problems.push((*loc, id.clone()))
+                        problems.push((*loc, id.clone()));
                     }
-
+                    
+                    if let None = born.get(id) {
+                        reborn.insert(id.clone(), stat.debug_info.location.unwrap());
+                    }
+                    
+                    if !alive.contains_key(id) && !born.contains(id) && !killed.contains(id) {
+                        rescue.insert(id.clone());
+                    }
+                    
+                    // we don't assert that the variable is born since it might not be from this scope
                     alive.insert(id.clone(), stat.debug_info.location.unwrap());
                     continue;
                 }
 
                 TypeCheckedStatementKind::Let(pat, expr) => {
-                    let dead = flowcheck_liveliness(
-                        vec![TypeCheckedNode::Expression(expr)],
-                        problems,
-                        false,
-                    );
-                    dead.iter().for_each(|id| {
-                        alive.remove(id);
-                    });
-                    killed.extend(dead);
-
+                    process!(vec![TypeCheckedNode::Expression(expr)], problems, false);
+                    
                     let ids: BTreeMap<StringId, Location> = pat
                         .collect_identifiers()
                         .iter()
@@ -470,31 +492,33 @@ fn flowcheck_liveliness(
                         .collect();
 
                     for id in ids.keys() {
+                        
                         if let Some(_) = born.get(id) {
                             if let Some(loc) = alive.get(id) {
                                 problems.push((*loc, id.clone()))
                             }
                         }
+                        
+                        if !alive.contains_key(id) && !born.contains(id) && !killed.contains(id) {
+                            rescue.insert(id.clone());
+                        }
                     }
-
+                    
+                    
+                    
                     born.extend(&mut ids.keys());
                     alive.extend(&ids);
                     continue;
                 }
                 TypeCheckedStatementKind::While(..) => true,
                 TypeCheckedStatementKind::Break(optional_expr, _) => {
-                    let dead = flowcheck_liveliness(
-                        optional_expr
-                            .iter_mut()
-                            .map(|x| TypeCheckedNode::Expression(x))
-                            .collect(),
-                        problems,
-                        false,
+                    process!(optional_expr
+                             .iter_mut()
+                             .map(|x| TypeCheckedNode::Expression(x))
+                             .collect(),
+                             problems,
+                             false,
                     );
-                    dead.iter().for_each(|id| {
-                        alive.remove(id);
-                    });
-                    killed.extend(dead);
                     continue;
                 }
                 _ => false,
@@ -503,53 +527,33 @@ fn flowcheck_liveliness(
             TypeCheckedNode::Expression(expr) => match &mut expr.kind {
                 TypeCheckedExprKind::DotRef(_, id, ..)
                 | TypeCheckedExprKind::LocalVariableRef(id, ..) => {
-                    killed.push(id.clone());
+                    killed.insert(id.clone());
                     alive.remove(id);
+                    reborn.remove(id);
                     false
                 }
                 TypeCheckedExprKind::IfLet(_, cond, block, else_block, _)
                 | TypeCheckedExprKind::If(cond, block, else_block, _) => {
-                    let mut dead = flowcheck_liveliness(
-                        vec![TypeCheckedNode::Expression(cond)],
-                        problems,
-                        false,
-                    );
-
-                    dead.extend(flowcheck_liveliness(block.child_nodes(), problems, false));
-
+                    
+                    process!(vec![TypeCheckedNode::Expression(cond)], problems, false);
+                    process!(block.child_nodes(), problems, false);
+                    
                     if let Some(branch) = else_block {
-                        dead.extend(flowcheck_liveliness(branch.child_nodes(), problems, false));
+                        process!(branch.child_nodes(), problems, false);
                     }
-
-                    dead.iter().for_each(|id| {
-                        alive.remove(id);
-                    });
-                    killed.extend(dead);
                     continue;
                 }
                 TypeCheckedExprKind::Loop(_body) => true,
                 _ => false,
             },
             TypeCheckedNode::StructField(field) => {
-                let dead = flowcheck_liveliness(
-                    vec![TypeCheckedNode::Expression(&mut field.value)],
-                    problems,
-                    false,
-                );
-                dead.iter().for_each(|id| {
-                    alive.remove(id);
-                });
-                killed.extend(dead);
+                process!(vec![TypeCheckedNode::Expression(&mut field.value)], problems, false);
                 continue;
             }
             _ => false,
         };
 
-        let dead = flowcheck_liveliness(node.child_nodes(), problems, repeat);
-        dead.iter().for_each(|id| {
-            alive.remove(id);
-        });
-        killed.extend(dead);
+        process!(node.child_nodes(), problems, repeat);
     }
 
     if loop_pass {
@@ -563,6 +567,16 @@ fn flowcheck_liveliness(
                 },
                 TypeCheckedNode::Expression(expr) => match &mut expr.kind {
                     TypeCheckedExprKind::Loop(..) => true,
+                    TypeCheckedExprKind::DotRef(_, id, ..)
+                    | TypeCheckedExprKind::LocalVariableRef(id, ..) => {
+                        
+                        // a variable born in this scope shouldn't get a second chance when unrolling
+                        if !born.contains(id) {
+                            alive.remove(id);
+                            reborn.remove(id);
+                        }
+                        false
+                    },
                     _ => false,
                 },
                 _ => false,
@@ -571,10 +585,16 @@ fn flowcheck_liveliness(
             // we've done already walked these nodes, so all errors are repeated and should be elided
             let mut duplicate_problems = vec![];
 
-            let dead = flowcheck_liveliness(node.child_nodes(), &mut duplicate_problems, repeat);
-            dead.iter().for_each(|id| {
-                alive.remove(id);
-            });
+            let (child_killed, _) = flowcheck_liveliness(node.child_nodes(), &mut duplicate_problems, repeat);
+            for id in child_killed.iter() {
+                
+                // a variable born in this scope shouldn't get a second chance when unrolling
+                if !born.contains(id) {
+                    alive.remove(id);
+                    reborn.remove(id);
+                }
+                
+            }
         }
     }
 
@@ -584,8 +604,12 @@ fn flowcheck_liveliness(
             problems.push((loc.clone(), id.clone()));
         }
     }
-
-    return killed;
+    
+    for id in &rescue {
+        killed.remove(id);
+    }
+    
+    return (killed, reborn);
 }
 
 impl TypeCheckedFunc {
@@ -614,16 +638,48 @@ impl TypeCheckedFunc {
         let reset = "\x1b[0;0m";
 
         flowcheck_reachability(self, file_info_chart);
-
+        
         let mut unused_assignments = vec![];
-
-        flowcheck_liveliness(self.child_nodes(), &mut unused_assignments, false);
-
+        
+        let (killed, reborn) = flowcheck_liveliness(self.child_nodes(), &mut unused_assignments, false);
+        
+        for arg in self.args.iter() {
+            // allow intentional lack of use
+            if !string_table.name_from_id(arg.name.clone()).starts_with('_') {
+                
+                if !killed.contains(&arg.name) {
+                    CompileError::new(
+                        String::from("Compile warning"),
+                        format!(
+                            "func {}{}{}'s argument {}{}{} is declared but never used",
+                            yellow, string_table.name_from_id(self.name.clone()), reset,
+                            yellow, string_table.name_from_id(arg.name.clone()), reset,
+                        ),
+                        arg.debug_info.location.into_iter().collect(),
+                        true,
+                    ).warn(file_info_chart);
+                }
+                
+                if let Some(loc) = reborn.get(&arg.name) {
+                    CompileError::new(
+                        String::from("Compile warning"),
+                        format!(
+                            "func {}{}{}'s argument {}{}{} is assigned but never used",
+                            yellow, string_table.name_from_id(self.name.clone()), reset,
+                            yellow, string_table.name_from_id(arg.name.clone()), reset,
+                        ),
+                        vec![*loc],
+                        true,
+                    ).warn(file_info_chart);
+                }
+            }
+        }
+        
         unused_assignments.sort_by(|a, b| a.0.line.to_usize().cmp(&b.0.line.to_usize()));
 
         for &(loc, id) in unused_assignments.iter() {
+            // allow intentional lack of use
             if !string_table.name_from_id(id.clone()).starts_with('_') {
-                // allow intentional unuse
                 CompileError::new(
                     String::from("Compile warning"),
                     format!(
