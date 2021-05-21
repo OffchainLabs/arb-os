@@ -32,7 +32,6 @@ use evmCallStack::evmCallStack_getTopFrameReturnData;
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert;
 use evmOps::evmOp_revert_knownCodePc;
-use evmOps::evmOp_callAndReturn;
 use evmOps::evmOp_returndatasize;
 use evmOps::doCreationOpcode;
 

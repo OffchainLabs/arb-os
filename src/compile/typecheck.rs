@@ -10,7 +10,7 @@ use super::ast::{
     Type, TypeTree, UnaryOp,
 };
 use crate::compile::ast::FieldInitializer;
-use crate::compile::{CompileError, FileInfo};
+use crate::compile::{CompileError, FileInfo, InliningHeuristic};
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::{Column, Location};
@@ -190,15 +190,45 @@ fn strip_returns(to_strip: &mut TypeCheckedNode, _state: &(), _mut_state: &mut (
     true
 }
 
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[repr(u32)]
+pub enum InliningMode {
+    Always,
+    Auto,
+    Never,
+}
+
+impl Default for InliningMode {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
+impl InliningMode {
+    pub fn and(&self, other: &InliningMode) -> InliningMode {
+        *if *self == InliningMode::Auto {
+            other
+        } else {
+            self
+        }
+    }
+}
+
 ///Used to inline an AST node
 fn inline(
     to_do: &mut TypeCheckedNode,
-    state: &(&Vec<TypeCheckedFunc>, &Vec<ImportedFunc>, &StringTable),
-    _mut_state: &mut (),
+    state: &(
+        &Vec<TypeCheckedFunc>,
+        &Vec<ImportedFunc>,
+        &StringTable,
+        &InliningHeuristic,
+    ),
+    _mut_state: &mut (InliningMode, Vec<usize>),
 ) -> bool {
     if let TypeCheckedNode::Statement(stat) = to_do {
-        stat.debug_info.attributes.inline
-    } else if let TypeCheckedNode::Expression(exp) = to_do {
+        _mut_state.0 = stat.debug_info.attributes.inline;
+    }
+    if let TypeCheckedNode::Expression(exp) = to_do {
         if let TypeCheckedExpr {
             kind: TypeCheckedExprKind::FunctionCall(name, args, _, _),
             debug_info: _,
@@ -211,6 +241,23 @@ fn inline(
             {
                 let found_func = state.0.iter().find(|func| func.name == id);
                 if let Some(func) = found_func {
+                    if match state.3 {
+                        InliningHeuristic::All => {
+                            _mut_state.0.and(&func.debug_info.attributes.inline)
+                                == InliningMode::Never
+                        }
+                        InliningHeuristic::None => {
+                            _mut_state.0.and(&func.debug_info.attributes.inline)
+                                != InliningMode::Always
+                        }
+                    } {
+                        return false;
+                    }
+                    if _mut_state.1.iter().any(|id| *id == func.name) {
+                        return false;
+                    } else {
+                        _mut_state.1.push(func.name);
+                    }
                     let mut code: Vec<_> = if func.args.len() == 0 {
                         vec![]
                     } else {
@@ -283,7 +330,7 @@ fn inline(
                     Some("_inline".to_string()),
                 ));
             }
-            false
+            true
         } else {
             true
         }
@@ -547,8 +594,13 @@ impl TypeCheckedFunc {
         funcs: &Vec<TypeCheckedFunc>,
         imported_funcs: &Vec<ImportedFunc>,
         string_table: &StringTable,
+        heuristic: &InliningHeuristic,
     ) {
-        self.recursive_apply(inline, &(funcs, imported_funcs, string_table), &mut ());
+        self.recursive_apply(
+            inline,
+            &(funcs, imported_funcs, string_table, heuristic),
+            &mut (InliningMode::Auto, vec![]),
+        );
     }
 
     pub fn flowcheck(
