@@ -144,6 +144,10 @@ func shadow(shadow_arg: uint, bad_arg: uint, good_arg: uint) {    // everything 
      while (true) {
        let shadowing_edge_case = shadowing_edge_case * 8;
      }
+     
+     let final = 4;
+     { xif (final == 4) { let _ = final; } elseif (true) { final = 8; } };
+     { xif (final == 4) { final = 8; } elseif (true) { let final = 8 * final; } };
 }
 
 func unused_function() {}

@@ -427,9 +427,8 @@ fn flowcheck_liveliness(
     //   we make no garuntee that all mistakes with the same variable are caught, only that one of them is
 
     macro_rules! process {
-        ($child_nodes:expr, $problems:expr, $loop_pass:expr $(,)?) => {
-            let (child_killed, child_reborn) =
-                flowcheck_liveliness($child_nodes, $problems, $loop_pass);
+        ($child_changes:expr) => {
+            let (child_killed, child_reborn) = $child_changes;
             for id in child_killed.iter() {
                 alive.remove(id);
                 reborn.remove(id);
@@ -441,8 +440,10 @@ fn flowcheck_liveliness(
                     reborn.insert(id, loc);
                 }
             }
-            //reborn.extend(child_reborn);
             killed.extend(child_killed);
+        };
+        ($child_nodes:expr, $problems:expr, $loop_pass:expr $(,)?) => {
+            process!(flowcheck_liveliness($child_nodes, $problems, $loop_pass));
         };
     }
 
@@ -527,12 +528,28 @@ fn flowcheck_liveliness(
                 }
                 TypeCheckedExprKind::IfLet(_, cond, block, else_block, _)
                 | TypeCheckedExprKind::If(cond, block, else_block, _) => {
-                    process!(vec![TypeCheckedNode::Expression(cond)], problems, false);
-                    process!(block.child_nodes(), problems, false);
+                    let (mut if_killed, mut if_reborn) = (
+                        BTreeSet::<StringId>::new(),
+                        BTreeMap::<StringId, Location>::new(),
+                    );
+
+                    macro_rules! extend {
+                        ($child_nodes:expr, $problems:expr, $loop_pass:expr $(,)?) => {
+                            let (child_killed, child_reborn) =
+                                flowcheck_liveliness($child_nodes, $problems, $loop_pass);
+                            if_killed.extend(child_killed);
+                            if_reborn.extend(child_reborn);
+                        };
+                    }
+
+                    extend!(vec![TypeCheckedNode::Expression(cond)], problems, false);
+                    extend!(block.child_nodes(), problems, false);
 
                     if let Some(branch) = else_block {
-                        process!(branch.child_nodes(), problems, false);
+                        extend!(branch.child_nodes(), problems, false);
                     }
+
+                    process!((if_killed, if_reborn));
                     continue;
                 }
                 TypeCheckedExprKind::Loop(_body) => true,
