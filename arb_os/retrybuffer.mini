@@ -285,7 +285,7 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
     }
 
     // charge for injecting this message
-    let (submissionFee, subFeeRecipient, feeStats) = getFeesForRetryableTx(sender, calldataSize);
+    let (submissionFee, subFeeRecipient, feeStats) = getFeesForRetryableTx(calldataSize);
 
     let ret = xif (submissionFee <= maxSubmissionCost) {
         let totalDue = callvalue + maxSubmissionCost;

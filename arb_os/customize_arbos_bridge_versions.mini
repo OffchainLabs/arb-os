@@ -18,12 +18,12 @@ public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade
     return input_globals.globalAccountStore;
 }
 
-public func set_globalCallStack_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
+public func set_globalCallStack_onUpgrade(_input_globals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
     return None<EvmCallFrame>;
 }
 
 public func set_codeSegGlobals_onUpgrade(
-    input_globals: GlobalsBeforeUpgrade
+    _input_globals: GlobalsBeforeUpgrade
 ) -> struct {
     unreachableMask: uint,
     dummyAcceptContractCode: impure func(),

@@ -40,7 +40,7 @@ public func rollupTracker_processEvent(
     msg: ByteArray,
     tracker: RollupTracker,
     neverBeenCalled: bool,
-    pluggableCallback: impure func(uint, any) -> option<any>,
+    _pluggableCallback: impure func(uint, any) -> option<any>,
 ) -> (any, any) {   // returns (success: bool, updatedTracker: RollupTracker)
     if (neverBeenCalled) {
         tracker = rollupTracker_initModule();
@@ -61,7 +61,7 @@ func processEventOrError(stream: ByteStream, tracker: RollupTracker) -> option<R
         let (us, prev) = bytestream_get256(us)?;
         let (us, heightL1) = bytestream_get256(us)?;
         let (us, deadlineL1) = bytestream_get256(us)?;
-        let (us, asserterUint) = bytestream_get256(us)?;
+        let (_, asserterUint) = bytestream_get256(us)?;
         rollupTracker_addNode(
             tracker,
             heightL2,
@@ -71,15 +71,15 @@ func processEventOrError(stream: ByteStream, tracker: RollupTracker) -> option<R
             address(asserterUint)
         )
     } elseif (eventType == const::ProtoEvent_confirmNode) {
-        let (us, heightL2) = bytestream_get256(stream)?;
+        let (_, heightL2) = bytestream_get256(stream)?;
         rollupTracker_confirmNode(tracker, heightL2)
     } elseif (eventType == const::ProtoEvent_rejectNode) {
-        let (us, heightL2) = bytestream_get256(stream)?;
+        let (_, heightL2) = bytestream_get256(stream)?;
         rollupTracker_rejectNode(tracker, heightL2)
     } elseif (eventType == const::ProtoEvent_newStake) {
         let (us, heightL2) = bytestream_get256(stream)?;
         let (us, stakerUint) = bytestream_get256(us)?;
-        let (us, stakeTimeL1) = bytestream_get256(us)?;
+        let (_, stakeTimeL1) = bytestream_get256(us)?;
         rollupTracker_newStake(
             tracker,
             heightL2,
@@ -88,7 +88,7 @@ func processEventOrError(stream: ByteStream, tracker: RollupTracker) -> option<R
         )
     } elseif (eventType == const::ProtoEvent_claimNode) {
         let (us, heightL2) = bytestream_get256(stream)?;
-        let (us, claimerUint) = bytestream_get256(us)?;
+        let (_, claimerUint) = bytestream_get256(us)?;
         rollupTracker_claimNode(tracker, heightL2, address(claimerUint))
     } elseif (eventType == const::ProtoEvent_debug) {
         _debug(tracker);
@@ -133,7 +133,6 @@ func rollupTracker_confirmNode(tracker: RollupTracker, heightL2: uint) -> option
     if (heightL2 != tracker.firstUnresolved) {    return None;    }
 
     let nodes = tracker.nodes;
-    let node = rsw_get(nodes, heightL2)?;
 
     // now eliminate nodes that aren't needed anymore
     // these will include the old latestConfirmed, and any already rejected nodes that follow it
@@ -165,7 +164,7 @@ func rollupTracker_rejectNode(tracker: RollupTracker, heightL2: uint) -> option<
 func rollupTracker_newStake(
     tracker: RollupTracker,
     heightL2: uint,
-    staker: address,
+    _staker: address,
     stakeTimeL1: uint
 ) -> option<RollupTracker> {
     let node = rsw_get(tracker.nodes, heightL2)?;
@@ -184,7 +183,7 @@ func rollupTracker_addNode(
     prev: uint,
     heightL1: uint,
     deadlineL1: uint,
-    asserter: address,
+    _asserter: address,
 ) -> option<RollupTracker> {
     let _ = rsw_get(tracker.nodes, prev)?;
     return Some(tracker with {
@@ -203,8 +202,8 @@ func rollupTracker_addNode(
 // claiming a node means taking the active validator role from somebody else, with a reduced payment
 func rollupTracker_claimNode(
     tracker: RollupTracker,
-    heightL2: uint,
-    claimer: address
+    _heightL2: uint,
+    _claimer: address
 ) -> option<RollupTracker> {
     return Some(tracker);
 }

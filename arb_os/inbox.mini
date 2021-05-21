@@ -96,7 +96,7 @@ public impure func inbox_init() {
 
 public impure func emitGenesisBlockReceipt() {
     outputStats_endOfBlock(globalInbox.arbBlockNum, globalInbox.ethBlockNum, globalInbox.timestamp);
-    blockhash_submitHash(globalInbox.arbBlockNum, globalInbox.ethBlockNum, globalInbox.inboxHashAccumulator);
+    blockhash_submitHash(globalInbox.ethBlockNum, globalInbox.inboxHashAccumulator);
     globalInbox = globalInbox with { arbBlockNum: globalInbox.arbBlockNum + 1 };
 }
 
@@ -177,7 +177,7 @@ impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, fromSide
 
         // do end of block processing
         outputStats_endOfBlock(inbox.arbBlockNum, inbox.ethBlockNum, inbox.timestamp);
-        blockhash_submitHash(inbox.arbBlockNum, inbox.ethBlockNum, inbox.inboxHashAccumulator);
+        blockhash_submitHash(inbox.ethBlockNum, inbox.inboxHashAccumulator);
 
         inbox = inbox with {
             pendingMessage: None<IncomingRequest>
@@ -414,7 +414,7 @@ public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
             } elseif (msg.kind == const::L1MessageType_endOfBlock) {
                 // it's an end-of-block message, so just trigger end-of-block processing
                 outputStats_endOfBlock(msg.arbBlockNumber, msg.ethBlockNumber, msg.timestamp);
-                blockhash_submitHash(msg.arbBlockNumber, msg.ethBlockNumber, globalInbox.inboxHashAccumulator);
+                blockhash_submitHash(msg.ethBlockNumber, globalInbox.inboxHashAccumulator);
                 globalInbox = globalInbox with {
                     arbBlockNum: globalInbox.arbBlockNum + 1
                 };
