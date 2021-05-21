@@ -120,7 +120,7 @@ impl CompileStruct {
                 Some(path) => Some(Path::new(path)),
                 None => None,
             };
-            match compile_from_file(path, &mut file_name_chart, &self.inline, constants_path) {
+            match compile_from_file(path, &mut file_info_chart, &self.inline, constants_path) {
                 Ok(idk) => idk,
                 Err(mut e) => {
                     e.description = format!("{}", e.description);
