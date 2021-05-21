@@ -425,9 +425,7 @@ fn flowcheck_liveliness(
     //   we assume conditionals could evaluate either true or false
     //   you can never kill a value that's been reborn since the original value might be used later
     //   we make no garuntee that all mistakes with the same variable are caught, only that one of them is
-
-    // it's okay to be alive if you walk out of scope if you've been reborn
-
+    
     macro_rules! process {
         ($child_nodes:expr, $problems:expr, $loop_pass:expr $(,)?) => {
             let (child_killed, child_reborn) =
