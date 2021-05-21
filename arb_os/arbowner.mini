@@ -31,6 +31,7 @@ use evmCallStack::evmCallStack_getTopFrameReturnData;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert;
+use evmOps::evmOp_revert_knownPc;
 use evmOps::evmOp_revert_knownCodePc;
 use evmOps::evmOp_returndatasize;
 use evmOps::doCreationOpcode;
@@ -46,6 +47,8 @@ use gasAccounting::gasAccounting_getFeeRecipients;
 use gasAccounting::gasAccounting_setFeeRecipients;
 use gasAccounting::setFairGasPriceSender;
 use gasAccounting::setGasAccountingParams;
+use gasAccounting::isFairGasPriceSender;
+use gasAccounting::getSerializedFairGasPriceSenders;
 
 use inbox::inbox_currentArbBlockNumber;
 use inbox::inbox_currentEthBlockNumber;
@@ -58,6 +61,7 @@ use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_copy;
 
 use std::avmcodebuilder::AvmCodeBuilder;
 use std::avmcodebuilder::avmCodeBuilder_new;
@@ -113,6 +117,10 @@ public impure func arbowner_txcall() {
             arbowner_setFeeRecipients(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_setFairGasPriceSender) {
             arbowner_setFairGasPriceSender(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_isFairGasPriceSender) {
+            arbowner_isFairGasPriceSender(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_getAllFairGasPriceSenders) {
+            arbowner_getAllFairGasPriceSenders(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_setSecondsPerSend) {
             arbowner_setSecondsPerSend(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_setGasAccountingParams) {
@@ -370,6 +378,50 @@ impure func arbowner_deployContract(topFrame: EvmCallFrame, calldata: ByteArray)
     }
 }
 
+// function isFairGasPriceSender(address addr) external view returns(bool);
+impure func arbowner_isFairGasPriceSender(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(170, 0, 0);
+    }
+    let mem = bytearray_set256(
+        bytearray_new(0),
+        0,
+        uint(isFairGasPriceSender(address(bytearray_get256(calldata, 4)))),
+    );
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownPc(171, 0, 0);
+    }
+}
+
+// function getAllFairGasPriceSenders() external view returns(bytes memory);
+impure func arbowner_getAllFairGasPriceSenders(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(180, 0, 0);
+    }
+    let serialized = getSerializedFairGasPriceSenders();
+    let mem = bytearray_copy(
+        serialized,
+        0,
+        bytearray_set256(
+            bytearray_set256(
+                bytearray_new(0),
+                0,
+                32,
+            ),
+            32,
+            bytearray_size(serialized),
+        ),
+        64,
+        bytearray_size(serialized),  // don't need to round up, because already a multiple of 32
+    );
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, bytearray_size(mem));
+    } else {
+        evmOp_revert_knownPc(181, 0, 0);
+    }
+}
 
 
 
