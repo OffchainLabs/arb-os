@@ -1446,10 +1446,10 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         "L2 tx {}, L1 calldata {}, L2 storage {}, base gas {}, congestion gas {}, total gas {}",
         l2tx, l1calldata, storage, basegas, conggas, totalgas
     );
-    assert_eq!(l2tx, Uint256::from_u64(658993125000000));
-    assert_eq!(l1calldata, Uint256::from_u64(178106250000));
-    assert_eq!(storage, Uint256::from_u64(309750000000000));
-    assert_eq!(basegas, Uint256::from_u64(1548750000));
+    assert_eq!(l2tx, Uint256::from_u64(638250000000000));
+    assert_eq!(l1calldata, Uint256::from_u64(172500000000));
+    assert_eq!(storage, Uint256::from_u64(300000000000000));
+    assert_eq!(basegas, Uint256::from_u64(1500000000));
     assert!(conggas.is_zero());
     assert_eq!(basegas.add(&conggas), totalgas);
 

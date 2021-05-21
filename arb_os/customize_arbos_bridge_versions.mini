@@ -13,6 +13,10 @@ use tracing::evmTracer_new;
 
 use std::merkletree::MerkleTreeBuilder;
 
+use std::storageMap::StorageMap;
+use std::storageMap::storageMap_new;
+use std::storageMap::storageMap_set;
+
 
 public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> AccountStore {
     return input_globals.globalAccountStore;
@@ -44,5 +48,21 @@ public func set_globalOutbox_onUpgrade(
         batchNumber: input_globals.globalOutbox.batchNumber,
         numInBatch: input_globals.globalOutbox.numInBatch,
         evmTracer: evmTracer_new(),
+    };
+}
+
+public func set_globalL1GasPriceEstimator_onUpgrade(
+    input_globals: GlobalsBeforeUpgrade
+) -> struct {
+    estimateWei: uint,
+    fairGasPriceSenders: StorageMap,
+} {
+    return struct {
+        estimateWei: input_globals.globalL1GasPriceEstimator.estimateWei,
+        fairGasPriceSenders: storageMap_set(
+            storageMap_new(),
+            uint(input_globals.globalL1GasPriceEstimator.fairGasPriceSender),
+            1,
+        ),
     };
 }

@@ -186,11 +186,11 @@ impure func arbowner_setFeeRecipients(topFrame: EvmCallFrame, calldata: ByteArra
     evmOp_return(0, 0);
 }
 
-impure func arbowner_setFairGasPriceSender(topFrame: EvmCallFrame, calldata: ByteArray) { // (address)
-    if (bytearray_size(calldata) != 36) {
+impure func arbowner_setFairGasPriceSender(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, bool)
+    if (bytearray_size(calldata) != 68) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 210, 0, 0);
     }
-    setFairGasPriceSender(address(bytearray_get256(calldata, 4)));
+    setFairGasPriceSender(address(bytearray_get256(calldata, 4)), bytearray_get256(calldata, 36)!=0);
     evmOp_return(0, 0);
 }
 

@@ -285,3 +285,18 @@ func smSerHelper(index: uint, value: uint, state: any) -> any {
         value,
     );
 }
+
+public func storageMap_serializeListOfNonzeros(s: StorageMap) -> ByteArray {
+    // list the keys that have non-zero values (but not the values)
+    return unsafecast<ByteArray>(storageMap_forall(s, smSerNZHelper, bytearray_new(0)));
+}
+
+func smSerNZHelper(index: uint, value: uint, state: any) -> any {
+    let ba = unsafecast<ByteArray>(state);
+    let sz = bytearray_size(ba);
+    return bytearray_set256(
+        ba,
+        sz,
+        index,
+    );
+}
