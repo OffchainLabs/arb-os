@@ -35,9 +35,7 @@ pub struct RuntimeEnvironment {
 }
 
 impl RuntimeEnvironment {
-    pub fn new(
-        charging_policy: Option<(Uint256, Uint256, Uint256)>,
-    ) -> Self {
+    pub fn new(charging_policy: Option<(Uint256, Uint256, Uint256)>) -> Self {
         RuntimeEnvironment::new_with_blocknum_timestamp(
             Uint256::from_u64(100_000),
             Uint256::from_u64(10_000_000),
@@ -93,7 +91,13 @@ impl RuntimeEnvironment {
     }
 
     pub fn send_chain_init_message(&mut self) {
-        self.insert_l1_message(4, Uint256::zero(), &self.chain_init_message.clone());
+        self.insert_l1_message(
+            4,
+            Uint256::zero(),
+            &self.chain_init_message.clone(),
+            None,
+            None,
+        );
     }
 
     fn get_params_bytes(owner: Option<Uint256>, chain_id: u64) -> Vec<u8> {

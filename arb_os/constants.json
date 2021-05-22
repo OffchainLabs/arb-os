@@ -75,16 +75,6 @@
     "AVM_xor": 24,
     "AVM_xset": 84,
     "ArbitrumNonZeroBalanceCallStipend": 200,
-    "Charging_ArbGasPerAvmGas": 100,
-    "Charging_AssumedBatchCostL1Gas": 50000,
-    "Charging_DefaultArbGasDivisor": 100,
-    "Charging_DefaultArbGasPerL2Tx": 0,
-    "Charging_DefaultArbGasPerCalldataUnit": 0,
-    "Charging_DefaultL1GasPerCalldataUnit": 1,
-    "Charging_DefaultL1GasPerL2Tx": 3700,
-    "Charging_DefaultL1GasPerStorage": 2000,
-    "Charging_DefaultArbGasPerStorage": 0,
-    "Charging_GasPoolDepthSeconds": 60,
     "Charging_MinArbGasForContractTx": 50,
     "Charging_RetryableTxRepriceIntervalSeconds": 900,
     "DefaultSecondsPerSend": 900,
@@ -232,7 +222,7 @@
     "ArbRetryableTx",
     "ArbStatistics"
   ],
-  "parameters_int": {
+  "parameters_int": { 
     "SecondsPerBlockNumerator": 15,
     "SecondsPerBlockDenominator": 1,
     "FeesEnabled": 0,
@@ -245,6 +235,7 @@
     "SpeedLimitPerSecond": 1000000,
     "SecondsPerSend": 1800,
     "ChainOwner": 0,
+    "ArbGasPerAvmGas": 100,
     "L1GasPerL1CalldataUnit": 1,
     "L1GasPerStorage": 2000,
     "ArbGasDivisor": 100,

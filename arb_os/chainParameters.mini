@@ -62,6 +62,7 @@ public func chainParams_getDefaults() -> map<uint, uint> {
         with { [const::Atom_Param_SpeedLimitPerSecond] = const::Default_Param_SpeedLimitPerSecond }
         with { [const::Atom_Param_SecondsPerSend] = const::Default_Param_SecondsPerSend }
         with { [const::Atom_Param_ChainOwner] = const::Default_Param_ChainOwner }
+        with { [const::Atom_Param_ArbGasPerAvmGas] = const::Default_Param_ArbGasPerAvmGas }
         with { [const::Atom_Param_L1GasPerL1CalldataUnit] = const::Default_Param_L1GasPerL1CalldataUnit }
         with { [const::Atom_Param_L1GasPerStorage] = const::Default_Param_L1GasPerStorage }
         with { [const::Atom_Param_ArbGasDivisor] = const::Default_Param_ArbGasDivisor }

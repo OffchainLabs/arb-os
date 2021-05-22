@@ -506,7 +506,7 @@ public impure func gasAccounting_startTxCharges(
         return (const::TxResultCode_noGasFunds, acctStore);
     }
 
-    let gasUsedByOS = ((~0) - asm() uint { getgas }) / const::Charging_ArbGasPerAvmGas;
+    let gasUsedByOS = ((~0) - asm() uint { getgas }) / chainParams_getOrDie(const::Atom_Param_ArbGasPerAvmGas);
 
     gasAccountingInfo = gasAccountingInfo with {
         txState: Some(struct {
@@ -525,7 +525,7 @@ public impure func gasAccounting_startTxCharges(
 
     arbStatistics_addToGasUsed(gasUsedByOS);
 
-    asm(gasForComputation * const::Charging_ArbGasPerAvmGas,) { setgas };
+    asm(gasForComputation * chainParams_getOrDie(const::Atom_Param_ArbGasPerAvmGas),) { setgas };
     return (const::TxResultCode_success, acctStore);
 }
 
@@ -683,7 +683,7 @@ public impure func gasAccounting_resumeTxCharges(allocationRequested: uint) -> u
 
     return xif let Some(txState) = gasAccountingInfo.txState {
         // stop charging the OS, and record the OS gas usage as overhead
-        let osGasUsed = ((~0) - asm() uint { getgas }) / const::Charging_ArbGasPerAvmGas;
+        let osGasUsed = ((~0) - asm() uint { getgas }) / chainParams_getOrDie(const::Atom_Param_ArbGasPerAvmGas);
 
         if (allocationRequested > txState.gasInReserve) {
             allocationRequested = txState.gasInReserve;  // can't request more gas than you have
@@ -703,7 +703,7 @@ public impure func gasAccounting_resumeTxCharges(allocationRequested: uint) -> u
 
         arbStatistics_addToGasUsed(osGasUsed);
 
-        asm(allocationRequested * const::Charging_ArbGasPerAvmGas,) { setgas };  // start charging the application
+        asm(allocationRequested * chainParams_getOrDie(const::Atom_Param_ArbGasPerAvmGas),) { setgas };  // start charging the application
         allocationRequested
     } else {
         // something went wrong: tried to resume tx charges when there isn't an active tx
@@ -722,7 +722,7 @@ impure func switchToChargingOS() -> uint {
     } else {
         // we were charging the tx; switch to charging the OS and return tx's unused amount from ArbGasRemaining
         asm(~0,) { setgas };
-        avmGasRemaining / const::Charging_ArbGasPerAvmGas
+        avmGasRemaining / chainParams_getOrDie(const::Atom_Param_ArbGasPerAvmGas)
     };
 }
 
