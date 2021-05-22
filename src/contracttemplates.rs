@@ -73,8 +73,6 @@ fn mini_code_for_arbinfo(buf: &mut BytesMut) {
     buf.put(
         &b"public func getArbInfoStorage() -> StorageMap {\n return storageMap_new();\n}\n\n"[..],
     );
-
-    buf.put(&b"public func getArbInfoAddress() -> address {\n  return address(0x65);\n}\n\n"[..])
 }
 
 fn get_deployed_bytecode(path: &Path) -> Vec<u8> {

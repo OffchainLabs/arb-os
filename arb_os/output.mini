@@ -9,6 +9,8 @@ use evmlogs::EvmLogs;
 
 use arbstatistics::arbStatistics_addTxReceipt;
 
+use tracing::evmTracer_emitAndClear;
+
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_marshalFull;
@@ -44,6 +46,10 @@ use inbox::inbox_currentTimestamp;
 use gasAccounting::GasUsage;
 use gasAccounting::TxFeeStats;
 use gasAccounting::gasAccounting_summaryToPublish;
+
+use tracing::EvmTracer;
+use tracing::evmTracer_new;
+use tracing::evmTracer_pushReturnRevert;
 
 
 // PerBlockReceiptData is different from OutputStatistics for now; might want to unify
@@ -233,6 +239,7 @@ public impure func emitTxReceipt(
     maybeEvmLogs: option<EvmLogs>,
     gasUsage: option<GasUsage>,
     feeStats: TxFeeStats,
+    emitTracingInfo: bool,
 ) {
     arbStatistics_addTxReceipt();
 
@@ -264,6 +271,10 @@ public impure func emitTxReceipt(
         evmLogs: evmLogs,
     };
 
+    if (emitTracingInfo) {
+        evmTracer_emitAndClear();
+    }
+
     asm((
         const::LogType_txReceipt,
         l1message with {
@@ -283,6 +294,7 @@ var globalOutbox: struct {
     batch: MerkleTreeBuilder,
     batchNumber: uint,
     numInBatch: uint,
+    evmTracer: EvmTracer,
 };
 
 impure func outbox_init() {
@@ -290,7 +302,16 @@ impure func outbox_init() {
         batch: merkleTreeBuilder_new(),
         batchNumber: 0,
         numInBatch: 0,
+        evmTracer: evmTracer_new(),
     };
+}
+
+public impure func outbox_getEvmTracer() -> EvmTracer {
+    return globalOutbox.evmTracer;
+}
+
+public impure func outbox_setEvmTracer(tracer: EvmTracer) {
+    globalOutbox = globalOutbox with { evmTracer: tracer };
 }
 
 impure func outbox_isEmpty() -> bool {
@@ -342,6 +363,7 @@ impure func outbox_send() {
         batch: merkleTreeBuilder_new(),
         batchNumber: globalOutbox.batchNumber + 1,
         numInBatch: 0,
+        evmTracer: globalOutbox.evmTracer,
     };
 }
 

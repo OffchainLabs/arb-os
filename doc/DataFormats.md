@@ -83,9 +83,9 @@ All other options are ignored at present.
 
 [This is no longer supported.]
 
-##### Message type 6: reserved
+##### Message type 6: end of Arbitrum block
 
-This message type is reserved for internal use by ArbOS. It should never appear in the inbox.
+A message of this type directs ArbOS to end the current Arbitrum block and start a new one. All integer or address fields (other than the message type) should be zero, and the buffer should be empty.
 
 **Message type 7: L2 transaction funded by L1**
 
@@ -301,6 +301,8 @@ For an unsigned transaction that is an L2 message of subtype 0, the requestID is
 For other transactions, the requestID is computed from incoming message contents as follows.  An incoming message is assigned a requestID of hash(chainID, inboxSeqNum), where inboxSeqNum is the value N such that this is the Nth message that has ever arrived in the chain's inbox.  If the incoming message includes a batch, the K'th item in the batch is assigned a requestID of hash(requestID of batch, K).  If batches are nested, this rule is applied recursively.
 
 It is infeasible to find two distinct requests that have the same requestID.  This is true because requestIDs are the output of a collision-free hash function, and it is not possible to create two distinct requests that will have the same input to the hash function.  Signed transaction IDs cannot collide with the other types, because the other types' hash preimages both start with a zero byte (because sender address and chainID are zero-filled in the most-significant byte of a big-endian value) and the RLP encoding of a list cannot start with a zero byte.  The other two types cannot have the same hash preimage because subtype-0 messages use a hash output as their second word, which with overwhelming probability will be too large to be feasible as the sequence number or batch index that occupies the same position in the default request ID scheme.
+
+When an incoming message is included through the delayed inbox, the inbox sequence number gets adjusted so it doesn't overlap with the sequencer's inbox. For these messages, you can calculate the request ID by masking the high order bit, as follows: inboxSeqNum | (1 << 255).
 
 ### Block summary
 

@@ -139,11 +139,18 @@ impl RuntimeEnvironment {
         self.l1_inbox = contents;
     }
 
-    pub fn insert_l1_message(&mut self, msg_type: u8, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
+    pub fn insert_l1_message(
+        &mut self,
+        msg_type: u8,
+        sender_addr: Uint256,
+        msg: &[u8],
+        block_num: Option<Uint256>,
+        timestamp: Option<Uint256>,
+    ) -> Uint256 {
         let l1_msg = Value::new_tuple(vec![
             Value::Int(Uint256::from_usize(msg_type as usize)),
-            Value::Int(self.current_block_num.clone()),
-            Value::Int(self.current_timestamp.clone()),
+            Value::Int(block_num.unwrap_or(self.current_block_num.clone())),
+            Value::Int(timestamp.unwrap_or(self.current_timestamp.clone())),
             Value::Int(sender_addr),
             Value::Int(self.next_inbox_seq_num.clone()),
             Value::Int(self.get_gas_price()),
@@ -184,7 +191,7 @@ impl RuntimeEnvironment {
         msg.extend(Uint256::from_usize(calldata.len()).to_bytes_be());
         msg.extend(calldata);
 
-        let submit_req_id = self.insert_l1_message(9u8, sender, &msg);
+        let submit_req_id = self.insert_l1_message(9u8, sender, &msg, None, None);
         let mut buf = submit_req_id.to_bytes_be();
         let mut buf2 = buf.clone();
         buf.extend(&[0u8; 32]);
@@ -214,6 +221,8 @@ impl RuntimeEnvironment {
             if is_buddy_deploy { 5 } else { 3 },
             sender_addr.clone(),
             msg,
+            None,
+            None,
         );
         if !is_buddy_deploy && (msg[0] == 0) {
             Uint256::avm_hash2(
@@ -232,7 +241,7 @@ impl RuntimeEnvironment {
         if (msg[0] != 0u8) && (msg[0] != 1u8) {
             panic!();
         }
-        let default_id = self.insert_l1_message(7, sender_addr.clone(), msg);
+        let default_id = self.insert_l1_message(7, sender_addr.clone(), msg, None, None);
         if msg[0] == 0 {
             Uint256::avm_hash2(
                 &sender_addr,
@@ -1444,25 +1453,6 @@ pub fn replay_from_testlog_file(
             Ok(success)
         }
         Err(e) => panic!("json parsing failed: {}", e),
-    }
-}
-
-#[test]
-fn logfile_replay_tests() {
-    for entry in std::fs::read_dir(Path::new("./replayTests")).unwrap() {
-        let path = entry.unwrap().path();
-        let name = path.file_name().unwrap();
-        assert_eq!(
-            replay_from_testlog_file(
-                &("./replayTests/".to_owned() + name.to_str().unwrap()),
-                false,
-                false,
-                ProfilerMode::Never,
-                None,
-            )
-            .unwrap(),
-            true
-        );
     }
 }
 

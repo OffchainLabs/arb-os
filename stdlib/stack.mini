@@ -51,6 +51,18 @@ public func stack_pop(stack: Stack) -> option<(Stack, any)> {
     };
 }
 
+public func stack_size(stack: Stack) -> uint {
+    let size = 0;
+    return xloop {
+        if let Some(res) = stack_pop(stack) {
+            stack = res.0;
+            size = size+1;
+        } else {
+            return size;
+        }
+    };
+}
+
 public func stack_discardDeepestItems(stack: Stack, numToDiscard: uint) -> Stack {
     return stack_ddi2(stack, numToDiscard).0;
 }
