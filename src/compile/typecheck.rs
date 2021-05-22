@@ -10,14 +10,14 @@ use super::ast::{
     Type, TypeTree, UnaryOp,
 };
 use crate::compile::ast::FieldInitializer;
-use crate::compile::InliningHeuristic;
+use crate::compile::{CompileError, FileInfo, InliningHeuristic};
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
-use crate::pos::Location;
+use crate::pos::{Column, Location};
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 type TypeTable = HashMap<usize, Type>;
 
@@ -339,6 +339,290 @@ fn inline(
     }
 }
 
+///Discovers code segments that could never be executed
+fn flowcheck_reachability<T: AbstractSyntaxTree>(
+    node: &mut T,
+    file_info_chart: &BTreeMap<u64, FileInfo>,
+) {
+    let mut children = node.child_nodes();
+    let mut child_iter = children.iter_mut();
+
+    let mut locations = vec![];
+
+    for child in &mut child_iter {
+        match child {
+            TypeCheckedNode::Statement(stat) => match &mut stat.kind {
+                TypeCheckedStatementKind::Return(_) | TypeCheckedStatementKind::ReturnVoid() => {
+                    locations.extend(stat.debug_info.location);
+                    break;
+                }
+                TypeCheckedStatementKind::Expression(expr) => match &mut expr.kind {
+                    TypeCheckedExprKind::If(_, block, else_block, ..)
+                    | TypeCheckedExprKind::IfLet(_, _, block, else_block, ..) => {
+                        flowcheck_reachability(block, file_info_chart);
+
+                        if let Some(branch) = else_block {
+                            flowcheck_reachability(branch, file_info_chart);
+                        }
+
+                        continue;
+                    }
+                    _ => {}
+                },
+                _ => {}
+            },
+            _ => {}
+        }
+
+        flowcheck_reachability(child, file_info_chart);
+    }
+
+    match child_iter.next() {
+        Some(TypeCheckedNode::Statement(issue)) => locations.extend(issue.debug_info.location),
+        _ => {}
+    };
+
+    match child_iter.last() {
+        Some(TypeCheckedNode::Statement(issue)) => locations.extend(issue.debug_info.location),
+        _ => {}
+    };
+
+    if locations.len() <= 1 {
+        return;
+    }
+
+    CompileError::new(
+        String::from("Compile warning"),
+        if locations.len() == 2 {
+            String::from("found unreachable statement")
+        } else {
+            String::from("found unreachable statements")
+        },
+        locations,
+        true,
+    )
+    .warn(file_info_chart);
+}
+
+///Discovers assigned values that are never used
+fn flowcheck_liveliness(
+    mut nodes: Vec<TypeCheckedNode>,
+    problems: &mut Vec<(Location, StringId)>,
+    loop_pass: bool,
+) -> (BTreeSet<StringId>, BTreeMap<StringId, Location>) {
+    let mut node_iter = nodes.iter_mut();
+    let mut alive = BTreeMap::new(); // values that are alive and need to die in this scope
+    let mut reborn = BTreeMap::new(); // values that are brought back to life within this scope
+    let mut born = BTreeSet::<StringId>::new(); // values brought to life within this scope
+    let mut killed = BTreeSet::<StringId>::new(); // values this scope has killed
+    let mut rescue = BTreeSet::<StringId>::new(); // values from parental scopes we provably must not kill
+
+    // algorithm notes:
+    //   anything still alive at the end of scope is unused
+    //   scopes return everything they've killed
+    //   a scope cannot kill that which it overwrites
+    //   loops are unrolled to give assignments a second chance to be killed before leaving scope
+    //   we assume conditionals could evaluate either true or false
+    //   you can never kill a value that's been reborn since the original value might be used later
+    //   we make no garuntee that all mistakes with the same variable are caught, only that one of them is
+
+    macro_rules! process {
+        ($child_changes:expr) => {
+            let (child_killed, child_reborn) = $child_changes;
+            for id in child_killed.iter() {
+                alive.remove(id);
+                reborn.remove(id);
+            }
+            for (id, loc) in child_reborn {
+                if born.contains(&id) {
+                    alive.insert(id, loc);
+                } else {
+                    reborn.insert(id, loc);
+                }
+            }
+            killed.extend(child_killed);
+        };
+        ($child_nodes:expr, $problems:expr, $loop_pass:expr $(,)?) => {
+            process!(flowcheck_liveliness($child_nodes, $problems, $loop_pass));
+        };
+    }
+
+    for node in &mut node_iter {
+        let repeat = match node {
+            TypeCheckedNode::Statement(stat) => match &mut stat.kind {
+                TypeCheckedStatementKind::AssignLocal(id, expr) => {
+                    process!(vec![TypeCheckedNode::Expression(expr)], problems, false);
+
+                    if let Some(loc) = alive.get(id) {
+                        problems.push((*loc, id.clone()));
+                    }
+
+                    if let None = born.get(id) {
+                        reborn.insert(id.clone(), stat.debug_info.location.unwrap());
+                    }
+
+                    if !alive.contains_key(id) && !born.contains(id) && !killed.contains(id) {
+                        rescue.insert(id.clone());
+                    }
+
+                    // we don't assert that the variable is born since it might not be from this scope
+                    alive.insert(id.clone(), stat.debug_info.location.unwrap());
+                    continue;
+                }
+
+                TypeCheckedStatementKind::Let(pat, expr) => {
+                    process!(vec![TypeCheckedNode::Expression(expr)], problems, false);
+
+                    let ids: BTreeMap<StringId, Location> = pat
+                        .collect_identifiers()
+                        .iter()
+                        .map(|id| {
+                            (id.clone(), {
+                                // we can't know the location exactly at this point,
+                                // so we shift past the 'let' keyword
+                                let mut loc = stat.debug_info.location.unwrap().clone();
+                                loc.column = Column::from(loc.column.to_usize() + 4);
+                                loc
+                            })
+                        })
+                        .collect();
+
+                    for id in ids.keys() {
+                        if let Some(_) = born.get(id) {
+                            if let Some(loc) = alive.get(id) {
+                                problems.push((*loc, id.clone()))
+                            }
+                        }
+
+                        if !alive.contains_key(id) && !born.contains(id) && !killed.contains(id) {
+                            rescue.insert(id.clone());
+                        }
+                    }
+
+                    born.extend(&mut ids.keys());
+                    alive.extend(&ids);
+                    continue;
+                }
+                TypeCheckedStatementKind::While(..) => true,
+                TypeCheckedStatementKind::Break(optional_expr, _) => {
+                    process!(
+                        optional_expr
+                            .iter_mut()
+                            .map(|x| TypeCheckedNode::Expression(x))
+                            .collect(),
+                        problems,
+                        false,
+                    );
+                    continue;
+                }
+                _ => false,
+            },
+
+            TypeCheckedNode::Expression(expr) => match &mut expr.kind {
+                TypeCheckedExprKind::DotRef(_, id, ..)
+                | TypeCheckedExprKind::LocalVariableRef(id, ..) => {
+                    killed.insert(id.clone());
+                    alive.remove(id);
+                    reborn.remove(id);
+                    false
+                }
+                TypeCheckedExprKind::IfLet(_, cond, block, else_block, _)
+                | TypeCheckedExprKind::If(cond, block, else_block, _) => {
+                    let (mut if_killed, mut if_reborn) = (
+                        BTreeSet::<StringId>::new(),
+                        BTreeMap::<StringId, Location>::new(),
+                    );
+
+                    macro_rules! extend {
+                        ($child_nodes:expr, $problems:expr, $loop_pass:expr $(,)?) => {
+                            let (child_killed, child_reborn) =
+                                flowcheck_liveliness($child_nodes, $problems, $loop_pass);
+                            if_killed.extend(child_killed);
+                            if_reborn.extend(child_reborn);
+                        };
+                    }
+
+                    extend!(vec![TypeCheckedNode::Expression(cond)], problems, false);
+                    extend!(block.child_nodes(), problems, false);
+
+                    if let Some(branch) = else_block {
+                        extend!(branch.child_nodes(), problems, false);
+                    }
+
+                    process!((if_killed, if_reborn));
+                    continue;
+                }
+                TypeCheckedExprKind::Loop(_body) => true,
+                _ => false,
+            },
+            TypeCheckedNode::StructField(field) => {
+                process!(
+                    vec![TypeCheckedNode::Expression(&mut field.value)],
+                    problems,
+                    false
+                );
+                continue;
+            }
+            _ => false,
+        };
+
+        process!(node.child_nodes(), problems, repeat);
+    }
+
+    if loop_pass {
+        let mut node_iter = nodes.iter_mut();
+
+        for node in &mut node_iter {
+            let repeat = match node {
+                TypeCheckedNode::Statement(stat) => match &mut stat.kind {
+                    TypeCheckedStatementKind::While(..) => true,
+                    _ => false,
+                },
+                TypeCheckedNode::Expression(expr) => match &mut expr.kind {
+                    TypeCheckedExprKind::Loop(..) => true,
+                    TypeCheckedExprKind::DotRef(_, id, ..)
+                    | TypeCheckedExprKind::LocalVariableRef(id, ..) => {
+                        // a variable born in this scope shouldn't get a second chance when unrolling
+                        if !born.contains(id) {
+                            alive.remove(id);
+                            reborn.remove(id);
+                        }
+                        false
+                    }
+                    _ => false,
+                },
+                _ => false,
+            };
+
+            // we've done already walked these nodes, so all errors are repeated and should be elided
+            let mut duplicate_problems = vec![];
+
+            let (child_killed, _) =
+                flowcheck_liveliness(node.child_nodes(), &mut duplicate_problems, repeat);
+            for id in child_killed.iter() {
+                // a variable born in this scope shouldn't get a second chance when unrolling
+                if !born.contains(id) {
+                    alive.remove(id);
+                    reborn.remove(id);
+                }
+            }
+        }
+    }
+
+    // check if variables are still alive and we're going out of scope
+    for (id, loc) in alive.iter() {
+        if let Some(_) = born.get(id) {
+            problems.push((loc.clone(), id.clone()));
+        }
+    }
+
+    for id in &rescue {
+        killed.remove(id);
+    }
+
+    return (killed, reborn);
+}
+
 impl TypeCheckedFunc {
     pub fn inline(
         &mut self,
@@ -352,6 +636,85 @@ impl TypeCheckedFunc {
             &(funcs, imported_funcs, string_table, heuristic),
             &mut (InliningMode::Auto, vec![]),
         );
+    }
+
+    pub fn flowcheck(
+        &mut self,
+        _funcs: &Vec<TypeCheckedFunc>,
+        _imported_funcs: &Vec<ImportedFunc>,
+        string_table: &mut StringTable,
+        file_info_chart: &BTreeMap<u64, FileInfo>,
+    ) {
+        let yellow = "\x1b[33;1m";
+        let reset = "\x1b[0;0m";
+
+        flowcheck_reachability(self, file_info_chart);
+
+        let mut unused_assignments = vec![];
+
+        let (killed, reborn) =
+            flowcheck_liveliness(self.child_nodes(), &mut unused_assignments, false);
+
+        for arg in self.args.iter() {
+            // allow intentional lack of use
+            if !string_table.name_from_id(arg.name.clone()).starts_with('_') {
+                if !killed.contains(&arg.name) {
+                    CompileError::new(
+                        String::from("Compile warning"),
+                        format!(
+                            "func {}{}{}'s argument {}{}{} is declared but never used",
+                            yellow,
+                            string_table.name_from_id(self.name.clone()),
+                            reset,
+                            yellow,
+                            string_table.name_from_id(arg.name.clone()),
+                            reset,
+                        ),
+                        arg.debug_info.location.into_iter().collect(),
+                        true,
+                    )
+                    .warn(file_info_chart);
+                }
+
+                if let Some(loc) = reborn.get(&arg.name) {
+                    CompileError::new(
+                        String::from("Compile warning"),
+                        format!(
+                            "func {}{}{}'s argument {}{}{} is assigned but never used",
+                            yellow,
+                            string_table.name_from_id(self.name.clone()),
+                            reset,
+                            yellow,
+                            string_table.name_from_id(arg.name.clone()),
+                            reset,
+                        ),
+                        vec![*loc],
+                        true,
+                    )
+                    .warn(file_info_chart);
+                }
+            }
+        }
+
+        unused_assignments.sort_by(|a, b| a.0.line.to_usize().cmp(&b.0.line.to_usize()));
+
+        for &(loc, id) in unused_assignments.iter() {
+            // allow intentional lack of use
+            if !string_table.name_from_id(id.clone()).starts_with('_') {
+                CompileError::new(
+                    String::from("Compile warning"),
+                    format!(
+                        "value {}{}{} is assigned but never used",
+                        yellow,
+                        string_table.name_from_id(id.clone()),
+                        reset
+                    ),
+                    vec![loc],
+                    true,
+                )
+                .warn(file_info_chart);
+            }
+        }
     }
 }
 
@@ -421,6 +784,18 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
 }
 
 pub type TypeCheckedMatchPattern = MatchPattern<Type>;
+
+impl TypeCheckedMatchPattern {
+    fn collect_identifiers(&self) -> Vec<StringId> {
+        match &self.kind {
+            MatchPatternKind::Simple(id) => vec![*id],
+            MatchPatternKind::Tuple(pats) => pats
+                .iter()
+                .flat_map(|pat| pat.collect_identifiers())
+                .collect(),
+        }
+    }
+}
 
 ///A mini expression with associated `DebugInfo` that has been type checked.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -3063,13 +3438,13 @@ impl TypeCheckedCodeBlock {
 
 impl AbstractSyntaxTree for TypeCheckedCodeBlock {
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
-        self.ret_expr
+        self.body
             .iter_mut()
-            .map(|exp| TypeCheckedNode::Expression(exp))
+            .map(|stat| TypeCheckedNode::Statement(stat))
             .chain(
-                self.body
+                self.ret_expr
                     .iter_mut()
-                    .map(|stat| TypeCheckedNode::Statement(stat)),
+                    .map(|exp| TypeCheckedNode::Expression(exp)),
             )
             .collect()
     }
