@@ -1,15 +1,21 @@
 //
-// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
 //
 
 use accounts::accounts_notifyParamsChanged;
 
 use evmCallStack::evmCallStack_callHitError;
 
+use core::kvs::Kvs;
+use core::kvs::builtin_kvsForall;
+
 use std::bytearray::MarshalledBytes;
 use std::bytearray::ByteArray;
 use std::bytearray::MarshalledBytes;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
 
 use std::bytestream::ByteStream;
 use std::bytestream::bytestream_new;
@@ -142,4 +148,23 @@ public impure func chainParams_setSecondsPerSend(sps: uint) {
 public impure func blocksToSeconds(numBlocks: uint) -> uint {
     return numBlocks * chainParams_getOrDie(const::Atom_Param_SecondsPerBlockNumerator)
                      / chainParams_getOrDie(const::Atom_Param_SecondsPerBlockDenominator);
+}
+
+public impure func chainParams_serializeAllParams() -> ByteArray {
+    return unsafecast<ByteArray>(
+        builtin_kvsForall(
+            unsafecast<Kvs>(globalChainParameters),
+            unsafecast<func(any, any, any) -> any>(sapClosure),
+            bytearray_new(0),
+        )
+    );
+}
+
+func sapClosure(key: uint, value: uint, ba: ByteArray) -> ByteArray {
+    let sz = bytearray_size(ba);
+    return bytearray_set256(
+        bytearray_set256(ba, sz, key),
+        sz+32,
+        value,
+    );
 }

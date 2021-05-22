@@ -14,6 +14,7 @@ use chainParameters::chainParams_setSecondsPerSend;
 use chainParameters::chainParams_get;
 use chainParameters::chainParams_set;
 use chainParameters::notifyParamsChanged;
+use chainParameters::chainParams_serializeAllParams;
 
 use decompression::decompressAndVerifyEcdsaSignedTx;
 
@@ -34,6 +35,7 @@ use evmCallStack::evmCallStack_getTopFrameReturnData;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert;
+use evmOps::evmOp_revert_knownPc;
 use evmOps::evmOp_revert_knownCodePc;
 use evmOps::evmOp_callAndReturn;
 use evmOps::evmOp_returndatasize;
@@ -63,6 +65,7 @@ use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_copy;
 
 use std::avmcodebuilder::AvmCodeBuilder;
 use std::avmcodebuilder::avmCodeBuilder_new;
@@ -112,6 +115,8 @@ public impure func arbowner_txcall() {
             arbowner_getChainParameter(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_setChainParameter) {
             arbowner_setChainParameter(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_serializeAllParameters) {
+            arbowner_serializeAllParameters(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_getTotalOfEthBalances) {
             arbowner_getTotalOfEthBalances(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_deployContract) {
@@ -313,6 +318,31 @@ impure func arbowner_deployContract(topFrame: EvmCallFrame, calldata: ByteArray)
         evmOp_return(0, 32);
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 164, 0, 0);
+    }
+}
+
+// function serializeAllParameters() external view returns(bytes memory);
+impure func arbowner_serializeAllParameters(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(170, 0, 0);
+    }
+    let serialized = chainParams_serializeAllParams();
+    let serSize = bytearray_size(serialized);
+    let mem = bytearray_copy(
+        serialized,
+        0,
+        bytearray_set256(
+            bytearray_set256(bytearray_new(0), 0, 64),
+            32,
+            serSize,   // no need to round up, because serSize is already a multiple of 32
+        ),
+        64,
+        serSize,
+    );
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 64+serSize);
+    } else {
+        evmOp_revert_knownPc(171, 0, 0);
     }
 }
 

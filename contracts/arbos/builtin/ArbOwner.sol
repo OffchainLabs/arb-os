@@ -26,6 +26,7 @@ interface ArbOwner {
     // Get and set chain parameters
     function getChainParameter(uint which) external view returns(uint);
     function setChainParameter(uint which, uint value) external;
+    function serializeAllParameters() external view returns(bytes memory);
 
     function getTotalOfEthBalances() external view returns(uint);
 }
