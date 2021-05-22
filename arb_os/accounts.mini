@@ -4,6 +4,7 @@
 
 use retrybuffer::RetryBuffer;
 use retrybuffer::retryBuffer_new;
+use retrybuffer::retryBuffer_setDefaultLifetime;
 
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
@@ -11,12 +12,18 @@ use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_setByte;
 use std::bytestream::bytestream_new;
 use std::bls::BLSKey;
+use std::outputbuffer::OutputBuffer;
+use std::outputbuffer::outputBuffer_new;
+use std::outputbuffer::outputBuffer_appendByte;
+use std::outputbuffer::outputBuffer_append256;
 use std::keccak::keccak256;
 use std::storageMap::StorageMap;
 use std::storageMap::storageMap_new;
 use std::storageMap::storageMap_size;
 use std::storageMap::storageMap_get;
 use std::storageMap::storageMap_set;
+use std::storageMap::storageMap_diff;
+use std::stack::stack_pop;
 
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsSize;
@@ -34,6 +41,7 @@ type AccountStore = struct {
     retryBuffer: RetryBuffer,
     numContracts: uint,
     codeRefTable: map<bytes32, CodeRef>,
+    escrowStore: EscrowStore,
 }
 
 // CodeRefs are reference-counted, but accuracy of the reference count only affects performance, not correctness.
@@ -48,6 +56,11 @@ type CodeRef = struct {
     code: ByteArray,
     evmJumpTable: map<uint, impure func()>,
     startCodePoint: impure func(),
+}
+
+type EscrowStore = struct {
+    nextKey: uint,
+    escrowedValues: StorageMap,   // amount escrowed under each key; StorageMap is a zero-default uint->uint map
 }
 
 type Account = struct {
@@ -86,6 +99,20 @@ public impure func accountStore_init() {   // This must be called first!
         retryBuffer: retryBuffer_new(),
         numContracts: 0,
         codeRefTable: newmap<bytes32, CodeRef>,
+        escrowStore: escrowStore_new(),
+    };
+}
+
+public func escrowStore_new() -> EscrowStore {
+    return struct {
+        nextKey: 1,     // key 0 is pre-reserved for escrowing the current tx's gas funds
+        escrowedValues: storageMap_new(),
+    };
+}
+
+public impure func accounts_notifyParamsChanged() {
+    globalAccountStore = globalAccountStore with {
+        retryBuffer: retryBuffer_setDefaultLifetime(globalAccountStore.retryBuffer)
     };
 }
 
@@ -477,10 +504,6 @@ public func account_getEthBalance(account: Account) -> uint {
     return account.ethBalance;
 }
 
-public func account_setEthBalance(account: Account, newBal: uint) -> Account {
-    return account with { ethBalance: newBal };
-}
-
 public func account_addToEthBalance(account: Account, addition: uint) -> Account {
     return account with { ethBalance: account.ethBalance + addition };
 }
@@ -527,6 +550,97 @@ public func accountStore_transferEthBalance(
             )
         }
     );
+}
+
+public func accountStore_newEscrow(acctStore: AccountStore, payer: address, amount: uint) -> option<(AccountStore, uint)> {
+    return xif (amount == 0) {
+        Some((acctStore, const::EscrowStoreID_txGas))
+    } else {
+        let acct = accountStore_get(acctStore, payer);
+        xif (acct.ethBalance < amount) {
+            None<(AccountStore, uint)>
+        } else {
+            let key = acctStore.escrowStore.nextKey;
+            Some((
+                accountStore_set(acctStore, payer, acct with { ethBalance: acct.ethBalance-amount }) with {
+                    escrowStore: struct {
+                        nextKey: key + 1,
+                        escrowedValues: storageMap_set(acctStore.escrowStore.escrowedValues, key, amount),
+                    }
+                },
+                key
+            ))
+        }
+    };
+}
+
+public func accountStore_getEscrowBalance(acctStore: AccountStore, key: uint) -> uint {
+    return storageMap_get(acctStore.escrowStore.escrowedValues, key);
+}
+
+public func accountStore_addToEscrow(acctStore: AccountStore, key: uint, payer: address, amount: uint) -> option<AccountStore> {
+    let acct = accountStore_get(acctStore, payer);
+    return xif (acct.ethBalance < amount) {
+        None<AccountStore>
+    } else {
+        let oldValue = storageMap_get(acctStore.escrowStore.escrowedValues, key);
+        Some(
+            accountStore_set(acctStore, payer, acct with { ethBalance: acct.ethBalance-amount }) with {
+                escrowStore: acctStore.escrowStore with {
+                    escrowedValues: storageMap_set(acctStore.escrowStore.escrowedValues, key, oldValue+amount)
+                }
+            }
+        )
+    };
+}
+
+public func accountStore_addToEscrowUpToMax(acctStore: AccountStore, key: uint, payer: address, maxAmount: uint) -> (AccountStore, uint) {
+    let acct = accountStore_get(acctStore, payer);
+    let balance = account_getEthBalance(acct);
+    let amount = xif (balance < maxAmount) { balance } else { maxAmount };
+    let oldValue = storageMap_get(acctStore.escrowStore.escrowedValues, key);
+    return (
+        accountStore_set(acctStore, payer, acct with { ethBalance: acct.ethBalance-amount }) with {
+            escrowStore: acctStore.escrowStore with {
+                escrowedValues: storageMap_set(acctStore.escrowStore.escrowedValues, key, oldValue+amount)
+            }
+        },
+        amount,
+    );
+}
+
+public func accountStore_payFromEscrow(acctStore: AccountStore, key: uint, recipient: address, amount: uint) -> option<AccountStore> {
+    let oldEscrow = storageMap_get(acctStore.escrowStore.escrowedValues, key);
+    return xif (oldEscrow < amount) {
+        None<AccountStore>
+    } else {
+        let oldAcct = accountStore_get(acctStore, recipient);
+        Some(
+            accountStore_set(
+                acctStore,
+                recipient,
+                oldAcct with { ethBalance: oldAcct.ethBalance + amount }
+            ) with {
+                escrowStore: acctStore.escrowStore with {
+                    escrowedValues: storageMap_set(acctStore.escrowStore.escrowedValues, key, oldEscrow-amount)
+                }
+            }
+        )
+    };
+}
+
+public func accountStore_payFullyFromEscrow(acctStore: AccountStore, key: uint, recipient: address) -> AccountStore {
+    let amount = storageMap_get(acctStore.escrowStore.escrowedValues, key);
+    let acct = accountStore_get(acctStore, recipient);
+    return accountStore_set(
+        acctStore,
+        recipient,
+        acct with { ethBalance: acct.ethBalance + amount }
+    ) with {
+        escrowStore: acctStore.escrowStore with {
+            escrowedValues: storageMap_set(acctStore.escrowStore.escrowedValues, key, 0)
+        }
+    };
 }
 
 public func account_getAllStorage(account: Account) -> option<StorageMap> {
@@ -596,11 +710,11 @@ public func account_getCode(acct: Account) -> option<ByteArray> {
 }
 
 type asfa_wrappedState = struct {
-    innerClosure: impure func(Account, any) -> any,
+    innerClosure: func(Account, any) -> any,
     innerState: any,
 }
 
-public impure func accountStore_forall(acctStore: AccountStore, closure: impure func(Account, any) -> any, startState: any) -> any {
+public func accountStore_forall(acctStore: AccountStore, closure: func(Account, any) -> any, startState: any) -> any {
     let wrappedState = struct {
         innerClosure: closure,
         innerState: startState,

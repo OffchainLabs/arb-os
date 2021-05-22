@@ -15,19 +15,19 @@ use accounts::account_checkAndIncrSeqNum;
 
 use arbstatistics::arbStatistics_init;
 
+use arbowner::arbowner_init;
+
 use arbsys::arbosVersion;
 use arbsys::arbsys_txcall;
 
 use blockhash::blockhash_init;
 
 use chainParameters::chainParams_init;
-use chainParameters::chainParams_haveDoneInit;
 
 use codeSegment::codeSegment_init;
 use codeSegment::translateEvmCodeSegment;
 
 use contractTemplates::getArbInfoCode;
-use contractTemplates::getArbInfoAddress;
 use contractTemplates::getArbInfoStorage;
 
 use decompression::decompression_init;
@@ -42,6 +42,8 @@ use evmOps::evmOp_return;
 use evmOps::dispatchForEvmOp;
 
 use evmlogs::EvmLogs;
+
+use tracing::evmTracer_clear;
 
 use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_init;
@@ -85,7 +87,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
     if (unsafecast<any>(oldGlobals) != ()) {
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
 
-        let (newGlobals, oldArbosVersion) = remapGlobalsForUpgrade(oldGlobals);
+        let (newGlobals, _oldArbosVersion) = remapGlobalsForUpgrade(oldGlobals);
 
         asm(newGlobals,) { rset };
 
@@ -93,17 +95,19 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         errorHandler_init();
         evmOps_init();
         __fixedLocationGlobal = dispatchForEvmOp;
+        codeSegment_init();
+
         if (initializePreinstalls(true) == None<()>) {
             panic;   // don't try to run without preinstalls and precompiles
         }
     } else {
         // this is a clean start, not an upgrade
         errorHandler_init();
+        chainParams_init();
         arbStatistics_init();
 
         pluggables_init();
         codeSegment_init();
-        chainParams_init();
         output_init();
         decompression_init();
         inbox_init();
@@ -114,6 +118,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         blockhash_init();
         inbox_init();
         accountStore_init();
+        arbowner_init();
         txReceipts_init();
         rollupTracker_init();
         if (initializePreinstalls(false) == None<()>) {
@@ -133,10 +138,7 @@ public impure func mainRunLoop() {
     loop {
         let (resultCode, request) = getNextRequestFromCongestionAuction();
         if (resultCode == const::TxResultCode_success) {
-            if (handleL2Request(
-                bytestream_new(request.incomingRequest.msgData),
-                request
-            ) == None<()>) {
+            if (handleL2Request(request) == None<()>) {
                 // reject for message format error
                 emitTxReceipt(
                     request.incomingRequest,
@@ -145,6 +147,7 @@ public impure func mainRunLoop() {
                     None<EvmLogs>,
                     None<GasUsage>,
                     request.feeStats,
+                    false,      // don't emit tracing info because the tx was bogus
                 );
             }
         } else {
@@ -165,6 +168,7 @@ public impure func mainRunLoop() {
                 None<EvmLogs>,
                 None<GasUsage>,
                 request.feeStats,
+                true,
             );
         }
     }
@@ -181,7 +185,7 @@ impure func initializePreinstalls(isUpgrade: bool) -> option<()> {
     acctStore = xif (isUpgrade) {
         accountStore_upgradeContractFromEvmCode(
             acctStore,
-            getArbInfoAddress(),
+            address(const::Address_ArbInfo),
             code,
             evmJumpTable,
             initCodePt,
@@ -189,7 +193,7 @@ impure func initializePreinstalls(isUpgrade: bool) -> option<()> {
     } else {
         accountStore_createAccountFromEvmCode(
             acctStore,
-            getArbInfoAddress(),
+            address(const::Address_ArbInfo),
             code,
             evmJumpTable,
             initCodePt,

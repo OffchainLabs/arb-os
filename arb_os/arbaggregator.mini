@@ -63,7 +63,7 @@ public impure func arbaggregator_txcall() {
     }
 }
 
-impure func arbaggregator_getPreferredAggregator(topFrame: EvmCallFrame, calldata: ByteArray) {  // (address) -> (address, bool)
+impure func arbaggregator_getPreferredAggregator(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (address) -> (address, bool)
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(10, 0, 0);
     }
@@ -90,14 +90,6 @@ impure func arbaggregator_setPreferredAggregator(topFrame: EvmCallFrame, calldat
     }
     let caller = evmCallFrame_getCaller(topFrame);
     let newPA = address(bytearray_get256(calldata, 4));
-    let updatedAcct = account_setAggregatorToPay(
-        evmCallStack_getAccountInCurrentContext(caller),
-        xif (newPA == address(0)) {
-            None<address>
-        } else {
-            Some(newPA)
-        },
-    );
     let newVal = xif (newPA == address(0)) {
          None<address>
      } else {
@@ -113,7 +105,7 @@ impure func arbaggregator_setPreferredAggregator(topFrame: EvmCallFrame, calldat
     evmOp_return(0, 0);
 }
 
-impure func arbaggregator_getDefaultAggregator(topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> address
+impure func arbaggregator_getDefaultAggregator(_topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> address
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(30, 0, 0);
     }
@@ -130,7 +122,7 @@ impure func arbaggregator_setDefaultAggregator(topFrame: EvmCallFrame, calldata:
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(40, 0, 0);
     }
-    if ((caller != address(0)) && (Some(caller) != chainParams_getOwner()) && (caller != chainParams_getDefaultAggregator())) {
+    if ((caller != address(0)) && (caller != chainParams_getOwner()) && (caller != chainParams_getDefaultAggregator())) {
         evmOp_revert_knownPc(41, 0, 0);
     }
     let newDefaultAgg = address(bytearray_get256(calldata, 4));
@@ -138,7 +130,7 @@ impure func arbaggregator_setDefaultAggregator(topFrame: EvmCallFrame, calldata:
     evmOp_return(0, 0);
 }
 
-impure func arbaggregator_getFeeCollector(topFrame: EvmCallFrame, calldata: ByteArray) {  // (address) -> address
+impure func arbaggregator_getFeeCollector(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (address) -> address
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(50, 0, 0);
     }
@@ -163,7 +155,7 @@ impure func arbaggregator_setFeeCollector(topFrame: EvmCallFrame, calldata: Byte
     let aggAcct = evmCallStack_getAccountInCurrentContext(aggregator);
     let oldCollector = account_getFeeCollector(aggAcct);
 
-    if ((caller != address(0)) && (Some(caller) != chainParams_getOwner()) && (caller != oldCollector)) {
+    if ((caller != address(0)) && (caller != chainParams_getOwner()) && (caller != oldCollector)) {
         evmOp_revert_knownPc(61, 0, 0);
     }
     evmCallStack_setAccountInCurrentContext(aggregator, account_setFeeCollector(aggAcct, newCollector));
