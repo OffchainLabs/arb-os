@@ -250,7 +250,6 @@ impure func setPrices(
 ) -> (GasPrices, RetryablePrices) {
     oldRetryablePrices = setRetryablePrices(oldRetryablePrices);
     return xif (feeConfig.enabled) {
-        let timestamp = inbox_currentTimestamp();
         let l1GasPrice = getL1GasPriceEstimate();
         let perArbGasBase = l1GasPrice / params.arbGasDivisor;
         let perArbGasCongestion = congestionState.congestionPriceWei;
@@ -840,30 +839,22 @@ public impure func getNextRequestFromCongestionAuction() -> (
             feeStats: txFeeStats_setPrices(tx.feeStats, prices)
         };
 
-        let (ignoreGasPrice, ignoreMaxGas, estimationCompGasLimit) = xif let Some(gep) = tx.incomingRequest.gasEstimationParams {
-            (
-                xif (gep.ignoreGasPrice) {
-                    tx = tx with {
-                        feeStats: tx.feeStats with {
-                            noFeeGasEstimationMode: true
-                        }
-                    };
-                    true
-                } else {
-                    false
-                },
-                xif (gep.ignoreMaxGas) {
-                    tx = tx with {
-                        maxGas: account_getBalance(accountStore_get(getGlobalAccountStore(), tx.gasPayer)) / gasAccountingInfo.currentPrices.perArbGasTotal
-                    };
-                    true
-                } else {
-                    false
-                },
-                gep.computeGasLimit,
-            )
+        let estimationCompGasLimit = xif let Some(gep) = tx.incomingRequest.gasEstimationParams {
+            if (gep.ignoreGasPrice) {
+                tx = tx with {
+                    feeStats: tx.feeStats with {
+                        noFeeGasEstimationMode: true
+                    }
+                };
+            }
+            if (gep.ignoreMaxGas) {
+                tx = tx with {
+                    maxGas: account_getBalance(accountStore_get(getGlobalAccountStore(), tx.gasPayer)) / gasAccountingInfo.currentPrices.perArbGasTotal
+                };
+            }
+            gep.computeGasLimit
         } else {
-            (false, false, 0)
+            0
         };
 
         if ((tx.gasPrice != 0) && (tx.gasPrice < prices.perArbGasTotal) ) {
@@ -872,8 +863,6 @@ public impure func getNextRequestFromCongestionAuction() -> (
 
         if let Some(aggInfo) = tx.incomingRequest.aggregator {
             if let Some(theAggregator) = aggInfo.aggregator {
-                let feeForTxAndCalldata = prices.perL2Tx + prices.perL1CalldataUnit * aggInfo.calldataUnits;
-
                 // reimburse aggregator for tx and calldata, and collect network fee
                 let (fullyPaid, feeStats) = payForTxAndL1Gas(
                     tx.gasPayer,
@@ -1097,7 +1086,7 @@ impure func updateCongestionState(state: CongestionState, toBlockNum: uint, toTi
         // now 0 <= maxtc <= gasPoolMax
 
         // constants here are chosen so that adjustment is by factor between 7/8 and 9/8 per mainnet block, as in EIP-1559
-        let totalPrice = totalPrice * (121 * gasPoolMax - 2 * uint(maxtc)) / (120 * gasPoolMax);
+        totalPrice = totalPrice * (121 * gasPoolMax - 2 * uint(maxtc)) / (120 * gasPoolMax);
         if (totalPrice < basePrice) { totalPrice = basePrice; }
     }
     return struct {
@@ -1126,7 +1115,6 @@ public impure func getRetryableTxPrice(calldataSize: uint) -> (uint, uint) {
 }
 
 public impure func getFeesForRetryableTx(
-    sender: address,
     calldataSize: uint,  // in bytes
 ) -> (uint, address, TxFeeStats) {
     return xif (gasAccountingInfo.feeConfig.enabled) {

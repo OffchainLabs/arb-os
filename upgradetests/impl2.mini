@@ -9,6 +9,6 @@ public func set_newGlobal2_onUpgrade(input: GlobalsBeforeUpgrade) -> uint {
     return input.global1;
 }
 
-public func set_newGlobal3_onUpgrade(input: GlobalsBeforeUpgrade) -> (uint, uint) {
+public func set_newGlobal3_onUpgrade(_input: GlobalsBeforeUpgrade) -> (uint, uint) {
     return (17, 39);
 }
