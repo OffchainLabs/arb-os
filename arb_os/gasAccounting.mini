@@ -155,7 +155,7 @@ public impure func gasAccounting_notifyParamsChanged() {
 impure func setupParameters(isInit: bool) {
     setGasAccountingParamsFromSpeedLimit(chainParams_getOrDie(const::Atom_Param_SpeedLimitPerSecond));
 
-    let l1GasPerL2Tx = chainParams_getOrDie(const::Atom_Param_L1GasPerL2Tx);
+    let l1GasPerL2Tx = 50000;   // will be eliminated in a future PR
     let l1GasPerL1CalldataUnit = chainParams_getOrDie(const::Atom_Param_L1GasPerL1CalldataUnit);
     let l1GasPerStorage = chainParams_getOrDie(const::Atom_Param_L1GasPerStorage);
     let arbGasDivisor = chainParams_getOrDie(const::Atom_Param_ArbGasDivisor);

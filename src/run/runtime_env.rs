@@ -19,7 +19,6 @@ use std::{collections::HashMap, fs::File, io, path::Path};
 #[derive(Debug, Clone)]
 pub struct RuntimeEnvironment {
     pub chain_id: u64,
-    pub chain_address: Uint256,
     pub l1_inbox: Vec<Value>,
     pub current_block_num: Uint256,
     pub current_timestamp: Uint256,
@@ -37,11 +36,9 @@ pub struct RuntimeEnvironment {
 
 impl RuntimeEnvironment {
     pub fn new(
-        chain_address: Uint256,
         charging_policy: Option<(Uint256, Uint256, Uint256)>,
     ) -> Self {
         RuntimeEnvironment::new_with_blocknum_timestamp(
-            chain_address,
             Uint256::from_u64(100_000),
             Uint256::from_u64(10_000_000),
             charging_policy,
@@ -49,9 +46,8 @@ impl RuntimeEnvironment {
         )
     }
 
-    pub fn _new_options(chain_address: Uint256) -> Self {
+    pub fn _new_options() -> Self {
         RuntimeEnvironment::new_with_blocknum_timestamp(
-            chain_address,
             Uint256::from_u64(100_000),
             Uint256::from_u64(10_000_000),
             None,
@@ -59,9 +55,8 @@ impl RuntimeEnvironment {
         )
     }
 
-    pub fn _new_with_owner(chain_address: Uint256, owner: Option<Uint256>) -> Self {
+    pub fn _new_with_owner(owner: Option<Uint256>) -> Self {
         RuntimeEnvironment::new_with_blocknum_timestamp(
-            chain_address,
             Uint256::from_u64(100_000),
             Uint256::from_u64(10_000_000),
             None,
@@ -70,16 +65,14 @@ impl RuntimeEnvironment {
     }
 
     pub fn new_with_blocknum_timestamp(
-        chain_address: Uint256,
         blocknum: Uint256,
         timestamp: Uint256,
         charging_policy: Option<(Uint256, Uint256, Uint256)>,
         owner: Option<Uint256>,
     ) -> Self {
-        let chain_id = chain_address.trim_to_u64() & 0xffffffffffff; // truncate to 48 bits
+        let chain_id = 42161;
         let mut ret = RuntimeEnvironment {
             chain_id,
-            chain_address,
             l1_inbox: vec![],
             current_block_num: blocknum,
             current_timestamp: timestamp,
@@ -572,7 +565,7 @@ impl RuntimeEnvironment {
 
 impl Default for RuntimeEnvironment {
     fn default() -> Self {
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None)
+        RuntimeEnvironment::new(None)
     }
 }
 
