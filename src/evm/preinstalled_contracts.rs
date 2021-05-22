@@ -2157,7 +2157,7 @@ impl ArbosTest {
         if (receipts.len() != 1) || (sends.len() != 0) {
             Err(ethabi::Error::from("wrong number of receipts or sends"))
         } else if receipts[0].succeeded() {
-            return Ok(receipts[0].get_return_data());
+            return Ok(receipts[0].get_return_data()[64..].to_vec());
         } else {
             println!(
                 "arbosTest.run revert code {}",
