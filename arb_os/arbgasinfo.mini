@@ -45,7 +45,7 @@ public impure func arbgasinfo_txcall() {
     }
 }
 
-impure func arbgasinfo_getPricesInWei(topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> (uint, ..., uint)
+impure func arbgasinfo_getPricesInWei(_topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> (uint, ..., uint)
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(10, 0, 0);
     }
@@ -64,7 +64,7 @@ impure func arbgasinfo_getPricesInWei(topFrame: EvmCallFrame, calldata: ByteArra
     }
 }
 
-impure func arbgasinfo_getPricesInArbGas(topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> (uint, uint, uint)
+impure func arbgasinfo_getPricesInArbGas(_topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> (uint, uint, uint)
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(20, 0, 0);
     }
@@ -80,7 +80,7 @@ impure func arbgasinfo_getPricesInArbGas(topFrame: EvmCallFrame, calldata: ByteA
     }
 }
 
-impure func arbgasinfo_getGasAccountingParams(topFrame: EvmCallFrame, calldata: ByteArray) { // () -> (uint, uint, uint)
+impure func arbgasinfo_getGasAccountingParams(_topFrame: EvmCallFrame, calldata: ByteArray) { // () -> (uint, uint, uint)
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(30, 0, 0);
     }

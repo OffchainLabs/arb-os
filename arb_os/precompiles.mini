@@ -94,7 +94,6 @@ public impure func precompiles_init(acctStore: AccountStore, isUpgrade: bool) ->
         address(0x05),
         bindContractAddressToPluggable(
             accountStore_get(acctStore, address(0x05)),
-            address(0x05),
             const::PluggableModuleID_precompile_0x05,
         ),
     );
@@ -207,7 +206,7 @@ public impure func precompiles_init(acctStore: AccountStore, isUpgrade: bool) ->
     return Some(acctStore);
 }
 
-impure func makeTrampoline(txcallFunc: impure func()) -> impure func() {
+public impure func makeTrampoline(txcallFunc: impure func()) -> impure func() {
     // make a small code snippet that function-calls to txcallFunc (with a dummy return address)
     return asm(
         const::AVM_nop,
@@ -336,8 +335,8 @@ public impure func precompile_0x05() {  // modexp
 
 func precompile_0x05_pluggable(
     args: (EvmCallFrame, ByteArray, any),
-    state: any,
-    firstTime: bool
+    _state: any,
+    _firstTime: bool
 ) -> (any, any) {  // return ((success: bool, returnData: ByteArray), any)
     let (_, calldata, _) = args;
 

@@ -24,7 +24,7 @@ type ByteArray = struct {
 //        reads beyond the end will return zero,
 //        size will expand to fit all writes (but max size is 2**64 bytes),
 //        and the capacity arg is a hint about how big it will get
-public func bytearray_new(ignored: uint) -> ByteArray {
+public func bytearray_new(_ignored: uint) -> ByteArray {
     return struct {
         size: 0,
         sliceOffset: 0,
@@ -109,7 +109,6 @@ public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> option<ByteArr
 
     // We'll also build 8-tuples of 32-byte words, and insert each tuple into the ExpIntArr with a single call.
     let eia = newbuffer();
-    let block = unsafecast<[8]any>((0,0,0,0,0,0,0,0));
 
     while (nwords > 0) {
         nwords = nwords-1;
