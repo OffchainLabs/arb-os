@@ -46,20 +46,15 @@ impl RuntimeEnvironment {
             Uint256::from_u64(10_000_000),
             charging_policy,
             None,
-            None,
         )
     }
 
-    pub fn _new_options(
-        chain_address: Uint256,
-        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
-    ) -> Self {
+    pub fn _new_options(chain_address: Uint256) -> Self {
         RuntimeEnvironment::new_with_blocknum_timestamp(
             chain_address,
             Uint256::from_u64(100_000),
             Uint256::from_u64(10_000_000),
             None,
-            sequencer_info,
             None,
         )
     }
@@ -70,7 +65,6 @@ impl RuntimeEnvironment {
             Uint256::from_u64(100_000),
             Uint256::from_u64(10_000_000),
             None,
-            None,
             owner,
         )
     }
@@ -80,7 +74,6 @@ impl RuntimeEnvironment {
         blocknum: Uint256,
         timestamp: Uint256,
         charging_policy: Option<(Uint256, Uint256, Uint256)>,
-        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
         owner: Option<Uint256>,
     ) -> Self {
         let mut ret = RuntimeEnvironment {
@@ -98,11 +91,7 @@ impl RuntimeEnvironment {
             compressor: TxCompressor::new(),
             charging_policy: charging_policy.clone(),
             num_wallets: 0,
-            chain_init_message: RuntimeEnvironment::get_params_bytes(
-                charging_policy,
-                sequencer_info,
-                owner,
-            ),
+            chain_init_message: RuntimeEnvironment::get_params_bytes(charging_policy, owner),
         };
 
         ret.send_chain_init_message();
@@ -114,12 +103,13 @@ impl RuntimeEnvironment {
             4,
             self.chain_address.clone(),
             &self.chain_init_message.clone(),
+            None,
+            None,
         );
     }
 
     fn get_params_bytes(
         charging_policy: Option<(Uint256, Uint256, Uint256)>,
-        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
         owner: Option<Uint256>,
     ) -> Vec<u8> {
         let mut buf = Vec::new();
@@ -139,14 +129,6 @@ impl RuntimeEnvironment {
         }
 
         buf.extend(owner.unwrap_or(Uint256::zero()).to_bytes_be()); // owner address
-
-        if let Some((seq_addr, delay_blocks, delay_time)) = sequencer_info {
-            buf.extend(&[0u8; 8]);
-            buf.extend(&96u64.to_be_bytes());
-            buf.extend(seq_addr.to_bytes_be());
-            buf.extend(delay_blocks.to_bytes_be());
-            buf.extend(delay_time.to_bytes_be());
-        }
 
         buf
     }
@@ -180,11 +162,18 @@ impl RuntimeEnvironment {
         self.l1_inbox = contents;
     }
 
-    pub fn insert_l1_message(&mut self, msg_type: u8, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
+    pub fn insert_l1_message(
+        &mut self,
+        msg_type: u8,
+        sender_addr: Uint256,
+        msg: &[u8],
+        block_num: Option<Uint256>,
+        timestamp: Option<Uint256>,
+    ) -> Uint256 {
         let l1_msg = Value::new_tuple(vec![
             Value::Int(Uint256::from_usize(msg_type as usize)),
-            Value::Int(self.current_block_num.clone()),
-            Value::Int(self.current_timestamp.clone()),
+            Value::Int(block_num.unwrap_or(self.current_block_num.clone())),
+            Value::Int(timestamp.unwrap_or(self.current_timestamp.clone())),
             Value::Int(sender_addr),
             Value::Int(self.next_inbox_seq_num.clone()),
             Value::Int(self.get_gas_price()),
@@ -225,7 +214,7 @@ impl RuntimeEnvironment {
         msg.extend(Uint256::from_usize(calldata.len()).to_bytes_be());
         msg.extend(calldata);
 
-        let submit_req_id = self.insert_l1_message(9u8, sender, &msg);
+        let submit_req_id = self.insert_l1_message(9u8, sender, &msg, None, None);
         let mut buf = submit_req_id.to_bytes_be();
         let mut buf2 = buf.clone();
         buf.extend(&[0u8; 32]);
@@ -255,6 +244,8 @@ impl RuntimeEnvironment {
             if is_buddy_deploy { 5 } else { 3 },
             sender_addr.clone(),
             msg,
+            None,
+            None,
         );
         if !is_buddy_deploy && (msg[0] == 0) {
             Uint256::avm_hash2(
@@ -273,7 +264,7 @@ impl RuntimeEnvironment {
         if (msg[0] != 0u8) && (msg[0] != 1u8) {
             panic!();
         }
-        let default_id = self.insert_l1_message(7, sender_addr.clone(), msg);
+        let default_id = self.insert_l1_message(7, sender_addr.clone(), msg, None, None);
         if msg[0] == 0 {
             Uint256::avm_hash2(
                 &sender_addr,
@@ -1485,25 +1476,6 @@ pub fn replay_from_testlog_file(
             Ok(success)
         }
         Err(e) => panic!("json parsing failed: {}", e),
-    }
-}
-
-#[test]
-fn logfile_replay_tests() {
-    for entry in std::fs::read_dir(Path::new("./replayTests")).unwrap() {
-        let path = entry.unwrap().path();
-        let name = path.file_name().unwrap();
-        assert_eq!(
-            replay_from_testlog_file(
-                &("./replayTests/".to_owned() + name.to_str().unwrap()),
-                false,
-                false,
-                ProfilerMode::Never,
-                None,
-            )
-            .unwrap(),
-            true
-        );
     }
 }
 

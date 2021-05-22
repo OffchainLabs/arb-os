@@ -95,7 +95,7 @@ impure func arbosTest_installAccount(topFrame: EvmCallFrame, calldata: ByteArray
         let marshalledStorage = bytearray_extract(calldata, storageOffset+32, storageSize);
 
         if let Some(initStorage) = storageMap_deserialize(marshalledStorage) {
-            let (startCodePoint, evmJumpTable, pcTable) = translateEvmCodeSegment(bytestream_new(code), false);
+            let (startCodePoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(code), false);
             acct = account_setContractInfo(
                 acct,
                 code,
@@ -136,8 +136,8 @@ impure func arbosTest_getMarshalledStorage(topFrame: EvmCallFrame, calldata: Byt
             msSize
         );
         mem = bytearray_copy(marshalledStorage, 0, mem, 64, msSize);
-        if (evmCallStack_setTopFrameMemory(marshalledStorage)) {
-            evmOp_return(0, msSize);
+        if (evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_return(0, 64+msSize);
         } else {
             evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 22, 0, 0);
         }

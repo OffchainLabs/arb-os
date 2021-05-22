@@ -11,12 +11,18 @@ use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_setByte;
 use std::bytestream::bytestream_new;
 use std::bls::BLSKey;
+use std::outputbuffer::OutputBuffer;
+use std::outputbuffer::outputBuffer_new;
+use std::outputbuffer::outputBuffer_appendByte;
+use std::outputbuffer::outputBuffer_append256;
 use std::keccak::keccak256;
 use std::storageMap::StorageMap;
 use std::storageMap::storageMap_new;
 use std::storageMap::storageMap_size;
 use std::storageMap::storageMap_get;
 use std::storageMap::storageMap_set;
+use std::storageMap::storageMap_diff;
+use std::stack::stack_pop;
 
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsSize;
@@ -596,11 +602,11 @@ public func account_getCode(acct: Account) -> option<ByteArray> {
 }
 
 type asfa_wrappedState = struct {
-    innerClosure: impure func(Account, any) -> any,
+    innerClosure: func(Account, any) -> any,
     innerState: any,
 }
 
-public impure func accountStore_forall(acctStore: AccountStore, closure: impure func(Account, any) -> any, startState: any) -> any {
+public func accountStore_forall(acctStore: AccountStore, closure: func(Account, any) -> any, startState: any) -> any {
     let wrappedState = struct {
         innerClosure: closure,
         innerState: startState,

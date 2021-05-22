@@ -15,6 +15,7 @@ use std::bytestream::bytestream_bytesRemaining;
 use std::bytestream::bytestream_truncate;
 use std::bytestream::bytestream_getByte;
 use std::bytestream::bytestream_get64;
+use std::bytestream::bytestream_getPartialWord;
 use std::bytestream::bytestream_skipBytes;
 use std::stack::stack_new;
 use std::stack::stack_push;
@@ -69,6 +70,8 @@ use evmOps::evmOp_timestamp;
 use evmOps::evmOp_create;
 use evmOps::evmOp_create2;
 
+use precompiles::makeTrampoline;
+
 use std::avmcodebuilder::AvmCodePoint;
 use std::avmcodebuilder::pushInstruction;
 use std::avmcodebuilder::pushInstructionImm;
@@ -101,7 +104,10 @@ func evmInstructionStack_pop(s: EvmInstructionStack) -> option<(EvmInstructionSt
     return Some((us, unsafecast<EvmInstruction>(item)));
 }
 
-var unreachableMask: uint;
+var codeSegGlobals: struct {
+    unreachableMask: uint,
+    dummyAcceptContractCode: AvmCodePoint,
+};
 
 impure func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
     let stack = evmInstructionStack_new();
@@ -116,15 +122,22 @@ impure func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
             if ((opcode >= 0x60) && (opcode <= 0x7f)) {
                 // it's a pushN instruction; unmarshal the immediate value and push it
                 let bytesRemaining = opcode - 0x5f;
-                let imm = 0;
-                while (bytesRemaining > 0) {
-                    if let Some(res) = bytestream_getByte(bs) {
-                        let (ubs, val) = res;
-                        bs = ubs;
-                        imm = 256*imm + val;
+                let imm = xif let Some(res) = bytestream_getPartialWord(bs, bytesRemaining) {
+                    let (ubs, v) = res;
+                    bs = ubs;
+                    v
+                } else {
+                    let val = 0;
+                    while (bytesRemaining > 0) {
+                        if let Some(res) = bytestream_getByte(bs) {
+                            let (ubs, v) = res;
+                            bs = ubs;
+                            val = 256*val + v;
+                        }
+                        bytesRemaining = bytesRemaining-1;
                     }
-                    bytesRemaining = bytesRemaining-1;
-                }
+                    val
+                };
                 if (reachable) {
                     stack = evmInstructionStack_push(
                         stack,
@@ -149,7 +162,7 @@ impure func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
                 }
                 evmPc = evmPc + 1;
             }
-            if ((unreachableMask & asm(opcode, 1) uint { shl }) != 0) { reachable = false;    }
+            if ((codeSegGlobals.unreachableMask & asm(opcode, 1) uint { shl }) != 0) { reachable = false;    }
         } else {
             return stack;
         }
@@ -165,7 +178,19 @@ public impure func codeSegment_init() {
         }
         opcode = opcode + 1;
     }
-    unreachableMask = mask;
+
+    codeSegGlobals = struct {
+        unreachableMask: mask,
+        dummyAcceptContractCode: makeTrampoline(dummyAcceptFunction),
+    };
+}
+
+impure func dummyAcceptFunction() {
+    evmOp_return(0, 0);
+}
+
+public impure func getDummyAcceptContractCode() -> AvmCodePoint {
+    return codeSegGlobals.dummyAcceptContractCode;
 }
 
 func unreachableAfterOpcode(opcode: uint) -> bool {
@@ -184,7 +209,7 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
         || (opcode == 0xff); // SELFDESTRUCT
 }
 
-impure func generateCodeForEvmSegment(
+#[noinline, ] impure func generateCodeForEvmSegment(
     insns: EvmInstructionStack,
     makePcTable: bool,
 ) -> (AvmCodePoint, map<uint, AvmCodePoint>, Stack) {
@@ -505,7 +530,7 @@ impure func generateCodeForEvmSegment(
             }
 
             // uncomment the following line, to get a debugprint before every EVM instruction
-            // code = pushInstructionImm(const::AVM_debugprint, (20000, insn.pc, insn.opcode), code);
+            // code = pushInstructionImm(const::AVM_debugprint, (30000, insn.pc, insn.opcode), code);
         } else {
             return (code, evmJumpTable, pcTable);
         }
