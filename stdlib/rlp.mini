@@ -81,9 +81,9 @@ public func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray
 
 public func rlp_encodeUintFresh(val: uint) -> ByteArray {
     return xif (val == 0) {
-        bytearray_fromSizeAndBuffer(1, setbuffer8(newbuffer(), 0, 0x80))
+        bytearray_fromSizeAndBuffer(1, setbuffer8(newbuffer(), 0, 0x80), true)
     } elseif (val <= 0x7f) {
-        bytearray_fromSizeAndBuffer(1, setbuffer8(newbuffer(), 0, val))
+        bytearray_fromSizeAndBuffer(1, setbuffer8(newbuffer(), 0, val), true)
     } else {
         let length = bytesNeededToRepresentUint(val);
         bytearray_fromSizeAndBuffer(
@@ -93,6 +93,7 @@ public func rlp_encodeUintFresh(val: uint) -> ByteArray {
                 1,
                 asm(256-8*length, val) uint { shl }
             ),
+            true
         )
     };
 }

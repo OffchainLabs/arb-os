@@ -16,7 +16,7 @@ impure func main() {
     global2 = Some(-3s);
 
     let (sz, buf) = asm() (uint, buffer) { inbox };
-    let stream = bytestream_new(bytearray_fromSizeAndBuffer(sz, buf));
+    let stream = bytestream_new(bytearray_fromSizeAndBuffer(sz, buf, false));
 
     let builder = avmCodeBuilder_new(false);
     builder = xif let Some(bu) = avmCodeBuilder_append(builder, stream) {

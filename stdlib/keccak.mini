@@ -61,7 +61,7 @@ public func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32 {
 }
 
 public func keccak256_sizedBuffer(size: uint, buf: buffer) -> bytes32 {
-    return keccak256(bytearray_fromSizeAndBuffer(size, buf), 0, size);
+    return keccak256(bytearray_fromSizeAndBuffer(size, buf, false), 0, size);
 }
 
 func keccak_xorblock(accumulator: [7]uint, ba: ByteArray, offset: uint) -> [7]uint {

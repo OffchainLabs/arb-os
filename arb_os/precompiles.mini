@@ -491,7 +491,7 @@ public impure func precompile_0x09() { // Blake2
         }
 
         let outputBuf = asm(inputBuf,) buffer { blake2f };
-        let mem = bytearray_fromSizeAndBuffer(64, outputBuf);
+        let mem = bytearray_fromSizeAndBuffer(64, outputBuf, true);
         if (evmCallStack_setTopFrameMemory(mem)) {
             evmOp_return(0, 64);
         } else {

@@ -17,6 +17,7 @@ type ByteArray = struct {
     size: uint,
     sliceOffset: uint,
     contents: buffer,
+    bufferIsClean: bool,    // true iff contents does not contain any nonzero data outside of this bytearray
 }
 
 // bytearray_new makes a new ByteArray
@@ -29,15 +30,17 @@ public func bytearray_new(_ignored: uint) -> ByteArray {
         size: 0,
         sliceOffset: 0,
         contents: setbuffer256(newbuffer(), 32, 0),   // ensure that contents size is always >= 64
+        bufferIsClean: true,
     };
 }
 
 
-public func bytearray_fromSizeAndBuffer(size: uint, buf: buffer) -> ByteArray {
+public func bytearray_fromSizeAndBuffer(size: uint, buf: buffer, bufferIsClean: bool) -> ByteArray {
     return struct {
         size: size,
         sliceOffset: 0,
         contents: buf,
+        bufferIsClean: bufferIsClean,
     };
 }
 
@@ -120,6 +123,7 @@ public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> option<ByteArr
         size: inBytes.nbytes,
         sliceOffset: 0,
         contents: eia,
+        bufferIsClean: true,
     });
 }
 
@@ -204,19 +208,12 @@ public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
     return res;
 }
 
-func make(cont: ByteArray) -> ByteArray {
-    return struct {
-        size: cont.size + cont.sliceOffset + 32,
-        sliceOffset: 0,
-        contents: cont.contents,
-    };
-}
-
-public func bytearray_wrap(cont: buffer, size: uint) -> ByteArray {
+public func bytearray_wrap(cont: buffer, size: uint, bufferIsClean: bool) -> ByteArray {
     return struct {
         size: size,
         sliceOffset: 0,
         contents: cont,
+        bufferIsClean: bufferIsClean,
     };
 }
 
@@ -342,7 +339,12 @@ public func bytearray_extract(from: ByteArray, offset: uint, nbytes: uint) -> By
         return bytearray_new(0);
     }
     
-    return struct { size: nbytes, sliceOffset: offset + from.sliceOffset, contents: from.contents };
+    return struct {
+        size: nbytes,
+        sliceOffset: offset + from.sliceOffset,
+        contents: from.contents,
+        bufferIsClean: from.bufferIsClean && (offset == 0) && (nbytes >= from.size),
+    };
 }
 
 
@@ -351,6 +353,7 @@ public func bytearray_wrap_slice(cont: buffer, offset: uint, size: uint) -> Byte
         size: size,
         sliceOffset: offset,
         contents: cont,
+        bufferIsClean: false,
     };
 }
 

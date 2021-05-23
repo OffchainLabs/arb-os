@@ -149,7 +149,7 @@ impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, fromSide
         timestamp: newMsgRaw.timestamp,
         sender: newMsgRaw.sender,
         requestId: newMsgRaw.requestId,
-        msgData: bytearray_fromSizeAndBuffer(newMsgRaw.msgSize, newMsgRaw.msgData),
+        msgData: bytearray_fromSizeAndBuffer(newMsgRaw.msgSize, newMsgRaw.msgData, true),
         provenance: struct {
             l1SeqNum: newMsgRaw.requestId,
             parentRequestId: 0,
