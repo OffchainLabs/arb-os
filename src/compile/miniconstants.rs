@@ -31,21 +31,27 @@ pub fn init_constant_table(
     let consts = if let Some(consts_file) = constants_path {
         let mut file = File::open(consts_file).map_err(|_| {
             CompileError::new(
+                String::from("Compile error"),
                 format!("Could not open constants file {:?}", consts_file),
-                None,
+                vec![],
+                false,
             )
         })?;
         let mut consts_string = String::new();
         file.read_to_string(&mut consts_string).map_err(|_| {
             CompileError::new(
+                String::from("Compile error"),
                 format!("Could not read file {:?} to a string", consts_file),
-                None,
+                vec![],
+                false,
             )
         })?;
         serde_json::from_str::<ConstantsFile>(&consts_string).map_err(|_| {
             CompileError::new(
+                String::from("Compile error"),
                 format!("Could not parse {:?} as constants file", consts_file),
-                None,
+                vec![],
+                false,
             )
         })?
     } else {
@@ -64,8 +70,10 @@ pub fn init_constant_table(
         let fcodes =
             func_codes_for_builtin_contract(&consts.contract_folder, &builtin).map_err(|e| {
                 CompileError::new(
+                    String::from("Compile error"),
                     format!("Error accessing builtin function {}: {}", builtin, e),
-                    None,
+                    vec![],
+                    false,
                 )
             })?;
         for (name, code) in fcodes {
@@ -75,8 +83,10 @@ pub fn init_constant_table(
         let etopics = event_topics_for_builtin_contract(&consts.contract_folder, &builtin)
             .map_err(|e| {
                 CompileError::new(
+                    String::from("Compile error"),
                     format!("Error accessing builtin event {}: {}", builtin, e),
-                    None,
+                    vec![],
+                    false,
                 )
             })?;
         for (name, topic) in etopics {
