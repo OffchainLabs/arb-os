@@ -83,7 +83,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
     if (unsafecast<any>(oldGlobals) != ()) {
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
 
-        let (newGlobals, oldArbosVersion) = remapGlobalsForUpgrade(oldGlobals);
+        let (newGlobals, _oldArbosVersion) = remapGlobalsForUpgrade(oldGlobals);
 
         asm(newGlobals,) { rset };
 
@@ -131,10 +131,7 @@ public impure func mainRunLoop() {
     loop {
         let (resultCode, request) = getNextRequestFromCongestionAuction();
         if (resultCode == const::TxResultCode_success) {
-            if (handleL2Request(
-                bytestream_new(request.incomingRequest.msgData),
-                request
-            ) == None<()>) {
+            if (handleL2Request(request) == None<()>) {
                 // reject for message format error
                 emitTxReceipt(
                     request.incomingRequest,
