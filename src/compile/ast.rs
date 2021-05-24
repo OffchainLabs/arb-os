@@ -930,9 +930,10 @@ fn field_vectors_downcastable(
     seen: HashSet<(Type, Type)>,
 ) -> bool {
     tvec1.len() == tvec2.len()
-        && tvec1.iter().zip(tvec2).all(|(t1, t2)| {
-            t1.tipe.downcastable(&t2.tipe, type_tree, seen.clone())
-        })
+        && tvec1
+            .iter()
+            .zip(tvec2)
+            .all(|(t1, t2)| t1.tipe.downcastable(&t2.tipe, type_tree, seen.clone()))
 }
 
 fn field_vectors_castable(
@@ -942,9 +943,10 @@ fn field_vectors_castable(
     seen: HashSet<(Type, Type)>,
 ) -> bool {
     tvec1.len() == tvec2.len()
-        && tvec1.iter().zip(tvec2).all(|(t1, t2)| {
-            t1.tipe.castable(&t2.tipe, type_tree, seen.clone())
-        })
+        && tvec1
+            .iter()
+            .zip(tvec2)
+            .all(|(t1, t2)| t1.tipe.castable(&t2.tipe, type_tree, seen.clone()))
 }
 
 ///Identical to `type_vectors_assignable`
