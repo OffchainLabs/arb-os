@@ -177,15 +177,7 @@ impl Type {
         }
         match self {
             Type::Any => *rhs != Type::Void,
-            Type::Uint | Type::Int | Type::Bytes32 => match &rhs {
-                Type::Uint | Type::Int | Type::Bytes32 => true,
-                _ => false,
-            },
-            Type::EthAddress => match &rhs {
-                Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress => true,
-                _ => false,
-            },
-            Type::Bool => match &rhs {
+            Type::Uint | Type::Int | Type::Bool | Type::Bytes32 | Type::EthAddress => match &rhs {
                 Type::Uint | Type::Int | Type::Bool | Type::Bytes32 | Type::EthAddress => true,
                 _ => false,
             },
