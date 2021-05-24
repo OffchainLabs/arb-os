@@ -919,6 +919,9 @@ impl Machine {
                         println!("We hit a breakpoint!");
                     }
                     println!("Next Opcode: {}", code.opcode);
+                    for debug in &code.debug_info.attributes.internal_debug {
+                        println!("Internal debug information: \"{}\"", debug)
+                    }
                     if let Some(imm) = code.immediate {
                         println!("Immediate: {}", imm);
                     }

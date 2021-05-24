@@ -37,6 +37,8 @@ pub struct Attributes {
     ///Is true if the current node is a breakpoint, false otherwise.
     pub breakpoint: bool,
     pub inline: InliningMode,
+    #[serde(default)]
+    pub internal_debug: Vec<String>,
 }
 
 impl DebugInfo {
