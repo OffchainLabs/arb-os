@@ -45,7 +45,7 @@ fn num_func_returns(ft: &FunctionType) -> usize {
     ft.results().len()
 }
 
-fn simple_op(op: AVMOpcode) -> Instruction {
+pub fn simple_op(op: AVMOpcode) -> Instruction {
     Instruction::from_opcode(Opcode::AVMOpcode(op), DebugInfo::from(None))
 }
 
@@ -1854,7 +1854,7 @@ pub fn has_label(inst: &Instruction) -> bool {
 pub fn get_inst(inst: &Instruction) -> u8 {
     match inst.opcode {
         Opcode::AVMOpcode(op) => op as u8,
-        _ => 0,
+        _ => AVMOpcode::Noop as u8,
     }
 }
 
@@ -2556,7 +2556,7 @@ fn process_wasm_inner(buffer: &[u8], init: &mut Vec<Instruction>, test_args: &[u
                 init.push(push_value(Value::Int(hash_ftype(&ftype))));
                 init.push(simple_op(AVMOpcode::Equal));
                 call_cjump(init, *f_idx as u32);
-                init.push(push_value(Value::Int(Uint256::from_signed_string("-1").unwrap())));
+                init.push(push_value(Value::Int(Uint256::from_string_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap())));
                 init.push(simple_op(AVMOpcode::Panic));
                 init.push(mk_label(next_label));
             }
@@ -2564,7 +2564,7 @@ fn process_wasm_inner(buffer: &[u8], init: &mut Vec<Instruction>, test_args: &[u
     }
     // Error handling
     init.push(mk_label(1));
-    init.push(push_value(Value::Int(Uint256::from_signed_string("-1").unwrap())));
+    init.push(push_value(Value::Int(Uint256::from_string_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap())));
     init.push(simple_op(AVMOpcode::Panic));
 
     // Cleaning up
