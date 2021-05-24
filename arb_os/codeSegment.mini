@@ -412,7 +412,7 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
                             } elseif (opcode == 0x59) { // MSIZE
                                 code = pushEvmInsnCall(const::EvmOp_msize, code);
                             } elseif (opcode == 0x5a) { // GAS
-                                code = pushInstruction(const::AVM_pushgas, code);
+                                code = pushEvmInsnCall(const::EvmOp_gas, code);
                             } elseif (opcode == 0x5b) { // JUMPDEST
                                 evmJumpTable = evmJumpTable with { [insn.pc] = code };
                             } else {
