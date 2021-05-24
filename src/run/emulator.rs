@@ -923,6 +923,7 @@ impl Machine {
                 if let Ok(pc) = self.get_pc() {
                     println!("PC: {}", pc);
                 }
+                /*
                 println!("Stack contents: {}", self.stack);
                 if show_aux {
                     println!("Aux-stack contents: {}", self.aux_stack);
@@ -936,13 +937,15 @@ impl Machine {
                 if !self.stack.is_empty() {
                     // println!("Stack top: {}", self.stack.top().unwrap());
                 }
+                */
+                println!("Gas used: {}", self.total_gas_usage);
                 if let Some(code) = self.next_opcode() {
                     if code.debug_info.attributes.breakpoint {
                         println!("We hit a breakpoint!");
                     }
                     println!("Next Opcode: {}", code.opcode);
                     if let Some(imm) = code.immediate {
-                        println!("Immediate: {}", imm);
+                        // println!("Immediate: {}", imm);
                     }
                     if let Some(str) = code.debug_str {
                         println!("*************************** Debug: {}", str);

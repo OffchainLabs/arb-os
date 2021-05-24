@@ -101,6 +101,8 @@ struct WasmTest {
     input: Vec<String>,
     #[clap(short, long)]
     param: Option<String>,
+    #[clap(short, long)]
+    debug: bool,
 }
 
 ///Command line options for wasm-test subcommand.
@@ -221,7 +223,6 @@ fn parse_list(lst: &json::JsonValue) -> Vec<u64> {
     args
 }
 
-
 fn main() -> Result<(), CompileError> {
     let mut print_time = true;
     let start_time = Instant::now();
@@ -332,8 +333,11 @@ fn main() -> Result<(), CompileError> {
                 machine.run(Some(CodePt::new_internal(code_len - 1)));
             }*/
             machine.start_at_zero();
-            let used = machine.run(Some(CodePt::new_internal(code_len - 1)));
-            // let used = machine.debug(Some(CodePt::new_internal(code_len - 1)));
+            let used = if fname.debug {
+                machine.debug(Some(CodePt::new_internal(code_len - 1)))
+            } else {
+                machine.run(Some(CodePt::new_internal(code_len - 1)))
+            };
             let len = machine.stack.nth(0);
             let buf = machine.stack.nth(1);
             let gas_left = machine.stack.nth(2);

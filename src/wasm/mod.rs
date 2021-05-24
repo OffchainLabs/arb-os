@@ -404,7 +404,7 @@ fn signed_op64_swap(res: &mut Vec<Instruction>, op: AVMOpcode) {
     res.push(simple_op(op));
     res.push(immed_op(
         AVMOpcode::BitwiseAnd,
-        Value::Int(Uint256::from_usize(0xffffffffffffffff)),
+        Value::Int(Uint256::from_u64(0xffffffffffffffff)),
     ));
 }
 
@@ -416,29 +416,29 @@ fn signed_op64(res: &mut Vec<Instruction>, op: AVMOpcode) {
 fn op64_swap(res: &mut Vec<Instruction>, op: AVMOpcode) {
     res.push(immed_op(
         AVMOpcode::BitwiseAnd,
-        Value::Int(Uint256::from_usize(0xffffffffffffffff)),
+        Value::Int(Uint256::from_u64(0xffffffffffffffff)),
     ));
     res.push(simple_op(AVMOpcode::Swap1));
     res.push(immed_op(
         AVMOpcode::BitwiseAnd,
-        Value::Int(Uint256::from_usize(0xffffffffffffffff)),
+        Value::Int(Uint256::from_u64(0xffffffffffffffff)),
     ));
     res.push(simple_op(op));
     res.push(immed_op(
         AVMOpcode::BitwiseAnd,
-        Value::Int(Uint256::from_usize(0xffffffffffffffff)),
+        Value::Int(Uint256::from_u64(0xffffffffffffffff)),
     ));
 }
 
 fn op64_unary(res: &mut Vec<Instruction>, op: AVMOpcode) {
     res.push(immed_op(
         AVMOpcode::BitwiseAnd,
-        Value::Int(Uint256::from_usize(0xffffffffffffffff)),
+        Value::Int(Uint256::from_u64(0xffffffffffffffff)),
     ));
     res.push(simple_op(op));
     res.push(immed_op(
         AVMOpcode::BitwiseAnd,
-        Value::Int(Uint256::from_usize(0xffffffffffffffff)),
+        Value::Int(Uint256::from_u64(0xffffffffffffffff)),
     ));
 }
 
@@ -473,10 +473,10 @@ fn make_rotr(res: &mut Vec<Instruction>, num: usize) {
 }
 
 fn make_popcnt(res: &mut Vec<Instruction>) {
-    let m1 = 0x5555555555555555;
-    let m2 = 0x3333333333333333;
-    let m4 = 0x0F0F0F0F0F0F0F0F;
-    let h01 = 0x0101010101010101;
+    let m1 = 0x5555555555555555u64;
+    let m2 = 0x3333333333333333u64;
+    let m4 = 0x0F0F0F0F0F0F0F0Fu64;
+    let h01 = 0x0101010101010101u64;
 
     // x -= (x >> 1) & m1;
     res.push(simple_op(AVMOpcode::Dup0));
@@ -486,7 +486,7 @@ fn make_popcnt(res: &mut Vec<Instruction>) {
     ));
     res.push(immed_op(
         AVMOpcode::BitwiseAnd,
-        Value::Int(Uint256::from_usize(m1)),
+        Value::Int(Uint256::from_u64(m1)),
     ));
     res.push(simple_op(AVMOpcode::Swap1));
     res.push(simple_op(AVMOpcode::Minus));
@@ -498,29 +498,29 @@ fn make_popcnt(res: &mut Vec<Instruction>) {
     ));
     res.push(immed_op(
         AVMOpcode::BitwiseAnd,
-        Value::Int(Uint256::from_usize(m2)),
+        Value::Int(Uint256::from_u64(m2)),
     ));
     res.push(simple_op(AVMOpcode::Swap1));
     res.push(immed_op(
         AVMOpcode::BitwiseAnd,
-        Value::Int(Uint256::from_usize(m2)),
+        Value::Int(Uint256::from_u64(m2)),
     ));
     res.push(simple_op(AVMOpcode::Plus));
     // x = (x + (x >> 4)) & m4;
     res.push(simple_op(AVMOpcode::Dup0));
     res.push(immed_op(
         AVMOpcode::ShiftRight,
-        Value::Int(Uint256::from_usize(4)),
+        Value::Int(Uint256::from_u64(4)),
     ));
     res.push(simple_op(AVMOpcode::Plus));
     res.push(immed_op(
         AVMOpcode::BitwiseAnd,
-        Value::Int(Uint256::from_usize(m4)),
+        Value::Int(Uint256::from_u64(m4)),
     ));
     // x = (x * h01) >> 56;
     res.push(immed_op(
         AVMOpcode::Mul,
-        Value::Int(Uint256::from_usize(h01)),
+        Value::Int(Uint256::from_u64(h01)),
     ));
     res.push(immed_op(
         AVMOpcode::ShiftRight,
@@ -1314,7 +1314,7 @@ fn handle_function(
                 ));
                 res.push(immed_op(
                     AVMOpcode::Mul,
-                    Value::Int(Uint256::from_usize(0xfffffffffffff00)),
+                    Value::Int(Uint256::from_u64(0xfffffffffffff00)),
                 ));
                 res.push(simple_op(AVMOpcode::BitwiseOr));
                 res.push(immed_op(
@@ -1628,7 +1628,7 @@ fn handle_function(
                 make_rotl(&mut res, 64);
                 res.push(immed_op(
                     AVMOpcode::BitwiseAnd,
-                    Value::Int(Uint256::from_usize(0xffffffffffffffff)),
+                    Value::Int(Uint256::from_u64(0xffffffffffffffff)),
                 ));
                 ptr = ptr - 1;
             }
@@ -1640,7 +1640,7 @@ fn handle_function(
                 make_rotr(&mut res, 64);
                 res.push(immed_op(
                     AVMOpcode::BitwiseAnd,
-                    Value::Int(Uint256::from_usize(0xffffffffffffffff)),
+                    Value::Int(Uint256::from_u64(0xffffffffffffffff)),
                 ));
                 ptr = ptr - 1;
             }
@@ -1648,21 +1648,21 @@ fn handle_function(
             I64Popcnt => {
                 res.push(immed_op(
                     AVMOpcode::BitwiseAnd,
-                    Value::Int(Uint256::from_usize(0xffffffffffffffff)),
+                    Value::Int(Uint256::from_u64(0xffffffffffffffff)),
                 ));
                 make_popcnt(&mut res);
             }
             I64Clz => {
                 res.push(immed_op(
                     AVMOpcode::BitwiseAnd,
-                    Value::Int(Uint256::from_usize(0xffffffffffffffff)),
+                    Value::Int(Uint256::from_u64(0xffffffffffffffff)),
                 ));
                 make_clz(&mut res, 64);
             }
             I64Ctz => {
                 res.push(immed_op(
                     AVMOpcode::BitwiseAnd,
-                    Value::Int(Uint256::from_usize(0xffffffffffffffff)),
+                    Value::Int(Uint256::from_u64(0xffffffffffffffff)),
                 ));
                 make_ctz(&mut res, 64);
             }
@@ -1683,7 +1683,7 @@ fn handle_function(
                 ));
                 res.push(immed_op(
                     AVMOpcode::BitwiseAnd,
-                    Value::Int(Uint256::from_usize(0xffffffffffffffff)),
+                    Value::Int(Uint256::from_u64(0xffffffffffffffff)),
                 ));
             }
 
@@ -1803,6 +1803,7 @@ pub fn make_table(tab: &[Value]) -> Value {
 
 fn value_replace_labels(v: Value, label_map: &HashMap<Label, Value>) -> Result<Value, Label> {
     match v {
+        Value::HashOnly(_,_) => Ok(v),
         Value::Int(_) => Ok(v),
         Value::CodePoint(_) => Ok(v),
         Value::Buffer(_) => Ok(v),
@@ -2179,8 +2180,8 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
     init.push(push_value(Value::new_tuple(vec![
         Value::new_buffer(vec![]), // memory
         int_from_usize(0), // call table
-        Value::new_buffer(vec![123, 234, 12]), // IO buffer
-        int_from_usize(3), // IO len
+        Value::new_buffer(vec![]), // IO buffer
+        int_from_usize(0), // IO len
         int_from_usize(1000000), // gas left
     ])));
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(1)));
@@ -2222,9 +2223,9 @@ fn process_test(buffer: &[u8], test_args: &[u64], entry: &String, set_memory: bo
     init.push(push_value(Value::new_tuple(vec![
         Value::new_buffer(vec![]), // memory
         int_from_usize(0), // call table
-        Value::new_buffer(vec![123, 234, 12]), // IO buffer
-        int_from_usize(3), // IO len
-        int_from_usize(1000000), // gas left
+        Value::new_buffer(vec![]), // IO buffer
+        int_from_usize(0), // IO len
+        int_from_usize(100000), // gas left
     ])));
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(0)));
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(1)));

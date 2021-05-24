@@ -665,6 +665,7 @@ fn _levels_needed(x: u128) -> (usize, u128) {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Value {
+    HashOnly(Uint256, u64),
     Int(Uint256),
     Tuple(Rc<Vec<Value>>),
     CodePoint(CodePt),
@@ -735,6 +736,9 @@ impl Value {
             Value::Label(_) => {
                 panic!("tried to run type instruction on a label");
             }
+            Value::HashOnly(_, _) => {
+                panic!("tried to run type instruction on a hashed value");
+            }
         }
     }
 
@@ -743,6 +747,7 @@ impl Value {
             Value::Int(_) => Ok(self),
             Value::CodePoint(_) => Ok(self),
             Value::Buffer(_) => Ok(self),
+            Value::HashOnly(_,_) => Ok(self),
             Value::Label(label) => {
                 let maybe_pc = label_map.get(&label);
                 match maybe_pc {
@@ -787,6 +792,7 @@ impl Value {
         func_offset: usize,
     ) -> (Self, usize) {
         match self {
+            Value::HashOnly(_,_) => (self, 0),
             Value::Int(_) => (self, 0),
             Value::Buffer(_) => (self, 0),
             Value::Tuple(v) => {
@@ -820,7 +826,7 @@ impl Value {
 
     pub fn xlate_labels(self, label_map: &HashMap<Label, &Label>) -> Self {
         match self {
-            Value::Int(_) | Value::CodePoint(_) | Value::Buffer(_) => self,
+            Value::Int(_) | Value::CodePoint(_) | Value::Buffer(_) | Value::HashOnly(_,_) => self,
             Value::Tuple(v) => {
                 let mut newv = Vec::new();
                 for val in &*v {
@@ -847,21 +853,47 @@ impl Value {
         }
     }
 
-    pub fn avm_hash(&self) -> Value {
-        //BUGBUG: should do same hash as AVM
+    pub fn value_size(&self) -> u64 {
         match self {
-            Value::Int(ui) => Value::Int(ui.avm_hash()),
-            Value::Buffer(buf) => Value::Int(buf.avm_hash()),
+            Value::HashOnly(_,sz) => *sz, // this has to be changed for table
+            Value::Int(_) => 1,
+            Value::Buffer(_) => 1,
             Value::Tuple(v) => {
-                let mut acc = Uint256::zero();
+                let mut acc = 1;
+                for val in v.to_vec() {
+                    acc += val.value_size()
+                }
+                acc
+            }
+            Value::CodePoint(_) => 1,
+            Value::WasmCodePoint(_, _) => 2,
+            Value::Label(_) => 0,
+        }
+    }
+
+    pub fn avm_hash(&self) -> Value {
+        match self {
+            Value::HashOnly(ui,_) => Value::Int(ui.clone()),
+            Value::Int(ui) => Value::Int(ui.avm_hash()),
+            Value::Buffer(buf) => Value::avm_hash2(&Value::Int(Uint256::from_u64(123)), &Value::Int(buf.avm_hash())),
+            Value::Tuple(v) => {
+                let mut buf = vec![];
+                buf.push(v.len() as u8);
                 for val in v.to_vec() {
                     if let Value::Int(ui) = val.avm_hash() {
-                        acc = Uint256::avm_hash2(&acc, &ui);
+                        buf.extend(ui.to_bytes_be());
                     } else {
                         panic!("Invalid value type from hash");
                     }
                 }
-                Value::Int(acc)
+                // println!("tuple hash {} {:?}", buf.len(), buf);
+                let preimage = Uint256::from_bytes(&keccak256(&buf));
+                let mut buf = vec![];
+                buf.push(3u8);
+                buf.extend(preimage.to_bytes_be());
+                buf.extend(Uint256::from_u64(self.value_size()).to_bytes_be());
+                Value::Int(Uint256::from_bytes(&keccak256(&buf)))
+                // Value::Int(acc)
             }
             Value::CodePoint(cp) => Value::avm_hash2(&Value::Int(Uint256::one()), &cp.avm_hash()),
             Value::WasmCodePoint(v, _) => {
@@ -895,6 +927,7 @@ impl fmt::Display for Value {
             Value::Buffer(buf) => {
                 write!(f, "Buffer({})", buf.hex_encode())
             }
+            Value::HashOnly(i,_) => write!(f, "HashOnly({})", i),
             Value::CodePoint(pc) => write!(f, "CodePoint({})", pc),
             Value::WasmCodePoint(v, _) => write!(f, "WasmCodePoint({})", v),
             Value::Label(label) => write!(f, "Label({})", label),
@@ -1140,6 +1173,7 @@ impl Opcode {
             "makewasm" => Opcode::AVMOpcode(AVMOpcode::MakeWasm),
             "runwasm" => Opcode::AVMOpcode(AVMOpcode::RunWasm),
             "compilewasm" => Opcode::AVMOpcode(AVMOpcode::CompileWasm),
+            "halt" => Opcode::AVMOpcode(AVMOpcode::Halt),
             _ => {
                 panic!("opcode not supported in asm segment: {}", name);
             }
