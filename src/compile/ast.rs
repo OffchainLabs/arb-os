@@ -224,11 +224,10 @@ impl Type {
                     false
                 }
             }
-            Type::Func(is_impure, args, ret) => {
-                if let Type::Func(is_impure2, args2, ret2) = rhs {
+            Type::Func(_, args, ret) => {
+                if let Type::Func(_, args2, ret2) = rhs {
                     //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
-                    (*is_impure || !is_impure2)
-                        && type_vectors_downcastable(args2, args, type_tree, seen.clone())
+                    type_vectors_downcastable(args2, args, type_tree, seen.clone())
                         && (ret.downcastable(ret2, type_tree, seen))
                 } else {
                     false
@@ -1358,6 +1357,7 @@ pub enum ExprKind {
     NewMap(Type, Type),
     ArrayOrMapMod(Box<Expr>, Box<Expr>, Box<Expr>),
     StructMod(Box<Expr>, String, Box<Expr>),
+    WeakCast(Box<Expr>, Type),
     Cast(Box<Expr>, Type),
     DownCast(Box<Expr>, Type),
     UnsafeCast(Box<Expr>, Type),
