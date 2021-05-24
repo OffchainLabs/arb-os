@@ -89,6 +89,7 @@ var gasAccountingInfo: struct {
     pricingParams: PricingParameters,  // parameters that affect pricing
     gasAllocatedToThisBlock: uint,     // total amount of gas allocated to the current Arbitrum block
     retryablePrices: RetryablePrices,  // prices of retryable txs
+    allowedSenders: SetOfAddresses,    // who is allowed to send txs
 };
 
 type GasPrices = struct {    // all prices in this struct are denominated in wei
@@ -204,6 +205,7 @@ public impure func gasAccounting_init() {    // initialize on boot, before we ha
         pricingParams: pricingParams,
         gasAllocatedToThisBlock: uint(congestionState.gasPool),
         retryablePrices: retryablePrices,
+        allowedSenders: setOfAddresses_all(),
     };
 }
 
@@ -802,6 +804,9 @@ public impure func getNextRequestFromCongestionAuction() -> (
     TxRequestData,
 ) {
     let tx = inbox_getNextUnpackedRequest();
+    while( ! setOfAddresses_contains(gasAccountingInfo.allowedSenders, tx.caller)) {
+        tx = inbox_getNextUnpackedRequest();
+    }
 
     if (tx.incomingRequest.arbBlockNumber > gasAccountingInfo.congestionState.lastArbBlockNumSeen) {
         // it's the first tx of a new block, so do beginning-of-block work
