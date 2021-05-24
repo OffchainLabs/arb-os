@@ -1915,7 +1915,7 @@ fn typecheck_expr(
                     type_tree,
                     scopes,
                 )?;
-                if t.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
+                if t.castable(&tc_expr.get_type(), type_tree, HashSet::new()) {
                     Ok(TypeCheckedExprKind::Cast(Box::new(tc_expr), t.clone()))
                 } else {
                     Err(new_type_error(
