@@ -7,7 +7,9 @@
 use super::typecheck::{new_type_error, TypeError};
 use crate::compile::ast::TypeMismatch::FuncArgLength;
 use crate::compile::path_display;
-use crate::compile::typecheck::{AbstractSyntaxTree, PropertiesList, TypeCheckedNode};
+use crate::compile::typecheck::{
+    AbstractSyntaxTree, InliningMode, PropertiesList, TypeCheckedNode,
+};
 use crate::link::{value_from_field_list, TUPLE_SIZE};
 use crate::mavm::{Instruction, Value};
 use crate::pos::Location;
@@ -34,7 +36,7 @@ pub struct DebugInfo {
 pub struct Attributes {
     ///Is true if the current node is a breakpoint, false otherwise.
     pub breakpoint: bool,
-    pub inline: bool,
+    pub inline: InliningMode,
 }
 
 impl DebugInfo {
@@ -1193,7 +1195,7 @@ impl Func {
         ret_type: Type,
         code: Vec<Statement>,
         exported: bool,
-        location: Option<Location>,
+        debug_info: DebugInfo,
     ) -> Self {
         let mut arg_types = Vec::new();
         let args_vec = args.to_vec();
@@ -1211,7 +1213,7 @@ impl Func {
             } else {
                 FuncDeclKind::Private
             },
-            debug_info: DebugInfo::from(location),
+            debug_info,
             properties: PropertiesList { pure: !is_impure },
         }
     }

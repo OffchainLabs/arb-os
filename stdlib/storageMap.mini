@@ -91,7 +91,7 @@ type Unwinder = struct {
     next: option<Unwinder>,
 }
 
-public func storageMap_set(s: StorageMap, key: uint, value: uint) -> StorageMap {
+#[noinline, ] public func storageMap_set(s: StorageMap, key: uint, value: uint) -> StorageMap {
     let (utree, maybeUnwinder, delta) = storageMap_set2(s.tree, key, value);
     return xloop {
         if let Some(unwinder) = maybeUnwinder {
