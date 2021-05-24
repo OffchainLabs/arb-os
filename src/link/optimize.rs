@@ -44,7 +44,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
         code_out.push(insn.clone());
         let mut done = false;
         while (!done) && (code_out.len() > 1) {
-            match *code_out.last().unwrap() {
+            match code_out.last().unwrap().clone() {
                 Instruction {
                     opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
                     immediate: None,

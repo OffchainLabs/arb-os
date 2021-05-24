@@ -108,7 +108,7 @@ fn mavm_codegen_func(
     let debug_info = func.debug_info;
     code.push(Instruction::from_opcode(
         Opcode::Label(Label::Func(func.name)),
-        debug_info,
+        debug_info.clone(),
     ));
 
     let num_args = func.args.len();
@@ -117,7 +117,7 @@ fn mavm_codegen_func(
     let make_frame_slot = code.len();
     code.push(Instruction::from_opcode(
         Opcode::AVMOpcode(AVMOpcode::Noop),
-        debug_info,
+        debug_info.clone(),
     )); // placeholder; will replace this later
 
     let (lg, max_num_locals) = add_args_to_locals_table(
@@ -318,8 +318,8 @@ fn mavm_codegen_statement(
     scopes: &mut Vec<(String, Label, Option<Type>)>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
 ) -> Result<(LabelGenerator, usize, HashMap<StringId, usize>), CodegenError> {
-    let debug = statement.debug_info;
-    let loc = statement.debug_info.location;
+    let debug = statement.debug_info.clone();
+    let loc = statement.debug_info.location.clone();
     match &statement.kind {
         TypeCheckedStatementKind::Noop() => Ok((label_gen, 0, HashMap::new())),
         TypeCheckedStatementKind::ReturnVoid() => {
@@ -343,17 +343,17 @@ fn mavm_codegen_statement(
             if prepushed_vals > 0 {
                 c.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                    debug,
+                    debug.clone(),
                 ));
                 for _ in 0..prepushed_vals {
                     c.push(Instruction::from_opcode(
                         Opcode::AVMOpcode(AVMOpcode::Pop),
-                        debug,
+                        debug.clone(),
                     ));
                 }
                 c.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                    debug,
+                    debug.clone(),
                 ));
             }
             c.push(Instruction::from_opcode(Opcode::Return, debug));
@@ -576,19 +576,22 @@ fn mavm_codegen_statement(
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
                 Value::Label(top_label),
-                debug,
+                debug.clone(),
             ));
             code.push(Instruction::from_opcode_imm(
                 Opcode::SetLocal,
                 slot_num.clone(),
-                debug,
+                debug.clone(),
             ));
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Jump),
                 Value::Label(cond_label),
-                debug,
+                debug.clone(),
             ));
-            code.push(Instruction::from_opcode(Opcode::Label(top_label), debug));
+            code.push(Instruction::from_opcode(
+                Opcode::Label(top_label),
+                debug.clone(),
+            ));
             let (lg, nl, _) = mavm_codegen_statements(
                 body.to_vec(),
                 code,
@@ -604,7 +607,10 @@ fn mavm_codegen_statement(
             )?;
             label_gen = lg;
             num_locals = nl;
-            code.push(Instruction::from_opcode(Opcode::Label(cond_label), debug));
+            code.push(Instruction::from_opcode(
+                Opcode::Label(cond_label),
+                debug.clone(),
+            ));
             let (lg, c, cond_locals) = mavm_codegen_expr(
                 cond,
                 code,
@@ -623,7 +629,7 @@ fn mavm_codegen_statement(
             code.push(Instruction::from_opcode_imm(
                 Opcode::GetLocal,
                 slot_num,
-                debug,
+                debug.clone(),
             ));
             code.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Cjump),
@@ -699,7 +705,7 @@ fn mavm_codegen_tuple_pattern(
         if i < pat_size - 1 {
             code.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Dup0),
-                debug_info,
+                debug_info.clone(),
             ));
         }
         match &pat.kind {
@@ -707,12 +713,12 @@ fn mavm_codegen_tuple_pattern(
                 code.push(Instruction::from_opcode_imm(
                     Opcode::TupleGet(pat_size),
                     Value::Int(Uint256::from_usize(i)),
-                    debug_info,
+                    debug_info.clone(),
                 ));
                 code.push(Instruction::from_opcode_imm(
                     Opcode::SetLocal,
                     Value::Int(Uint256::from_usize(local_slot_num_base + i)),
-                    debug_info,
+                    debug_info.clone(),
                 ));
             }
             MatchPatternKind::Tuple(_) => {
@@ -747,7 +753,7 @@ fn mavm_codegen_expr<'a>(
     scopes: &mut Vec<(String, Label, Option<Type>)>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
-    let debug = expr.debug_info;
+    let debug = expr.debug_info.clone();
     let loc = expr.debug_info.location;
     match &expr.kind {
         TypeCheckedExprKind::NewBuffer => {
@@ -822,7 +828,7 @@ fn mavm_codegen_expr<'a>(
             c.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
                 Value::new_tuple(vec![Value::Int(Uint256::from_usize(1)), Value::none()]),
-                debug,
+                debug.clone(),
             ));
             c.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Tset),
@@ -890,7 +896,7 @@ fn mavm_codegen_expr<'a>(
                 BinaryOp::LogicalOr => Opcode::LogicalOr,
                 BinaryOp::Hash => Opcode::AVMOpcode(AVMOpcode::Hash2),
             };
-            code.push(Instruction::from_opcode(opcode, debug));
+            code.push(Instruction::from_opcode(opcode, debug.clone()));
             match op {
                 BinaryOp::NotEqual
                 | BinaryOp::LessEq
@@ -981,16 +987,16 @@ fn mavm_codegen_expr<'a>(
             let (lab, lg) = lg.next();
             c.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Dup0),
-                debug,
+                debug.clone(),
             ));
             c.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Cjump),
                 Value::Label(lab),
-                debug,
+                debug.clone(),
             ));
             c.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Pop),
-                debug,
+                debug.clone(),
             ));
             let (lg, c, right_locals) = mavm_codegen_expr(
                 tce2,
@@ -1025,20 +1031,20 @@ fn mavm_codegen_expr<'a>(
             let (lab, lg) = lg.next();
             c.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Dup0),
-                debug,
+                debug.clone(),
             ));
             c.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::IsZero),
-                debug,
+                debug.clone(),
             ));
             c.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Cjump),
                 Value::Label(lab),
-                debug,
+                debug.clone(),
             ));
             c.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Pop),
-                debug,
+                debug.clone(),
             ));
             let (lg, c, right_locals) = mavm_codegen_expr(
                 tce2,
@@ -1179,7 +1185,7 @@ fn mavm_codegen_expr<'a>(
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
                 Value::Label(ret_label),
-                debug,
+                debug.clone(),
             ));
             let (lg, c, fexpr_locals) = mavm_codegen_expr(
                 fexpr,
@@ -1196,7 +1202,7 @@ fn mavm_codegen_expr<'a>(
             )?;
             c.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Jump),
-                debug,
+                debug.clone(),
             ));
             c.push(Instruction::from_opcode(Opcode::Label(ret_label), debug));
             Ok((lg, c, max(num_locals, max(fexpr_locals, args_locals))))
@@ -1241,13 +1247,13 @@ fn mavm_codegen_expr<'a>(
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
                 empty_vec,
-                debug,
+                debug.clone(),
             ));
             for i in 0..fields_len {
                 code.push(Instruction::from_opcode_imm(
                     Opcode::TupleSet(fields_len),
                     Value::Int(Uint256::from_usize(i)),
-                    debug,
+                    debug.clone(),
                 ));
             }
             Ok((label_gen, code, max(num_locals, struct_locals)))
@@ -1278,13 +1284,13 @@ fn mavm_codegen_expr<'a>(
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
                 Value::new_tuple(empty_vec),
-                debug,
+                debug.clone(),
             ));
             for i in 0..fields_len {
                 code.push(Instruction::from_opcode_imm(
                     Opcode::TupleSet(fields_len),
                     Value::Int(Uint256::from_usize(i)),
-                    debug,
+                    debug.clone(),
                 ));
             }
             Ok((label_gen, code, max(num_locals, tuple_locals)))
@@ -1359,23 +1365,26 @@ fn mavm_codegen_expr<'a>(
                 label_gen = lg;
                 code.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::Dup0),
-                    debug,
+                    debug.clone(),
                 ));
                 code.push(Instruction::from_opcode_imm(
                     Opcode::AVMOpcode(AVMOpcode::GreaterThan),
                     Value::Int(Uint256::from_usize(*size)),
-                    debug,
+                    debug.clone(),
                 ));
                 code.push(Instruction::from_opcode_imm(
                     Opcode::AVMOpcode(AVMOpcode::Cjump),
                     Value::Label(cont_label),
-                    debug,
+                    debug.clone(),
                 ));
                 code.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::Panic),
-                    debug,
+                    debug.clone(),
                 ));
-                code.push(Instruction::from_opcode(Opcode::Label(cont_label), debug));
+                code.push(Instruction::from_opcode(
+                    Opcode::Label(cont_label),
+                    debug.clone(),
+                ));
             }
             code.push(Instruction::from_opcode(
                 Opcode::UncheckedFixedArrayGet(*size),
@@ -1487,20 +1496,20 @@ fn mavm_codegen_expr<'a>(
                     for _i in 0..7 {
                         code.push(Instruction::from_opcode(
                             Opcode::AVMOpcode(AVMOpcode::Dup0),
-                            debug,
+                            debug.clone(),
                         ));
                     }
                     let empty_tuple = vec![Value::new_tuple(Vec::new()); 8];
                     code.push(Instruction::from_opcode_imm(
                         Opcode::AVMOpcode(AVMOpcode::Noop),
                         Value::new_tuple(empty_tuple),
-                        debug,
+                        debug.clone(),
                     ));
                     for i in 0..8 {
                         code.push(Instruction::from_opcode_imm(
                             Opcode::AVMOpcode(AVMOpcode::Tset),
                             Value::Int(Uint256::from_usize(i)),
-                            debug,
+                            debug.clone(),
                         ));
                     }
                 }
@@ -1509,7 +1518,7 @@ fn mavm_codegen_expr<'a>(
                     code.push(Instruction::from_opcode_imm(
                         Opcode::AVMOpcode(AVMOpcode::Noop),
                         Value::new_tuple(empty_tuple),
-                        debug,
+                        debug.clone(),
                     ));
                 }
             }
@@ -1518,20 +1527,20 @@ fn mavm_codegen_expr<'a>(
                 for _i in 0..7 {
                     code.push(Instruction::from_opcode(
                         Opcode::AVMOpcode(AVMOpcode::Dup0),
-                        debug,
+                        debug.clone(),
                     ));
                 }
                 let empty_tuple = vec![Value::new_tuple(Vec::new()); 8];
                 code.push(Instruction::from_opcode_imm(
                     Opcode::AVMOpcode(AVMOpcode::Noop),
                     Value::new_tuple(empty_tuple),
-                    debug,
+                    debug.clone(),
                 ));
                 for i in 0..8 {
                     code.push(Instruction::from_opcode_imm(
                         Opcode::AVMOpcode(AVMOpcode::Tset),
                         Value::Int(Uint256::from_usize(i)),
-                        debug,
+                        debug.clone(),
                     ));
                 }
                 tuple_size *= 8;
@@ -1761,37 +1770,40 @@ fn mavm_codegen_expr<'a>(
             let (extract, label_gen) = label_gen.next();
             code.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Dup0),
-                debug,
+                debug.clone(),
             ));
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Tget),
                 Value::Int(Uint256::zero()),
-                debug,
+                debug.clone(),
             ));
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Cjump),
                 Value::Label(extract),
-                debug,
+                debug.clone(),
             ));
             // We use the auxstack here to temporarily store the return value while we clear the temp values on the stack
             if prepushed_vals > 0 {
                 code.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                    debug,
+                    debug.clone(),
                 ));
                 for _ in 0..prepushed_vals {
                     code.push(Instruction::from_opcode(
                         Opcode::AVMOpcode(AVMOpcode::Pop),
-                        debug,
+                        debug.clone(),
                     ));
                 }
                 code.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                    debug,
+                    debug.clone(),
                 ));
             }
-            code.push(Instruction::from_opcode(Opcode::Return, debug));
-            code.push(Instruction::from_opcode(Opcode::Label(extract), debug));
+            code.push(Instruction::from_opcode(Opcode::Return, debug.clone()));
+            code.push(Instruction::from_opcode(
+                Opcode::Label(extract),
+                debug.clone(),
+            ));
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Tget),
                 Value::Int(Uint256::one()),
@@ -1817,12 +1829,12 @@ fn mavm_codegen_expr<'a>(
             let (end_label, lab_gen) = lab_gen.next();
             code.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::IsZero),
-                debug,
+                debug.clone(),
             ));
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Cjump),
                 Value::Label(after_label),
-                debug,
+                debug.clone(),
             ));
             let (block_lab_gen, code, block_locals) = mavm_codegen_code_block(
                 block,
@@ -1836,16 +1848,19 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
-                debug,
+                debug.clone(),
             )?;
             if else_block.is_some() {
                 code.push(Instruction::from_opcode_imm(
                     Opcode::AVMOpcode(AVMOpcode::Jump),
                     Value::Label(end_label),
-                    debug,
+                    debug.clone(),
                 ))
             }
-            code.push(Instruction::from_opcode(Opcode::Label(after_label), debug));
+            code.push(Instruction::from_opcode(
+                Opcode::Label(after_label),
+                debug.clone(),
+            ));
             let (lg, code, else_locals) = if let Some(block) = else_block {
                 let (lg, code, else_locals) = mavm_codegen_code_block(
                     block,
@@ -1859,7 +1874,7 @@ fn mavm_codegen_expr<'a>(
                     prepushed_vals,
                     scopes,
                     file_info_chart,
-                    debug,
+                    debug.clone(),
                 )?;
                 (lg, code, else_locals)
             } else {
@@ -1890,31 +1905,31 @@ fn mavm_codegen_expr<'a>(
             code = c;
             code.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Dup0),
-                debug,
+                debug.clone(),
             ));
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Tget),
                 Value::Int(Uint256::from_usize(0)),
-                debug,
+                debug.clone(),
             ));
             code.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::IsZero),
-                debug,
+                debug.clone(),
             ));
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Cjump),
                 Value::Label(after_label),
-                debug,
+                debug.clone(),
             ));
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Tget),
                 Value::Int(Uint256::from_usize(1)),
-                debug,
+                debug.clone(),
             ));
             code.push(Instruction::from_opcode_imm(
                 Opcode::SetLocal,
                 Value::Int(Uint256::from_usize(slot_num)),
-                debug,
+                debug.clone(),
             ));
             let (lg, code, mut total_locals) = mavm_codegen_code_block(
                 &block,
@@ -1928,7 +1943,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
-                debug,
+                debug.clone(),
             )?;
             total_locals = max(total_locals, exp_locals);
 
@@ -1936,12 +1951,15 @@ fn mavm_codegen_expr<'a>(
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Jump),
                 Value::Label(outside_label),
-                debug,
+                debug.clone(),
             ));
-            code.push(Instruction::from_opcode(Opcode::Label(after_label), debug));
+            code.push(Instruction::from_opcode(
+                Opcode::Label(after_label),
+                debug.clone(),
+            ));
             code.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Pop),
-                debug,
+                debug.clone(),
             ));
             if let Some(else_block) = else_block {
                 let (lg3, _, else_locals) = mavm_codegen_code_block(
@@ -1956,7 +1974,7 @@ fn mavm_codegen_expr<'a>(
                     prepushed_vals,
                     scopes,
                     file_info_chart,
-                    debug,
+                    debug.clone(),
                 )?;
                 total_locals = max(total_locals, else_locals);
                 label_gen = lg3;
@@ -1978,14 +1996,17 @@ fn mavm_codegen_expr<'a>(
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
                 Value::Label(top_label),
-                debug,
+                debug.clone(),
             ));
             code.push(Instruction::from_opcode_imm(
                 Opcode::SetLocal,
                 slot_num.clone(),
-                debug,
+                debug.clone(),
             ));
-            code.push(Instruction::from_opcode(Opcode::Label(top_label), debug));
+            code.push(Instruction::from_opcode(
+                Opcode::Label(top_label),
+                debug.clone(),
+            ));
             let (lg, nl, _) = mavm_codegen_statements(
                 body.to_vec(),
                 code,
@@ -2004,11 +2025,11 @@ fn mavm_codegen_expr<'a>(
             code.push(Instruction::from_opcode_imm(
                 Opcode::GetLocal,
                 slot_num,
-                debug,
+                debug.clone(),
             ));
             code.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Jump),
-                debug,
+                debug.clone(),
             ));
             code.push(Instruction::from_opcode(Opcode::Label(bottom_label), debug));
             Ok((label_gen, code, max(num_locals + 1, nl)))
@@ -2079,25 +2100,25 @@ fn codegen_fixed_array_mod<'a>(
         label_gen = lg;
         code.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::Dup0),
-            debug_info,
+            debug_info.clone(),
         ));
         code.push(Instruction::from_opcode_imm(
             Opcode::AVMOpcode(AVMOpcode::GreaterThan),
             Value::Int(Uint256::from_usize(size)),
-            debug_info,
+            debug_info.clone(),
         ));
         code.push(Instruction::from_opcode_imm(
             Opcode::AVMOpcode(AVMOpcode::Cjump),
             Value::Label(ok_label),
-            debug_info,
+            debug_info.clone(),
         ));
         code.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::Panic),
-            debug_info,
+            debug_info.clone(),
         ));
         code.push(Instruction::from_opcode(
             Opcode::Label(ok_label),
-            debug_info,
+            debug_info.clone(),
         ));
     }
     let exp_locals = max(val_locals, max(arr_locals, idx_locals));
@@ -2142,60 +2163,60 @@ fn codegen_fixed_array_mod_2<'a>(
         code_in.push(Instruction::from_opcode_imm(
             Opcode::AVMOpcode(AVMOpcode::Dup2),
             tuple_size.clone(),
-            debug_info,
+            debug_info.clone(),
         ));
         code_in.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::AuxPush),
-            debug_info,
+            debug_info.clone(),
         ));
         code_in.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::Dup1),
-            debug_info,
+            debug_info.clone(),
         ));
         // stack: idx TUPLE_SIZE idx tupletree val; aux: tupletree
         code_in.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::Mod),
-            debug_info,
+            debug_info.clone(),
         ));
         code_in.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::Dup0),
-            debug_info,
+            debug_info.clone(),
         ));
         code_in.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::AuxPush),
-            debug_info,
+            debug_info.clone(),
         ));
         // stack: slot idx tupletree val; aux: slot tupletree
         code_in.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::Swap1),
-            debug_info,
+            debug_info.clone(),
         ));
         code_in.push(Instruction::from_opcode_imm(
             Opcode::AVMOpcode(AVMOpcode::Swap1),
             tuple_size,
-            debug_info,
+            debug_info.clone(),
         ));
         code_in.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::Div),
-            debug_info,
+            debug_info.clone(),
         ));
         // stack: subidx slot tupletree val; aux: slot tupletree
         code_in.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::Swap2),
-            debug_info,
+            debug_info.clone(),
         ));
         code_in.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::Swap1),
-            debug_info,
+            debug_info.clone(),
         ));
         // stack: slot tupletree subidx val; aux: slot tupletree
         code_in.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::Tget),
-            debug_info,
+            debug_info.clone(),
         ));
         code_in.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::Swap1),
-            debug_info,
+            debug_info.clone(),
         ));
         // stack: subidx subtupletree val; aux: slot tupletree
 
@@ -2209,21 +2230,21 @@ fn codegen_fixed_array_mod_2<'a>(
             string_table,
             import_func_map,
             global_var_map,
-            debug_info,
+            debug_info.clone(),
         )?;
 
         // stack: newsubtupletree; aux: slot tupletree
         code.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::AuxPop),
-            debug_info,
+            debug_info.clone(),
         ));
         code.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::AuxPop),
-            debug_info,
+            debug_info.clone(),
         ));
         code.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::Swap1),
-            debug_info,
+            debug_info.clone(),
         ));
         // stack: slot tupletree newsubtupletree
         code.push(Instruction::from_opcode(

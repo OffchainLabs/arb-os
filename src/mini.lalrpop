@@ -26,7 +26,7 @@ pub Decls: Vec<TopLevelDecl> = {
 	<a: ("#![" <Attributes> "]")?><mut i:ImportDecl*> <mut n:NonImportDecl+> => {
         i.append(&mut n);
         for decl in &mut i {
-            if let (TopLevelDecl::FuncDecl(func), Some(attr)) = (decl, a) {
+            if let (TopLevelDecl::FuncDecl(func), Some(attr)) = (decl, a.clone()) {
                 func.debug_info.attributes.inline = func.debug_info.attributes.inline.and(&attr.inline);
             }
         };

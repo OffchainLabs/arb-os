@@ -130,17 +130,17 @@ fn strip_returns(to_strip: &mut TypeCheckedNode, _state: &(), _mut_state: &mut (
                                 vec![
                                     Instruction::from_opcode(
                                         Opcode::AVMOpcode(AVMOpcode::Dup0),
-                                        inner.debug_info,
+                                        inner.debug_info.clone(),
                                     ),
                                     Instruction::from_opcode_imm(
                                         Opcode::AVMOpcode(AVMOpcode::Tget),
                                         Value::Int(Uint256::zero()),
-                                        inner.debug_info,
+                                        inner.debug_info.clone(),
                                     ),
                                 ],
                                 vec![(**inner).clone()],
                             ),
-                            debug_info: inner.debug_info,
+                            debug_info: inner.debug_info.clone(),
                         }),
                         TypeCheckedCodeBlock::new(
                             vec![],
@@ -150,11 +150,11 @@ fn strip_returns(to_strip: &mut TypeCheckedNode, _state: &(), _mut_state: &mut (
                                     vec![Instruction::from_opcode_imm(
                                         Opcode::AVMOpcode(AVMOpcode::Tget),
                                         Value::Int(Uint256::one()),
-                                        inner.debug_info,
+                                        inner.debug_info.clone(),
                                     )],
                                     vec![],
                                 ),
-                                debug_info: inner.debug_info,
+                                debug_info: inner.debug_info.clone(),
                             })),
                             None,
                         ),
@@ -167,21 +167,21 @@ fn strip_returns(to_strip: &mut TypeCheckedNode, _state: &(), _mut_state: &mut (
                                             vec![],
                                             vec![],
                                         ),
-                                        debug_info: inner.debug_info,
+                                        debug_info: inner.debug_info.clone(),
                                     }),
                                     "_inline".to_string(),
                                 ),
-                                debug_info: inner.debug_info,
+                                debug_info: inner.debug_info.clone(),
                             }],
                             Some(Box::new(TypeCheckedExpr {
                                 kind: TypeCheckedExprKind::Panic,
-                                debug_info: inner.debug_info,
+                                debug_info: inner.debug_info.clone(),
                             })),
                             None,
                         )),
                         tipe.clone(),
                     ),
-                    debug_info: inner.debug_info,
+                    debug_info: inner.debug_info.clone(),
                 })),
                 None,
             ))
@@ -1216,7 +1216,7 @@ pub fn typecheck_function(
         code: tc_stats,
         tipe: fd.tipe.clone(),
         kind: fd.kind,
-        debug_info: DebugInfo::from(fd.debug_info),
+        debug_info: DebugInfo::from(fd.debug_info.clone()),
         properties: fd.properties.clone(),
     })
 }
@@ -1304,7 +1304,7 @@ fn typecheck_statement<'a>(
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<(TypeCheckedStatement, Vec<(StringId, Type)>), TypeError> {
     let kind = &statement.kind;
-    let debug_info = statement.debug_info;
+    let debug_info = statement.debug_info.clone();
     let (stat, binds) = match kind {
         StatementKind::Noop() => Ok((TypeCheckedStatementKind::Noop(), vec![])),
         StatementKind::ReturnVoid() => {
@@ -1666,7 +1666,7 @@ fn typecheck_expr(
     type_tree: &TypeTree,
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<TypeCheckedExpr, TypeError> {
-    let debug_info = expr.debug_info;
+    let debug_info = expr.debug_info.clone();
     let loc = debug_info.location;
     Ok(TypeCheckedExpr {
         kind: match &expr.kind {

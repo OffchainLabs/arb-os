@@ -130,11 +130,11 @@ pub fn fix_nonforward_labels(
                         };
                         code_out.push(Instruction::from_opcode(
                             Opcode::GetGlobalVar(jump_table_index_in_globals),
-                            insn_in.debug_info,
+                            insn_in.debug_info.clone(),
                         ));
                         code_out.push(Instruction::from_opcode(
                             Opcode::PushExternal(idx),
-                            insn_in.debug_info,
+                            insn_in.debug_info.clone(),
                         ));
                         code_out.push(Instruction::from_opcode(insn_in.opcode, insn_in.debug_info));
                     } else {
@@ -170,13 +170,13 @@ pub fn fix_nonforward_labels(
                     code_xformed.push(Instruction::from_opcode_imm(
                         Opcode::AVMOpcode(AVMOpcode::Noop),
                         val.clone(),
-                        insn.debug_info,
+                        insn.debug_info.clone(),
                     ));
                 }
                 code_xformed.push(Instruction::from_opcode_imm(
                     Opcode::TupleGet(jump_table.len()),
                     Value::Int(Uint256::from_usize(idx)),
-                    insn.debug_info,
+                    insn.debug_info.clone(),
                 ));
             }
             _ => {

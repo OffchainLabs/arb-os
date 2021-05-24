@@ -301,7 +301,7 @@ fn hardcode_jump_table_into_register(
     code[offset] = Instruction::from_opcode_imm(
         code[offset].opcode,
         old_imm.replace_last_none(jump_table),
-        code[offset].debug_info,
+        code[offset].debug_info.clone(),
     );
 }
 

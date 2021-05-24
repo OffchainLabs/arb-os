@@ -25,14 +25,14 @@ use std::fmt::Formatter;
 pub type TypeTree = HashMap<(Vec<String>, usize), (Type, String)>;
 
 ///Debugging info serialized into mini executables, currently only contains a location.
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DebugInfo {
     pub location: Option<Location>,
     pub attributes: Attributes,
 }
 
 ///A list of properties that an AST node has, currently only contains breakpoints.
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Attributes {
     ///Is true if the current node is a breakpoint, false otherwise.
     pub breakpoint: bool,
