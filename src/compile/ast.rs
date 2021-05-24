@@ -931,7 +931,7 @@ fn field_vectors_downcastable(
 ) -> bool {
     tvec1.len() == tvec2.len()
         && tvec1.iter().zip(tvec2).all(|(t1, t2)| {
-            t1.tipe.downcastable(&t2.tipe, type_tree, seen.clone()) && t1.name == t2.name
+            t1.tipe.downcastable(&t2.tipe, type_tree, seen.clone())
         })
 }
 
@@ -943,7 +943,7 @@ fn field_vectors_castable(
 ) -> bool {
     tvec1.len() == tvec2.len()
         && tvec1.iter().zip(tvec2).all(|(t1, t2)| {
-            t1.tipe.castable(&t2.tipe, type_tree, seen.clone()) && t1.name == t2.name
+            t1.tipe.castable(&t2.tipe, type_tree, seen.clone())
         })
 }
 
