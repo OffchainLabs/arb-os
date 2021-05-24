@@ -294,9 +294,13 @@ public func storageMap_serializeListOfNonzeros(s: StorageMap) -> ByteArray {
 func smSerNZHelper(index: uint, value: uint, state: any) -> any {
     let ba = unsafecast<ByteArray>(state);
     let sz = bytearray_size(ba);
-    return bytearray_set256(
-        ba,
-        sz,
-        index,
-    );
+    return xif (value == 0) {
+        ba
+    } else {
+        bytearray_set256(
+            ba,
+            sz,
+            index,
+        )
+    };
 }

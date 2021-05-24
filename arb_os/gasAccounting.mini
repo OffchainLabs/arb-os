@@ -58,16 +58,18 @@ use std::queue::queue_put;
 use std::queue::queue_get;
 use std::queue::queue_getOrDie;
 
+use std::addressSet::SetOfAddresses;
+use std::addressSet::setOfAddresses_emptySet;
+use std::addressSet::setOfAddresses_all;
+use std::addressSet::setOfAddresses_add;
+use std::addressSet::setOfAddresses_remove;
+use std::addressSet::setOfAddresses_contains;
+use std::addressSet::setOfAddresses_serialize;
+
 use std::stack::Stack;
 use std::stack::stack_new;
 use std::stack::stack_push;
 use std::stack::stack_pop;
-
-use std::storageMap::StorageMap;
-use std::storageMap::storageMap_new;
-use std::storageMap::storageMap_get;
-use std::storageMap::storageMap_set;
-use std::storageMap::storageMap_serializeListOfNonzeros;
 
 use chainParameters::chainParams_speedLimitPerSecond;
 
@@ -1161,13 +1163,13 @@ public impure func getFeesForRetryableTx(
 //       an Arbitrum node that is trusted (for the purpose of choosing representative L1 gas prices).
 var globalL1GasPriceEstimator: struct {
     estimateWei: uint,
-    fairGasPriceSenders: StorageMap,
+    fairGasPriceSenders: SetOfAddresses,
 };
 
 impure func initGasPriceEstimator() {
     globalL1GasPriceEstimator = struct {
         estimateWei: 150*(1000*1000*1000),  // 150 gwei
-        fairGasPriceSenders: storageMap_new(),
+        fairGasPriceSenders: setOfAddresses_emptySet(),
     };
 }
 
@@ -1189,27 +1191,33 @@ public impure func updateL1GasPriceEstimate(sender: address, price: uint) {
 }
 
 public impure func isFairGasPriceSender(sender: address) -> bool {
-    return storageMap_get(globalL1GasPriceEstimator.fairGasPriceSenders, uint(sender)) != 0;
+    return setOfAddresses_contains(globalL1GasPriceEstimator.fairGasPriceSenders, sender);
 }
 
 public impure func setFairGasPriceSender(sender: address, value: bool) {
     globalL1GasPriceEstimator = globalL1GasPriceEstimator with {
-        fairGasPriceSenders: storageMap_set(
-            globalL1GasPriceEstimator.fairGasPriceSenders,
-            uint(sender),
-            uint(value),
-        )
+        fairGasPriceSenders: xif (value) {
+            setOfAddresses_add(
+                globalL1GasPriceEstimator.fairGasPriceSenders,
+                sender,
+            )
+        } else {
+            setOfAddresses_remove(
+                globalL1GasPriceEstimator.fairGasPriceSenders,
+                sender,
+            )
+        }
     };
 }
 
-public impure func getSerializedFairGasPriceSenders() -> ByteArray {
-    return storageMap_serializeListOfNonzeros(globalL1GasPriceEstimator.fairGasPriceSenders);
+public impure func getSerializedFairGasPriceSenders() -> option<ByteArray> {
+    return setOfAddresses_serialize(globalL1GasPriceEstimator.fairGasPriceSenders);
 }
 
 // This adjusts l1GasPerL2Tx to be a weighted average, over recent transactions that arrived in batches,
 //     of the quantity (const::Charging_AssumedBatchCostL1Gas / batchSize). Because we're averaging over
 //     transactions, a batch contributes (batchSize) times, once for each transaction in it.
-public func updateBatchSizeEstimate(size: uint, batchSender: address) {
+public func updateBatchSizeEstimate(_size: uint, _batchSender: address) {
     // leaving this as a no-op, rather than fixing it, because it will be removed in a different PR
 }
 

@@ -379,7 +379,7 @@ impure func arbowner_deployContract(topFrame: EvmCallFrame, calldata: ByteArray)
 }
 
 // function isFairGasPriceSender(address addr) external view returns(bool);
-impure func arbowner_isFairGasPriceSender(topFrame: EvmCallFrame, calldata: ByteArray) {
+impure func arbowner_isFairGasPriceSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(170, 0, 0);
     }
@@ -396,30 +396,33 @@ impure func arbowner_isFairGasPriceSender(topFrame: EvmCallFrame, calldata: Byte
 }
 
 // function getAllFairGasPriceSenders() external view returns(bytes memory);
-impure func arbowner_getAllFairGasPriceSenders(topFrame: EvmCallFrame, calldata: ByteArray) {
+impure func arbowner_getAllFairGasPriceSenders(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(180, 0, 0);
     }
-    let serialized = getSerializedFairGasPriceSenders();
-    let mem = bytearray_copy(
-        serialized,
-        0,
-        bytearray_set256(
+    if let Some(serialized) = getSerializedFairGasPriceSenders() {
+        let mem = bytearray_copy(
+            serialized,
+            0,
             bytearray_set256(
-                bytearray_new(0),
-                0,
+                bytearray_set256(
+                    bytearray_new(0),
+                    0,
+                    32,
+                ),
                 32,
+                bytearray_size(serialized),
             ),
-            32,
-            bytearray_size(serialized),
-        ),
-        64,
-        bytearray_size(serialized),  // don't need to round up, because already a multiple of 32
-    );
-    if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, bytearray_size(mem));
+            64,
+            bytearray_size(serialized),  // don't need to round up, because already a multiple of 32
+        );
+        if (evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_return(0, bytearray_size(mem));
+        } else {
+            evmOp_revert_knownPc(181, 0, 0);
+        }
     } else {
-        evmOp_revert_knownPc(181, 0, 0);
+        evmOp_revert_knownPc(182, 0, 0);
     }
 }
 
