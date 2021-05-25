@@ -49,6 +49,12 @@ use gasAccounting::setFairGasPriceSender;
 use gasAccounting::setGasAccountingParams;
 use gasAccounting::isFairGasPriceSender;
 use gasAccounting::getSerializedFairGasPriceSenders;
+use gasAccounting::allowedSenders_allowAll;
+use gasAccounting::allowedSenders_allowNone;
+use gasAccounting::allowedSenders_contains;
+use gasAccounting::allowedSenders_add;
+use gasAccounting::allowedSenders_remove;
+use gasAccounting::allowedSenders_serialize;
 
 use inbox::inbox_currentArbBlockNumber;
 use inbox::inbox_currentEthBlockNumber;
@@ -129,6 +135,18 @@ public impure func arbowner_txcall() {
             arbowner_getTotalOfEthBalances(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_deployContract) {
             arbowner_deployContract(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_allowAllSenders) {
+            arbowner_allowAllSenders(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_allowOnlyOwnerToSend) {
+            arbowner_allowOnlyOwnerToSend(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_isAllowedSender) {
+            arbowner_isAllowedSender(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_addAllowedSender) {
+            arbowner_addAllowedSender(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_removeAllowedSender) {
+            arbowner_removeAllowedSender(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_getAllAllowedSenders) {
+            arbowner_getAllAllowedSenders(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
@@ -426,6 +444,86 @@ impure func arbowner_getAllFairGasPriceSenders(_topFrame: EvmCallFrame, calldata
     }
 }
 
+// function allowAllSenders() external;
+impure func arbowner_allowAllSenders(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(190, 0, 0);
+    }
+    allowedSenders_allowAll();
+    evmOp_return(0, 0);
+}
+
+// function allowOnlyOwnerToSend() external;
+impure func arbowner_allowOnlyOwnerToSend(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(200, 0, 0);
+    }
+    allowedSenders_allowNone();
+    evmOp_return(0, 0);
+}
+
+// function isAllowedSender(address addr) external view returns(bool);
+impure func arbowner_isAllowedSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(210, 0, 0);
+    }
+    let mem = bytearray_set256(
+        bytearray_new(0),
+        0,
+        uint(allowedSenders_contains(address(bytearray_get256(calldata, 4))))
+    );
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownPc(211, 0, 0);
+    }
+}
+
+// function addAllowedSender(address addr) external;
+impure func arbowner_addAllowedSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(220, 0, 0);
+    }
+    allowedSenders_add(address(bytearray_get256(calldata, 4)));
+    evmOp_return(0, 0);
+}
+
+// function removeAllowedSender(address addr) external;
+impure func arbowner_removeAllowedSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(230, 0, 0);
+    }
+    allowedSenders_remove(address(bytearray_get256(calldata, 4)));
+    evmOp_return(0, 0);
+}
+
+// function getAllAllowedSenders() external view returns(bytes memory);
+impure func arbowner_getAllAllowedSenders(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(240, 0, 0);
+    }
+    if let Some(serialized) = allowedSenders_serialize() {
+        let size = bytearray_size(serialized);
+        let mem = bytearray_copy(
+            serialized,
+            0,
+            bytearray_set256(
+                bytearray_set256(bytearray_new(0), 0, 64),
+                32,
+                size,    // no need to round up, because size is already a multiple of 32
+            ),
+            64,
+            size,
+        );
+        if (evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_return(0, 64+size);
+        } else {
+            evmOp_revert_knownPc(241, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownPc(242, 0, 0);
+    }
+}
 
 
 

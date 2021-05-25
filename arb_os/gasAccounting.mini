@@ -27,6 +27,8 @@ use accounts::account_getAggregatorToPay;
 use arbstatistics::arbStatistics_addToStorage;
 use arbstatistics::arbStatistics_addToGasUsed;
 
+use chainParameters::chainParams_getOwner;
+
 use evmCallStack::evmCallStack_isEmpty;
 use evmCallStack::evmCallStack_getAccountInCurrentContext;
 use evmCallStack::evmCallStack_setAccountInCurrentContext;
@@ -804,7 +806,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
     TxRequestData,
 ) {
     let tx = inbox_getNextUnpackedRequest();
-    while( ! setOfAddresses_contains(gasAccountingInfo.allowedSenders, tx.caller)) {
+    while( ! allowedSenders_contains(tx.caller)) {
         tx = inbox_getNextUnpackedRequest();
     }
 
@@ -1294,4 +1296,38 @@ public func deferredPayments_apply(acctStore: AccountStore, dp: DeferredPayments
             return acctStore;
         }
     };
+}
+
+public impure func allowedSenders_allowAll() {
+    gasAccountingInfo = gasAccountingInfo with {
+        allowedSenders: setOfAddresses_all()
+    };
+}
+
+public impure func allowedSenders_allowNone() {
+    gasAccountingInfo = gasAccountingInfo with {
+        allowedSenders: setOfAddresses_emptySet()
+    };
+}
+
+public impure func allowedSenders_contains(addr: address) -> bool {
+    return setOfAddresses_contains(gasAccountingInfo.allowedSenders, addr)
+        || (addr == address(0))
+        || (Some(addr) == chainParams_getOwner());
+}
+
+public impure func allowedSenders_add(addr: address) {
+    gasAccountingInfo = gasAccountingInfo with {
+        allowedSenders: setOfAddresses_add(gasAccountingInfo.allowedSenders, addr)
+    };
+}
+
+public impure func allowedSenders_remove(addr: address) {
+    gasAccountingInfo = gasAccountingInfo with {
+        allowedSenders: setOfAddresses_remove(gasAccountingInfo.allowedSenders, addr)
+    };
+}
+
+public impure func allowedSenders_serialize() -> option<ByteArray> {
+    return setOfAddresses_serialize(gasAccountingInfo.allowedSenders);
 }
