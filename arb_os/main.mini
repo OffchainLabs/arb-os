@@ -7,34 +7,65 @@ use accounts::AccountStore;
 use accounts::accountStore_init;
 use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
+use accounts::accountStore_get;
+use accounts::accountStore_set;
 use accounts::accountStore_createAccountFromEvmCode;
-use arbstatistics::arbStatistics_init;
 use accounts::accountStore_upgradeContractFromEvmCode;
+use accounts::account_checkAndIncrSeqNum;
+
 use arbstatistics::arbStatistics_init;
 use arbowner::arbowner_init;
+
 use arbsys::arbosVersion;
+use arbsys::arbsys_txcall;
+
 use blockhash::blockhash_init;
+
 use chainParameters::chainParams_init;
+use chainParameters::chainParams_haveDoneInit;
+
 use codeSegment::codeSegment_init;
 use codeSegment::translateEvmCodeSegment;
+
 use contractTemplates::getArbInfoCode;
 use contractTemplates::getArbInfoAddress;
 use contractTemplates::getArbInfoStorage;
+
 use decompression::decompression_init;
+
 use errorHandler::errorHandler_init;
+
 use evmCallStack::evmCallStack_init;
+use evmCallStack::evmCallStack_makeEmpty;
+
 use evmOps::evmOps_init;
 use evmOps::evmOp_return;
+
 use evmlogs::EvmLogs;
+
+use tracing::evmTracer_clear;
+
 use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_init;
+use gasAccounting::getNextRequestFromCongestionAuction;
+use gasAccounting::txFeeStats_zero;
+
+use inbox::IncomingRequest;
 use inbox::inbox_init;
 use inbox::inbox_get;
+use inbox::emitGenesisBlockReceipt;
+
 use messages::TxRequestData;
+use messages::handleL2Request;
+
 use output::output_init;
 use output::txReceipts_init;
+use output::emitTxReceipt;
+
 use pluggables::pluggables_init;
+
 use precompiles::precompiles_init;
+
 use rollupTracker::rollupTracker_init;
 
 use std::bytearray::MarshalledBytes;
@@ -45,15 +76,6 @@ use std::bytestream::ByteStream;
 use std::bytestream::bytestream_new;
 use std::storageMap::StorageMap;
 
-use decompression::decompression_init;
-use gasAccounting::getNextRequestFromCongestionAuction;
-use gasAccounting::txFeeStats_zero;
-use messages::handleL2Request; // return None if message format error; Some(()) if other error; if no error, never return
-use output::emitTxReceipt;
-use arbsys::arbsys_txcall;
-use inbox::IncomingRequest;
-use evmCallStack::evmCallStack_makeEmpty;
-
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 use bridge_arbos_versions::remapGlobalsForUpgrade;
 
@@ -62,13 +84,15 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
     if (unsafecast<any>(oldGlobals) != ()) {
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
 
-        let (newGlobals, oldArbosVersion) = remapGlobalsForUpgrade(oldGlobals);
+        let (newGlobals, _oldArbosVersion) = remapGlobalsForUpgrade(oldGlobals);
 
         asm(newGlobals,) { rset };
 
         // now re-do the initializations that set up pointers into the ArbOS code
         errorHandler_init();
         evmOps_init();
+        codeSegment_init();
+
         if (initializePreinstalls(true) == None<()>) {
             panic;   // don't try to run without preinstalls and precompiles
         }
@@ -95,6 +119,9 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         if (initializePreinstalls(false) == None<()>) {
             panic;   // don't try to run without preinstalls and precompiles
         }
+
+        // advance the Arbitrum block number, and emit a block receipt
+        emitGenesisBlockReceipt();
     }
 
     // initialize any customizations here
@@ -106,10 +133,7 @@ public impure func mainRunLoop() {
     loop {
         let (resultCode, request) = getNextRequestFromCongestionAuction();
         if (resultCode == const::TxResultCode_success) {
-            if (handleL2Request(
-                bytestream_new(request.incomingRequest.msgData),
-                request
-            ) == None<()>) {
+            if (handleL2Request(request) == None<()>) {
                 // reject for message format error
                 emitTxReceipt(
                     request.incomingRequest,
@@ -118,10 +142,20 @@ public impure func mainRunLoop() {
                     None<EvmLogs>,
                     None<GasUsage>,
                     request.feeStats,
+                    false,      // don't emit tracing info because the tx was bogus
                 );
             }
         } else {
-            // reject for error
+            // before emitting a failure receipt, try to increment caller's sequence number
+            if (resultCode != const::TxResultCode_badSequenceNum) {
+                if let Some(seqNum) = request.seqNum {
+                    let gAcctStore = getGlobalAccountStore();
+                    if let Some(acct) = account_checkAndIncrSeqNum(accountStore_get(gAcctStore, request.caller), seqNum) {
+                        setGlobalAccountStore(accountStore_set(gAcctStore, request.caller, acct));
+                    }
+                }
+            }
+
             emitTxReceipt(
                 request.incomingRequest,
                 resultCode,
@@ -129,6 +163,7 @@ public impure func mainRunLoop() {
                 None<EvmLogs>,
                 None<GasUsage>,
                 request.feeStats,
+                true,
             );
         }
     }

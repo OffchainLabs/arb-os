@@ -192,7 +192,7 @@ public impure func decompressAndVerifyEcdsaSignedTx(
     let v = bytearray_getByte(ba, sz-1);
     let body = bytearray_extract(ba, 1, sz-66);
 
-    let (_, txRequest) = decompressTx(bytestream_new(body), None<address>, None<FunctionTable>)?;
+    let (_, txRequest) = decompressTx(bytestream_new(body), None<address>)?;
 
     let (seqNum, calldataUnitsDelta) = xif(originalRequest.kind == const::L1MessageType_L2ForGasEstimation) {
         let realSnum = account_getNextSeqNum(accountStore_get(getGlobalAccountStore(), originalRequest.sender));
@@ -258,16 +258,28 @@ public impure func decompressAndVerifyEcdsaSignedTx(
             };
         }
     }
-    if ( (originalRequest.kind == const::L1MessageType_L2ForGasEstimation) && (tx.gasPrice == 0)) {
-        // gas estimation tx requested zero gas, so ignore gas funding and pay whatever price is necessary to run
-        originalRequest = originalRequest with {
-            gasEstimationParams: xif let Some(gep) = originalRequest.gasEstimationParams {
-                Some(gep with { ignoreInsufficientGasFunds: true })
-            } else {
-                None<GasEstimationParams>
-            }
-        };
-        tx = tx with { gasPrice: ~0 };
+    if (originalRequest.kind == const::L1MessageType_L2ForGasEstimation) {
+        if (tx.gasPrice == 0) {
+            // gas estimation tx requested zero gas, so ignore gas funding and pay whatever price is necessary to run
+            originalRequest = originalRequest with {
+                gasEstimationParams: xif let Some(gep) = originalRequest.gasEstimationParams {
+                    Some(gep with { ignoreGasPrice: true })
+                } else {
+                    None<GasEstimationParams>
+                }
+            };
+            tx = tx with { gasPrice: ~0 };
+        }
+        if (tx.gasLimit == 0) {
+            // gas estimation tx requested zero maxGas, so ignore use max gas allowed
+            originalRequest = originalRequest with {
+                gasEstimationParams: xif let Some(gep) = originalRequest.gasEstimationParams {
+                    Some(gep with { ignoreMaxGas: true })
+                } else {
+                    None<GasEstimationParams>
+                }
+            };
+        }
     }
 
     return Some(
@@ -299,7 +311,6 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
     let (stream, numMsgs) = rlp_decodeUint(stream)?;
     let msgHashes = newarray<BLSHashedMessage>(numMsgs);
     let signerKeys = newarray<BLSKey>(numMsgs);
-    let txs = newarray<TxRequestData>(numMsgs);
 
     let (stream, sigx) = bytestream_get256(stream)?;
     let (stream, sigy) = bytestream_get256(stream)?;
@@ -336,7 +347,7 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
             }
         }
 
-        let (_, newTx) = decompressTx(bytestream_new(txData), Some(signerAddr), None<FunctionTable>)?;
+        let (_, newTx) = decompressTx(bytestream_new(txData), Some(signerAddr))?;
         let txHash = rlp_encodeAndHashMessageInfoForSignature(
              struct {
                  seqNum: newTx.seqNum?,
@@ -383,7 +394,6 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
 impure func decompressTx(
     stream: ByteStream,
     maybeSender: option<address>,
-    maybeTable: option<FunctionTable>,
 ) -> option<(ByteStream, TxRequestData)> {
     // decompress a compressed transaction, reading it from ByteStream
     // return None if insufficient data in the ByteStream
@@ -401,17 +411,6 @@ impure func decompressTx(
         stream = ustr;   // consume the first byte
     } else {
         return None;     // this feature isn't fully tested, so disable it for now
-        
-        if let Some(funcTable) = maybeTable {
-            // read from beginning of stream (because we haven't set stream = ustr)
-            let (ustr, index) = rlp_decodeUint(stream)?;
-            stream = ustr;
-            if (index < len(funcTable)) {
-                funcTableEntry = Some(funcTable[index]);
-            }
-        } else {
-            stream = ustr;
-        }
     }
     let sender = address(0);
     let seqNum = 0;
@@ -504,7 +503,6 @@ type AggregatorDecompressionState = struct {
 }
 
 public func parseAggregatorFunctionTable(
-    maybeState: option<AggregatorDecompressionState>,
     contents: ByteArray
 ) -> option<AggregatorDecompressionState> {
     let stream = bytestream_new(contents);

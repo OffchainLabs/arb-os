@@ -105,6 +105,21 @@ public func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)> {
     };
 }
 
+public func bytestream_getPartialWord(bs: ByteStream, nbytes: uint) -> option<(ByteStream, uint)> {
+    // read part of the next word -- just get the first nbytes bytes of it
+    // nbytes must be <= 32
+    return xif (nbytes > 32) {
+        None<(ByteStream, uint)>
+    } elseif (bs.currentOffset+nbytes > bs.capacity) {
+        None<(ByteStream, uint)>
+    } else {
+        Some((
+            bs with { currentOffset: bs.currentOffset+nbytes },
+            asm(256-8*nbytes, getbuffer256(bs.buf, bs.currentOffset+bs.slice)) uint { shr },
+        ))
+    };
+}
+
 public func bytestream_getN(bs: ByteStream, nbytes: uint) -> option<(ByteStream, ByteArray)> {
     if (bs.currentOffset + nbytes > bs.capacity) {
         return None;

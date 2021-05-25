@@ -5,6 +5,7 @@
 use accounts::Account;
 use evmCallStack::EvmCallFrame;
 use evmlogs::EvmLogs;
+use std::avmcodebuilder::AvmCodePoint;
 use std::bytearray::ByteArray;
 use std::bytestream::ByteStream;
 use std::bytearray::MarshalledBytes;
@@ -61,6 +62,8 @@ use accounts::account_isEmpty;
 use accounts::account_hasContract;
 use accounts::pristineAccount;
 
+use codeSegment::getDummyAcceptContractCode;
+
 use std::storageMap::storageMap_new;
 
 use evmCallStack::evmCallStack_currentTimestamp;
@@ -70,6 +73,9 @@ use evmlogs::evmlogs_empty;
 
 use gasAccounting::getArbGasPrice;
 use gasAccounting::getCurrentBlockGasLimit;
+
+use tracing::evmTracer_pushCreate;
+use tracing::evmTracer_pushCreate2;
 
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
@@ -149,7 +155,7 @@ public impure func getEvmOpJumpTable() -> [const::NumEvmOps]impure func() {
     return evmOpJumpTable;
 }
 
-public impure func evmOps_trampoline(index: uint) {
+#[noinline, ] public impure func evmOps_trampoline(index: uint) {
     asm(evmOpJumpTable[index],) {
         auxpop pop   // discard this function's call frame
         auxpop
@@ -691,7 +697,7 @@ public impure func evmOp_log4(
     panic;
 }
 
-public impure func evmOp_callAndReturn(
+#[noinline, ] public impure func evmOp_callAndReturn(
     gas: uint,
     callee: address,
     balance: uint,
@@ -699,7 +705,8 @@ public impure func evmOp_callAndReturn(
     argsLength: uint,
     retOffset: uint,
     retLength: uint,
-    chargeForCallvalue: bool
+    callvalueEscrowKey: option<uint>,  // escrow key that supplies the callvalue (otherwise caller supplies it)
+    overrideStartPoint: option<AvmCodePoint>,
 ) -> bool {
     let savedAuxStack = snapshotAuxStack();
 
@@ -732,7 +739,8 @@ public impure func evmOp_callAndReturn(
         retLength,
         resumeCodePoint,
         Some(savedAuxStack),
-        chargeForCallvalue,
+        callvalueEscrowKey,
+        overrideStartPoint,
     );
     return xif let Some(success) = res {
         success
@@ -741,7 +749,7 @@ public impure func evmOp_callAndReturn(
     };
 }
 
-public impure func evmOp_call(
+#[noinline, ] public impure func evmOp_call(
     gas: uint,
     calleeAsUint: uint,
     balance: uint,
@@ -788,7 +796,8 @@ public impure func evmOp_call(
         retLength,
         resumeCodePoint,
         None<Stack>,
-        true,
+        None<uint>,
+        None<impure func()>,
     );
     return xif let Some(success) = res {
         success
@@ -797,7 +806,7 @@ public impure func evmOp_call(
     };
 }
 
-public impure func evmOp_callcode(
+#[noinline, ] public impure func evmOp_callcode(
     gas: uint,
     calleeAsUint: uint,
     balance: uint,
@@ -829,7 +838,8 @@ public impure func evmOp_callcode(
         retLength,
         resumeCodePoint,
         None<Stack>,
-        true,
+        None<uint>,
+        None<impure func()>,
     );
     return xif let Some(success) = res {
         success
@@ -838,7 +848,7 @@ public impure func evmOp_callcode(
     };
 }
 
-public impure func evmOp_delegatecall(
+#[noinline, ] public impure func evmOp_delegatecall(
     gas: uint,
     calleeAsUint: uint,
     argsOffset: uint,
@@ -869,7 +879,8 @@ public impure func evmOp_delegatecall(
          retLength,
          resumeCodePoint,
          None<Stack>,
-         true,
+         None<uint>,
+         None<impure func()>,
      );
     return xif let Some(success) = res {
         success
@@ -878,7 +889,7 @@ public impure func evmOp_delegatecall(
     };
 }
 
-public impure func evmOp_staticcall(
+#[noinline, ] public impure func evmOp_staticcall(
     gas: uint,
     calleeAsUint: uint,
     argsOffset: uint,
@@ -909,7 +920,8 @@ public impure func evmOp_staticcall(
         retLength,
         resumeCodePoint,
         None<Stack>,
-        true,
+        None<uint>,
+        None<impure func()>,
     );
     return xif let Some(success) = res {
         success
@@ -970,7 +982,13 @@ public impure func evmOp_create(value: uint, offset: uint, length: uint) -> addr
             return address(0);
         }
         let newAddress = address(keccakOfRlpEncodedUintPair(uint(myAddr), seqNum));
-        let ret = doCreationOpcode(value, offset, length, newAddress);
+        let constructorCode = bytearray_extract(
+            evmCallStack_getTopFrameMemoryOrDie(),
+            offset,
+            length
+        );
+        evmTracer_pushCreate(constructorCode, newAddress);
+        let ret = doCreationOpcode(value, constructorCode, newAddress);
         return ret;
     }
 
@@ -999,14 +1017,20 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
             ))
         );
         let newAddress = address(keccak256(newAddrBuf, 0, 85));
-        return doCreationOpcode(value, offset, length, newAddress);
+        let constructorCode = bytearray_extract(
+            evmCallStack_getTopFrameMemoryOrDie(),
+            offset,
+            length
+        );
+        evmTracer_pushCreate2(constructorCode, myAddr, salt, newAddress);
+        return doCreationOpcode(value, constructorCode, newAddress);
     }
 
     evm_runtimePanic(31);
     return panic;
 }
 
-public impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress: address) -> address {
+#[noinline, ] public impure func doCreationOpcode(value: uint, constructorCode: ByteArray, newAddress: address) -> address {
     // make sure there isn't already an account at the given address
     if let Some(acct) = evmCallStack_getAccount(newAddress) {
         if (account_hasContract(acct)) {
@@ -1019,12 +1043,6 @@ public impure func doCreationOpcode(value: uint, offset: uint, length: uint, new
         panic;
     }
 
-    let constructorCode = bytearray_extract(
-        evmCallStack_getTopFrameMemoryOrDie(),
-        offset,
-        length
-    );
-
     let (startPoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(constructorCode), false);
 
     // Create a new account to run the constructor code.
@@ -1034,7 +1052,7 @@ public impure func doCreationOpcode(value: uint, offset: uint, length: uint, new
                 pristineAccount(newAddress),
                 constructorCode,
                 evmJumpTable,
-                startPoint,
+                getDummyAcceptContractCode(),
                 storageMap_new(),
                 true,
             )
@@ -1048,7 +1066,8 @@ public impure func doCreationOpcode(value: uint, offset: uint, length: uint, new
             0,
             0,           // don't copy returndata back into caller's memory
             0,
-            true,
+            None<uint>,
+            Some(startPoint),  // use constructor's startPoint, even though code isn't installed yet
         );
 
         if (constructorSucceeded) {

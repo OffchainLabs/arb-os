@@ -5,7 +5,8 @@
 //!Provides types and utilities for linking together compiled mini programs
 
 use crate::compile::{
-    CompileError, CompiledProgram, DebugInfo, GlobalVarDecl, SourceFileMap, Type,
+    comma_list, CompileError, CompiledProgram, DebugInfo, FileInfo, GlobalVarDecl, SourceFileMap,
+    Type, TypeTree,
 };
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::try_display_location;
@@ -25,6 +26,34 @@ mod optimize;
 mod striplabels;
 mod xformcode;
 
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SerializableTypeTree {
+    inner: BTreeMap<String, (Type, String)>,
+}
+
+impl SerializableTypeTree {
+    pub fn from_type_tree(tree: TypeTree) -> Self {
+        let mut inner = BTreeMap::new();
+        for ((path, id), tipe) in tree.into_iter() {
+            inner.insert(format!("{}, {}", comma_list(&path), id), tipe);
+        }
+        Self { inner }
+    }
+    pub fn into_type_tree(self) -> TypeTree {
+        let mut type_tree = HashMap::new();
+        for (path, tipe) in self.inner.into_iter() {
+            let mut x: Vec<_> = path.split(", ").map(|val| val.to_string()).collect();
+            let id = x
+                .pop()
+                .map(|id| id.parse::<usize>())
+                .expect("empty list")
+                .expect("failed to parse");
+            type_tree.insert((x, id), tipe);
+        }
+        type_tree
+    }
+}
+
 ///Represents a mini program that has gone through the post-link compilation step.
 ///
 /// This is typically constructed via the `postlink_compile` function.
@@ -36,7 +65,8 @@ pub struct LinkedProgram {
     pub static_val: Value,
     pub globals: Vec<GlobalVarDecl>,
     #[serde(default)]
-    pub file_name_chart: BTreeMap<u64, String>,
+    pub file_info_chart: BTreeMap<u64, FileInfo>,
+    pub type_tree: SerializableTypeTree,
 }
 
 impl LinkedProgram {
@@ -55,7 +85,7 @@ impl LinkedProgram {
                         insn,
                         try_display_location(
                             insn.debug_info.location,
-                            &self.file_name_chart,
+                            &self.file_info_chart,
                             false
                         )
                     )
@@ -67,6 +97,7 @@ impl LinkedProgram {
                     writeln!(output, "{}", prog_str).unwrap();
                 }
                 Err(e) => {
+                    eprintln!("failure");
                     writeln!(output, "json serialization error: {:?}", e).unwrap();
                 }
             },
@@ -178,7 +209,7 @@ impl ExportedFunc {
 /// table to a static value, and combining the file name chart with the associated argument.
 pub fn postlink_compile(
     program: CompiledProgram,
-    mut file_name_chart: BTreeMap<u64, String>,
+    mut file_info_chart: BTreeMap<u64, FileInfo>,
     test_mode: bool,
     debug: bool,
 ) -> Result<LinkedProgram, CompileError> {
@@ -225,8 +256,10 @@ pub fn postlink_compile(
                 Ok(Instruction::new(inner, insn.immediate, insn.debug_info))
             } else {
                 Err(CompileError::new(
+                    String::from("Compile error"),
                     format!("In final output encountered virtual opcode {}", insn.opcode),
-                    insn.debug_info.location,
+                    insn.debug_info.location.into_iter().collect(),
+                    false,
                 ))
             }
         })
@@ -241,7 +274,7 @@ pub fn postlink_compile(
         println!("============ after full compile/link =============");
     }
 
-    file_name_chart.extend(program.file_name_chart);
+    file_info_chart.extend(program.file_info_chart.clone());
 
     Ok(LinkedProgram {
         arbos_version: init_constant_table(Some(Path::new("arb_os/constants.json")))
@@ -252,8 +285,9 @@ pub fn postlink_compile(
             .trim_to_u64(),
         code: code_final,
         static_val: Value::none(),
-        globals: program.globals,
-        file_name_chart,
+        globals: program.globals.clone(),
+        file_info_chart,
+        type_tree: SerializableTypeTree::from_type_tree(program.type_tree),
     })
 }
 
@@ -281,6 +315,7 @@ pub fn link(
     test_mode: bool,
 ) -> Result<CompiledProgram, CompileError> {
     let progs = progs_in.to_vec();
+    let type_tree = progs[0].type_tree.clone();
     let mut insns_so_far: usize = 3; // leave 2 insns of space at beginning for initialization
     let mut imports_so_far: usize = 0;
     let mut int_offsets = Vec::new();
@@ -372,10 +407,13 @@ pub fn link(
         if let Some(label) = exports_map.get(&imp.name) {
             label_xlate_map.insert(Label::External(imp.slot_num), label);
         } else {
-            println!(
-                "Warning: {}",
-                CompileError::new(format!("Failed to resolve import \"{}\"", imp.name), None)
-            );
+            CompileError::new(
+                String::from("Compile warning"),
+                format!("Failed to resolve import \"{}\"", imp.name),
+                vec![],
+                true,
+            )
+            .warn(&BTreeMap::new());
         }
     }
 
@@ -394,11 +432,26 @@ pub fn link(
             let mut map = HashMap::new();
             let mut file_hasher = DefaultHasher::new();
             file_hasher.write(b"builtin/array.mini");
-            map.insert(file_hasher.finish(), "builtin/array.mini".to_string());
+            map.insert(
+                file_hasher.finish(),
+                FileInfo {
+                    name: String::from("builtin/array.mini"),
+                    path: String::from("builtin/array.mini"),
+                    contents: vec![], // COME BACK
+                },
+            );
             let mut file_hasher = DefaultHasher::new();
             file_hasher.write(b"builtin/kvs.mini");
-            map.insert(file_hasher.finish(), "builtin/kvs.mini".to_string());
+            map.insert(
+                file_hasher.finish(),
+                FileInfo {
+                    name: String::from("builtin/kvs.mini"),
+                    path: String::from("builtin/kvs.mini"),
+                    contents: vec![], // COME BACK
+                },
+            );
             map
         },
+        type_tree,
     ))
 }
