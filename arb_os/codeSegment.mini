@@ -70,6 +70,8 @@ use evmOps::evmOp_timestamp;
 use evmOps::evmOp_create;
 use evmOps::evmOp_create2;
 
+use precompiles::makeTrampoline;
+
 use std::avmcodebuilder::AvmCodePoint;
 use std::avmcodebuilder::pushInstruction;
 use std::avmcodebuilder::pushInstructionImm;
@@ -102,7 +104,10 @@ func evmInstructionStack_pop(s: EvmInstructionStack) -> option<(EvmInstructionSt
     return Some((us, unsafecast<EvmInstruction>(item)));
 }
 
-var unreachableMask: uint;
+var codeSegGlobals: struct {
+    unreachableMask: uint,
+    dummyAcceptContractCode: AvmCodePoint,
+};
 
 impure func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
     let stack = evmInstructionStack_new();
@@ -157,7 +162,7 @@ impure func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
                 }
                 evmPc = evmPc + 1;
             }
-            if ((unreachableMask & asm(opcode, 1) uint { shl }) != 0) { reachable = false;    }
+            if ((codeSegGlobals.unreachableMask & asm(opcode, 1) uint { shl }) != 0) { reachable = false;    }
         } else {
             return stack;
         }
@@ -173,7 +178,19 @@ public impure func codeSegment_init() {
         }
         opcode = opcode + 1;
     }
-    unreachableMask = mask;
+
+    codeSegGlobals = struct {
+        unreachableMask: mask,
+        dummyAcceptContractCode: makeTrampoline(dummyAcceptFunction),
+    };
+}
+
+impure func dummyAcceptFunction() {
+    evmOp_return(0, 0);
+}
+
+public impure func getDummyAcceptContractCode() -> AvmCodePoint {
+    return codeSegGlobals.dummyAcceptContractCode;
 }
 
 func unreachableAfterOpcode(opcode: uint) -> bool {
@@ -192,7 +209,7 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
         || (opcode == 0xff); // SELFDESTRUCT
 }
 
-impure func generateCodeForEvmSegment(
+#[noinline, ] impure func generateCodeForEvmSegment(
     insns: EvmInstructionStack,
     makePcTable: bool,
 ) -> (AvmCodePoint, map<uint, AvmCodePoint>, Stack) {
@@ -513,7 +530,7 @@ impure func generateCodeForEvmSegment(
             }
 
             // uncomment the following line, to get a debugprint before every EVM instruction
-            // code = pushInstructionImm(const::AVM_debugprint, (20000, insn.pc, insn.opcode), code);
+            // code = pushInstructionImm(const::AVM_debugprint, (30000, insn.pc, insn.opcode), code);
         } else {
             return (code, evmJumpTable, pcTable);
         }

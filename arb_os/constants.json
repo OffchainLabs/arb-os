@@ -1,5 +1,5 @@
 {
-  "arbos_version": 16,
+  "arbos_version": 19,
   "integer": {
     "AVMSendType_batch": 0,
     "AVM_add": 1,
@@ -194,6 +194,10 @@
     "SendType_sendTxToL1": 3,
     "Sequencer_deltaSeconds": 0,
     "Sequencer_maxDelaySeconds": 983040,
+    "TraceEvent_call": 0,
+    "TraceEvent_returnOrRevert": 1,
+    "TraceEvent_create": 2,
+    "TraceEvent_create2": 3,
     "TwoToThe32": 4294967296,
     "TxResultCode_badSequenceNum": 5,
     "TxResultCode_cannotDeployAtAddress": 7,
@@ -204,6 +208,7 @@
     "TxResultCode_insufficientBalance": 4,
     "TxResultCode_insufficientGasForBaseFee": 9,
     "TxResultCode_belowMinimumTxGas": 10,
+    "TxResultCode_noGasForAutoRedeem": 12,
     "TxResultCode_noGasFunds": 3,
     "TxResultCode_revert": 1,
     "TxResultCode_success": 0,
@@ -220,6 +225,7 @@
   "contract_folder": "contracts/artifacts/arbos/builtin",
   "contract": [
     "ArbAggregator",
+    "ArbosTest",
     "ArbOwner",
     "ArbRetryableTx",
     "ArbStatistics"

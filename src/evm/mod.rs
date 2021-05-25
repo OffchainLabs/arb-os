@@ -4,6 +4,8 @@
 
 use crate::evm::abi::FunctionTable;
 use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest};
+use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys};
+use crate::evm::preinstalled_contracts::ArbosTest;
 use crate::run::{load_from_file, load_from_file_and_env, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use ethers_signers::Signer;
@@ -33,6 +35,13 @@ pub fn test_contract_path(contract_name: &str) -> String {
     format!(
         "contracts/artifacts/arbos/test/{}.sol/{}.json",
         contract_name, contract_name
+    )
+}
+
+pub fn _test_contract_path2(parent_name: &str, contract_name: &str) -> String {
+    format!(
+        "contracts/artifacts/arbos/test/{}.sol/{}.json",
+        parent_name, contract_name
     )
 }
 
@@ -1767,11 +1776,7 @@ fn _evm_reverter_factory_test_impl() {
                 false,
             );
             if let Err(maybe_receipt) = result {
-                if let Some(receipt) = maybe_receipt {
-                    if receipt.get_return_data().len() == 0 {
-                        panic!("zero-length returndata")
-                    }
-                } else {
+                if maybe_receipt.is_none() {
                     panic!("deploy failed without receipt");
                 }
             } else {
@@ -2026,6 +2031,44 @@ fn _evm_bad_receipt_revert_test_impl() {
         receipts[total_receipts_before].get_return_code(),
         Uint256::from_u64(10)
     );
+}
+
+#[test]
+fn evm_test_constructor_recursion() {
+    let _ = _test_constructor_recursion().unwrap();
+}
+
+pub fn _test_constructor_recursion() -> Result<(), ethabi::Error> {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+
+    let my_addr = Uint256::from_usize(1025);
+
+    let mut ccontract = AbiForContract::new_from_file(&_test_contract_path2(
+        "ReverterFactory",
+        "ConstructorCallback2",
+    ))?;
+    if ccontract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .is_err()
+    {
+        panic!("failed to deploy ConstructorCallback contract");
+    }
+
+    let (receipts, _) = ccontract
+        .call_function(
+            my_addr.clone(),
+            "test",
+            &[],
+            &mut machine,
+            Uint256::zero(),
+            false,
+        )
+        .unwrap();
+    assert_eq!(receipts.len(), 1);
+    assert!(receipts[0].succeeded());
+
+    Ok(())
 }
 
 pub fn make_logs_for_all_arbos_tests() {

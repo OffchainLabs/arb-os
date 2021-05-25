@@ -106,7 +106,6 @@ type TxRequestData = struct {
 }
 
 public impure func handleL2Request(
-    inStream: ByteStream,
     request: TxRequestData
 ) -> option<()> {   // return None if message is malformatted; otherwise handle errors and return Some(()); if no error, never return
     if let Some(sequenceNum) = request.seqNum {
@@ -121,6 +120,7 @@ public impure func handleL2Request(
                 None<EvmLogs>,
                 None<GasUsage>,
                 request.feeStats,
+                true,
             );
             return Some(());
         }
@@ -137,6 +137,7 @@ public impure func handleL2Request(
                 None<EvmLogs>,
                 None<GasUsage>,
                 request.feeStats,
+                true,
             );
             return Some(());
         }
@@ -162,6 +163,7 @@ public impure func handleL2Request(
                 None<EvmLogs>,
                 None<GasUsage>,
                 request.feeStats,
+                true,
             );
             return Some(());
         } else {

@@ -42,6 +42,8 @@ use evmOps::evmOp_return;
 
 use evmlogs::EvmLogs;
 
+use tracing::evmTracer_clear;
+
 use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_init;
 use gasAccounting::getNextRequestFromCongestionAuction;
@@ -81,13 +83,15 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
     if (unsafecast<any>(oldGlobals) != ()) {
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
 
-        let (newGlobals, oldArbosVersion) = remapGlobalsForUpgrade(oldGlobals);
+        let (newGlobals, _oldArbosVersion) = remapGlobalsForUpgrade(oldGlobals);
 
         asm(newGlobals,) { rset };
 
         // now re-do the initializations that set up pointers into the ArbOS code
         errorHandler_init();
         evmOps_init();
+        codeSegment_init();
+
         if (initializePreinstalls(true) == None<()>) {
             panic;   // don't try to run without preinstalls and precompiles
         }
@@ -127,10 +131,7 @@ public impure func mainRunLoop() {
     loop {
         let (resultCode, request) = getNextRequestFromCongestionAuction();
         if (resultCode == const::TxResultCode_success) {
-            if (handleL2Request(
-                bytestream_new(request.incomingRequest.msgData),
-                request
-            ) == None<()>) {
+            if (handleL2Request(request) == None<()>) {
                 // reject for message format error
                 emitTxReceipt(
                     request.incomingRequest,
@@ -139,6 +140,7 @@ public impure func mainRunLoop() {
                     None<EvmLogs>,
                     None<GasUsage>,
                     request.feeStats,
+                    false,      // don't emit tracing info because the tx was bogus
                 );
             }
         } else {
@@ -159,6 +161,7 @@ public impure func mainRunLoop() {
                 None<EvmLogs>,
                 None<GasUsage>,
                 request.feeStats,
+                true,
             );
         }
     }
