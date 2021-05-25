@@ -17,6 +17,7 @@ use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_marshalFull;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
+use std::bytearray::buffer_getCalldataUnits;
 
 use std::bytearray::marshalledBytes_hash;
 
@@ -37,7 +38,7 @@ func tests() -> uint {
 	}	
 
 	// check that this wont error
-	let buf2 = setbuffer8(buf2, 10000, 1234);
+	let _ = setbuffer8(buf2, 10000, 1234);
 
 	let ba = bytearray_new(33);
 	if (bytearray_size(ba) != 0) {
@@ -107,7 +108,6 @@ func tests() -> uint {
 		),
 	));
 
-	ba = bytearray_new(67);
 	if let Some(ba2) = bytearray_unmarshalBytes(marshalledStruct) {
         let i = 0;
         while (i < 67) {
@@ -248,7 +248,7 @@ func tests() -> uint {
         return 30;
     }
 
-	return 0;
+    return testCalldataUnitCounting();
 }
 
 func setupFromUnmarshal() -> ByteArray {
@@ -270,4 +270,18 @@ func setupFromUnmarshal() -> ByteArray {
 	} else {
 	    panic
 	};
+}
+
+func testCalldataUnitCounting() -> uint {
+    let buf = newbuffer();
+    if (buffer_getCalldataUnits(buf, 0, 37) != 4*37) {
+        return 10001;
+    }
+
+    buf = setbuffer256(buf, 3, ~0);
+    if (buffer_getCalldataUnits(buf, 0, 37) != (16*32 + 4*5)) {
+        return 10002;
+    }
+
+    return 0;
 }

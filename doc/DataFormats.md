@@ -48,21 +48,11 @@ This message type is initiated by a client, via a transaction to the EthBridge. 
 
 Details of L2 message subtypes and formats are listed in a separate section below.
 
-##### Message type 4: chain initialization message
+##### Message type 4: set parameters message
 
 This message type is initiated by the EthBridge, as part of the creation of a new L2 chain, in order to convey parameters of the chain to ArbOS. It must only be sent as the first message in the inbox of a new chain.  
 
-Type-specific data:
-
-* challenge period, in seconds (uint)
-* ArbGas speed limit, in ArbGas per second (uint)
-* maximum number of execution steps allowed in an assertion (uint)
-* minimum stake requirement, in Wei (uint)
-* address of the staking token, or zero if staking in ETH (address encoded as uint)
-* address of the chain's owner (address encoded as uint)
-* option data
-
-Option data consists of a sequence of zero or more chunks.  ArbOS will ignore a chunk if it does not know how to handle that chunk's option ID.
+Type-specific data consists 
 
 Each chunk is:
 
@@ -311,6 +301,8 @@ For an unsigned transaction that is an L2 message of subtype 0, the requestID is
 For other transactions, the requestID is computed from incoming message contents as follows.  An incoming message is assigned a requestID of hash(chainID, inboxSeqNum), where inboxSeqNum is the value N such that this is the Nth message that has ever arrived in the chain's inbox.  If the incoming message includes a batch, the K'th item in the batch is assigned a requestID of hash(requestID of batch, K).  If batches are nested, this rule is applied recursively.
 
 It is infeasible to find two distinct requests that have the same requestID.  This is true because requestIDs are the output of a collision-free hash function, and it is not possible to create two distinct requests that will have the same input to the hash function.  Signed transaction IDs cannot collide with the other types, because the other types' hash preimages both start with a zero byte (because sender address and chainID are zero-filled in the most-significant byte of a big-endian value) and the RLP encoding of a list cannot start with a zero byte.  The other two types cannot have the same hash preimage because subtype-0 messages use a hash output as their second word, which with overwhelming probability will be too large to be feasible as the sequence number or batch index that occupies the same position in the default request ID scheme.
+
+When an incoming message is included through the delayed inbox, the inbox sequence number gets adjusted so it doesn't overlap with the sequencer's inbox. For these messages, you can calculate the request ID by masking the high order bit, as follows: inboxSeqNum | (1 << 255).
 
 ### Block summary
 
