@@ -210,6 +210,7 @@
     "TxResultCode_noGasForAutoRedeem": 12,
     "TxResultCode_noGasFunds": 3,
     "TxResultCode_revert": 1,
+    "TxResultCode_senderNotPermitted": 13,
     "TxResultCode_success": 0,
     "TxResultCode_unknownFailure": 255
   },

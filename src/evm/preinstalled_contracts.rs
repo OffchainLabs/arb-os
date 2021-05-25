@@ -532,6 +532,154 @@ impl<'a> _ArbOwner<'a> {
             Err(ethabi::Error::from("reverted"))
         }
     }
+
+    pub fn _allow_all_senders(&self, machine: &mut Machine) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "allowAllSenders",
+            &[],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _allow_only_owner_to_send(&self, machine: &mut Machine) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "allowOnlyOwnerToSend",
+            &[],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _is_allowed_sender(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+    ) -> Result<bool, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "isAllowedSender",
+            &[ethabi::Token::Address(addr.to_h160())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(!Uint256::from_bytes(&receipts[0].get_return_data()).is_zero())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _add_allowed_sender(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+    ) -> Result<bool, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "addAllowedSender",
+            &[ethabi::Token::Address(addr.to_h160())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()) != Uint256::zero())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _remove_allowed_sender(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+    ) -> Result<bool, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "removeAllowedSender",
+            &[ethabi::Token::Address(addr.to_h160())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()) != Uint256::zero())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _get_all_allowed_senders(
+        &self,
+        machine: &mut Machine,
+    ) -> Result<Vec<Uint256>, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "getAllAllowedSenders",
+            &[],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            let ret_data = receipts[0].get_return_data();
+            let mut ret = vec![];
+            let mut offset = 64;
+            while (offset < ret_data.len()) {
+                ret.push(Uint256::from_bytes(&ret_data[offset..offset + 32]));
+                offset += 32;
+            }
+            Ok(ret)
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
 }
 
 pub struct _ArbGasInfo<'a> {
@@ -2125,4 +2273,68 @@ fn _test_arb_stats() -> Result<(), ethabi::Error> {
     assert_eq!(txs, Uint256::from_u64(0));
     assert_eq!(contracts, Uint256::from_u64(19));
     Ok(())
+}
+
+#[test]
+fn test_allowed_senders() {
+    _evm_test_allowed_senders();
+}
+
+fn _evm_test_allowed_senders() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+    let wallet = machine.runtime_env.new_wallet();
+
+    let arbowner = _ArbOwner::_new(&wallet, false);
+
+    let addr1 = Uint256::from_u64(123489121);
+    let addr2 = Uint256::from_u64(1348098777777);
+
+    assert!(arbowner
+        ._is_allowed_sender(&mut machine, addr1.clone())
+        .unwrap());
+
+    assert!(arbowner._allow_only_owner_to_send(&mut machine).is_ok());
+    assert!(!arbowner
+        ._is_allowed_sender(&mut machine, addr1.clone())
+        .unwrap());
+    assert!(arbowner
+        ._is_allowed_sender(&mut machine, Uint256::zero())
+        .unwrap());
+
+    assert!(arbowner._allow_all_senders(&mut machine).is_ok());
+    assert!(arbowner
+        ._is_allowed_sender(&mut machine, addr1.clone())
+        .unwrap());
+
+    assert!(arbowner._allow_only_owner_to_send(&mut machine).is_ok());
+    assert!(arbowner
+        ._add_allowed_sender(&mut machine, addr1.clone())
+        .is_ok());
+    assert!(arbowner
+        ._is_allowed_sender(&mut machine, addr1.clone())
+        .unwrap());
+    assert!(!arbowner
+        ._is_allowed_sender(&mut machine, addr2.clone())
+        .unwrap());
+
+    assert!(arbowner
+        ._add_allowed_sender(&mut machine, addr2.clone())
+        .is_ok());
+    let serialized = arbowner._get_all_allowed_senders(&mut machine).unwrap();
+    assert_eq!(serialized.len(), 2);
+    assert!(
+        ((serialized[0] == addr1.clone()) && (serialized[1] == addr2.clone()))
+            || ((serialized[0] == addr2.clone()) && (serialized[1] == addr1.clone()))
+    );
+
+    assert!(arbowner
+        ._remove_allowed_sender(&mut machine, addr1.clone())
+        .is_ok());
+    assert!(!arbowner
+        ._is_allowed_sender(&mut machine, addr1.clone())
+        .unwrap());
+    assert!(arbowner
+        ._is_allowed_sender(&mut machine, addr2.clone())
+        .unwrap());
 }

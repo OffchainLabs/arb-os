@@ -806,8 +806,8 @@ public impure func getNextRequestFromCongestionAuction() -> (
     TxRequestData,
 ) {
     let tx = inbox_getNextUnpackedRequest();
-    while( ! allowedSenders_contains(tx.caller)) {
-        tx = inbox_getNextUnpackedRequest();
+    if( ! allowedSenders_contains(tx.caller)) {
+        return (const::TxResultCode_senderNotPermitted, tx);
     }
 
     if (tx.incomingRequest.arbBlockNumber > gasAccountingInfo.congestionState.lastArbBlockNumSeen) {
