@@ -2,7 +2,6 @@ use super::*;
 use crate::compile::miniconstants::init_constant_table;
 use crate::run::{load_from_file, Machine, RuntimeEnvironment};
 use crate::uint256::Uint256;
-use crate::upload::CodeUploader;
 use ethers_core::utils::keccak256;
 use ethers_signers::{Signer, Wallet};
 use std::path::Path;
@@ -1105,70 +1104,6 @@ pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), et
 }
 
 #[test]
-fn _test_upgrade_arbos_to_different_version() {
-    _test_upgrade_arbos_over_itself_impl().unwrap();
-}
-
-fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
-    let mut machine = load_from_file(Path::new("arb_os/arbos_before.mexe"));
-    machine.start_at_zero();
-
-    let wallet = machine.runtime_env.new_wallet();
-    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
-
-    let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
-    if add_contract
-        .deploy(&[], &mut machine, Uint256::zero(), None, false)
-        .is_err()
-    {
-        panic!("failed to deploy Add contract");
-    }
-
-    let arbowner = _ArbOwner::_new(&wallet, false);
-
-    let arbsys_orig_binding = ArbSys::new(&wallet, false);
-    assert_eq!(
-        arbsys_orig_binding._arbos_version(&mut machine)?,
-        Uint256::from_u64(19),
-    );
-
-    arbowner._give_ownership(&mut machine, my_addr, true)?;
-
-    let uploader = CodeUploader::_new_from_file(Path::new("arb_os/arbos-upgrade.mexe"));
-    arbowner._start_code_upload(&mut machine)?;
-
-    let mut accum = vec![];
-    for buf in uploader.instructions {
-        accum.extend(buf);
-        if (accum.len() > 3000) {
-            arbowner._continue_code_upload(&mut machine, accum)?;
-            accum = vec![];
-        }
-    }
-    if (accum.len() > 0) {
-        arbowner._continue_code_upload(&mut machine, accum)?;
-    }
-
-    let expected_code_hash = arbowner._get_uploaded_code_hash(&mut machine)?;
-    arbowner._finish_code_upload_as_arbos_upgrade(&mut machine, expected_code_hash)?;
-
-    let wallet2 = machine.runtime_env.new_wallet();
-    let arbsys = ArbSys::new(&wallet2, false);
-    let arbos_version = arbsys._arbos_version(&mut machine)?;
-    assert_eq!(
-        arbos_version,
-        *init_constant_table(Some(Path::new("arb_os/constants.json")))
-            .unwrap()
-            .get("ArbosVersionNumber")
-            .unwrap()
-    );
-    let arbos_version_orig = arbsys_orig_binding._arbos_version(&mut machine)?;
-    assert_eq!(arbos_version, arbos_version_orig);
-
-    Ok(())
-}
-
-#[test]
 pub fn test_gas_charging_underfunded() {
     match _evm_run_with_gas_charging(None, Uint256::_from_gwei(20), false, false) {
         Ok(result) => assert_eq!(result, false),
@@ -1461,10 +1396,10 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         "L2 tx {}, L1 calldata {}, L2 storage {}, base gas {}, congestion gas {}, total gas {}",
         l2tx, l1calldata, storage, basegas, conggas, totalgas
     );
-    assert_eq!(l2tx, Uint256::from_u64(658993125000000));
-    assert_eq!(l1calldata, Uint256::from_u64(178106250000));
-    assert_eq!(storage, Uint256::from_u64(309750000000000));
-    assert_eq!(basegas, Uint256::from_u64(1548750000));
+    assert_eq!(l2tx, Uint256::from_u64(18070093750000000));
+    assert_eq!(l1calldata, Uint256::from_u64(361401875000));
+    assert_eq!(storage, Uint256::from_u64(628525000000000));
+    assert_eq!(basegas, Uint256::from_u64(1571312500));
     assert!(conggas.is_zero());
     assert_eq!(basegas.add(&conggas), totalgas);
 
@@ -1473,9 +1408,9 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         "L2 tx / ag {}, L1 calldata / ag {}, L2 storage / ag {}",
         l2tx, l1calldata, storage
     );
-    assert_eq!(l2tx, Uint256::from_u64(425500));
-    assert_eq!(l1calldata, Uint256::from_u64(115));
-    assert_eq!(storage, Uint256::from_u64(200000));
+    assert_eq!(l2tx, Uint256::from_u64(11500000));
+    assert_eq!(l1calldata, Uint256::from_u64(230));
+    assert_eq!(storage, Uint256::from_u64(400000));
 
     let (speed_limit, gas_pool_max, tx_gas_limit) =
         arbgasinfo._get_gas_accounting_params(&mut machine)?;

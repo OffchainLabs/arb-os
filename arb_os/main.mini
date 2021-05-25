@@ -22,7 +22,6 @@ use arbsys::arbsys_txcall;
 use blockhash::blockhash_init;
 
 use chainParameters::chainParams_init;
-use chainParameters::chainParams_haveDoneInit;
 
 use codeSegment::codeSegment_init;
 use codeSegment::translateEvmCodeSegment;

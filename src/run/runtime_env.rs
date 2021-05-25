@@ -93,7 +93,7 @@ impl RuntimeEnvironment {
     }
 
     pub fn send_chain_init_message(&mut self) {
-        self.insert_l1_message(4, Uint256::zero(), &self.chain_init_message.clone());
+        self.insert_l1_message(4, Uint256::zero(), &self.chain_init_message.clone(), None, None);
     }
 
     fn get_params_bytes(owner: Option<Uint256>, chain_id: u64) -> Vec<u8> {
