@@ -1,5 +1,5 @@
 {
-  "arbos_version": 20,
+  "arbos_version": 21,
   "integer": {
     "AVMSendType_batch": 0,
     "AVM_add": 1,
@@ -128,6 +128,7 @@
     "EvmOp_extcodecopy": 14,
     "EvmOp_extcodehash": 15,
     "EvmOp_extcodesize": 13,
+    "EvmOp_gas": 47,
     "EvmOp_gaslimit": 45,
     "EvmOp_gasprice": 44,
     "EvmOp_getjumpaddr": 26,
@@ -178,7 +179,7 @@
     "LogType_txReceipt": 0,
     "NetFee_defaultRateDenominator": 100,
     "NetFee_defaultRateNumerator": 15,
-    "NumEvmOps": 47,
+    "NumEvmOps": 48,
     "PluggableModuleID_precompile_0x05": 1,
     "PluggableModuleID_rollupTracker": 0,
     "ProtoEvent_claimNode": 4,

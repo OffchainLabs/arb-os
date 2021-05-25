@@ -18,6 +18,10 @@ public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade
     return input_globals.globalAccountStore;
 }
 
+public func set_evmOpJumpTable_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> [48]impure func() {
+    return unsafecast<[48]impure func()>(input_globals.evmOpJumpTable);
+}
+
 public func set_globalCallStack_onUpgrade(_input_globals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
     return None<EvmCallFrame>;
 }
