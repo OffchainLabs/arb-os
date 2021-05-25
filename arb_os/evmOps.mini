@@ -155,7 +155,7 @@ public impure func getEvmOpJumpTable() -> [const::NumEvmOps]impure func() {
     return evmOpJumpTable;
 }
 
-#[noinline, ] public impure func evmOps_trampoline(index: uint) {
+#[noinline, ] public impure func dispatchForEvmOp(index: uint) {
     asm(evmOpJumpTable[index],) {
         auxpop pop   // discard this function's call frame
         auxpop
@@ -705,7 +705,7 @@ public impure func evmOp_log4(
     argsLength: uint,
     retOffset: uint,
     retLength: uint,
-    chargeForCallvalue: bool,
+    callvalueEscrowKey: option<uint>,  // escrow key that supplies the callvalue (otherwise caller supplies it)
     overrideStartPoint: option<AvmCodePoint>,
 ) -> bool {
     let savedAuxStack = snapshotAuxStack();
@@ -739,7 +739,7 @@ public impure func evmOp_log4(
         retLength,
         resumeCodePoint,
         Some(savedAuxStack),
-        chargeForCallvalue,
+        callvalueEscrowKey,
         overrideStartPoint,
     );
     return xif let Some(success) = res {
@@ -796,7 +796,7 @@ public impure func evmOp_log4(
         retLength,
         resumeCodePoint,
         None<Stack>,
-        true,
+        None<uint>,
         None<impure func()>,
     );
     return xif let Some(success) = res {
@@ -838,7 +838,7 @@ public impure func evmOp_log4(
         retLength,
         resumeCodePoint,
         None<Stack>,
-        true,
+        None<uint>,
         None<impure func()>,
     );
     return xif let Some(success) = res {
@@ -879,7 +879,7 @@ public impure func evmOp_log4(
          retLength,
          resumeCodePoint,
          None<Stack>,
-         true,
+         None<uint>,
          None<impure func()>,
      );
     return xif let Some(success) = res {
@@ -920,7 +920,7 @@ public impure func evmOp_log4(
         retLength,
         resumeCodePoint,
         None<Stack>,
-        true,
+        None<uint>,
         None<impure func()>,
     );
     return xif let Some(success) = res {
@@ -1066,7 +1066,7 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
             0,
             0,           // don't copy returndata back into caller's memory
             0,
-            true,
+            None<uint>,
             Some(startPoint),  // use constructor's startPoint, even though code isn't installed yet
         );
 

@@ -14,6 +14,7 @@ use accounts::accountStore_upgradeContractFromEvmCode;
 use accounts::account_checkAndIncrSeqNum;
 
 use arbstatistics::arbStatistics_init;
+use arbowner::arbowner_init;
 
 use arbsys::arbosVersion;
 use arbsys::arbsys_txcall;
@@ -21,7 +22,6 @@ use arbsys::arbsys_txcall;
 use blockhash::blockhash_init;
 
 use chainParameters::chainParams_init;
-use chainParameters::chainParams_haveDoneInit;
 
 use codeSegment::codeSegment_init;
 use codeSegment::translateEvmCodeSegment;
@@ -39,6 +39,7 @@ use evmCallStack::evmCallStack_makeEmpty;
 
 use evmOps::evmOps_init;
 use evmOps::evmOp_return;
+use evmOps::dispatchForEvmOp;
 
 use evmlogs::EvmLogs;
 
@@ -78,6 +79,9 @@ use std::storageMap::StorageMap;
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 use bridge_arbos_versions::remapGlobalsForUpgrade;
 
+// The compiler will always put __fixedLocationGlobal in slot 0 of the AVM Register,
+//     so we can rely on it not moving across upgrades.
+var __fixedLocationGlobal: impure func(uint);    // points to EVM op dispatch function
 
 impure func main(oldGlobals: GlobalsBeforeUpgrade) {
     if (unsafecast<any>(oldGlobals) != ()) {
@@ -90,6 +94,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         // now re-do the initializations that set up pointers into the ArbOS code
         errorHandler_init();
         evmOps_init();
+        __fixedLocationGlobal = dispatchForEvmOp;
         codeSegment_init();
 
         if (initializePreinstalls(true) == None<()>) {
@@ -98,20 +103,22 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
     } else {
         // this is a clean start, not an upgrade
         errorHandler_init();
+        chainParams_init();
         arbStatistics_init();
 
         pluggables_init();
         codeSegment_init();
-        chainParams_init();
         output_init();
         decompression_init();
         inbox_init();
         gasAccounting_init();
         evmCallStack_init();
         evmOps_init();
+        __fixedLocationGlobal = dispatchForEvmOp;
         blockhash_init();
         inbox_init();
         accountStore_init();
+        arbowner_init();
         txReceipts_init();
         rollupTracker_init();
         if (initializePreinstalls(false) == None<()>) {

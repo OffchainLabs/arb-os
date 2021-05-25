@@ -122,7 +122,7 @@ impure func arbaggregator_setDefaultAggregator(topFrame: EvmCallFrame, calldata:
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(40, 0, 0);
     }
-    if ((caller != address(0)) && (Some(caller) != chainParams_getOwner()) && (caller != chainParams_getDefaultAggregator())) {
+    if ((caller != address(0)) && (caller != chainParams_getOwner()) && (caller != chainParams_getDefaultAggregator())) {
         evmOp_revert_knownPc(41, 0, 0);
     }
     let newDefaultAgg = address(bytearray_get256(calldata, 4));
@@ -155,7 +155,7 @@ impure func arbaggregator_setFeeCollector(topFrame: EvmCallFrame, calldata: Byte
     let aggAcct = evmCallStack_getAccountInCurrentContext(aggregator);
     let oldCollector = account_getFeeCollector(aggAcct);
 
-    if ((caller != address(0)) && (Some(caller) != chainParams_getOwner()) && (caller != oldCollector)) {
+    if ((caller != address(0)) && (caller != chainParams_getOwner()) && (caller != oldCollector)) {
         evmOp_revert_knownPc(61, 0, 0);
     }
     evmCallStack_setAccountInCurrentContext(aggregator, account_setFeeCollector(aggAcct, newCollector));

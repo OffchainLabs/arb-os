@@ -23,7 +23,7 @@ use blockhash::blockhash_submitHash;
 
 use chainParameters::chainParams_gotParamsMessage;
 use chainParameters::chainParams_chainId;
-use chainParameters::haveReceivedChainInitMessage;
+use chainParameters::chainParams_getOwner;
 
 use gasAccounting::updateL1GasPriceEstimate;
 use gasAccounting::txFeeStats_zero;
@@ -120,8 +120,10 @@ public impure func inbox_get() -> IncomingRequest {
             inboxHashAccumulator: hash(globalInbox.inboxHashAccumulator, ebMsgHash)
         };
 
-        if (ebMsg.kind == const::L1MessageType_chainInit) {
-            chainParams_gotParamsMessage(ebMsg.sender, ebMsg.msgData);
+        if (ebMsg.kind == const::L1MessageType_setChainParameters) {
+            if (ebMsg.sender == address(0)) {
+                chainParams_gotParamsMessage(ebMsg.msgData);
+            }   // ignore this message if it didn't come from chain owner
         } else {
             return ebMsg with {
                 requestId: uint(hash(bytes32(chainParams_chainId()), bytes32(ebMsg.requestId)))
@@ -454,9 +456,10 @@ public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
                     // else request was malformatted, ignore it and execute loop again to get another
                 }
             } elseif (msg.kind == const::L1MessageType_rollupProtocolEvent) {
-                if (msg.sender == address(0)) {
-                    let _ = callPluggable(const::PluggableModuleID_rollupTracker, msg.msgData);
-                }
+                // disable processing of these messages, because we don't do anything with the results at present
+                // if (msg.sender == address(0)) {
+                //     let _ = callPluggable(const::PluggableModuleID_rollupTracker, msg.msgData);
+                // }
                 // else request was forged or malformatted, ignore it and execute loop again to get another
             } elseif (msg.kind == const::L1MessageType_submitRetryableTx) {
                 if let Some(txRequest) = processRetryableTx(msg) {

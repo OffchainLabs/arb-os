@@ -4,21 +4,11 @@ interface ArbOwner {
     // Support actions that can be taken by the chain's owner.
     // All methods will revert, unless the caller is the chain's owner.
 
-    function giveOwnership(address newOwnerAddr) external;
-
     function addToReserveFunds() external payable;
-
-    function setFeesEnabled(bool enabled) external;
-    function getFeeRecipients() external view returns (address, address);
-    function setFeeRecipients(address netFeeRecipient, address congestionFeeRecipient) external;
 
     function setFairGasPriceSender(address addr, bool isFairGasPriceSender) external;
     function isFairGasPriceSender(address addr) external view returns(bool);
     function getAllFairGasPriceSenders() external view returns(bytes memory);
-
-    function setGasAccountingParams(uint speedLimitPerBlock, uint gasPoolMax, uint maxTxGasLimit) external;
-
-    function setSecondsPerSend(uint blocksPerSend) external;
 
     // Deploy a contract on the chain
     // The contract is deployed as if it was submitted by deemedSender with deemedNonce
@@ -45,6 +35,11 @@ interface ArbOwner {
     function addAllowedSender(address addr) external;
     function removeAllowedSender(address addr) external;
     function getAllAllowedSenders() external view returns(bytes memory);  // reverts if all or nearly all senders are allowed
+
+    // Get and set chain parameters
+    function getChainParameter(uint which) external view returns(uint);
+    function setChainParameter(uint which, uint value) external;
+    function serializeAllParameters() external view returns(bytes memory);
 
     function getTotalOfEthBalances() external view returns(uint);
 }
