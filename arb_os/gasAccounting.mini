@@ -1137,6 +1137,10 @@ public impure func updateL1GasPriceEstimate(sender: address, price: uint) {
     }
 }
 
+public func updateBatchSizeEstimate(_size: uint, _sender: address) {
+    // do nothing -- this will be removed in a future PR
+}
+
 public impure func isFairGasPriceSender(sender: address) -> bool {
     return setOfAddresses_contains(globalL1GasPriceEstimator.fairGasPriceSenders, sender);
 }
@@ -1246,7 +1250,7 @@ public impure func allowedSenders_allowNone() {
 public impure func allowedSenders_contains(addr: address) -> bool {
     return setOfAddresses_contains(gasAccountingInfo.allowedSenders, addr)
         || (addr == address(0))
-        || (Some(addr) == chainParams_getOwner());
+        || (addr == chainParams_getOwner());
 }
 
 public impure func allowedSenders_add(addr: address) {

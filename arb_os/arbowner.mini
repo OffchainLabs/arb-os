@@ -59,7 +59,6 @@ use gasAccounting::allowedSenders_contains;
 use gasAccounting::allowedSenders_add;
 use gasAccounting::allowedSenders_remove;
 use gasAccounting::allowedSenders_serialize;
-use gasAccounting::getAddressForReserveFundsDeposit;
 
 use inbox::inbox_currentArbBlockNumber;
 use inbox::inbox_currentEthBlockNumber;
@@ -116,8 +115,6 @@ public impure func arbowner_txcall() {
            arbowner_finishCodeUploadAsArbosUpgrade(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_finishCodeUploadAsPluggable) {
            arbowner_finishCodeUploadAsPluggable(topFrame, calldata);
-        } elseif (funcCode == const::funcCode_ArbOwner_addToReserveFunds) {
-            arbowner_addToReserveFunds(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_setFairGasPriceSender) {
             arbowner_setFairGasPriceSender(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_isFairGasPriceSender) {
@@ -156,26 +153,11 @@ public impure func arbowner_txcall() {
     }
 }
 
-impure func arbowner_addToReserveFunds(topFrame: EvmCallFrame, calldata: ByteArray) { // () payable
-    if (bytearray_size(calldata) != 4) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 50, 0, 0);
-    }
-    let callvalue = evmCallFrame_getCallvalue(topFrame);
-    if (callvalue > 0) {
-        gasAccounting_addToReserveInCurrentContext(callvalue);
-    }
-    evmOp_return(0, 0);
-}
-
 impure func arbowner_setFairGasPriceSender(_topFrame: EvmCallFrame, calldata: ByteArray) { // (address)
     if (bytearray_size(calldata) != 68) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 210, 0, 0);
     }
     setFairGasPriceSender(address(bytearray_get256(calldata, 4)), bytearray_get256(calldata, 36)!=0);
-        if (evmCallStack_transferEthFromCurrent(getAddressForReserveFundsDeposit(), callvalue) == None<()>) {
-            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 51, 0, 0);
-        }
-    }
     evmOp_return(0, 0);
 }
 

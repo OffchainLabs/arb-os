@@ -758,6 +758,7 @@ public impure func evmCallStack_doCall(
         } else {
             true
         };
+        
         evmTracer_pushCallAndResultNoExecution(
             kind,
             bytearray_extract(topFrame.memory, argsOffset, argsLength),

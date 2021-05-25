@@ -4,8 +4,6 @@ interface ArbOwner {
     // Support actions that can be taken by the chain's owner.
     // All methods will revert, unless the caller is the chain's owner.
 
-    function addToReserveFunds() external payable;
-
     function setFairGasPriceSender(address addr, bool isFairGasPriceSender) external;
     function isFairGasPriceSender(address addr) external view returns(bool);
     function getAllFairGasPriceSenders() external view returns(bytes memory);

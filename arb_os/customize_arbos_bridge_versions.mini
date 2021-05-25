@@ -51,10 +51,18 @@ public func set_gasAccountingInfo_onUpgrade(
     };
 }
 
-public func set_globalCallStack_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
+public func set_globalCallStack_onUpgrade(_input_globals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
     return None<EvmCallFrame>;
 }
 
 public func set_globalCurrentTxRequest_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> TxRequestData {
     return unsafecast<TxRequestData>(input_globals.globalCurrentTxRequest);
+}
+
+public func set___fixedLocationGlobal_onUpgrade(_input_globals: GlobalsBeforeUpgrade) -> impure func(uint) {
+    return unsafecast<impure func(uint)>(0);
+}
+
+public func set_globalChainParameters_onUpgrade(_input_globals: GlobalsBeforeUpgrade) -> map<uint, uint> {
+    return newmap<uint, uint>;
 }
