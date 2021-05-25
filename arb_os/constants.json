@@ -224,6 +224,7 @@
   "contract_folder": "contracts/artifacts/arbos/builtin",
   "contract": [
     "ArbAggregator",
+    "ArbosTest",
     "ArbOwner",
     "ArbRetryableTx",
     "ArbStatistics"
