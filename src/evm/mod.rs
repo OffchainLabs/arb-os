@@ -3,7 +3,6 @@
  */
 
 use crate::evm::abi::FunctionTable;
-use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest};
 use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys};
 use crate::evm::preinstalled_contracts::ArbosTest;
 use crate::run::{load_from_file, load_from_file_and_env, RuntimeEnvironment};
