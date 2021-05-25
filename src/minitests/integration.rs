@@ -10,10 +10,7 @@ fn compile_run_cycle(input: String) -> Machine {
     compile.test_mode = true;
     compile.consts_file = Some(format!("arb_os/constants.json"));
     let mexe = compile.invoke().unwrap();
-    let mut machine = Machine::new(
-        mexe,
-        RuntimeEnvironment::new(None),
-    );
+    let mut machine = Machine::new(mexe, RuntimeEnvironment::new(None));
     run(&mut machine, vec![], false).unwrap();
     machine
 }

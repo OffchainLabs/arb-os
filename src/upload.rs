@@ -2,6 +2,7 @@
  * Copyright 2021, Offchain Labs, Inc. All rights reserved.
  */
 
+use crate::compile::miniconstants::init_constant_table;
 use crate::evm::abi::ArbSys;
 use crate::evm::preinstalled_contracts::_ArbOwner;
 use crate::evm::{test_contract_path, AbiForContract};
@@ -16,7 +17,6 @@ use std::fmt;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use crate::compile::miniconstants::init_constant_table;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct CodeUploader {
@@ -200,9 +200,11 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     match init_constant_table(Some(Path::new("arb_os/constants.json"))) {
         Ok(t) => match t.get("ArbosVersionNumber") {
             Some(val) => assert_eq!(&arbsys_orig_binding._arbos_version(&mut machine)?, val),
-            None => { return Err(ethabi::Error::from("could not find ArbosVersionNumber")) },
+            None => return Err(ethabi::Error::from("could not find ArbosVersionNumber")),
         },
-        Err(e) => { return Err(ethabi::Error::from(e.to_string())); }
+        Err(e) => {
+            return Err(ethabi::Error::from(e.to_string()));
+        }
     }
 
     arbowner._give_ownership(&mut machine, my_addr, true)?;
