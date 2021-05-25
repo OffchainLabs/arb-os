@@ -148,7 +148,9 @@ public impure func evmOps_init() {
         with  { [const::EvmOp_selfdestruct] = unsafecast<impure func()>(evmOp_selfdestruct) }
         with  { [const::EvmOp_create] = unsafecast<impure func()>(evmOp_create) }
         with  { [const::EvmOp_create2] = unsafecast<impure func()>(evmOp_create2) }
-        with  { [const::EvmOp_chainId] = unsafecast<impure func()>(chainParams_chainId) };
+        with  { [const::EvmOp_chainId] = unsafecast<impure func()>(chainParams_chainId) }
+        with  { [const::EvmOp_gas] = unsafecast<impure func()>(evmOp_gas) };
+
 }
 
 public impure func getEvmOpJumpTable() -> [const::NumEvmOps]impure func() {
@@ -695,6 +697,10 @@ public impure func evmOp_log4(
 
     evm_runtimePanic(27);
     panic;
+}
+
+public impure func evmOp_gas() -> uint {
+    return (asm() uint { getgas }) / const::Charging_ArbGasPerAvmGas;
 }
 
 #[noinline, ] public impure func evmOp_callAndReturn(
