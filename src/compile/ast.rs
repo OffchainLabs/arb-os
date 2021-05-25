@@ -168,7 +168,7 @@ impl Type {
         }
     }
 
-    pub fn downcastable(
+    pub fn covariant_castable(
         &self,
         rhs: &Self,
         type_tree: &TypeTree,
@@ -186,28 +186,28 @@ impl Type {
             Type::Buffer | Type::Void | Type::Every => rhs == self,
             Type::Tuple(tvec) => {
                 if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
-                    type_vectors_downcastable(tvec, &tvec2, type_tree, seen)
+                    type_vectors_covariant_castable(tvec, &tvec2, type_tree, seen)
                 } else {
                     false
                 }
             }
             Type::Array(t) => {
                 if let Ok(Type::Array(t2)) = rhs.get_representation(type_tree) {
-                    t.downcastable(&t2, type_tree, seen)
+                    t.covariant_castable(&t2, type_tree, seen)
                 } else {
                     false
                 }
             }
             Type::FixedArray(t, s) => {
                 if let Ok(Type::FixedArray(t2, s2)) = rhs.get_representation(type_tree) {
-                    (*s == s2) && t.downcastable(&t2, type_tree, seen)
+                    (*s == s2) && t.covariant_castable(&t2, type_tree, seen)
                 } else {
                     false
                 }
             }
             Type::Struct(fields) => {
                 if let Ok(Type::Struct(fields2)) = rhs.get_representation(type_tree) {
-                    field_vectors_downcastable(fields, &fields2, type_tree, seen)
+                    field_vectors_covariant_castable(fields, &fields2, type_tree, seen)
                 } else {
                     false
                 }
@@ -218,7 +218,7 @@ impl Type {
                     rhs.get_representation(type_tree),
                 ) {
                     if seen.insert((left.clone(), right.clone())) {
-                        left.downcastable(&right, type_tree, seen)
+                        left.covariant_castable(&right, type_tree, seen)
                     } else {
                         true
                     }
@@ -229,8 +229,8 @@ impl Type {
             Type::Func(_, args, ret) => {
                 if let Type::Func(_, args2, ret2) = rhs {
                     //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
-                    type_vectors_downcastable(args2, args, type_tree, seen.clone())
-                        && (ret.downcastable(ret2, type_tree, seen))
+                    type_vectors_covariant_castable(args2, args, type_tree, seen.clone())
+                        && (ret.covariant_castable(ret2, type_tree, seen))
                 } else {
                     false
                 }
@@ -238,8 +238,8 @@ impl Type {
             Type::Map(key1, val1) => {
                 if let Type::Map(key2, val2) = rhs {
                     if let Ok(val2) = val2.get_representation(type_tree) {
-                        key1.downcastable(key2, type_tree, seen.clone())
-                            && (val1.downcastable(&val2, type_tree, seen))
+                        key1.covariant_castable(key2, type_tree, seen.clone())
+                            && (val1.covariant_castable(&val2, type_tree, seen))
                     } else {
                         false
                     }
@@ -884,7 +884,7 @@ impl Type {
     }
 }
 
-pub fn type_vectors_downcastable(
+pub fn type_vectors_covariant_castable(
     tvec1: &[Type],
     tvec2: &[Type],
     type_tree: &TypeTree,
@@ -894,7 +894,7 @@ pub fn type_vectors_downcastable(
         && tvec1
             .iter()
             .zip(tvec2)
-            .all(|(t1, t2)| t1.downcastable(t2, type_tree, seen.clone()))
+            .all(|(t1, t2)| t1.covariant_castable(t2, type_tree, seen.clone()))
 }
 
 pub fn type_vectors_castable(
@@ -925,17 +925,17 @@ pub fn type_vectors_assignable(
             .all(|(t1, t2)| t1.assignable(t2, type_tree, seen.clone()))
 }
 
-fn field_vectors_downcastable(
+fn field_vectors_covariant_castable(
     tvec1: &[StructField],
     tvec2: &[StructField],
     type_tree: &TypeTree,
     seen: HashSet<(Type, Type)>,
 ) -> bool {
     tvec1.len() == tvec2.len()
-        && tvec1
-            .iter()
-            .zip(tvec2)
-            .all(|(t1, t2)| t1.tipe.downcastable(&t2.tipe, type_tree, seen.clone()))
+        && tvec1.iter().zip(tvec2).all(|(t1, t2)| {
+            t1.tipe
+                .covariant_castable(&t2.tipe, type_tree, seen.clone())
+        })
 }
 
 fn field_vectors_castable(
@@ -1363,7 +1363,7 @@ pub enum ExprKind {
     StructMod(Box<Expr>, String, Box<Expr>),
     WeakCast(Box<Expr>, Type),
     Cast(Box<Expr>, Type),
-    DownCast(Box<Expr>, Type),
+    CovariantCast(Box<Expr>, Type),
     UnsafeCast(Box<Expr>, Type),
     Asm(Type, Vec<Instruction>, Vec<Expr>),
     Panic,

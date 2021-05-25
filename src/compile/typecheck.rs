@@ -2379,7 +2379,7 @@ fn typecheck_expr(
                     ))
                 }
             }
-            ExprKind::DownCast(expr, t) => {
+            ExprKind::CovariantCast(expr, t) => {
                 let tc_expr = typecheck_expr(
                     expr,
                     type_table,
@@ -2389,12 +2389,12 @@ fn typecheck_expr(
                     type_tree,
                     scopes,
                 )?;
-                if t.downcastable(&tc_expr.get_type(), type_tree, HashSet::new()) {
+                if t.covariant_castable(&tc_expr.get_type(), type_tree, HashSet::new()) {
                     Ok(TypeCheckedExprKind::Cast(Box::new(tc_expr), t.clone()))
                 } else {
                     Err(new_type_error(
                         format!(
-                            "Cannot downcast from type {} to type {}",
+                            "Cannot covariant cast from type {} to type {}",
                             tc_expr.get_type().display(),
                             t.display()
                         ),
