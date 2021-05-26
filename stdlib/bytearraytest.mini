@@ -11,7 +11,6 @@ use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_get64;
-use std::bytearray::bytearray_set64;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_marshalFull;

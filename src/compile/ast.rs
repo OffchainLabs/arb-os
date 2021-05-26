@@ -10,7 +10,7 @@ use crate::compile::path_display;
 use crate::compile::typecheck::{
     AbstractSyntaxTree, InliningMode, PropertiesList, TypeCheckedNode,
 };
-use crate::link::{value_from_field_list, TUPLE_SIZE};
+use crate::link::{value_from_field_list, TUPLE_SIZE, Import};
 use crate::mavm::{Instruction, Value};
 use crate::pos::Location;
 use crate::stringtable::StringId;
@@ -64,7 +64,8 @@ pub enum TopLevelDecl {
     TypeDecl(TypeDecl),
     FuncDecl(Func),
     VarDecl(GlobalVarDecl),
-    UseDecl(Vec<String>, String),
+    UseDecl(Import),
+    ConstDecl,
 }
 
 ///Type Declaration, contains the StringId corresponding to the type name, and the underlying Type.
@@ -151,7 +152,49 @@ impl Type {
         }
         Ok(base_type)
     }
-
+    
+    ///Finds all nominal sub-types present under a type
+    pub fn find_nominals(&self) -> Vec<usize> {
+        match self {
+            Type::Nominal(_, id) => {
+                vec![*id]
+            }
+            Type::Array(tipe)
+            | Type::FixedArray(tipe, ..)
+            | Type::Option(tipe) => {
+                tipe.find_nominals()
+            }
+            Type::Tuple(entries) => {
+                let mut tipes = vec![];
+                for entry in entries {
+                    tipes.extend(entry.find_nominals());
+                }
+                tipes
+            }
+            Type::Func(_, args, ret) => {
+                let mut tipes = ret.find_nominals();
+                for arg in args {
+                    tipes.extend(arg.find_nominals());
+                }
+                tipes
+            }
+            Type::Struct(fields) => {
+                let mut tipes = vec![];
+                for field in fields {
+                    tipes.extend(field.tipe.find_nominals());
+                }
+                tipes
+            }
+            
+            Type::Map(domain_tipe, codomain_tipe) => {
+                let mut tipes = domain_tipe.find_nominals();
+                tipes.extend(codomain_tipe.find_nominals());
+                tipes
+            }
+            _ => vec![],
+        }
+    }
+    
     ///If self is a Struct, and name is the StringID of a field of self, then returns Some(n), where
     /// n is the index of the field of self whose ID matches name.  Otherwise returns None.
     pub fn get_struct_slot_by_name(&self, name: String) -> Option<usize> {
@@ -167,7 +210,7 @@ impl Type {
             _ => None,
         }
     }
-
+    
     ///Returns true if rhs is a subtype of self, and false otherwise
     pub fn assignable(
         &self,

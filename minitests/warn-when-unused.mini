@@ -2,6 +2,39 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+const UsedConstant = 0x10000000000000000;
+const UnusedConstant = 0x10000000000000000;
+
+use std::random::random_new;
+use std::random::random_new;
+use std::random::RandomGenerator;
+use std::random::RandomGenerator;
+
+use std::queue::Queue;
+use std::queue::queue_new;
+
+use std::priorityq::PriorityQ;
+use std::priorityq::priorityq_isEmpty;
+use std::priorityq::priorityq_new;
+
+use std::bytearray::ByteArray;
+use std::outputbuffer::OutputBuffer;
+
+type FixedPoint = struct {
+   val: uint,
+   shiftFactor: ByteArray,
+}
+
+func use_statements(arg: option<RandomGenerator>) -> (option<RandomGenerator>, option<option<option<Queue>>>) {
+    
+    let a = struct {
+        val: arg,
+        array: None<OutputBuffer>,
+    };
+    
+    return (Some(random_new(bytes32(0))), Some(Some(Some(queue_new()))));
+}
+
 var unused_global: uint;
 var used_global: uint;
 
@@ -10,7 +43,7 @@ public func main() {
     asm(used_global,) { log };
 }
 
-func crazy(n: uint, unused_arg : uint, unused_arg2 : bool, _intentional : uint) -> uint {
+func crazy(n: uint, unused_arg: uint, unused_arg2: bool, _intentional: uint) -> uint {
     
     let (x, y) = (4, 8);
     let y = { let ux = x + 4; ux };
@@ -59,7 +92,7 @@ func crazy(n: uint, unused_arg : uint, unused_arg2 : bool, _intentional : uint) 
         unreachable_variable = 4;
         return unreachable_variable;
         
-        cond = 4;
+        cond = 4;    // is unreachable but still a valid assignment
     }
     return v;
     
@@ -67,14 +100,14 @@ func crazy(n: uint, unused_arg : uint, unused_arg2 : bool, _intentional : uint) 
     
     let with_init = newfixedarray(8, 0);
     let (newSlotContents, returnValue) = (1, 2);
-    struct {
+    let some_struct = struct {
         bloc: with_init with { [0] = newSlotContents },
         val: returnValue,
     };
     
     let x = asm() uint { };
     let y = asm() uint { };
-    Some(struct { x: x + 1, y: y });
+    let some_option = Some(struct { x: x + 1, y: y });
     
     let unreachable_variable = 4;
     return unreachable_variable;

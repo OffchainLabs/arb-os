@@ -9,6 +9,7 @@ OptionConst, FieldInitializer, new_func_arg, new_type_decl};
 use crate::compile::InliningMode;
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
+use crate::link::Import;
 use crate::pos::BytePos;
 use crate::mavm::{Value, Instruction, Opcode};
 use crate::uint256::Uint256;
@@ -23,7 +24,7 @@ extern {
 }
 
 pub Decls: Vec<TopLevelDecl> = {
-	<a: ("#![" <Attributes> "]")?><mut i:ImportDecl*> <mut n:NonImportDecl+> => {
+	<a: ("#![" <Attributes> "]")?><mut i:HeadDecl*> <mut n:BodyDecl+> => {
         i.append(&mut n);
         for decl in &mut i {
             if let (TopLevelDecl::FuncDecl(func), Some(attr)) = (decl, a) {
@@ -34,12 +35,12 @@ pub Decls: Vec<TopLevelDecl> = {
         },
 }
 
-ImportDecl: TopLevelDecl = {
-    "use" <mut p: PathDecl> ";" => {
+HeadDecl: TopLevelDecl = {
+    <lno: @L> "use" <mut p: PathDecl> ";" => {
         let file = p.pop().expect("Internal error: Path vector was empty");
-        TopLevelDecl::UseDecl(p, file)
+        TopLevelDecl::UseDecl(Import::new(p, file, file_info.location(BytePos::from(lno), filename)))
     },
-    <d: ImportDecl> "const" <n: IdentString> "=" <u: UnsignedInteger> ";" => { constants.insert(n, u);  d },
+    "const" <n: IdentString> "=" <u: UnsignedInteger> ";" => { constants.insert(n, u); TopLevelDecl::ConstDecl },
 }
 
 PathDecl: Vec<String> = {
@@ -50,7 +51,7 @@ PathDecl: Vec<String> = {
     },
 }
 
-NonImportDecl: TopLevelDecl = {
+BodyDecl: TopLevelDecl = {
 	TypeDecl => TopLevelDecl::TypeDecl(<>),
 	FuncDecl => TopLevelDecl::FuncDecl(<>),
 	GlobalVarDecl => TopLevelDecl::VarDecl(<>),

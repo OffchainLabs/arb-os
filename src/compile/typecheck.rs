@@ -10,7 +10,7 @@ use super::ast::{
     Type, TypeTree, UnaryOp,
 };
 use crate::compile::ast::FieldInitializer;
-use crate::compile::{CompileError, FileInfo, InliningHeuristic};
+use crate::compile::{CompileError, WarningSystem, InliningHeuristic};
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::{Column, Location};
@@ -339,14 +339,43 @@ fn inline(
     }
 }
 
+///Discovers which import statements have been used
+fn flowcheck_imports(
+    mut nodes: Vec<TypeCheckedNode>,
+    imports: &mut BTreeMap<usize, Import>,
+) {
+    for node in &mut nodes {
+        
+        if let TypeCheckedNode::Expression(expr) = node {
+            
+            let nominals = match &expr.kind {
+                TypeCheckedExprKind::Cast(_, tipe)
+                | TypeCheckedExprKind::Const(_, tipe)
+                | TypeCheckedExprKind::NewArray(_, _, tipe) => tipe.find_nominals(),
+                _ => vec![],
+            };
+            for nominal in &nominals {
+                imports.remove(nominal);
+            }
+            
+            // observe any function calls or pointers
+            if let TypeCheckedExprKind::FuncRef(id, _) = &expr.kind {
+                imports.remove(&id);
+            }
+        }
+        
+        flowcheck_imports(node.child_nodes(), imports);
+    }
+}
+
 ///Discovers code segments that could never be executed
 fn flowcheck_reachability<T: AbstractSyntaxTree>(
     node: &mut T,
-    file_info_chart: &BTreeMap<u64, FileInfo>,
-) {
+) -> Vec<CompileError>{
     let mut children = node.child_nodes();
     let mut child_iter = children.iter_mut();
-
+    
+    let mut warnings  = vec![];
     let mut locations = vec![];
 
     for child in &mut child_iter {
@@ -359,10 +388,10 @@ fn flowcheck_reachability<T: AbstractSyntaxTree>(
                 TypeCheckedStatementKind::Expression(expr) => match &mut expr.kind {
                     TypeCheckedExprKind::If(_, block, else_block, ..)
                     | TypeCheckedExprKind::IfLet(_, _, block, else_block, ..) => {
-                        flowcheck_reachability(block, file_info_chart);
+                        warnings.extend(flowcheck_reachability(block));
 
                         if let Some(branch) = else_block {
-                            flowcheck_reachability(branch, file_info_chart);
+                            warnings.extend(flowcheck_reachability(branch));
                         }
 
                         continue;
@@ -374,7 +403,7 @@ fn flowcheck_reachability<T: AbstractSyntaxTree>(
             _ => {}
         }
 
-        flowcheck_reachability(child, file_info_chart);
+        warnings.extend(flowcheck_reachability(child));
     }
 
     match child_iter.next() {
@@ -388,10 +417,10 @@ fn flowcheck_reachability<T: AbstractSyntaxTree>(
     };
 
     if locations.len() <= 1 {
-        return;
+        return warnings;
     }
-
-    CompileError::new(
+    
+    warnings.push(CompileError::new(
         String::from("Compile warning"),
         if locations.len() == 2 {
             String::from("found unreachable statement")
@@ -400,8 +429,9 @@ fn flowcheck_reachability<T: AbstractSyntaxTree>(
         },
         locations,
         true,
-    )
-    .warn(file_info_chart);
+    ));
+    
+    warnings
 }
 
 ///Discovers assigned values that are never used
@@ -640,81 +670,83 @@ impl TypeCheckedFunc {
 
     pub fn flowcheck(
         &mut self,
-        _funcs: &Vec<TypeCheckedFunc>,
-        _imported_funcs: &Vec<ImportedFunc>,
+        imports: &mut BTreeMap<usize, Import>,
         string_table: &mut StringTable,
-        file_info_chart: &BTreeMap<u64, FileInfo>,
-    ) {
-        let yellow = "\x1b[33;1m";
-        let reset = "\x1b[0;0m";
-
-        flowcheck_reachability(self, file_info_chart);
-
+        warning_system: &WarningSystem,
+    ) -> Vec<CompileError> {
+        
+        let mut flowcheck_warnings = vec![];
+        
+        flowcheck_imports(self.child_nodes(), imports);
+        
+        for id in self.tipe.find_nominals() {
+            imports.remove(&id);
+        }
+        
+        flowcheck_warnings.extend(flowcheck_reachability(self));
+        
         let mut unused_assignments = vec![];
-
+        
         let (killed, reborn) =
             flowcheck_liveliness(self.child_nodes(), &mut unused_assignments, false);
-
+        
         for arg in self.args.iter() {
             // allow intentional lack of use
             if !string_table.name_from_id(arg.name.clone()).starts_with('_') {
                 if !killed.contains(&arg.name) {
-                    CompileError::new(
+                    flowcheck_warnings.push(CompileError::new(
                         String::from("Compile warning"),
                         format!(
                             "func {}{}{}'s argument {}{}{} is declared but never used",
-                            yellow,
+                            warning_system.warn_color,
                             string_table.name_from_id(self.name.clone()),
-                            reset,
-                            yellow,
+                            CompileError::RESET,
+                            warning_system.warn_color,
                             string_table.name_from_id(arg.name.clone()),
-                            reset,
+                            CompileError::RESET,
                         ),
                         arg.debug_info.location.into_iter().collect(),
                         true,
-                    )
-                    .warn(file_info_chart);
+                    ));
                 }
 
                 if let Some(loc) = reborn.get(&arg.name) {
-                    CompileError::new(
+                    flowcheck_warnings.push(CompileError::new(
                         String::from("Compile warning"),
                         format!(
                             "func {}{}{}'s argument {}{}{} is assigned but never used",
-                            yellow,
+                            warning_system.warn_color,
                             string_table.name_from_id(self.name.clone()),
-                            reset,
-                            yellow,
+                            CompileError::RESET,
+                            warning_system.warn_color,
                             string_table.name_from_id(arg.name.clone()),
-                            reset,
+                            CompileError::RESET,
                         ),
                         vec![*loc],
                         true,
-                    )
-                    .warn(file_info_chart);
+                    ));
                 }
             }
         }
-
-        unused_assignments.sort_by(|a, b| a.0.line.to_usize().cmp(&b.0.line.to_usize()));
-
+        
         for &(loc, id) in unused_assignments.iter() {
             // allow intentional lack of use
             if !string_table.name_from_id(id.clone()).starts_with('_') {
-                CompileError::new(
+                flowcheck_warnings.push(CompileError::new(
                     String::from("Compile warning"),
                     format!(
                         "value {}{}{} is assigned but never used",
-                        yellow,
+                        warning_system.warn_color,
                         string_table.name_from_id(id.clone()),
-                        reset
+                        CompileError::RESET,
                     ),
                     vec![loc],
                     true,
-                )
-                .warn(file_info_chart);
+                ));
             }
         }
+        
+        flowcheck_warnings
     }
 }
 
@@ -1026,7 +1058,7 @@ type TypeCheckedFieldInitializer = FieldInitializer<TypeCheckedExpr>;
 
 impl AbstractSyntaxTree for TypeCheckedFieldInitializer {
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
-        self.value.child_nodes()
+        vec![TypeCheckedNode::Expression(&mut self.value)]
     }
     fn is_pure(&mut self) -> bool {
         self.value.is_pure()
@@ -1039,27 +1071,27 @@ fn builtin_func_decls() -> Vec<Import> {
     vec![
         Import::new(
             vec!["core".to_string(), "array".to_string()],
-            "builtin_arrayNew".to_string(),
+            "builtin_arrayNew".to_string(), None,
         ),
         Import::new(
             vec!["core".to_string(), "array".to_string()],
-            "builtin_arrayGet".to_string(),
+            "builtin_arrayGet".to_string(), None,
         ),
         Import::new(
             vec!["core".to_string(), "array".to_string()],
-            "builtin_arraySet".to_string(),
+            "builtin_arraySet".to_string(), None,
         ),
         Import::new(
             vec!["core".to_string(), "kvs".to_string()],
-            "builtin_kvsNew".to_string(),
+            "builtin_kvsNew".to_string(), None,
         ),
         Import::new(
             vec!["core".to_string(), "kvs".to_string()],
-            "builtin_kvsGet".to_string(),
+            "builtin_kvsGet".to_string(), None,
         ),
         Import::new(
             vec!["core".to_string(), "kvs".to_string()],
-            "builtin_kvsSet".to_string(),
+            "builtin_kvsSet".to_string(), None,
         ),
     ]
 }
@@ -1092,8 +1124,11 @@ pub fn sort_top_level_decls(
             TopLevelDecl::VarDecl(vd) => {
                 global_vars.push(vd.clone());
             }
-            TopLevelDecl::UseDecl(path, filename) => {
-                imports.push(Import::new(path.clone(), filename.clone()));
+            TopLevelDecl::UseDecl(ud) => {
+                imports.push(ud.clone());
+            }
+            TopLevelDecl::ConstDecl => {
+                
             }
         }
     }
@@ -1104,7 +1139,7 @@ pub fn sort_top_level_decls(
 /// named `Type`s, and global variables.
 pub fn typecheck_top_level_decls(
     funcs: Vec<Func>,
-    named_types: HashMap<usize, Type>,
+    named_types: &HashMap<usize, Type>,
     global_vars: Vec<GlobalVarDecl>,
     string_table: StringTable,
     func_map: HashMap<usize, Type>,
