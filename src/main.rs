@@ -102,6 +102,8 @@ struct WasmTest {
     #[clap(short, long)]
     param: Option<String>,
     #[clap(short, long)]
+    param_file: Option<String>,
+    #[clap(short, long)]
     debug: bool,
 }
 
@@ -292,9 +294,15 @@ fn main() -> Result<(), CompileError> {
                 println!("no input");
                 return Ok(());
             }
-            let param = match fname.param {
-                Some(p) => hex::decode(p).unwrap(),
-                None => vec![],
+            let param = match (fname.param, fname.param_file) {
+                (Some(p), _) => hex::decode(p).unwrap(),
+                (_, Some(file)) => {
+                    let mut file = File::open(&file).unwrap();
+                    let mut buffer = Vec::<u8>::new();
+                    file.read_to_end(&mut buffer).unwrap();
+                    buffer
+                }
+                _ => vec![],
             };
             let mut file = File::open(&filenames[0]).unwrap();
             let mut buffer = Vec::<u8>::new();
