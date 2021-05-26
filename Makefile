@@ -22,7 +22,7 @@ COMPILEFLAGS = -c "arb_os/constants.json" -i "none"
 COMPILEFLAGSNOINLINE = -c "arb_os/constants.json"
 
 
-all: $(ARBOSCONTRACTS) $(TESTFILES) $(TESTCONTRACTS) $(TEMPLATES) $(UPGRADEFILES) arbos upgrade test
+all: $(ARBOSCONTRACTS) $(TESTFILES) $(TESTCONTRACTS) $(TEMPLATES) $(UPGRADEFILES) arbos upgrade paramslist test
 arbos: $(ARBOSDIR)/arbos.mexe
 upgrade: $(ARBOSDIR)/upgrade.json
 contracts: $(TESTCONTRACTS) $(ARBOSCONTRACTS)
@@ -125,6 +125,11 @@ $(TESTCONTRACTSPURE): $(TCSRCDIR)
 
 $(ARBOSCONTRACTS): $(ACSRCDIR)
 	(cd contracts; yarn install; yarn build)
+
+paramslist: parameters.json
+
+parameters.json: compiler $(ARBOSDIR)/constants.json
+	$(CARGORUN) make-parameters-list -c $(ARBOSDIR)/constants.json >parameters.json
 
 compiler:
 	cargo build --release

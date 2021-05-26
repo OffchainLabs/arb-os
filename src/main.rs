@@ -107,7 +107,7 @@ struct SerializeUpgrade {
 }
 
 #[derive(Clap, Debug)]
-struct MakeConstantList {
+struct MakeParametersList {
     #[clap(short, long)]
     pub consts_file: Option<String>,
 }
@@ -127,7 +127,7 @@ enum Args {
     EvmTests(EvmTests),
     GenUpgradeCode(GenUpgrade),
     SerializeUpgrade(SerializeUpgrade),
-    MakeConstantList(MakeConstantList),
+    MakeParametersList(MakeParametersList),
 }
 
 fn main() -> Result<(), CompileError> {
@@ -295,12 +295,13 @@ fn main() -> Result<(), CompileError> {
             print!("{}", the_json.unwrap());
             print_time = false;
         }
-        Args::MakeConstantList(clist) => {
+        Args::MakeParametersList(clist) => {
             let constants_map = make_parameters_list(clist.consts_file.as_ref().map(|s| Path::new(s))).unwrap();
             match serde_json::to_string(&constants_map) {
                 Ok(s) => { println!("{}", s); }
                 Err(e) => { panic!("{}", e); }
             }
+            print_time = false;
         }
     }
     let total_time = Instant::now() - start_time;
