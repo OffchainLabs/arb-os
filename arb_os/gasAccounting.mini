@@ -166,17 +166,12 @@ public impure func gasAccounting_notifyParamsChanged() {
 impure func setupParameters(isInit: bool) {
     setGasAccountingParamsFromSpeedLimit(chainParams_getOrDie(const::Atom_Param_SpeedLimitPerSecond));
 
-    let l1GasPerL2Tx = 50000;   // will be eliminated in a future PR
     let l1GasPerL1CalldataUnit = chainParams_getOrDie(const::Atom_Param_L1GasPerL1CalldataUnit);
     let l1GasPerStorage = chainParams_getOrDie(const::Atom_Param_L1GasPerStorage);
     let arbGasDivisor = chainParams_getOrDie(const::Atom_Param_ArbGasDivisor);
     let pricingParams = struct {
-        l1GasPerL2Tx: l1GasPerL2Tx,
-        arbGasPerL2Tx: l1GasPerL2Tx * arbGasDivisor,
         l1GasPerL1CalldataUnit: l1GasPerL1CalldataUnit,
-        arbGasPerL1CalldataUnit: l1GasPerL1CalldataUnit * arbGasDivisor,
         l1GasPerStorage: l1GasPerStorage,
-        arbGasPerStorage: l1GasPerStorage * arbGasDivisor,
         arbGasDivisor: arbGasDivisor,
     };
 
@@ -417,12 +412,8 @@ public impure func gasAccounting_setFeesEnabled(enabled: bool) {
 }
 
 public impure func gasAccounting_setChargingParams(
-    l1GasPerL2Tx: uint,
-    arbGasPerL2Tx: uint,
     l1GasPerL1CalldataUnit: uint,
-    arbGasPerL1CalldataUnit: uint,
     l1GasPerStorage: uint,
-    arbGasPerStorage: uint,
     arbGasDivisor: uint,
     netFeeRecipient: address,
     congestionFeeRecipient: address,
