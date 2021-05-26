@@ -10,7 +10,7 @@ use crate::compile::path_display;
 use crate::compile::typecheck::{
     AbstractSyntaxTree, InliningMode, PropertiesList, TypeCheckedNode,
 };
-use crate::link::{value_from_field_list, TUPLE_SIZE, Import};
+use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
 use crate::mavm::{Instruction, Value};
 use crate::pos::Location;
 use crate::stringtable::StringId;
@@ -152,16 +152,14 @@ impl Type {
         }
         Ok(base_type)
     }
-    
+
     ///Finds all nominal sub-types present under a type
     pub fn find_nominals(&self) -> Vec<usize> {
         match self {
             Type::Nominal(_, id) => {
                 vec![*id]
             }
-            Type::Array(tipe)
-            | Type::FixedArray(tipe, ..)
-            | Type::Option(tipe) => {
+            Type::Array(tipe) | Type::FixedArray(tipe, ..) | Type::Option(tipe) => {
                 tipe.find_nominals()
             }
             Type::Tuple(entries) => {
@@ -185,7 +183,7 @@ impl Type {
                 }
                 tipes
             }
-            
+
             Type::Map(domain_tipe, codomain_tipe) => {
                 let mut tipes = domain_tipe.find_nominals();
                 tipes.extend(codomain_tipe.find_nominals());
@@ -194,7 +192,7 @@ impl Type {
             _ => vec![],
         }
     }
-    
+
     ///If self is a Struct, and name is the StringID of a field of self, then returns Some(n), where
     /// n is the index of the field of self whose ID matches name.  Otherwise returns None.
     pub fn get_struct_slot_by_name(&self, name: String) -> Option<usize> {
@@ -210,7 +208,7 @@ impl Type {
             _ => None,
         }
     }
-    
+
     ///Returns true if rhs is a subtype of self, and false otherwise
     pub fn assignable(
         &self,

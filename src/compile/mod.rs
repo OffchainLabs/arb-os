@@ -45,7 +45,7 @@ pub struct CompileStruct {
     #[clap(short, long)]
     pub test_mode: bool,
     #[clap(short, long)]
-    pub warnings_are_errors : bool,
+    pub warnings_are_errors: bool,
     #[clap(short, long)]
     pub output: Option<String>,
     #[clap(short, long)]
@@ -119,7 +119,9 @@ struct TypeCheckedModule {
 }
 
 impl CompileStruct {
-    pub fn invoke(&self) -> Result<LinkedProgram, (CompileError, Vec<CompileError>, BTreeMap<u64, FileInfo>)> {
+    pub fn invoke(
+        &self,
+    ) -> Result<LinkedProgram, (CompileError, Vec<CompileError>, BTreeMap<u64, FileInfo>)> {
         let mut file_info_chart = BTreeMap::new();
         let mut compiled_progs = Vec::new();
         let mut warning_system = WarningSystem {
@@ -128,9 +130,9 @@ impl CompileStruct {
             warn_color: match self.warnings_are_errors {
                 true => CompileError::PINK,
                 false => CompileError::YELLOW,
-            }
+            },
         };
-        
+
         for filename in &self.input {
             let path = Path::new(filename);
             let constants_path = match &self.consts_file {
@@ -138,7 +140,11 @@ impl CompileStruct {
                 None => None,
             };
             match compile_from_file(
-                path, &mut file_info_chart, &self.inline, constants_path, &mut warning_system
+                path,
+                &mut file_info_chart,
+                &self.inline,
+                constants_path,
+                &mut warning_system,
             ) {
                 Ok(idk) => idk,
                 Err(mut e) => {
@@ -172,12 +178,12 @@ impl CompileStruct {
                 return Err((e, warning_system.warnings, file_info_chart));
             }
         };
-        
+
         match warning_system.process(&file_info_chart) {
             Ok(()) => {}
-            Err(e) => return Err((e, warning_system.warnings, file_info_chart))
+            Err(e) => return Err((e, warning_system.warnings, file_info_chart)),
         }
-        
+
         Ok(postlinked_prog)
     }
 }
@@ -244,15 +250,13 @@ impl TypeCheckedModule {
     }
     ///Reasons about control flow and construct usage within the typechecked AST
     fn flowcheck(&mut self, warning_system: &mut WarningSystem) {
-        
         let mut flow_warnings = vec![];
-        
+
         let mut imports: BTreeMap<usize, Import> = BTreeMap::new();
-        
+
         for import in self.imports.iter() {
-            
             let id = self.string_table.get_if_exists(&import.name).unwrap();
-            
+
             if let Some(prior) = imports.get(&id) {
                 flow_warnings.push(CompileError::new(
                     String::from("Compile warning"),
@@ -262,38 +266,40 @@ impl TypeCheckedModule {
                         import.name,
                         CompileError::RESET,
                     ),
-                    prior.location.into_iter().chain(
-                        import.location.into_iter()
-                    ).collect(),
+                    prior
+                        .location
+                        .into_iter()
+                        .chain(import.location.into_iter())
+                        .collect(),
                     true,
                 ));
             }
-            
+
             if import.path[0] != "core" {
                 imports.insert(*id, import.clone());
             }
         }
-        
+
         for global in &self.global_vars {
             for nominal in &global.tipe.find_nominals() {
                 imports.remove(nominal);
             }
         }
-        
+
         for (_id, tipe) in &self.named_types {
             for nominal in &tipe.find_nominals() {
                 imports.remove(nominal);
             }
         }
-        
+
         for f in &mut self.checked_funcs.clone() {
             flow_warnings.extend(f.flowcheck(
-                &mut imports,              // will remove from imports everything used
+                &mut imports, // will remove from imports everything used
                 &mut self.string_table,
                 warning_system,
             ));
         }
-        
+
         for (_id, import) in imports {
             flow_warnings.push(CompileError::new(
                 String::from("Compile warning"),
@@ -307,12 +313,16 @@ impl TypeCheckedModule {
                 true,
             ));
         }
-        
-        flow_warnings.sort_by(
-            |a, b| 
-            a.locations.last().unwrap().line.to_usize().cmp(&b.locations.last().unwrap().line.to_usize())
-        );
-        
+
+        flow_warnings.sort_by(|a, b| {
+            a.locations
+                .last()
+                .unwrap()
+                .line
+                .to_usize()
+                .cmp(&b.locations.last().unwrap().line.to_usize())
+        });
+
         warning_system.warnings.extend(flow_warnings);
     }
 }
@@ -565,13 +575,14 @@ pub fn compile_from_folder(
         out.sort_by(|module1, module2| module2.name.cmp(&module1.name));
         out
     });
-    let mut typechecked_modules = typecheck_programs(&type_tree, modules, file_info_chart, warning_system)?;
-    
+    let mut typechecked_modules =
+        typecheck_programs(&type_tree, modules, file_info_chart, warning_system)?;
+
     // Control flow analysis stage
     typechecked_modules
         .iter_mut()
         .for_each(|module| module.flowcheck(warning_system));
-    
+
     // Inlining stage
     if let Some(cool) = inline {
         typechecked_modules
@@ -579,7 +590,13 @@ pub fn compile_from_folder(
             .for_each(|module| module.inline(cool));
     }
 
-    let progs = codegen_programs(typechecked_modules, file_info_chart, warning_system, type_tree, folder)?;
+    let progs = codegen_programs(
+        typechecked_modules,
+        file_info_chart,
+        warning_system,
+        type_tree,
+        folder,
+    )?;
     Ok(progs)
 }
 
@@ -617,7 +634,7 @@ fn create_program_tree(
     } else {
         vec![vec![main.to_owned()]]
     };
-    
+
     let mut programs = HashMap::new();
     let mut import_map = HashMap::new();
     let mut seen_paths = HashSet::new();
@@ -867,9 +884,9 @@ fn codegen_programs(
         string_table,
         imported_funcs,
         exported_funcs,
-        named_types : _,
+        named_types: _,
         global_vars,
-        imports : _,
+        imports: _,
         name,
     } in typechecked_modules
     {
@@ -1023,15 +1040,17 @@ impl CompileError {
             is_warning,
         }
     }
-    
-    const RED:    &'static str = "\x1b[31;1m";
-    const BLUE:   &'static str = "\x1b[34;1m";
+
+    const RED: &'static str = "\x1b[31;1m";
+    const BLUE: &'static str = "\x1b[34;1m";
     const YELLOW: &'static str = "\x1b[33;1m";
-    const PINK:   &'static str = "\x1b[38;5;161;1m";
-    const RESET:  &'static str = "\x1b[0;0m";
+    const PINK: &'static str = "\x1b[38;5;161;1m";
+    const RESET: &'static str = "\x1b[0;0m";
 
     pub fn pretty_fmt(
-        &self, file_info_chart: &BTreeMap<u64, FileInfo>, warnings_are_errors : bool
+        &self,
+        file_info_chart: &BTreeMap<u64, FileInfo>,
+        warnings_are_errors: bool,
     ) -> String {
         let blue = CompileError::BLUE;
         let reset = CompileError::RESET;
@@ -1040,10 +1059,10 @@ impl CompileError {
             true => match warnings_are_errors {
                 true => CompileError::PINK,
                 false => CompileError::YELLOW,
-            }
+            },
             false => CompileError::RED,
         };
-        
+
         let last_line = &self.locations.last();
 
         let mut pretty = format!(
@@ -1129,7 +1148,7 @@ impl WarningSystem {
                 String::from("Compile Error"),
                 String::from("Found warning with -w on"),
                 vec![],
-                false
+                false,
             ))
         } else {
             Ok(())

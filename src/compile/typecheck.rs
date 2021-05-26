@@ -10,7 +10,7 @@ use super::ast::{
     Type, TypeTree, UnaryOp,
 };
 use crate::compile::ast::FieldInitializer;
-use crate::compile::{CompileError, WarningSystem, InliningHeuristic};
+use crate::compile::{CompileError, InliningHeuristic, WarningSystem};
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::{Column, Location};
@@ -340,14 +340,9 @@ fn inline(
 }
 
 ///Discovers which import statements have been used
-fn flowcheck_imports(
-    mut nodes: Vec<TypeCheckedNode>,
-    imports: &mut BTreeMap<usize, Import>,
-) {
+fn flowcheck_imports(mut nodes: Vec<TypeCheckedNode>, imports: &mut BTreeMap<usize, Import>) {
     for node in &mut nodes {
-        
         if let TypeCheckedNode::Expression(expr) = node {
-            
             let nominals = match &expr.kind {
                 TypeCheckedExprKind::Cast(_, tipe)
                 | TypeCheckedExprKind::Const(_, tipe)
@@ -357,25 +352,23 @@ fn flowcheck_imports(
             for nominal in &nominals {
                 imports.remove(nominal);
             }
-            
+
             // observe any function calls or pointers
             if let TypeCheckedExprKind::FuncRef(id, _) = &expr.kind {
                 imports.remove(&id);
             }
         }
-        
+
         flowcheck_imports(node.child_nodes(), imports);
     }
 }
 
 ///Discovers code segments that could never be executed
-fn flowcheck_reachability<T: AbstractSyntaxTree>(
-    node: &mut T,
-) -> Vec<CompileError>{
+fn flowcheck_reachability<T: AbstractSyntaxTree>(node: &mut T) -> Vec<CompileError> {
     let mut children = node.child_nodes();
     let mut child_iter = children.iter_mut();
-    
-    let mut warnings  = vec![];
+
+    let mut warnings = vec![];
     let mut locations = vec![];
 
     for child in &mut child_iter {
@@ -419,7 +412,7 @@ fn flowcheck_reachability<T: AbstractSyntaxTree>(
     if locations.len() <= 1 {
         return warnings;
     }
-    
+
     warnings.push(CompileError::new(
         String::from("Compile warning"),
         if locations.len() == 2 {
@@ -430,7 +423,7 @@ fn flowcheck_reachability<T: AbstractSyntaxTree>(
         locations,
         true,
     ));
-    
+
     warnings
 }
 
@@ -674,22 +667,21 @@ impl TypeCheckedFunc {
         string_table: &mut StringTable,
         warning_system: &WarningSystem,
     ) -> Vec<CompileError> {
-        
         let mut flowcheck_warnings = vec![];
-        
+
         flowcheck_imports(self.child_nodes(), imports);
-        
+
         for id in self.tipe.find_nominals() {
             imports.remove(&id);
         }
-        
+
         flowcheck_warnings.extend(flowcheck_reachability(self));
-        
+
         let mut unused_assignments = vec![];
-        
+
         let (killed, reborn) =
             flowcheck_liveliness(self.child_nodes(), &mut unused_assignments, false);
-        
+
         for arg in self.args.iter() {
             // allow intentional lack of use
             if !string_table.name_from_id(arg.name.clone()).starts_with('_') {
@@ -728,7 +720,7 @@ impl TypeCheckedFunc {
                 }
             }
         }
-        
+
         for &(loc, id) in unused_assignments.iter() {
             // allow intentional lack of use
             if !string_table.name_from_id(id.clone()).starts_with('_') {
@@ -745,7 +737,7 @@ impl TypeCheckedFunc {
                 ));
             }
         }
-        
+
         flowcheck_warnings
     }
 }
@@ -1071,27 +1063,33 @@ fn builtin_func_decls() -> Vec<Import> {
     vec![
         Import::new(
             vec!["core".to_string(), "array".to_string()],
-            "builtin_arrayNew".to_string(), None,
+            "builtin_arrayNew".to_string(),
+            None,
         ),
         Import::new(
             vec!["core".to_string(), "array".to_string()],
-            "builtin_arrayGet".to_string(), None,
+            "builtin_arrayGet".to_string(),
+            None,
         ),
         Import::new(
             vec!["core".to_string(), "array".to_string()],
-            "builtin_arraySet".to_string(), None,
+            "builtin_arraySet".to_string(),
+            None,
         ),
         Import::new(
             vec!["core".to_string(), "kvs".to_string()],
-            "builtin_kvsNew".to_string(), None,
+            "builtin_kvsNew".to_string(),
+            None,
         ),
         Import::new(
             vec!["core".to_string(), "kvs".to_string()],
-            "builtin_kvsGet".to_string(), None,
+            "builtin_kvsGet".to_string(),
+            None,
         ),
         Import::new(
             vec!["core".to_string(), "kvs".to_string()],
-            "builtin_kvsSet".to_string(), None,
+            "builtin_kvsSet".to_string(),
+            None,
         ),
     ]
 }
@@ -1127,9 +1125,7 @@ pub fn sort_top_level_decls(
             TopLevelDecl::UseDecl(ud) => {
                 imports.push(ud.clone());
             }
-            TopLevelDecl::ConstDecl => {
-                
-            }
+            TopLevelDecl::ConstDecl => {}
         }
     }
     (imports, funcs, named_types, global_vars, func_table)

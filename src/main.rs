@@ -130,7 +130,9 @@ fn main() -> Result<(), CompileError> {
     match matches {
         Args::Compile(compile) => match do_compile(compile) {
             Ok(_) => {}
-            Err((err, _warnings, file_info_chart)) => eprintln!("{}", err.pretty_fmt(&file_info_chart, false)),
+            Err((err, _warnings, file_info_chart)) => {
+                eprintln!("{}", err.pretty_fmt(&file_info_chart, false))
+            }
         },
 
         Args::Run(run) => {
@@ -300,7 +302,9 @@ fn main() -> Result<(), CompileError> {
     Ok(())
 }
 
-fn do_compile(compile: CompileStruct) -> Result<(), (CompileError, Vec<CompileError>, BTreeMap<u64, FileInfo>)> {
+fn do_compile(
+    compile: CompileStruct,
+) -> Result<(), (CompileError, Vec<CompileError>, BTreeMap<u64, FileInfo>)> {
     let mut output = get_output(compile.output.clone()).unwrap();
     compile
         .invoke()?

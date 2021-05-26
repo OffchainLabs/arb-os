@@ -5,8 +5,8 @@
 //!Provides types and utilities for linking together compiled mini programs
 
 use crate::compile::{
-    comma_list, CompileError, WarningSystem, CompiledProgram, DebugInfo, FileInfo, GlobalVarDecl, 
-    SourceFileMap, Type, TypeTree,
+    comma_list, CompileError, CompiledProgram, DebugInfo, FileInfo, GlobalVarDecl, SourceFileMap,
+    Type, TypeTree, WarningSystem,
 };
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::{try_display_location, Location};
@@ -131,11 +131,13 @@ pub struct Import {
 
 impl Import {
     pub fn new(path: Vec<String>, name: String, location: Option<Location>) -> Self {
-        Import { path, name, location }
+        Import {
+            path,
+            name,
+            location,
+        }
     }
 }
-
-
 
 ///Represents a function imported from another mini program or module.
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
