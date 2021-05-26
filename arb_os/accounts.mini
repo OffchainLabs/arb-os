@@ -4,6 +4,7 @@
 
 use retrybuffer::RetryBuffer;
 use retrybuffer::retryBuffer_new;
+use retrybuffer::retryBuffer_setDefaultLifetime;
 
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
@@ -82,6 +83,7 @@ type AccountContractInfo = struct {
 type AggregatorInfo = struct {
     decompressionState: option<AggregatorDecompressionState>,
     feeCollector: address,    // address to pay this aggregator's fees to (could be, e.g., aggregator's cold wallet)
+    baseTxFeeL1Gas: uint,
 }
 
 // globalAccountStore is the authoritative source of info on accounts that exist on this chain
@@ -106,6 +108,12 @@ public func escrowStore_new() -> EscrowStore {
     return struct {
         nextKey: 1,     // key 0 is pre-reserved for escrowing the current tx's gas funds
         escrowedValues: storageMap_new(),
+    };
+}
+
+public impure func accounts_notifyParamsChanged() {
+    globalAccountStore = globalAccountStore with {
+        retryBuffer: retryBuffer_setDefaultLifetime(globalAccountStore.retryBuffer)
     };
 }
 
@@ -315,6 +323,7 @@ public func account_setAggregatorDecompressionState(
                 struct {
                     decompressionState: maybeState,
                     feeCollector: account.addr,
+                    baseTxFeeL1Gas: const::Charging_DefaultBaseTxFeeL1Gas,
                 }
             }
         )
@@ -344,6 +353,25 @@ public func account_setFeeCollector(account: Account, newCollector: address) -> 
                 struct {
                     decompressionState: None<AggregatorDecompressionState>,
                     feeCollector: newCollector,
+                    baseTxFeeL1Gas: const::Charging_DefaultBaseTxFeeL1Gas,
+                }
+            }
+        )
+    };
+}
+
+public func account_setBaseTxFeeL1Gas(account: Account, fee: uint) -> Account {
+    return account with {
+        aggregatorInfo: Some(
+            xif let Some(aggInfo) = account.aggregatorInfo {
+                aggInfo with {
+                    baseTxFeeL1Gas: fee
+                }
+            } else {
+                struct {
+                    decompressionState: None<AggregatorDecompressionState>,
+                    feeCollector: account.addr,
+                    baseTxFeeL1Gas: fee,
                 }
             }
         )
