@@ -1,5 +1,5 @@
 {
-  "arbos_version": 22,
+  "arbos_version": 23,
   "integer": {
     "AVMSendType_batch": 0,
     "AVM_add": 1,
@@ -107,6 +107,7 @@
     "EVMCallType_staticcall": 3,
     "EVMNonZeroBalanceCallStipend": 2300,
     "EVMWriteL1GasCost": 5000,
+    "EscrowStoreID_txGas": 0,
     "Estimate_L1GasCostPerNode": 220000,
     "Estimate_L1GasPrice": 100000000000,
     "EvmOp_address": 2,
