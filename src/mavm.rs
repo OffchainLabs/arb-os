@@ -360,7 +360,7 @@ pub struct BufferInternal {
     capacity: u128,
     left: Rc<BufferNode>,
     right: Rc<BufferNode>,
-    hash_val: Uint256,
+    // hash_val: Uint256,
 }
 
 impl Buffer {
@@ -491,11 +491,6 @@ impl BufferNode {
                 capacity,
                 left: left.clone(),
                 right: right.clone(),
-                hash_val: {
-                    let mut b = left.hash().to_bytes_be();
-                    b.extend(right.hash().to_bytes_be());
-                    Uint256::from_bytes(&keccak256(&b))
-                },
             })
         } else {
             let mid = (capacity / 2) as usize;
@@ -514,11 +509,6 @@ impl BufferNode {
                 capacity,
                 left: left.clone(),
                 right: right.clone(),
-                hash_val: {
-                    let mut b = left.hash().to_bytes_be();
-                    b.extend(right.hash().to_bytes_be());
-                    Uint256::from_bytes(&keccak256(&b))
-                },
             })
         }
     }
@@ -534,19 +524,14 @@ impl BufferNode {
             capacity,
             left: child.clone(),
             right: child.clone(),
-            hash_val: {
-                let a = child.hash().to_bytes_be();
-                let mut b = a.clone();
-                b.extend(a);
-                Uint256::from_bytes(&keccak256(&b))
-            },
         })
     }
 
     fn hash(&self) -> Uint256 {
         match self {
             BufferNode::Leaf(b) => Uint256::from_bytes(&keccak256(&b[..])),
-            BufferNode::Internal(x) => x.hash_val.clone(),
+            // BufferNode::Internal(x) => x.hash_val.clone(),
+            BufferNode::Internal(x) => Uint256::from_usize(0),
         }
     }
 
@@ -589,11 +574,6 @@ impl BufferInternal {
             capacity,
             left: Rc::new(left.clone()),
             right: Rc::new(right.clone()),
-            hash_val: {
-                let mut b = left.hash().to_bytes_be();
-                b.extend(right.hash().to_bytes_be());
-                Uint256::from_bytes(&keccak256(&b))
-            },
         }
     }
 
@@ -1062,7 +1042,7 @@ pub enum AVMOpcode {
     MakeWasm,
     JumpTable = 0xb0,
     CjumpTable,
-    
+
 }
 
 impl Opcode {
