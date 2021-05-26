@@ -161,3 +161,55 @@ fn event_topics_for_builtin_contract(
     }
     Ok(ret)
 }
+
+pub fn make_parameters_list(constants_path: Option<&Path>) -> Result<HashMap<String, String>, CompileError> {
+    let mut ret = HashMap::new();
+
+    let consts = if let Some(consts_file) = constants_path {
+        let mut file = File::open(consts_file).map_err(|_| {
+            CompileError::new(
+                String::from("Compile error"),
+                format!("Could not open constants file {:?}", consts_file),
+                vec![],
+                false,
+            )
+        })?;
+        let mut consts_string = String::new();
+        file.read_to_string(&mut consts_string).map_err(|_| {
+            CompileError::new(
+                String::from("Compile error"),
+                format!("Could not read file {:?} to a string", consts_file),
+                vec![],
+                false,
+            )
+        })?;
+        serde_json::from_str::<ConstantsFile>(&consts_string).map_err(|_| {
+            CompileError::new(
+                String::from("Compile error"),
+                format!("Could not parse {:?} as constants file", consts_file),
+                vec![],
+                false,
+            )
+        })?
+    } else {
+        ConstantsFile::default()
+    };
+
+    for (s, _) in consts.parameters_int {
+        let mut ss = s.as_bytes();
+        ret.insert(
+            "".to_owned() + &s,
+            hex::encode( keccak(&mut ss).as_bytes()),
+        );
+    }
+
+    for (s, _) in consts.parameters_hex {
+        let mut ss = s.as_bytes();
+        ret.insert(
+            "".to_owned() + &s,
+            hex::encode( keccak(&mut ss).as_bytes()),
+        );
+    }
+
+    Ok(ret)
+}

@@ -22,6 +22,7 @@ use std::io;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
+use crate::compile::miniconstants::make_parameters_list;
 
 mod compile;
 mod contracttemplates;
@@ -105,6 +106,12 @@ struct SerializeUpgrade {
     input: String,
 }
 
+#[derive(Clap, Debug)]
+struct MakeConstantList {
+    #[clap(short, long)]
+    pub consts_file: Option<String>,
+}
+
 ///Main enum for command line arguments.
 #[derive(Clap, Debug)]
 enum Args {
@@ -120,6 +127,7 @@ enum Args {
     EvmTests(EvmTests),
     GenUpgradeCode(GenUpgrade),
     SerializeUpgrade(SerializeUpgrade),
+    MakeConstantList(MakeConstantList),
 }
 
 fn main() -> Result<(), CompileError> {
@@ -286,6 +294,13 @@ fn main() -> Result<(), CompileError> {
             let the_json = CodeUploader::_new_from_file(Path::new(&up.input))._to_json();
             print!("{}", the_json.unwrap());
             print_time = false;
+        }
+        Args::MakeConstantList(clist) => {
+            let constants_map = make_parameters_list(clist.consts_file.as_ref().map(|s| Path::new(s))).unwrap();
+            match serde_json::to_string(&constants_map) {
+                Ok(s) => { println!("{}", s); }
+                Err(e) => { panic!("{}", e); }
+            }
         }
     }
     let total_time = Instant::now() - start_time;
