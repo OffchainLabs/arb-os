@@ -32,6 +32,21 @@ pub struct ValueStack {
     contents: im::Vector<Value>,
 }
 
+fn get_from_table_aux(v: &Value, num: usize, depth: usize) -> Value {
+    if depth == 0 {
+        v.clone()
+    } else if let Value::Tuple(vec) = v {
+        let n = num & 0x7;
+        get_from_table_aux(&vec[n], num/8, depth-1)
+    } else {
+        panic!("stub")
+    }
+}
+
+fn get_from_table(v: &Value, num: usize) -> Value {
+    get_from_table_aux(v, num, 5)
+}
+
 impl ValueStack {
     pub fn new() -> Self {
         ValueStack {
@@ -1359,6 +1374,8 @@ impl Machine {
                 AVMOpcode::RunWasm => 1000000,
                 AVMOpcode::CompileWasm => 100,
                 AVMOpcode::MakeWasm => 100,
+                AVMOpcode::JumpTable => 10,
+                AVMOpcode::CjumpTable => 10,
             })
         } else {
             None
@@ -1418,6 +1435,19 @@ impl Machine {
         }
     }
 
+    fn find_jump(&self, num: usize) -> Result<CodePt,ExecutionError> {
+        if let Value::Tuple(val) = &self.register {
+            let elem = get_from_table(&val[1], num);
+            if let Value::CodePoint(pt) = elem {
+                Ok(pt)
+            } else {
+                Err(ExecutionError::new("Cannot resolve jump", &self.state, None))
+            }
+        } else {
+            Err(ExecutionError::new("Cannot resolve jump", &self.state, None))
+        }
+    }
+
     fn run_one_dont_catch_errors(&mut self, _debug: bool) -> Result<bool, ExecutionError> {
         if let MachineState::Running(pc) = self.state {
             if let Some(insn) = self.code.get_insn(pc) {
@@ -1454,6 +1484,23 @@ impl Machine {
                     }
                     AVMOpcode::Zero | AVMOpcode::Panic => {
                         Err(ExecutionError::new("panicked", &self.state, None))
+                    }
+                    AVMOpcode::JumpTable => {
+                        let num = self.stack.pop_usize(&self.state)?;
+                        let cp = self.find_jump(num)?;
+                        self.state = MachineState::Running(cp);
+                        Ok(true)
+                    }
+                    AVMOpcode::CjumpTable => {
+                        let num = self.stack.pop_usize(&self.state)?;
+                        let cond = self.stack.pop_uint(&self.state)?;
+                        if cond != Uint256::zero() {
+                            let cp = self.find_jump(num)?;
+                            self.state = MachineState::Running(cp);
+                        } else {
+                            self.incr_pc();
+                        }
+                        Ok(true)
                     }
                     AVMOpcode::Jump => {
                         self.state = MachineState::Running(self.stack.pop_codepoint(&self.state)?);
