@@ -2247,7 +2247,10 @@ fn test_congestion_price_adjustment() {
         .runtime_env
         ._advance_time(Uint256::one(), None, true);
 
-    assert_eq!(arbgasinfo._get_prices_in_wei(&mut machine).unwrap().4, Uint256::zero());
+    assert_eq!(
+        arbgasinfo._get_prices_in_wei(&mut machine).unwrap().4,
+        Uint256::zero()
+    );
 
     let arbtest = ArbosTest::new(false);
     let mut seen_any_congestion = false;
@@ -2260,7 +2263,7 @@ fn test_congestion_price_adjustment() {
             Ok(rc) => rc,
             Err(_) => panic!(),
         };
-        assert!( (!seen_any_congestion && (res_code == 0)) || (res_code == 2) );   // success or congestion
+        assert!((!seen_any_congestion && (res_code == 0)) || (res_code == 2)); // success or congestion
         if (res_code == 2) {
             seen_any_congestion = true;
         }
@@ -2276,7 +2279,9 @@ fn test_congestion_price_adjustment() {
     let prices = arbgasinfo._get_prices_in_wei(&mut machine).unwrap();
     assert!(prices.4 > Uint256::zero());
 
-    machine.runtime_env._advance_time(Uint256::from_u64(4), Some(Uint256::from_u64(60)), false);
+    machine
+        .runtime_env
+        ._advance_time(Uint256::from_u64(4), Some(Uint256::from_u64(60)), false);
     let prices2 = arbgasinfo._get_prices_in_wei(&mut machine).unwrap();
     assert_eq!(prices2.4, Uint256::zero());
 }
