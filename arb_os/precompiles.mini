@@ -94,7 +94,6 @@ public impure func precompiles_init(acctStore: AccountStore, isUpgrade: bool) ->
         address(0x05),
         bindContractAddressToPluggable(
             accountStore_get(acctStore, address(0x05)),
-            address(0x05),
             const::PluggableModuleID_precompile_0x05,
         ),
     );
@@ -248,8 +247,7 @@ public impure func precompile_0x02() {  // sha256
         let calldata = evmCallFrame_getCalldata(topFrame);
         let result = sha256_byteArray(calldata);
         let success = evmCallStack_setTopFrameMemory(
-            bytearray_set256(
-            bytearray_new(0), 0, uint(result))
+            bytearray_set256(bytearray_new(0), 0, uint(result))
         );
         if (success) {
             evmOp_return(0, 32);
@@ -336,8 +334,8 @@ public impure func precompile_0x05() {  // modexp
 
 func precompile_0x05_pluggable(
     args: (EvmCallFrame, ByteArray, any),
-    state: any,
-    firstTime: bool
+    _state: any,
+    _firstTime: bool
 ) -> (any, any) {  // return ((success: bool, returnData: ByteArray), any)
     let (_, calldata, _) = args;
 

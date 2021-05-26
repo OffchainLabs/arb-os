@@ -2,8 +2,15 @@
  * Copyright 2021, Offchain Labs, Inc. All rights reserved.
  */
 
+use crate::compile::miniconstants::init_constant_table;
+use crate::evm::abi::ArbSys;
+use crate::evm::preinstalled_contracts::_ArbOwner;
+use crate::evm::{test_contract_path, AbiForContract};
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, Instruction};
+use crate::run::load_from_file;
+use crate::uint256::Uint256;
+use ethers_signers::Signer;
 use rustc_hex::ToHex;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -165,4 +172,66 @@ fn test_code_upload_prep() {
     assert_eq!(uploader.num_total, uploader.num_so_far);
     let reconstituted = CodeUploader::_from_json(&uploader.clone()._to_json().unwrap());
     assert_eq!(uploader, reconstituted);
+}
+
+#[test]
+fn _test_upgrade_arbos_to_different_version() {
+    _test_upgrade_arbos_over_itself_impl().unwrap();
+}
+
+fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
+    let mut machine = load_from_file(Path::new("arb_os/arbos_before.mexe"));
+    machine.start_at_zero();
+
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
+    if add_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .is_err()
+    {
+        panic!("failed to deploy Add contract");
+    }
+
+    let arbowner = _ArbOwner::_new(&wallet, false);
+
+    let arbsys_orig_binding = ArbSys::new(&wallet, false);
+    match init_constant_table(Some(Path::new("arb_os/constants.json"))) {
+        Ok(t) => match t.get("ArbosVersionNumber") {
+            Some(val) => assert_eq!(&arbsys_orig_binding._arbos_version(&mut machine)?, val),
+            None => return Err(ethabi::Error::from("could not find ArbosVersionNumber")),
+        },
+        Err(e) => {
+            return Err(ethabi::Error::from(e.to_string()));
+        }
+    }
+
+    arbowner._give_ownership(&mut machine, my_addr, true)?;
+
+    let uploader = CodeUploader::_new_from_file(Path::new("arb_os/arbos-upgrade.mexe"));
+    arbowner._start_code_upload(&mut machine)?;
+
+    let mut accum = vec![];
+    for buf in uploader.instructions {
+        accum.extend(buf);
+        if (accum.len() > 3000) {
+            arbowner._continue_code_upload(&mut machine, accum)?;
+            accum = vec![];
+        }
+    }
+    if (accum.len() > 0) {
+        arbowner._continue_code_upload(&mut machine, accum)?;
+    }
+
+    let expected_code_hash = arbowner._get_uploaded_code_hash(&mut machine)?;
+    arbowner._finish_code_upload_as_arbos_upgrade(&mut machine, expected_code_hash)?;
+
+    let wallet2 = machine.runtime_env.new_wallet();
+    let arbsys = ArbSys::new(&wallet2, false);
+    let arbos_version = arbsys._arbos_version(&mut machine)?;
+    let arbos_version_orig = arbsys_orig_binding._arbos_version(&mut machine)?;
+    assert_eq!(arbos_version, arbos_version_orig);
+
+    Ok(())
 }

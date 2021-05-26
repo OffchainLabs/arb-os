@@ -181,7 +181,7 @@ func getSomeOr(x: option<any>, backupVal: any) -> any {
 	};
 }
 
-func sumForKvsIterator(key: uint, value: uint, state: any) -> any {
+func sumForKvsIterator(_key: uint, value: uint, state: any) -> any {
 	return value + unsafecast<uint>(state);
 }
 

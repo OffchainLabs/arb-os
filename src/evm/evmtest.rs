@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::abi::ArbosTest;
+use crate::evm::preinstalled_contracts::ArbosTest;
 use crate::run::{load_from_file_and_env, Machine, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use std::collections::HashMap;
@@ -190,13 +190,7 @@ fn storage_from_jval(jval: serde_json::Value) -> HashMap<Uint256, Uint256> {
 }
 
 fn start_test(blocknum: Uint256, timestamp: Uint256) -> (Machine, ArbosTest) {
-    let rt_env = RuntimeEnvironment::new_with_blocknum_timestamp(
-        Uint256::from_usize(1111),
-        blocknum,
-        timestamp,
-        None,
-        None,
-    );
+    let rt_env = RuntimeEnvironment::new_with_blocknum_timestamp(blocknum, timestamp, None, None);
     let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 

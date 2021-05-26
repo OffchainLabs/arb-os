@@ -3,19 +3,20 @@
 //
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
-
 use accounts::AccountStore;
 
+use gasAccounting::TxGasState;
+use gasAccounting::FeeConfig;
+use gasAccounting::GasPrices;
+use gasAccounting::CongestionState;
+use gasAccounting::PricingParameters;
+use gasAccounting::RetryablePrices;
+
+use std::addressSet::SetOfAddresses;
+use std::addressSet::setOfAddresses_all;
+
 use evmCallStack::EvmCallFrame;
-
-use gasAccounting::GasAccountingInfo;
-
-use tracing::EvmTracer;
-use tracing::evmTracer_new;
-
-use std::avmcodebuilder::AvmCodePoint;
-
-use std::merkletree::MerkleTreeBuilder;
+use messages::TxRequestData;
 
 
 public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> AccountStore {
@@ -64,18 +65,46 @@ public func set_codeSegGlobals_onUpgrade(
     };
 }
 
-public func set_globalOutbox_onUpgrade(
+public func set_gasAccountingInfo_onUpgrade(
     input_globals: GlobalsBeforeUpgrade
 ) -> struct {
-    batch: MerkleTreeBuilder,
-    batchNumber: uint,
-    numInBatch: uint,
-    evmTracer: EvmTracer,
+    txState: option<TxGasState>,       // status of currently active tx (if there is one)
+    feeConfig: FeeConfig,              // fee configuration
+    currentPrices: GasPrices,          // current prices for resources
+    gasRemainingThisBlock: uint,       // amount of gas remaining for this Arbitrum block
+    congestionState: CongestionState,  // state of congestion pricing algorithm
+    speedLimitPerSecond: uint,         // nominal ArbGas available for computation per second
+    pricingParams: PricingParameters,  // parameters that affect pricing
+    gasAllocatedToThisBlock: uint,     // total amount of gas allocated to the current Arbitrum block
+    retryablePrices: RetryablePrices,  // prices of retryable txs
+    allowedSenders: SetOfAddresses,    // who is allowed to send txs
 } {
     return struct {
-        batch: input_globals.globalOutbox.batch,
-        batchNumber: input_globals.globalOutbox.batchNumber,
-        numInBatch: input_globals.globalOutbox.numInBatch,
-        evmTracer: evmTracer_new(),
+        txState: input_globals.gasAccountingInfo.txState,
+        feeConfig: input_globals.gasAccountingInfo.feeConfig,
+        currentPrices: input_globals.gasAccountingInfo.currentPrices,
+        gasRemainingThisBlock: input_globals.gasAccountingInfo.gasRemainingThisBlock,
+        congestionState: input_globals.gasAccountingInfo.congestionState,
+        speedLimitPerSecond: input_globals.gasAccountingInfo.speedLimitPerSecond,
+        pricingParams: input_globals.gasAccountingInfo.pricingParams,
+        gasAllocatedToThisBlock: input_globals.gasAccountingInfo.gasAllocatedToThisBlock,
+        retryablePrices: input_globals.gasAccountingInfo.retryablePrices,
+        allowedSenders: setOfAddresses_all(),
     };
+}
+
+public func set_globalCallStack_onUpgrade(_input_globals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
+    return None<EvmCallFrame>;
+}
+
+public func set_globalCurrentTxRequest_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> TxRequestData {
+    return unsafecast<TxRequestData>(input_globals.globalCurrentTxRequest);
+}
+
+public func set___fixedLocationGlobal_onUpgrade(_input_globals: GlobalsBeforeUpgrade) -> impure func(uint) {
+    return unsafecast<impure func(uint)>(0);
+}
+
+public func set_globalChainParameters_onUpgrade(_input_globals: GlobalsBeforeUpgrade) -> map<uint, uint> {
+    return newmap<uint, uint>;
 }

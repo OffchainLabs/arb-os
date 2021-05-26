@@ -38,7 +38,7 @@ func tests() -> uint {
 	}	
 
 	// check that this wont error
-	let buf2 = setbuffer8(buf2, 10000, 1234);
+	let _ = setbuffer8(buf2, 10000, 1234);
 
 	let ba = bytearray_new(33);
 	if (bytearray_size(ba) != 0) {
@@ -108,7 +108,6 @@ func tests() -> uint {
 		),
 	));
 
-	ba = bytearray_new(67);
 	if let Some(ba2) = bytearray_unmarshalBytes(marshalledStruct) {
         let i = 0;
         while (i < 67) {

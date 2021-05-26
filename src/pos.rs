@@ -5,6 +5,7 @@
 //!
 //! [libsyntax_pos]: https://github.com/rust-lang/rust/blob/master/src/libsyntax_pos/lib.rs
 
+use crate::compile::FileInfo;
 use serde::{Deserialize, Serialize};
 use std::cmp::{self, Ordering};
 use std::collections::BTreeMap;
@@ -137,23 +138,24 @@ impl fmt::Display for Location {
 impl Location {
     pub fn display_with_file(
         &self,
-        file_name_chart: &BTreeMap<u64, String>,
+        file_name_chart: &BTreeMap<u64, FileInfo>,
         line_break: bool,
     ) -> String {
         format!(
             "{}{}In file: {}",
             self,
             if line_break { "\n" } else { " " },
-            file_name_chart
-                .get(&self.file_id)
-                .unwrap_or(&self.file_id.to_string())
+            match &file_name_chart.get(&self.file_id) {
+                None => self.file_id.to_string(),
+                Some(info) => info.name.clone(),
+            }
         )
     }
 }
 
 pub fn try_display_location(
     location: Option<Location>,
-    file_name_chart: &BTreeMap<u64, String>,
+    file_name_chart: &BTreeMap<u64, FileInfo>,
     line_break: bool,
 ) -> String {
     location

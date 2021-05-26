@@ -18,7 +18,7 @@ TESTCONTRACTS = $(ACBUILDDIR)/ArbSys.sol/ArbSys.json $(TESTCONTRACTSPURE)
 UPGRADEFILES = $(UPGRADETESTDIR)/regcopy_old.mexe $(UPGRADETESTDIR)/regcopy_new.mexe $(UPGRADETESTDIR)/upgrade1_old.mexe $(UPGRADETESTDIR)/upgrade1_new.mexe $(UPGRADETESTDIR)/upgrade2_new.mexe
 ARBOSCONTRACTS = $(ACBUILDDIR)/ArbAddressTable.sol/ArbAddressTable.json $(ACBUILDDIR)/ArbBLS.sol/ArbBLS.json $(ACBUILDDIR)/ArbFunctionTable.sol/ArbFunctionTable.json $(ACBUILDDIR)/ArbInfo.sol/ArbInfo.json $(ACBUILDDIR)/ArbOwner.sol/ArbOwner.json $(ACBUILDDIR)/ArbSys.sol/ArbSys.json $(ACBUILDDIR)/ArbosTest.sol/ArbosTest.json $(ACBUILDDIR)/ArbRetryable.sol/ArbRetryable.json
 
-COMPILEFLAGS = -c "arb_os/constants.json"
+COMPILEFLAGS = -c "arb_os/constants.json" -i "none"
 COMPILEFLAGSNOINLINE = -c "arb_os/constants.json"
 
 
@@ -135,6 +135,8 @@ run: compiler
 test:
 	cargo test --release 
 
+evmtest: compiler $(ARBOS)
+
 evmtest: $(ARBOS)
 	$(CARGORUN) evm-tests
 
@@ -148,11 +150,14 @@ testlogs: compiler $(TEMPLATES) $(ARBOS)
 	mkdir testlogs
 	$(CARGORUN) make-test-logs >/dev/null
 
-evmdebug: all
+evmdebug: compiler all
 	$(CARGORUN) evm-debug
 
 benchmark: compiler $(TEMPLATES) $(ARBOS)
 	$(CARGORUN) make-benchmarks
+
+./target/release/mini: src/* src/*/*
+	cargo build --release
 
 clean:
 	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe $(UPGRADETESTDIR)/*.mexe $(ARBOSDIR)/arbos.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/upgrade.json minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini
