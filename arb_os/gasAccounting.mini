@@ -724,8 +724,8 @@ public impure func getNextRequestFromCongestionAuction() -> (
             tx.incomingRequest.arbBlockNumber,
             tx.incomingRequest.timestamp
         );
-        let gasForThisBlock = xif(gasAccountingInfo.congestionState.gasPool > int(0)) {
-            uint(gasAccountingInfo.congestionState.gasPool)
+        let gasForThisBlock = xif(updatedCongestionState.gasPool > int(0)) {
+            uint(updatedCongestionState.gasPool)
         } else {
             0   // gas pool has gone negative; wait until it gets positive
         };
