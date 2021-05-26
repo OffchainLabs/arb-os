@@ -1042,7 +1042,10 @@ pub enum AVMOpcode {
     MakeWasm,
     JumpTable = 0xb0,
     CjumpTable,
-
+    GetBuffer16,
+    GetBuffer32,
+    SetBuffer16,
+    SetBuffer32,
 }
 
 impl Opcode {
@@ -1153,6 +1156,10 @@ impl Opcode {
             "setbuffer8" => Opcode::AVMOpcode(AVMOpcode::SetBuffer8),
             "setbuffer64" => Opcode::AVMOpcode(AVMOpcode::SetBuffer64),
             "setbuffer256" => Opcode::AVMOpcode(AVMOpcode::SetBuffer256),
+            "getbuffer16" => Opcode::AVMOpcode(AVMOpcode::GetBuffer16),
+            "getbuffer32" => Opcode::AVMOpcode(AVMOpcode::GetBuffer32),
+            "setbuffer16" => Opcode::AVMOpcode(AVMOpcode::SetBuffer16),
+            "setbuffer32" => Opcode::AVMOpcode(AVMOpcode::SetBuffer32),
             "makewasm" => Opcode::AVMOpcode(AVMOpcode::MakeWasm),
             "runwasm" => Opcode::AVMOpcode(AVMOpcode::RunWasm),
             "compilewasm" => Opcode::AVMOpcode(AVMOpcode::CompileWasm),
@@ -1266,6 +1273,10 @@ impl AVMOpcode {
             AVMOpcode::SetBuffer8 => "setbuffer8",
             AVMOpcode::SetBuffer64 => "setbuffer64",
             AVMOpcode::SetBuffer256 => "setbuffer256",
+            AVMOpcode::GetBuffer16 => "getbuffer16",
+            AVMOpcode::GetBuffer32 => "getbuffer32",
+            AVMOpcode::SetBuffer16 => "setbuffer16",
+            AVMOpcode::SetBuffer32 => "setbuffer32",
             AVMOpcode::RunWasm => "runwasm",
             AVMOpcode::CompileWasm => "compilewasm",
             AVMOpcode::MakeWasm => "makewasm",
@@ -1456,6 +1467,10 @@ impl AVMOpcode {
             AVMOpcode::MakeWasm => 0xa9,
             AVMOpcode::JumpTable => 0xb0,
             AVMOpcode::CjumpTable => 0xb1,
+            AVMOpcode::GetBuffer16 => 0xb2,
+            AVMOpcode::GetBuffer32 => 0xb3,
+            AVMOpcode::SetBuffer16 => 0xb4,
+            AVMOpcode::SetBuffer32 => 0xb5,
         }
     }
 }
