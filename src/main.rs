@@ -4,6 +4,7 @@
 
 #![allow(unused_parens)]
 
+use crate::compile::miniconstants::make_parameters_list;
 use crate::compile::CompileStruct;
 use crate::link::LinkedProgram;
 use crate::upload::CodeUploader;
@@ -22,7 +23,6 @@ use std::io;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use crate::compile::miniconstants::make_parameters_list;
 
 mod compile;
 mod contracttemplates;
@@ -296,10 +296,15 @@ fn main() -> Result<(), CompileError> {
             print_time = false;
         }
         Args::MakeParametersList(clist) => {
-            let constants_map = make_parameters_list(clist.consts_file.as_ref().map(|s| Path::new(s))).unwrap();
+            let constants_map =
+                make_parameters_list(clist.consts_file.as_ref().map(|s| Path::new(s))).unwrap();
             match serde_json::to_string(&constants_map) {
-                Ok(s) => { println!("{}", s); }
-                Err(e) => { panic!("{}", e); }
+                Ok(s) => {
+                    println!("{}", s);
+                }
+                Err(e) => {
+                    panic!("{}", e);
+                }
             }
             print_time = false;
         }

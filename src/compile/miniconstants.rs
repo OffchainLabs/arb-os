@@ -162,7 +162,9 @@ fn event_topics_for_builtin_contract(
     Ok(ret)
 }
 
-pub fn make_parameters_list(constants_path: Option<&Path>) -> Result<HashMap<String, String>, CompileError> {
+pub fn make_parameters_list(
+    constants_path: Option<&Path>,
+) -> Result<HashMap<String, String>, CompileError> {
     let mut ret = HashMap::new();
 
     let consts = if let Some(consts_file) = constants_path {
@@ -197,18 +199,12 @@ pub fn make_parameters_list(constants_path: Option<&Path>) -> Result<HashMap<Str
 
     for (s, _) in consts.parameters_int {
         let mut ss = s.as_bytes();
-        ret.insert(
-            "".to_owned() + &s,
-            hex::encode( keccak(&mut ss).as_bytes()),
-        );
+        ret.insert("".to_owned() + &s, hex::encode(keccak(&mut ss).as_bytes()));
     }
 
     for (s, _) in consts.parameters_hex {
         let mut ss = s.as_bytes();
-        ret.insert(
-            "".to_owned() + &s,
-            hex::encode( keccak(&mut ss).as_bytes()),
-        );
+        ret.insert("".to_owned() + &s, hex::encode(keccak(&mut ss).as_bytes()));
     }
 
     Ok(ret)
