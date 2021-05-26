@@ -219,7 +219,6 @@
     "BLSSignatureDomainBase": "73a92f91d473214defd5ffa91d036007eb2e6487fffaa551835e988fb24aaa2b",
     "Charging_DefaultCongestionFeeRecipient": "0",
     "Charging_DefaultNetworkFeeRecipient": "0",
-    "EscrowStoreID_txGas": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
     "EVMLogTopicForL2ToL1Send": "5baaa87db386365b5c161be377bc3d8e317e8d98d71a3ca7ed7d555340c8f767",
     "SpecialAccount_gasAccountingReserve": "af6cbc19f66dec07f790912226744d744f04b37b666b9343317df33a5114fb96"
   },
