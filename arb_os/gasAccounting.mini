@@ -42,7 +42,6 @@ use messages::TxRequestData;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
-use std::bytearray::bytearray_get256;
 
 use std::fixedpoint::FixedPoint;
 use std::fixedpoint::fixedPoint_new;
@@ -1196,7 +1195,7 @@ public func deferredPayments_add(dp: DeferredPayments, escrowKey: uint, recipien
     return stack_push(dp, (escrowKey, recipient, amount));
 }
 
-public func deferredPayments_apply(acctStore: AccountStore, dp: DeferredPayments) -> AccountStore {
+public func deferredPayments_apply(acctStore: AccountStore, dp: DeferredPayments) -> option<AccountStore> {
     return xloop {
         if let Some(res) = stack_pop(dp) {
             let (udp, item) = res;
@@ -1206,9 +1205,10 @@ public func deferredPayments_apply(acctStore: AccountStore, dp: DeferredPayments
                 acctStore = uAcctStore;
             } else {
                 asm(11000,) { debugprint };
+                return None<AccountStore>;
             }
         } else {
-            return acctStore;
+            return Some(acctStore);
         }
     };
 }

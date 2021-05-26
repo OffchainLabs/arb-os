@@ -350,9 +350,9 @@ public impure func initEvmCallStack(
                 if let Some(res) = gasAccounting_endTxCharges(int(0), request.feeStats) {
                     // insufficient balance error
                     let (_, gasUsage, feeStats, payments) = res;
-                    setGlobalAccountStore(
-                        deferredPayments_apply(getGlobalAccountStore(), payments)
-                    );
+                    if let Some(uas) = deferredPayments_apply(getGlobalAccountStore(), payments) {
+                        setGlobalAccountStore(uas);
+                    }
                     evmTracer_pushReturnRevert(const::TxResultCode_insufficientBalance, bytearray_new(0), 0);
                     emitTxReceipt(
                         request.incomingRequest,
@@ -906,23 +906,22 @@ public impure func evmCallStack_returnFromCall(
                     }
 
                     // Update the global account store
-                    setGlobalAccountStore(
-                        deferredPayments_apply(
-                            accountStore_set(
-                                topFrame.accountStore,
-                                topFrame.runningAs,
-                                account_setContractInfo(
-                                    topFrame.runningAsAccount,
-                                    returnData,
-                                    evmJumpTable,
-                                    entryPoint,
-                                    storageMap,
-                                    true,
-                                )
-                            ),
-                            deferredPayments,
+                    let acctStore = accountStore_set(
+                        topFrame.accountStore,
+                        topFrame.runningAs,
+                        account_setContractInfo(
+                            topFrame.runningAsAccount,
+                            returnData,
+                            evmJumpTable,
+                            entryPoint,
+                            storageMap,
+                            true,
                         )
                     );
+                    if let Some(uas) = deferredPayments_apply(acctStore, deferredPayments) {
+                        acctStore = uas;
+                    }
+                    setGlobalAccountStore(acctStore);
 
                     returnData = bytearray_set256(
                         bytearray_new(0),
@@ -994,7 +993,10 @@ public impure func evmCallStack_returnFromCall(
                         let updEvmLogs = sendQueuedMessages(topFrame.sendQueue, topFrame.evmLogs);
 
                         // Save results back to the main globalAccountStore
-                        setGlobalAccountStore(deferredPayments_apply(acctStore, deferredPayments));
+                        if let Some(uas) = deferredPayments_apply(acctStore, deferredPayments) {
+                            acctStore = uas;
+                        }
+                        setGlobalAccountStore(acctStore);
 
                         updEvmLogs
                     } else {
@@ -1034,12 +1036,16 @@ public impure func evmCallStack_returnFromCall(
                     feeStats,
                     true,
                 );
-                setGlobalAccountStore(deferredPayments_apply(getGlobalAccountStore(), deferredPayments));
+                if let Some(uas) = deferredPayments_apply(getGlobalAccountStore(), deferredPayments) {
+                    setGlobalAccountStore(uas);
+                }
             }
         } else {
             // Request failed
             let (_, gasUsage, feeStats, payments) = gasAccounting_endTxCharges(int(0), globalCurrentTxRequest.feeStats)?;
-            setGlobalAccountStore(deferredPayments_apply(getGlobalAccountStore(), payments));
+            if let Some(uas) = deferredPayments_apply(getGlobalAccountStore(), payments) {
+                setGlobalAccountStore(uas);
+            }
             if let Some(msg) = topFrame.sendOnFailure {
                 outbox_append(msg);
             }
