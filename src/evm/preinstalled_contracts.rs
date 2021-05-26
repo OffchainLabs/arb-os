@@ -2512,8 +2512,12 @@ fn test_congestion_price_adjustment() {
         .runtime_env
         ._advance_time(Uint256::one(), None, true);
 
+    let randomish_address = Uint256::from_u64(1583913081);
     assert_eq!(
-        arbgasinfo._get_prices_in_wei(&mut machine).unwrap().4,
+        arbgasinfo
+            ._get_prices_in_wei(&mut machine, randomish_address.clone())
+            .unwrap()
+            .4,
         Uint256::zero()
     );
 
@@ -2541,12 +2545,16 @@ fn test_congestion_price_adjustment() {
         ._advance_time(Uint256::one(), None, false);
     let _ = machine.run(None);
 
-    let prices = arbgasinfo._get_prices_in_wei(&mut machine).unwrap();
+    let prices = arbgasinfo
+        ._get_prices_in_wei(&mut machine, randomish_address.clone())
+        .unwrap();
     assert!(prices.4 > Uint256::zero());
 
     machine
         .runtime_env
         ._advance_time(Uint256::from_u64(4), Some(Uint256::from_u64(60)), false);
-    let prices2 = arbgasinfo._get_prices_in_wei(&mut machine).unwrap();
+    let prices2 = arbgasinfo
+        ._get_prices_in_wei(&mut machine, randomish_address.clone())
+        .unwrap();
     assert_eq!(prices2.4, Uint256::zero());
 }
