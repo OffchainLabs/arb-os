@@ -40,4 +40,9 @@ contract Add {
         Fibonacci fib = new Fibonacci();
         return fib.isTopLevel();
     }
+
+    function payTo(address addr) public payable {
+        (bool success,) = addr.call{ value: msg.value }("");
+        require(success);
+    }
 }

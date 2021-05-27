@@ -202,6 +202,11 @@ fn test_direct_deploy_add() {
 }
 
 #[test]
+fn test_pay_eoa_from_contract() {
+    crate::evm::_evm_pay_eoa_from_contract(None, false);
+}
+
+#[test]
 fn test_sha256_precompile() {
     crate::evm::evm_eval_sha256(None, false);
 }
