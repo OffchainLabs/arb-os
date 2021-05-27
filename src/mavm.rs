@@ -910,6 +910,8 @@ pub enum AVMOpcode {
     GetBuffer32,
     SetBuffer16,
     SetBuffer32,
+    GetMemory,
+    SetMemory,
 }
 
 impl Opcode {
@@ -1146,6 +1148,8 @@ impl AVMOpcode {
             AVMOpcode::MakeWasm => "makewasm",
             AVMOpcode::JumpTable => "jumptable",
             AVMOpcode::CjumpTable => "cjumptable",
+            AVMOpcode::GetMemory => "getmemory",
+            AVMOpcode::SetMemory => "setmemory",
         }
     }
 
@@ -1335,6 +1339,7 @@ impl AVMOpcode {
             AVMOpcode::GetBuffer32 => 0xb3,
             AVMOpcode::SetBuffer16 => 0xb4,
             AVMOpcode::SetBuffer32 => 0xb5,
+            _ => 0xff,
         }
     }
 }

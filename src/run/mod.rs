@@ -17,7 +17,7 @@ pub use runtime_env::{
 
 mod blake2b;
 mod emulator;
-mod interp;
+pub mod interp;
 mod ripemd160port;
 mod runtime_env;
 

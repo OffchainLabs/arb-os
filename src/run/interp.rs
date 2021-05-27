@@ -10,47 +10,12 @@ use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Value, WInstruction};
 use crate::uint256::Uint256;
 use std::fmt;
 
-/*
-use super::RuntimeEnvironment;
-use crate::pos::{try_display_location, Location};
-use crate::run::blake2b::blake2bf_instruction;
-use crate::run::ripemd160port;
-use crate::wasm::{process_wasm, JitWasm};
-use clap::Clap;
-use ethers_core::types::{Signature, H256};
-use std::cmp::{max, Ordering};
-use std::collections::{BTreeMap, HashMap};
-use std::convert::TryInto;
-use std::fs::File;
-use std::io::{stdin, BufWriter, Write};
-use std::path::Path;
-use std::str::FromStr;
-
-const MAX_PAIRING_SIZE: u64 = 30;
-*/
 
 ///Represents a stack of `Value`s
 #[derive(Debug, Default, Clone)]
 pub struct ValueStack {
     contents: im::Vector<u64>,
 }
-
-/* table will be in the env
-fn get_from_table_aux(v: &Value, num: usize, depth: usize) -> Value {
-    if depth == 0 {
-        v.clone()
-    } else if let Value::Tuple(vec) = v {
-        let n = num & 0x7;
-        get_from_table_aux(&vec[n], num/8, depth-1)
-    } else {
-        panic!("stub")
-    }
-}
-
-fn get_from_table(v: &Value, num: usize) -> Value {
-    get_from_table_aux(v, num, 5)
-}
-*/
 
 impl ValueStack {
     pub fn new() -> Self {
@@ -284,7 +249,7 @@ pub struct Machine {
 }
 
 impl Machine {
-    pub fn new(program: LinkedProgram) -> Self {
+    pub fn new(program: LinkedProgram, call_table: Vec<CodePt>) -> Self {
         Machine {
             stack: ValueStack::new(),
             aux_stack: ValueStack::new(),
@@ -293,7 +258,7 @@ impl Machine {
             err_codepoint: CodePt::Null,
             counter: 0,
             memory: 0,
-            call_table: vec![],
+            call_table,
             buffers: vec![],
             frames: vec![],
         }
@@ -898,6 +863,17 @@ impl Machine {
                     AVMOpcode::NewBuffer => {
                         self.buffers.push(vec![]);
                         self.stack.push_usize(self.buffers.len() - 1);
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    AVMOpcode::SetMemory => {
+                        let buf = self.stack.pop(&self.state)?;
+                        self.memory = buf;
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    AVMOpcode::GetMemory => {
+                        self.stack.push(self.memory);
                         self.incr_pc();
                         Ok(true)
                     }

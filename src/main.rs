@@ -8,6 +8,7 @@ use crate::compile::CompileStruct;
 use crate::link::LinkedProgram;
 use crate::pos::try_display_location;
 use crate::run::Machine;
+use crate::run::interp::Machine as WasmMachine;
 use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
 use clap::Clap;
@@ -153,6 +154,7 @@ enum Args {
     Reformat(Reformat),
     EvmTests(EvmTests),
     WasmTest(WasmTest),
+    WasmTestOpt(WasmTest),
     WasmSuite(WasmSuite),
     WasmRun(WasmRun),
     GenUpgradeCode(GenUpgrade),
@@ -408,6 +410,86 @@ fn main() -> Result<(), CompileError> {
                 }
                 _ => println!("Unexpected output"),
             };
+        }
+        Args::WasmTestOpt(fname) => {
+            let filenames: Vec<_> = fname.input.clone();
+            if (filenames.len() != 1) {
+                println!("no input");
+                return Ok(());
+            }
+            let param = match (fname.param, fname.param_file) {
+                (Some(p), _) => hex::decode(p).unwrap(),
+                (_, Some(file)) => {
+                    let mut file = File::open(&file).unwrap();
+                    let mut buffer = Vec::<u8>::new();
+                    file.read_to_end(&mut buffer).unwrap();
+                    buffer
+                }
+                _ => vec![],
+            };
+            let mut file = File::open(&filenames[0]).unwrap();
+            let mut buffer = Vec::<u8>::new();
+            file.read_to_end(&mut buffer).unwrap();
+
+            let (code_0, table) = wasm::load_with_table(&buffer, &param);
+            let mut code = vec![];
+            for i in 0..code_0.len() {
+                match &code_0[i].opcode {
+                    Opcode::AVMOpcode(op) => {
+                        code.push(Instruction::new_with_debug(
+                            op.clone(),
+                            code_0[i].immediate.clone(),
+                            code_0[i].debug_info.clone(),
+                            code_0[i].debug_str.clone(),
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+            let code_len = code.len();
+            println!("Code length {}", code_len);
+            let program = LinkedProgram {
+                code: code,
+                static_val: Value::new_tuple(vec![]),
+                arbos_version: 10,
+                // exported_funcs: vec![],
+                // imported_funcs: vec![],
+                globals: vec![],
+                file_name_chart: BTreeMap::new(),
+            };
+            let mut machine = WasmMachine::new(program, table);
+            /*
+            for i in 0..100 {
+                machine.start_at_zero();
+                machine.run(Some(CodePt::new_internal(code_len - 1)));
+            }*/
+            machine.start_at_zero();
+            let used = if fname.debug {
+                machine.debug(Some(CodePt::new_internal(code_len - 1)))
+            } else {
+                machine.run(Some(CodePt::new_internal(code_len - 1)))
+            };
+            /*
+            let len = machine.stack.nth(0);
+            let buf = machine.stack.nth(1);
+            let gas_left = machine.stack.nth(2);
+            match (len, buf, gas_left) {
+                (Some(Value::Int(a)), Some(Value::Buffer(buf)), Some(Value::Int(gl))) => {
+                    let len = a.to_usize().unwrap();
+                    let mut res = vec![];
+                    for i in 0..len {
+                        // println!("{}", buf.read_byte(i));
+                        res.push(buf.read_byte(i as u128))
+                    }
+                    println!(
+                        "WASM Gas used {}, Gas used {}, Result {}",
+                        1000000 - gl.to_usize().unwrap(),
+                        used,
+                        hex::encode(res)
+                    );
+                }
+                _ => println!("Unexpected output"),
+            }; */
         }
         Args::WasmRun(fname) => {
             let filenames: Vec<_> = fname.input.clone();

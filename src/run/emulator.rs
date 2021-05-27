@@ -1380,6 +1380,7 @@ impl Machine {
                 AVMOpcode::MakeWasm => 100,
                 AVMOpcode::JumpTable => 10,
                 AVMOpcode::CjumpTable => 10,
+                _ => 0,
             })
         } else {
             None
@@ -2522,6 +2523,7 @@ impl Machine {
 
                         Ok(true)
                     }
+                    _ => Ok(true),
                 }
             } else {
                 Err(ExecutionError::new(
