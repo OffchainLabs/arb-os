@@ -1347,7 +1347,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys_orig_binding._arbos_version(&mut machine)?,
-        Uint256::from_u64(25),
+        Uint256::from_u64(26),
     );
 
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
@@ -2563,7 +2563,7 @@ fn test_eventual_congestion_reject() {
         let res_code = match arbtest._burn_arb_gas(
             &mut machine,
             my_address.clone(),
-            Uint256::from_u64(500_000_000),
+            Uint256::from_u64(5_000_000),
         ) {
             Ok(rc) => rc,
             Err(_) => panic!(),
@@ -2574,4 +2574,76 @@ fn test_eventual_congestion_reject() {
         assert_eq!(res_code, 0); // we should report success, if haven't hit congestion yet
     }
     assert!(false);
+}
+
+#[test]
+fn test_congestion_price_adjustment() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+    let wallet = machine.runtime_env.new_wallet();
+    let my_address = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let arbowner = _ArbOwner::_new(&wallet, false);
+    let arbgasinfo = _ArbGasInfo::_new(&wallet, false);
+    let _ = arbowner
+        ._set_fees_enabled(&mut machine, true, true)
+        .unwrap();
+    machine.runtime_env.insert_eth_deposit_message(
+        my_address.clone(),
+        my_address.clone(),
+        Uint256::_from_eth(1000),
+    );
+    let _ = machine.run(None);
+    machine
+        .runtime_env
+        ._advance_time(Uint256::one(), None, true);
+
+    let _randomish_address = Uint256::from_u64(1583913081);
+    assert_eq!(
+        arbgasinfo
+            //._get_prices_in_wei(&mut machine, randomish_address.clone())  preserve this for later integration
+            ._get_prices_in_wei(&mut machine)
+            .unwrap()
+            .4,
+        Uint256::zero()
+    );
+
+    let arbtest = ArbosTest::new(false);
+    let mut seen_any_congestion = false;
+    for _ in 0..100 {
+        let res_code = match arbtest._burn_arb_gas(
+            &mut machine,
+            my_address.clone(),
+            Uint256::from_u64(5_000_000),
+        ) {
+            Ok(rc) => rc,
+            Err(_) => panic!(),
+        };
+        assert!((!seen_any_congestion && (res_code == 0)) || (res_code == 2)); // success or congestion
+        if (res_code == 2) {
+            seen_any_congestion = true;
+        }
+    }
+    assert!(seen_any_congestion);
+
+    // the chain should be congested now
+    machine
+        .runtime_env
+        ._advance_time(Uint256::one(), None, false);
+    let _ = machine.run(None);
+
+    let prices = arbgasinfo
+        //._get_prices_in_wei(&mut machine, randomish_address.clone())  preserve this for later integration
+        ._get_prices_in_wei(&mut machine)
+        .unwrap();
+    assert!(prices.4 > Uint256::zero());
+
+    machine
+        .runtime_env
+        ._advance_time(Uint256::from_u64(4), Some(Uint256::from_u64(60)), false);
+    let prices2 = arbgasinfo
+        //._get_prices_in_wei(&mut machine, randomish_address.clone())  preserve this for later integration
+        ._get_prices_in_wei(&mut machine)
+        .unwrap();
+    assert_eq!(prices2.4, Uint256::zero());
 }
