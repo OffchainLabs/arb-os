@@ -1,5 +1,5 @@
 {
-  "arbos_version": 27,
+  "arbos_version": 28,
   "integer": {
     "AVMSendType_batch": 0,
     "AVM_add": 1,
@@ -86,6 +86,7 @@
     "Address_ArbosTest": 105,
     "Address_ReservedForEthBridge": 200,
     "ArbitrumNonZeroBalanceCallStipend": 200,
+    "ChainID": 42161,
     "Charging_ArbGasPerAvmGas": 100,
     "Charging_AssumedBatchCostL1Gas": 50000,
     "Charging_DefaultArbGasDivisor": 100,

@@ -21,7 +21,6 @@ use gasAccounting::gasAccounting_postInitMessage;
 
 
 type ChainParams = struct {
-    chainAddress: address,
     gracePeriodBlocks: uint,         // time validators are given to respond to an assertion
     arbGasSpeedLimitPerSecond: uint, // assumed max speed of nodes tracking this chain's VM
     maxExecutionSteps: uint,         // max number of steps in an assertion
@@ -46,13 +45,12 @@ public impure func haveReceivedChainInitMessage() -> bool {
     return globalChainParams != None<ChainParams>;
 }
 
-public impure func chainParams_gotParamsMessage(sender: address, data: ByteArray) {
+public impure func chainParams_gotParamsMessage(_sender: address, data: ByteArray) {
     if (globalChainParams == None<ChainParams>) {
         arbowner_init();
 
         let arbGasSpeedLimitPerBlock = bytearray_get256(data, 32);
         globalChainParams = Some(struct{
-            chainAddress: sender,
             gracePeriodBlocks: bytearray_get256(data, 0),
             arbGasSpeedLimitPerSecond: blocksToSeconds(arbGasSpeedLimitPerBlock),
             maxExecutionSteps: bytearray_get256(data, 2*32),
@@ -135,18 +133,8 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
     };
 }
 
-public impure func chainParams_chainAddress() -> address {
-    return xif let Some(params) = globalChainParams {
-        params.chainAddress
-    } else {
-        // If we get here, the chain never received its initialization message.
-        evmCallStack_callHitError(20);
-        panic
-    };
-}
-
-public impure func chainParams_chainId() -> uint {
-    return uint(chainParams_chainAddress()) & 0xffffffffffff;  // chainID == low 48 bits of chainAddress
+public func chainParams_chainId() -> uint {
+    return const::ChainID;
 }
 
 public impure func chainParams_speedLimitPerSecond() -> uint {

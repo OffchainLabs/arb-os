@@ -470,7 +470,7 @@ public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
     };
 }
 
-impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
+func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
     let inStream = bytestream_new(request.msgData);
     let (us, subtype) = bytestream_getByte(inStream)?;
     inStream = us;
