@@ -96,7 +96,7 @@ public impure func inbox_init() {
 
 public impure func emitGenesisBlockReceipt() {
     outputStats_endOfBlock(globalInbox.arbBlockNum, globalInbox.ethBlockNum, globalInbox.timestamp);
-    blockhash_submitHash(globalInbox.arbBlockNum, globalInbox.ethBlockNum, globalInbox.inboxHashAccumulator);
+    blockhash_submitHash(globalInbox.ethBlockNum, globalInbox.inboxHashAccumulator);
     globalInbox = globalInbox with { arbBlockNum: globalInbox.arbBlockNum + 1 };
 }
 
@@ -130,8 +130,8 @@ public impure func inbox_get() -> IncomingRequest {
     };
 }
 
-impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, adminMode: bool) -> IncomingRequest {
-    if (! adminMode) {
+impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, fromSideload: bool) -> IncomingRequest {
+    if (! fromSideload) {
         updateL1GasPriceEstimate(newMsgRaw.sender, newMsgRaw.gasPriceL1);
     }
 
@@ -156,12 +156,12 @@ impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, adminMod
             indexInParent: ~0,
         },
         aggregator: None<AggregatorInfo>,
-        adminMode: adminMode,
+        adminMode: fromSideload && (newMsgRaw.kind != const::L1MessageType_L2ForGasEstimation),
         gasEstimationParams: None<GasEstimationParams>,
     };
 }
 
-impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
+#[noinline, ] impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
     // Get a message from the L1 inbox, and append it to the inbox.
     // Automatically generate an end-of-block message if that is needed.
     // If there are no messages available in the L1 inbox, this blocks until one is available
@@ -177,7 +177,7 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
 
         // do end of block processing
         outputStats_endOfBlock(inbox.arbBlockNum, inbox.ethBlockNum, inbox.timestamp);
-        blockhash_submitHash(inbox.arbBlockNum, inbox.ethBlockNum, inbox.inboxHashAccumulator);
+        blockhash_submitHash(inbox.ethBlockNum, inbox.inboxHashAccumulator);
 
         inbox = inbox with {
             pendingMessage: None<IncomingRequest>
@@ -414,7 +414,7 @@ public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
             } elseif (msg.kind == const::L1MessageType_endOfBlock) {
                 // it's an end-of-block message, so just trigger end-of-block processing
                 outputStats_endOfBlock(msg.arbBlockNumber, msg.ethBlockNumber, msg.timestamp);
-                blockhash_submitHash(msg.arbBlockNumber, msg.ethBlockNumber, globalInbox.inboxHashAccumulator);
+                blockhash_submitHash(msg.ethBlockNumber, globalInbox.inboxHashAccumulator);
                 globalInbox = globalInbox with {
                     arbBlockNum: globalInbox.arbBlockNum + 1
                 };
