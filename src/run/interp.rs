@@ -730,47 +730,42 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
-                    /*
                     AVMOpcode::BitwiseNeg => {
-                        let res = self.stack.pop_uint(&self.state)?.bitwise_neg();
-                        self.stack.push_uint(res);
+                        let res = self.stack.pop(&self.state)?;
+                        self.stack.push(!res);
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::Plus => {
-                        let r1 = self.stack.pop_uint(&self.state)?;
-                        let r2 = self.stack.pop_uint(&self.state)?;
-                        self.stack.push_uint(r1.add(&r2));
+                        let r1 = self.stack.pop(&self.state)?;
+                        let r2 = self.stack.pop(&self.state)?;
+                        self.stack.push(r1 + r2);
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::Minus => {
-                        let r1 = self.stack.pop_uint(&self.state)?;
-                        let r2 = self.stack.pop_uint(&self.state)?;
-                        self.stack.push_uint(r1.unchecked_sub(&r2));
+                        let r1 = self.stack.pop(&self.state)?;
+                        let r2 = self.stack.pop(&self.state)?;
+                        self.stack.push(r1 - r2);
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::Mul => {
-                        let r1 = self.stack.pop_uint(&self.state)?;
-                        let r2 = self.stack.pop_uint(&self.state)?;
-                        self.stack.push_uint(r1.mul(&r2));
+                        let r1 = self.stack.pop(&self.state)?;
+                        let r2 = self.stack.pop(&self.state)?;
+                        self.stack.push(r1*r2);
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::Div => {
-                        let r1 = self.stack.pop_uint(&self.state)?;
-                        let r2 = self.stack.pop_uint(&self.state)?;
-                        let ores = r1.div(&r2);
-                        match ores {
-                            Some(res) => {
-                                self.stack.push_uint(res);
-                                self.incr_pc();
-                                Ok(true)
-                            }
-                            None => Err(ExecutionError::new("divide by zero", &self.state, None)),
-                        }
+                        let r1 = self.stack.pop(&self.state)?;
+                        let r2 = self.stack.pop(&self.state)?;
+                        let res = r1/r2;
+                        self.stack.push(res);
+                        self.incr_pc();
+                        Ok(true)
                     }
+                    /*
                     AVMOpcode::Mod => {
                         let r1 = self.stack.pop_uint(&self.state)?;
                         let r2 = self.stack.pop_uint(&self.state)?;
@@ -879,100 +874,85 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
+                    */
+
                     AVMOpcode::LessThan => {
-                        let r1 = self.stack.pop_uint(&self.state)?;
-                        let r2 = self.stack.pop_uint(&self.state)?;
-                        self.stack.push_usize(if r1 < r2 { 1 } else { 0 });
+                        let r1 = self.stack.pop(&self.state)?;
+                        let r2 = self.stack.pop(&self.state)?;
+                        self.stack.push_bool(r1 < r2);
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::GreaterThan => {
-                        let r1 = self.stack.pop_uint(&self.state)?;
-                        let r2 = self.stack.pop_uint(&self.state)?;
-                        self.stack.push_usize(if r1 > r2 { 1 } else { 0 });
+                        let r1 = self.stack.pop(&self.state)?;
+                        let r2 = self.stack.pop(&self.state)?;
+                        self.stack.push_bool(r1 > r2);
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::SLessThan => {
-                        let r1 = self.stack.pop_uint(&self.state)?;
-                        let r2 = self.stack.pop_uint(&self.state)?;
-                        self.stack
-                            .push_usize(if r1.s_less_than(&r2) { 1 } else { 0 });
+                        let r1 = self.stack.pop(&self.state)? as i64;
+                        let r2 = self.stack.pop(&self.state)? as i64;
+                        self.stack.push_bool(r1 < r2);
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::SGreaterThan => {
-                        let r1 = self.stack.pop_uint(&self.state)?;
-                        let r2 = self.stack.pop_uint(&self.state)?;
-                        self.stack
-                            .push_usize(if r2.s_less_than(&r1) { 1 } else { 0 });
+                        let r1 = self.stack.pop(&self.state)? as i64;
+                        let r2 = self.stack.pop(&self.state)? as i64;
+                        self.stack.push_bool(r1 < r2);
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::Equal => {
                         let r1 = self.stack.pop(&self.state)?;
                         let r2 = self.stack.pop(&self.state)?;
-                        self.stack.push_usize(if r1 == r2 { 1 } else { 0 });
+                        self.stack.push_bool(r1 == r2);
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::BitwiseAnd => {
-                        let r1 = self.stack.pop_uint(&self.state)?;
-                        let r2 = self.stack.pop_uint(&self.state)?;
-                        self.stack.push_uint(r1.bitwise_and(&r2));
+                        let r1 = self.stack.pop(&self.state)?;
+                        let r2 = self.stack.pop(&self.state)?;
+                        self.stack.push(r1&r2);
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::BitwiseOr => {
-                        let r1 = self.stack.pop_uint(&self.state)?;
-                        let r2 = self.stack.pop_uint(&self.state)?;
-                        self.stack.push_uint(r1.bitwise_or(&r2));
+                        let r1 = self.stack.pop(&self.state)?;
+                        let r2 = self.stack.pop(&self.state)?;
+                        self.stack.push(r1|r2);
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::BitwiseXor => {
-                        let r1 = self.stack.pop_uint(&self.state)?;
-                        let r2 = self.stack.pop_uint(&self.state)?;
-                        self.stack.push_uint(r1.bitwise_xor(&r2));
+                        let r1 = self.stack.pop(&self.state)?;
+                        let r2 = self.stack.pop(&self.state)?;
+                        self.stack.push(r1^r2);
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::ShiftLeft => {
-                        let shift_big = self.stack.pop_uint(&self.state)?;
-                        let value = self.stack.pop_uint(&self.state)?;
-                        let result = if let Some(shift) = shift_big.to_usize() {
-                            value.shift_left(shift)
-                        } else {
-                            Uint256::zero()
-                        };
-                        self.stack.push_uint(result);
+                        let r1 = self.stack.pop(&self.state)?;
+                        let r2 = self.stack.pop(&self.state)?;
+                        self.stack.push(r2<<r1);
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::ShiftRight => {
-                        let shift_big = self.stack.pop_uint(&self.state)?;
-                        let value = self.stack.pop_uint(&self.state)?;
-                        let result = if let Some(shift) = shift_big.to_usize() {
-                            value.shift_right(shift)
-                        } else {
-                            Uint256::zero()
-                        };
-                        self.stack.push_uint(result);
+                        let r1 = self.stack.pop(&self.state)?;
+                        let r2 = self.stack.pop(&self.state)?;
+                        self.stack.push(r2>>r1);
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::ShiftArith => {
-                        let shift_big = self.stack.pop_uint(&self.state)?;
-                        let value = self.stack.pop_uint(&self.state)?;
-                        let result = if let Some(shift) = shift_big.to_usize() {
-                            value.shift_arith(shift)
-                        } else {
-                            Uint256::zero()
-                        };
-                        self.stack.push_uint(result);
+                        let r1 = self.stack.pop(&self.state)? as i64;
+                        let r2 = self.stack.pop(&self.state)? as i64;
+                        self.stack.push((r2>>r1) as u64);
                         self.incr_pc();
                         Ok(true)
-                    }*/
+                    }
                     AVMOpcode::Halt => {
                         self.state = MachineState::Stopped;
                         Ok(false)
