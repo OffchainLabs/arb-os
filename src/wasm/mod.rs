@@ -318,7 +318,6 @@ fn generate_store16(res: &mut Vec<Instruction>, offset: u32, memory_offset: usiz
     res.push(simple_op(AVMOpcode::Swap1)); // address, value, buffer
     res.push(simple_op(AVMOpcode::SetBuffer16)); // buffer
     set_memory(res);
-
 }
 
 fn generate_store32(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize) {
@@ -603,10 +602,7 @@ fn make_popcnt(res: &mut Vec<Instruction>) {
         Value::Int(Uint256::from_u64(m4)),
     ));
     // x = (x * h01) >> 56;
-    res.push(immed_op(
-        AVMOpcode::Mul,
-        Value::Int(Uint256::from_u64(h01)),
-    ));
+    res.push(immed_op(AVMOpcode::Mul, Value::Int(Uint256::from_u64(h01))));
     res.push(immed_op(
         AVMOpcode::ShiftRight,
         Value::Int(Uint256::from_usize(56)),
@@ -695,7 +691,9 @@ fn trap_zero_division_s32(res: &mut Vec<Instruction>) {
     ));
     res.push(simple_op(AVMOpcode::Dup2));
     res.push(simple_op(AVMOpcode::BitwiseOr));
-    res.push(push_value(Value::Int(Uint256::from_string_hex("ffffffff80000000").unwrap())));
+    res.push(push_value(Value::Int(
+        Uint256::from_string_hex("ffffffff80000000").unwrap(),
+    )));
     res.push(simple_op(AVMOpcode::Equal));
     cjump(res, 1);
 }
@@ -708,7 +706,9 @@ fn trap_zero_division_s64(res: &mut Vec<Instruction>) {
     ));
     res.push(simple_op(AVMOpcode::Dup2));
     res.push(simple_op(AVMOpcode::BitwiseOr));
-    res.push(push_value(Value::Int(Uint256::from_string_hex("ffffffffffffffff8000000000000000").unwrap())));
+    res.push(push_value(Value::Int(
+        Uint256::from_string_hex("ffffffffffffffff8000000000000000").unwrap(),
+    )));
     res.push(simple_op(AVMOpcode::Equal));
     cjump(res, 1);
 }
@@ -927,7 +927,10 @@ fn handle_function(
         );
         */
         let cur_len = res.len();
-        res.push(debug_op(format!("{:?} level {} func {} idx {}", *op, ptr, idx, idx_inf)));
+        res.push(debug_op(format!(
+            "{:?} level {} func {} idx {}",
+            *op, ptr, idx, idx_inf
+        )));
         if unreachable {
             if *op == End {
                 if stack.len() == 0 {
@@ -958,9 +961,9 @@ fn handle_function(
                 c.else_label = 0;
                 stack.push(c);
                 unreachable = false;
-                continue
+                continue;
             } else {
-                continue
+                continue;
             }
         }
 
@@ -972,10 +975,10 @@ fn handle_function(
                 if stack.len() == 0 {
                     break;
                 }
-                let c: &Control = &stack[stack.len()-1];
+                let c: &Control = &stack[stack.len() - 1];
                 ptr = c.level;
                 unreachable = true;
-            },
+            }
             Block(bt) => {
                 let end_label = label;
                 label = label + 1;
@@ -1078,7 +1081,10 @@ fn handle_function(
             }
             BrIf(x) => {
                 let c = &stack[stack.len() - (*x as usize) - 1];
-                res.push(debug_op(format!("Debug brif {:?} ptr {} next level: {} + {}", c, ptr, c.level, c.rets)));
+                res.push(debug_op(format!(
+                    "Debug brif {:?} ptr {} next level: {} + {}",
+                    c, ptr, c.level, c.rets
+                )));
                 // println!("Debug brif {:?} ptr {} next level: {} + {}", c, ptr, c.level, c.rets);
                 let continue_label = label;
                 let end_label = label + 1;
@@ -1124,7 +1130,9 @@ fn handle_function(
                 set_frame(&mut res);
             }
             I32Const(x) => {
-                res.push(push_value(Value::Int(Uint256::from_u64((*x as u64) & 0xffffffff))));
+                res.push(push_value(Value::Int(Uint256::from_u64(
+                    (*x as u64) & 0xffffffff,
+                ))));
                 ptr = ptr + 1;
             }
             I64Const(x) => {
@@ -1791,7 +1799,7 @@ fn handle_function(
                 res.push(simple_op(AVMOpcode::Dup0));
                 res.push(immed_op(
                     AVMOpcode::GreaterThan,
-                    Value::Int(Uint256::from_usize(max_memory+1)),
+                    Value::Int(Uint256::from_usize(max_memory + 1)),
                 ));
                 cjump(&mut res, ok_label);
                 res.push(simple_op(AVMOpcode::Pop));
@@ -1861,7 +1869,13 @@ fn table_to_tuple(tab: &[usize], prefix: usize, shift: usize, level: usize, limi
     return Value::new_tuple(v);
 }
 
-fn table_to_tuple2(tab: &[Value], prefix: usize, shift: usize, level: usize, limit: usize) -> Value {
+fn table_to_tuple2(
+    tab: &[Value],
+    prefix: usize,
+    shift: usize,
+    level: usize,
+    limit: usize,
+) -> Value {
     if prefix > limit {
         return int_from_usize(0);
     }
@@ -1891,7 +1905,7 @@ pub fn make_table(tab: &[Value]) -> Value {
 
 fn value_replace_labels(v: Value, label_map: &HashMap<Label, Value>) -> Result<Value, Label> {
     match v {
-        Value::HashOnly(_,_) => Ok(v),
+        Value::HashOnly(_, _) => Ok(v),
         Value::Int(_) => Ok(v),
         Value::CodePoint(_) => Ok(v),
         Value::Buffer(_) => Ok(v),
@@ -2077,11 +2091,11 @@ impl JitWasm {
 
         let buf = Buffer::from_bytes(vec![]);
 
-        let memory_cell : Rc<RefCell<std::option::Option<Memory>>> = Rc::new(RefCell::new(None));
+        let memory_cell: Rc<RefCell<std::option::Option<Memory>>> = Rc::new(RefCell::new(None));
         let memory_cell2 = memory_cell.clone();
         let memory_cell3 = memory_cell.clone();
 
-        let extra_cell : Rc<RefCell<Vec<u8>>> = Rc::new(RefCell::new(vec![]));
+        let extra_cell: Rc<RefCell<Vec<u8>>> = Rc::new(RefCell::new(vec![]));
         let extra_cell1 = extra_cell.clone();
 
         let cell = Rc::new(RefCell::new(buf));
@@ -2112,7 +2126,7 @@ impl JitWasm {
             let mut vec = extra_cell1.borrow_mut();
             let offset = offset as usize;
             if vec.len() <= offset {
-                vec.resize(offset+1, 0)
+                vec.resize(offset + 1, 0)
             }
             vec[offset as usize] = v as u8;
             // replace_with(|buf| buf.set_byte(offset as u128, v as u8));
@@ -2124,43 +2138,47 @@ impl JitWasm {
                 None => println!("warning, no memory"),
                 Some(memory) => {
                     let mut tmp = vec![];
-                    for i in offset..offset+len {
+                    for i in offset..offset + len {
                         tmp.push(buf.read_byte(i as u128));
                     }
                     println!("{:?}", tmp);
-                    memory.write(ptr as usize, &tmp).expect("cannot write memory");
+                    memory
+                        .write(ptr as usize, &tmp)
+                        .expect("cannot write memory");
                 }
             }
         });
 
-        let wvec_func = Func::wrap(&store, move |ptr: i32, offset: i32, len: i32| {
-            match &*memory_cell3.borrow() {
-                None => println!("warning, no memory"),
-                Some(memory) => {
-                    let mut tmp = vec![0; len as usize];
-                    memory.read(ptr as usize, &mut tmp).expect("cannot read memory");
-                    println!("{:?}", tmp);
+        let wvec_func =
+            Func::wrap(
+                &store,
+                move |ptr: i32, offset: i32, len: i32| match &*memory_cell3.borrow() {
+                    None => println!("warning, no memory"),
+                    Some(memory) => {
+                        let mut tmp = vec![0; len as usize];
+                        memory
+                            .read(ptr as usize, &mut tmp)
+                            .expect("cannot read memory");
+                        println!("{:?}", tmp);
 
-                    cell4.replace_with(|buf| {
-                        let mut res = buf.clone();
-                        for i in 0..len {
-                            res = res.set_byte((offset+i) as u128, tmp[i as usize]);
-                        }
-                        res
-                    });
-
-                }
-            }
-        });
+                        cell4.replace_with(|buf| {
+                            let mut res = buf.clone();
+                            for i in 0..len {
+                                res = res.set_byte((offset + i) as u128, tmp[i as usize]);
+                            }
+                            res
+                        });
+                    }
+                },
+            );
 
         let len_func = Func::wrap(&store, move || len1.borrow().clone() as i32);
 
-        let set_len_func = Func::wrap(&store, move |nlen: i32| { len2.replace_with(|_| nlen); });
+        let set_len_func = Func::wrap(&store, move |nlen: i32| {
+            len2.replace_with(|_| nlen);
+        });
 
-        let callback_type = FuncType::new(
-            [ValType::I32].iter().cloned(),
-            [].iter().cloned(),
-        );
+        let callback_type = FuncType::new([ValType::I32].iter().cloned(), [].iter().cloned());
         let gas_func = Func::new(&store, callback_type, move |_, args, _results| {
             let gas_used = args[0].unwrap_i32();
             let gas = gas1.borrow().clone();
@@ -2172,7 +2190,7 @@ impl JitWasm {
                 Ok(())
             }
         });
-    
+
         let error_func = Func::wrap(&store, || {
             panic!("Unknown import");
         });
@@ -2226,7 +2244,7 @@ impl JitWasm {
         self.len_cell.replace_with(|_len| len as i32);
         self.gas_cell.replace_with(|_gas| 1000000);
 
-        let _res = match self.instance.get_typed_func::<(),(i32)>("test") {
+        let _res = match self.instance.get_typed_func::<(), (i32)>("test") {
             Ok(f) => get_answer(f) as i64,
             Err(_) => 0,
         };
@@ -2267,10 +2285,10 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
     // Initialize register
     init.push(push_value(Value::new_tuple(vec![
         Value::new_buffer(vec![]), // memory
-        int_from_usize(0), // call table
+        int_from_usize(0),         // call table
         Value::new_buffer(vec![]), // IO buffer
-        int_from_usize(0), // IO len
-        int_from_usize(1000000), // gas left
+        int_from_usize(0),         // IO len
+        int_from_usize(1000000),   // gas left
     ])));
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(1)));
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(2)));
@@ -2292,10 +2310,14 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
     init.push(simple_op(AVMOpcode::Noop));
 
     init
-
 }
 
-fn process_test(buffer: &[u8], test_args: &[u64], entry: &String, set_memory: bool) -> Vec<Instruction> {
+fn process_test(
+    buffer: &[u8],
+    test_args: &[u64],
+    entry: &String,
+    set_memory: bool,
+) -> Vec<Instruction> {
     let mut init = vec![];
 
     // These might become replaced
@@ -2310,10 +2332,10 @@ fn process_test(buffer: &[u8], test_args: &[u64], entry: &String, set_memory: bo
     // Initialize register
     init.push(push_value(Value::new_tuple(vec![
         Value::new_buffer(vec![]), // memory
-        int_from_usize(0), // call table
+        int_from_usize(0),         // call table
         Value::new_buffer(vec![]), // IO buffer
-        int_from_usize(0), // IO len
-        int_from_usize(100000), // gas left
+        int_from_usize(0),         // IO len
+        int_from_usize(100000),    // gas left
     ])));
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(0)));
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(1)));
@@ -2333,10 +2355,15 @@ fn process_test(buffer: &[u8], test_args: &[u64], entry: &String, set_memory: bo
     init.push(simple_op(AVMOpcode::Noop));
 
     init
-
 }
 
-fn process_wasm_inner(buffer: &[u8], init: &mut Vec<Instruction>, test_args: &[u64], entry: &String, init_memory: bool) {
+fn process_wasm_inner(
+    buffer: &[u8],
+    init: &mut Vec<Instruction>,
+    test_args: &[u64],
+    entry: &String,
+    init_memory: bool,
+) {
     let module = parity_wasm::deserialize_buffer::<Module>(buffer).unwrap();
     assert!(module.code_section().is_some());
 
@@ -2406,10 +2433,10 @@ fn process_wasm_inner(buffer: &[u8], init: &mut Vec<Instruction>, test_args: &[u
     init.push(simple_op(AVMOpcode::AuxPush));
 
     // Add test arguments to the frame
-    for (i,arg) in test_args.iter().enumerate() {
+    for (i, arg) in test_args.iter().enumerate() {
         get_frame(init);
         init.push(push_value(Value::Int(Uint256::from_u64(*arg))));
-        init.push(set64_from_buffer(i+1));
+        init.push(set64_from_buffer(i + 1));
         set_frame(init);
     }
 
@@ -2463,7 +2490,12 @@ fn process_wasm_inner(buffer: &[u8], init: &mut Vec<Instruction>, test_args: &[u
                 init.push(push_value(Value::Int(hash_ftype(&ftype))));
                 init.push(simple_op(AVMOpcode::Equal));
                 call_cjump(init, *f_idx as u32);
-                init.push(push_value(Value::Int(Uint256::from_string_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap())));
+                init.push(push_value(Value::Int(
+                    Uint256::from_string_hex(
+                        "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                    )
+                    .unwrap(),
+                )));
                 init.push(simple_op(AVMOpcode::Panic));
                 init.push(mk_label(next_label));
             }
@@ -2471,7 +2503,10 @@ fn process_wasm_inner(buffer: &[u8], init: &mut Vec<Instruction>, test_args: &[u
     }
     // Error handling
     init.push(mk_label(1));
-    init.push(push_value(Value::Int(Uint256::from_string_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap())));
+    init.push(push_value(Value::Int(
+        Uint256::from_string_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+            .unwrap(),
+    )));
     init.push(simple_op(AVMOpcode::Panic));
 
     // Cleaning up
@@ -2480,7 +2515,6 @@ fn process_wasm_inner(buffer: &[u8], init: &mut Vec<Instruction>, test_args: &[u
 }
 
 pub fn load(buffer: &[u8], param: &[u8]) -> Vec<Instruction> {
-    
     let init = process_wasm(buffer);
 
     let (res, tab) = resolve_labels(init);
@@ -2496,8 +2530,13 @@ pub fn load(buffer: &[u8], param: &[u8]) -> Vec<Instruction> {
     a
 }
 
-pub fn make_test(buffer: &[u8], prev_memory: &Buffer, test_args: &[u64], entry: &String, set_memory: bool) -> Vec<Instruction> {
-    
+pub fn make_test(
+    buffer: &[u8],
+    prev_memory: &Buffer,
+    test_args: &[u64],
+    entry: &String,
+    set_memory: bool,
+) -> Vec<Instruction> {
     let init = process_test(buffer, test_args, entry, set_memory);
 
     let (res, tab) = resolve_labels(init);

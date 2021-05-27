@@ -6,7 +6,7 @@
 
 use crate::compile::{CompileError, DebugInfo};
 use crate::link::LinkedProgram;
-use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, WInstruction, Value};
+use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Value, WInstruction};
 use crate::uint256::Uint256;
 use std::fmt;
 
@@ -111,7 +111,6 @@ impl ValueStack {
             None => Err(ExecutionError::new("stack underflow", state, None)),
         }
     }
-
 }
 
 impl fmt::Display for ValueStack {
@@ -229,7 +228,8 @@ impl CodeStore {
     ///Creates a new code segment containing a single panic instruction, returns a `CodePt` pointing
     /// to the start of that segment.
     fn create_segment(&mut self) -> CodePt {
-        self.segments.push(vec![WInstruction::from_opcode(AVMOpcode::Zero)]);
+        self.segments
+            .push(vec![WInstruction::from_opcode(AVMOpcode::Zero)]);
         CodePt::new_in_segment(self.segments.len() - 1, 0)
     }
 
@@ -372,7 +372,7 @@ impl Machine {
                     println!("PC: {}", pc);
                 }
                 println!("Stack contents: {}", self.stack);
-                    println!("Aux-stack contents: {}", self.aux_stack);
+                println!("Aux-stack contents: {}", self.aux_stack);
                 if !self.stack.is_empty() {
                     println!("Stack size: {}", self.stack.num_items());
                 }
@@ -581,7 +581,6 @@ impl Machine {
         }
     }
 
-
     ///Runs the instruction pointed to by the program counter, returns either a bool indicating
     /// whether the instruction was blocked if execution does not hit an error state, or an
     /// `ExecutionError` if an error was encountered.
@@ -599,7 +598,7 @@ impl Machine {
         }
     }
 
-    fn find_jump(&self, num: usize) -> Result<CodePt,ExecutionError> {
+    fn find_jump(&self, num: usize) -> Result<CodePt, ExecutionError> {
         Ok(self.call_table[num])
         /*
         if let Value::Tuple(val) = &self.register {
@@ -753,128 +752,61 @@ impl Machine {
                     AVMOpcode::Mul => {
                         let r1 = self.stack.pop(&self.state)?;
                         let r2 = self.stack.pop(&self.state)?;
-                        self.stack.push(r1*r2);
+                        self.stack.push(r1 * r2);
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::Div => {
                         let r1 = self.stack.pop(&self.state)?;
                         let r2 = self.stack.pop(&self.state)?;
-                        let res = r1/r2;
+                        let res = r1 / r2;
                         self.stack.push(res);
                         self.incr_pc();
                         Ok(true)
                     }
-                    /*
-                    AVMOpcode::Mod => {
-                        let r1 = self.stack.pop_uint(&self.state)?;
-                        let r2 = self.stack.pop_uint(&self.state)?;
-                        let ores = r1.modulo(&r2);
-                        match ores {
-                            Some(res) => {
-                                self.stack.push_uint(res);
-                                self.incr_pc();
-                                Ok(true)
-                            }
-                            None => Err(ExecutionError::new("modulo by zero", &self.state, None)),
-                        }
-                    }
                     AVMOpcode::Sdiv => {
-                        let r1 = self.stack.pop_uint(&self.state)?;
-                        let r2 = self.stack.pop_uint(&self.state)?;
-                        let ores = r1.sdiv(&r2);
-                        match ores {
-                            Some(res) => {
-                                self.stack.push_uint(res);
-                                self.incr_pc();
-                                Ok(true)
-                            }
-                            None => Err(ExecutionError::new("divide by zero", &self.state, None)),
-                        }
+                        let r1 = self.stack.pop(&self.state)? as i64;
+                        let r2 = self.stack.pop(&self.state)? as i64;
+                        let res = r1 / r2;
+                        self.stack.push(res as u64);
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    AVMOpcode::Mod => {
+                        let r1 = self.stack.pop(&self.state)?;
+                        let r2 = self.stack.pop(&self.state)?;
+                        let res = r1 % r2;
+                        self.stack.push(res);
+                        self.incr_pc();
+                        Ok(true)
                     }
                     AVMOpcode::Smod => {
-                        let r1 = self.stack.pop_uint(&self.state)?;
-                        let r2 = self.stack.pop_uint(&self.state)?;
-                        let ores = r1.smodulo(&r2);
-                        match ores {
-                            Some(res) => {
-                                self.stack.push_uint(res);
-                                self.incr_pc();
-                                Ok(true)
-                            }
-                            None => Err(ExecutionError::new("modulo by zero", &self.state, None)),
-                        }
-                    }
-                    AVMOpcode::AddMod => {
-                        let r1 = self.stack.pop_uint(&self.state)?;
-                        let r2 = self.stack.pop_uint(&self.state)?;
-                        let r3 = self.stack.pop_uint(&self.state)?;
-                        let ores = r1.add_mod(&r2, &r3);
-                        match ores {
-                            Some(res) => {
-                                self.stack.push_uint(res);
-                                self.incr_pc();
-                                Ok(true)
-                            }
-                            None => Err(ExecutionError::new("modulo by zero", &self.state, None)),
-                        }
-                    }
-                    AVMOpcode::MulMod => {
-                        let r1 = self.stack.pop_uint(&self.state)?;
-                        let r2 = self.stack.pop_uint(&self.state)?;
-                        let r3 = self.stack.pop_uint(&self.state)?;
-                        let ores = r1.mul_mod(&r2, &r3);
-                        match ores {
-                            Some(res) => {
-                                self.stack.push_uint(res);
-                                self.incr_pc();
-                                Ok(true)
-                            }
-                            None => Err(ExecutionError::new("modulo by zero", &self.state, None)),
-                        }
-                    }
-                    AVMOpcode::Exp => {
-                        let r1 = self.stack.pop_uint(&self.state)?;
-                        let r2 = self.stack.pop_uint(&self.state)?;
-                        self.stack.push_uint(r1.exp(&r2));
+                        let r1 = self.stack.pop(&self.state)? as i64;
+                        let r2 = self.stack.pop(&self.state)? as i64;
+                        let res = r1 % r2;
+                        self.stack.push(res as u64);
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::SignExtend => {
-                        let bnum = self.stack.pop_uint(&self.state)?;
-                        let x = self.stack.pop_uint(&self.state)?;
-                        let out = match bnum.to_usize() {
-                            Some(ub) => {
-                                if ub >= 31 {
-                                    x
-                                } else {
-                                    let shifted_bit = Uint256::from_usize(2)
-                                        .exp(&Uint256::from_usize(8 * ub + 7));
-                                    let sign_bit = x.bitwise_and(&shifted_bit) != Uint256::zero();
-                                    let mask = shifted_bit
-                                        .mul(&Uint256::from_u64(2))
-                                        .sub(&Uint256::one())
-                                        .ok_or_else(|| {
-                                            ExecutionError::new(
-                                                "underflow in signextend",
-                                                &self.state,
-                                                None,
-                                            )
-                                        })?;
-                                    if sign_bit {
-                                        x.bitwise_or(&mask.bitwise_neg())
-                                    } else {
-                                        x.bitwise_and(&mask)
-                                    }
-                                }
+                        let ub = self.stack.pop(&self.state)?;
+                        let x = self.stack.pop(&self.state)?;
+                        let out = if ub >= 31 {
+                            x
+                        } else {
+                            let shifted_bit = 1 << (8 * ub + 7);
+                            let sign_bit = x & shifted_bit != 0;
+                            let mask = (shifted_bit - 1) * 2 + 1;
+                            if sign_bit {
+                                x | !mask
+                            } else {
+                                x & mask
                             }
-                            None => x,
                         };
-                        self.stack.push_uint(out);
+                        self.stack.push(out);
                         self.incr_pc();
                         Ok(true)
                     }
-                    */
 
                     AVMOpcode::LessThan => {
                         let r1 = self.stack.pop(&self.state)?;
@@ -914,42 +846,42 @@ impl Machine {
                     AVMOpcode::BitwiseAnd => {
                         let r1 = self.stack.pop(&self.state)?;
                         let r2 = self.stack.pop(&self.state)?;
-                        self.stack.push(r1&r2);
+                        self.stack.push(r1 & r2);
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::BitwiseOr => {
                         let r1 = self.stack.pop(&self.state)?;
                         let r2 = self.stack.pop(&self.state)?;
-                        self.stack.push(r1|r2);
+                        self.stack.push(r1 | r2);
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::BitwiseXor => {
                         let r1 = self.stack.pop(&self.state)?;
                         let r2 = self.stack.pop(&self.state)?;
-                        self.stack.push(r1^r2);
+                        self.stack.push(r1 ^ r2);
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::ShiftLeft => {
                         let r1 = self.stack.pop(&self.state)?;
                         let r2 = self.stack.pop(&self.state)?;
-                        self.stack.push(r2<<r1);
+                        self.stack.push(r2 << r1);
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::ShiftRight => {
                         let r1 = self.stack.pop(&self.state)?;
                         let r2 = self.stack.pop(&self.state)?;
-                        self.stack.push(r2>>r1);
+                        self.stack.push(r2 >> r1);
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::ShiftArith => {
                         let r1 = self.stack.pop(&self.state)? as i64;
                         let r2 = self.stack.pop(&self.state)? as i64;
-                        self.stack.push((r2>>r1) as u64);
+                        self.stack.push((r2 >> r1) as u64);
                         self.incr_pc();
                         Ok(true)
                     }
@@ -960,12 +892,12 @@ impl Machine {
                     AVMOpcode::DebugPrint => {
                         let r1 = self.stack.pop(&self.state)?;
                         println!("debugprint: {}", r1);
-						self.incr_pc();
-						Ok(true)
-					}
+                        self.incr_pc();
+                        Ok(true)
+                    }
                     AVMOpcode::NewBuffer => {
                         self.buffers.push(vec![]);
-                        self.stack.push_usize(self.buffers.len()-1);
+                        self.stack.push_usize(self.buffers.len() - 1);
                         self.incr_pc();
                         Ok(true)
                     }
@@ -985,7 +917,7 @@ impl Machine {
                         } else {
                             let mut res = [0u8; 2];
                             for i in 0..2 {
-                                res[i] = vec[offset+i];
+                                res[i] = vec[offset + i];
                             }
                             u16::from_le_bytes(res) as u64
                         };
@@ -1003,7 +935,7 @@ impl Machine {
                         } else {
                             let mut res = [0u8; 4];
                             for i in 0..4 {
-                                res[i] = vec[offset+i];
+                                res[i] = vec[offset + i];
                             }
                             u32::from_le_bytes(res) as u64
                         };
@@ -1021,7 +953,7 @@ impl Machine {
                         } else {
                             let mut res = [0u8; 8];
                             for i in 0..8 {
-                                res[i] = vec[offset+i];
+                                res[i] = vec[offset + i];
                             }
                             u64::from_le_bytes(res)
                         };
@@ -1062,7 +994,7 @@ impl Machine {
                             }
                         }
                         for i in 0..2 {
-                            vec[offset+i] = bytes[i];
+                            vec[offset + i] = bytes[i];
                         }
                         self.stack.push_usize(buf);
                         self.incr_pc();
@@ -1082,7 +1014,7 @@ impl Machine {
                             }
                         }
                         for i in 0..4 {
-                            vec[offset+i] = bytes[i];
+                            vec[offset + i] = bytes[i];
                         }
                         self.stack.push_usize(buf);
                         self.incr_pc();
@@ -1102,14 +1034,14 @@ impl Machine {
                             }
                         }
                         for i in 0..8 {
-                            vec[offset+i] = bytes[i];
+                            vec[offset + i] = bytes[i];
                         }
                         self.stack.push_usize(buf);
                         self.incr_pc();
                         Ok(true)
                     }
                     _ => Ok(true),
-				}
+                }
             } else {
                 Err(ExecutionError::new(
                     "invalid program counter",
@@ -1126,4 +1058,3 @@ impl Machine {
         }
     }
 }
-
