@@ -8,6 +8,8 @@ use accounts::AccountStore;
 use evmCallStack::EvmCallFrame;
 use messages::TxRequestData;
 
+use std::bytearray::ByteArray;
+
 
 public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> AccountStore {
     return unsafecast<AccountStore>(input_globals.globalAccountStore);
@@ -23,4 +25,8 @@ public func set_globalCallStack_onUpgrade(_input_globals: GlobalsBeforeUpgrade) 
 
 public func set_globalCurrentTxRequest_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> TxRequestData {
     return unsafecast<TxRequestData>(input_globals.globalCurrentTxRequest);
+}
+
+public func set_upgradeInProgress_onUpgrade(_input_globals: GlobalsBeforeUpgrade) -> option<ByteArray> {
+    return None<ByteArray>;
 }

@@ -59,6 +59,7 @@ use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_append;
 
 use std::avmcodebuilder::AvmCodeBuilder;
 use std::avmcodebuilder::avmCodeBuilder_new;
@@ -73,10 +74,10 @@ use std::rlp::keccakOfRlpEncodedUintPair;
 use std::storageMap::storageMap_new;
 
 
-var upgradeInProgress: option<AvmCodeBuilder>;
+var upgradeInProgress: option<ByteArray>;
 
 public impure func arbowner_init() {
-    upgradeInProgress = None<AvmCodeBuilder>;
+    upgradeInProgress = None<ByteArray>;
 }
 
 public impure func arbowner_txcall() {
@@ -212,7 +213,7 @@ impure func arbowner_startCodeUpload(_topFrame: EvmCallFrame, calldata: ByteArra
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 20, 0, 0);
     }
-    upgradeInProgress = Some(avmCodeBuilder_new(false));
+    upgradeInProgress = Some(bytearray_new(0));
     evmOp_return(0, 0);
 }
 
@@ -223,14 +224,10 @@ impure func arbowner_continueCodeUpload(_topFrame: EvmCallFrame, calldata: ByteA
     if let Some(upgrade) = upgradeInProgress {
         let nbytes = bytearray_get256(calldata, 36);
         let marshalledCode = bytearray_extract(calldata, 68, nbytes);
-        if let Some(updated) = avmCodeBuilder_append(upgrade, bytestream_new(marshalledCode)) {
-            upgradeInProgress = Some(updated);
-            evmOp_return(0, 0);
-        } else {
-            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 33, 0, 0);
-        }
+        upgradeInProgress = Some(bytearray_append(upgrade, marshalledCode));
+        evmOp_return(0, 0);
     } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 33, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 31, 0, 0);
     }
 }
 
@@ -238,15 +235,19 @@ impure func arbowner_getUploadedCodeHash(_topFrame: EvmCallFrame, calldata: Byte
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 140, 0, 0);
     }
-    if let Some(upgrade) = upgradeInProgress {
-        let codeHash = avmCodeBuilder_getCodeHash(upgrade);
-        if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, uint(codeHash)))) {
-            evmOp_return(0, 32);
+    if let Some(marshalledUpgrade) = upgradeInProgress {
+        if let Some(upgrade) = avmCodeBuilder_append(avmCodeBuilder_new(false), bytestream_new(marshalledUpgrade)) {
+            let codeHash = avmCodeBuilder_getCodeHash(upgrade);
+            if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, uint(codeHash)))) {
+                evmOp_return(0, 32);
+            } else {
+                evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 141, 0, 0);
+            }
         } else {
-            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 141, 0, 0);
+            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 142, 0, 0);
         }
     } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 142, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 143, 0, 0);
     }
 }
 
@@ -260,16 +261,20 @@ impure func arbowner_finishCodeUploadAsArbosUpgrade(_topFrame: EvmCallFrame, cal
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 41, 0, 0);
     }
 
-    if let Some(upgrade) = upgradeInProgress {
-        let requiredCodeHash = bytes32(bytearray_get256(calldata, 4));
-        if (avmCodeBuilder_getCodeHash(upgrade) != requiredCodeHash) {
-            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 42, 0, 0);
+    if let Some(marshalledUpgrade) = upgradeInProgress {
+        if let Some(upgrade) = avmCodeBuilder_append(avmCodeBuilder_new(false), bytestream_new(marshalledUpgrade)) {
+            let requiredCodeHash = bytes32(bytearray_get256(calldata, 4));
+            if (avmCodeBuilder_getCodeHash(upgrade) != requiredCodeHash) {
+                evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 42, 0, 0);
+            }
+            let upgradeCodePoint = unsafecast<impure func()>(avmCodeBuilder_finish(upgrade));
+            upgradeInProgress = None<ByteArray>;
+            let _ = evmCallStack_returnFromCall(true, 0, 0, Some(upgradeCodePoint));
+        } else {
+            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 43, 0, 0);
         }
-        let upgradeCodePoint = unsafecast<impure func()>(avmCodeBuilder_finish(upgrade));
-        upgradeInProgress = None<AvmCodeBuilder>;
-        let _ = evmCallStack_returnFromCall(true, 0, 0, Some(upgradeCodePoint));
     } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 43, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 44, 0, 0);
     }
 }
 
@@ -279,14 +284,19 @@ impure func arbowner_finishCodeUploadAsPluggable(_topFrame: EvmCallFrame, callda
     }
     let id = bytearray_get256(calldata, 4);
     let keepState = bytearray_get256(calldata, 36) != 0;
-    if let Some(upgrade) = upgradeInProgress {
-        if let Some(_) = installPluggable(id, unsafecast<ModuleFunction>(avmCodeBuilder_finish(upgrade)), keepState) {
-            evmOp_return(0, 0);
+    if let Some(marshalledUpgrade) = upgradeInProgress {
+        if let Some(upgrade) = avmCodeBuilder_append(avmCodeBuilder_new(false), bytestream_new(marshalledUpgrade)) {
+            if let Some(_) = installPluggable(id, unsafecast<ModuleFunction>(avmCodeBuilder_finish(upgrade)), keepState) {
+                upgradeInProgress = None<ByteArray>;
+                evmOp_return(0, 0);
+            } else {
+                evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 51, 0, 0);
+            }
         } else {
-            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 51, 0, 0);
+            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 52, 0, 0);
         }
     } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 52, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 53, 0, 0);
     }
 }
 
