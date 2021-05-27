@@ -102,6 +102,61 @@ pub struct Instruction<T = Opcode> {
     pub debug_str: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WInstruction {
+    pub opcode: AVMOpcode,
+    pub immediate: Option<u64>,
+    pub debug_str: Option<String>,
+}
+
+impl From<Instruction> for WInstruction {
+
+    fn from(from: Instruction) -> Self {
+        let Instruction {
+            opcode,
+            immediate,
+            debug_info,
+            debug_str,
+        } = from;
+        let opcode = match opcode {
+            Opcode::AVMOpcode(op) => op,
+            _ => AVMOpcode::Noop,
+        };
+        let immediate = match immediate {
+            None => None,
+            Some(Value::Int(a)) => Some(a.to_u64().unwrap()),
+            Some(a) => panic!("Bad immed {}", a),
+        };
+        Self {
+            opcode,
+            immediate,
+            debug_str,
+        }
+    }
+}
+
+impl From<Instruction<AVMOpcode>> for WInstruction {
+
+    fn from(from: Instruction<AVMOpcode>) -> Self {
+        let Instruction {
+            opcode,
+            immediate,
+            debug_info,
+            debug_str,
+        } = from;
+        let immediate = match immediate {
+            None => None,
+            Some(Value::Int(a)) => Some(a.to_u64().unwrap()),
+            Some(a) => panic!("Bad immed {}", a),
+        };
+        Self {
+            opcode,
+            immediate,
+            debug_str,
+        }
+    }
+}
+
 impl From<Instruction<AVMOpcode>> for Instruction {
 
     fn from(from: Instruction<AVMOpcode>) -> Self {
@@ -118,6 +173,20 @@ impl From<Instruction<AVMOpcode>> for Instruction {
             debug_str,
         }
     }
+}
+
+impl WInstruction {
+    pub fn new(opcode: AVMOpcode, immediate: Option<u64>, debug_str: Option<String>) -> Self {
+        WInstruction {
+            opcode,
+            immediate,
+            debug_str,
+        }
+    }
+    pub fn from_opcode(opcode: AVMOpcode) -> Self {
+        WInstruction::new(opcode, None, None)
+    }
+
 }
 
 impl<T> Instruction<T> {
