@@ -1140,7 +1140,7 @@ public impure func getSerializedFairGasPriceSenders() -> option<ByteArray> {
 //     of the quantity (const::Charging_AssumedBatchCostL1Gas / batchSize). Because we're averaging over
 //     transactions, a batch contributes (batchSize) times, once for each transaction in it.
 public func updateBatchSizeEstimate(_size: uint, _batchSender: address) {
-    // leaving this as a no-op, rather than fixing it, because it will be removed in a different PR
+    // Leaving this as a no-op, so the estimate remains fixed.  This will be removed in a later PR.
 }
 
 type FourResources = struct {
