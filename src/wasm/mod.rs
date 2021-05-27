@@ -127,12 +127,16 @@ fn call_jump(res: &mut Vec<Instruction>, idx: u32) {
     res.push(simple_op(AVMOpcode::JumpTable));
 }
 
-fn get_frame() -> Instruction {
-    Instruction::from_opcode_imm(
-        Opcode::AVMOpcode(AVMOpcode::Xget),
-        Value::Int(Uint256::from_usize(0)),
-        DebugInfo::from(None),
-    )
+fn get_frame(res: &mut Vec<Instruction>) {
+    res.push(simple_op(AVMOpcode::AuxPop));
+    res.push(simple_op(AVMOpcode::Dup0));
+    res.push(simple_op(AVMOpcode::AuxPush));
+}
+
+fn set_frame(res: &mut Vec<Instruction>) {
+    res.push(simple_op(AVMOpcode::AuxPop));
+    res.push(simple_op(AVMOpcode::Pop));
+    res.push(simple_op(AVMOpcode::AuxPush));
 }
 
 fn get_return_pc() -> Instruction {
@@ -153,14 +157,6 @@ fn push_frame(v: Value) -> Instruction {
 
 fn push_value(v: Value) -> Instruction {
     Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Noop), v, DebugInfo::from(None))
-}
-
-fn set_frame() -> Instruction {
-    Instruction::from_opcode_imm(
-        Opcode::AVMOpcode(AVMOpcode::Xset),
-        Value::Int(Uint256::from_usize(0)),
-        DebugInfo::from(None),
-    )
 }
 
 fn get64_from_buffer(loc: usize) -> Instruction {
@@ -1102,30 +1098,30 @@ fn handle_function(
             }
             GetLocal(x) => {
                 // First get stack frame
-                res.push(get_frame());
+                get_frame(&mut res);
                 // Then get the local from the buffer
-                res.push(get64_from_buffer(*x as usize));
+                res.push(get64_from_buffer(*x as usize + 1));
                 ptr = ptr + 1;
             }
             SetLocal(x) => {
                 // First get stack frame
-                res.push(get_frame());
+                get_frame(&mut res);
                 // reorder stack
                 res.push(simple_op(AVMOpcode::Swap1));
-                res.push(set64_from_buffer(*x as usize));
+                res.push(set64_from_buffer(*x as usize + 1));
                 // store frame
-                res.push(set_frame());
+                set_frame(&mut res);
                 ptr = ptr - 1;
             }
             TeeLocal(x) => {
                 res.push(simple_op(AVMOpcode::Dup0));
                 // First get stack frame
-                res.push(get_frame());
+                get_frame(&mut res);
                 // reorder stack
                 res.push(simple_op(AVMOpcode::Swap1));
-                res.push(set64_from_buffer(*x as usize));
+                res.push(set64_from_buffer(*x as usize + 1));
                 // store frame
-                res.push(set_frame());
+                set_frame(&mut res);
             }
             I32Const(x) => {
                 res.push(push_value(Value::Int(Uint256::from_u64((*x as u64) & 0xffffffff))));
@@ -1150,20 +1146,16 @@ fn handle_function(
                 label = label + 1;
                 // push new frame to aux stack
                 res.push(simple_op(AVMOpcode::NewBuffer));
-                res.push(push_value(Value::new_tuple(vec![
-                    // Value::new_buffer(vec![]),
-                    int_from_usize(0),
-                    Value::Label(Label::Evm(return_label)),
-                ])));
+                res.push(push_value(Value::Label(Label::Evm(return_label))));
                 res.push(push_value(int_from_usize(0)));
-                res.push(simple_op(AVMOpcode::Tset));
+                res.push(simple_op(AVMOpcode::SetBuffer64));
                 res.push(simple_op(AVMOpcode::AuxPush));
                 // Push args to frame
                 for i in 0..ftype.params().len() {
-                    res.push(get_frame());
+                    get_frame(&mut res);
                     res.push(simple_op(AVMOpcode::Swap1));
-                    res.push(set64_from_buffer(ftype.params().len() - 1 - i));
-                    res.push(set_frame());
+                    res.push(set64_from_buffer(ftype.params().len() - 1 - i + 1));
+                    set_frame(&mut res);
                 }
                 call_jump(&mut res, *x);
                 res.push(mk_label(return_label));
@@ -1187,16 +1179,17 @@ fn handle_function(
                 // Save func ptr
                 res.push(simple_op(AVMOpcode::AuxPush));
                 // push new frame to aux stack
-                res.push(push_frame(Value::new_tuple(vec![
-                    Value::new_buffer(vec![]),
-                    Value::Label(Label::Evm(return_label)),
-                ])));
+                res.push(simple_op(AVMOpcode::NewBuffer));
+                res.push(push_value(Value::Label(Label::Evm(return_label))));
+                res.push(push_value(int_from_usize(0)));
+                res.push(simple_op(AVMOpcode::SetBuffer64));
+                res.push(simple_op(AVMOpcode::AuxPush));
                 // Push args to frame
                 for i in 0..ftype.params().len() {
-                    res.push(get_frame());
+                    get_frame(&mut res);
                     res.push(simple_op(AVMOpcode::Swap1));
-                    res.push(set64_from_buffer(ftype.params().len() - 1 - i));
-                    res.push(set_frame());
+                    res.push(set64_from_buffer(ftype.params().len() - 1 - i + 1));
+                    set_frame(&mut res);
                 }
                 // Codepoints and hashes are in some kind of a table
                 res.push(simple_op(AVMOpcode::AuxPop));
@@ -1827,7 +1820,8 @@ fn handle_function(
 
     // Function return
     res.push(mk_label(end_label));
-    res.push(get_return_pc());
+    get_frame(&mut res);
+    res.push(get64_from_buffer(0));
     get_return_from_table(&mut res);
     res.push(simple_op(AVMOpcode::JumpTable));
 
@@ -2405,17 +2399,18 @@ fn process_wasm_inner(buffer: &[u8], init: &mut Vec<Instruction>, test_args: &[u
     };
 
     // Put initial frame to aux stack
-    init.push(push_frame(Value::new_tuple(vec![
-        Value::new_buffer(vec![]),
-        Value::Label(Label::WasmFunc(f_count + 1)),
-    ])));
+    init.push(simple_op(AVMOpcode::NewBuffer));
+    init.push(push_value(Value::Label(Label::WasmFunc(f_count + 1))));
+    init.push(push_value(int_from_usize(0)));
+    init.push(simple_op(AVMOpcode::SetBuffer64));
+    init.push(simple_op(AVMOpcode::AuxPush));
 
     // Add test arguments to the frame
     for (i,arg) in test_args.iter().enumerate() {
-        init.push(get_frame());
+        get_frame(init);
         init.push(push_value(Value::Int(Uint256::from_u64(*arg))));
-        init.push(set64_from_buffer(i));
-        init.push(set_frame());
+        init.push(set64_from_buffer(i+1));
+        set_frame(init);
     }
 
     // Here we should have jump to the correct function
@@ -2438,191 +2433,9 @@ fn process_wasm_inner(buffer: &[u8], init: &mut Vec<Instruction>, test_args: &[u
 
     for (idx, f) in get_func_imports(&module).iter().enumerate() {
         init.push(mk_func_label(idx));
-        if f.field().contains("read") {
-            init.push(debug_op("Read".to_string()));
-            // Get buffer
-            get_buffer(init);
-            // Get param
-            init.push(get_frame());
-            init.push(get64_from_buffer(0));
-            init.push(simple_op(AVMOpcode::GetBuffer8));
-        }
-        if f.field().contains("write") {
-            init.push(debug_op("Write".to_string()));
-            // Get buffer
-            get_buffer(init);
-            // Get params
-            init.push(get_frame());
-            init.push(get64_from_buffer(1));
-            init.push(get_frame());
-            init.push(get64_from_buffer(0));
-            init.push(simple_op(AVMOpcode::SetBuffer8));
-            set_buffer(init);
-        }
-        if f.field().contains("getlen") {
-            get_buffer_len(init);
-        }
-        if f.field().contains("setlen") {
-            init.push(get_frame());
-            init.push(get64_from_buffer(0));
-            set_buffer_len(init);
-        }
-        if f.field().contains("usegas") {
-            let ok_label = label;
-            label = label + 1;
-            init.push(get_frame());
-            init.push(get64_from_buffer(0));
-            get_gas_left(init);
-            init.push(simple_op(AVMOpcode::GreaterThan));
-            cjump(init, ok_label);
-
-            init.push(push_value(int_from_usize(0)));
-            set_gas_left(init);
-            call_jump(init, (f_count + 1) as u32);
-
-            init.push(mk_label(ok_label));
-            init.push(get_frame());
-            init.push(get64_from_buffer(0));
-            get_gas_left(init);
-            init.push(simple_op(AVMOpcode::Minus));
-            set_gas_left(init);
-        }
-        if f.field().contains("rvec") {
-            let start_label = label;
-            let end_label = label+1;
-            label = label + 2;
-
-            init.push(debug_op("Rvec".to_string()));
-            // init counter
-            init.push(get_frame());
-            init.push(push_value(int_from_usize(0)));
-            init.push(set64_from_buffer(3));
-            init.push(set_frame());
-
-            init.push(mk_label(start_label));
-            // check if loop ends
-            init.push(get_frame());
-            init.push(get64_from_buffer(3));
-            init.push(get_frame());
-            init.push(get64_from_buffer(2));
-            init.push(simple_op(AVMOpcode::LessThan));
-            cjump(init, end_label);
-
-            init.push(debug_op("Rvec loop".to_string()));
-            // Read from IO
-            get_buffer(init);
-            init.push(get_frame());
-            init.push(get64_from_buffer(1)); // offset
-            init.push(simple_op(AVMOpcode::GetBuffer8));
-            // Write to memory
-            init.push(get_frame());
-            init.push(get64_from_buffer(0)); // pointer
-            init.push(simple_op(AVMOpcode::Swap1));
-            generate_store8(init, 0, memory_offset);
-
-            // increment counters
-            init.push(get_frame());
-            init.push(get64_from_buffer(1));
-            init.push(push_value(int_from_usize(1)));
-            init.push(simple_op(AVMOpcode::Plus));
-            init.push(get_frame());
-            init.push(simple_op(AVMOpcode::Swap1));
-            init.push(set64_from_buffer(1));
-            init.push(set_frame());
-
-            init.push(get_frame());
-            init.push(get64_from_buffer(3));
-            init.push(push_value(int_from_usize(1)));
-            init.push(simple_op(AVMOpcode::Plus));
-            init.push(get_frame());
-            init.push(simple_op(AVMOpcode::Swap1));
-            init.push(set64_from_buffer(3));
-            init.push(set_frame());
-
-            // also increment memory pointer
-            init.push(get_frame());
-            init.push(get64_from_buffer(0));
-            init.push(push_value(int_from_usize(1)));
-            init.push(simple_op(AVMOpcode::Plus));
-            init.push(get_frame());
-            init.push(simple_op(AVMOpcode::Swap1));
-            init.push(set64_from_buffer(0));
-            init.push(set_frame());
-
-            jump(init, start_label);
-            
-            init.push(mk_label(end_label));
-        }
-        if f.field().contains("wvec") {
-            let start_label = label;
-            let end_label = label+1;
-            label = label + 2;
-
-            init.push(debug_op("Wvec".to_string()));
-            // init counter
-            init.push(get_frame());
-            init.push(push_value(int_from_usize(0)));
-            init.push(set64_from_buffer(3));
-            init.push(set_frame());
-
-            init.push(mk_label(start_label));
-            // check if loop ends
-            init.push(get_frame());
-            init.push(get64_from_buffer(3));
-            init.push(get_frame());
-            init.push(get64_from_buffer(2));
-            init.push(simple_op(AVMOpcode::LessThan));
-            cjump(init, end_label);
-
-            init.push(debug_op("Wvec loop".to_string()));
-            // Read from memory
-            init.push(get_frame());
-            init.push(get64_from_buffer(0)); // pointer
-            generate_load8(init, 0, memory_offset);
-            // Write to IO
-            get_buffer(init);
-            init.push(simple_op(AVMOpcode::Swap1));
-            init.push(get_frame());
-            init.push(get64_from_buffer(1)); // offset
-            init.push(simple_op(AVMOpcode::SetBuffer8));
-            set_buffer(init);
-
-            // increment counters
-            init.push(get_frame());
-            init.push(get64_from_buffer(1));
-            init.push(push_value(int_from_usize(1)));
-            init.push(simple_op(AVMOpcode::Plus));
-            init.push(get_frame());
-            init.push(simple_op(AVMOpcode::Swap1));
-            init.push(set64_from_buffer(1));
-            init.push(set_frame());
-
-            init.push(get_frame());
-            init.push(get64_from_buffer(3));
-            init.push(push_value(int_from_usize(1)));
-            init.push(simple_op(AVMOpcode::Plus));
-            init.push(get_frame());
-            init.push(simple_op(AVMOpcode::Swap1));
-            init.push(set64_from_buffer(3));
-            init.push(set_frame());
-
-            // also increment memory pointer
-            init.push(get_frame());
-            init.push(get64_from_buffer(0));
-            init.push(push_value(int_from_usize(1)));
-            init.push(simple_op(AVMOpcode::Plus));
-            init.push(get_frame());
-            init.push(simple_op(AVMOpcode::Swap1));
-            init.push(set64_from_buffer(0));
-            init.push(set_frame());
-
-            jump(init, start_label);
-            
-            init.push(mk_label(end_label));
-        }
-
         // Return from function
-        init.push(get_return_pc());
+        get_frame(init);
+        init.push(get64_from_buffer(0));
         get_return_from_table(init);
         init.push(simple_op(AVMOpcode::JumpTable));
     }
