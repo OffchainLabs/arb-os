@@ -451,102 +451,89 @@ fn mavm_codegen_statement(
             }
             Ok((lg, exp_locals, HashMap::new()))
         }
-        TypeCheckedStatementKind::Let(pat, expr) => match &pat.kind {
-            MatchPatternKind::Simple(name) => {
-                let slot_num = num_locals;
-                let (lg, c, exp_locals) = mavm_codegen_expr(
-                    expr,
-                    code,
-                    num_locals,
-                    &locals,
-                    label_gen,
-                    string_table,
-                    import_func_map,
-                    global_var_map,
-                    prepushed_vals,
-                    scopes,
-                    file_info_chart,
-                )?;
-                let mut bindings = HashMap::new();
-                bindings.insert(*name, slot_num);
-                num_locals += 1;
-                num_locals = max(num_locals, exp_locals);
-                label_gen = lg;
-                code = c;
-                code.push(Instruction::from_opcode_imm(
-                    Opcode::SetLocal,
-                    Value::Int(Uint256::from_usize(slot_num)),
-                    debug,
-                ));
-                Ok((label_gen, num_locals, bindings))
-            }
-            MatchPatternKind::Assign(_) => unimplemented!(),
-            MatchPatternKind::Tuple(pattern) => {
-                let (lg, c, exp_locals) = mavm_codegen_expr(
-                    expr,
-                    code,
-                    num_locals,
-                    &locals,
-                    label_gen,
-                    string_table,
-                    import_func_map,
-                    global_var_map,
-                    prepushed_vals,
-                    scopes,
-                    file_info_chart,
-                )?;
-                label_gen = lg;
-                code = c;
-                let mut assigned = HashSet::new();
-                let mut pairs = HashMap::new();
-                let mut binding_types = Vec::new();
-                for (i, sub_pat) in pattern.clone().iter().enumerate() {
-                    match &sub_pat.kind {
-                        MatchPatternKind::Simple(name) => {
-                            pairs.insert(*name, num_locals + i);
-                            binding_types.push((*name, num_locals + i));
-                        }
-                        MatchPatternKind::Assign(name) => {
-                            if locals.get(name).is_none() {
-                                if global_var_map.get(name).is_none() {
+        TypeCheckedStatementKind::Let(pat, expr) => {
+            let (lg, c, exp_locals) = mavm_codegen_expr(
+                expr,
+                code,
+                num_locals,
+                &locals,
+                label_gen,
+                string_table,
+                import_func_map,
+                global_var_map,
+                prepushed_vals,
+                scopes,
+                file_info_chart,
+            )?;
+            match &pat.kind {
+                MatchPatternKind::Simple(name) => {
+                    let slot_num = num_locals;
+                    let mut bindings = HashMap::new();
+                    bindings.insert(*name, slot_num);
+                    num_locals += 1;
+                    num_locals = max(num_locals, exp_locals);
+                    label_gen = lg;
+                    code = c;
+                    code.push(Instruction::from_opcode_imm(
+                        Opcode::SetLocal,
+                        Value::Int(Uint256::from_usize(slot_num)),
+                        debug,
+                    ));
+                    Ok((label_gen, num_locals, bindings))
+                }
+                MatchPatternKind::Assign(_) => unimplemented!(),
+                MatchPatternKind::Tuple(pattern) => {
+                    label_gen = lg;
+                    code = c;
+                    let mut assigned = HashSet::new();
+                    let mut pairs = HashMap::new();
+                    for (i, sub_pat) in pattern.clone().iter().enumerate() {
+                        match &sub_pat.kind {
+                            MatchPatternKind::Simple(name) => {
+                                pairs.insert(*name, num_locals + i);
+                            }
+                            MatchPatternKind::Assign(name) => {
+                                if locals.get(name).is_none() {
+                                    if global_var_map.get(name).is_none() {
+                                        return Err(new_codegen_error(
+                                            "assigned to non-existent variable in mixed let"
+                                                .to_string(),
+                                            loc,
+                                        ));
+                                    }
+                                };
+                                if !assigned.insert(name) {
                                     return Err(new_codegen_error(
-                                        "assigned to non-existent variable in mixed let"
-                                            .to_string(),
+                                        format!(
+                                            "assigned to variable {} in mixed let multiple times",
+                                            string_table.name_from_id(*name)
+                                        ),
                                         loc,
                                     ));
                                 }
-                            };
-                            if !assigned.insert(name) {
+                            }
+                            MatchPatternKind::Tuple(_) => {
                                 return Err(new_codegen_error(
-                                    format!(
-                                        "assigned to variable {} in mixed let multiple times",
-                                        string_table.name_from_id(*name)
-                                    ),
+                                    "nested pattern not supported in pattern-match let".to_string(),
                                     loc,
                                 ));
                             }
                         }
-                        MatchPatternKind::Tuple(_) => {
-                            return Err(new_codegen_error(
-                                "nested pattern not supported in pattern-match let".to_string(),
-                                loc,
-                            ));
-                        }
                     }
+                    mavm_codegen_tuple_pattern(
+                        code,
+                        pattern,
+                        num_locals,
+                        locals,
+                        global_var_map,
+                        debug,
+                    )?;
+                    num_locals += pattern.len();
+                    num_locals = max(num_locals, exp_locals);
+                    Ok((label_gen, num_locals, pairs))
                 }
-                mavm_codegen_tuple_pattern(
-                    code,
-                    pattern,
-                    num_locals,
-                    locals,
-                    global_var_map,
-                    debug,
-                )?;
-                num_locals += pattern.len();
-                num_locals = max(num_locals, exp_locals);
-                Ok((label_gen, num_locals, pairs))
             }
-        },
+        }
         TypeCheckedStatementKind::AssignLocal(name, expr) => {
             let slot_num = match locals.get(name) {
                 Some(slot) => slot,
