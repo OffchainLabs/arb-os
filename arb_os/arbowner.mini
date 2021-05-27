@@ -25,6 +25,7 @@ use evmCallStack::evmCallStack_setAccount;
 use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallStack_stackDepth;
 use evmCallStack::evmCallStack_returnFromCall;
+use evmCallStack::evmCallStack_transferEthFromCurrent;
 use evmCallStack::evmCallStack_getAccountInCurrentContext;
 use evmCallStack::evmCallStack_setAccountInCurrentContext;
 use evmCallStack::evmCallStack_getTopFrameReturnData;
@@ -41,7 +42,6 @@ use pluggables::installPluggable;
 use pluggables::callPluggable;
 use pluggables::bindContractAddressToPluggable;
 
-use gasAccounting::gasAccounting_addToReserveInCurrentContext;
 use gasAccounting::gasAccounting_setFeesEnabled;
 use gasAccounting::gasAccounting_getFeeRecipients;
 use gasAccounting::gasAccounting_setFeeRecipients;
@@ -55,6 +55,7 @@ use gasAccounting::allowedSenders_contains;
 use gasAccounting::allowedSenders_add;
 use gasAccounting::allowedSenders_remove;
 use gasAccounting::allowedSenders_serialize;
+use gasAccounting::getAddressForReserveFundsDeposit;
 
 use inbox::inbox_currentArbBlockNumber;
 use inbox::inbox_currentEthBlockNumber;
@@ -171,7 +172,9 @@ impure func arbowner_addToReserveFunds(topFrame: EvmCallFrame, calldata: ByteArr
     }
     let callvalue = evmCallFrame_getCallvalue(topFrame);
     if (callvalue > 0) {
-        gasAccounting_addToReserveInCurrentContext(callvalue);
+        if (evmCallStack_transferEthFromCurrent(getAddressForReserveFundsDeposit(), callvalue) == None<()>) {
+            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 51, 0, 0);
+        }
     }
     evmOp_return(0, 0);
 }

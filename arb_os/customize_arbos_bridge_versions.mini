@@ -3,7 +3,6 @@
 //
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
-
 use accounts::AccountStore;
 
 use gasAccounting::TxGasState;
@@ -15,10 +14,12 @@ use gasAccounting::RetryablePrices;
 
 use std::addressSet::SetOfAddresses;
 use std::addressSet::setOfAddresses_all;
+use evmCallStack::EvmCallFrame;
+use messages::TxRequestData;
 
 
 public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> AccountStore {
-    return input_globals.globalAccountStore;
+    return unsafecast<AccountStore>(input_globals.globalAccountStore);
 }
 
 public func set_gasAccountingInfo_onUpgrade(
@@ -47,4 +48,16 @@ public func set_gasAccountingInfo_onUpgrade(
         retryablePrices: input_globals.gasAccountingInfo.retryablePrices,
         allowedSenders: setOfAddresses_all(),
     };
+}
+
+public func set_evmOpJumpTable_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> [48]impure func() {
+    return unsafecast<[48]impure func()>(input_globals.evmOpJumpTable);
+}
+
+public func set_globalCallStack_onUpgrade(_input_globals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
+    return None<EvmCallFrame>;
+}
+
+public func set_globalCurrentTxRequest_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> TxRequestData {
+    return unsafecast<TxRequestData>(input_globals.globalCurrentTxRequest);
 }

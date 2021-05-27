@@ -1,5 +1,5 @@
 {
-  "arbos_version": 19,
+  "arbos_version": 24,
   "integer": {
     "AVMSendType_batch": 0,
     "AVM_add": 1,
@@ -107,6 +107,7 @@
     "EVMCallType_staticcall": 3,
     "EVMNonZeroBalanceCallStipend": 2300,
     "EVMWriteL1GasCost": 5000,
+    "EscrowStoreID_txGas": 0,
     "Estimate_L1GasCostPerNode": 220000,
     "Estimate_L1GasPrice": 100000000000,
     "EvmOp_address": 2,
@@ -128,6 +129,7 @@
     "EvmOp_extcodecopy": 14,
     "EvmOp_extcodehash": 15,
     "EvmOp_extcodesize": 13,
+    "EvmOp_gas": 47,
     "EvmOp_gaslimit": 45,
     "EvmOp_gasprice": 44,
     "EvmOp_getjumpaddr": 26,
@@ -178,7 +180,7 @@
     "LogType_txReceipt": 0,
     "NetFee_defaultRateDenominator": 100,
     "NetFee_defaultRateNumerator": 15,
-    "NumEvmOps": 47,
+    "NumEvmOps": 48,
     "PluggableModuleID_precompile_0x05": 1,
     "PluggableModuleID_rollupTracker": 0,
     "ProtoEvent_claimNode": 4,
@@ -224,6 +226,7 @@
   "contract_folder": "contracts/artifacts/arbos/builtin",
   "contract": [
     "ArbAggregator",
+    "ArbosTest",
     "ArbOwner",
     "ArbRetryableTx",
     "ArbStatistics"
