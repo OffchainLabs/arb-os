@@ -8,6 +8,7 @@ use std::bytearray::MarshalledBytes;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_unmarshalBytes;
 use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_eq;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_get64;
@@ -18,6 +19,7 @@ use std::bytearray::bytearray_marshalFull;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
 use std::bytearray::buffer_getCalldataUnits;
+use std::bytearray::bytearray_append;
 
 use std::bytearray::marshalledBytes_hash;
 
@@ -248,7 +250,22 @@ func tests() -> uint {
         return 30;
     }
 
-    return testCalldataUnitCounting();
+    let res = testCalldataUnitCounting();
+    if (res != 0) {
+        return res;
+    }
+
+    res = testEqualityTest();
+    if (res != 0) {
+        return res;
+    }
+
+    res = testAppend();
+    if (res != 0) {
+        return res;
+    }
+
+    return 0;
 }
 
 func setupFromUnmarshal() -> ByteArray {
@@ -281,6 +298,42 @@ func testCalldataUnitCounting() -> uint {
     buf = setbuffer256(buf, 3, ~0);
     if (buffer_getCalldataUnits(buf, 0, 37) != (16*32 + 4*5)) {
         return 10002;
+    }
+
+    return 0;
+}
+
+func testEqualityTest() -> uint {
+    if ( ! bytearray_eq(bytearray_new(0), bytearray_new(0)) ) {
+        return 20001;
+    }
+    if (bytearray_eq(bytearray_new(0), bytearray_setByte(bytearray_new(0), 3, 13))) {
+        return 20002;
+    }
+    if (bytearray_eq(bytearray_new(0), bytearray_setByte(bytearray_new(0), 3, 0))) {
+        return 20002;
+    }
+
+    return 0;
+}
+
+func testAppend() -> uint {
+    let ba1 = bytearray_set256(bytearray_new(0), 0, ~73);
+    let ba2 = bytearray_set256(bytearray_new(0), 0, 99);
+
+    if (! bytearray_eq(
+        bytearray_append(ba1, ba2),
+        bytearray_set256(ba1, 32, 99),
+    )) {
+        return 30001;
+    }
+
+    let ba3 = bytearray_setByte(ba1, 997, 3);
+    if (bytearray_size(bytearray_append(ba2, ba3)) != 998+32) {
+        return 30002;
+    }
+    if (bytearray_size(bytearray_append(ba3, ba2)) != 998+32) {
+        return 30003;
     }
 
     return 0;

@@ -2,7 +2,7 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-use std::random::RandomGenerator;  // dummy use, to work around compiler issue (error on const if not preceded by use)
+use std::keccak::keccak256;
 
 const MaxByteArraySize = 0x10000000000000000;
 
@@ -54,6 +54,10 @@ public func bytearray_toSizeAndBuffer(ba: ByteArray) -> (uint, buffer) {
         i = i+1;
     }
     return (size, buf);
+}
+
+public func bytearray_eq(ba1: ByteArray, ba2: ByteArray) -> bool {
+    return (ba1.size == ba2.size) && (keccak256(ba1, 0, ba1.size) == keccak256(ba2, 0, ba2.size));
 }
 
 public func bytearray_getCalldataUnits(ba: ByteArray) -> uint {
@@ -332,6 +336,10 @@ public func bytearray_copy(
         }
     }
     return to with { contents: toContents };
+}
+
+public func bytearray_append(ba1: ByteArray, ba2: ByteArray) -> ByteArray {
+    return bytearray_copy(ba2, 0, ba1, bytearray_size(ba1), bytearray_size(ba2));
 }
 
 public func bytearray_extract(from: ByteArray, offset: uint, nbytes: uint) -> ByteArray {
