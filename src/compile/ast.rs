@@ -1012,6 +1012,7 @@ pub struct MatchPattern<T = ()> {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MatchPatternKind<T> {
     Simple(StringId),
+    Assign(StringId),
     Tuple(Vec<T>),
 }
 
@@ -1019,6 +1020,12 @@ impl<T> MatchPattern<T> {
     pub fn new_simple(id: StringId, cached: T) -> Self {
         Self {
             kind: MatchPatternKind::Simple(id),
+            cached,
+        }
+    }
+    pub fn new_assign(id: StringId, cached: T) -> Self {
+        Self {
+            kind: MatchPatternKind::Assign(id),
             cached,
         }
     }

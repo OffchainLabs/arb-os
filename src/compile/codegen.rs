@@ -18,7 +18,7 @@ use crate::mavm::{AVMOpcode, Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::{cmp::max, collections::HashMap};
 
 ///Represents any encountered during codegen
@@ -480,6 +480,7 @@ fn mavm_codegen_statement(
                 ));
                 Ok((label_gen, num_locals, bindings))
             }
+            MatchPatternKind::Assign(_) => unimplemented!(),
             MatchPatternKind::Tuple(pattern) => {
                 let (lg, c, exp_locals) = mavm_codegen_expr(
                     expr,
@@ -496,6 +497,7 @@ fn mavm_codegen_statement(
                 )?;
                 label_gen = lg;
                 code = c;
+                let mut assigned = HashSet::new();
                 let mut pairs = HashMap::new();
                 let mut binding_types = Vec::new();
                 for (i, sub_pat) in pattern.clone().iter().enumerate() {
@@ -503,6 +505,26 @@ fn mavm_codegen_statement(
                         MatchPatternKind::Simple(name) => {
                             pairs.insert(*name, num_locals + i);
                             binding_types.push((*name, num_locals + i));
+                        }
+                        MatchPatternKind::Assign(name) => {
+                            if locals.get(name).is_none() {
+                                if global_var_map.get(name).is_none() {
+                                    return Err(new_codegen_error(
+                                        "assigned to non-existent variable in mixed let"
+                                            .to_string(),
+                                        loc,
+                                    ));
+                                }
+                            };
+                            if !assigned.insert(name) {
+                                return Err(new_codegen_error(
+                                    format!(
+                                        "assigned to variable {} in mixed let multiple times",
+                                        string_table.name_from_id(*name)
+                                    ),
+                                    loc,
+                                ));
+                            }
                         }
                         MatchPatternKind::Tuple(_) => {
                             return Err(new_codegen_error(
@@ -512,7 +534,14 @@ fn mavm_codegen_statement(
                         }
                     }
                 }
-                mavm_codegen_tuple_pattern(code, pattern, num_locals, debug);
+                mavm_codegen_tuple_pattern(
+                    code,
+                    pattern,
+                    num_locals,
+                    locals,
+                    global_var_map,
+                    debug,
+                )?;
                 num_locals += pattern.len();
                 num_locals = max(num_locals, exp_locals);
                 Ok((label_gen, num_locals, pairs))
@@ -692,8 +721,10 @@ fn mavm_codegen_tuple_pattern(
     code: &mut Vec<Instruction>,
     pattern: &[TypeCheckedMatchPattern],
     local_slot_num_base: usize,
+    locals: &HashMap<usize, usize>,
+    global_var_map: &HashMap<StringId, usize>,
     debug_info: DebugInfo,
-) {
+) -> Result<(), CodegenError> {
     let pat_size = pattern.len();
     for (i, pat) in pattern.iter().enumerate() {
         if i < pat_size - 1 {
@@ -715,11 +746,57 @@ fn mavm_codegen_tuple_pattern(
                     debug_info,
                 ));
             }
+            MatchPatternKind::Assign(id) => {
+                code.push(Instruction::from_opcode_imm(
+                    Opcode::TupleGet(pat_size),
+                    Value::Int(Uint256::from_usize(i)),
+                    debug_info,
+                ));
+                if let Some(val) = locals.get(id) {
+                    code.push(Instruction::from_opcode_imm(
+                        Opcode::SetLocal,
+                        Value::Int(Uint256::from_usize(*val)),
+                        debug_info,
+                    ))
+                } else {
+                    code.push(Instruction::from_opcode(
+                        Opcode::SetGlobalVar(*global_var_map.get(id).ok_or_else(|| {
+                            new_codegen_error(
+                                format!(
+                                    "Failed to find local when generating code for match pattern "
+                                ),
+                                debug_info.location,
+                            )
+                        })?),
+                        debug_info,
+                    ))
+                };
+                /*code.push(Instruction::from_opcode_imm(
+                    Opcode::SetLocal,
+                    Value::Int(Uint256::from_usize(if let Some(val) = locals.get(id) {
+                        val
+                    } else {
+                        global_var_map.get(id).ok_or_else(|| {
+                            new_codegen_error(
+                                format!(
+                                    "Failed to find local when generating code for match pattern "
+                                ),
+                                debug_info.location,
+                            )
+                        })?
+                    })),
+                    debug_info,
+                ));*/
+            }
             MatchPatternKind::Tuple(_) => {
-                panic!("Can't yet generate code for pattern-match let with nested tuples");
+                return Err(new_codegen_error(
+                    format!("Can't yet generate code for pattern-match let with nested tuples"),
+                    debug_info.location,
+                ));
             }
         }
     }
+    Ok(())
 }
 
 ///Generates code for the expression expr.

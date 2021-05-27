@@ -789,6 +789,7 @@ impl TypeCheckedMatchPattern {
     fn collect_identifiers(&self) -> Vec<StringId> {
         match &self.kind {
             MatchPatternKind::Simple(id) => vec![*id],
+            MatchPatternKind::Assign(id) => vec![*id],
             MatchPatternKind::Tuple(pats) => pats
                 .iter()
                 .flat_map(|pat| pat.collect_identifiers())
@@ -1454,6 +1455,7 @@ fn typecheck_statement<'a>(
                     ),
                     vec![(*name, tce_type)],
                 )),
+                MatchPatternKind::Assign(_) => unimplemented!(),
                 MatchPatternKind::Tuple(pats) => {
                     let (tc_pats, bindings) =
                         typecheck_patvec(tce_type.clone(), pats.to_vec(), debug_info.location)?;
@@ -1622,6 +1624,9 @@ fn typecheck_patvec(
                     MatchPatternKind::Simple(name) => {
                         tc_pats.push(TypeCheckedMatchPattern::new_simple(*name, rhs_type.clone()));
                         bindings.push((*name, rhs_type.clone()));
+                    }
+                    MatchPatternKind::Assign(name) => {
+                        tc_pats.push(TypeCheckedMatchPattern::new_assign(*name, rhs_type.clone()));
                     }
                     MatchPatternKind::Tuple(_) => {
                         //TODO: implement this properly
