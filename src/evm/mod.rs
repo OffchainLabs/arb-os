@@ -1112,7 +1112,6 @@ pub fn _evm_xcontract_call_using_compressed_batch(
     Ok(true)
 }
 
-
 pub fn _evm_xcontract_call_sequencer_reordering(
     log_to: Option<&Path>,
     debug: bool,
