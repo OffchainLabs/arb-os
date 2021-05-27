@@ -762,7 +762,7 @@ public impure func evmCallStack_doCall(
         };
 
         // save returndata and status
-        globalCallStack = Some(topFrame with {
+        globalCallStack = Some(globalCallStack? with {
             returnInfo: Some(struct {
                 data: bytearray_new(0),
                 status: success,
