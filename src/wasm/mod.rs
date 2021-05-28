@@ -272,6 +272,8 @@ fn store_byte(res: &mut Vec<Instruction>, offset: usize) {
 }
 
 fn check_memory(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize, num: usize) {
+    res.push(simple_op(AVMOpcode::Pop));
+    /*
     res.push(immed_op(
         AVMOpcode::Plus,
         Value::Int(Uint256::from_usize(offset as usize + num - 1)),
@@ -285,6 +287,7 @@ fn check_memory(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize, n
     res.push(simple_op(AVMOpcode::GreaterThan));
     res.push(simple_op(AVMOpcode::IsZero));
     cjump(res, 1);
+    */
 }
 
 fn generate_store8(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize) {

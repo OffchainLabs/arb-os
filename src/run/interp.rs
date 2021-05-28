@@ -14,27 +14,30 @@ use std::fmt;
 ///Represents a stack of `Value`s
 #[derive(Debug, Default, Clone)]
 pub struct ValueStack {
-    contents: im::Vector<u64>,
+    contents: Vec<u64>,
+    ptr: usize,
 }
 
 impl ValueStack {
     pub fn new() -> Self {
         ValueStack {
-            contents: im::Vector::new(),
+            contents: vec![0; 10000],
+            ptr: 0,
         }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.contents.len() == 0
+        self.ptr == 0
     }
 
     pub fn num_items(&self) -> usize {
-        self.contents.len()
+        self.ptr
     }
 
     ///Pushes val to the top of self.
     pub fn push(&mut self, val: u64) {
-        self.contents.push_back(val);
+        self.contents[self.ptr] = val;
+        self.ptr = self.ptr + 1;
     }
 
     pub fn push_bool(&mut self, val: bool) {
@@ -42,7 +45,8 @@ impl ValueStack {
     }
 
     pub fn push_usize(&mut self, val: usize) {
-        self.contents.push_back(val as u64);
+        self.contents[self.ptr] = val as u64;
+        self.ptr = self.ptr + 1;
     }
 
     ///Returns the `Value` on the top of self, or None if self is empty.
@@ -50,13 +54,13 @@ impl ValueStack {
         if self.is_empty() {
             None
         } else {
-            Some(self.contents[self.contents.len() - 1].clone())
+            Some(self.contents[self.ptr - 1])
         }
     }
 
     pub fn nth(&self, n: usize) -> Option<u64> {
         if self.num_items() > n {
-            Some(self.contents[self.contents.len() - 1 - n].clone())
+            Some(self.contents[self.ptr - 1 - n])
         } else {
             None
         }
@@ -65,15 +69,19 @@ impl ValueStack {
     ///Pops the top value off the stack and returns it, or if the stack is empty returns an
     /// `ExecutionError`.
     pub fn pop(&mut self, state: &MachineState) -> Result<u64, ExecutionError> {
-        match self.contents.pop_back() {
-            Some(v) => Ok(v),
-            None => Err(ExecutionError::new("stack underflow", state, None)),
+        if self.ptr > 0 {
+            self.ptr = self.ptr - 1;
+            Ok(self.contents[self.ptr])
+        } else {
+            Err(ExecutionError::new("stack underflow", state, None))
         }
     }
     pub fn pop_usize(&mut self, state: &MachineState) -> Result<usize, ExecutionError> {
-        match self.contents.pop_back() {
-            Some(v) => Ok(v as usize),
-            None => Err(ExecutionError::new("stack underflow", state, None)),
+        if self.ptr > 0 {
+            self.ptr = self.ptr - 1;
+            Ok(self.contents[self.ptr] as usize)
+        } else {
+            Err(ExecutionError::new("stack underflow", state, None))
         }
     }
 }
@@ -797,7 +805,7 @@ impl Machine {
                     AVMOpcode::SGreaterThan => {
                         let r1 = self.stack.pop(&self.state)? as i64;
                         let r2 = self.stack.pop(&self.state)? as i64;
-                        self.stack.push_bool(r1 < r2);
+                        self.stack.push_bool(r1 > r2);
                         self.incr_pc();
                         Ok(true)
                     }
