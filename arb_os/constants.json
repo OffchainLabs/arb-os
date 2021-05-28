@@ -235,6 +235,7 @@
     "ArbosTest",
     "ArbOwner",
     "ArbRetryableTx",
-    "ArbStatistics"
+    "ArbStatistics",
+    "ArbSys"
   ]
 }
