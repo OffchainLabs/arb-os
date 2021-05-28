@@ -1803,9 +1803,9 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         "speed limit {}, pool max {}, tx gas limit {}",
         speed_limit, gas_pool_max, tx_gas_limit
     );
-    assert_eq!(speed_limit, Uint256::from_u64(1_000_000));
-    assert_eq!(gas_pool_max, Uint256::from_u64(720_000_000));
-    assert_eq!(tx_gas_limit, Uint256::from_u64(10_000_000));
+    assert_eq!(speed_limit, Uint256::from_u64(400_000));
+    assert_eq!(gas_pool_max, Uint256::from_u64(288_000_000));
+    assert_eq!(tx_gas_limit, Uint256::from_u64(8_000_000));
 
     if let Some(path) = log_to {
         machine
@@ -2611,7 +2611,7 @@ fn test_eventual_congestion_reject() {
         let res_code = match arbtest._burn_arb_gas(
             &mut machine,
             my_address.clone(),
-            Uint256::from_u64(5_000_000),
+            Uint256::from_u64(2_000_000),
         ) {
             Ok(rc) => rc,
             Err(_) => panic!(),
@@ -2662,7 +2662,7 @@ fn test_congestion_price_adjustment() {
         let res_code = match arbtest._burn_arb_gas(
             &mut machine,
             my_address.clone(),
-            Uint256::from_u64(5_000_000),
+            Uint256::from_u64(2_000_000),
         ) {
             Ok(rc) => rc,
             Err(_) => panic!(),
