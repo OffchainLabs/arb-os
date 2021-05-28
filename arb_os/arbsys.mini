@@ -10,6 +10,8 @@ use std::stack::Stack;
 use accounts::AccountStore;
 use std::bytestream::ByteStream;
 
+use chainParameters::chainParams_chainId;
+
 use evmCallStack::evmCallStack_stackDepth;
 use evmCallStack::evmCallStack_topFrame;
 use evmCallStack::evmCallStack_setAccount;
@@ -94,6 +96,7 @@ public impure func arbsys_txcall() {
         let funcCode = getFuncCode(calldata);
         if (funcCode == 0x051038F2) {
             arbsys_arbOSVersion(topFrame, calldata);
+        } elseif(funcCode == const::funcCode_ArbSys_arbChainID) {
         } elseif(funcCode == 0xa3b1b31d) {
             arbsys_arbBlockNumber(topFrame, calldata);
         } elseif(funcCode == 0x25e16063) {
@@ -211,6 +214,18 @@ impure func arbsys_arbOSVersion(_topFrame: EvmCallFrame, calldata: ByteArray) { 
         evmOp_return(0, 32);
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 6, 0, 0);
+    }
+}
+
+impure func arbsys_arbChainID(_topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> uint
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 7, 0, 0);
+    }
+    let chainId = chainParams_chainId();
+    if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, chainId))) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 8, 0, 0);
     }
 }
 
