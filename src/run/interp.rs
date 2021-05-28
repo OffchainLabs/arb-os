@@ -337,7 +337,7 @@ impl Machine {
                     println!("PC: {}", pc);
                 }
                 println!("Stack contents: {}", self.stack);
-                println!("Aux-stack contents: {}", self.aux_stack);
+                // println!("Aux-stack contents: {}", self.aux_stack);
                 if !self.stack.is_empty() {
                     println!("Stack size: {}", self.stack.num_items());
                 }
@@ -347,7 +347,7 @@ impl Machine {
                 if let Some(code) = self.next_opcode() {
                     println!("Next Opcode: {}", code.opcode);
                     if let Some(imm) = code.immediate {
-                        // println!("Immediate: {}", imm);
+                        println!("Immediate: {}", imm);
                     }
                     if let Some(str) = code.debug_str {
                         println!("*************************** Debug: {}", str);

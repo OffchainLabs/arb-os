@@ -2577,9 +2577,8 @@ pub fn load_with_table(buffer: &[u8], param: &[u8]) -> (Vec<Instruction>, Vec<Co
     let (res, tab) = resolve_labels_array(init);
     let res = clear_labels(res);
     let mut a = vec![];
-    a.push(push_value(int_from_usize(param.len())));
-    // a.push(push_value(int_from_usize(10000)));
-    a.push(push_value(Value::new_buffer(param.to_vec())));
+    a.push(push_value(int_from_usize(0)));
+    a.push(push_value(int_from_usize(0)));
     a.push(push_value(int_from_usize(0)));
     for i in 3..res.len() {
         a.push(res[i].clone());
