@@ -375,17 +375,24 @@ impl<'a> _ArbOwner<'a> {
     pub fn _finish_code_upload_as_arbos_upgrade(
         &self,
         machine: &mut Machine,
-        expected_code_hash: Uint256,
-    ) -> Result<(), ethabi::Error> {
-        let _res = self.contract_abi.call_function(
+        new_code_hash: Uint256,
+        previous_upgrade_code_hash: Uint256,
+    ) -> Result<bool, ethabi::Error> {
+        let (receipts, _) = self.contract_abi.call_function(
             self.my_address.clone(),
             "finishCodeUploadAsArbosUpgrade",
-            &[ethabi::Token::FixedBytes(expected_code_hash.to_bytes_be())],
+            &[
+                ethabi::Token::FixedBytes(new_code_hash.to_bytes_be()),
+                ethabi::Token::FixedBytes(previous_upgrade_code_hash.to_bytes_be()),
+            ],
             machine,
             Uint256::zero(),
             self.debug,
         )?;
-        Ok(())
+
+        assert_eq!(receipts.len(), 1);
+
+        Ok(receipts[0].succeeded())
     }
 
     pub fn _finish_code_upload_as_pluggable(
@@ -1347,28 +1354,13 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys_orig_binding._arbos_version(&mut machine)?,
-        Uint256::from_u64(26),
+        Uint256::from_u64(27),
     );
 
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
 
-    let uploader = CodeUploader::_new_from_file(Path::new("arb_os/arbos-upgrade.mexe"));
-    arbowner._start_code_upload(&mut machine)?;
-
-    let mut accum = vec![];
-    for buf in uploader.instructions {
-        accum.extend(buf);
-        if (accum.len() > 3000) {
-            arbowner._continue_code_upload(&mut machine, accum)?;
-            accum = vec![];
-        }
-    }
-    if (accum.len() > 0) {
-        arbowner._continue_code_upload(&mut machine, accum)?;
-    }
-
-    let expected_code_hash = arbowner._get_uploaded_code_hash(&mut machine)?;
-    arbowner._finish_code_upload_as_arbos_upgrade(&mut machine, expected_code_hash)?;
+    let mexe_path = Path::new("arb_os/arbos-upgrade.mexe");
+    let previous_upgrade_hash = _try_upgrade(&arbowner, &mut machine, &mexe_path, None)?.unwrap();
 
     let wallet2 = machine.runtime_env.new_wallet();
     let arbsys = ArbSys::new(&wallet2, false);
@@ -1383,7 +1375,59 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbos_version_orig = arbsys_orig_binding._arbos_version(&mut machine)?;
     assert_eq!(arbos_version, arbos_version_orig);
 
+    // try again, specifying a previous hash
+    assert_eq!(
+        _try_upgrade(
+            &arbowner,
+            &mut machine,
+            &mexe_path,
+            Some(previous_upgrade_hash.clone())
+        )?,
+        Some(previous_upgrade_hash.clone())
+    );
+
+    // try again, specifying an incorrect previous hash
+    assert_eq!(
+        _try_upgrade(&arbowner, &mut machine, &mexe_path, Some(Uint256::one()))?,
+        None
+    );
+
     Ok(())
+}
+
+fn _try_upgrade(
+    arbowner: &_ArbOwner,
+    machine: &mut Machine,
+    mexe_path: &Path,
+    previous_upgrade_hash: Option<Uint256>,
+) -> Result<Option<Uint256>, ethabi::Error> {
+    let uploader = CodeUploader::_new_from_file(mexe_path);
+    arbowner._start_code_upload(machine)?;
+
+    let mut accum = vec![];
+    for buf in uploader.instructions {
+        accum.extend(buf);
+        if (accum.len() > 3000) {
+            arbowner._continue_code_upload(machine, accum)?;
+            accum = vec![];
+        }
+    }
+    if (accum.len() > 0) {
+        arbowner._continue_code_upload(machine, accum)?;
+    }
+
+    let expected_code_hash = arbowner._get_uploaded_code_hash(machine)?;
+    Ok(
+        if arbowner._finish_code_upload_as_arbos_upgrade(
+            machine,
+            expected_code_hash.clone(),
+            previous_upgrade_hash.unwrap_or(Uint256::zero()),
+        )? {
+            Some(expected_code_hash)
+        } else {
+            None
+        },
+    )
 }
 
 #[test]
@@ -1538,7 +1582,11 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
     arbowner._continue_code_upload(&mut machine, mcode)?;
 
     let expected_code_hash = arbowner._get_uploaded_code_hash(&mut machine)?;
-    arbowner._finish_code_upload_as_arbos_upgrade(&mut machine, expected_code_hash)?;
+    assert!(arbowner._finish_code_upload_as_arbos_upgrade(
+        &mut machine,
+        expected_code_hash,
+        Uint256::zero(),
+    )?);
 
     arbowner._set_seconds_per_send(&mut machine, Uint256::from_u64(10))?;
 

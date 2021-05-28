@@ -5,6 +5,8 @@
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 use accounts::AccountStore;
 
+use chainParameters::ChainParams;
+
 use gasAccounting::TxGasState;
 use gasAccounting::FeeConfig;
 use gasAccounting::GasPrices;
@@ -22,42 +24,6 @@ public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade
     return unsafecast<AccountStore>(input_globals.globalAccountStore);
 }
 
-public func set_gasAccountingInfo_onUpgrade(
-    input_globals: GlobalsBeforeUpgrade
-) -> struct {
-    txState: option<TxGasState>,       // status of currently active tx (if there is one)
-    feeConfig: FeeConfig,              // fee configuration
-    currentPrices: GasPrices,          // current prices for resources
-    gasRemainingThisBlock: uint,       // amount of gas remaining for this Arbitrum block
-    congestionState: CongestionState,  // state of congestion pricing algorithm
-    speedLimitPerSecond: uint,         // nominal ArbGas available for computation per second
-    pricingParams: PricingParameters,  // parameters that affect pricing
-    gasAllocatedToThisBlock: uint,     // total amount of gas allocated to the current Arbitrum block
-    retryablePrices: RetryablePrices,  // prices of retryable txs
-    allowedSenders: SetOfAddresses,    // who is allowed to send txs
-} {
-    return struct {
-        txState: input_globals.gasAccountingInfo.txState,
-        feeConfig: input_globals.gasAccountingInfo.feeConfig,
-        currentPrices: input_globals.gasAccountingInfo.currentPrices,
-        gasRemainingThisBlock: input_globals.gasAccountingInfo.gasRemainingThisBlock,
-        congestionState: input_globals.gasAccountingInfo.congestionState,
-        speedLimitPerSecond: input_globals.gasAccountingInfo.speedLimitPerSecond,
-        pricingParams: input_globals.gasAccountingInfo.pricingParams,
-        gasAllocatedToThisBlock: input_globals.gasAccountingInfo.gasAllocatedToThisBlock,
-        retryablePrices: input_globals.gasAccountingInfo.retryablePrices,
-        allowedSenders: setOfAddresses_all(),
-    };
-}
-
-public func set_evmOpJumpTable_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> [48]impure func() {
-    return unsafecast<[48]impure func()>(input_globals.evmOpJumpTable);
-}
-
 public func set_globalCallStack_onUpgrade(_input_globals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
     return None<EvmCallFrame>;
-}
-
-public func set_globalCurrentTxRequest_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> TxRequestData {
-    return unsafecast<TxRequestData>(input_globals.globalCurrentTxRequest);
 }

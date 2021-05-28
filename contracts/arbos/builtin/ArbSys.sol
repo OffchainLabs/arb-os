@@ -10,6 +10,8 @@ interface ArbSys {
      */
     function arbOSVersion() external pure returns (uint);
 
+    function arbChainID() external view returns(uint);
+
     /**
     * @notice Get Arbitrum block number (distinct from L1 block number; Arbitrum genesis block has block number 0)
     * @return block number as int
