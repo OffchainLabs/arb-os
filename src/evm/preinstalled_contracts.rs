@@ -1804,7 +1804,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         speed_limit, gas_pool_max, tx_gas_limit
     );
     assert_eq!(speed_limit, Uint256::from_u64(1_000_000));
-    assert_eq!(gas_pool_max, Uint256::from_u64(60_000_000));
+    assert_eq!(gas_pool_max, Uint256::from_u64(720_000_000));
     assert_eq!(tx_gas_limit, Uint256::from_u64(10_000_000));
 
     if let Some(path) = log_to {
@@ -2607,7 +2607,7 @@ fn test_eventual_congestion_reject() {
         ._advance_time(Uint256::one(), None, true);
 
     let arbtest = ArbosTest::new(false);
-    for _ in 0..100 {
+    for _ in 0..1200 {
         let res_code = match arbtest._burn_arb_gas(
             &mut machine,
             my_address.clone(),
@@ -2658,7 +2658,7 @@ fn test_congestion_price_adjustment() {
 
     let arbtest = ArbosTest::new(false);
     let mut seen_any_congestion = false;
-    for _ in 0..100 {
+    for _ in 0..1200 {
         let res_code = match arbtest._burn_arb_gas(
             &mut machine,
             my_address.clone(),
@@ -2688,7 +2688,7 @@ fn test_congestion_price_adjustment() {
 
     machine
         .runtime_env
-        ._advance_time(Uint256::from_u64(4), Some(Uint256::from_u64(60)), false);
+        ._advance_time(Uint256::from_u64(48), Some(Uint256::from_u64(720)), false);
     let prices2 = arbgasinfo
         //._get_prices_in_wei(&mut machine, randomish_address.clone())  preserve this for later integration
         ._get_prices_in_wei(&mut machine)

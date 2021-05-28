@@ -96,7 +96,7 @@
     "Charging_DefaultL1GasPerL2Tx": 3700,
     "Charging_DefaultL1GasPerStorage": 2000,
     "Charging_DefaultArbGasPerStorage": 0,
-    "Charging_GasPoolDepthSeconds": 60,
+    "Charging_GasPoolDepthSeconds": 720,
     "Charging_MinArbGasForContractTx": 50,
     "Charging_RetryableTxRepriceIntervalSeconds": 86400,
     "Charging_TxGasLimitSeconds": 10,
