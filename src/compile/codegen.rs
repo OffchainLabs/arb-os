@@ -719,8 +719,8 @@ fn mavm_codegen_tuple_pattern(
                 Value::Int(Uint256::from_usize(local_slot_num_base)),
                 debug_info,
             ));
-        },
-        MatchPatternKind::Assign(id) =>
+        }
+        MatchPatternKind::Assign(id) => {
             if let Some(val) = locals.get(id) {
                 code.push(Instruction::from_opcode_imm(
                     Opcode::SetLocal,
@@ -731,15 +731,14 @@ fn mavm_codegen_tuple_pattern(
                 code.push(Instruction::from_opcode(
                     Opcode::SetGlobalVar(*global_var_map.get(id).ok_or_else(|| {
                         new_codegen_error(
-                            format!(
-                                "Failed to find local when generating code for match pattern "
-                            ),
+                            format!("Failed to find local when generating code for match pattern "),
                             debug_info.location,
                         )
                     })?),
                     debug_info,
                 ))
-            },
+            }
+        }
         MatchPatternKind::Tuple(sub_pats) => {
             let pat_size = sub_pats.len();
             for (i, pat) in sub_pats.iter().enumerate() {
