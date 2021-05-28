@@ -11,7 +11,11 @@ interface ArbOwner {
     function setFeesEnabled(bool enabled) external;
     function getFeeRecipients() external view returns (address, address);
     function setFeeRecipients(address netFeeRecipient, address congestionFeeRecipient) external;
-    function setFairGasPriceSender(address addr) external;
+
+    function setFairGasPriceSender(address addr, bool isFairGasPriceSender) external;
+    function isFairGasPriceSender(address addr) external view returns(bool);
+    function getAllFairGasPriceSenders() external view returns(bytes memory);
+
     function setGasAccountingParams(uint speedLimitPerBlock, uint gasPoolMax, uint maxTxGasLimit) external;
 
     function setSecondsPerSend(uint blocksPerSend) external;
@@ -32,6 +36,15 @@ interface ArbOwner {
 
     // Bind an address to a pluggable, so the pluggable can be a contract.
     function bindAddressToPluggable(address addr, uint pluggableId) external;
+
+    // Manage the set of allowed senders
+    // address 0 and the chain owner are always allowed to send, even if not on the list
+    function allowAllSenders() external;
+    function allowOnlyOwnerToSend() external;
+    function isAllowedSender(address addr) external view returns(bool);
+    function addAllowedSender(address addr) external;
+    function removeAllowedSender(address addr) external;
+    function getAllAllowedSenders() external view returns(bytes memory);  // reverts if all or nearly all senders are allowed
 
     function getTotalOfEthBalances() external view returns(uint);
 }

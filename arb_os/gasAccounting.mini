@@ -28,6 +28,8 @@ use accounts::account_getAggregatorToPay;
 use arbstatistics::arbStatistics_addToStorage;
 use arbstatistics::arbStatistics_addToGasUsed;
 
+use chainParameters::chainParams_getOwner;
+
 use evmCallStack::evmCallStack_isEmpty;
 use evmCallStack::evmCallStack_getAccountInCurrentContext;
 use evmCallStack::evmCallStack_setAccountInCurrentContext;
@@ -59,6 +61,14 @@ use std::queue::queue_put;
 use std::queue::queue_get;
 use std::queue::queue_getOrDie;
 
+use std::addressSet::SetOfAddresses;
+use std::addressSet::setOfAddresses_emptySet;
+use std::addressSet::setOfAddresses_all;
+use std::addressSet::setOfAddresses_add;
+use std::addressSet::setOfAddresses_remove;
+use std::addressSet::setOfAddresses_contains;
+use std::addressSet::setOfAddresses_serialize;
+
 use std::stack::Stack;
 use std::stack::stack_new;
 use std::stack::stack_push;
@@ -82,6 +92,7 @@ var gasAccountingInfo: struct {
     pricingParams: PricingParameters,  // parameters that affect pricing
     gasAllocatedToThisBlock: uint,     // total amount of gas allocated to the current Arbitrum block
     retryablePrices: RetryablePrices,  // prices of retryable txs
+    allowedSenders: SetOfAddresses,    // who is allowed to send txs
 };
 
 type GasPrices = struct {    // all prices in this struct are denominated in wei
@@ -197,6 +208,7 @@ public impure func gasAccounting_init() {    // initialize on boot, before we ha
         pricingParams: pricingParams,
         gasAllocatedToThisBlock: uint(congestionState.gasPool),
         retryablePrices: retryablePrices,
+        allowedSenders: setOfAddresses_all(),
     };
 }
 
@@ -716,6 +728,9 @@ public impure func getNextRequestFromCongestionAuction() -> (
     TxRequestData,
 ) {
     let tx = inbox_getNextUnpackedRequest();
+    if( ! allowedSenders_contains(tx.caller)) {
+        return (const::TxResultCode_senderNotPermitted, tx);
+    }
 
     if (tx.incomingRequest.arbBlockNumber > gasAccountingInfo.congestionState.lastArbBlockNumSeen) {
         // it's the first tx of a new block, so do beginning-of-block work
@@ -1070,13 +1085,13 @@ public impure func getFeesForRetryableTx(
 //       an Arbitrum node that is trusted (for the purpose of choosing representative L1 gas prices).
 var globalL1GasPriceEstimator: struct {
     estimateWei: uint,
-    fairGasPriceSender: address,
+    fairGasPriceSenders: SetOfAddresses,
 };
 
 impure func initGasPriceEstimator() {
     globalL1GasPriceEstimator = struct {
         estimateWei: 150*(1000*1000*1000),  // 150 gwei
-        fairGasPriceSender: address(0),
+        fairGasPriceSenders: setOfAddresses_emptySet(),
     };
 }
 
@@ -1085,7 +1100,7 @@ impure func getL1GasPriceEstimate() -> uint {
 }
 
 public impure func updateL1GasPriceEstimate(sender: address, price: uint) {
-    if (sender == globalL1GasPriceEstimator.fairGasPriceSender) {
+    if (isFairGasPriceSender(sender)) {
         if (price > 5 * globalL1GasPriceEstimator.estimateWei) {
             price = 5 * globalL1GasPriceEstimator.estimateWei;
         } elseif (price < globalL1GasPriceEstimator.estimateWei / 5) {
@@ -1097,31 +1112,35 @@ public impure func updateL1GasPriceEstimate(sender: address, price: uint) {
     }
 }
 
-public impure func getFairGasPriceSender() -> address {
-    return globalL1GasPriceEstimator.fairGasPriceSender;
+public impure func isFairGasPriceSender(sender: address) -> bool {
+    return setOfAddresses_contains(globalL1GasPriceEstimator.fairGasPriceSenders, sender);
 }
 
-public impure func setFairGasPriceSender(sender: address) {
+public impure func setFairGasPriceSender(sender: address, value: bool) {
     globalL1GasPriceEstimator = globalL1GasPriceEstimator with {
-        fairGasPriceSender: sender
+        fairGasPriceSenders: xif (value) {
+            setOfAddresses_add(
+                globalL1GasPriceEstimator.fairGasPriceSenders,
+                sender,
+            )
+        } else {
+            setOfAddresses_remove(
+                globalL1GasPriceEstimator.fairGasPriceSenders,
+                sender,
+            )
+        }
     };
+}
+
+public impure func getSerializedFairGasPriceSenders() -> option<ByteArray> {
+    return setOfAddresses_serialize(globalL1GasPriceEstimator.fairGasPriceSenders);
 }
 
 // This adjusts l1GasPerL2Tx to be a weighted average, over recent transactions that arrived in batches,
 //     of the quantity (const::Charging_AssumedBatchCostL1Gas / batchSize). Because we're averaging over
 //     transactions, a batch contributes (batchSize) times, once for each transaction in it.
-public impure func updateBatchSizeEstimate(size: uint, batchSender: address) {
-    if (batchSender == getFairGasPriceSender()) {
-        if (size > 500) { size = 500; }
-        let oldValue = gasAccountingInfo.pricingParams.l1GasPerL2Tx;
-        let newValue = (const::Charging_AssumedBatchCostL1Gas + (5000 - size) * oldValue) / 5000;
-
-        gasAccountingInfo = gasAccountingInfo with {
-            pricingParams: gasAccountingInfo.pricingParams with {
-                l1GasPerL2Tx: newValue
-            }
-        };
-    }
+public func updateBatchSizeEstimate(_size: uint, _batchSender: address) {
+    // Leaving this as a no-op, so the estimate remains fixed.  This will be removed in a later PR.
 }
 
 type FourResources = struct {
@@ -1193,4 +1212,38 @@ public func deferredPayments_apply(acctStore: AccountStore, dp: DeferredPayments
             return Some(acctStore);
         }
     };
+}
+
+public impure func allowedSenders_allowAll() {
+    gasAccountingInfo = gasAccountingInfo with {
+        allowedSenders: setOfAddresses_all()
+    };
+}
+
+public impure func allowedSenders_allowNone() {
+    gasAccountingInfo = gasAccountingInfo with {
+        allowedSenders: setOfAddresses_emptySet()
+    };
+}
+
+public impure func allowedSenders_contains(addr: address) -> bool {
+    return setOfAddresses_contains(gasAccountingInfo.allowedSenders, addr)
+        || (addr == address(0))
+        || (Some(addr) == chainParams_getOwner());
+}
+
+public impure func allowedSenders_add(addr: address) {
+    gasAccountingInfo = gasAccountingInfo with {
+        allowedSenders: setOfAddresses_add(gasAccountingInfo.allowedSenders, addr)
+    };
+}
+
+public impure func allowedSenders_remove(addr: address) {
+    gasAccountingInfo = gasAccountingInfo with {
+        allowedSenders: setOfAddresses_remove(gasAccountingInfo.allowedSenders, addr)
+    };
+}
+
+public impure func allowedSenders_serialize() -> option<ByteArray> {
+    return setOfAddresses_serialize(gasAccountingInfo.allowedSenders);
 }
