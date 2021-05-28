@@ -687,6 +687,34 @@ impl<'a> _ArbOwner<'a> {
             Err(ethabi::Error::from("reverted"))
         }
     }
+
+    pub fn _set_l1_gas_price_estimate(
+        &self,
+        machine: &mut Machine,
+        price_in_gwei: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "setL1GasPriceEstimate",
+            &[ethabi::Token::Uint(price_in_gwei.to_u256())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from(format!(
+                "tx failed: {}",
+                receipts[0]._get_return_code_text()
+            )))
+        }
+    }
 }
 
 pub struct _ArbGasInfo<'a> {
@@ -1354,7 +1382,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys_orig_binding._arbos_version(&mut machine)?,
-        Uint256::from_u64(27),
+        Uint256::from_u64(28),
     );
 
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
@@ -1803,9 +1831,9 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         "speed limit {}, pool max {}, tx gas limit {}",
         speed_limit, gas_pool_max, tx_gas_limit
     );
-    assert_eq!(speed_limit, Uint256::from_u64(1_000_000));
-    assert_eq!(gas_pool_max, Uint256::from_u64(60_000_000));
-    assert_eq!(tx_gas_limit, Uint256::from_u64(10_000_000));
+    assert_eq!(speed_limit, Uint256::from_u64(400_000));
+    assert_eq!(gas_pool_max, Uint256::from_u64(288_000_000));
+    assert_eq!(tx_gas_limit, Uint256::from_u64(8_000_000));
 
     if let Some(path) = log_to {
         machine
@@ -2607,11 +2635,11 @@ fn test_eventual_congestion_reject() {
         ._advance_time(Uint256::one(), None, true);
 
     let arbtest = ArbosTest::new(false);
-    for _ in 0..100 {
+    for _ in 0..1200 {
         let res_code = match arbtest._burn_arb_gas(
             &mut machine,
             my_address.clone(),
-            Uint256::from_u64(5_000_000),
+            Uint256::from_u64(2_000_000),
         ) {
             Ok(rc) => rc,
             Err(_) => panic!(),
@@ -2658,11 +2686,11 @@ fn test_congestion_price_adjustment() {
 
     let arbtest = ArbosTest::new(false);
     let mut seen_any_congestion = false;
-    for _ in 0..100 {
+    for _ in 0..1200 {
         let res_code = match arbtest._burn_arb_gas(
             &mut machine,
             my_address.clone(),
-            Uint256::from_u64(5_000_000),
+            Uint256::from_u64(2_000_000),
         ) {
             Ok(rc) => rc,
             Err(_) => panic!(),
@@ -2688,10 +2716,49 @@ fn test_congestion_price_adjustment() {
 
     machine
         .runtime_env
-        ._advance_time(Uint256::from_u64(4), Some(Uint256::from_u64(60)), false);
+        ._advance_time(Uint256::from_u64(48), Some(Uint256::from_u64(720)), false);
     let prices2 = arbgasinfo
         //._get_prices_in_wei(&mut machine, randomish_address.clone())  preserve this for later integration
         ._get_prices_in_wei(&mut machine)
         .unwrap();
     assert_eq!(prices2.4, Uint256::zero());
+}
+
+#[test]
+fn test_set_gas_price_estimate() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+    let wallet = machine.runtime_env.new_wallet();
+    let my_address = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let arbowner = _ArbOwner::_new(&wallet, false);
+    let arbgasinfo = _ArbGasInfo::_new(&wallet, false);
+
+    machine.runtime_env.insert_eth_deposit_message(
+        my_address.clone(),
+        my_address.clone(),
+        Uint256::_from_eth(1000),
+    );
+    let _ = machine.run(None);
+
+    arbowner
+        ._set_fees_enabled(&mut machine, true, true)
+        .unwrap();
+
+    let new_gas_price = Uint256::from_u64(37);
+    let new_storage_price = new_gas_price.mul(&Uint256::from_u64(2_000_000_000_000));
+
+    let storage_price = arbgasinfo._get_prices_in_wei(&mut machine).unwrap().2;
+    assert!(storage_price != new_storage_price);
+
+    arbowner
+        ._set_l1_gas_price_estimate(&mut machine, new_gas_price)
+        .unwrap();
+
+    machine
+        .runtime_env
+        ._advance_time(Uint256::one(), None, false);
+
+    let storage_price = arbgasinfo._get_prices_in_wei(&mut machine).unwrap().2;
+    assert_eq!(storage_price, new_storage_price);
 }

@@ -20,6 +20,8 @@ interface ArbOwner {
 
     function setSecondsPerSend(uint blocksPerSend) external;
 
+    function setL1GasPriceEstimate(uint priceInGwei) external;
+
     // Deploy a contract on the chain
     // The contract is deployed as if it was submitted by deemedSender with deemedNonce
     // Reverts if there is already a contract at that address

@@ -56,6 +56,7 @@ use gasAccounting::allowedSenders_add;
 use gasAccounting::allowedSenders_remove;
 use gasAccounting::allowedSenders_serialize;
 use gasAccounting::getAddressForReserveFundsDeposit;
+use gasAccounting::setL1GasPriceEstimate;
 
 use inbox::inbox_currentArbBlockNumber;
 use inbox::inbox_currentEthBlockNumber;
@@ -150,6 +151,8 @@ public impure func arbowner_txcall() {
             arbowner_removeAllowedSender(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_getAllAllowedSenders) {
             arbowner_getAllAllowedSenders(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_setL1GasPriceEstimate) {
+            arbowner_setL1GasPriceEstimate(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
@@ -535,6 +538,17 @@ impure func arbowner_getAllAllowedSenders(_topFrame: EvmCallFrame, calldata: Byt
         evmOp_revert_knownPc(242, 0, 0);
     }
 }
+
+// function setL1GasPriceEstimate(uint priceInGwei) external;
+impure func arbowner_setL1GasPriceEstimate(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(250, 0, 0);
+    }
+    let newGasPrice = bytearray_get256(calldata, 4);
+    setL1GasPriceEstimate(newGasPrice);
+    evmOp_return(0, 0);
+}
+
 
 
 

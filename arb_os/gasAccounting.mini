@@ -224,8 +224,8 @@ impure func initCongestionState(isInit: bool) -> CongestionState {
 impure func setGasAccountingParamsFromSpeedLimit(speedLimitPerSecond: uint) {
     gasAccountingParams = struct {
         SpeedLimitPerSecond: speedLimitPerSecond,
-        GasPoolMax: speedLimitPerSecond * 60,
-        TxGasLimit: speedLimitPerSecond * 10,
+        GasPoolMax: speedLimitPerSecond * const::Charging_GasPoolDepthSeconds,
+        TxGasLimit: speedLimitPerSecond * const::Charging_TxGasLimitSeconds,
     };
 }
 
@@ -306,8 +306,8 @@ impure func setRetryablePrices(oldRetryablePrices: RetryablePrices) -> Retryable
         xif (gasAccountingInfo.feeConfig.enabled) {
             let gasPrice = getL1GasPriceEstimate();
             struct {
-                perTx: gasPrice,
-                perCalldataByte: gasPrice / 256,
+                perTx: gasPrice * const::RetryablePriceBase,
+                perCalldataByte: gasPrice * const::RetryablePricePerByteNumerator / const::RetryablePricePerByteDenominator,
                 nextUpdateTimestamp: inbox_currentTimestamp() + const::Charging_RetryableTxRepriceIntervalSeconds,
             }
         } else {
@@ -1097,6 +1097,12 @@ impure func initGasPriceEstimator() {
 
 impure func getL1GasPriceEstimate() -> uint {
     return globalL1GasPriceEstimator.estimateWei;
+}
+
+public impure func setL1GasPriceEstimate(newPriceGwei: uint) {
+    globalL1GasPriceEstimator = globalL1GasPriceEstimator with {
+        estimateWei: newPriceGwei * 1000 * 1000 * 1000
+    };
 }
 
 public impure func updateL1GasPriceEstimate(sender: address, price: uint) {
