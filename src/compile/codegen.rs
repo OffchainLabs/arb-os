@@ -465,6 +465,8 @@ fn mavm_codegen_statement(
                 scopes,
                 file_info_chart,
             )?;
+            label_gen = lg;
+            code = c;
             match &pat.kind {
                 MatchPatternKind::Simple(name) => {
                     let slot_num = num_locals;
@@ -472,8 +474,6 @@ fn mavm_codegen_statement(
                     bindings.insert(*name, slot_num);
                     num_locals += 1;
                     num_locals = max(num_locals, exp_locals);
-                    label_gen = lg;
-                    code = c;
                     code.push(Instruction::from_opcode_imm(
                         Opcode::SetLocal,
                         Value::Int(Uint256::from_usize(slot_num)),
@@ -483,8 +483,6 @@ fn mavm_codegen_statement(
                 }
                 MatchPatternKind::Assign(_) => unimplemented!(),
                 MatchPatternKind::Tuple(pattern) => {
-                    label_gen = lg;
-                    code = c;
                     let mut assigned = HashSet::new();
                     let mut pairs = HashMap::new();
                     for (i, sub_pat) in pattern.clone().iter().enumerate() {
@@ -522,7 +520,7 @@ fn mavm_codegen_statement(
                     }
                     mavm_codegen_tuple_pattern(
                         code,
-                        pattern,
+                        &pat,
                         num_locals,
                         locals,
                         global_var_map,
@@ -706,80 +704,64 @@ fn mavm_codegen_statement(
 /// Nothing is returned directly, and the generated code can be accessed through the code reference.
 fn mavm_codegen_tuple_pattern(
     code: &mut Vec<Instruction>,
-    pattern: &[TypeCheckedMatchPattern],
+    pattern: &TypeCheckedMatchPattern,
     local_slot_num_base: usize,
     locals: &HashMap<usize, usize>,
     global_var_map: &HashMap<StringId, usize>,
     debug_info: DebugInfo,
 ) -> Result<(), CodegenError> {
-    let pat_size = pattern.len();
-    for (i, pat) in pattern.iter().enumerate() {
-        if i < pat_size - 1 {
-            code.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::Dup0),
+    match &pattern.kind {
+        MatchPatternKind::Simple(name) => {
+            let mut bindings = HashMap::new();
+            bindings.insert(*name, local_slot_num_base);
+            code.push(Instruction::from_opcode_imm(
+                Opcode::SetLocal,
+                Value::Int(Uint256::from_usize(local_slot_num_base)),
                 debug_info,
             ));
-        }
-        match &pat.kind {
-            MatchPatternKind::Simple(_) => {
-                code.push(Instruction::from_opcode_imm(
-                    Opcode::TupleGet(pat_size),
-                    Value::Int(Uint256::from_usize(i)),
-                    debug_info,
-                ));
+        },
+        MatchPatternKind::Assign(id) =>
+            if let Some(val) = locals.get(id) {
                 code.push(Instruction::from_opcode_imm(
                     Opcode::SetLocal,
-                    Value::Int(Uint256::from_usize(local_slot_num_base + i)),
+                    Value::Int(Uint256::from_usize(*val)),
                     debug_info,
-                ));
-            }
-            MatchPatternKind::Assign(id) => {
-                code.push(Instruction::from_opcode_imm(
-                    Opcode::TupleGet(pat_size),
-                    Value::Int(Uint256::from_usize(i)),
+                ))
+            } else {
+                code.push(Instruction::from_opcode(
+                    Opcode::SetGlobalVar(*global_var_map.get(id).ok_or_else(|| {
+                        new_codegen_error(
+                            format!(
+                                "Failed to find local when generating code for match pattern "
+                            ),
+                            debug_info.location,
+                        )
+                    })?),
                     debug_info,
-                ));
-                if let Some(val) = locals.get(id) {
-                    code.push(Instruction::from_opcode_imm(
-                        Opcode::SetLocal,
-                        Value::Int(Uint256::from_usize(*val)),
-                        debug_info,
-                    ))
-                } else {
+                ))
+            },
+        MatchPatternKind::Tuple(sub_pats) => {
+            let pat_size = sub_pats.len();
+            for (i, pat) in sub_pats.iter().enumerate() {
+                if i < pat_size - 1 {
                     code.push(Instruction::from_opcode(
-                        Opcode::SetGlobalVar(*global_var_map.get(id).ok_or_else(|| {
-                            new_codegen_error(
-                                format!(
-                                    "Failed to find local when generating code for match pattern "
-                                ),
-                                debug_info.location,
-                            )
-                        })?),
+                        Opcode::AVMOpcode(AVMOpcode::Dup0),
                         debug_info,
-                    ))
-                };
-                /*code.push(Instruction::from_opcode_imm(
-                    Opcode::SetLocal,
-                    Value::Int(Uint256::from_usize(if let Some(val) = locals.get(id) {
-                        val
-                    } else {
-                        global_var_map.get(id).ok_or_else(|| {
-                            new_codegen_error(
-                                format!(
-                                    "Failed to find local when generating code for match pattern "
-                                ),
-                                debug_info.location,
-                            )
-                        })?
-                    })),
+                    ));
+                }
+                code.push(Instruction::from_opcode_imm(
+                    Opcode::TupleGet(pat_size),
+                    Value::Int(Uint256::from_usize(i)),
                     debug_info,
-                ));*/
-            }
-            MatchPatternKind::Tuple(_) => {
-                return Err(new_codegen_error(
-                    format!("Can't yet generate code for pattern-match let with nested tuples"),
-                    debug_info.location,
                 ));
+                mavm_codegen_tuple_pattern(
+                    code,
+                    pat,
+                    local_slot_num_base + i,
+                    locals,
+                    global_var_map,
+                    debug_info,
+                )?;
             }
         }
     }
