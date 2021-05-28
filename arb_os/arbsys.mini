@@ -97,6 +97,7 @@ public impure func arbsys_txcall() {
         if (funcCode == 0x051038F2) {
             arbsys_arbOSVersion(topFrame, calldata);
         } elseif(funcCode == const::funcCode_ArbSys_arbChainID) {
+            arbsys_arbChainID(topFrame, calldata);
         } elseif(funcCode == 0xa3b1b31d) {
             arbsys_arbBlockNumber(topFrame, calldata);
         } elseif(funcCode == 0x25e16063) {
