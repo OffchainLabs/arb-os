@@ -518,7 +518,7 @@ fn mavm_codegen_statement(
                             }
                         }
                     }
-                    mavm_codegen_tuple_pattern(
+                    num_locals += mavm_codegen_tuple_pattern(
                         code,
                         &pat,
                         num_locals,
@@ -526,7 +526,6 @@ fn mavm_codegen_statement(
                         global_var_map,
                         debug,
                     )?;
-                    num_locals += pattern.len();
                     num_locals = max(num_locals, exp_locals);
                     Ok((label_gen, num_locals, pairs))
                 }
@@ -709,7 +708,7 @@ fn mavm_codegen_tuple_pattern(
     locals: &HashMap<usize, usize>,
     global_var_map: &HashMap<StringId, usize>,
     debug_info: DebugInfo,
-) -> Result<(), CodegenError> {
+) -> Result<usize, CodegenError> {
     match &pattern.kind {
         MatchPatternKind::Simple(name) => {
             let mut bindings = HashMap::new();
@@ -719,6 +718,7 @@ fn mavm_codegen_tuple_pattern(
                 Value::Int(Uint256::from_usize(local_slot_num_base)),
                 debug_info,
             ));
+            Ok(1)
         }
         MatchPatternKind::Assign(id) => {
             if let Some(val) = locals.get(id) {
@@ -738,8 +738,10 @@ fn mavm_codegen_tuple_pattern(
                     debug_info,
                 ))
             }
+            Ok(0)
         }
         MatchPatternKind::Tuple(sub_pats) => {
+            let mut bindings = 0;
             let pat_size = sub_pats.len();
             for (i, pat) in sub_pats.iter().enumerate() {
                 if i < pat_size - 1 {
@@ -753,7 +755,7 @@ fn mavm_codegen_tuple_pattern(
                     Value::Int(Uint256::from_usize(i)),
                     debug_info,
                 ));
-                mavm_codegen_tuple_pattern(
+                bindings += mavm_codegen_tuple_pattern(
                     code,
                     pat,
                     local_slot_num_base + i,
@@ -762,9 +764,9 @@ fn mavm_codegen_tuple_pattern(
                     debug_info,
                 )?;
             }
+            Ok(bindings)
         }
     }
-    Ok(())
 }
 
 ///Generates code for the expression expr.
