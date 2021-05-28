@@ -106,10 +106,6 @@ public func retryBuffer_new() -> RetryBuffer {
     };
 }
 
-public func retryBuffer_getLifetime(rbuf: RetryBuffer) -> uint {
-    return rbuf.txLifetimeSeconds;
-}
-
 // We trim the buffer when it's modified. This removes aged-out items from the buffer.
 // trimTwo will trim up to two entries, and trimOne will trim zero or one entries.
 // These are called by every externally-callable mutating function in this file, except init.
