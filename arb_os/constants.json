@@ -1,5 +1,5 @@
 {
-  "arbos_version": 28,
+  "arbos_version": 27,
   "integer": {
     "AVMSendType_batch": 0,
     "AVM_add": 1,
@@ -86,7 +86,7 @@
     "Address_ArbosTest": 105,
     "Address_ReservedForEthBridge": 200,
     "ArbitrumNonZeroBalanceCallStipend": 200,
-    "ChainID": 42161,
+    "DefaultChainID": 42161,
     "Charging_ArbGasPerAvmGas": 100,
     "Charging_AssumedBatchCostL1Gas": 50000,
     "Charging_DefaultArbGasDivisor": 100,
@@ -161,6 +161,7 @@
     "EvmOp_timestamp": 18,
     "InitOption_setChargingParams": 2,
     "InitOption_setDefaultAggregator": 3,
+    "InitOption_setChainId": 4,
     "L1MessageType_L2": 3,
     "L1MessageType_L2ForGasEstimation": 10,
     "L1MessageType_L2FundedByL1": 7,

@@ -21,6 +21,7 @@ use gasAccounting::gasAccounting_postInitMessage;
 
 
 type ChainParams = struct {
+    chainId: uint,                   // chain ID
     gracePeriodBlocks: uint,         // time validators are given to respond to an assertion
     arbGasSpeedLimitPerSecond: uint, // assumed max speed of nodes tracking this chain's VM
     maxExecutionSteps: uint,         // max number of steps in an assertion
@@ -51,6 +52,7 @@ public impure func chainParams_gotParamsMessage(_sender: address, data: ByteArra
 
         let arbGasSpeedLimitPerBlock = bytearray_get256(data, 32);
         globalChainParams = Some(struct{
+            chainId: const::DefaultChainID,
             gracePeriodBlocks: bytearray_get256(data, 0),
             arbGasSpeedLimitPerSecond: blocksToSeconds(arbGasSpeedLimitPerBlock),
             maxExecutionSteps: bytearray_get256(data, 2*32),
@@ -127,14 +129,32 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
         let (ustr, newDefaultAgg) = bytestream_get256(stream)?;
         chainParams_setDefaultAggregator(address(newDefaultAgg));
         Some(ustr)
+    } elseif (optionId == const::InitOption_setChainId) {
+        if (numPayloadBytes != 32) {
+            // unexpected payload size; discard the payload and ignore this option
+            return bytestream_skipBytes(stream, numPayloadBytes);
+        }
+        let (ustr, newChainId) = bytestream_get256(stream)?;
+        chainParams_setChainId(newChainId);
+        Some(ustr)
     } else {
         // unrecognized option, discard it
         bytestream_skipBytes(stream, numPayloadBytes)
     };
 }
 
-public func chainParams_chainId() -> uint {
-    return const::ChainID;
+public impure func chainParams_chainId() -> uint {
+    return xif let Some(params) = globalChainParams {
+        params.chainId
+    } else {
+        const::DefaultChainID
+    };
+}
+
+public impure func chainParams_setChainId(newChainId: uint) {
+    if let Some(params) = globalChainParams {
+        globalChainParams = Some(params with { chainId: newChainId });
+    }
 }
 
 public impure func chainParams_speedLimitPerSecond() -> uint {
