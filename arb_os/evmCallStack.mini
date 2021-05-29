@@ -760,7 +760,7 @@ public impure func evmCallStack_doCall(
         };
 
         // save returndata and status
-        globalCallStack = Some(topFrame with {
+        globalCallStack = Some(globalCallStack? with {
             returnInfo: Some(struct {
                 data: bytearray_new(0),
                 status: success,
@@ -1354,10 +1354,6 @@ public impure func saveAvmAndAuxStacks() -> Stack {
 public impure func restoreAvmAndAuxStacks(saved: Stack) {
     restoreAvmStack(saved);
     restoreAuxStack(asm() Stack { });
-}
-
-public impure func evmCallStack_isEmpty() -> bool {
-    return globalCallStack == None<EvmCallFrame>;
 }
 
 public impure func evmCallStack_topFrame() -> option<EvmCallFrame> {

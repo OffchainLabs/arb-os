@@ -1105,12 +1105,18 @@ pub fn sort_top_level_decls(
 pub fn typecheck_top_level_decls(
     funcs: Vec<Func>,
     named_types: HashMap<usize, Type>,
-    global_vars: Vec<GlobalVarDecl>,
+    mut global_vars: Vec<GlobalVarDecl>,
     string_table: StringTable,
     func_map: HashMap<usize, Type>,
     checked_funcs: &mut Vec<TypeCheckedFunc>,
     type_tree: &TypeTree,
 ) -> Result<(Vec<ExportedFunc>, Vec<GlobalVarDecl>, StringTable), TypeError> {
+    if let Some(var) = global_vars
+        .iter()
+        .position(|var| &var.name == "__fixedLocationGlobal")
+    {
+        global_vars.swap(0, var)
+    }
     let global_vars_map = global_vars
         .iter()
         .enumerate()
