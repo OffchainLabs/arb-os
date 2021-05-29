@@ -41,7 +41,7 @@ pub fn new_codegen_error(reason: String, location: Option<Location>) -> CodegenE
 /// The function returns a vector of instructions representing the generated code if it is
 /// successful, otherwise it returns a CodegenError.
 pub fn mavm_codegen(
-    funcs: Vec<TypeCheckedFunc>,
+    funcs: BTreeMap<StringId, TypeCheckedFunc>,
     string_table: &StringTable,
     imported_funcs: &[ImportedFunc],
     global_vars: &[GlobalVarDecl],
@@ -60,7 +60,7 @@ pub fn mavm_codegen(
 
     let mut label_gen = LabelGenerator::new();
     let mut funcs_code = BTreeMap::new();
-    for func in funcs {
+    for (_id, func) in funcs {
         let id = func.name;
         let (lg, function_code) = mavm_codegen_func(
             func,
@@ -1340,7 +1340,7 @@ fn mavm_codegen_expr<'a>(
                 kind: TypeCheckedExprKind::FunctionCall(
                     Box::new(TypeCheckedExpr {
                         kind: TypeCheckedExprKind::FuncRef(
-                            *string_table.get_if_exists("builtin_arrayGet").unwrap(),
+                            string_table.get_if_exists("builtin_arrayGet").unwrap(),
                             call_type.clone(),
                         ),
                         debug_info: DebugInfo::from(loc),
@@ -1441,7 +1441,7 @@ fn mavm_codegen_expr<'a>(
                 kind: TypeCheckedExprKind::FunctionCall(
                     Box::new(TypeCheckedExpr {
                         kind: TypeCheckedExprKind::FuncRef(
-                            *string_table.get_if_exists("builtin_kvsGet").unwrap(),
+                            string_table.get_if_exists("builtin_kvsGet").unwrap(),
                             call_type.clone(),
                         ),
                         debug_info: DebugInfo::from(loc),
@@ -1478,7 +1478,7 @@ fn mavm_codegen_expr<'a>(
                 kind: TypeCheckedExprKind::FunctionCall(
                     Box::new(TypeCheckedExpr {
                         kind: TypeCheckedExprKind::FuncRef(
-                            *string_table.get_if_exists("builtin_arrayNew").unwrap(),
+                            string_table.get_if_exists("builtin_arrayNew").unwrap(),
                             call_type.clone(),
                         ),
                         debug_info: DebugInfo::from(loc),
@@ -1591,7 +1591,7 @@ fn mavm_codegen_expr<'a>(
                 kind: TypeCheckedExprKind::FunctionCall(
                     Box::new(TypeCheckedExpr {
                         kind: TypeCheckedExprKind::FuncRef(
-                            *string_table.get_if_exists("builtin_kvsNew").unwrap(),
+                            string_table.get_if_exists("builtin_kvsNew").unwrap(),
                             call_type.clone(),
                         ),
                         debug_info: DebugInfo::from(loc),
@@ -1627,7 +1627,7 @@ fn mavm_codegen_expr<'a>(
                 kind: TypeCheckedExprKind::FunctionCall(
                     Box::new(TypeCheckedExpr {
                         kind: TypeCheckedExprKind::FuncRef(
-                            *string_table.get_if_exists("builtin_arraySet").unwrap(),
+                            string_table.get_if_exists("builtin_arraySet").unwrap(),
                             call_type.clone(),
                         ),
                         debug_info: DebugInfo::from(loc),
@@ -1685,7 +1685,7 @@ fn mavm_codegen_expr<'a>(
                 kind: TypeCheckedExprKind::FunctionCall(
                     Box::new(TypeCheckedExpr {
                         kind: TypeCheckedExprKind::FuncRef(
-                            *string_table.get_if_exists("builtin_kvsSet").unwrap(),
+                            string_table.get_if_exists("builtin_kvsSet").unwrap(),
                             call_type.clone(),
                         ),
                         debug_info: DebugInfo::from(loc),

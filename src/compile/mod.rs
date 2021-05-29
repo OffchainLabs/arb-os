@@ -7,13 +7,14 @@
 use crate::link::{link, postlink_compile, ExportedFunc, Import, ImportedFunc, LinkedProgram};
 use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
-use crate::stringtable::StringTable;
+use crate::stringtable::{StringId, StringTable};
 use ast::Func;
 use clap::Clap;
 use lalrpop_util::lalrpop_mod;
 use lalrpop_util::ParseError;
 use mini::DeclsParser;
 use miniconstants::init_constant_table;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -81,9 +82,9 @@ struct Module {
     ///The list of imported functions imported through the old import/export system
     imported_funcs: Vec<ImportedFunc>,
     ///List of functions defined locally within the source file
-    funcs: Vec<Func>,
+    funcs: BTreeMap<StringId, Func>,
     ///Map from `StringId`s in this file to the `Type`s they represent.
-    named_types: HashMap<usize, Type>,
+    named_types: HashMap<StringId, Type>,
     ///List of global variables defined within this file.
     global_vars: Vec<GlobalVarDecl>,
     ///List of imported constructs within this file.
@@ -91,7 +92,9 @@ struct Module {
     ///Map from `StringId`s to the names they derived from.
     string_table: StringTable,
     ///Map from `StringId`s to the types of the functions they represent.
-    func_table: HashMap<usize, Type>,
+    func_table: HashMap<StringId, Type>,
+    ///The path to the module
+    path: Vec<String>,
     ///The name of the module, this may be removed later.
     name: String,
 }
@@ -99,9 +102,9 @@ struct Module {
 ///Represents the contents of a source file after type checking is done.
 #[derive(Clone, Debug)]
 struct TypeCheckedModule {
-    /// List of functions defined locally within the source file that have been validated by
+    /// Collection of functions defined locally within the source file that have been validated by
     /// typechecking
-    checked_funcs: Vec<TypeCheckedFunc>,
+    checked_funcs: BTreeMap<StringId, TypeCheckedFunc>,
     ///Map from `StringId`s to the names they derived from.
     string_table: StringTable,
     ///The list of imported functions imported through the old import/export system
@@ -109,11 +112,13 @@ struct TypeCheckedModule {
     ///The list of exported functions exported through the old import/export system
     exported_funcs: Vec<ExportedFunc>,
     ///Map from `StringId`s in this file to the `Type`s they represent.
-    named_types: HashMap<usize, Type>,
+    named_types: HashMap<StringId, Type>,
     ///List of global variables defined in this module.
     global_vars: Vec<GlobalVarDecl>,
     ///The list of imports declared via `use` statements.
     imports: Vec<Import>,
+    ///The path to the module
+    path: Vec<String>,
     ///The name of the module, this may be removed later.
     name: String,
 }
@@ -191,12 +196,13 @@ impl CompileStruct {
 impl Module {
     fn new(
         imported_funcs: Vec<ImportedFunc>,
-        funcs: Vec<Func>,
+        funcs: BTreeMap<StringId, Func>,
         named_types: HashMap<usize, Type>,
         global_vars: Vec<GlobalVarDecl>,
         imports: Vec<Import>,
         string_table: StringTable,
         func_table: HashMap<usize, Type>,
+        path: Vec<String>,
         name: String,
     ) -> Self {
         Self {
@@ -207,6 +213,7 @@ impl Module {
             imports,
             string_table,
             func_table,
+            path,
             name,
         }
     }
@@ -214,13 +221,14 @@ impl Module {
 
 impl TypeCheckedModule {
     fn new(
-        checked_funcs: Vec<TypeCheckedFunc>,
+        checked_funcs: BTreeMap<StringId, TypeCheckedFunc>,
         string_table: StringTable,
         imported_funcs: Vec<ImportedFunc>,
         exported_funcs: Vec<ExportedFunc>,
         named_types: HashMap<usize, Type>,
         global_vars: Vec<GlobalVarDecl>,
         imports: Vec<Import>,
+        path: Vec<String>,
         name: String,
     ) -> Self {
         Self {
@@ -231,6 +239,7 @@ impl TypeCheckedModule {
             named_types,
             global_vars,
             imports,
+            path,
             name,
         }
     }
@@ -238,9 +247,9 @@ impl TypeCheckedModule {
     /// appropriate
     fn inline(&mut self, heuristic: &InliningHeuristic) {
         let mut new_funcs = self.checked_funcs.clone();
-        for f in &mut new_funcs {
-            f.inline(
-                &self.checked_funcs,
+        for (_id, func) in &mut new_funcs {
+            func.inline(
+                &self.checked_funcs.values().cloned().collect(),
                 &self.imported_funcs,
                 &self.string_table,
                 heuristic,
@@ -248,11 +257,44 @@ impl TypeCheckedModule {
         }
         self.checked_funcs = new_funcs;
     }
+    ///Creates callgraph that associates module functions to those that they call
+    fn build_callgraph(
+        &mut self,
+    ) -> BTreeMap<StringId, (Vec<(StringId, Option<Import>)>, Location)> {
+        let mut call_graph = BTreeMap::new();
+
+        let mut import_ids = HashMap::<StringId, Import>::new();
+        for import in &self.imports {
+            if let Some(id) = import.id {
+                import_ids.insert(id, import.clone());
+            }
+        }
+
+        for (_, func) in &mut self.checked_funcs {
+            let call_ids = Func::determine_funcs_used(func.child_nodes());
+            let mut calls = Vec::<(StringId, Option<Import>)>::new();
+
+            for id in call_ids {
+                match import_ids.get(&id) {
+                    None => calls.push((id, None)),
+                    Some(import) => {
+                        if import.path[0] != "core" && import.path[0] != "std" {
+                            calls.push((id, Some(import.clone())));
+                        }
+                    }
+                }
+            }
+
+            call_graph.insert(func.name, (calls, func.debug_info.location.unwrap()));
+        }
+
+        call_graph
+    }
     ///Reasons about control flow and construct usage within the typechecked AST
     fn flowcheck(&mut self, warning_system: &mut WarningSystem) {
         let mut flow_warnings = vec![];
 
-        let mut imports: BTreeMap<usize, Import> = BTreeMap::new();
+        let mut imports: BTreeMap<StringId, Import> = BTreeMap::new();
 
         for import in self.imports.iter() {
             let id = self.string_table.get_if_exists(&import.name).unwrap();
@@ -276,7 +318,7 @@ impl TypeCheckedModule {
             }
 
             if import.path[0] != "core" {
-                imports.insert(*id, import.clone());
+                imports.insert(id, import.clone());
             }
         }
 
@@ -292,8 +334,8 @@ impl TypeCheckedModule {
             }
         }
 
-        for f in &mut self.checked_funcs.clone() {
-            flow_warnings.extend(f.flowcheck(
+        for (_id, func) in &mut self.checked_funcs {
+            flow_warnings.extend(func.flowcheck(
                 &mut imports, // will remove from imports everything used
                 &mut self.string_table,
                 warning_system,
@@ -546,7 +588,7 @@ fn _print_node(node: &mut TypeCheckedNode, state: &String, mut_state: &mut usize
 ///
 ///The `folder` argument gives the path to the folder, `library` optionally contains a library
 ///prefix attached to the front of all paths, `main` contains the name of the main file in the
-///folder, `file_info_chart` contains a map from the `u64` hashes of file names to the `Strings`
+///folder, `file_info_chart` contains a map from the `u64` hashes of file names to the `FileInfo`
 ///they represent, useful for formatting errors, and `inline` determines whether inlining is used
 ///when compiling this folder.
 pub fn compile_from_folder(
@@ -560,7 +602,9 @@ pub fn compile_from_folder(
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let (mut programs, import_map) =
         create_program_tree(folder, library, main, file_info_chart, constants_path)?;
+
     resolve_imports(&mut programs, &import_map, warning_system)?;
+
     //Conversion of programs from `HashMap` to `Vec` for typechecking
     let type_tree = create_type_tree(&programs);
     let mut modules = vec![programs
@@ -579,9 +623,12 @@ pub fn compile_from_folder(
         typecheck_programs(&type_tree, modules, file_info_chart, warning_system)?;
 
     // Control flow analysis stage
-    typechecked_modules
-        .iter_mut()
-        .for_each(|module| module.flowcheck(warning_system));
+    let mut program_callgraph = HashMap::new();
+    for module in &mut typechecked_modules {
+        module.flowcheck(warning_system);
+        program_callgraph.insert(module.path.clone(), module.build_callgraph());
+    }
+    consume_program_callgraph(program_callgraph, &mut typechecked_modules, warning_system);
 
     // Inlining stage
     if let Some(cool) = inline {
@@ -638,25 +685,25 @@ fn create_program_tree(
     let mut programs = HashMap::new();
     let mut import_map = HashMap::new();
     let mut seen_paths = HashSet::new();
-    while let Some(name) = paths.pop() {
-        if seen_paths.contains(&name) {
+    while let Some(path) = paths.pop() {
+        if seen_paths.contains(&path) {
             continue;
         } else {
-            seen_paths.insert(name.clone());
+            seen_paths.insert(path.clone());
         }
-        let path = if name.len() == 1 {
-            name[0].clone()
-        } else if name[0] == "std" {
-            format!("../stdlib/{}", name[1])
-        } else if name[0] == "core" {
-            format!("../builtin/{}", name[1])
+        let name = if path.len() == 1 {
+            path[0].clone()
+        } else if path[0] == "std" {
+            format!("../stdlib/{}", path[1])
+        } else if path[0] == "core" {
+            format!("../builtin/{}", path[1])
         } else {
-            name[0].clone()
+            path[0].clone()
         } + ".mini";
-        let mut file = File::open(folder.join(path.clone())).map_err(|why| {
+        let mut file = File::open(folder.join(name.clone())).map_err(|why| {
             CompileError::new(
                 String::from("Compile error"),
-                format!("Can not open {}/{}: {:?}", folder.display(), path, why),
+                format!("Can not open {}/{}: {:?}", folder.display(), name, why),
                 vec![],
                 false,
             )
@@ -666,32 +713,33 @@ fn create_program_tree(
         file.read_to_string(&mut source).map_err(|why| {
             CompileError::new(
                 String::from("Compile error"),
-                format!("Can not read {}/{}: {:?}", folder.display(), path, why),
+                format!("Can not read {}/{}: {:?}", folder.display(), name, why),
                 vec![],
                 false,
             )
         })?;
         let mut file_hasher = DefaultHasher::new();
-        name.hash(&mut file_hasher);
+        path.hash(&mut file_hasher);
         let file_id = file_hasher.finish();
 
         file_info_chart.insert(
             file_id,
             FileInfo {
-                name: path_display(&name),
-                path: folder.join(path.clone()).display().to_string(),
+                name: path_display(&path),
+                path: folder.join(name.clone()).display().to_string(),
                 contents: source.split("\n").map(|x| x.to_string()).collect(),
             },
         );
 
         let mut string_table = StringTable::new();
         let (imports, funcs, named_types, global_vars, hm) = typecheck::sort_top_level_decls(
-            &parse_from_source(source, file_id, &name, &mut string_table, constants_path)?,
+            &parse_from_source(source, file_id, &path, &mut string_table, constants_path)?,
+            path.clone(),
         );
         paths.append(&mut imports.iter().map(|imp| imp.path.clone()).collect());
-        import_map.insert(name.clone(), imports.clone());
+        import_map.insert(path.clone(), imports.clone());
         programs.insert(
-            name.clone(),
+            path.clone(),
             Module::new(
                 vec![],
                 funcs,
@@ -701,6 +749,7 @@ fn create_program_tree(
                 string_table,
                 hm,
                 path,
+                name,
             ),
         );
     }
@@ -729,7 +778,7 @@ fn resolve_imports(
                         import.path.get(0).cloned().unwrap_or_else(String::new),
                         import.name
                     ),
-                    vec![],
+                    import.location.into_iter().collect(),
                     false,
                 ));
             };
@@ -742,7 +791,7 @@ fn resolve_imports(
                         import.path.get(0).cloned().unwrap_or_else(String::new),
                         import.name
                     ),
-                    vec![],
+                    import.location.into_iter().collect(),
                     false,
                 )
             })?;
@@ -764,7 +813,7 @@ fn resolve_imports(
                         import.path.get(0).cloned().unwrap_or_else(String::new),
                         import.name
                     ),
-                    vec![],
+                    import.location.into_iter().collect(),
                     true,
                 ));
             }
@@ -805,70 +854,187 @@ fn typecheck_programs(
     _file_info_chart: &mut BTreeMap<u64, FileInfo>,
     warning_system: &mut WarningSystem,
 ) -> Result<Vec<TypeCheckedModule>, CompileError> {
-    let mut typechecked = vec![];
-    for Module {
-        imported_funcs,
-        funcs,
-        named_types,
-        global_vars,
-        imports,
-        string_table,
-        func_table: hm,
-        name,
-    } in modules
-    {
-        let mut checked_funcs = vec![];
-        let (exported_funcs, global_vars, string_table) = typecheck::typecheck_top_level_decls(
-            funcs,
-            &named_types,
-            global_vars,
-            string_table,
-            hm,
-            &mut checked_funcs,
-            type_tree,
-        )
-        .map_err(|res3| {
-            CompileError::new(
-                String::from("Compile error"),
-                res3.reason.to_string(),
-                res3.location.into_iter().collect(),
-                false,
-            )
-        })?;
-        checked_funcs.iter_mut().for_each(|func| {
-            let detected_purity = func.is_pure();
-            let declared_purity = func.properties.pure;
+    let (typechecked_modules, module_warnings) = modules
+        .into_par_iter()
+        //.into_iter()
+        .map(
+            |Module {
+                 imported_funcs,
+                 funcs,
+                 named_types,
+                 global_vars,
+                 imports,
+                 string_table,
+                 func_table: hm,
+                 path,
+                 name,
+             }| {
+                let mut typecheck_warnings = vec![];
+                let mut checked_funcs = BTreeMap::new();
+                let (exported_funcs, global_vars, string_table) =
+                    typecheck::typecheck_top_level_decls(
+                        funcs,
+                        &named_types,
+                        global_vars,
+                        &imports,
+                        string_table,
+                        hm,
+                        &mut checked_funcs,
+                        type_tree,
+                    )?;
 
-            if detected_purity != declared_purity {
+                checked_funcs.iter_mut().for_each(|(id, func)| {
+                    let detected_purity = func.is_pure();
+                    let declared_purity = func.properties.pure;
+
+                    if detected_purity != declared_purity {
+                        typecheck_warnings.push(CompileError::new(
+                            String::from("Compile warning"),
+                            format!(
+                                "func {}{}{} {}",
+                                warning_system.warn_color,
+                                string_table.name_from_id(*id),
+                                CompileError::RESET,
+                                match declared_purity {
+                                    true => "is impure but not marked impure",
+                                    false => "is declared impure but does not contain impure code",
+                                },
+                            ),
+                            func.debug_info.location.into_iter().collect(),
+                            true,
+                        ));
+                    }
+                });
+                Ok((
+                    TypeCheckedModule::new(
+                        checked_funcs,
+                        string_table,
+                        imported_funcs,
+                        exported_funcs,
+                        named_types,
+                        global_vars,
+                        imports,
+                        path,
+                        name,
+                    ),
+                    typecheck_warnings,
+                ))
+            },
+        )
+        .collect::<Result<(Vec<TypeCheckedModule>, Vec<Vec<CompileError>>), CompileError>>()?;
+
+    warning_system
+        .warnings
+        .extend(module_warnings.into_iter().flatten());
+
+    Ok(typechecked_modules)
+}
+
+///Walks the program callgraph function by function across module boundries,
+/// retracting each module's callgraph along the way to eliminate all reachable functions
+fn callgraph_descend(
+    func: StringId,
+    module: &TypeCheckedModule,
+    program_callgraph: &mut HashMap<
+        Vec<String>,
+        BTreeMap<StringId, (Vec<(StringId, Option<Import>)>, Location)>,
+    >,
+    paths_to_modules: &HashMap<Vec<String>, &TypeCheckedModule>,
+) {
+    if module.path[0] == "core" || module.path[0] == "std" {
+        return;
+    }
+
+    let module_callgraph = program_callgraph.get_mut(&module.path).unwrap();
+    let calls = match &module_callgraph.get(&func) {
+        Some(calls) => calls.0.clone(),
+        None => return,
+    };
+
+    module_callgraph.remove(&func);
+    for (call, dest) in calls {
+        match dest {
+            None => callgraph_descend(call, module, program_callgraph, paths_to_modules),
+            Some(import) => {
+                // outbound function crosses module boundry, so we jump there
+                let other_module = paths_to_modules.get(&import.path).unwrap();
+                let other_func = other_module
+                    .string_table
+                    .get_if_exists(&import.name)
+                    .unwrap();
+                callgraph_descend(
+                    other_func,
+                    other_module,
+                    program_callgraph,
+                    paths_to_modules,
+                );
+            }
+        }
+    }
+}
+
+///Walks the callgraph, pruning and/or warning on any unused functions
+fn consume_program_callgraph(
+    mut program_callgraph: HashMap<
+        Vec<String>,
+        BTreeMap<StringId, (Vec<(StringId, Option<Import>)>, Location)>,
+    >,
+    modules: &mut Vec<TypeCheckedModule>,
+    warning_system: &mut WarningSystem,
+) {
+    let mut paths_to_modules = HashMap::<_, &TypeCheckedModule>::new();
+    let main_module = &modules[0];
+    let main_func = *modules[0].checked_funcs.keys().collect::<Vec<_>>()[0]; //.name;
+    for module in modules.iter() {
+        paths_to_modules.insert(module.path.clone(), module);
+    }
+
+    if main_module.path[0] == "std" || main_module.path[0] == "core" {
+        // the entry point is in the standard library,
+        // so we shouldn't require that functions be used
+        return;
+    }
+
+    callgraph_descend(
+        main_func,
+        main_module,
+        &mut program_callgraph,
+        &paths_to_modules,
+    );
+
+    // we transform to a mutable now, rather than before, since graph traversal would
+    // otherwise create ownership conflicts
+    let mut paths_to_modules = HashMap::<_, &mut TypeCheckedModule>::new();
+    for module in modules.iter_mut() {
+        paths_to_modules.insert(module.path.clone(), module);
+    }
+
+    for (path, module_callgraph) in program_callgraph {
+        if path[0] == "core" || path[0] == "std" {
+            continue;
+        }
+
+        for (func, data) in module_callgraph {
+            let module = paths_to_modules.get_mut(&path).unwrap();
+            let func_name = module.string_table.name_from_id(func);
+
+            if !func_name.starts_with('_') {
                 warning_system.warnings.push(CompileError::new(
                     String::from("Compile warning"),
                     format!(
-                        "func {}{}{} {}",
+                        "func {}{}{} is unreachable",
                         warning_system.warn_color,
-                        string_table.name_from_id(func.name),
+                        func_name,
                         CompileError::RESET,
-                        match declared_purity {
-                            true => "is impure but not marked impure",
-                            false => "is declared impure but does not contain impure code",
-                        },
                     ),
-                    func.debug_info.location.into_iter().collect(),
+                    vec![data.1],
                     true,
                 ));
             }
-        });
-        typechecked.push(TypeCheckedModule::new(
-            checked_funcs,
-            string_table,
-            imported_funcs,
-            exported_funcs,
-            named_types,
-            global_vars,
-            imports,
-            name,
-        ));
+
+            module.checked_funcs.remove(&func);
+        }
     }
-    Ok(typechecked)
 }
 
 fn codegen_programs(
@@ -887,6 +1053,7 @@ fn codegen_programs(
         named_types: _,
         global_vars,
         imports: _,
+        path: _,
         name,
     } in typechecked_modules
     {
@@ -1038,6 +1205,15 @@ impl CompileError {
             description,
             locations,
             is_warning,
+        }
+    }
+
+    pub fn new_type_error(description: String, locations: Vec<Location>) -> Self {
+        CompileError {
+            title: String::from("Typecheck Error"),
+            description,
+            locations,
+            is_warning: false,
         }
     }
 

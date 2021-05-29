@@ -305,6 +305,11 @@ fn main() -> Result<(), CompileError> {
 fn do_compile(
     compile: CompileStruct,
 ) -> Result<(), (CompileError, Vec<CompileError>, BTreeMap<u64, FileInfo>)> {
+    rayon::ThreadPoolBuilder::new()
+        .stack_size(8192 * 1024)
+        .build_global()
+        .expect("failed to initialize rayon thread pool");
+
     let mut output = get_output(compile.output.clone()).unwrap();
     compile
         .invoke()?

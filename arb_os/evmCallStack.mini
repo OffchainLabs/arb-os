@@ -194,10 +194,6 @@ public impure func evmCallStack_makeEmpty() {
     globalCallStack = None<EvmCallFrame>;
 }
 
-public impure func evmCallStack_isEmpty() -> bool {
-    return globalCallStack == None<EvmCallFrame>;
-}
-
 public impure func evmCallStack_currentTxRequestGasBid() -> uint {
     return globalCurrentTxRequest.gasPrice;
 }

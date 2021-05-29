@@ -25,12 +25,14 @@ type FixedPoint = struct {
    shiftFactor: ByteArray,
 }
 
-func use_statements(arg: option<RandomGenerator>) -> (option<RandomGenerator>, option<option<option<Queue>>>) {
+func main(arg: option<RandomGenerator>) -> (option<RandomGenerator>, option<option<option<Queue>>>) {
     
     let a = struct {
         val: arg,
         array: None<OutputBuffer>,
     };
+    
+    let (_, __) = (shadow, hop);
     
     return (Some(random_new(bytes32(0))), Some(Some(Some(queue_new()))));
 }
@@ -38,7 +40,7 @@ func use_statements(arg: option<RandomGenerator>) -> (option<RandomGenerator>, o
 var unused_global: uint;
 var used_global: uint;
 
-public func main() {
+public func hop() {
     used_global = crazy(4, 8, true, 4);
     asm(used_global,) { log };
 }
