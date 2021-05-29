@@ -125,16 +125,32 @@ pub struct Import {
     pub path: Vec<String>,
     ///Name of `Type` or function to be imported.
     pub name: String,
-    ///Location of the `use` statement in code
+    ///`StringId` of the use-statement from parsing according to the containing module's `StringTable`
+    pub id: Option<StringId>,
+    ///Location of the use-statement in code
     pub location: Option<Location>,
 }
 
 impl Import {
-    pub fn new(path: Vec<String>, name: String, location: Option<Location>) -> Self {
+    pub fn new(
+        path: Vec<String>,
+        name: String,
+        id: Option<StringId>,
+        location: Option<Location>,
+    ) -> Self {
         Import {
             path,
             name,
+            id,
             location,
+        }
+    }
+    pub fn new_builtin(virtual_file: &str, name: &str) -> Self {
+        Import {
+            path: vec!["core".to_string(), virtual_file.to_string()],
+            name: name.to_string(),
+            id: None,
+            location: None,
         }
     }
 }
@@ -212,7 +228,7 @@ impl ExportedFunc {
 
 ///Converts a linked `CompiledProgram` into a `LinkedProgram` by fixing non-forward jumps,
 /// converting wide tuples to nested tuples, performing code optimizations, converting the jump
-/// table to a static value, and combining the file name chart with the associated argument.
+/// table to a static value, and combining the file info chart with the associated argument.
 pub fn postlink_compile(
     program: CompiledProgram,
     mut file_info_chart: BTreeMap<u64, FileInfo>,
@@ -444,7 +460,7 @@ pub fn link(
                 FileInfo {
                     name: String::from("builtin/array.mini"),
                     path: String::from("builtin/array.mini"),
-                    contents: vec![], // COME BACK
+                    contents: vec![], // we assume the builtin files are correct
                 },
             );
             let mut file_hasher = DefaultHasher::new();
@@ -454,7 +470,7 @@ pub fn link(
                 FileInfo {
                     name: String::from("builtin/kvs.mini"),
                     path: String::from("builtin/kvs.mini"),
-                    contents: vec![], // COME BACK
+                    contents: vec![], // we assume the builtin files are correct
                 },
             );
             map

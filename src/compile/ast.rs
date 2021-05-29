@@ -4,12 +4,11 @@
 
 //!Contains types and utilities for constructing the mini AST
 
-use super::typecheck::{new_type_error, TypeError};
 use crate::compile::ast::TypeMismatch::FuncArgLength;
-use crate::compile::path_display;
 use crate::compile::typecheck::{
     AbstractSyntaxTree, InliningMode, PropertiesList, TypeCheckedNode,
 };
+use crate::compile::{path_display, CompileError};
 use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
 use crate::mavm::{Instruction, Value};
 use crate::pos::Location;
@@ -136,17 +135,17 @@ impl AbstractSyntaxTree for Type {
 
 impl Type {
     ///Gets the representation of a `Nominal` type, based on the types in `type_tree`, returns self
-    /// if the type is not `Nominal`, or a `TypeError` if the type of `self` cannot be resolved in
+    /// if the type is not `Nominal`, or a `CompileError` if the type of `self` cannot be resolved in
     /// `type_tree`.
-    pub fn get_representation(&self, type_tree: &TypeTree) -> Result<Self, TypeError> {
+    pub fn get_representation(&self, type_tree: &TypeTree) -> Result<Self, CompileError> {
         let mut base_type = self.clone();
         while let Type::Nominal(path, id) = base_type.clone() {
             base_type = type_tree
                 .get(&(path.clone(), id))
                 .cloned()
-                .ok_or(new_type_error(
+                .ok_or(CompileError::new_type_error(
                     format!("No type at {:?}, {}", path, id),
-                    None,
+                    vec![],
                 ))?
                 .0;
         }
@@ -1067,6 +1066,15 @@ impl<T> MatchPattern<T> {
         Self {
             kind: MatchPatternKind::Tuple(id),
             cached,
+        }
+    }
+    pub fn collect_identifiers(&self) -> Vec<StringId> {
+        match &self.kind {
+            MatchPatternKind::Simple(id) => vec![*id],
+            MatchPatternKind::Tuple(pats) => pats
+                .iter()
+                .flat_map(|pat| pat.collect_identifiers())
+                .collect(),
         }
     }
 }

@@ -38,7 +38,10 @@ pub Decls: Vec<TopLevelDecl> = {
 HeadDecl: TopLevelDecl = {
     <lno: @L> "use" <mut p: PathDecl> ";" => {
         let file = p.pop().expect("Internal error: Path vector was empty");
-        TopLevelDecl::UseDecl(Import::new(p, file, file_info.location(BytePos::from(lno), filename)))
+        let id = stringtable.get(file.clone());
+        TopLevelDecl::UseDecl(Import::new(
+            p, file, Some(id), file_info.location(BytePos::from(lno), filename),
+        ))
     },
     "const" <n: IdentString> "=" <u: UnsignedInteger> ";" => { constants.insert(n, u); TopLevelDecl::ConstDecl },
 }
