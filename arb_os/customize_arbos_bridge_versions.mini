@@ -3,46 +3,27 @@
 //
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
-
 use accounts::AccountStore;
 
+use chainParameters::ChainParams;
+
+use gasAccounting::TxGasState;
+use gasAccounting::FeeConfig;
+use gasAccounting::GasPrices;
+use gasAccounting::CongestionState;
+use gasAccounting::PricingParameters;
+use gasAccounting::RetryablePrices;
+
+use std::addressSet::SetOfAddresses;
+use std::addressSet::setOfAddresses_all;
 use evmCallStack::EvmCallFrame;
-
-use tracing::EvmTracer;
-use tracing::evmTracer_new;
-
-use std::merkletree::MerkleTreeBuilder;
+use messages::TxRequestData;
 
 
 public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> AccountStore {
-    return input_globals.globalAccountStore;
+    return unsafecast<AccountStore>(input_globals.globalAccountStore);
 }
 
 public func set_globalCallStack_onUpgrade(_input_globals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
     return None<EvmCallFrame>;
-}
-
-public func set_codeSegGlobals_onUpgrade(
-    _input_globals: GlobalsBeforeUpgrade
-) -> struct {
-    unreachableMask: uint,
-    dummyAcceptContractCode: impure func(),
-} {
-    return unsafecast<struct { unreachableMask: uint, dummyAcceptContractCode: impure func() }>(0);   // will be properly initialized later
-}
-
-public func set_globalOutbox_onUpgrade(
-    input_globals: GlobalsBeforeUpgrade
-) -> struct {
-   batch: MerkleTreeBuilder,
-   batchNumber: uint,
-   numInBatch: uint,
-   evmTracer: EvmTracer,
-} {
-    return struct {
-        batch: input_globals.globalOutbox.batch,
-        batchNumber: input_globals.globalOutbox.batchNumber,
-        numInBatch: input_globals.globalOutbox.numInBatch,
-        evmTracer: evmTracer_new(),
-    };
 }

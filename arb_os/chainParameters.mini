@@ -21,7 +21,7 @@ use gasAccounting::gasAccounting_postInitMessage;
 
 
 type ChainParams = struct {
-    chainAddress: address,
+    chainId: uint,                   // chain ID
     gracePeriodBlocks: uint,         // time validators are given to respond to an assertion
     arbGasSpeedLimitPerSecond: uint, // assumed max speed of nodes tracking this chain's VM
     maxExecutionSteps: uint,         // max number of steps in an assertion
@@ -46,13 +46,13 @@ public impure func haveReceivedChainInitMessage() -> bool {
     return globalChainParams != None<ChainParams>;
 }
 
-public impure func chainParams_gotParamsMessage(sender: address, data: ByteArray) {
+public impure func chainParams_gotParamsMessage(_sender: address, data: ByteArray) {
     if (globalChainParams == None<ChainParams>) {
         arbowner_init();
 
         let arbGasSpeedLimitPerBlock = bytearray_get256(data, 32);
         globalChainParams = Some(struct{
-            chainAddress: sender,
+            chainId: const::DefaultChainID,
             gracePeriodBlocks: bytearray_get256(data, 0),
             arbGasSpeedLimitPerSecond: blocksToSeconds(arbGasSpeedLimitPerBlock),
             maxExecutionSteps: bytearray_get256(data, 2*32),
@@ -129,24 +129,32 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
         let (ustr, newDefaultAgg) = bytestream_get256(stream)?;
         chainParams_setDefaultAggregator(address(newDefaultAgg));
         Some(ustr)
+    } elseif (optionId == const::InitOption_setChainId) {
+        if (numPayloadBytes != 32) {
+            // unexpected payload size; discard the payload and ignore this option
+            return bytestream_skipBytes(stream, numPayloadBytes);
+        }
+        let (ustr, newChainId) = bytestream_get256(stream)?;
+        chainParams_setChainId(newChainId);
+        Some(ustr)
     } else {
         // unrecognized option, discard it
         bytestream_skipBytes(stream, numPayloadBytes)
     };
 }
 
-public impure func chainParams_chainAddress() -> address {
+public impure func chainParams_chainId() -> uint {
     return xif let Some(params) = globalChainParams {
-        params.chainAddress
+        params.chainId
     } else {
-        // If we get here, the chain never received its initialization message.
-        evmCallStack_callHitError(20);
-        panic
+        const::DefaultChainID
     };
 }
 
-public impure func chainParams_chainId() -> uint {
-    return uint(chainParams_chainAddress()) & 0xffffffffffff;  // chainID == low 48 bits of chainAddress
+public impure func chainParams_setChainId(newChainId: uint) {
+    if let Some(params) = globalChainParams {
+        globalChainParams = Some(params with { chainId: newChainId });
+    }
 }
 
 public impure func chainParams_speedLimitPerSecond() -> uint {
