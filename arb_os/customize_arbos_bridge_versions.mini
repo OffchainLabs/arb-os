@@ -4,6 +4,30 @@
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 
+use gasAccounting::GasAccountingInfo;
+
+
+public func set_gasAccountingInfo_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> GasAccountingInfo {
+    let oldInfo = oldGlobals.gasAccountingInfo;
+    let oldPP = oldInfo.pricingParams;
+    return struct {
+        txState: oldInfo.txState,
+        feeConfig: oldInfo.feeConfig,
+        currentPrices: oldInfo.currentPrices,
+        gasRemainingThisBlock: oldInfo.gasRemainingThisBlock,
+        congestionState: oldInfo.congestionState,
+        speedLimitPerSecond: oldInfo.speedLimitPerSecond,
+        pricingParams: struct {
+            l1GasPerL2Tx: oldPP.l1GasPerL2Tx,
+            l1GasPerL1CalldataUnit: oldPP.l1GasPerL1CalldataUnit,
+            l1GasPerStorage: oldPP.l1GasPerStorage,
+            arbGasDivisor: oldPP.arbGasDivisor,
+        },
+        gasAllocatedToThisBlock: oldInfo.gasAllocatedToThisBlock,
+        retryablePrices: oldInfo.retryablePrices,
+        allowedSenders: oldInfo.allowedSenders,
+    };
+}
 
 public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> map<uint, uint> {
     let oldChainParams = xif let Some(cp) = oldGlobals.globalChainParams {

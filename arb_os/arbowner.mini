@@ -145,6 +145,12 @@ public impure func arbowner_txcall() {
             arbowner_getAllAllowedSenders(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_setL1GasPriceEstimate) {
             arbowner_setL1GasPriceEstimate(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_setFairGasPriceSender) {
+            arbowner_setFairGasPriceSender(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_isFairGasPriceSender) {
+            arbowner_isFairGasPriceSender(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_getAllFairGasPriceSenders) {
+            arbowner_getAllFairGasPriceSenders(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
@@ -512,6 +518,63 @@ impure func arbowner_setL1GasPriceEstimate(_topFrame: EvmCallFrame, calldata: By
     setL1GasPriceEstimate(newGasPrice);
     evmOp_return(0, 0);
 }
+
+impure func arbowner_setFairGasPriceSender(_topFrame: EvmCallFrame, calldata: ByteArray) { // (address)
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 210, 0, 0);
+    }
+    setFairGasPriceSender(address(bytearray_get256(calldata, 4)), bytearray_get256(calldata, 36)!=0);
+    evmOp_return(0, 0);
+}
+
+// function isFairGasPriceSender(address addr) external view returns(bool);
+impure func arbowner_isFairGasPriceSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(170, 0, 0);
+    }
+    let mem = bytearray_set256(
+        bytearray_new(0),
+        0,
+        uint(isFairGasPriceSender(address(bytearray_get256(calldata, 4)))),
+    );
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownPc(171, 0, 0);
+    }
+}
+
+// function getAllFairGasPriceSenders() external view returns(bytes memory);
+impure func arbowner_getAllFairGasPriceSenders(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(180, 0, 0);
+    }
+    if let Some(serialized) = getSerializedFairGasPriceSenders() {
+        let mem = bytearray_copy(
+            serialized,
+            0,
+            bytearray_set256(
+                bytearray_set256(
+                    bytearray_new(0),
+                    0,
+                    32,
+                ),
+                32,
+                bytearray_size(serialized),
+            ),
+            64,
+            bytearray_size(serialized),  // don't need to round up, because already a multiple of 32
+        );
+        if (evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_return(0, bytearray_size(mem));
+        } else {
+            evmOp_revert_knownPc(181, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownPc(182, 0, 0);
+    }
+}
+
 
 
 

@@ -247,7 +247,7 @@
     "DefaultAggregator": 0,
     "ChainID": 42161,
     "ChallengePeriodEthBlocks": 45818,
-    "SpeedLimitPerSecond": 1000000,
+    "SpeedLimitPerSecond": 400000,
     "SecondsPerSend": 1800,
     "ChainOwner": 0,
     "L1GasPerL1CalldataUnit": 1,
