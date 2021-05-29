@@ -55,7 +55,6 @@ public func chainParams_getDefaults() -> map<uint, uint> {
         with { [const::Atom_Param_FeesEnabled] = const::Default_Param_FeesEnabled }
         with { [const::Atom_Param_NetworkFeeRecipient] = const::Default_Param_NetworkFeeRecipient }
         with { [const::Atom_Param_CongestionFeeRecipient] = const::Default_Param_CongestionFeeRecipient }
-        with { [const::Atom_Param_FairGasPriceSender] = const::Default_Param_FairGasPriceSender }
         with { [const::Atom_Param_DefaultAggregator] = const::Default_Param_DefaultAggregator }
         with { [const::Atom_Param_ChainID] = const::Default_Param_ChainID }
         with { [const::Atom_Param_ChallengePeriodEthBlocks] = const::Default_Param_ChallengePeriodEthBlocks }
@@ -73,11 +72,9 @@ public func chainParams_getDefaults() -> map<uint, uint> {
         with { [const::Atom_Param_RetryablePricePerByteNumerator] = const::Default_Param_RetryablePricePerByteNumerator }
         with { [const::Atom_Param_RetryablePricePerByteDenominator] = const::Default_Param_RetryablePricePerByteDenominator }
         with { [const::Atom_Param_RetryableTxRepriceIntervalSeconds] = const::Default_Param_RetryableTxRepriceIntervalSeconds }
-        with { [const::Atom_Param_L1GasPriceEstimateGwei] = const::Default_Param_L1GasPriceEstimateGwei }
         with { [const::Atom_Param_L1GasPriceEstimateWeightNumerator] = const::Default_Param_L1GasPriceEstimateWeightNumerator }
-        with { [const::Atom_Param_BatchSizeEstimateWeightDenominator] = const::Default_Param_BatchSizeEstimateWeightDenominator }
+        with { [const::Atom_Param_L1GasPriceEstimateWeightDenominator] = const::Default_Param_L1GasPriceEstimateWeightDenominator }
         with { [const::Atom_Param_RetryableTxLifetimeSeconds] = const::Default_Param_RetryableTxLifetimeSeconds }
-        with { [const::Atom_Param_AssumedBatchCostL1Gas] = const::Default_Param_AssumedBatchCostL1Gas }
         with { [const::Atom_Param_ArbitrumNonZeroBalanceCallStipend] = const::Default_Param_ArbitrumNonZeroBalanceCallStipend }
     ;
 }

@@ -225,7 +225,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     }
 
     let expected_code_hash = arbowner._get_uploaded_code_hash(&mut machine)?;
-    arbowner._finish_code_upload_as_arbos_upgrade(&mut machine, expected_code_hash)?;
+    arbowner._finish_code_upload_as_arbos_upgrade(&mut machine, expected_code_hash, Uint256::zero())?;
 
     let wallet2 = machine.runtime_env.new_wallet();
     let arbsys = ArbSys::new(&wallet2, false);

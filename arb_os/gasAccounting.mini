@@ -28,6 +28,7 @@ use accounts::account_getAggregatorToPay;
 use arbstatistics::arbStatistics_addToStorage;
 use arbstatistics::arbStatistics_addToGasUsed;
 
+use chainParameters::chainParams_get;
 use chainParameters::chainParams_getOrDie;
 
 use evmCallStack::evmCallStack_isEmpty;
@@ -122,17 +123,17 @@ type PricingParameters = struct {
 }
 
 type FeeConfig = struct {
-    enabled: bool,                   // if false, don't charge any fees
-    forNetwork: address,             // where network fees go
-    forCongestion: address,          // where congestion fees go
-    baseFeeMultiplier: FixedPoint,   // multiply base fee by this to get total fee
-    shareForNetFee: FixedPoint,      // total fee times this == network fee
+    enabled: bool,                   // if false, don't charge any fees     //FIXME: is param
+    forNetwork: address,             // where network fees go               //FIXME: is param
+    forCongestion: address,          // where congestion fees go            //FIXME: is param
+    baseFeeMultiplier: FixedPoint,   // multiply base fee by this to get total fee  //FIXME: is param
+    shareForNetFee: FixedPoint,      // total fee times this == network fee         //FIXME: is param
 }
 
 var gasAccountingParams: struct {
-    SpeedLimitPerSecond: uint,   // ArbGas available per second
-    GasPoolMax: uint,            // max amount of gas that the gas pool can hold
-    TxGasLimit: uint,            // max gas usable by any single transaction
+    SpeedLimitPerSecond: uint,   // ArbGas available per second                    //FIXME: is param
+    GasPoolMax: uint,            // max amount of gas that the gas pool can hold   //FIXME: is param
+    TxGasLimit: uint,            // max gas usable by any single transaction       //FIXME: is param
 };
 
 type TxGasState = struct {        // this is the gas state of the currently running transaction
@@ -320,8 +321,9 @@ impure func setRetryablePrices(oldRetryablePrices: RetryablePrices) -> Retryable
         xif (gasAccountingInfo.feeConfig.enabled) {
             let gasPrice = getL1GasPriceEstimate();
             struct {
-                perTx: gasPrice * chainParams_getOrDie(),
-                perCalldataByte: gasPrice chainParams_getOrDie() / chainParams_getOrDie(),
+                perTx: gasPrice * chainParams_getOrDie(const::Atom_Param_RetryablePriceBase),
+                perCalldataByte: gasPrice * chainParams_getOrDie(const::Atom_Param_RetryablePricePerByteNumerator) /
+                                            chainParams_getOrDie(const::Atom_Param_RetryablePricePerByteDenominator),
                 nextUpdateTimestamp: inbox_currentTimestamp()
                                      + chainParams_getOrDie(const::Atom_Param_RetryableTxRepriceIntervalSeconds),
             }
@@ -1251,7 +1253,7 @@ public impure func allowedSenders_allowNone() {
 public impure func allowedSenders_contains(addr: address) -> bool {
     return setOfAddresses_contains(gasAccountingInfo.allowedSenders, addr)
         || (addr == address(0))
-        || (Some(addr) == chainParams_getOwner());
+        || (Some(uint(addr)) == chainParams_get(const::Atom_Param_ChainOwner));
 }
 
 public impure func allowedSenders_add(addr: address) {

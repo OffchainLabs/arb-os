@@ -5,6 +5,7 @@ use crate::uint256::Uint256;
 use ethers_core::utils::keccak256;
 use ethers_signers::{Signer, Wallet};
 use std::path::Path;
+use crate::upload::CodeUploader;
 
 pub struct _ArbInfo {
     pub contract_abi: AbiForContract,
@@ -1399,7 +1400,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
         Uint256::from_u64(28),
     );
 
-    arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
+    arbowner._give_ownership(&mut machine, my_addr, true)?;
 
     let mexe_path = Path::new("arb_os/arbos-upgrade.mexe");
     let previous_upgrade_hash = _try_upgrade(&arbowner, &mut machine, &mexe_path, None)?.unwrap();
