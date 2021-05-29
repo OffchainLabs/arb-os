@@ -24,6 +24,3 @@ public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade
     return unsafecast<AccountStore>(input_globals.globalAccountStore);
 }
 
-public func set_globalCallStack_onUpgrade(_input_globals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
-    return None<EvmCallFrame>;
-}
