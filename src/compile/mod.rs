@@ -856,7 +856,6 @@ fn typecheck_programs(
 ) -> Result<Vec<TypeCheckedModule>, CompileError> {
     let (typechecked_modules, module_warnings) = modules
         .into_par_iter()
-        //.into_iter()
         .map(
             |Module {
                  imported_funcs,
@@ -931,7 +930,7 @@ fn typecheck_programs(
 }
 
 ///Walks the program callgraph function by function across module boundries,
-/// retracting each module's callgraph along the way to eliminate all reachable functions
+/// deleting edges in each module's callgraph along the way to eliminate all reachable functions
 fn callgraph_descend(
     func: StringId,
     module: &TypeCheckedModule,
