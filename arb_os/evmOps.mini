@@ -148,14 +148,16 @@ public impure func evmOps_init() {
         with  { [const::EvmOp_selfdestruct] = unsafecast<impure func()>(evmOp_selfdestruct) }
         with  { [const::EvmOp_create] = unsafecast<impure func()>(evmOp_create) }
         with  { [const::EvmOp_create2] = unsafecast<impure func()>(evmOp_create2) }
-        with  { [const::EvmOp_chainId] = unsafecast<impure func()>(chainParams_chainId) };
+        with  { [const::EvmOp_chainId] = unsafecast<impure func()>(chainParams_chainId) }
+        with  { [const::EvmOp_gas] = unsafecast<impure func()>(evmOp_gas) };
+
 }
 
 public impure func getEvmOpJumpTable() -> [const::NumEvmOps]impure func() {
     return evmOpJumpTable;
 }
 
-public impure func evmOps_trampoline(index: uint) {
+#[noinline, ] public impure func dispatchForEvmOp(index: uint) {
     asm(evmOpJumpTable[index],) {
         auxpop pop   // discard this function's call frame
         auxpop
@@ -697,7 +699,11 @@ public impure func evmOp_log4(
     panic;
 }
 
-public impure func evmOp_callAndReturn(
+public impure func evmOp_gas() -> uint {
+    return (asm() uint { getgas }) / const::Charging_ArbGasPerAvmGas;
+}
+
+#[noinline, ] public impure func evmOp_callAndReturn(
     gas: uint,
     callee: address,
     balance: uint,
@@ -705,7 +711,7 @@ public impure func evmOp_callAndReturn(
     argsLength: uint,
     retOffset: uint,
     retLength: uint,
-    chargeForCallvalue: bool,
+    callvalueEscrowKey: option<uint>,  // escrow key that supplies the callvalue (otherwise caller supplies it)
     overrideStartPoint: option<AvmCodePoint>,
 ) -> bool {
     let savedAuxStack = snapshotAuxStack();
@@ -739,7 +745,7 @@ public impure func evmOp_callAndReturn(
         retLength,
         resumeCodePoint,
         Some(savedAuxStack),
-        chargeForCallvalue,
+        callvalueEscrowKey,
         overrideStartPoint,
     );
     return xif let Some(success) = res {
@@ -749,7 +755,7 @@ public impure func evmOp_callAndReturn(
     };
 }
 
-public impure func evmOp_call(
+#[noinline, ] public impure func evmOp_call(
     gas: uint,
     calleeAsUint: uint,
     balance: uint,
@@ -796,7 +802,7 @@ public impure func evmOp_call(
         retLength,
         resumeCodePoint,
         None<Stack>,
-        true,
+        None<uint>,
         None<impure func()>,
     );
     return xif let Some(success) = res {
@@ -806,7 +812,7 @@ public impure func evmOp_call(
     };
 }
 
-public impure func evmOp_callcode(
+#[noinline, ] public impure func evmOp_callcode(
     gas: uint,
     calleeAsUint: uint,
     balance: uint,
@@ -838,7 +844,7 @@ public impure func evmOp_callcode(
         retLength,
         resumeCodePoint,
         None<Stack>,
-        true,
+        None<uint>,
         None<impure func()>,
     );
     return xif let Some(success) = res {
@@ -848,7 +854,7 @@ public impure func evmOp_callcode(
     };
 }
 
-public impure func evmOp_delegatecall(
+#[noinline, ] public impure func evmOp_delegatecall(
     gas: uint,
     calleeAsUint: uint,
     argsOffset: uint,
@@ -879,7 +885,7 @@ public impure func evmOp_delegatecall(
          retLength,
          resumeCodePoint,
          None<Stack>,
-         true,
+         None<uint>,
          None<impure func()>,
      );
     return xif let Some(success) = res {
@@ -889,7 +895,7 @@ public impure func evmOp_delegatecall(
     };
 }
 
-public impure func evmOp_staticcall(
+#[noinline, ] public impure func evmOp_staticcall(
     gas: uint,
     calleeAsUint: uint,
     argsOffset: uint,
@@ -920,7 +926,7 @@ public impure func evmOp_staticcall(
         retLength,
         resumeCodePoint,
         None<Stack>,
-        true,
+        None<uint>,
         None<impure func()>,
     );
     return xif let Some(success) = res {
@@ -1030,7 +1036,7 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
     return panic;
 }
 
-public impure func doCreationOpcode(value: uint, constructorCode: ByteArray, newAddress: address) -> address {
+#[noinline, ] public impure func doCreationOpcode(value: uint, constructorCode: ByteArray, newAddress: address) -> address {
     // make sure there isn't already an account at the given address
     if let Some(acct) = evmCallStack_getAccount(newAddress) {
         if (account_hasContract(acct)) {
@@ -1066,7 +1072,7 @@ public impure func doCreationOpcode(value: uint, constructorCode: ByteArray, new
             0,
             0,           // don't copy returndata back into caller's memory
             0,
-            true,
+            None<uint>,
             Some(startPoint),  // use constructor's startPoint, even though code isn't installed yet
         );
 

@@ -39,6 +39,7 @@ use evmCallStack::evmCallStack_makeEmpty;
 
 use evmOps::evmOps_init;
 use evmOps::evmOp_return;
+use evmOps::dispatchForEvmOp;
 
 use evmlogs::EvmLogs;
 
@@ -78,18 +79,22 @@ use std::storageMap::StorageMap;
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 use bridge_arbos_versions::remapGlobalsForUpgrade;
 
+// The compiler will always put __fixedLocationGlobal in slot 0 of the AVM Register,
+//     so we can rely on it not moving across upgrades.
+var __fixedLocationGlobal: impure func(uint);    // points to EVM op dispatch function
 
 impure func main(oldGlobals: GlobalsBeforeUpgrade) {
     if (unsafecast<any>(oldGlobals) != ()) {
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
 
-        let (newGlobals, oldArbosVersion) = remapGlobalsForUpgrade(oldGlobals);
+        let (newGlobals, _oldArbosVersion) = remapGlobalsForUpgrade(oldGlobals);
 
         asm(newGlobals,) { rset };
 
         // now re-do the initializations that set up pointers into the ArbOS code
         errorHandler_init();
         evmOps_init();
+        __fixedLocationGlobal = dispatchForEvmOp;
         codeSegment_init();
 
         if (initializePreinstalls(true) == None<()>) {
@@ -109,6 +114,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         gasAccounting_init();
         evmCallStack_init();
         evmOps_init();
+        __fixedLocationGlobal = dispatchForEvmOp;
         blockhash_init();
         inbox_init();
         accountStore_init();
@@ -131,10 +137,7 @@ public impure func mainRunLoop() {
     loop {
         let (resultCode, request) = getNextRequestFromCongestionAuction();
         if (resultCode == const::TxResultCode_success) {
-            if (handleL2Request(
-                bytestream_new(request.incomingRequest.msgData),
-                request
-            ) == None<()>) {
+            if (handleL2Request(request) == None<()>) {
                 // reject for message format error
                 emitTxReceipt(
                     request.incomingRequest,

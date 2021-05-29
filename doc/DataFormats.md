@@ -312,6 +312,8 @@ For other transactions, the requestID is computed from incoming message contents
 
 It is infeasible to find two distinct requests that have the same requestID.  This is true because requestIDs are the output of a collision-free hash function, and it is not possible to create two distinct requests that will have the same input to the hash function.  Signed transaction IDs cannot collide with the other types, because the other types' hash preimages both start with a zero byte (because sender address and chainID are zero-filled in the most-significant byte of a big-endian value) and the RLP encoding of a list cannot start with a zero byte.  The other two types cannot have the same hash preimage because subtype-0 messages use a hash output as their second word, which with overwhelming probability will be too large to be feasible as the sequence number or batch index that occupies the same position in the default request ID scheme.
 
+When an incoming message is included through the delayed inbox, the inbox sequence number gets adjusted so it doesn't overlap with the sequencer's inbox. For these messages, you can calculate the request ID by masking the high order bit, as follows: inboxSeqNum | (1 << 255).
+
 ### Block summary
 
 A block summary is emitted at the end of every L1 block that contains any L2 transactions. No summary is emitted for a block that has no L2 activity.

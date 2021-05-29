@@ -26,8 +26,6 @@ use std::rlp::rlp_decodeUint;
 use chainParameters::chainParams_chainId;
 use gasAccounting::getGasLimitPerTx;
 
-use evmOps::evmOps_trampoline;
-
 use evmOps::evmOp_address;
 use evmOps::evmOp_balance;
 use evmOps::evmOp_selfbalance;
@@ -209,7 +207,7 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
         || (opcode == 0xff); // SELFDESTRUCT
 }
 
-impure func generateCodeForEvmSegment(
+#[noinline, ] impure func generateCodeForEvmSegment(
     insns: EvmInstructionStack,
     makePcTable: bool,
 ) -> (AvmCodePoint, map<uint, AvmCodePoint>, Stack) {
@@ -412,7 +410,7 @@ impure func generateCodeForEvmSegment(
                             } elseif (opcode == 0x59) { // MSIZE
                                 code = pushEvmInsnCall(const::EvmOp_msize, code);
                             } elseif (opcode == 0x5a) { // GAS
-                                code = pushInstruction(const::AVM_pushgas, code);
+                                code = pushEvmInsnCall(const::EvmOp_gas, code);
                             } elseif (opcode == 0x5b) { // JUMPDEST
                                 evmJumpTable = evmJumpTable with { [insn.pc] = code };
                             } else {
@@ -530,7 +528,7 @@ impure func generateCodeForEvmSegment(
             }
 
             // uncomment the following line, to get a debugprint before every EVM instruction
-            // code = pushInstructionImm(const::AVM_debugprint, (20000, insn.pc, insn.opcode), code);
+            // code = pushInstructionImm(const::AVM_debugprint, (30000, insn.pc, insn.opcode), code);
         } else {
             return (code, evmJumpTable, pcTable);
         }
@@ -644,10 +642,16 @@ impure func pushEvmInsnCall(evmOpNum: uint, code: AvmCodePoint) -> AvmCodePoint 
         evmOpNum,
         pushValue(
             code,
-            pushInstructionImm(
-                const::AVM_jump,
-                evmOps_trampoline,
-                code,
+            pushInstruction(
+                const::AVM_rpush,
+                pushInstructionImm(
+                    const::AVM_tget,
+                    0,
+                    pushInstruction(
+                        const::AVM_jump,
+                        code,
+                    ),
+                ),
             ),
         ),
     );

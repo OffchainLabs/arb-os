@@ -107,7 +107,7 @@ public impure func installPluggable(id: uint, newFunc: ModuleFunction, keepState
 //          (callFrame: EvmCallFrame, calldata: ByteArray, evmOpJumpTable: [const::NumEvmOps]impure func()).
 // Its should return (success: bool, resultData: ByteArray).
 
-public impure func bindContractAddressToPluggable(account: Account, addr: address, id: uint) -> Account {
+public impure func bindContractAddressToPluggable(account: Account, id: uint) -> Account {
     return account_setContractInfo(
        account,
        bytearray_setByte(bytearray_new(0), 0, 0xfe),   // like an "Arbitrum style" precompiled contract
