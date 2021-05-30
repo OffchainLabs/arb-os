@@ -522,7 +522,7 @@ impure func arbowner_getAllAllowedSenders(_topFrame: EvmCallFrame, calldata: Byt
             serialized,
             0,
             bytearray_set256(
-                bytearray_set256(bytearray_new(0), 0, 64),
+                bytearray_set256(bytearray_new(0), 0, 32),
                 32,
                 size,    // no need to round up, because size is already a multiple of 32
             ),
