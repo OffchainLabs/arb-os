@@ -1440,7 +1440,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
 
     let mexe_path = Path::new("arb_os/arbos-upgrade.mexe");
-    let previous_upgrade_hash = _try_upgrade(&arbowner, &mut machine, &mexe_path, None)?.unwrap();
+    let _previous_upgrade_hash = _try_upgrade(&arbowner, &mut machine, &mexe_path, None)?.unwrap();
 
     let wallet2 = machine.runtime_env.new_wallet();
     let arbsys = ArbSys::new(&wallet2, false);
@@ -1454,23 +1454,6 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     );
     let arbos_version_orig = arbsys_orig_binding._arbos_version(&mut machine)?;
     assert_eq!(arbos_version, arbos_version_orig);
-
-    // try again, specifying a previous hash
-    assert_eq!(
-        _try_upgrade(
-            &arbowner,
-            &mut machine,
-            &mexe_path,
-            Some(previous_upgrade_hash.clone())
-        )?,
-        Some(previous_upgrade_hash.clone())
-    );
-
-    // try again, specifying an incorrect previous hash
-    assert_eq!(
-        _try_upgrade(&arbowner, &mut machine, &mexe_path, Some(Uint256::one()))?,
-        None
-    );
 
     Ok(())
 }
@@ -1862,7 +1845,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         "L2 tx {}, L1 calldata {}, L2 storage {}, base gas {}, congestion gas {}, total gas {}",
         l2tx, l1calldata, storage, basegas, conggas, totalgas
     );
-    assert_eq!(l2tx, Uint256::from_u64(638250000000000));
+    assert_eq!(l2tx, Uint256::from_u64(600000000000000));
     assert_eq!(l1calldata, Uint256::from_u64(172500000000));
     assert_eq!(storage, Uint256::from_u64(300000000000000));
     assert_eq!(basegas, Uint256::from_u64(1500000000));
@@ -2748,7 +2731,7 @@ fn test_congestion_price_adjustment() {
     assert_eq!(
         arbgasinfo
             //._get_prices_in_wei(&mut machine, randomish_address.clone())  preserve this for later integration
-            ._get_prices_in_wei(&mut machine)
+            ._get_prices_in_wei(&mut machine, my_address.clone())
             .unwrap()
             .4,
         Uint256::zero()
@@ -2780,7 +2763,7 @@ fn test_congestion_price_adjustment() {
 
     let prices = arbgasinfo
         //._get_prices_in_wei(&mut machine, randomish_address.clone())  preserve this for later integration
-        ._get_prices_in_wei(&mut machine)
+        ._get_prices_in_wei(&mut machine, my_address.clone())
         .unwrap();
     assert!(prices.4 > Uint256::zero());
 
@@ -2789,7 +2772,7 @@ fn test_congestion_price_adjustment() {
         ._advance_time(Uint256::from_u64(48), Some(Uint256::from_u64(720)), false);
     let prices2 = arbgasinfo
         //._get_prices_in_wei(&mut machine, randomish_address.clone())  preserve this for later integration
-        ._get_prices_in_wei(&mut machine)
+        ._get_prices_in_wei(&mut machine, my_address.clone())
         .unwrap();
     assert_eq!(prices2.4, Uint256::zero());
 }
@@ -2818,7 +2801,7 @@ fn test_set_gas_price_estimate() {
     let new_gas_price = Uint256::from_u64(37);
     let new_storage_price = new_gas_price.mul(&Uint256::from_u64(2_000_000_000_000));
 
-    let storage_price = arbgasinfo._get_prices_in_wei(&mut machine).unwrap().2;
+    let storage_price = arbgasinfo._get_prices_in_wei(&mut machine, my_address.clone()).unwrap().2;
     assert!(storage_price != new_storage_price);
 
     arbowner
@@ -2829,6 +2812,6 @@ fn test_set_gas_price_estimate() {
         .runtime_env
         ._advance_time(Uint256::one(), None, false);
 
-    let storage_price = arbgasinfo._get_prices_in_wei(&mut machine).unwrap().2;
+    let storage_price = arbgasinfo._get_prices_in_wei(&mut machine, my_address.clone()).unwrap().2;
     assert_eq!(storage_price, new_storage_price);
 }

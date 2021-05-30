@@ -395,12 +395,12 @@ public impure func gasAccounting_setFeesEnabled(enabled: bool) {
 }
 
 public impure func gasAccounting_setChargingParams(
-    l1GasPerL2Tx: uint,
-    arbGasPerL2Tx: uint,
+    _l1GasPerL2Tx: uint,
+    _arbGasPerL2Tx: uint,
     l1GasPerL1CalldataUnit: uint,
-    arbGasPerL1CalldataUnit: uint,
+    _arbGasPerL1CalldataUnit: uint,
     l1GasPerStorage: uint,
-    arbGasPerStorage: uint,
+    _arbGasPerStorage: uint,
     arbGasDivisor: uint,
     netFeeRecipient: address,
     congestionFeeRecipient: address,
@@ -926,7 +926,9 @@ impure func payForTxAndL1Gas(
         address(1 ^ uint(preferredAggregator))   // can use any value that is not equal to preferredAggregator
     };
 
-    if (preferredAggregator != recipient) {
+    feeStats = xif (preferredAggregator == recipient) {
+        txFeeStats_setPrices(feeStats, prices, Some(preferredAggregator))
+    } else {
         // Tx isn't using the preferred aggregator, so only charge for the network fee, for L2 tx and L1 calldata gas.
         // Here we reduce the prices of those things so they include only the network fee.
         // Below we will charge the reduced price and give all of the funds for these things to the network fee.

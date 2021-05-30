@@ -45,7 +45,7 @@ public impure func arbgasinfo_txcall() {
     }
 }
 
-]impure func arbgasinfo_getPricesInWei(_topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> (uint, ..., uint)
+impure func arbgasinfo_getPricesInWei(_topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> (uint, ..., uint)
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(10, 0, 0);
     }
