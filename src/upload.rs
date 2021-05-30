@@ -166,4 +166,3 @@ fn test_code_upload_prep() {
     let reconstituted = CodeUploader::_from_json(&uploader.clone()._to_json().unwrap());
     assert_eq!(uploader, reconstituted);
 }
-
