@@ -2801,7 +2801,10 @@ fn test_set_gas_price_estimate() {
     let new_gas_price = Uint256::from_u64(37);
     let new_storage_price = new_gas_price.mul(&Uint256::from_u64(2_000_000_000_000));
 
-    let storage_price = arbgasinfo._get_prices_in_wei(&mut machine, my_address.clone()).unwrap().2;
+    let storage_price = arbgasinfo
+        ._get_prices_in_wei(&mut machine, my_address.clone())
+        .unwrap()
+        .2;
     assert!(storage_price != new_storage_price);
 
     arbowner
@@ -2812,6 +2815,9 @@ fn test_set_gas_price_estimate() {
         .runtime_env
         ._advance_time(Uint256::one(), None, false);
 
-    let storage_price = arbgasinfo._get_prices_in_wei(&mut machine, my_address.clone()).unwrap().2;
+    let storage_price = arbgasinfo
+        ._get_prices_in_wei(&mut machine, my_address.clone())
+        .unwrap()
+        .2;
     assert_eq!(storage_price, new_storage_price);
 }
