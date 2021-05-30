@@ -5,8 +5,8 @@
 //!Provides types and utilities for linking together compiled mini programs
 
 use crate::compile::{
-    comma_list, CompileError, CompiledProgram, DebugInfo, FileInfo, GlobalVarDecl, SourceFileMap,
-    Type, TypeTree, WarningSystem,
+    comma_list, CompileError, CompiledProgram, DebugInfo, ErrorSystem, FileInfo, GlobalVarDecl,
+    SourceFileMap, Type, TypeTree,
 };
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::{try_display_location, Location};
@@ -232,14 +232,39 @@ impl ExportedFunc {
 pub fn postlink_compile(
     program: CompiledProgram,
     mut file_info_chart: BTreeMap<u64, FileInfo>,
-    _warning_system: &mut WarningSystem,
+    _error_system: &mut ErrorSystem,
     test_mode: bool,
     debug: bool,
 ) -> Result<LinkedProgram, CompileError> {
+    let consider_debug_printing = |code: &Vec<Instruction>, did_print: bool, phase: &str| {
+        if debug {
+            println!("========== {} ==========", phase);
+            for (idx, insn) in code.iter().enumerate() {
+                println!("{:04}:  {}", idx, insn);
+            }
+        } else if did_print {
+            println!("========== {} ==========", phase);
+            for (idx, insn) in code.iter().enumerate() {
+                if insn.debug_info.attributes.codegen_print {
+                    println!("{:04}:  {}", idx, insn);
+                }
+            }
+        }
+    };
+
+    let mut did_print = false;
+
     if debug {
         println!("========== after initial linking ===========");
         for (idx, insn) in program.code.iter().enumerate() {
             println!("{:04}:  {}", idx, insn);
+        }
+    } else {
+        for (idx, insn) in program.code.iter().enumerate() {
+            if insn.debug_info.attributes.codegen_print {
+                println!("{:04}:  {}", idx, insn);
+                did_print = true;
+            }
         }
     }
     let (code_2, jump_table) = striplabels::fix_nonforward_labels(
@@ -247,26 +272,14 @@ pub fn postlink_compile(
         &program.imported_funcs,
         program.globals.len() - 1,
     );
-    if debug {
-        println!("========== after fix_backward_labels ===========");
-        for (idx, insn) in code_2.iter().enumerate() {
-            println!("{:04}:  {}", idx, insn);
-        }
-    }
+    consider_debug_printing(&code_2, did_print, "after fix_backward_labels");
+
     let code_3 = xformcode::fix_tuple_size(&code_2, program.globals.len())?;
-    if debug {
-        println!("=========== after fix_tuple_size ==============");
-        for (idx, insn) in code_3.iter().enumerate() {
-            println!("{:04}:  {}", idx, insn);
-        }
-    }
+    consider_debug_printing(&code_3, did_print, "after fix_tuple_size");
+
     let code_4 = optimize::peephole(&code_3);
-    if debug {
-        println!("============ after peephole optimization ===========");
-        for (idx, insn) in code_4.iter().enumerate() {
-            println!("{:04}:  {}", idx, insn);
-        }
-    }
+    consider_debug_printing(&code_4, did_print, "after peephole optimization");
+
     let (mut code_5, jump_table_final) =
         striplabels::strip_labels(code_4, &jump_table, &program.imported_funcs)?;
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
@@ -279,10 +292,9 @@ pub fn postlink_compile(
                 Ok(Instruction::new(inner, insn.immediate, insn.debug_info))
             } else {
                 Err(CompileError::new(
-                    String::from("Compile error"),
+                    String::from("Postlink error"),
                     format!("In final output encountered virtual opcode {}", insn.opcode),
                     insn.debug_info.location.into_iter().collect(),
-                    false,
                 ))
             }
         })
@@ -336,7 +348,7 @@ fn hardcode_jump_table_into_register(
 pub fn link(
     progs_in: &[CompiledProgram],
     test_mode: bool,
-    warning_system: &mut WarningSystem,
+    error_system: &mut ErrorSystem,
 ) -> Result<CompiledProgram, CompileError> {
     let progs = progs_in.to_vec();
     let type_tree = progs[0].type_tree.clone();
@@ -431,11 +443,10 @@ pub fn link(
         if let Some(label) = exports_map.get(&imp.name) {
             label_xlate_map.insert(Label::External(imp.slot_num), label);
         } else {
-            warning_system.warnings.push(CompileError::new(
+            error_system.warnings.push(CompileError::new_warning(
                 String::from("Compile warning"),
                 format!("Failed to resolve import \"{}\"", imp.name),
                 vec![],
-                true,
             ));
         }
     }

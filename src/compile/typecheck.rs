@@ -5,12 +5,12 @@
 //!Converts non-type checked ast nodes to type checked versions, and other related utilities.
 
 use super::ast::{
-    BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func, FuncDeclKind, GlobalVarDecl,
-    MatchPattern, MatchPatternKind, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp,
-    Type, TypeTree, UnaryOp,
+    Attributes, BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func, FuncDeclKind,
+    GlobalVarDecl, MatchPattern, MatchPatternKind, Statement, StatementKind, StructField,
+    TopLevelDecl, TrinaryOp, Type, TypeTree, UnaryOp,
 };
 use crate::compile::ast::FieldInitializer;
-use crate::compile::{CompileError, InliningHeuristic, WarningSystem};
+use crate::compile::{CompileError, ErrorSystem, InliningHeuristic};
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::{Column, Location};
@@ -71,6 +71,29 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
             TypeCheckedNode::Expression(exp) => exp.is_pure(),
             TypeCheckedNode::StructField(field) => field.is_pure(),
             TypeCheckedNode::Type(_) => true,
+        }
+    }
+}
+
+impl<'a> TypeCheckedNode<'a> {
+    ///Propagates attributes down the tree. Currently only passes `codegen_print`.
+    pub fn propagate_attributes(mut nodes: Vec<TypeCheckedNode>, attributes: &Attributes) {
+        for node in nodes.iter_mut() {
+            match node {
+                TypeCheckedNode::Statement(stat) => {
+                    stat.debug_info.attributes.codegen_print =
+                        stat.debug_info.attributes.codegen_print || attributes.codegen_print;
+                    let child_attributes = stat.debug_info.attributes.clone();
+                    TypeCheckedNode::propagate_attributes(stat.child_nodes(), &child_attributes);
+                }
+                TypeCheckedNode::Expression(expr) => {
+                    expr.debug_info.attributes.codegen_print =
+                        expr.debug_info.attributes.codegen_print || attributes.codegen_print;
+                    let child_attributes = expr.debug_info.attributes.clone();
+                    TypeCheckedNode::propagate_attributes(expr.child_nodes(), &child_attributes);
+                }
+                _ => {}
+            }
         }
     }
 }
@@ -399,7 +422,7 @@ fn flowcheck_reachability<T: AbstractSyntaxTree>(node: &mut T) -> Vec<CompileErr
         return warnings;
     }
 
-    warnings.push(CompileError::new(
+    warnings.push(CompileError::new_warning(
         String::from("Compile warning"),
         if locations.len() == 2 {
             String::from("found unreachable statement")
@@ -407,7 +430,6 @@ fn flowcheck_reachability<T: AbstractSyntaxTree>(node: &mut T) -> Vec<CompileErr
             String::from("found unreachable statements")
         },
         locations,
-        true,
     ));
 
     warnings
@@ -651,7 +673,7 @@ impl TypeCheckedFunc {
         &mut self,
         imports: &mut BTreeMap<usize, Import>,
         string_table: &mut StringTable,
-        warning_system: &WarningSystem,
+        error_system: &ErrorSystem,
     ) -> Vec<CompileError> {
         let mut flowcheck_warnings = vec![];
 
@@ -672,36 +694,34 @@ impl TypeCheckedFunc {
             // allow intentional lack of use
             if !string_table.name_from_id(arg.name.clone()).starts_with('_') {
                 if !killed.contains(&arg.name) {
-                    flowcheck_warnings.push(CompileError::new(
+                    flowcheck_warnings.push(CompileError::new_warning(
                         String::from("Compile warning"),
                         format!(
                             "func {}{}{}'s argument {}{}{} is declared but never used",
-                            warning_system.warn_color,
+                            error_system.warn_color,
                             string_table.name_from_id(self.name.clone()),
                             CompileError::RESET,
-                            warning_system.warn_color,
+                            error_system.warn_color,
                             string_table.name_from_id(arg.name.clone()),
                             CompileError::RESET,
                         ),
                         arg.debug_info.location.into_iter().collect(),
-                        true,
                     ));
                 }
 
                 if let Some(loc) = reborn.get(&arg.name) {
-                    flowcheck_warnings.push(CompileError::new(
+                    flowcheck_warnings.push(CompileError::new_warning(
                         String::from("Compile warning"),
                         format!(
                             "func {}{}{}'s argument {}{}{} is assigned but never used",
-                            warning_system.warn_color,
+                            error_system.warn_color,
                             string_table.name_from_id(self.name.clone()),
                             CompileError::RESET,
-                            warning_system.warn_color,
+                            error_system.warn_color,
                             string_table.name_from_id(arg.name.clone()),
                             CompileError::RESET,
                         ),
                         vec![*loc],
-                        true,
                     ));
                 }
             }
@@ -710,16 +730,15 @@ impl TypeCheckedFunc {
         for &(loc, id) in unused_assignments.iter() {
             // allow intentional lack of use
             if !string_table.name_from_id(id.clone()).starts_with('_') {
-                flowcheck_warnings.push(CompileError::new(
+                flowcheck_warnings.push(CompileError::new_warning(
                     String::from("Compile warning"),
                     format!(
                         "value {}{}{} is assigned but never used",
-                        warning_system.warn_color,
+                        error_system.warn_color,
                         string_table.name_from_id(id.clone()),
                         CompileError::RESET,
                     ),
                     vec![loc],
-                    true,
                 ));
             }
         }

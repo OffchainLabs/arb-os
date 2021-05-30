@@ -30,12 +30,15 @@ pub struct DebugInfo {
     pub attributes: Attributes,
 }
 
-///A list of properties that an AST node has, currently only contains breakpoints.
+///A list of properties that an AST node has.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Attributes {
     ///Is true if the current node is a breakpoint, false otherwise.
     pub breakpoint: bool,
     pub inline: InliningMode,
+    #[serde(skip)]
+    ///Whether generated instructions should be printed to the console.
+    pub codegen_print: bool,
 }
 
 impl DebugInfo {

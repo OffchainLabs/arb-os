@@ -2,8 +2,10 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-const UsedConstant = 0x10000000000000000;
-const UnusedConstant = 0x10000000000000000;
+const UsedConstant = 0x44444444444444444;
+const DuplicateConstant = 0x88888888888888888;
+const DuplicateConstant = 0x88888888888888888;
+const UnusedConstant = 0x88888888888888888;
 
 use std::random::random_new;
 use std::random::random_new;
@@ -40,6 +42,7 @@ func main(arg: option<RandomGenerator>) -> (option<RandomGenerator>, option<opti
 var unused_global: uint;
 var used_global: uint;
 
+#[bad_attribute, inline]
 public func hop() {
     used_global = crazy(4, 8, true, 4);
     asm(used_global,) { log };
@@ -98,7 +101,8 @@ func crazy(n: uint, unused_arg: uint, unused_arg2: bool, _intentional: uint) -> 
     }
     return v;
     
-    let _unused_on_purpose = 4;
+    let _unused_on_purpose = const::UsedConstant + const::_ShouldNotBeUsed;
+    let _unused_on_purpose = const::NonExistantConstant;
     
     let with_init = newfixedarray(8, 0);
     let (newSlotContents, returnValue) = (1, 2);
@@ -180,6 +184,7 @@ func shadow(shadow_arg: uint, bad_arg: uint, good_arg: uint) {    // everything 
        let shadowing_edge_case = shadowing_edge_case * 8;
      }
      
+     #[bad_attribute]
      let final = 4;
      { xif (final == 4) { let _ = final; } elseif (true) { final = 8; } };
      { xif (final == 4) { final = 8; } elseif (true) { let final = 8 * final; } };

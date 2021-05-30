@@ -1,8 +1,8 @@
-use crate::compile::CompileStruct;
+use crate::compile::{CompileError, CompileStruct, FileInfo};
 use crate::mavm::Value;
 use crate::run::{run, Machine, RuntimeEnvironment};
 use crate::uint256::Uint256;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 fn compile_run_cycle(input: String) -> Machine {
@@ -10,7 +10,10 @@ fn compile_run_cycle(input: String) -> Machine {
     compile.input = vec![input];
     compile.test_mode = true;
     compile.consts_file = Some(format!("arb_os/constants.json"));
-    let mexe = compile.invoke().unwrap();
+    let mexe = match compile.invoke() {
+        Ok((mexe, _error_system)) => mexe,
+        Err(_error_system) => panic!("failed to compile"),
+    };
     let mut machine = Machine::new(
         mexe,
         RuntimeEnvironment::new(Uint256::from_usize(1111), None),
@@ -44,18 +47,21 @@ fn test_codeblocks() {
 }
 
 #[test]
-fn test_warnings() {
-    fn check_warnings(file_path: &str, sources: BTreeSet<String>, correct: &[&[usize]]) {
-        let mut compile = CompileStruct::default();
-        compile.input = vec![file_path.to_string()];
-        compile.warnings_are_errors = true;
+fn test_error_system() {
+    fn check_correctness(
+        issues: Vec<CompileError>,
+        correct: &[&[usize]],
+        file_info_chart: &BTreeMap<u64, FileInfo>,
+        file_path: &str,
+        sources: &BTreeSet<String>,
+        issue_type: &str,
+    ) {
+        let mut issues: Vec<CompileError> = issues
+            .into_iter()
+            .filter(|x| x.locations.len() > 0)
+            .collect();
 
-        let (mut warnings, file_info_chart) = match compile.invoke() {
-            Ok(_) => panic!("No compile error was emitted despite the -w flag."),
-            Err((_, warnings, file_info_chart)) => (warnings, file_info_chart),
-        };
-
-        warnings.sort_by(|a, b| {
+        issues.sort_by(|a, b| {
             a.locations
                 .last()
                 .unwrap()
@@ -64,10 +70,10 @@ fn test_warnings() {
                 .cmp(&b.locations.last().unwrap().line.to_usize())
         });
 
-        let warnings: Vec<Vec<usize>> = warnings
+        let issues: Vec<Vec<usize>> = issues
             .into_iter()
-            .map(|warning| {
-                warning
+            .map(|issue| {
+                issue
                     .locations
                     .into_iter()
                     .filter(|loc| {
@@ -79,87 +85,145 @@ fn test_warnings() {
             .filter(|vec| !vec.is_empty())
             .collect();
 
-        let pairs = warnings.iter().zip(correct.iter());
+        let pairs = issues.iter().zip(correct.iter());
 
-        for (warning_lines, correct_lines) in pairs {
-            let mut found_issue = warning_lines.len() != correct_lines.len();
+        for (issue_lines, correct_lines) in pairs {
+            let mut found_issue = issue_lines.len() != correct_lines.len();
 
-            for (warning_line, correct_line) in warning_lines.iter().zip(correct_lines.iter()) {
-                found_issue = found_issue || warning_line != correct_line;
+            for (issue_line, correct_line) in issue_lines.iter().zip(correct_lines.iter()) {
+                found_issue = found_issue || issue_line != correct_line;
             }
 
             if found_issue {
-                let last_warning = warning_lines.last().unwrap();
+                let last_warning = issue_lines.last().unwrap();
                 let last_correct = correct_lines.last().unwrap();
 
                 if last_warning < last_correct {
-                    panic!("Unexpected warning on line {}", last_warning);
+                    panic!(
+                        "Unexpected {} on line {} in file {}",
+                        issue_type, last_warning, file_path
+                    );
                 } else if last_warning > last_correct {
-                    panic!("Missing warning on line {}", last_correct);
+                    panic!(
+                        "Missing {} on line {} in file {}",
+                        issue_type, last_correct, file_path
+                    );
                 } else {
-                    panic!("Warning mismatch on line {}", last_correct);
+                    panic!(
+                        "{} mismatch on line {} in file {}",
+                        issue_type, last_correct, file_path
+                    );
                 }
             }
         }
 
-        if warnings.len() < correct.len() {
-            panic!("Too few warnings");
-        } else if warnings.len() > correct.len() {
-            panic!("Too many warnings");
+        if issues.len() != correct.len() {
+            panic!(
+                "Found {} {}s when {} are expected in {}",
+                issues.len(),
+                issue_type,
+                correct.len(),
+                file_path
+            );
         }
     }
 
+    fn check_issues(
+        file_path: &str,
+        sources: BTreeSet<String>,
+        correct_warnings: &[&[usize]],
+        correct_errors: &[&[usize]],
+    ) {
+        let mut compile = CompileStruct::default();
+        compile.input = vec![file_path.to_string()];
+        compile.warnings_are_errors = true;
+        compile.consts_file = Some("minitests/constants.json".to_string());
+
+        let (warnings, errors, file_info_chart) = match compile.invoke() {
+            Ok(_) => panic!("No compile error was emitted despite the -w flag."),
+            Err(error_system) => {
+                error_system.print();
+                (
+                    error_system.warnings,
+                    error_system.errors,
+                    error_system.file_info_chart,
+                )
+            }
+        };
+
+        check_correctness(
+            warnings,
+            correct_warnings,
+            &file_info_chart,
+            file_path,
+            &sources,
+            "warning",
+        );
+        check_correctness(
+            errors,
+            correct_errors,
+            &file_info_chart,
+            file_path,
+            &sources,
+            "error",
+        );
+    }
+
     // check single-file warnings
-    check_warnings(
-        "minitests/warn-when-unused.mini",
-        vec!["warn-when-unused".to_string()].into_iter().collect(),
+    check_issues(
+        "minitests/error-system-test.mini",
+        vec!["error-system-test".to_string()].into_iter().collect(),
         &[
-            &[8, 9],
+            &[7],
+            &[8],
             &[10, 11],
-            &[16],
-            &[17],
+            &[12, 13],
             &[18],
-            &[30],
-            &[43],
-            &[48],
-            &[48],
-            &[50],
-            &[58],
-            &[59],
-            &[63],
-            &[67],
-            &[69],
+            &[19],
+            &[20],
+            &[32],
+            &[45],
+            &[51],
+            &[51],
+            &[53],
+            &[61],
+            &[62],
+            &[66],
             &[70],
+            &[72],
             &[73],
-            &[73],
-            &[84],
-            &[86],
-            &[91],
-            &[93],
-            &[81, 83, 97],
-            &[105],
-            &[112],
-            &[99, 101, 115],
-            &[118],
-            &[123],
-            &[131],
-            &[143],
-            &[148],
-            &[151],
+            &[76],
+            &[76],
+            &[87],
+            &[89],
+            &[94],
+            &[96],
+            &[84, 86, 100],
+            &[104],
+            &[109],
+            &[116],
+            &[102, 104, 119],
+            &[122],
+            &[127],
+            &[135],
+            &[147],
+            &[152],
             &[155],
-            &[175],
-            &[180],
-            &[185],
-            &[185],
-            &[188],
-            &[189],
-            &[191],
-            &[192],
+            &[159],
+            &[179],
+            &[184],
+            &[190],
+            &[190],
+            &[193],
+            &[194],
+            &[196],
+            &[197],
         ],
+        &[&[7], &[45], &[105], &[187]],
     );
 
     // check directory callgraph warnings
-    check_warnings(
+    check_issues(
         "minitests/callgraph",
         vec!["main".to_string(), "other".to_string()]
             .into_iter()
@@ -172,5 +236,6 @@ fn test_warnings() {
             &[21],
             &[26],
         ],
+        &[],
     );
 }
