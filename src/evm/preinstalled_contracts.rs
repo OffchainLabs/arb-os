@@ -675,10 +675,8 @@ impl<'a> _ArbOwner<'a> {
         }
 
         if receipts[0].succeeded() {
-            let decoded = ethabi::decode(
-                &[ethabi::ParamType::Bytes],
-                &*receipts[0].get_return_data(),
-            )?;
+            let decoded =
+                ethabi::decode(&[ethabi::ParamType::Bytes], &*receipts[0].get_return_data())?;
 
             match &decoded[0] {
                 ethabi::Token::Bytes(ret_data) => {
@@ -690,7 +688,7 @@ impl<'a> _ArbOwner<'a> {
                     }
                     Ok(ret)
                 }
-                _ => Err(ethabi::Error::from("invalid returndata encoding"))
+                _ => Err(ethabi::Error::from("invalid returndata encoding")),
             }
         } else {
             Err(ethabi::Error::from("reverted"))
