@@ -248,6 +248,41 @@ func tests() -> uint {
         return 30;
     }
 
+    let ba = setupFromUnmarshal();
+    ba = bytearray_extract(ba, 0, 1);
+    ba = bytearray_setByte(ba, 256, 42);
+    if (bytearray_get256(ba, 32) != 0) {
+        return 40;
+    }
+
+    let ba = setupFromUnmarshal();
+    ba = bytearray_extract(ba, 0, 1);
+    ba = bytearray_set64(ba, 256, 42);
+    if (bytearray_get256(ba, 32) != 0) {
+        return 41;
+    }
+
+    let ba = setupFromUnmarshal();
+    ba = bytearray_extract(ba, 0, 1);
+    ba = bytearray_set256(ba, 256, 42);
+    if (bytearray_get256(ba, 32) != 0) {
+        return 42;
+    }
+
+    let ba = setupFromUnmarshal();
+    ba = bytearray_extract(ba, 0, 1);
+    ba = bytearray_copy(bytearray_set256(bytearray_new(0), 0, 99), 0, ba, 256, 32);
+    if (bytearray_get256(ba, 32) != 0) {
+        return 43;
+    }
+
+    let ba = setupFromUnmarshal();
+    ba = bytearray_extract(ba, 0, 1);
+    let ba2 = bytearray_copy(ba, 0, bytearray_set256(bytearray_new(0), 256, 42), 0, 100);
+    if (bytearray_get256(ba2, 32) != 0) {
+        return 50;
+    }
+
     return testCalldataUnitCounting();
 }
 
