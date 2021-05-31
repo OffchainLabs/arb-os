@@ -276,6 +276,13 @@ func tests() -> uint {
         return 43;
     }
 
+    let ba = setupFromUnmarshal();
+    ba = bytearray_extract(ba, 0, 1);
+    let ba2 = bytearray_copy(ba, 0, bytearray_set256(bytearray_new(0), 256, 42), 0, 100);
+    if (bytearray_get256(ba2, 32) != 0) {
+        return 50;
+    }
+
     return testCalldataUnitCounting();
 }
 

@@ -223,7 +223,7 @@ public func bytearray_wrap(cont: buffer, size: uint) -> ByteArray {
 func zero_fill_region(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray {
     return xif(nbytes < ba.size) {
         // copy zeroes into the buffer
-        bytearray_copy(bytearray_new(0), 0, ba, offset, nbytes)
+        bytearray_copy(bytearray_new(0), 0, ba, offset, 32*((nbytes+31)/32))
     } else {
         // copy into a clean buffer
         bytearray_copy(ba, 0, bytearray_new(0), 0, ba.size)
@@ -308,6 +308,9 @@ public func bytearray_copy(
     toOffset: uint,
     nbytes: uint,
 ) -> ByteArray {
+    if (fromOffset + nbytes > from.size) {
+        from = zero_fill_region(from, from.size, fromOffset+nbytes-from.size);
+    }
     if ((fromOffset >= const::MaxByteArraySize)
         || (toOffset >= const::MaxByteArraySize)
         || (nbytes > const::MaxByteArraySize)
