@@ -4,7 +4,7 @@
 
 //!Contains utilities for generating instructions from AST structures.
 
-use super::ast::{BinaryOp, FuncArg, GlobalVarDecl, TrinaryOp, Type, UnaryOp};
+use super::ast::{BinaryOp, GlobalVarDecl, TrinaryOp, Type, UnaryOp};
 use super::typecheck::{
     PropertiesList, TypeCheckedExpr, TypeCheckedFunc, TypeCheckedMatchPattern, TypeCheckedStatement,
 };
@@ -92,7 +92,7 @@ pub fn mavm_codegen(
 /// codegen, and a vector of the generated code, otherwise it returns a CodegenError.
 fn mavm_codegen_func(
     mut func: TypeCheckedFunc,
-    mut label_gen: LabelGenerator,
+    label_gen: LabelGenerator,
     string_table: &StringTable,
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
@@ -104,7 +104,11 @@ fn mavm_codegen_func(
     {
         func.code.push(TypeCheckedStatement {
             kind: TypeCheckedStatementKind::ReturnVoid(),
-            debug_info: DebugInfo::default(),
+            debug_info: {
+                let mut debug_info = DebugInfo::default();
+                debug_info.attributes.codegen_print = func.debug_info.attributes.codegen_print;
+                debug_info
+            },
         });
     }
     let mut code = vec![];
@@ -115,7 +119,7 @@ fn mavm_codegen_func(
     ));
 
     let num_args = func.args.len();
-    let locals = HashMap::new();
+    let mut locals = HashMap::new();
 
     let make_frame_slot = code.len();
     code.push(Instruction::from_opcode(
@@ -123,58 +127,14 @@ fn mavm_codegen_func(
         debug_info,
     )); // placeholder; will replace this later
 
-    let (lg, max_num_locals) = add_args_to_locals_table(
-        &locals,
-        &func.args,
-        0,
+    for (index, arg) in func.args.iter().enumerate() {
+        locals.insert(arg.name, index);
+    }
+    let (label_gen, max_num_locals, _slot_map) = mavm_codegen_statements(
         func.code,
         &mut code,
-        label_gen,
-        string_table,
-        import_func_map,
-        global_var_map,
-        file_info_chart,
-        error_system,
-    )?;
-    label_gen = lg;
-
-    // put makeframe Instruction at beginning of function, to build the frame (replacing placeholder)
-    code[make_frame_slot] =
-        Instruction::from_opcode(Opcode::MakeFrame(num_args, max_num_locals), debug_info);
-    Ok((label_gen, code))
-}
-
-///This adds args to locals, and then codegens the statements in statements, using the updated
-/// locals and other function arguments as parameters.
-///
-/// If successful the function returns a tuple containing the updated label generator, maximum
-/// number of locals used so far by this call frame, and a bool that is set to true when the
-/// function may continue past the end of the generated code, otherwise the function returns a
-/// CodegenError.
-fn add_args_to_locals_table(
-    locals: &HashMap<usize, usize>,
-    args: &[FuncArg],
-    num_locals: usize,
-    statements: Vec<TypeCheckedStatement>,
-    code: &mut Vec<Instruction>,
-    label_gen: LabelGenerator,
-    string_table: &StringTable,
-    import_func_map: &HashMap<StringId, Label>,
-    global_var_map: &HashMap<StringId, usize>,
-    file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    error_system: &mut ErrorSystem,
-) -> Result<(LabelGenerator, usize), CodegenError> {
-    let mut locals_map = HashMap::new();
-    for (index, arg) in args.iter().enumerate() {
-        locals_map.insert(arg.name, num_locals + index);
-    }
-    let mut new_locals = locals.clone();
-    new_locals.extend(locals_map);
-    mavm_codegen_statements(
-        statements,
-        code,
-        num_locals + args.len(),
-        &new_locals,
+        num_args,
+        &locals,
         label_gen,
         string_table,
         import_func_map,
@@ -183,8 +143,12 @@ fn add_args_to_locals_table(
         &mut vec![],
         file_info_chart,
         error_system,
-    )
-    .map(|(a, b, _)| (a, b))
+    )?;
+
+    // put makeframe Instruction at beginning of function, to build the frame (replacing placeholder)
+    code[make_frame_slot] =
+        Instruction::from_opcode(Opcode::MakeFrame(num_args, max_num_locals), debug_info);
+    Ok((label_gen, code))
 }
 
 fn mavm_codegen_code_block<'a>(
