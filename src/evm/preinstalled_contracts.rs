@@ -1916,7 +1916,9 @@ fn test_arbgas_oracle() {
         .unwrap();
 
     let gpest = Uint256::_from_gwei(73);
-    arbgasinfo._set_l1_gas_price_estimate(&mut machine, gpest.clone(), my_addr.clone()).unwrap();
+    arbgasinfo
+        ._set_l1_gas_price_estimate(&mut machine, gpest.clone(), my_addr.clone())
+        .unwrap();
 
     let gasprice = arbgasinfo._get_l1_gas_price_estimate(&mut machine).unwrap();
     assert_eq!(gpest, gasprice);
