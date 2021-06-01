@@ -486,8 +486,7 @@ fn mavm_codegen_statement(
                     let mut assigned = HashSet::new();
                     for sub_pat in pattern.clone().iter() {
                         match &sub_pat.kind {
-                            MatchPatternKind::Simple(_) => {
-                            }
+                            MatchPatternKind::Simple(_) => {}
                             MatchPatternKind::Assign(name) => {
                                 if locals.get(name).is_none() {
                                     if global_var_map.get(name).is_none() {
