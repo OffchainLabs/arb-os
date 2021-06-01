@@ -467,67 +467,45 @@ fn mavm_codegen_statement(
             )?;
             label_gen = lg;
             code = c;
-            match &pat.kind {
-                MatchPatternKind::Simple(name) => {
-                    let slot_num = num_locals;
-                    let mut bindings = HashMap::new();
-                    bindings.insert(*name, slot_num);
-                    num_locals += 1;
-                    num_locals = max(num_locals, exp_locals);
-                    code.push(Instruction::from_opcode_imm(
-                        Opcode::SetLocal,
-                        Value::Int(Uint256::from_usize(slot_num)),
-                        debug,
-                    ));
-                    Ok((label_gen, num_locals, bindings))
-                }
-                MatchPatternKind::Assign(_) => unimplemented!(),
-                MatchPatternKind::Tuple(pattern) => {
-                    let mut assigned = HashSet::new();
-                    for sub_pat in pattern.clone().iter() {
-                        match &sub_pat.kind {
-                            MatchPatternKind::Simple(_) => {}
-                            MatchPatternKind::Assign(name) => {
-                                if locals.get(name).is_none() {
-                                    if global_var_map.get(name).is_none() {
-                                        return Err(new_codegen_error(
-                                            "assigned to non-existent variable in mixed let"
-                                                .to_string(),
-                                            loc,
-                                        ));
-                                    }
-                                };
-                                if !assigned.insert(name) {
+            if let MatchPatternKind::Tuple(pattern) = &pat.kind {
+                let mut assigned = HashSet::new();
+                for sub_pat in pattern.clone().iter() {
+                    match &sub_pat.kind {
+                        MatchPatternKind::Simple(_) => {}
+                        MatchPatternKind::Assign(name) => {
+                            if locals.get(name).is_none() {
+                                if global_var_map.get(name).is_none() {
                                     return Err(new_codegen_error(
-                                        format!(
-                                            "assigned to variable {} in mixed let multiple times",
-                                            string_table.name_from_id(*name)
-                                        ),
+                                        "assigned to non-existent variable in mixed let"
+                                            .to_string(),
                                         loc,
                                     ));
                                 }
-                            }
-                            MatchPatternKind::Tuple(_) => {
+                            };
+                            if !assigned.insert(name) {
                                 return Err(new_codegen_error(
-                                    "nested pattern not supported in pattern-match let".to_string(),
+                                    format!(
+                                        "assigned to variable {} in mixed let multiple times",
+                                        string_table.name_from_id(*name)
+                                    ),
                                     loc,
                                 ));
                             }
                         }
+                        MatchPatternKind::Tuple(_) => {
+                            return Err(new_codegen_error(
+                                "nested pattern not supported in pattern-match let".to_string(),
+                                loc,
+                            ));
+                        }
                     }
-                    let (new_locals, bindings) = mavm_codegen_tuple_pattern(
-                        code,
-                        &pat,
-                        num_locals,
-                        locals,
-                        global_var_map,
-                        debug,
-                    )?;
-                    num_locals += new_locals;
-                    num_locals = max(num_locals, exp_locals);
-                    Ok((label_gen, num_locals, bindings))
                 }
             }
+            let (new_locals, bindings) =
+                mavm_codegen_tuple_pattern(code, &pat, num_locals, locals, global_var_map, debug)?;
+            num_locals += new_locals;
+            num_locals = max(num_locals, exp_locals);
+            Ok((label_gen, num_locals, bindings))
         }
         TypeCheckedStatementKind::AssignLocal(name, expr) => {
             let slot_num = match locals.get(name) {
