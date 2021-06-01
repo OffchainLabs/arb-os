@@ -484,11 +484,9 @@ fn mavm_codegen_statement(
                 MatchPatternKind::Assign(_) => unimplemented!(),
                 MatchPatternKind::Tuple(pattern) => {
                     let mut assigned = HashSet::new();
-                    let mut pairs = HashMap::new();
-                    for (i, sub_pat) in pattern.clone().iter().enumerate() {
+                    for sub_pat in pattern.clone().iter() {
                         match &sub_pat.kind {
-                            MatchPatternKind::Simple(name) => {
-                                pairs.insert(*name, num_locals + i);
+                            MatchPatternKind::Simple(_) => {
                             }
                             MatchPatternKind::Assign(name) => {
                                 if locals.get(name).is_none() {
@@ -518,7 +516,7 @@ fn mavm_codegen_statement(
                             }
                         }
                     }
-                    num_locals += mavm_codegen_tuple_pattern(
+                    let (new_locals, bindings) = mavm_codegen_tuple_pattern(
                         code,
                         &pat,
                         num_locals,
@@ -526,8 +524,9 @@ fn mavm_codegen_statement(
                         global_var_map,
                         debug,
                     )?;
+                    num_locals += new_locals;
                     num_locals = max(num_locals, exp_locals);
-                    Ok((label_gen, num_locals, pairs))
+                    Ok((label_gen, num_locals, bindings))
                 }
             }
         }
@@ -708,7 +707,7 @@ fn mavm_codegen_tuple_pattern(
     locals: &HashMap<usize, usize>,
     global_var_map: &HashMap<StringId, usize>,
     debug_info: DebugInfo,
-) -> Result<usize, CodegenError> {
+) -> Result<(usize, HashMap<usize, usize>), CodegenError> {
     match &pattern.kind {
         MatchPatternKind::Simple(name) => {
             let mut bindings = HashMap::new();
@@ -718,7 +717,7 @@ fn mavm_codegen_tuple_pattern(
                 Value::Int(Uint256::from_usize(local_slot_num_base)),
                 debug_info,
             ));
-            Ok(1)
+            Ok((1, bindings))
         }
         MatchPatternKind::Assign(id) => {
             if let Some(val) = locals.get(id) {
@@ -738,10 +737,11 @@ fn mavm_codegen_tuple_pattern(
                     debug_info,
                 ))
             }
-            Ok(0)
+            Ok((0, HashMap::new()))
         }
         MatchPatternKind::Tuple(sub_pats) => {
-            let mut bindings = 0;
+            let mut num_bindings = 0;
+            let mut bindings = HashMap::new();
             let pat_size = sub_pats.len();
             for (i, pat) in sub_pats.iter().enumerate() {
                 if i < pat_size - 1 {
@@ -755,7 +755,7 @@ fn mavm_codegen_tuple_pattern(
                     Value::Int(Uint256::from_usize(i)),
                     debug_info,
                 ));
-                bindings += mavm_codegen_tuple_pattern(
+                let (num_new_bindings, new_bindings) = mavm_codegen_tuple_pattern(
                     code,
                     pat,
                     local_slot_num_base + i,
@@ -763,8 +763,10 @@ fn mavm_codegen_tuple_pattern(
                     global_var_map,
                     debug_info,
                 )?;
+                num_bindings += num_new_bindings;
+                bindings.extend(new_bindings)
             }
-            Ok(bindings)
+            Ok((num_bindings, bindings))
         }
     }
 }
