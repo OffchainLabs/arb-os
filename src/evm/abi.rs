@@ -27,7 +27,7 @@ pub struct AbiForContract {
     pub code_bytes: Vec<u8>,
     pub contract: ethabi::Contract,
     pub address: Uint256,
-    name: String,
+    pub name: String,
 }
 
 impl AbiForContract {

@@ -21,6 +21,7 @@ mod benchmarks;
 mod bls;
 mod evmtest;
 mod preinstalled_contracts;
+pub mod abigen;
 
 #[derive(Clone)]
 pub struct CallInfo<'a> {

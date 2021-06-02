@@ -22,6 +22,7 @@ use std::io;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
+use crate::evm::abigen::write_mini_wrapper_to_file;
 
 mod compile;
 mod contracttemplates;
@@ -105,6 +106,14 @@ struct SerializeUpgrade {
     input: String,
 }
 
+#[derive(Clap, Debug)]
+struct Abigen {
+    #[clap(short, long)]
+    contract: String,
+    #[clap(short, long)]
+    output: String,
+}
+
 ///Main enum for command line arguments.
 #[derive(Clap, Debug)]
 enum Args {
@@ -120,6 +129,7 @@ enum Args {
     EvmTests(EvmTests),
     GenUpgradeCode(GenUpgrade),
     SerializeUpgrade(SerializeUpgrade),
+    Abigen(Abigen),
 }
 
 fn main() -> Result<(), CompileError> {
@@ -286,6 +296,17 @@ fn main() -> Result<(), CompileError> {
             let the_json = CodeUploader::_new_from_file(Path::new(&up.input))._to_json();
             print!("{}", the_json.unwrap());
             print_time = false;
+        }
+        Args::Abigen(abigen) => {
+            if let Err(e) = write_mini_wrapper_to_file(&*abigen.contract, &*abigen.output) {
+                println!("Encountered an error: {}", e);
+                return Err(CompileError::new(
+                    String::from("Gen upgrade error"),
+                    e.to_string(),
+                    vec![],
+                    false,
+                ));
+            }
         }
     }
     let total_time = Instant::now() - start_time;
