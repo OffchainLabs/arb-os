@@ -5,6 +5,7 @@
 #![allow(unused_parens)]
 
 use crate::compile::CompileStruct;
+use crate::evm::abigen::{write_mini_wrapper_to_file, abigen_from_directory_structure};
 use crate::link::LinkedProgram;
 use crate::upload::CodeUploader;
 use clap::Clap;
@@ -22,7 +23,6 @@ use std::io;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use crate::evm::abigen::write_mini_wrapper_to_file;
 
 mod compile;
 mod contracttemplates;
@@ -108,6 +108,8 @@ struct SerializeUpgrade {
 
 #[derive(Clap, Debug)]
 struct Abigen {
+    #[clap(short, long)]
+    directories: bool,
     #[clap(short, long)]
     contract: String,
     #[clap(short, long)]
@@ -298,10 +300,13 @@ fn main() -> Result<(), CompileError> {
             print_time = false;
         }
         Args::Abigen(abigen) => {
-            if let Err(e) = write_mini_wrapper_to_file(&*abigen.contract, &*abigen.output) {
+            if let Err(e) = if abigen.directories { abigen_from_directory_structure } else { write_mini_wrapper_to_file } (
+                &Path::new(&*abigen.contract),
+                &Path::new(&*abigen.output),
+            ) {
                 println!("Encountered an error: {}", e);
                 return Err(CompileError::new(
-                    String::from("Gen upgrade error"),
+                    String::from("Abigen error"),
                     e.to_string(),
                     vec![],
                     false,

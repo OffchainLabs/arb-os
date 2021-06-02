@@ -6,23 +6,44 @@ use crate::evm::AbiForContract;
 use ethabi::ParamType;
 use ethers_core::utils::keccak256;
 use std::collections::HashMap;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io;
 use std::io::{ErrorKind, Write};
+use std::path::Path;
 
-pub fn write_mini_wrapper_to_file(
-    contract_filename: &str,
-    out_filename: &str,
-) -> Result<(), io::Error> {
-    generate_mini_wrapper(contract_filename, &mut File::create(out_filename)?)
+pub fn abigen_from_directory_structure(dirpath: &Path, out_dir: &Path) -> Result<(), io::Error> {
+    for entry in fs::read_dir(dirpath)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            for subentry in fs::read_dir(path)? {
+                let subentry = subentry?;
+                let subpath = subentry.path();
+                if !subpath.ends_with(".dbg.json") {
+                    write_mini_wrapper_to_file(
+                        &subpath,
+                        &out_dir.join(format!(
+                            "{}.mini",
+                            subpath.file_stem().unwrap().to_str().unwrap()
+                        )),
+                    )?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn write_mini_wrapper_to_file(contract_path: &Path, out_path: &Path) -> Result<(), io::Error> {
+    generate_mini_wrapper(contract_path, &mut File::create(out_path)?)
 }
 
 pub fn generate_mini_wrapper(
-    contract_filename: &str,
+    contract_path: &Path,
     out: &mut dyn io::Write,
 ) -> Result<(), io::Error> {
     let (contract, contract_name) = {
-        let afc = AbiForContract::new_from_file(contract_filename)
+        let afc = AbiForContract::new_from_file(contract_path.to_str().to_owned().unwrap())
             .map_err(|e| io::Error::new(ErrorKind::Other, e.to_string()))?;
         let cname = afc.name.clone();
         (afc.contract, cname[1..(cname.len() - 1)].to_string())
