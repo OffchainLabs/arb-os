@@ -3,7 +3,7 @@
  */
 
 use crate::evm::AbiForContract;
-use ethabi::{Param, ParamType};
+use ethabi::ParamType;
 use ethers_core::utils::keccak256;
 use std::collections::HashMap;
 use std::fs::File;
@@ -133,12 +133,7 @@ fn write_dispatch_if_statement(
         let func = &func_list[0];
         let wrapper_name = contract_name.clone() + "_" + &func.name + "_wrapper";
 
-        write_dispatch_for_func(
-            dispatch_func_out,
-            func,
-            wrapper_name.clone(),
-            first_one,
-        )?;
+        write_dispatch_for_func(dispatch_func_out, func, wrapper_name.clone(), first_one)?;
         first_one = false;
 
         write_header_for_func(header_out, func, contract_name.clone())?;
@@ -251,7 +246,14 @@ fn write_wrapper_for_func(
         writeln!(out, "    let __offset = 0;")?;
         let mut delayed_marshals = vec![];
         for (i, ret) in rets.iter().enumerate() {
-            if let Some(delmar) = write_put_param_into_mem(out, ret, if rets.len() == 1 { None } else { Some(i)})? {
+            let (param_selector, param_name) = if rets.len() == 0 {
+                ("ret".to_string(), "ret".to_string())
+            } else {
+                (format!("ret.{}", i), format!("ret_{}", i))
+            };
+            if let Some(delmar) =
+                write_put_param_into_mem(out, &ret.kind, param_selector, param_name)?
+            {
                 delayed_marshals.push(delmar);
             }
         }
@@ -382,19 +384,50 @@ fn write_get_param_from_calldata(
 }
 
 enum DelayedMarshalSpec {
-    Bytearray(String, String),   // param_selector, param_name
+    Bytearray(String, String), // param_selector, param_name
+    Multi(Vec<DelayedMarshalSpec>),
 }
 
 impl DelayedMarshalSpec {
     fn write_put_into_mem(&self, out: &mut dyn io::Write) -> Result<(), io::Error> {
         match self {
             DelayedMarshalSpec::Bytearray(param_selector, param_name) => {
-                writeln!(out, "    let {}_size = bytearray_size({});", param_name, param_selector)?;
-                writeln!(out, "    let {}_size_rounded = 32 * (({}_size + 31)/32);", param_name, param_name)?;
-                writeln!(out, "    mem = bytearray_set256(mem, __offset_{}, __offset);", param_name)?;
-                writeln!(out, "    mem = bytearray_set256(mem, __offset, {}_size);", param_selector)?;
-                writeln!(out, "    mem = bytearray_copy({}, 0, mem, 32+__offset, {}_size_rounded);", param_selector, param_name)?;
-                writeln!(out, "    __offset = __offset + 32 + {}_size_rounded;", param_selector)?;
+                writeln!(
+                    out,
+                    "    let {}_size = bytearray_size({});",
+                    param_name, param_selector
+                )?;
+                writeln!(
+                    out,
+                    "    let {}_size_rounded = 32 * (({}_size + 31)/32);",
+                    param_name, param_name
+                )?;
+                writeln!(
+                    out,
+                    "    mem = bytearray_set256(mem, __offset_{}, __offset);",
+                    param_name
+                )?;
+                writeln!(
+                    out,
+                    "    mem = bytearray_set256(mem, __offset, {}_size);",
+                    param_selector
+                )?;
+                writeln!(
+                    out,
+                    "    mem = bytearray_copy({}, 0, mem, 32+__offset, {}_size_rounded);",
+                    param_selector, param_name
+                )?;
+                writeln!(
+                    out,
+                    "    __offset = __offset + 32 + {}_size_rounded;",
+                    param_selector
+                )?;
+                Ok(())
+            }
+            DelayedMarshalSpec::Multi(v) => {
+                for delmar in v {
+                    delmar.write_put_into_mem(out)?;
+                }
                 Ok(())
             }
         }
@@ -403,27 +436,34 @@ impl DelayedMarshalSpec {
 
 fn write_put_param_into_mem(
     out: &mut dyn io::Write,
-    param: &Param,
-    arg_num: Option<usize>,
+    kind: &ParamType,
+    param_selector: String,
+    param_name: String,
 ) -> Result<Option<DelayedMarshalSpec>, io::Error> {
-    let (param_selector, param_name) = if let Some(an) = arg_num {
-        (format!("ret.{}", an), format!("ret_{}", an))
-    } else {
-        ("ret".to_string(), "ret".to_string())
-    };
-    match param.kind {
+    match kind {
         ParamType::Address | ParamType::Int(_) => {
-            writeln!(out, "    mem = bytearray_set256(mem, __offset, uint({}));", param_selector)?;
+            writeln!(
+                out,
+                "    mem = bytearray_set256(mem, __offset, uint({}));",
+                param_selector
+            )?;
             writeln!(out, "    __offset = __offset + 32;")?;
         }
         ParamType::Bytes | ParamType::String => {
             writeln!(out, "    let __offset_{} = __offset;", param_name)?;
             writeln!(out, "    __offset = 32 + __offset;")?;
-            return Ok(Some(DelayedMarshalSpec::Bytearray(param_selector, param_name)));
+            return Ok(Some(DelayedMarshalSpec::Bytearray(
+                param_selector,
+                param_name,
+            )));
         }
         ParamType::FixedBytes(sz) => {
-            if sz == 32 {
-                writeln!(out, "    mem = bytearray_set256(mem, __offset, uint({}));", param_selector)?;
+            if *sz == 32 {
+                writeln!(
+                    out,
+                    "    mem = bytearray_set256(mem, __offset, uint({}));",
+                    param_selector
+                )?;
                 writeln!(out, "    __offset = __offset + 32;")?;
             } else {
                 return Err(io::Error::new(
@@ -433,11 +473,19 @@ fn write_put_param_into_mem(
             }
         }
         ParamType::Uint(_) => {
-            writeln!(out, "    mem = bytearray_set256(mem, __offset, {});", param_selector)?;
+            writeln!(
+                out,
+                "    mem = bytearray_set256(mem, __offset, {});",
+                param_selector
+            )?;
             writeln!(out, "    __offset = __offset + 32;")?;
         }
         ParamType::Bool => {
-            writeln!(out, "    mem = bytearray_set256(mem, __offset, xif ({}) {{ 1 }} else {{ 0 }});", param_selector)?;
+            writeln!(
+                out,
+                "    mem = bytearray_set256(mem, __offset, xif ({}) {{ 1 }} else {{ 0 }});",
+                param_selector
+            )?;
             writeln!(out, "    __offset = __offset + 32;")?;
         }
         ParamType::Array(_) => {
@@ -445,18 +493,30 @@ fn write_put_param_into_mem(
                 ErrorKind::Other,
                 "ABI encoding of arrays not yet implemented",
             ));
-        },
+        }
         ParamType::FixedArray(_, _) => {
             return Err(io::Error::new(
                 ErrorKind::Other,
                 "ABI encoding of fixed-arrays not yet implemented",
             ));
         }
-        ParamType::Tuple(_) => {
-            return Err(io::Error::new(
-                ErrorKind::Other,
-                "ABI encoding of tuples not yet implemented",
-            ));
+        ParamType::Tuple(tup) => {
+            let mut marshes = vec![];
+            for (i, subkind) in tup.iter().enumerate() {
+                if let Some(marsh) = write_put_param_into_mem(
+                    out,
+                    subkind,
+                    format!("{}.{}", param_selector, i),
+                    format!("{}_{}", param_name, i),
+                )? {
+                    marshes.push(marsh);
+                }
+            }
+            return Ok(if marshes.len() == 0 {
+                None
+            } else {
+                Some(DelayedMarshalSpec::Multi(marshes))
+            });
         }
     }
     Ok(None)
