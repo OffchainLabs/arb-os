@@ -468,10 +468,8 @@ fn mavm_codegen_statement(
             label_gen = lg;
             code = c;
             if let MatchPatternKind::Tuple(pattern) = &pat.kind {
-                let mut assigned = HashSet::new();
                 for sub_pat in pattern.clone().iter() {
                     match &sub_pat.kind {
-                        MatchPatternKind::Simple(_) => {}
                         MatchPatternKind::Assign(name) => {
                             if locals.get(name).is_none() {
                                 if global_var_map.get(name).is_none() {
@@ -482,27 +480,20 @@ fn mavm_codegen_statement(
                                     ));
                                 }
                             };
-                            if !assigned.insert(name) {
-                                return Err(new_codegen_error(
-                                    format!(
-                                        "assigned to variable {} in mixed let multiple times",
-                                        string_table.name_from_id(*name)
-                                    ),
-                                    loc,
-                                ));
-                            }
                         }
-                        MatchPatternKind::Tuple(_) => {
-                            return Err(new_codegen_error(
-                                "nested pattern not supported in pattern-match let".to_string(),
-                                loc,
-                            ));
-                        }
+                        _ => {}
                     }
                 }
             }
-            let (new_locals, bindings) =
-                mavm_codegen_tuple_pattern(code, &pat, num_locals, locals, global_var_map, debug)?;
+            let (new_locals, bindings, _assignments) = mavm_codegen_tuple_pattern(
+                code,
+                &pat,
+                num_locals,
+                locals,
+                global_var_map,
+                string_table,
+                debug,
+            )?;
             num_locals += new_locals;
             num_locals = max(num_locals, exp_locals);
             Ok((label_gen, num_locals, bindings))
@@ -683,8 +674,9 @@ fn mavm_codegen_tuple_pattern(
     local_slot_num_base: usize,
     locals: &HashMap<usize, usize>,
     global_var_map: &HashMap<StringId, usize>,
+    string_table: &StringTable,
     debug_info: DebugInfo,
-) -> Result<(usize, HashMap<usize, usize>), CodegenError> {
+) -> Result<(usize, HashMap<usize, usize>, HashSet<usize>), CodegenError> {
     match &pattern.kind {
         MatchPatternKind::Simple(name) => {
             let mut bindings = HashMap::new();
@@ -694,7 +686,7 @@ fn mavm_codegen_tuple_pattern(
                 Value::Int(Uint256::from_usize(local_slot_num_base)),
                 debug_info,
             ));
-            Ok((1, bindings))
+            Ok((1, bindings, HashSet::new()))
         }
         MatchPatternKind::Assign(id) => {
             if let Some(val) = locals.get(id) {
@@ -714,11 +706,14 @@ fn mavm_codegen_tuple_pattern(
                     debug_info,
                 ))
             }
-            Ok((0, HashMap::new()))
+            let mut assignments = HashSet::new();
+            assignments.insert(*id);
+            Ok((0, HashMap::new(), assignments))
         }
         MatchPatternKind::Tuple(sub_pats) => {
             let mut num_bindings = 0;
             let mut bindings = HashMap::new();
+            let mut assignments = HashSet::new();
             let pat_size = sub_pats.len();
             for (i, pat) in sub_pats.iter().enumerate() {
                 if i < pat_size - 1 {
@@ -732,18 +727,30 @@ fn mavm_codegen_tuple_pattern(
                     Value::Int(Uint256::from_usize(i)),
                     debug_info,
                 ));
-                let (num_new_bindings, new_bindings) = mavm_codegen_tuple_pattern(
+                let (num_new_bindings, new_bindings, new_assignments) = mavm_codegen_tuple_pattern(
                     code,
                     pat,
                     local_slot_num_base + i,
                     locals,
                     global_var_map,
+                    string_table,
                     debug_info,
                 )?;
                 num_bindings += num_new_bindings;
-                bindings.extend(new_bindings)
+                bindings.extend(new_bindings);
+                for name in new_assignments {
+                    if !assignments.insert(name) {
+                        return Err(new_codegen_error(
+                            format!(
+                                "assigned to variable {} in mixed let multiple times",
+                                string_table.name_from_id(name)
+                            ),
+                            debug_info.location,
+                        ));
+                    }
+                }
             }
-            Ok((num_bindings, bindings))
+            Ok((num_bindings, bindings, assignments))
         }
     }
 }
