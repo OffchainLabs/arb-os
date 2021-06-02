@@ -3,3 +3,9 @@
 //
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
+
+
+func _dummy() -> uint {
+    return 0;
+}
+
