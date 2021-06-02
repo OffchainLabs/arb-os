@@ -26,12 +26,6 @@ use std::str::FromStr;
 
 const MAX_PAIRING_SIZE: u64 = 30;
 
-///Represents a stack of `Value`s
-#[derive(Debug, Default, Clone)]
-pub struct ValueStack {
-    contents: im::Vector<Value>,
-}
-
 fn get_from_table_aux(v: &Value, num: usize, depth: usize) -> Value {
     if depth == 0 {
         v.clone()
@@ -47,24 +41,33 @@ fn get_from_table(v: &Value, num: usize) -> Value {
     get_from_table_aux(v, num, 5)
 }
 
+///Represents a stack of `Value`s
+#[derive(Debug, Default, Clone)]
+pub struct ValueStack {
+    contents: Vec<Value>,
+    ptr: usize,
+}
+
 impl ValueStack {
     pub fn new() -> Self {
         ValueStack {
-            contents: im::Vector::new(),
+            contents: vec![Value::none(); 10000],
+            ptr: 0,
         }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.contents.len() == 0
+        self.ptr == 0
     }
 
     pub fn num_items(&self) -> usize {
-        self.contents.len()
+        self.ptr
     }
 
     ///Pushes val to the top of self.
     pub fn push(&mut self, val: Value) {
-        self.contents.push_back(val);
+        self.contents[self.ptr] = val;
+        self.ptr = self.ptr + 1;
     }
 
     ///Pushes a `Value` created from val to the top of self.
@@ -96,13 +99,13 @@ impl ValueStack {
         if self.is_empty() {
             None
         } else {
-            Some(self.contents[self.contents.len() - 1].clone())
+            Some(self.contents[self.ptr - 1].clone())
         }
     }
 
     pub fn nth(&self, n: usize) -> Option<Value> {
         if self.num_items() > n {
-            Some(self.contents[self.contents.len() - 1 - n].clone())
+            Some(self.contents[self.ptr - 1 - n].clone())
         } else {
             None
         }
@@ -111,9 +114,11 @@ impl ValueStack {
     ///Pops the top value off the stack and returns it, or if the stack is empty returns an
     /// `ExecutionError`.
     pub fn pop(&mut self, state: &MachineState) -> Result<Value, ExecutionError> {
-        match self.contents.pop_back() {
-            Some(v) => Ok(v),
-            None => Err(ExecutionError::new("stack underflow", state, None)),
+        if self.ptr > 0 {
+            self.ptr = self.ptr - 1;
+            Ok(self.contents[self.ptr].clone())
+        } else {
+            Err(ExecutionError::new("stack underflow", state, None))
         }
     }
 
@@ -213,7 +218,7 @@ impl ValueStack {
     ///Returns a list of all CodePoint `Value`s as `CodePt`s, this is used for generating stack
     /// traces, as all code points on the aux stack represent the start of a call frame.
     pub fn all_codepts(&self) -> Vec<CodePt> {
-        self.contents
+        self.contents[0..self.ptr]
             .iter()
             .filter_map(|item| {
                 if let Value::CodePoint(cp) = item {
@@ -1479,7 +1484,9 @@ impl Machine {
                     // println!("{}, stack sz {}", str, stack_len);
                     // println!("{}", str);
                     if self.counter % 1000000 == 0 {
-                        println!("Wasm instruction {}", self.counter);
+                        if let Value::Tuple(t) = self.register.clone() {
+                            println!("Wasm instruction {} gas {}", self.counter, t[4]);
+                        }
                     }
                 };
                 match insn.opcode {
