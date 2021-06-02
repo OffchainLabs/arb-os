@@ -1382,13 +1382,13 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys_orig_binding._arbos_version(&mut machine)?,
-        Uint256::from_u64(28),
+        Uint256::from_u64(29),
     );
 
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
 
     let mexe_path = Path::new("arb_os/arbos-upgrade.mexe");
-    let previous_upgrade_hash = _try_upgrade(&arbowner, &mut machine, &mexe_path, None)?.unwrap();
+    let _previous_upgrade_hash = _try_upgrade(&arbowner, &mut machine, &mexe_path, None)?.unwrap();
 
     let wallet2 = machine.runtime_env.new_wallet();
     let arbsys = ArbSys::new(&wallet2, false);
@@ -1402,23 +1402,6 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     );
     let arbos_version_orig = arbsys_orig_binding._arbos_version(&mut machine)?;
     assert_eq!(arbos_version, arbos_version_orig);
-
-    // try again, specifying a previous hash
-    assert_eq!(
-        _try_upgrade(
-            &arbowner,
-            &mut machine,
-            &mexe_path,
-            Some(previous_upgrade_hash.clone())
-        )?,
-        Some(previous_upgrade_hash.clone())
-    );
-
-    // try again, specifying an incorrect previous hash
-    assert_eq!(
-        _try_upgrade(&arbowner, &mut machine, &mexe_path, Some(Uint256::one()))?,
-        None
-    );
 
     Ok(())
 }
