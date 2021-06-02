@@ -467,24 +467,6 @@ fn mavm_codegen_statement(
             )?;
             label_gen = lg;
             code = c;
-            if let MatchPatternKind::Tuple(pattern) = &pat.kind {
-                for sub_pat in pattern.clone().iter() {
-                    match &sub_pat.kind {
-                        MatchPatternKind::Assign(name) => {
-                            if locals.get(name).is_none() {
-                                if global_var_map.get(name).is_none() {
-                                    return Err(new_codegen_error(
-                                        "assigned to non-existent variable in mixed let"
-                                            .to_string(),
-                                        loc,
-                                    ));
-                                }
-                            };
-                        }
-                        _ => {}
-                    }
-                }
-            }
             let (new_locals, bindings, _assignments) = mavm_codegen_tuple_pattern(
                 code,
                 &pat,
@@ -699,7 +681,7 @@ fn mavm_codegen_tuple_pattern(
                 code.push(Instruction::from_opcode(
                     Opcode::SetGlobalVar(*global_var_map.get(id).ok_or_else(|| {
                         new_codegen_error(
-                            format!("Failed to find local when generating code for match pattern "),
+                            "assigned to non-existent variable in mixed let".to_string(),
                             debug_info.location,
                         )
                     })?),
