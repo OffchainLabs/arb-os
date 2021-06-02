@@ -831,8 +831,6 @@ pub enum AVMOpcode {
     CompileWasm,
     RunWasm,
     MakeWasm,
-    JumpTable = 0xb0,
-    CjumpTable,
     GetBuffer16,
     GetBuffer32,
     SetBuffer16,
@@ -1071,8 +1069,6 @@ impl AVMOpcode {
             AVMOpcode::RunWasm => "runwasm",
             AVMOpcode::CompileWasm => "compilewasm",
             AVMOpcode::MakeWasm => "makewasm",
-            AVMOpcode::JumpTable => "jumptable",
-            AVMOpcode::CjumpTable => "cjumptable",
         }
     }
 
@@ -1256,8 +1252,6 @@ impl AVMOpcode {
             AVMOpcode::RunWasm => 0xa7,
             AVMOpcode::CompileWasm => 0xa8,
             AVMOpcode::MakeWasm => 0xa9,
-            AVMOpcode::JumpTable => 0xb0,
-            AVMOpcode::CjumpTable => 0xb1,
             AVMOpcode::GetBuffer16 => 0xb2,
             AVMOpcode::GetBuffer32 => 0xb3,
             AVMOpcode::SetBuffer16 => 0xb4,

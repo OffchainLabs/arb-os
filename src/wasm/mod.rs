@@ -66,8 +66,6 @@ fn mk_func_label(idx: usize) -> Instruction {
 }
 
 fn get_from_table(res: &mut Vec<Instruction>, idx: Value) {
-    res.push(push_value(idx));
-    /*
     res.push(simple_op(AVMOpcode::Rget));
     res.push(immed_op(AVMOpcode::Tget, int_from_usize(1)));
     res.push(push_value(idx));
@@ -83,11 +81,9 @@ fn get_from_table(res: &mut Vec<Instruction>, idx: Value) {
         res.push(simple_op(AVMOpcode::Swap1)); // idx, table
     }
     res.push(simple_op(AVMOpcode::Pop));
-    */
 }
 
-fn get_return_from_table(_res: &mut Vec<Instruction>) {
-    /*
+fn get_return_from_table(res: &mut Vec<Instruction>) {
     res.push(simple_op(AVMOpcode::AuxPush));
     res.push(simple_op(AVMOpcode::Rget));
     res.push(immed_op(AVMOpcode::Tget, int_from_usize(1)));
@@ -104,27 +100,26 @@ fn get_return_from_table(_res: &mut Vec<Instruction>) {
         res.push(simple_op(AVMOpcode::Swap1)); // idx, table
     }
     res.push(simple_op(AVMOpcode::Pop));
-    */
 }
 
 fn cjump(res: &mut Vec<Instruction>, idx: usize) {
     get_from_table(res, Value::Label(Label::Evm(idx)));
-    res.push(simple_op(AVMOpcode::CjumpTable));
+    res.push(simple_op(AVMOpcode::Cjump));
 }
 
 fn jump(res: &mut Vec<Instruction>, idx: usize) {
     get_from_table(res, Value::Label(Label::Evm(idx)));
-    res.push(simple_op(AVMOpcode::JumpTable));
+    res.push(simple_op(AVMOpcode::Jump));
 }
 
 fn call_cjump(res: &mut Vec<Instruction>, idx: u32) {
     get_from_table(res, Value::Label(Label::WasmFunc(idx as usize)));
-    res.push(simple_op(AVMOpcode::CjumpTable));
+    res.push(simple_op(AVMOpcode::Cjump));
 }
 
 fn call_jump(res: &mut Vec<Instruction>, idx: u32) {
     get_from_table(res, Value::Label(Label::WasmFunc(idx as usize)));
-    res.push(simple_op(AVMOpcode::JumpTable));
+    res.push(simple_op(AVMOpcode::Jump));
 }
 
 fn get_frame() -> Instruction {
@@ -1829,7 +1824,7 @@ fn handle_function(
     res.push(mk_label(end_label));
     res.push(get_return_pc());
     get_return_from_table(&mut res);
-    res.push(simple_op(AVMOpcode::JumpTable));
+    res.push(simple_op(AVMOpcode::Jump));
 
     return (res, label, avm_gas);
 }
@@ -2624,7 +2619,7 @@ fn process_wasm_inner(buffer: &[u8], init: &mut Vec<Instruction>, test_args: &[u
         // Return from function
         init.push(get_return_pc());
         get_return_from_table(init);
-        init.push(simple_op(AVMOpcode::JumpTable));
+        init.push(simple_op(AVMOpcode::Jump));
     }
 
     // Indirect calls

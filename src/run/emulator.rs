@@ -1383,8 +1383,6 @@ impl Machine {
                 AVMOpcode::RunWasm => 1000000,
                 AVMOpcode::CompileWasm => 100,
                 AVMOpcode::MakeWasm => 100,
-                AVMOpcode::JumpTable => 10,
-                AVMOpcode::CjumpTable => 10,
             })
         } else {
             None
@@ -1444,19 +1442,6 @@ impl Machine {
         }
     }
 
-    fn find_jump(&self, num: usize) -> Result<CodePt,ExecutionError> {
-        if let Value::Tuple(val) = &self.register {
-            let elem = get_from_table(&val[1], num);
-            if let Value::CodePoint(pt) = elem {
-                Ok(pt)
-            } else {
-                Err(ExecutionError::new("Cannot resolve jump", &self.state, None))
-            }
-        } else {
-            Err(ExecutionError::new("Cannot resolve jump", &self.state, None))
-        }
-    }
-
     fn run_one_dont_catch_errors(&mut self, _debug: bool) -> Result<bool, ExecutionError> {
         if let MachineState::Running(pc) = self.state {
             if let Some(insn) = self.code.get_insn(pc) {
@@ -1496,23 +1481,6 @@ impl Machine {
                     }
                     AVMOpcode::Zero | AVMOpcode::Panic => {
                         Err(ExecutionError::new("panicked", &self.state, None))
-                    }
-                    AVMOpcode::JumpTable => {
-                        let num = self.stack.pop_usize(&self.state)?;
-                        let cp = self.find_jump(num)?;
-                        self.state = MachineState::Running(cp);
-                        Ok(true)
-                    }
-                    AVMOpcode::CjumpTable => {
-                        let num = self.stack.pop_usize(&self.state)?;
-                        let cond = self.stack.pop_uint(&self.state)?;
-                        if cond != Uint256::zero() {
-                            let cp = self.find_jump(num)?;
-                            self.state = MachineState::Running(cp);
-                        } else {
-                            self.incr_pc();
-                        }
-                        Ok(true)
                     }
                     AVMOpcode::Jump => {
                         self.state = MachineState::Running(self.stack.pop_codepoint(&self.state)?);
