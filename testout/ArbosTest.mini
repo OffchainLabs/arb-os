@@ -1,9 +1,8 @@
 // This is machine-generated code. Don't modify it unless you know what you're doing.
 
-use evmOps::evmOp_return;
-use evmOps::evmOp_revert_knownPc;
+use evmOp::evmOp_return;
+use evmOp::evmOp_revert_knownPc;
 use evmCallStack::evmCallStack_topFrame;
-use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallStack_setTopFrameMemory;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
@@ -11,10 +10,10 @@ use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_copy;
 
-use ArbosTestImpl::ArbosTest_installAccount;
 use ArbosTestImpl::ArbosTest_burnArbGas;
-use ArbosTestImpl::ArbosTest_getMarshalledStorage;
 use ArbosTestImpl::ArbosTest_getAccountInfo;
+use ArbosTestImpl::ArbosTest_getMarshalledStorage;
+use ArbosTestImpl::ArbosTest_installAccount;
 
 public impure func ArbosTest__dispatch() {
     if let Some(topFrame) = evmCallStack_topFrame() {
@@ -23,20 +22,47 @@ public impure func ArbosTest__dispatch() {
             evmOp_revert_knownPc(0, 0, 0);
         }
         let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
-        if (funcCode == 0xfbe6e022) {
-            ArbosTest_installAccount_wrapper(topFrame, calldata);
-        } elseif  (funcCode == 0xbb3480f9) {
+        if (funcCode == 0xbb3480f9) {
             ArbosTest_burnArbGas_wrapper(topFrame, calldata);
-        } elseif  (funcCode == 0xd56aa31f) {
-            ArbosTest_getMarshalledStorage_wrapper(topFrame, calldata);
         } elseif  (funcCode == 0x7b510fe8) {
             ArbosTest_getAccountInfo_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xd56aa31f) {
+            ArbosTest_getMarshalledStorage_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xfbe6e022) {
+            ArbosTest_installAccount_wrapper(topFrame, calldata);
         } else {
             evmOp_revert_knownPc(1, 0, 0);
         }
     } else {
         evmOp_revert_knownPc(2, 0, 0);
     }
+}
+
+impure func ArbosTest_burnArbGas_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let gasAmount = bytearray_get256(calldata, 4);
+    ArbosTest_burnArbGas(gasAmount);
+    evmOp_return(0, 0);
+}
+
+impure func ArbosTest_getAccountInfo_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    ArbosTest_getAccountInfo(addr);
+    evmOp_return(0, 0);
+}
+
+impure func ArbosTest_getMarshalledStorage_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    ArbosTest_getMarshalledStorage(addr);
+    evmOp_return(0, 0);
 }
 
 impure func ArbosTest_installAccount_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
@@ -50,34 +76,7 @@ impure func ArbosTest_installAccount_wrapper(topFrame: EvmCallFrame, calldata: B
     let initStorage_offset = bytearray_get256(calldata, 164);
     let initStorage_nbytes = bytearray_get256(calldata, 4+initStorage_offset);
     let initStorage = bytearray_extract(calldata, 36+initStorage_offset, initStorage_nbytes);
-    ArbosTest_installAccount(topFrame, addr, isEOA, balance, nonce, code, initStorage);
-    evmOp_return(0, 0);
-}
-
-impure func ArbosTest_burnArbGas_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownPc(3, 0, 0);
-    }
-    let gasAmount = bytearray_get256(calldata, 4);
-    ArbosTest_burnArbGas(topFrame, gasAmount);
-    evmOp_return(0, 0);
-}
-
-impure func ArbosTest_getMarshalledStorage_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownPc(3, 0, 0);
-    }
-    let addr = address(bytearray_get256(calldata, 4));
-    ArbosTest_getMarshalledStorage(topFrame, addr);
-    evmOp_return(0, 0);
-}
-
-impure func ArbosTest_getAccountInfo_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownPc(3, 0, 0);
-    }
-    let addr = address(bytearray_get256(calldata, 4));
-    ArbosTest_getAccountInfo(topFrame, addr);
+    ArbosTest_installAccount(addr, isEOA, balance, nonce, code, initStorage);
     evmOp_return(0, 0);
 }
 

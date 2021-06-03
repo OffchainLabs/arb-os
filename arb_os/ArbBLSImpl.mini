@@ -1,0 +1,108 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use evmCallStack::EvmCallFrame;
+use accounts::Account;
+use std::bytearray::ByteArray;
+use std::bytearray::MarshalledBytes;
+use std::stack::Stack;
+use accounts::AccountStore;
+use std::bytestream::ByteStream;
+
+use chainParameters::chainParams_chainId;
+
+use evmCallStack::evmCallStack_stackDepth;
+use evmCallStack::evmCallStack_topFrame;
+use evmCallStack::evmCallStack_setAccount;
+use evmCallStack::evmCallStack_getTopFrameMemoryOrDie;
+use evmCallStack::evmCallStack_setTopFrameMemory;
+use evmCallStack::evmCallStack_callHitError;
+use evmCallStack::evmCallStack_addEvmLogToCurrent;
+use evmCallStack::evmCallStack_addStorageCharge;
+
+use evmCallStack::evmCallFrame_getCalldata;
+use evmCallStack::evmCallFrame_getCallvalue;
+use evmCallStack::evmCallFrame_getAccount;
+use evmCallStack::evmCallFrame_runningAsAddress;
+use evmCallStack::evmCallFrame_runningAsAccount;
+use evmCallStack::evmCallFrame_getParent;
+use evmCallStack::evmCallFrame_getCaller;
+
+use evmOps::evmOp_log4;
+use evmOps::evmOp_return;
+use evmOps::evmOp_revert_knownCodePc;
+use evmOps::evmOp_sload;
+use evmOps::evmOp_sstore;
+
+use accounts::account_getAddress;
+use accounts::account_getNextSeqNum;
+use accounts::account_getStorageCell;
+use accounts::account_deductFromEthBalance;
+use accounts::account_setBlsKey;
+use accounts::account_getBlsKey;
+use accounts::account_getAggregatorDecompressionState;
+use accounts::account_setAggregatorDecompressionState;
+
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_copy;
+
+use std::bytestream::bytestream_new;
+use std::bytestream::bytestream_bytesReadSoFar;
+
+use inbox::inbox_currentArbBlockNumber;
+use inbox::inbox_currentEthBlockNumber;
+use inbox::inbox_currentTimestamp;
+
+use std::stack::stack_pop;
+
+use output::queueMessageForSend;
+
+use decompression::getGlobalAddressTable;
+use decompression::setGlobalAddressTable;
+use decompression::addressTable_size;
+use decompression::addressTable_getByAddressAlloc;
+use decompression::addressTable_getByAddress;
+use decompression::addressTable_getByIndex;
+use decompression::decompressAddress;
+use decompression::getFromFunctionTable;
+use decompression::functionTableSize;
+use decompression::getFromFunctionTable;
+
+use std::rlp::rlp_encodeUint;
+use std::rlp::rlp_encodeAddress;
+
+use std::bls::bls_makeKey;
+use std::bls::bls_publicKeyAsTuple;
+
+use decompression::parseAggregatorFunctionTable;
+
+use codeSegment::pcTableForCode;
+
+
+impure func ArbBLS_register(topFrame: EvmCallFrame, x0: uint, x1: uint, y0: uint, y1: uint) {
+    let maybeBlsKey = bls_makeKey(x0, x1, y0, y1);
+    let caller = evmCallFrame_getCaller(topFrame);
+    let acct = evmCallFrame_getAccount(topFrame, caller);
+    if ( ! evmCallStack_setAccount(caller, account_setBlsKey(acct, maybeBlsKey))) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbBLS), 171, 0, 0);
+    }
+}
+
+impure func ArbBLS_getPublicKey(topFrame: EvmCallFrame, addr: address) -> (uint, uint, uint, uint) {
+    let maybeBlsKey = account_getBlsKey(evmCallFrame_getAccount(topFrame, addr));
+
+    let mem = evmCallStack_getTopFrameMemoryOrDie();
+    if let Some(blsKey) = maybeBlsKey {
+        return bls_publicKeyAsTuple(blsKey);
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbBLS), 101, 0, 0);
+    }
+}

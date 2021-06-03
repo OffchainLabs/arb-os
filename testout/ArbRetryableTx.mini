@@ -1,0 +1,175 @@
+// This is machine-generated code. Don't modify it unless you know what you're doing.
+
+use evmOp::evmOp_return;
+use evmOp::evmOp_revert_knownPc;
+use evmCallStack::evmCallStack_topFrame;
+use evmCallStack::evmCallStack_setTopFrameMemory;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_copy;
+
+use ArbRetryableTxImpl::ArbRetryableTx_getBeneficiary;
+use ArbRetryableTxImpl::ArbRetryableTx_getKeepalivePrice;
+use ArbRetryableTxImpl::ArbRetryableTx_getLifetime;
+use ArbRetryableTxImpl::ArbRetryableTx_getTimeout;
+use ArbRetryableTxImpl::ArbRetryableTx_keepalive;
+use ArbRetryableTxImpl::ArbRetryableTx_getSubmissionPrice;
+use ArbRetryableTxImpl::ArbRetryableTx_cancel;
+use ArbRetryableTxImpl::ArbRetryableTx_redeem;
+
+public impure func ArbRetryableTx__dispatch() {
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        if (bytearray_size(calldata) < 4) {
+            evmOp_revert_knownPc(0, 0, 0);
+        }
+        let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
+        if (funcCode == 0xba20dda4) {
+            ArbRetryableTx_getBeneficiary_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xb16607e5) {
+            ArbRetryableTx_getKeepalivePrice_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x81e6e083) {
+            ArbRetryableTx_getLifetime_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x9f1025c6) {
+            ArbRetryableTx_getTimeout_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xf0b21a41) {
+            ArbRetryableTx_keepalive_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xf88029dc) {
+            ArbRetryableTx_getSubmissionPrice_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xc4d252f5) {
+            ArbRetryableTx_cancel_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xeda1122c) {
+            ArbRetryableTx_redeem_wrapper(topFrame, calldata);
+        } else {
+            evmOp_revert_knownPc(1, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownPc(2, 0, 0);
+    }
+}
+
+impure func ArbRetryableTx_getBeneficiary_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let ticketId = bytes32(bytearray_get256(calldata, offset));
+    let ret = ArbRetryableTx_getBeneficiary(ticketId);
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, uint(ret.0));
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
+impure func ArbRetryableTx_getKeepalivePrice_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let ticketId = bytes32(bytearray_get256(calldata, offset));
+    let ret = ArbRetryableTx_getKeepalivePrice(ticketId);
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, ret.0);
+    __offset = __offset + 32;
+    mem = bytearray_set256(mem, __offset, ret.1);
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
+impure func ArbRetryableTx_getLifetime_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let ret = ArbRetryableTx_getLifetime();
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, ret.0);
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
+impure func ArbRetryableTx_getTimeout_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let ticketId = bytes32(bytearray_get256(calldata, offset));
+    let ret = ArbRetryableTx_getTimeout(ticketId);
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, ret.0);
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
+impure func ArbRetryableTx_keepalive_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let ticketId = bytes32(bytearray_get256(calldata, offset));
+    let ret = ArbRetryableTx_keepalive(ticketId);
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, ret.0);
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
+impure func ArbRetryableTx_getSubmissionPrice_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let calldataSize = bytearray_get256(calldata, 4);
+    let ret = ArbRetryableTx_getSubmissionPrice(calldataSize);
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, ret.0);
+    __offset = __offset + 32;
+    mem = bytearray_set256(mem, __offset, ret.1);
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
+impure func ArbRetryableTx_cancel_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let ticketId = bytes32(bytearray_get256(calldata, offset));
+    ArbRetryableTx_cancel(ticketId);
+    evmOp_return(0, 0);
+}
+
+impure func ArbRetryableTx_redeem_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let txId = bytes32(bytearray_get256(calldata, offset));
+    ArbRetryableTx_redeem(txId);
+    evmOp_return(0, 0);
+}
+

@@ -13,10 +13,9 @@ use accounts::accountStore_createAccountFromEvmCode;
 use accounts::accountStore_upgradeContractFromEvmCode;
 use accounts::account_checkAndIncrSeqNum;
 
-use arbstatistics::arbStatistics_init;
+use ArbStatisticsImpl::arbStatistics_init;
 
-use arbsys::arbosVersion;
-use arbsys::arbsys_txcall;
+use ArbSysImpl::arbosVersion;
 
 use blockhash::blockhash_init;
 

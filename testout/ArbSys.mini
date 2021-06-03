@@ -1,9 +1,8 @@
 // This is machine-generated code. Don't modify it unless you know what you're doing.
 
-use evmOps::evmOp_return;
-use evmOps::evmOp_revert_knownPc;
+use evmOp::evmOp_return;
+use evmOp::evmOp_revert_knownPc;
 use evmCallStack::evmCallStack_topFrame;
-use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallStack_setTopFrameMemory;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
@@ -11,13 +10,13 @@ use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_copy;
 
-use ArbSysImpl::ArbSys_getStorageAt;
 use ArbSysImpl::ArbSys_arbBlockNumber;
-use ArbSysImpl::ArbSys_getTransactionCount;
-use ArbSysImpl::ArbSys_sendTxToL1;
 use ArbSysImpl::ArbSys_withdrawEth;
-use ArbSysImpl::ArbSys_arbOSVersion;
+use ArbSysImpl::ArbSys_getTransactionCount;
 use ArbSysImpl::ArbSys_isTopLevelCall;
+use ArbSysImpl::ArbSys_getStorageAt;
+use ArbSysImpl::ArbSys_sendTxToL1;
+use ArbSysImpl::ArbSys_arbOSVersion;
 use ArbSysImpl::ArbSys_arbChainID;
 
 public impure func ArbSys__dispatch() {
@@ -27,20 +26,20 @@ public impure func ArbSys__dispatch() {
             evmOp_revert_knownPc(0, 0, 0);
         }
         let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
-        if (funcCode == 0xa169625f) {
-            ArbSys_getStorageAt_wrapper(topFrame, calldata);
-        } elseif  (funcCode == 0xa3b1b31d) {
+        if (funcCode == 0xa3b1b31d) {
             ArbSys_arbBlockNumber_wrapper(topFrame, calldata);
-        } elseif  (funcCode == 0x23ca0cd2) {
-            ArbSys_getTransactionCount_wrapper(topFrame, calldata);
-        } elseif  (funcCode == 0x928c169a) {
-            ArbSys_sendTxToL1_wrapper(topFrame, calldata);
         } elseif  (funcCode == 0x25e16063) {
             ArbSys_withdrawEth_wrapper(topFrame, calldata);
-        } elseif  (funcCode == 0x051038f2) {
-            ArbSys_arbOSVersion_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x23ca0cd2) {
+            ArbSys_getTransactionCount_wrapper(topFrame, calldata);
         } elseif  (funcCode == 0x08bd624c) {
             ArbSys_isTopLevelCall_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xa169625f) {
+            ArbSys_getStorageAt_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x928c169a) {
+            ArbSys_sendTxToL1_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x051038f2) {
+            ArbSys_arbOSVersion_wrapper(topFrame, calldata);
         } elseif  (funcCode == 0xd127f54a) {
             ArbSys_arbChainID_wrapper(topFrame, calldata);
         } else {
@@ -51,63 +50,11 @@ public impure func ArbSys__dispatch() {
     }
 }
 
-impure func ArbSys_getStorageAt_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 68) {
-        evmOp_revert_knownPc(3, 0, 0);
-    }
-    let account = address(bytearray_get256(calldata, 4));
-    let index = bytearray_get256(calldata, 36);
-    let ret = ArbSys_getStorageAt(account, index);
-    let mem = bytearray_new(0);
-    let __offset = 0;
-    mem = bytearray_set256(mem, __offset, ret.0);
-    __offset = __offset + 32;
-    if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, __offset);
-    } else {
-        evmOp_revert(5, 0, 0);
-    }
-}
-
 impure func ArbSys_arbBlockNumber_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(3, 0, 0);
     }
     let ret = ArbSys_arbBlockNumber();
-    let mem = bytearray_new(0);
-    let __offset = 0;
-    mem = bytearray_set256(mem, __offset, ret.0);
-    __offset = __offset + 32;
-    if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, __offset);
-    } else {
-        evmOp_revert(5, 0, 0);
-    }
-}
-
-impure func ArbSys_getTransactionCount_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownPc(3, 0, 0);
-    }
-    let account = address(bytearray_get256(calldata, 4));
-    let ret = ArbSys_getTransactionCount(account);
-    let mem = bytearray_new(0);
-    let __offset = 0;
-    mem = bytearray_set256(mem, __offset, ret.0);
-    __offset = __offset + 32;
-    if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, __offset);
-    } else {
-        evmOp_revert(5, 0, 0);
-    }
-}
-
-impure func ArbSys_sendTxToL1_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
-    let destination = address(bytearray_get256(calldata, 4));
-    let calldataForL1_offset = bytearray_get256(calldata, 36);
-    let calldataForL1_nbytes = bytearray_get256(calldata, 4+calldataForL1_offset);
-    let calldataForL1 = bytearray_extract(calldata, 36+calldataForL1_offset, calldataForL1_nbytes);
-    let ret = ArbSys_sendTxToL1(destination, calldataForL1);
     let mem = bytearray_new(0);
     let __offset = 0;
     mem = bytearray_set256(mem, __offset, ret.0);
@@ -136,11 +83,12 @@ impure func ArbSys_withdrawEth_wrapper(topFrame: EvmCallFrame, calldata: ByteArr
     }
 }
 
-impure func ArbSys_arbOSVersion_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 4) {
+impure func ArbSys_getTransactionCount_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(3, 0, 0);
     }
-    let ret = ArbSys_arbOSVersion();
+    let account = address(bytearray_get256(calldata, 4));
+    let ret = ArbSys_getTransactionCount(account);
     let mem = bytearray_new(0);
     let __offset = 0;
     mem = bytearray_set256(mem, __offset, ret.0);
@@ -160,6 +108,57 @@ impure func ArbSys_isTopLevelCall_wrapper(topFrame: EvmCallFrame, calldata: Byte
     let mem = bytearray_new(0);
     let __offset = 0;
     mem = bytearray_set256(mem, __offset, xif (ret.0) { 1 } else { 0 });
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
+impure func ArbSys_getStorageAt_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let account = address(bytearray_get256(calldata, 4));
+    let index = bytearray_get256(calldata, 36);
+    let ret = ArbSys_getStorageAt(account, index);
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, ret.0);
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
+impure func ArbSys_sendTxToL1_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    let destination = address(bytearray_get256(calldata, 4));
+    let calldataForL1_offset = bytearray_get256(calldata, 36);
+    let calldataForL1_nbytes = bytearray_get256(calldata, 4+calldataForL1_offset);
+    let calldataForL1 = bytearray_extract(calldata, 36+calldataForL1_offset, calldataForL1_nbytes);
+    let ret = ArbSys_sendTxToL1(destination, calldataForL1);
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, ret.0);
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
+impure func ArbSys_arbOSVersion_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let ret = ArbSys_arbOSVersion();
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, ret.0);
     __offset = __offset + 32;
     if (evmCallStack_setTopFrameMemory(mem)) {
         evmOp_return(0, __offset);

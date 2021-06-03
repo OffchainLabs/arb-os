@@ -136,6 +136,10 @@ public func bls_marshalPublicKey(key: BLSKey, ba: ByteArray, offset: uint) -> By
     );
 }
 
+public func bls_publicKeyAsTuple(key: BLSKey) -> (uint, uint, uint, uint) {
+    return (key.ax, key.ay, key.bx, key.by);
+}
+
 public func bls_verifySignature(
     messages: []BLSHashedMessage,
     keys: []BLSKey,

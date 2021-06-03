@@ -1,9 +1,8 @@
 // This is machine-generated code. Don't modify it unless you know what you're doing.
 
-use evmOps::evmOp_return;
-use evmOps::evmOp_revert_knownPc;
+use evmOp::evmOp_return;
+use evmOp::evmOp_revert_knownPc;
 use evmCallStack::evmCallStack_topFrame;
-use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallStack_setTopFrameMemory;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
@@ -11,12 +10,12 @@ use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_copy;
 
-use ArbAggregatorImpl::ArbAggregator_getPreferredAggregator;
 use ArbAggregatorImpl::ArbAggregator_setDefaultAggregator;
 use ArbAggregatorImpl::ArbAggregator_setFeeCollector;
 use ArbAggregatorImpl::ArbAggregator_setPreferredAggregator;
-use ArbAggregatorImpl::ArbAggregator_getFeeCollector;
 use ArbAggregatorImpl::ArbAggregator_getDefaultAggregator;
+use ArbAggregatorImpl::ArbAggregator_getFeeCollector;
+use ArbAggregatorImpl::ArbAggregator_getPreferredAggregator;
 
 public impure func ArbAggregator__dispatch() {
     if let Some(topFrame) = evmCallStack_topFrame() {
@@ -25,18 +24,18 @@ public impure func ArbAggregator__dispatch() {
             evmOp_revert_knownPc(0, 0, 0);
         }
         let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
-        if (funcCode == 0x52f10740) {
-            ArbAggregator_getPreferredAggregator_wrapper(topFrame, calldata);
-        } elseif  (funcCode == 0x0ffd6650) {
+        if (funcCode == 0x0ffd6650) {
             ArbAggregator_setDefaultAggregator_wrapper(topFrame, calldata);
         } elseif  (funcCode == 0x29149799) {
             ArbAggregator_setFeeCollector_wrapper(topFrame, calldata);
         } elseif  (funcCode == 0x6e928a6e) {
             ArbAggregator_setPreferredAggregator_wrapper(topFrame, calldata);
-        } elseif  (funcCode == 0x9c2c5bb5) {
-            ArbAggregator_getFeeCollector_wrapper(topFrame, calldata);
         } elseif  (funcCode == 0x875883f2) {
             ArbAggregator_getDefaultAggregator_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x9c2c5bb5) {
+            ArbAggregator_getFeeCollector_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x52f10740) {
+            ArbAggregator_getPreferredAggregator_wrapper(topFrame, calldata);
         } else {
             evmOp_revert_knownPc(1, 0, 0);
         }
@@ -45,31 +44,12 @@ public impure func ArbAggregator__dispatch() {
     }
 }
 
-impure func ArbAggregator_getPreferredAggregator_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownPc(3, 0, 0);
-    }
-    let addr = address(bytearray_get256(calldata, 4));
-    let ret = ArbAggregator_getPreferredAggregator(addr);
-    let mem = bytearray_new(0);
-    let __offset = 0;
-    mem = bytearray_set256(mem, __offset, uint(ret.0));
-    __offset = __offset + 32;
-    mem = bytearray_set256(mem, __offset, xif (ret.1) { 1 } else { 0 });
-    __offset = __offset + 32;
-    if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, __offset);
-    } else {
-        evmOp_revert(5, 0, 0);
-    }
-}
-
 impure func ArbAggregator_setDefaultAggregator_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(3, 0, 0);
     }
     let newDefault = address(bytearray_get256(calldata, 4));
-    ArbAggregator_setDefaultAggregator(topFrame, newDefault);
+    ArbAggregator_setDefaultAggregator(newDefault);
     evmOp_return(0, 0);
 }
 
@@ -79,7 +59,7 @@ impure func ArbAggregator_setFeeCollector_wrapper(topFrame: EvmCallFrame, callda
     }
     let aggregator = address(bytearray_get256(calldata, 4));
     let newFeeCollector = address(bytearray_get256(calldata, 36));
-    ArbAggregator_setFeeCollector(topFrame, aggregator, newFeeCollector);
+    ArbAggregator_setFeeCollector(aggregator, newFeeCollector);
     evmOp_return(0, 0);
 }
 
@@ -88,8 +68,24 @@ impure func ArbAggregator_setPreferredAggregator_wrapper(topFrame: EvmCallFrame,
         evmOp_revert_knownPc(3, 0, 0);
     }
     let prefAgg = address(bytearray_get256(calldata, 4));
-    ArbAggregator_setPreferredAggregator(topFrame, prefAgg);
+    ArbAggregator_setPreferredAggregator(prefAgg);
     evmOp_return(0, 0);
+}
+
+impure func ArbAggregator_getDefaultAggregator_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let ret = ArbAggregator_getDefaultAggregator();
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, uint(ret.0));
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
 }
 
 impure func ArbAggregator_getFeeCollector_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
@@ -109,14 +105,17 @@ impure func ArbAggregator_getFeeCollector_wrapper(topFrame: EvmCallFrame, callda
     }
 }
 
-impure func ArbAggregator_getDefaultAggregator_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 4) {
+impure func ArbAggregator_getPreferredAggregator_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(3, 0, 0);
     }
-    let ret = ArbAggregator_getDefaultAggregator();
+    let addr = address(bytearray_get256(calldata, 4));
+    let ret = ArbAggregator_getPreferredAggregator(addr);
     let mem = bytearray_new(0);
     let __offset = 0;
     mem = bytearray_set256(mem, __offset, uint(ret.0));
+    __offset = __offset + 32;
+    mem = bytearray_set256(mem, __offset, xif (ret.1) { 1 } else { 0 });
     __offset = __offset + 32;
     if (evmCallStack_setTopFrameMemory(mem)) {
         evmOp_return(0, __offset);

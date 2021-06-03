@@ -25,8 +25,8 @@ use accounts::accountStore_transferEthBalance;
 use accounts::account_getNextSeqNum;
 use accounts::account_getAggregatorToPay;
 
-use arbstatistics::arbStatistics_addToStorage;
-use arbstatistics::arbStatistics_addToGasUsed;
+use ArbStatisticsImpl::arbStatistics_addToStorage;
+use ArbStatisticsImpl::arbStatistics_addToGasUsed;
 
 use chainParameters::chainParams_getOwner;
 

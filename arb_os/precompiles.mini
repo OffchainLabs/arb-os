@@ -42,16 +42,16 @@ use std::bytearray::bytearray_fromSizeAndBuffer;
 use std::sha256::sha256_byteArray;
 use std::ripemd160::ripemd160_byteArray;
 
-use arbsys::arbsys_txcall;
-use arbowner::arbowner_txcall;
-use arbgasinfo::arbgasinfo_txcall;
-use arbosTest::arbosTest_txcall;
-use arbsys::arbAddressTable_txcall;
-use arbsys::arbBLS_txcall;
-use arbsys::arbFunctionTable_txcall;
-use arbaggregator::arbaggregator_txcall;
-use arbretryable::arbretryable_txcall;
-use arbstatistics::arbStatistics_txcall;
+use ArbSys::ArbSys__dispatch;
+use ArbOwner::ArbOwner__dispatch;
+use ArbGasInfo::ArbGasInfo__dispatch;
+use ArbosTest::ArbosTest__dispatch;
+use ArbAddressTable::ArbAddressTable__dispatch;
+use ArbBLS::ArbBLS__dispatch;
+use ArbFunctionTable::ArbFunctionTable__dispatch;
+use ArbAggregator::ArbAggregator__dispatch;
+use ArbRetryableTx::ArbRetryableTx__dispatch;
+use ArbStatistics::ArbStatistics__dispatch;
 
 
 public impure func precompiles_init(acctStore: AccountStore, isUpgrade: bool) -> option<AccountStore> {
@@ -129,70 +129,70 @@ public impure func precompiles_init(acctStore: AccountStore, isUpgrade: bool) ->
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbSys),
-        makeTrampoline(arbsys_txcall),
+        makeTrampoline(ArbSys__dispatch),
         true,
         isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbosTest),
-        makeTrampoline(arbosTest_txcall),
+        makeTrampoline(ArbosTest__dispatch),
         true,
         isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbAddressTable),
-        makeTrampoline(arbAddressTable_txcall),
+        makeTrampoline(ArbAddressTable__dispatch),
         true,
         isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbBLS),
-        makeTrampoline(arbBLS_txcall),
+        makeTrampoline(ArbBLS__dispatch),
         true,
         isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbFunctionTable),
-        makeTrampoline(arbFunctionTable_txcall),
+        makeTrampoline(ArbFunctionTable__dispatch),
         true,
         isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbOwner),
-        makeTrampoline(arbowner_txcall),
+        makeTrampoline(ArbOwner__dispatch),
         true,
         isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbGasInfo),
-        makeTrampoline(arbgasinfo_txcall),
+        makeTrampoline(ArbGasInfo__dispatch),
         true,
         isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbAggregator),
-        makeTrampoline(arbaggregator_txcall),
+        makeTrampoline(ArbAggregator__dispatch),
         true,
         isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbRetryableTx),
-        makeTrampoline(arbretryable_txcall),
+        makeTrampoline(ArbRetryableTx__dispatch),
         true,
         isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbStatistics),
-        makeTrampoline(arbStatistics_txcall),
+        makeTrampoline(ArbStatistics__dispatch),
         true,
         isUpgrade,
     )?;

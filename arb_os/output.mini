@@ -7,7 +7,7 @@ use std::bytearray::MarshalledBytes;
 use std::queue::Queue;
 use evmlogs::EvmLogs;
 
-use arbstatistics::arbStatistics_addTxReceipt;
+use ArbStatisticsImpl::arbStatistics_addTxReceipt;
 
 use tracing::evmTracer_emitAndClear;
 

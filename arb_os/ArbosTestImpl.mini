@@ -1,0 +1,119 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_copy;
+
+use std::bytestream::bytestream_new;
+
+use std::storageMap::storageMap_new;
+use std::storageMap::storageMap_serialize;
+use std::storageMap::storageMap_deserialize;
+
+use accounts::pristineAccount;
+use accounts::account_setContractInfo;
+use accounts::account_getAllStorage;
+use accounts::account_getNextSeqNum;
+use accounts::account_getEthBalance;
+
+use codeSegment::translateEvmCodeSegment;
+
+use evmOps::evmOp_return;
+use evmOps::evmOp_revert_knownCodePc;
+
+use evmCallStack::EvmCallFrame;
+use evmCallStack::evmCallStack_callHitError;
+use evmCallStack::evmCallStack_topFrame;
+use evmCallStack::evmCallFrame_getCalldata;
+use evmCallStack::evmCallStack_setTopFrameMemory;
+use evmCallStack::evmCallStack_setAccount;
+use evmCallStack::evmCallFrame_getCaller;
+use evmCallStack::evmCallFrame_getAccount;
+
+
+public impure func ArbosTest_installAccount(
+    topFrame: EvmCallFrame,
+    addr: address,
+    isEOA: bool,
+    balance: uint,
+    nonce: uint,
+    code: ByteArray,
+    marshalledStorage: ByteArray,
+) {
+    // Verify that this has been called by address zero.
+    // This ensures that this method can only be called (1) in testing, or (2) by the EthBridge.
+    if (evmCallFrame_getCaller(topFrame) != address(0)) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 10, 0, 0);
+    }
+
+    let acct = pristineAccount(addr) with {
+        ethBalance: balance
+    } with {
+        nextSeqNum: nonce
+    };
+
+    if( ! isEOA) {
+        if let Some(initStorage) = storageMap_deserialize(marshalledStorage) {
+            let (startCodePoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(code), false);
+            acct = account_setContractInfo(
+                acct,
+                code,
+                evmJumpTable,
+                startCodePoint,
+                initStorage,
+                false,
+            );
+        } else {
+            evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 12, 0, 0);
+        }
+    }
+}
+
+public impure func ArbosTest_getMarshalledStorage(topFrame: EvmCallFrame, addr: address) -> ByteArray {
+    // Return the marshalled storage for the contract at addr. Revert if no contract at that address.
+    if (evmCallFrame_getCaller(topFrame) != address(0)) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 20, 0, 0);
+    }
+
+    return xif let Some(storage) = account_getAllStorage(evmCallFrame_getAccount(topFrame, addr)) {
+        storageMap_serialize(storage)
+    } else {
+        bytearray_new(0)  // tests expect a report of empty storage if there is no storage
+    };
+}
+
+public impure func ArbosTest_getAccountInfo(topFrame: EvmCallFrame, addr: address) -> ByteArray {
+    // Return the balance, nonce, and marshalled storage for the contract at addr. Revert if no contract at that address.
+    if (evmCallFrame_getCaller(topFrame) != address(0)) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 20, 0, 0);
+    }
+
+    let acct = evmCallFrame_getAccount(topFrame, addr);
+    let mem = bytearray_set256(
+        bytearray_set256(bytearray_new(0), 0, account_getEthBalance(acct)),
+        32,
+        account_getNextSeqNum(acct),
+    );
+    if let Some(storage) = account_getAllStorage(acct) {
+        let marshalledStorage = storageMap_serialize(storage);
+        let msSize = bytearray_size(marshalledStorage);
+        mem = bytearray_copy(marshalledStorage, 0, mem, 64, msSize);
+    }
+    return mem;
+}
+
+public impure func ArbosTest_burnArbGas(_topFrame: EvmCallFrame, arbGasToBurn: uint) {
+    // Burn a specified amount of ArbGas
+    let avmGasToBurn = arbGasToBurn * const::Charging_DefaultArbGasDivisor;
+    let gasLeft = asm() uint { getgas };
+    if (avmGasToBurn >= gasLeft) {
+        avmGasToBurn = gasLeft - 1;
+    }
+    asm(gasLeft - avmGasToBurn,) { setgas };
+}

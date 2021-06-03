@@ -1,0 +1,404 @@
+// This is machine-generated code. Don't modify it unless you know what you're doing.
+
+use evmOp::evmOp_return;
+use evmOp::evmOp_revert_knownPc;
+use evmCallStack::evmCallStack_topFrame;
+use evmCallStack::evmCallStack_setTopFrameMemory;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_copy;
+
+use ArbOwnerImpl::ArbOwner_isAllowedSender;
+use ArbOwnerImpl::ArbOwner_getAllAllowedSenders;
+use ArbOwnerImpl::ArbOwner_getAllFairGasPriceSenders;
+use ArbOwnerImpl::ArbOwner_getFeeRecipients;
+use ArbOwnerImpl::ArbOwner_setFeesEnabled;
+use ArbOwnerImpl::ArbOwner_giveOwnership;
+use ArbOwnerImpl::ArbOwner_continueCodeUpload;
+use ArbOwnerImpl::ArbOwner_addAllowedSender;
+use ArbOwnerImpl::ArbOwner_allowAllSenders;
+use ArbOwnerImpl::ArbOwner_allowOnlyOwnerToSend;
+use ArbOwnerImpl::ArbOwner_removeAllowedSender;
+use ArbOwnerImpl::ArbOwner_getUploadedCodeHash;
+use ArbOwnerImpl::ArbOwner_setFairGasPriceSender;
+use ArbOwnerImpl::ArbOwner_setFeeRecipients;
+use ArbOwnerImpl::ArbOwner_setSecondsPerSend;
+use ArbOwnerImpl::ArbOwner_finishCodeUploadAsPluggable;
+use ArbOwnerImpl::ArbOwner_startCodeUpload;
+use ArbOwnerImpl::ArbOwner_isFairGasPriceSender;
+use ArbOwnerImpl::ArbOwner_addToReserveFunds;
+use ArbOwnerImpl::ArbOwner_setL1GasPriceEstimate;
+use ArbOwnerImpl::ArbOwner_deployContract;
+use ArbOwnerImpl::ArbOwner_finishCodeUploadAsArbosUpgrade;
+use ArbOwnerImpl::ArbOwner_getTotalOfEthBalances;
+use ArbOwnerImpl::ArbOwner_bindAddressToPluggable;
+use ArbOwnerImpl::ArbOwner_setGasAccountingParams;
+
+public impure func ArbOwner__dispatch() {
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        if (bytearray_size(calldata) < 4) {
+            evmOp_revert_knownPc(0, 0, 0);
+        }
+        let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
+        if (funcCode == 0xbe8c97b0) {
+            ArbOwner_isAllowedSender_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x817ef62e) {
+            ArbOwner_getAllAllowedSenders_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xa88bae30) {
+            ArbOwner_getAllFairGasPriceSenders_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x08df6923) {
+            ArbOwner_getFeeRecipients_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xa901dd92) {
+            ArbOwner_setFeesEnabled_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xe3a0a148) {
+            ArbOwner_giveOwnership_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x56331f75) {
+            ArbOwner_continueCodeUpload_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xc746c8f4) {
+            ArbOwner_addAllowedSender_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xdebb08f5) {
+            ArbOwner_allowAllSenders_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xca4ba78c) {
+            ArbOwner_allowOnlyOwnerToSend_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x471eab5c) {
+            ArbOwner_removeAllowedSender_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xc060180d) {
+            ArbOwner_getUploadedCodeHash_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xcad462d4) {
+            ArbOwner_setFairGasPriceSender_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xc6cabb40) {
+            ArbOwner_setFeeRecipients_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x29854f47) {
+            ArbOwner_setSecondsPerSend_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xf4f4e136) {
+            ArbOwner_finishCodeUploadAsPluggable_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x31acdf5e) {
+            ArbOwner_startCodeUpload_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x973f9730) {
+            ArbOwner_isFairGasPriceSender_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xc3bf429d) {
+            ArbOwner_addToReserveFunds_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x4290549e) {
+            ArbOwner_setL1GasPriceEstimate_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x5b0b7f1e) {
+            ArbOwner_deployContract_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xb3def0d7) {
+            ArbOwner_finishCodeUploadAsArbosUpgrade_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x2816aba5) {
+            ArbOwner_getTotalOfEthBalances_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xf589445c) {
+            ArbOwner_bindAddressToPluggable_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x8ea93643) {
+            ArbOwner_setGasAccountingParams_wrapper(topFrame, calldata);
+        } else {
+            evmOp_revert_knownPc(1, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownPc(2, 0, 0);
+    }
+}
+
+impure func ArbOwner_isAllowedSender_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let ret = ArbOwner_isAllowedSender(addr);
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, xif (ret.0) { 1 } else { 0 });
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
+impure func ArbOwner_getAllAllowedSenders_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let ret = ArbOwner_getAllAllowedSenders();
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    let __offset_ret_0 = __offset;
+    __offset = 32 + __offset;
+    let ret_0_size = bytearray_size(ret.0);
+    let ret_0_size_rounded = 32 * ((ret_0_size + 31)/32);
+    mem = bytearray_set256(mem, __offset_ret_0, __offset);
+    mem = bytearray_set256(mem, __offset, ret.0_size);
+    mem = bytearray_copy(ret.0, 0, mem, 32+__offset, ret_0_size_rounded);
+    __offset = __offset + 32 + ret.0_size_rounded;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
+impure func ArbOwner_getAllFairGasPriceSenders_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let ret = ArbOwner_getAllFairGasPriceSenders();
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    let __offset_ret_0 = __offset;
+    __offset = 32 + __offset;
+    let ret_0_size = bytearray_size(ret.0);
+    let ret_0_size_rounded = 32 * ((ret_0_size + 31)/32);
+    mem = bytearray_set256(mem, __offset_ret_0, __offset);
+    mem = bytearray_set256(mem, __offset, ret.0_size);
+    mem = bytearray_copy(ret.0, 0, mem, 32+__offset, ret_0_size_rounded);
+    __offset = __offset + 32 + ret.0_size_rounded;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
+impure func ArbOwner_getFeeRecipients_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let ret = ArbOwner_getFeeRecipients();
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, uint(ret.0));
+    __offset = __offset + 32;
+    mem = bytearray_set256(mem, __offset, uint(ret.1));
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
+impure func ArbOwner_setFeesEnabled_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let enabled = (bytearray_get256(calldata, 4) != 0);
+    ArbOwner_setFeesEnabled(enabled);
+    evmOp_return(0, 0);
+}
+
+impure func ArbOwner_giveOwnership_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let newOwnerAddr = address(bytearray_get256(calldata, 4));
+    ArbOwner_giveOwnership(newOwnerAddr);
+    evmOp_return(0, 0);
+}
+
+impure func ArbOwner_continueCodeUpload_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    let marshalledCode_offset = bytearray_get256(calldata, 4);
+    let marshalledCode_nbytes = bytearray_get256(calldata, 4+marshalledCode_offset);
+    let marshalledCode = bytearray_extract(calldata, 36+marshalledCode_offset, marshalledCode_nbytes);
+    ArbOwner_continueCodeUpload(marshalledCode);
+    evmOp_return(0, 0);
+}
+
+impure func ArbOwner_addAllowedSender_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    ArbOwner_addAllowedSender(addr);
+    evmOp_return(0, 0);
+}
+
+impure func ArbOwner_allowAllSenders_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    ArbOwner_allowAllSenders();
+    evmOp_return(0, 0);
+}
+
+impure func ArbOwner_allowOnlyOwnerToSend_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    ArbOwner_allowOnlyOwnerToSend();
+    evmOp_return(0, 0);
+}
+
+impure func ArbOwner_removeAllowedSender_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    ArbOwner_removeAllowedSender(addr);
+    evmOp_return(0, 0);
+}
+
+impure func ArbOwner_getUploadedCodeHash_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let ret = ArbOwner_getUploadedCodeHash();
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, uint(ret.0));
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
+impure func ArbOwner_setFairGasPriceSender_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let isFairGasPriceSender = (bytearray_get256(calldata, 36) != 0);
+    ArbOwner_setFairGasPriceSender(addr, isFairGasPriceSender);
+    evmOp_return(0, 0);
+}
+
+impure func ArbOwner_setFeeRecipients_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let netFeeRecipient = address(bytearray_get256(calldata, 4));
+    let congestionFeeRecipient = address(bytearray_get256(calldata, 36));
+    ArbOwner_setFeeRecipients(netFeeRecipient, congestionFeeRecipient);
+    evmOp_return(0, 0);
+}
+
+impure func ArbOwner_setSecondsPerSend_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let blocksPerSend = bytearray_get256(calldata, 4);
+    ArbOwner_setSecondsPerSend(blocksPerSend);
+    evmOp_return(0, 0);
+}
+
+impure func ArbOwner_finishCodeUploadAsPluggable_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let id = bytearray_get256(calldata, 4);
+    let keepState = (bytearray_get256(calldata, 36) != 0);
+    ArbOwner_finishCodeUploadAsPluggable(id, keepState);
+    evmOp_return(0, 0);
+}
+
+impure func ArbOwner_startCodeUpload_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    ArbOwner_startCodeUpload();
+    evmOp_return(0, 0);
+}
+
+impure func ArbOwner_isFairGasPriceSender_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let ret = ArbOwner_isFairGasPriceSender(addr);
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, xif (ret.0) { 1 } else { 0 });
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
+impure func ArbOwner_addToReserveFunds_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    ArbOwner_addToReserveFunds();
+    evmOp_return(0, 0);
+}
+
+impure func ArbOwner_setL1GasPriceEstimate_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let priceInGwei = bytearray_get256(calldata, 4);
+    ArbOwner_setL1GasPriceEstimate(priceInGwei);
+    evmOp_return(0, 0);
+}
+
+impure func ArbOwner_deployContract_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    let constructorData_offset = bytearray_get256(calldata, 4);
+    let constructorData_nbytes = bytearray_get256(calldata, 4+constructorData_offset);
+    let constructorData = bytearray_extract(calldata, 36+constructorData_offset, constructorData_nbytes);
+    let deemedSender = address(bytearray_get256(calldata, 36));
+    let deemedNonce = bytearray_get256(calldata, 68);
+    let ret = ArbOwner_deployContract(constructorData, deemedSender, deemedNonce);
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, uint(ret.0));
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
+impure func ArbOwner_finishCodeUploadAsArbosUpgrade_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let newCodeHash = bytes32(bytearray_get256(calldata, offset));
+    let oldCodeHash = bytes32(bytearray_get256(calldata, offset));
+    ArbOwner_finishCodeUploadAsArbosUpgrade(newCodeHash, oldCodeHash);
+    evmOp_return(0, 0);
+}
+
+impure func ArbOwner_getTotalOfEthBalances_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let ret = ArbOwner_getTotalOfEthBalances();
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, ret.0);
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
+impure func ArbOwner_bindAddressToPluggable_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let pluggableId = bytearray_get256(calldata, 36);
+    ArbOwner_bindAddressToPluggable(addr, pluggableId);
+    evmOp_return(0, 0);
+}
+
+impure func ArbOwner_setGasAccountingParams_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 100) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let speedLimitPerBlock = bytearray_get256(calldata, 4);
+    let gasPoolMax = bytearray_get256(calldata, 36);
+    let maxTxGasLimit = bytearray_get256(calldata, 68);
+    ArbOwner_setGasAccountingParams(speedLimitPerBlock, gasPoolMax, maxTxGasLimit);
+    evmOp_return(0, 0);
+}
+

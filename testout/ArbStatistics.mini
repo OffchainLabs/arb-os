@@ -1,9 +1,8 @@
 // This is machine-generated code. Don't modify it unless you know what you're doing.
 
-use evmOps::evmOp_return;
-use evmOps::evmOp_revert_knownPc;
+use evmOp::evmOp_return;
+use evmOp::evmOp_revert_knownPc;
 use evmCallStack::evmCallStack_topFrame;
-use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallStack_setTopFrameMemory;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;

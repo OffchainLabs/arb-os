@@ -2,7 +2,7 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-use arbowner::arbowner_init;
+use ArbOwnerImpl::arbowner_init;
 use evmCallStack::evmCallStack_callHitError;
 
 use std::bytearray::MarshalledBytes;

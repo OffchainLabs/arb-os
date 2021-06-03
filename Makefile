@@ -15,6 +15,7 @@ TEMPLATES = $(ARBOSDIR)/contractTemplates.mini
 TESTFILES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/biguinttest.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe $(STDDIR)/sha256test.mexe $(STDDIR)/ripemd160test.mexe minitests/codeloadtest.mexe $(STDDIR)/fixedpointtest.mexe $(STDDIR)/blstest.mexe
 TESTCONTRACTSPURE = $(TCBUILDDIR)/Add.sol/Add.json $(TCBUILDDIR)/Fibonacci.sol/Fibonacci.json $(TCBUILDDIR)/PaymentChannel.sol/PaymentChannel.json $(TCBUILDDIR)/Underfunded.sol/Underfunded.json $(TCBUILDDIR)/ReverterFactory.sol/ReverterFactory.json $(TCBUILDDIR)/Callback.sol/Callback.json
 TESTCONTRACTS = $(ACBUILDDIR)/ArbSys.sol/ArbSys.json $(TESTCONTRACTSPURE)
+ABIGENFILES = $(ARBOSDIR)/ArbAddressTable.mini $(ARBOSDIR)/ArbAggregator.mini $(ARBOSDIR)/ArbBLS.mini $(ARBOSDIR)/ArbFunctionTable.mini $(ARBOSDIR)/ArbGasInfo.mini $(ARBOSDIR)/ArbInfo.mini $(ARBOSDIR)/ArbosTest.mini $(ARBOSDIR)/ArbOwner.mini $(ARBOSDIR)/ArbRetryableTx.mini $(ARBOSDIR)/ArbStatistics.mini $(ARBOSDIR)/ArbSys.mini
 UPGRADEFILES = $(UPGRADETESTDIR)/regcopy_old.mexe $(UPGRADETESTDIR)/regcopy_new.mexe $(UPGRADETESTDIR)/upgrade1_old.mexe $(UPGRADETESTDIR)/upgrade1_new.mexe $(UPGRADETESTDIR)/upgrade2_new.mexe
 ARBOSCONTRACTS = $(ACBUILDDIR)/ArbAddressTable.sol/ArbAddressTable.json $(ACBUILDDIR)/ArbBLS.sol/ArbBLS.json $(ACBUILDDIR)/ArbFunctionTable.sol/ArbFunctionTable.json $(ACBUILDDIR)/ArbInfo.sol/ArbInfo.json $(ACBUILDDIR)/ArbOwner.sol/ArbOwner.json $(ACBUILDDIR)/ArbSys.sol/ArbSys.json $(ACBUILDDIR)/ArbosTest.sol/ArbosTest.json $(ACBUILDDIR)/ArbRetryable.sol/ArbRetryable.json
 
@@ -117,11 +118,16 @@ $(ARBOSDIR)/upgrade.json: compiler $(ARBOSDIR)/arbos-upgrade.mexe
 $(BUILTINDIR)/maptest.mexe: compiler $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
 	$(CARGORUN) compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe $(COMPILEFLAGS) -t
 
-$(ARBOSDIR)/arbos.mexe: compiler $(TESTCONTRACTS) $(ARBOSDIR) $(STDDIR) $(BUILTINDIR) $(TEMPLATES) src/compile/miniconstants.rs
+$(ARBOSDIR)/arbos.mexe: compiler $(TESTCONTRACTS) abigenfiles $(ARBOSDIR) $(STDDIR) $(BUILTINDIR) $(TEMPLATES) src/compile/miniconstants.rs
 	$(CARGORUN) compile "arb_os" -o "arb_os/arbos.mexe" $(COMPILEFLAGS)
 
 $(TESTCONTRACTSPURE): $(TCSRCDIR)
 	(cd contracts; yarn install; yarn build)
+
+abigenfiles: $(ABIGENFILES)
+
+$(ABIGENFILES): compiler $(ARBOSCONTRACTS)
+	$(CARGORUN) abigen -d -c $(ARTIFACTDIR)/builtin/ -o $(ARBOSDIR)
 
 $(ARBOSCONTRACTS): $(ACSRCDIR)
 	(cd contracts; yarn install; yarn build)

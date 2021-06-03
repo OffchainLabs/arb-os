@@ -19,7 +19,7 @@ pub fn abigen_from_directory_structure(dirpath: &Path, out_dir: &Path) -> Result
             for subentry in fs::read_dir(path)? {
                 let subentry = subentry?;
                 let subpath = subentry.path();
-                if !subpath.ends_with(".dbg.json") {
+                if !subpath.clone().into_os_string().to_str().unwrap().ends_with(".dbg.json") {
                     write_mini_wrapper_to_file(
                         &subpath,
                         &out_dir.join(format!(
@@ -35,6 +35,7 @@ pub fn abigen_from_directory_structure(dirpath: &Path, out_dir: &Path) -> Result
 }
 
 pub fn write_mini_wrapper_to_file(contract_path: &Path, out_path: &Path) -> Result<(), io::Error> {
+    println!("{} --> {}", contract_path.to_str().unwrap(), out_path.to_str().unwrap());
     generate_mini_wrapper(contract_path, &mut File::create(out_path)?)
 }
 
@@ -61,9 +62,10 @@ pub fn generate_mini_wrapper(
     )?;
     writeln!(header_out, "")?;
     for import_name in &[
-        "evmOp::evmOp_return",
-        "evmOp::evmOp_revert_knownPc",
+        "evmOps::evmOp_return",
+        "evmOps::evmOp_revert_knownPc",
         "evmCallStack::evmCallStack_topFrame",
+        "evmCallStack::evmCallFrame_getCalldata",
         "evmCallStack::evmCallStack_setTopFrameMemory",
         "std::bytearray::bytearray_new",
         "std::bytearray::bytearray_size",
@@ -247,11 +249,9 @@ fn write_wrapper_for_func(
     }
 
     if rets.len() == 0 {
-        write!(out, "    {}_{}(", contract_name, func.name)?;
-        let mut first_one = true;
+        write!(out, "    {}_{}(topFrame", contract_name, func.name)?;
         for param in params {
-            write!(out, "{}{}", if first_one { "" } else { ", " }, param.name)?;
-            first_one = false;
+            write!(out, ", {}", param.name)?;
         }
         writeln!(out, ");")?;
         writeln!(out, "    evmOp_return(0, 0);")?;
@@ -431,7 +431,7 @@ impl DelayedMarshalSpec {
                 writeln!(
                     out,
                     "    mem = bytearray_set256(mem, __offset, {}_size);",
-                    param_selector
+                    param_name
                 )?;
                 writeln!(
                     out,
@@ -441,7 +441,7 @@ impl DelayedMarshalSpec {
                 writeln!(
                     out,
                     "    __offset = __offset + 32 + {}_size_rounded;",
-                    param_selector
+                    param_name
                 )?;
                 Ok(())
             }

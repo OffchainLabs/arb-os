@@ -1,0 +1,90 @@
+//
+// Copyright 2021, Offchain Labs, Inc. All rights reserved.
+//
+
+use accounts::getGlobalAccountStore;
+use accounts::setGlobalAccountStore;
+use accounts::accountStore_get;
+use accounts::accountStore_set;
+use accounts::account_setAggregatorToPay;
+use accounts::account_getAggregatorToPayAsOption;
+use accounts::account_getFeeCollector;
+use accounts::account_setFeeCollector;
+
+use chainParameters::chainParams_getDefaultAggregator;
+use chainParameters::chainParams_setDefaultAggregator;
+use chainParameters::chainParams_getOwner;
+
+use evmCallStack::EvmCallFrame;
+use evmCallStack::evmCallStack_topFrame;
+use evmCallStack::evmCallStack_setTopFrameMemory;
+use evmCallStack::evmCallFrame_getCalldata;
+use evmCallStack::evmCallFrame_getCaller;
+use evmCallStack::evmCallStack_callHitError;
+use evmCallStack::evmCallStack_getAccountInCurrentContext;
+use evmCallStack::evmCallStack_setAccountInCurrentContext;
+
+use evmOps::evmOp_return;
+use evmOps::evmOp_revert_knownPc;
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+
+
+public impure func ArbAggregator_getPreferredAggregator(_topFrame: EvmCallFrame, addr: address) -> (address, bool) {
+    let maybePA = account_getAggregatorToPayAsOption(
+        evmCallStack_getAccountInCurrentContext(addr)
+    );
+    if let Some(pa) = maybePA {
+        return (pa, false);
+    } else {
+        return (chainParams_getDefaultAggregator(), true);
+    }
+}
+
+public impure func ArbAggregator_setPreferredAggregator(topFrame: EvmCallFrame, newPA: address) {
+    let caller = evmCallFrame_getCaller(topFrame);
+    let newVal = xif (newPA == address(0)) {
+         None<address>
+     } else {
+         Some(newPA)
+     };
+    evmCallStack_setAccountInCurrentContext(
+        caller,
+        account_setAggregatorToPay(
+            evmCallStack_getAccountInCurrentContext(caller),
+            newVal,
+        )
+    );
+}
+
+public impure func ArbAggregator_getDefaultAggregator(_topFrame: EvmCallFrame) -> address {
+    return chainParams_getDefaultAggregator();
+}
+
+public impure func ArbAggregator_setDefaultAggregator(topFrame: EvmCallFrame, newDefaultAgg: address) {
+    let caller = evmCallFrame_getCaller(topFrame);
+    if ((caller != address(0)) && (Some(caller) != chainParams_getOwner()) && (caller != chainParams_getDefaultAggregator())) {
+        evmOp_revert_knownPc(41, 0, 0);
+    }
+    chainParams_setDefaultAggregator(newDefaultAgg);
+}
+
+public impure func ArbAggregator_getFeeCollector(_topFrame: EvmCallFrame, aggregator: address) -> address {
+    return account_getFeeCollector(evmCallStack_getAccountInCurrentContext(aggregator));
+}
+
+public impure func ArbAggregator_setFeeCollector(topFrame: EvmCallFrame, aggregator: address, newCollector: address) {
+    let caller = evmCallFrame_getCaller(topFrame);
+
+    let aggAcct = evmCallStack_getAccountInCurrentContext(aggregator);
+    let oldCollector = account_getFeeCollector(aggAcct);
+
+    if ((caller != address(0)) && (Some(caller) != chainParams_getOwner()) && (caller != oldCollector)) {
+        evmOp_revert_knownPc(61, 0, 0);
+    }
+    evmCallStack_setAccountInCurrentContext(aggregator, account_setFeeCollector(aggAcct, newCollector));
+}

@@ -1,0 +1,20 @@
+//
+// Copyright 2021, Offchain Labs, Inc. All rights reserved.
+//
+
+use gasAccounting::gasAccounting_getPricesInWei;
+use gasAccounting::gasAccounting_getPricesInArbGas;
+use gasAccounting::getGasAccountingParams;
+
+
+public impure func ArbGasInfo_getPricesInWei(_topFrame: EvmCallFrame) -> (uint, uint, uint, uint, uint, uint) {
+    return gasAccounting_getPricesInWei();
+}
+
+public impure func ArbGasInfo_getPricesInArbGas(_topFrame: EvmCallFrame) -> (uint, uint, uint) {
+    return gasAccounting_getPricesInArbGas();
+}
+
+public impure func ArbGasInfo_getGasAccountingParams(_topFrame: EvmCallFrame) -> (uint, uint, uint) {
+    return getGasAccountingParams();
+}

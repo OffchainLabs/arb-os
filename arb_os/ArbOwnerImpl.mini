@@ -1,0 +1,332 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use accounts::Account;
+use accounts::getGlobalAccountStore;
+use accounts::account_getBalance;
+use accounts::account_setContractInfo;
+use accounts::accountStore_forall;
+
+use chainParameters::chainParams_getOwner;
+use chainParameters::chainParams_setOwner;
+use chainParameters::chainParams_setSecondsPerSend;
+
+use decompression::decompressAndVerifyEcdsaSignedTx;
+
+use evmCallStack::EvmCallFrame;
+use evmCallStack::evmCallStack_topFrame;
+use evmCallStack::evmCallStack_callHitError;
+use evmCallStack::evmCallFrame_getCalldata;
+use evmCallStack::evmCallFrame_getCaller;
+use evmCallStack::evmCallFrame_getCallvalue;
+use evmCallStack::evmCallFrame_getAccount;
+use evmCallStack::evmCallStack_setAccount;
+use evmCallStack::evmCallStack_setTopFrameMemory;
+use evmCallStack::evmCallStack_stackDepth;
+use evmCallStack::evmCallStack_returnFromCall;
+use evmCallStack::evmCallStack_transferEthFromCurrent;
+use evmCallStack::evmCallStack_getAccountInCurrentContext;
+use evmCallStack::evmCallStack_setAccountInCurrentContext;
+use evmCallStack::evmCallStack_getTopFrameReturnData;
+
+use evmOps::evmOp_return;
+use evmOps::evmOp_revert;
+use evmOps::evmOp_revert_knownPc;
+use evmOps::evmOp_revert_knownCodePc;
+use evmOps::evmOp_returndatasize;
+use evmOps::doCreationOpcode;
+
+use pluggables::ModuleFunction;
+use pluggables::installPluggable;
+use pluggables::callPluggable;
+use pluggables::bindContractAddressToPluggable;
+
+use gasAccounting::gasAccounting_setFeesEnabled;
+use gasAccounting::gasAccounting_getFeeRecipients;
+use gasAccounting::gasAccounting_setFeeRecipients;
+use gasAccounting::setFairGasPriceSender;
+use gasAccounting::setGasAccountingParams;
+use gasAccounting::isFairGasPriceSender;
+use gasAccounting::getSerializedFairGasPriceSenders;
+use gasAccounting::allowedSenders_allowAll;
+use gasAccounting::allowedSenders_allowNone;
+use gasAccounting::allowedSenders_contains;
+use gasAccounting::allowedSenders_add;
+use gasAccounting::allowedSenders_remove;
+use gasAccounting::allowedSenders_serialize;
+use gasAccounting::getAddressForReserveFundsDeposit;
+use gasAccounting::setL1GasPriceEstimate;
+
+use inbox::inbox_currentArbBlockNumber;
+use inbox::inbox_currentEthBlockNumber;
+use inbox::inbox_currentTimestamp;
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_copy;
+
+use std::avmcodebuilder::AvmCodeBuilder;
+use std::avmcodebuilder::avmCodeBuilder_new;
+use std::avmcodebuilder::avmCodeBuilder_append;
+use std::avmcodebuilder::avmCodeBuilder_getCodeHash;
+use std::avmcodebuilder::avmCodeBuilder_finish;
+
+use std::bytestream::bytestream_new;
+
+use std::rlp::keccakOfRlpEncodedUintPair;
+
+use std::storageMap::storageMap_new;
+
+
+var upgradeInProgress: option<AvmCodeBuilder>;
+var previousArbosUpgradeHash: bytes32;
+
+public impure func arbowner_init() {
+    upgradeInProgress = None<AvmCodeBuilder>;
+    previousArbosUpgradeHash = bytes32(0);
+}
+
+public impure func requireCalledByOwner(topFrame: EvmCallFrame) {
+    let caller = evmCallFrame_getCaller(topFrame);
+    if ((caller != address(0)) && (Some(caller) != chainParams_getOwner())) {
+        evmOp_revert_knownPc(9999, 0, 0);
+    }
+}
+
+public impure func ArbOwner_giveOwnership(topFrame: EvmCallFrame, addr: address) {
+    requireCalledByOwner(topFrame);
+    chainParams_setOwner(addr);
+}
+
+public impure func ArbOwner_addToReserveFunds(topFrame: EvmCallFrame) { // payable
+    requireCalledByOwner(topFrame);
+    let callvalue = evmCallFrame_getCallvalue(topFrame);
+    if (callvalue > 0) {
+        if (evmCallStack_transferEthFromCurrent(getAddressForReserveFundsDeposit(), callvalue) == None<()>) {
+            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 51, 0, 0);
+        }
+    }
+}
+
+public impure func ArbOwner_setFeesEnabled(topFrame: EvmCallFrame, enabled: bool) {
+    requireCalledByOwner(topFrame);
+    gasAccounting_setFeesEnabled(enabled);
+}
+
+public impure func ArbOwner_getFeeRecipients(topFrame: EvmCallFrame) -> (address, address) {
+    requireCalledByOwner(topFrame);
+    return gasAccounting_getFeeRecipients();
+}
+
+public impure func ArbOwner_setFeeRecipients(topFrame: EvmCallFrame, rec1: address, rec2: address) {
+    requireCalledByOwner(topFrame);
+    gasAccounting_setFeeRecipients(recipient1, recipient2);
+}
+
+public impure func ArbOwner_setFairGasPriceSender(topFrame: EvmCallFrame, addr: address, set: bool) {
+    requireCalledByOwner(topFrame);
+    setFairGasPriceSender(addr, set);
+}
+
+public impure func ArbOwner_setSecondsPerSend(topFrame: EvmCallFrame, sps: uint) {
+    requireCalledByoOwner(topFrame);
+    if (chainParams_setSecondsPerSend(sps) == None<()>) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 121, 0, 0);
+    }
+}
+
+public impure func ArbOwner_startCodeUpload(topFrame: EvmCallFrame) {
+    requireCalledByOwner(topFrame);
+    upgradeInProgress = Some(avmCodeBuilder_new(false));
+}
+
+public impure func ArbOwner_continueCodeUpload(topFrame: EvmCallFrame, marshalledCode: ByteArray) {
+    requireCalledByOwner(topFrame);
+    if let Some(upgrade) = upgradeInProgress {
+        if let Some(updated) = avmCodeBuilder_append(upgrade, bytestream_new(marshalledCode)) {
+            upgradeInProgress = Some(updated);
+        } else {
+            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 33, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 33, 0, 0);
+    }
+}
+
+public impure func ArbOwner_getUploadedCodeHash(topFrame: EvmCallFrame) -> bytes32 {
+    requireCalledByOwner(topFrame);
+    if let Some(upgrade) = upgradeInProgress {
+        return avmCodeBuilder_getCodeHash(upgrade);
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 142, 0, 0);
+    }
+}
+
+// function finishCodeUploadAsArbosUpgrade(bytes32 newCodeHash, bytes32 oldCodeHash) external;
+public impure func ArbOwner_finishCodeUploadAsArbosUpgrade(topFrame: EvmCallFrame, newCodeHash: bytes32, oldCodeHash: bytes32) {
+     requireCalledByOwner(topFrame);
+
+    // This can only be called directly from L1. Revert if called from L2.
+    if (evmCallStack_stackDepth() != 1) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 41, 0, 0);
+    }
+
+    if let Some(upgrade) = upgradeInProgress {
+        if (avmCodeBuilder_getCodeHash(upgrade) != newCodeHash) {
+            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 42, 0, 0);
+        }
+        if ((oldCodeHash != bytes32(0)) && (oldCodeHash != previousArbosUpgradeHash)) {
+            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 43, 0, 0);
+        }
+        let upgradeCodePoint = unsafecast<impure func()>(avmCodeBuilder_finish(upgrade));
+        upgradeInProgress = None<AvmCodeBuilder>;
+        previousArbosUpgradeHash = newCodeHash;
+        let _ = evmCallStack_returnFromCall(true, 0, 0, Some(upgradeCodePoint));
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 44, 0, 0);
+    }
+}
+
+public impure func ArbOwner_finishCodeUploadAsPluggable(topFrame: EvmCallFrame, id: uint, keepState: bool) {
+    requireCalledByOwner(topFrame);
+    if let Some(upgrade) = upgradeInProgress {
+        if (installPluggable(id, unsafecast<ModuleFunction>(avmCodeBuilder_finish(upgrade)), keepState) == None<()>) {
+            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 51, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 52, 0, 0);
+    }
+}
+
+public impure func ArbOwner_bindAddressToPluggable(topFrame: EvmCallFrame, addr: address, pluggableId: uint) {
+    requireCalledByOwner(topFrame);
+    let acct = evmCallFrame_getAccount(topFrame, addr);
+    acct = bindContractAddressToPluggable(acct, pluggableId);
+    if ( ! evmCallStack_setAccount(addr, acct)) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 61, 0, 0);
+    }
+}
+
+public impure func ArbOwner_setGasAccountingParams(
+    topFrame: EvmCallFrame,
+    speedLimitPerBlock: uint,
+    gasPoolMax: uint,
+    maxTxGasLimit: uint,
+) {
+    requireCalledByOwner(topFrame);
+    if (bytearray_size(calldata) != (4+3*32)) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 130, 0, 0);
+    }
+    let speedLimitPerSecond = speedLimitPerBlock * const::SecondsPerBlockDenominator / const::SecondsPerBlockNumerator;
+    if ( ! setGasAccountingParams(
+            speedLimitPerSecond,
+            gasPoolMax,
+            maxTxGasLimit,
+        )
+    ) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 131, 0, 0);
+    }
+}
+
+public impure func ArbOwner_getTotalOfEthBalances(topFrame: EvmCallFrame) -> uint {
+    requireCalledByOwner(topFrame);
+    return unsafecast<uint>(accountStore_forall(
+        getGlobalAccountStore(),
+        unsafecast<func(Account, any) -> any>(totalEthClosure),
+        0
+    ));
+}
+
+func totalEthClosure(acct: Account, state: uint) -> uint {
+    return state + account_getBalance(acct);
+}
+
+// function deployContract(bytes calldata constructorData, address deemedSender, uint deemedNonce) external payable returns(address);
+public impure func ArbOwner_deployContract(
+    topFrame: EvmCallFrame,
+    constructorData: ByteArray,
+    deemedSender: address,
+    deemedNonce: uint,
+) -> address {
+    requireCalledByOwner(topFrame);
+
+    let callvalue = evmCallFrame_getCallvalue(topFrame);
+
+    let deployAddress = address(keccakOfRlpEncodedUintPair(uint(deemedSender), deemedNonce));
+
+    if (doCreationOpcode(callvalue, constructorData, deployAddress) == address(0)) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 163, 0, 0);
+    }
+
+    return deployAddress;
+}
+
+public impure func ArbOwner_isFairGasPriceSender(topFrame: EvmCallFrame, addr: address) -> bool {
+    requireCalledByOwner(topFrame);
+    return isFairGasPriceSender(addr);
+}
+
+// function getAllFairGasPriceSenders() external view returns(bytes memory);
+public impure func ArbOwner_getAllFairGasPriceSenders(topFrame: EvmCallFrame) -> ByteArray {
+    requireCalledByOwner(topFrame);
+    if let Some(serialized) = getSerializedFairGasPriceSenders() {
+        return serialized;
+    } else {
+        evmOp_revert_knownPc(182, 0, 0);
+    }
+}
+
+public impure func ArbOwner_allowAllSenders(topFrame: EvmCallFrame) {
+    requireCalledByOwner(topFrame);
+    allowedSenders_allowAll();
+}
+
+public impure func ArbOwner_allowOnlyOwnerToSend(topFrame: EvmCallFrame) {
+    requireCalledByOwner(topFrame);
+    allowedSenders_allowNone();
+}
+
+// function isAllowedSender(address addr) external view returns(bool);
+public impure func ArbOwner_isAllowedSender(topFrame: EvmCallFrame, addr: address) -> bool {
+    requireCalledByOwner(topFrame);
+    return allowedSenders_contains(addr);
+}
+
+// function addAllowedSender(address addr) external;
+public impure func ArbOwner_addAllowedSender(topFrame: EvmCallFrame, addr: address) {
+    requireCalledByOwner(topFrame);
+    allowedSenders_add(addr);
+}
+
+// function removeAllowedSender(address addr) external;
+public impure func ArbOwner_removeAllowedSender(topFrame: EvmCallFrame, addr: address) {
+    requireCalledByOwner(topFrame);
+    allowedSenders_remove(addr);
+}
+
+// function getAllAllowedSenders() external view returns(bytes memory);
+public impure func ArbOwner_getAllAllowedSenders(topFrame: EvmCallFrame) -> ByteArray {
+    requireCalledByOwner(topFrame);
+    if let Some(serialized) = allowedSenders_serialize() {
+        return serialized;
+    } else {
+        evmOp_revert_knownPc(242, 0, 0);
+    }
+}
+
+// function setL1GasPriceEstimate(uint priceInGwei) external;
+public impure func ArbOwner_setL1GasPriceEstimate(topFrame: EvmCallFrame, priceInGwei: uint) {
+    requireCalledByOwner(topFrame);
+    setL1GasPriceEstimate(priceInGwei);
+}
+
+
+
+
+

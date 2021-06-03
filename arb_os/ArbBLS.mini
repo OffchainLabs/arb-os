@@ -11,17 +11,20 @@ use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_copy;
 
-use ArbStatisticsImpl::ArbStatistics_getStats;
+use ArbBLSImpl::ArbBLS_register;
+use ArbBLSImpl::ArbBLS_getPublicKey;
 
-public impure func ArbStatistics__dispatch() {
+public impure func ArbBLS__dispatch() {
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) < 4) {
             evmOp_revert_knownPc(0, 0, 0);
         }
         let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
-        if (funcCode == 0xc59d4847) {
-            ArbStatistics_getStats_wrapper(topFrame, calldata);
+        if (funcCode == 0x375a7c7f) {
+            ArbBLS_register_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x857cdbb8) {
+            ArbBLS_getPublicKey_wrapper(topFrame, calldata);
         } else {
             evmOp_revert_knownPc(1, 0, 0);
         }
@@ -30,11 +33,24 @@ public impure func ArbStatistics__dispatch() {
     }
 }
 
-impure func ArbStatistics_getStats_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 4) {
+impure func ArbBLS_register_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 132) {
         evmOp_revert_knownPc(3, 0, 0);
     }
-    let ret = ArbStatistics_getStats();
+    let x0 = bytearray_get256(calldata, 4);
+    let x1 = bytearray_get256(calldata, 36);
+    let y0 = bytearray_get256(calldata, 68);
+    let y1 = bytearray_get256(calldata, 100);
+    ArbBLS_register(topFrame, x0, x1, y0, y1);
+    evmOp_return(0, 0);
+}
+
+impure func ArbBLS_getPublicKey_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let ret = ArbBLS_getPublicKey(addr);
     let mem = bytearray_new(0);
     let __offset = 0;
     mem = bytearray_set256(mem, __offset, ret.0);
@@ -44,10 +60,6 @@ impure func ArbStatistics_getStats_wrapper(topFrame: EvmCallFrame, calldata: Byt
     mem = bytearray_set256(mem, __offset, ret.2);
     __offset = __offset + 32;
     mem = bytearray_set256(mem, __offset, ret.3);
-    __offset = __offset + 32;
-    mem = bytearray_set256(mem, __offset, ret.4);
-    __offset = __offset + 32;
-    mem = bytearray_set256(mem, __offset, ret.5);
     __offset = __offset + 32;
     if (evmCallStack_setTopFrameMemory(mem)) {
         evmOp_return(0, __offset);
