@@ -728,7 +728,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
     TxRequestData,
 ) {
     let tx = inbox_getNextUnpackedRequest();
-    if( ! allowedSenders_contains(tx.caller)) {
+    if( (!allowedSenders_contains(tx.caller)) && (!tx.incomingRequest.adminMode) ) {
         return (const::TxResultCode_senderNotPermitted, tx);
     }
 
