@@ -405,12 +405,8 @@ public impure func gasAccounting_setFeesEnabled(enabled: bool) {
 }
 
 public impure func gasAccounting_setChargingParams(
-    _l1GasPerL2Tx: uint,
-    _arbGasPerL2Tx: uint,
     l1GasPerL1CalldataUnit: uint,
-    _arbGasPerL1CalldataUnit: uint,
     l1GasPerStorage: uint,
-    _arbGasPerStorage: uint,
     arbGasDivisor: uint,
     netFeeRecipient: address,
     congestionFeeRecipient: address,
@@ -1179,13 +1175,6 @@ public impure func setFairGasPriceSender(sender: address, value: bool) {
 
 public impure func getSerializedFairGasPriceSenders() -> option<ByteArray> {
     return setOfAddresses_serialize(globalL1GasPriceEstimator.fairGasPriceSenders);
-}
-
-// This adjusts l1GasPerL2Tx to be a weighted average, over recent transactions that arrived in batches,
-//     of the quantity (const::Charging_AssumedBatchCostL1Gas / batchSize). Because we're averaging over
-//     transactions, a batch contributes (batchSize) times, once for each transaction in it.
-public func updateBatchSizeEstimate(_size: uint, _batchSender: address) {
-    // Leaving this as a no-op, so the estimate remains fixed.  This will be removed in a later PR.
 }
 
 type FourResources = struct {
