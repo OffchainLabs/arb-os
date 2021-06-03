@@ -220,6 +220,16 @@ public func bytearray_wrap(cont: buffer, size: uint) -> ByteArray {
     };
 }
 
+func zero_fill_region(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray {
+    return xif(nbytes < ba.size) {
+        // copy zeroes into the buffer
+        bytearray_copy(bytearray_new(0), 0, ba, offset, 32*((nbytes+31)/32))
+    } else {
+        // copy into a clean buffer
+        bytearray_copy(ba, 0, bytearray_new(0), 0, ba.size)
+    };
+}
+
 // bytearray_setbyte writes one byte to a ByteArray, returns the resulting ByteArray
 public func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
     if (offset >= const::MaxByteArraySize) {
@@ -231,6 +241,9 @@ public func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteA
             ba = ba with { size: offset+1 };
         }
     } else {
+        if (offset > ba.size) {
+            ba = zero_fill_region(ba, ba.size, offset-ba.size);
+        }
         if (offset+1 > ba.size) {
             ba = ba with { size: offset+1 };
         }
@@ -250,6 +263,10 @@ public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> ByteArr
             ba = ba with { size: offset+8 };
         }
     } else {
+        if (offset > ba.size) {
+            ba = zero_fill_region(ba, ba.size, offset-ba.size);
+        }
+
         if (offset+8 > ba.size) {
             ba = ba with { size: offset+8 };
         }
@@ -270,6 +287,9 @@ public func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteAr
             ba = ba with { size: offset+32 };
         }
     } else {
+        if (offset > ba.size) {
+            ba = zero_fill_region(ba, ba.size, offset-ba.size);
+        }
         if (offset+32 > ba.size) {
             ba = ba with { size: offset+32 };
         }
@@ -288,6 +308,9 @@ public func bytearray_copy(
     toOffset: uint,
     nbytes: uint,
 ) -> ByteArray {
+    if (fromOffset + nbytes > from.size) {
+        from = zero_fill_region(from, from.size, fromOffset+nbytes-from.size);
+    }
     if ((fromOffset >= const::MaxByteArraySize)
         || (toOffset >= const::MaxByteArraySize)
         || (nbytes > const::MaxByteArraySize)
@@ -296,9 +319,10 @@ public func bytearray_copy(
         return to;  // ignore out-of-bounds parameters
     }
 
-    // TODO: optimize this to exploit alignment and speed up the endgame
     if (to.size + to.sliceOffset + nbytes > const::MaxByteArraySize) {
         to = bytearray_copy(to, 0, bytearray_new(0), 0, to.size);
+    } elseif (toOffset > to.size) {
+        to = zero_fill_region(to, to.size, toOffset-to.size);
     }
     if (to.size < toOffset + nbytes) {
         to = to with { size: toOffset + nbytes };

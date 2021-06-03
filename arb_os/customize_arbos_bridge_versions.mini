@@ -10,8 +10,6 @@ use accounts::AccountStore;
 use accounts::AggregatorInfo;
 use accounts::accountStore_forall;
 
-use chainParameters::ChainParams;
-
 use gasAccounting::GasAccountingInfo;
 
 use tracing::EvmTracer;
