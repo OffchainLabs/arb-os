@@ -39,6 +39,8 @@ public impure func arbgasinfo_txcall() {
             arbgasinfo_getPricesInWeiWithAggregator(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbGasInfo_getPricesInArbGas) {
             arbgasinfo_getPricesInArbGas(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbGasInfo_getPricesInArbGasWithAggregator) {
+            arbgasinfo_getPricesInArbGasWithAggregator(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbGasInfo_getGasAccountingParams) {
             arbgasinfo_getGasAccountingParams(topFrame, calldata);
         } else {
@@ -83,11 +85,23 @@ impure func getPricesInWeiCommon(aggregatorAddr: address) {
     }
 }
 
-impure func arbgasinfo_getPricesInArbGas(_topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> (uint, uint, uint)
+impure func arbgasinfo_getPricesInArbGas(topFrame: EvmCallFrame, calldata: ByteArray) { // () -> (uint, ..., uint)
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(9, 0, 0);
+    }
+    let caller = evmCallFrame_getCaller(topFrame);
+    getPricesInArbGasCommon(account_getAggregatorToPay(evmCallFrame_getAccount(topFrame, caller)));
+}
+
+impure func arbgasinfo_getPricesInArbGasWithAggregator(_topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> (uint, uint, uint)
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(20, 0, 0);
     }
     let aggregatorAddr = address(bytearray_get256(calldata, 4));
+    getPricesInArbGasCommon(aggregatorAddr);
+}
+
+impure func getPricesInArbGasCommon(aggregatorAddr: address) {
     let gasPricesWei = gasAccounting_getPricesInArbGas(aggregatorAddr);
     let mem = bytearray_new(0);
     mem = bytearray_set256(mem, 0*32, gasPricesWei.0);

@@ -801,14 +801,14 @@ impl<'a> _ArbGasInfo<'a> {
         }
     }
 
-    pub fn _get_prices_in_arbgas(
+    pub fn _get_prices_in_arbgas_with_aggregator(
         &self,
         machine: &mut Machine,
         aggregator: Uint256,
     ) -> Result<(Uint256, Uint256, Uint256), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
             self.my_address.clone(),
-            "getPricesInArbGas",
+            "getPricesInArbGasWithAggregator",
             &[ethabi::Token::Address(aggregator.to_h160())],
             machine,
             Uint256::zero(),
@@ -1853,7 +1853,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
     assert_eq!(basegas.add(&conggas), totalgas);
 
     let (l2tx, l1calldata, storage) =
-        arbgasinfo._get_prices_in_arbgas(&mut machine, Uint256::zero())?;
+        arbgasinfo._get_prices_in_arbgas_with_aggregator(&mut machine, Uint256::zero())?;
     println!(
         "L2 tx / ag {}, L1 calldata / ag {}, L2 storage / ag {}",
         l2tx, l1calldata, storage

@@ -16,8 +16,13 @@ interface ArbGasInfo {
     //     if the caller hasn't specified a preferred aggregator, the default aggregator is assumed
     function getPricesInWei() external view returns (uint, uint, uint, uint, uint, uint);
 
-    // return prices in ArbGas (per L2 tx, per L1 calldata unit, per storage allocation)
-    function getPricesInArbGas(address aggregator) external view returns (uint, uint, uint);
+    // return prices in ArbGas (per L2 tx, per L1 calldata unit, per storage allocation),
+    //       assuming the specified aggregator is used
+    function getPricesInArbGasWithAggregator(address aggregator) external view returns (uint, uint, uint);
+
+    // return gas prices in ArbGas, as described above, assuming the caller's preferred aggregator is used
+    //     if the caller hasn't specified a preferred aggregator, the default aggregator is assumed
+    function getPricesInArbGas() external view returns (uint, uint, uint);
 
     // return gas accounting parameters (speedLimitPerSecond, gasPoolMax, maxTxGasLimit)
     function getGasAccountingParams() external view returns (uint, uint, uint);
