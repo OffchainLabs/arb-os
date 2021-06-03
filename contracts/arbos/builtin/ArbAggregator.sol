@@ -30,10 +30,8 @@ interface ArbAggregator {
     function getTxBaseFee(address aggregator) external view returns (uint);
 
     // Set the tx base fee (in approximate L1 gas) for aggregator
-    // If feeInL1Gas is outside the chain's allowed bounds, then:
-    //      if revertIfOutOfBounds is true, this will revert
-    //      if revertIfOutOfBounds is false, fee will be "clipped" to the min or max allowed value
-    // Reverts unless called by aggregator or the chain owner
-    function setTxBaseFee(address aggregator, uint feeInL1Gas, bool revertIfOutOfBounds) external;
+    // Revert unless called by aggregator or the chain owner
+    // Revert if feeInL1Gas is outside the chain's allowed bounds
+    function setTxBaseFee(address aggregator, uint feeInL1Gas) external;
 }
 

@@ -1100,7 +1100,6 @@ impl _ArbAggregator {
         machine: &mut Machine,
         agg_addr: Uint256,
         fee: Uint256,
-        revert_if_out_of_bounds: bool,
     ) -> Result<(), ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function(
             Uint256::zero(),
@@ -1108,7 +1107,6 @@ impl _ArbAggregator {
             &[
                 ethabi::Token::Address(agg_addr.to_h160()),
                 ethabi::Token::Uint(fee.to_u256()),
-                ethabi::Token::Bool(revert_if_out_of_bounds),
             ],
             machine,
             Uint256::zero(),
@@ -1882,7 +1880,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
 
     let new_fee = Uint256::from_u64(8913);
     arbaggregator
-        ._set_tx_base_fee(&mut machine, agg_addr.clone(), new_fee.clone(), false)
+        ._set_tx_base_fee(&mut machine, agg_addr.clone(), new_fee.clone())
         .unwrap();
 
     let fee = arbaggregator
