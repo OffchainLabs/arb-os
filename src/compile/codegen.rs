@@ -4,7 +4,7 @@
 
 //!Contains utilities for generating instructions from AST structures.
 
-use super::ast::{BinaryOp, FuncArg, GlobalVarDecl, TrinaryOp, Type, UnaryOp};
+use super::ast::{BinaryOp, GlobalVarDecl, TrinaryOp, Type, UnaryOp};
 use super::typecheck::{
     PropertiesList, TypeCheckedExpr, TypeCheckedFunc, TypeCheckedMatchPattern, TypeCheckedStatement,
 };
@@ -12,7 +12,7 @@ use crate::compile::ast::{DebugInfo, MatchPatternKind};
 use crate::compile::typecheck::{
     TypeCheckedCodeBlock, TypeCheckedExprKind, TypeCheckedStatementKind,
 };
-use crate::compile::{CompileError, FileInfo};
+use crate::compile::{CompileError, ErrorSystem, FileInfo};
 use crate::link::{ImportedFunc, TupleTree, TUPLE_SIZE};
 use crate::mavm::{AVMOpcode, Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::pos::Location;
@@ -41,11 +41,12 @@ pub fn new_codegen_error(reason: String, location: Option<Location>) -> CodegenE
 /// The function returns a vector of instructions representing the generated code if it is
 /// successful, otherwise it returns a CodegenError.
 pub fn mavm_codegen(
-    funcs: Vec<TypeCheckedFunc>,
+    funcs: BTreeMap<StringId, TypeCheckedFunc>,
     string_table: &StringTable,
     imported_funcs: &[ImportedFunc],
     global_vars: &[GlobalVarDecl],
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
+    error_system: &mut ErrorSystem,
 ) -> Result<Vec<Instruction>, CodegenError> {
     let mut import_func_map = HashMap::new();
     for imp_func in imported_funcs {
@@ -59,7 +60,7 @@ pub fn mavm_codegen(
 
     let mut label_gen = LabelGenerator::new();
     let mut funcs_code = BTreeMap::new();
-    for func in funcs {
+    for (_id, func) in funcs {
         let id = func.name;
         let (lg, function_code) = mavm_codegen_func(
             func,
@@ -68,6 +69,7 @@ pub fn mavm_codegen(
             &import_func_map,
             &global_var_map,
             file_info_chart,
+            error_system,
         )?;
         label_gen = lg;
         funcs_code.insert(id, function_code);
@@ -90,18 +92,23 @@ pub fn mavm_codegen(
 /// codegen, and a vector of the generated code, otherwise it returns a CodegenError.
 fn mavm_codegen_func(
     mut func: TypeCheckedFunc,
-    mut label_gen: LabelGenerator,
+    label_gen: LabelGenerator,
     string_table: &StringTable,
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
+    error_system: &mut ErrorSystem,
 ) -> Result<(LabelGenerator, Vec<Instruction>), CodegenError> {
     if func.ret_type == Type::Void
         && func.code.last().cloned().map(|s| s.kind) != Some(TypeCheckedStatementKind::ReturnVoid())
     {
         func.code.push(TypeCheckedStatement {
             kind: TypeCheckedStatementKind::ReturnVoid(),
-            debug_info: DebugInfo::default(),
+            debug_info: {
+                let mut debug_info = DebugInfo::default();
+                debug_info.attributes.codegen_print = func.debug_info.attributes.codegen_print;
+                debug_info
+            },
         });
     }
     let mut code = vec![];
@@ -112,7 +119,7 @@ fn mavm_codegen_func(
     ));
 
     let num_args = func.args.len();
-    let locals = HashMap::new();
+    let mut locals = HashMap::new();
 
     let make_frame_slot = code.len();
     code.push(Instruction::from_opcode(
@@ -120,56 +127,14 @@ fn mavm_codegen_func(
         debug_info,
     )); // placeholder; will replace this later
 
-    let (lg, max_num_locals) = add_args_to_locals_table(
-        &locals,
-        &func.args,
-        0,
+    for (index, arg) in func.args.iter().enumerate() {
+        locals.insert(arg.name, index);
+    }
+    let (label_gen, max_num_locals, _slot_map) = mavm_codegen_statements(
         func.code,
         &mut code,
-        label_gen,
-        string_table,
-        import_func_map,
-        global_var_map,
-        file_info_chart,
-    )?;
-    label_gen = lg;
-
-    // put makeframe Instruction at beginning of function, to build the frame (replacing placeholder)
-    code[make_frame_slot] =
-        Instruction::from_opcode(Opcode::MakeFrame(num_args, max_num_locals), debug_info);
-    Ok((label_gen, code))
-}
-
-///This adds args to locals, and then codegens the statements in statements, using the updated
-/// locals and other function arguments as parameters.
-///
-/// If successful the function returns a tuple containing the updated label generator, maximum
-/// number of locals used so far by this call frame, and a bool that is set to true when the
-/// function may continue past the end of the generated code, otherwise the function returns a
-/// CodegenError.
-fn add_args_to_locals_table(
-    locals: &HashMap<usize, usize>,
-    args: &[FuncArg],
-    num_locals: usize,
-    statements: Vec<TypeCheckedStatement>,
-    code: &mut Vec<Instruction>,
-    label_gen: LabelGenerator,
-    string_table: &StringTable,
-    import_func_map: &HashMap<StringId, Label>,
-    global_var_map: &HashMap<StringId, usize>,
-    file_info_chart: &mut BTreeMap<u64, FileInfo>,
-) -> Result<(LabelGenerator, usize), CodegenError> {
-    let mut locals_map = HashMap::new();
-    for (index, arg) in args.iter().enumerate() {
-        locals_map.insert(arg.name, num_locals + index);
-    }
-    let mut new_locals = locals.clone();
-    new_locals.extend(locals_map);
-    mavm_codegen_statements(
-        statements,
-        code,
-        num_locals + args.len(),
-        &new_locals,
+        num_args,
+        &locals,
         label_gen,
         string_table,
         import_func_map,
@@ -177,8 +142,13 @@ fn add_args_to_locals_table(
         0,
         &mut vec![],
         file_info_chart,
-    )
-    .map(|(a, b, _)| (a, b))
+        error_system,
+    )?;
+
+    // put makeframe Instruction at beginning of function, to build the frame (replacing placeholder)
+    code[make_frame_slot] =
+        Instruction::from_opcode(Opcode::MakeFrame(num_args, max_num_locals), debug_info);
+    Ok((label_gen, code))
 }
 
 fn mavm_codegen_code_block<'a>(
@@ -193,6 +163,7 @@ fn mavm_codegen_code_block<'a>(
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
+    error_system: &mut ErrorSystem,
     debug_info: DebugInfo,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
     let (bottom_label, lg) = label_gen.next();
@@ -213,6 +184,7 @@ fn mavm_codegen_code_block<'a>(
         prepushed_vals,
         scopes,
         file_info_chart,
+        error_system,
     )?;
     if let Some(ret_expr) = &block.ret_expr {
         let mut new_locals = locals.clone();
@@ -229,6 +201,7 @@ fn mavm_codegen_code_block<'a>(
             prepushed_vals,
             scopes,
             file_info_chart,
+            error_system,
         )
         .map(|(lg, code, exp_locals)| (lg, code, max(num_locals, max(exp_locals, nl))))?;
         code.push(Instruction::from_opcode(
@@ -268,6 +241,7 @@ fn mavm_codegen_statements(
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
+    error_system: &mut ErrorSystem,
 ) -> Result<(LabelGenerator, usize, HashMap<StringId, usize>), CodegenError> {
     let mut bindings = HashMap::new();
     for statement in statements {
@@ -285,6 +259,7 @@ fn mavm_codegen_statements(
             prepushed_vals,
             scopes,
             file_info_chart,
+            error_system,
         )?;
         label_gen = lg;
         num_locals = max(statement_locals, num_locals);
@@ -317,6 +292,7 @@ fn mavm_codegen_statement(
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
+    error_system: &mut ErrorSystem,
 ) -> Result<(LabelGenerator, usize, HashMap<StringId, usize>), CodegenError> {
     let debug = statement.debug_info;
     let loc = statement.debug_info.location;
@@ -339,6 +315,7 @@ fn mavm_codegen_statement(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             if prepushed_vals > 0 {
                 c.push(Instruction::from_opcode(
@@ -406,6 +383,7 @@ fn mavm_codegen_statement(
                     prepushed_vals,
                     &mut inner_scopes,
                     file_info_chart,
+                    error_system,
                 )?
             } else {
                 (label_gen, code, prepushed_vals)
@@ -430,6 +408,7 @@ fn mavm_codegen_statement(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             if !(expr.get_type() == Type::Void || expr.get_type() == Type::Every) {
                 c.push(Instruction::from_opcode(
@@ -437,16 +416,14 @@ fn mavm_codegen_statement(
                     debug,
                 ));
                 if expr.get_type() != Type::Tuple(vec![]) {
-                    CompileError::new(
+                    error_system.warnings.push(CompileError::new_warning(
                         String::from("Compile warning"),
                         format!(
                             "expression statement returns value of type {:?}, which is discarded",
                             expr.get_type()
                         ),
                         loc.into_iter().collect(),
-                        true,
-                    )
-                    .pretty_fmt(file_info_chart);
+                    ));
                 }
             }
             Ok((lg, exp_locals, HashMap::new()))
@@ -466,6 +443,7 @@ fn mavm_codegen_statement(
                     prepushed_vals,
                     scopes,
                     file_info_chart,
+                    error_system,
                 )?;
                 let mut bindings = HashMap::new();
                 bindings.insert(*name, slot_num);
@@ -493,6 +471,7 @@ fn mavm_codegen_statement(
                     prepushed_vals,
                     scopes,
                     file_info_chart,
+                    error_system,
                 )?;
                 label_gen = lg;
                 code = c;
@@ -540,6 +519,7 @@ fn mavm_codegen_statement(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             label_gen = lg;
             code = c;
@@ -563,6 +543,7 @@ fn mavm_codegen_statement(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             c.push(Instruction::from_opcode(Opcode::SetGlobalVar(*idx), debug));
             Ok((lg, exp_locals, HashMap::new()))
@@ -601,6 +582,7 @@ fn mavm_codegen_statement(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             label_gen = lg;
             num_locals = nl;
@@ -617,6 +599,7 @@ fn mavm_codegen_statement(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             label_gen = lg;
             code = c;
@@ -647,6 +630,7 @@ fn mavm_codegen_statement(
                     prepushed_vals + i,
                     scopes,
                     file_info_chart,
+                    error_system,
                 )?;
                 exp_locals = max(exp_locals, e_locals);
                 label_gen = lg;
@@ -670,6 +654,7 @@ fn mavm_codegen_statement(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             label_gen = lg;
             code = c;
@@ -746,6 +731,7 @@ fn mavm_codegen_expr<'a>(
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
+    error_system: &mut ErrorSystem,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
     let debug = expr.debug_info;
     let loc = expr.debug_info.location;
@@ -775,6 +761,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             label_gen = lg;
             code = c;
@@ -818,6 +805,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             c.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
@@ -844,6 +832,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             let (lg, c, right_locals) = mavm_codegen_expr(
                 tce1,
@@ -857,6 +846,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals + 1,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             label_gen = lg;
             code = c;
@@ -923,6 +913,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             let (lg, c, locals2) = mavm_codegen_expr(
                 tce2,
@@ -936,6 +927,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals + 1,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             let (lg, c, locals1) = mavm_codegen_expr(
                 tce1,
@@ -949,6 +941,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals + 2,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             label_gen = lg;
             code = c;
@@ -977,6 +970,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             let (lab, lg) = lg.next();
             c.push(Instruction::from_opcode(
@@ -1004,6 +998,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             c.push(Instruction::from_opcode(Opcode::Label(lab), debug));
             Ok((lg, c, max(num_locals, max(left_locals, right_locals))))
@@ -1021,6 +1016,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             let (lab, lg) = lg.next();
             c.push(Instruction::from_opcode(
@@ -1052,6 +1048,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             c.push(Instruction::from_opcode(Opcode::Label(lab), debug));
             Ok((lg, c, max(num_locals, max(left_locals, right_locals))))
@@ -1114,6 +1111,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             c.push(Instruction::from_opcode_imm(
                 Opcode::TupleGet(tuple_size),
@@ -1135,6 +1133,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             label_gen = lg;
             code = c;
@@ -1171,6 +1170,7 @@ fn mavm_codegen_expr<'a>(
                     prepushed_vals + i,
                     scopes,
                     file_info_chart,
+                    error_system,
                 )?;
                 args_locals = max(args_locals, arg_locals);
                 label_gen = lg;
@@ -1193,6 +1193,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals + n_args + 1,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             c.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Jump),
@@ -1213,6 +1214,7 @@ fn mavm_codegen_expr<'a>(
             prepushed_vals,
             scopes,
             file_info_chart,
+            error_system,
             debug,
         ),
         TypeCheckedExprKind::StructInitializer(fields, _) => {
@@ -1232,6 +1234,7 @@ fn mavm_codegen_expr<'a>(
                     prepushed_vals + i,
                     scopes,
                     file_info_chart,
+                    error_system,
                 )?;
                 struct_locals = max(struct_locals, field_locals);
                 label_gen = lg;
@@ -1269,6 +1272,7 @@ fn mavm_codegen_expr<'a>(
                     prepushed_vals + i,
                     scopes,
                     file_info_chart,
+                    error_system,
                 )?;
                 tuple_locals = max(field_locals, tuple_locals);
                 label_gen = lg;
@@ -1299,7 +1303,7 @@ fn mavm_codegen_expr<'a>(
                 kind: TypeCheckedExprKind::FunctionCall(
                     Box::new(TypeCheckedExpr {
                         kind: TypeCheckedExprKind::FuncRef(
-                            *string_table.get_if_exists("builtin_arrayGet").unwrap(),
+                            string_table.get_if_exists("builtin_arrayGet").unwrap(),
                             call_type.clone(),
                         ),
                         debug_info: DebugInfo::from(loc),
@@ -1322,6 +1326,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )
         }
         TypeCheckedExprKind::FixedArrayRef(expr1, expr2, size, _) => {
@@ -1337,6 +1342,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             let (lg, c, exp2_locals) = mavm_codegen_expr(
                 expr2,
@@ -1350,6 +1356,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals + 1,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             label_gen = lg;
             code = c;
@@ -1397,7 +1404,7 @@ fn mavm_codegen_expr<'a>(
                 kind: TypeCheckedExprKind::FunctionCall(
                     Box::new(TypeCheckedExpr {
                         kind: TypeCheckedExprKind::FuncRef(
-                            *string_table.get_if_exists("builtin_kvsGet").unwrap(),
+                            string_table.get_if_exists("builtin_kvsGet").unwrap(),
                             call_type.clone(),
                         ),
                         debug_info: DebugInfo::from(loc),
@@ -1420,6 +1427,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )
         }
         TypeCheckedExprKind::NewArray(sz_expr, base_type, array_type) => {
@@ -1433,7 +1441,7 @@ fn mavm_codegen_expr<'a>(
                 kind: TypeCheckedExprKind::FunctionCall(
                     Box::new(TypeCheckedExpr {
                         kind: TypeCheckedExprKind::FuncRef(
-                            *string_table.get_if_exists("builtin_arrayNew").unwrap(),
+                            string_table.get_if_exists("builtin_arrayNew").unwrap(),
                             call_type.clone(),
                         ),
                         debug_info: DebugInfo::from(loc),
@@ -1462,6 +1470,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )
         }
         TypeCheckedExprKind::NewFixedArray(sz, bo_expr, _) => {
@@ -1480,6 +1489,7 @@ fn mavm_codegen_expr<'a>(
                         prepushed_vals,
                         scopes,
                         file_info_chart,
+                        error_system,
                     )?;
                     expr_locals = some_locals;
                     label_gen = lg;
@@ -1544,7 +1554,7 @@ fn mavm_codegen_expr<'a>(
                 kind: TypeCheckedExprKind::FunctionCall(
                     Box::new(TypeCheckedExpr {
                         kind: TypeCheckedExprKind::FuncRef(
-                            *string_table.get_if_exists("builtin_kvsNew").unwrap(),
+                            string_table.get_if_exists("builtin_kvsNew").unwrap(),
                             call_type.clone(),
                         ),
                         debug_info: DebugInfo::from(loc),
@@ -1567,6 +1577,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )
         }
         TypeCheckedExprKind::ArrayMod(arr, index, val, _) => {
@@ -1579,7 +1590,7 @@ fn mavm_codegen_expr<'a>(
                 kind: TypeCheckedExprKind::FunctionCall(
                     Box::new(TypeCheckedExpr {
                         kind: TypeCheckedExprKind::FuncRef(
-                            *string_table.get_if_exists("builtin_arraySet").unwrap(),
+                            string_table.get_if_exists("builtin_arraySet").unwrap(),
                             call_type.clone(),
                         ),
                         debug_info: DebugInfo::from(loc),
@@ -1602,6 +1613,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )
         }
         TypeCheckedExprKind::FixedArrayMod(arr, index, val, size, _) => codegen_fixed_array_mod(
@@ -1620,6 +1632,7 @@ fn mavm_codegen_expr<'a>(
             prepushed_vals,
             scopes,
             file_info_chart,
+            error_system,
         ),
         TypeCheckedExprKind::MapMod(map_expr, key_expr, val_expr, _) => {
             let call_type = Type::Func(
@@ -1635,7 +1648,7 @@ fn mavm_codegen_expr<'a>(
                 kind: TypeCheckedExprKind::FunctionCall(
                     Box::new(TypeCheckedExpr {
                         kind: TypeCheckedExprKind::FuncRef(
-                            *string_table.get_if_exists("builtin_kvsSet").unwrap(),
+                            string_table.get_if_exists("builtin_kvsSet").unwrap(),
                             call_type.clone(),
                         ),
                         debug_info: DebugInfo::from(loc),
@@ -1658,6 +1671,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )
         }
         TypeCheckedExprKind::StructMod(struc, index, val, t) => {
@@ -1673,6 +1687,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             let (lg, c, struc_locals) = mavm_codegen_expr(
                 struc,
@@ -1686,6 +1701,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals + 1,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             label_gen = lg;
             code = c;
@@ -1717,6 +1733,7 @@ fn mavm_codegen_expr<'a>(
             prepushed_vals,
             scopes,
             file_info_chart,
+            error_system,
         ),
         TypeCheckedExprKind::Asm(_, insns, args) => {
             let n_args = args.len();
@@ -1734,6 +1751,7 @@ fn mavm_codegen_expr<'a>(
                     prepushed_vals + i,
                     scopes,
                     file_info_chart,
+                    error_system,
                 )?;
                 args_locals = max(args_locals, arg_locals);
                 label_gen = lg;
@@ -1757,6 +1775,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             let (extract, label_gen) = label_gen.next();
             code.push(Instruction::from_opcode(
@@ -1812,6 +1831,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             let (after_label, lab_gen) = lab_gen.next();
             let (end_label, lab_gen) = lab_gen.next();
@@ -1836,6 +1856,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
                 debug,
             )?;
             if else_block.is_some() {
@@ -1859,6 +1880,7 @@ fn mavm_codegen_expr<'a>(
                     prepushed_vals,
                     scopes,
                     file_info_chart,
+                    error_system,
                     debug,
                 )?;
                 (lg, code, else_locals)
@@ -1885,6 +1907,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             label_gen = lg;
             code = c;
@@ -1928,6 +1951,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
                 debug,
             )?;
             total_locals = max(total_locals, exp_locals);
@@ -1956,6 +1980,7 @@ fn mavm_codegen_expr<'a>(
                     prepushed_vals,
                     scopes,
                     file_info_chart,
+                    error_system,
                     debug,
                 )?;
                 total_locals = max(total_locals, else_locals);
@@ -1998,6 +2023,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
             )?;
             scopes.pop();
             label_gen = lg;
@@ -2033,6 +2059,7 @@ fn codegen_fixed_array_mod<'a>(
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
+    error_system: &mut ErrorSystem,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
     let (label_gen, code, val_locals) = mavm_codegen_expr(
         val_expr,
@@ -2046,6 +2073,7 @@ fn codegen_fixed_array_mod<'a>(
         prepushed_vals,
         scopes,
         file_info_chart,
+        error_system,
     )?;
     let (label_gen, code, arr_locals) = mavm_codegen_expr(
         arr_expr,
@@ -2059,6 +2087,7 @@ fn codegen_fixed_array_mod<'a>(
         prepushed_vals + 1,
         scopes,
         file_info_chart,
+        error_system,
     )?;
     let (mut label_gen, code, idx_locals) = mavm_codegen_expr(
         idx_expr,
@@ -2072,6 +2101,7 @@ fn codegen_fixed_array_mod<'a>(
         prepushed_vals + 2,
         scopes,
         file_info_chart,
+        error_system,
     )?;
     if size != 8 {
         // TODO: safe for if-condition to say size does not equal any power of 8
