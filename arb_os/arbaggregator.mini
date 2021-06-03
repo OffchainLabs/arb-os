@@ -185,16 +185,20 @@ impure func arbaggregator_getTxBaseFee(_topFrame: EvmCallFrame, calldata: ByteAr
 
 impure func arbaggregator_setTxBaseFee(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, uint)
     let caller = evmCallFrame_getCaller(topFrame);
-    if (bytearray_size(calldata) != 68) {
+    if (bytearray_size(calldata) != 100) {
         evmOp_revert_knownPc(80, 0, 0);
     }
     let aggregator = address(bytearray_get256(calldata, 4));
     let fee = bytearray_get256(calldata, 36);
+    let revertIfOutOfBounds = bytearray_get256(calldata, 68) != 0;
 
     if ((caller != aggregator) && (Some(caller) != chainParams_getOwner()) && (caller != address(0))) {
         evmOp_revert_knownPc(81, 0, 0);
     }
 
-    gasAccounting_setTxBaseFeeL1Gas(aggregator, fee);
-    evmOp_return(0, 0);
+    if (gasAccounting_setTxBaseFeeL1Gas(aggregator, fee, revertIfOutOfBounds) == Some(())) {
+        evmOp_return(0, 0);
+    } else {
+        evmOp_revert_knownPc(82, 0, 0);
+    }
 }

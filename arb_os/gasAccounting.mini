@@ -338,11 +338,19 @@ public impure func gasAccounting_getTxBaseFeeL1Gas(aggregatorAddr: option<addres
     };
 }
 
-public impure func gasAccounting_setTxBaseFeeL1Gas(aggregator: address, fee: uint) {
+public impure func gasAccounting_setTxBaseFeeL1Gas(aggregator: address, fee: uint, failIfOutOfBounds: bool) -> option<()> {
     if (fee < const::Charging_MinBaseTxFeeL1Gas) {
-        fee = const::Charging_MinBaseTxFeeL1Gas;
+        if (failIfOutOfBounds) {
+            return None<()>;
+        } else {
+            fee = const::Charging_MinBaseTxFeeL1Gas;
+        }
     } elseif (fee > const::Charging_MaxBaseTxFeeL1Gas) {
-        fee = const::Charging_MaxBaseTxFeeL1Gas;
+        if (failIfOutOfBounds) {
+            return None<()>;
+        } else {
+            fee = const::Charging_MaxBaseTxFeeL1Gas;
+        }
     }
 
     evmCallStack_setAccountInCurrentContext(
@@ -352,6 +360,8 @@ public impure func gasAccounting_setTxBaseFeeL1Gas(aggregator: address, fee: uin
             fee
         ),
     );
+
+    return Some(());
 }
 
 public impure func getArbGasPrice() -> uint {
