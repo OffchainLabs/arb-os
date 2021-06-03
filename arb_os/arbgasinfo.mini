@@ -2,11 +2,15 @@
 // Copyright 2021, Offchain Labs, Inc. All rights reserved.
 //
 
+use accounts::account_getAggregatorToPay;
+
 use evmCallStack::EvmCallFrame;
 use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallStack_callHitError;
 use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallStack_topFrame;
+use evmCallStack::evmCallFrame_getAccount;
+use evmCallStack::evmCallFrame_getCaller;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
@@ -31,6 +35,8 @@ public impure func arbgasinfo_txcall() {
         let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
         if (funcCode == const::funcCode_ArbGasInfo_getPricesInWei) {
             arbgasinfo_getPricesInWei(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbGasInfo_getPricesInWeiWithAggregator) {
+            arbgasinfo_getPricesInWeiWithAggregator(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbGasInfo_getPricesInArbGas) {
             arbgasinfo_getPricesInArbGas(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbGasInfo_getGasAccountingParams) {
@@ -45,11 +51,23 @@ public impure func arbgasinfo_txcall() {
     }
 }
 
-impure func arbgasinfo_getPricesInWei(_topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> (uint, ..., uint)
+impure func arbgasinfo_getPricesInWei(topFrame: EvmCallFrame, calldata: ByteArray) { // () -> (uint, ..., uint)
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(9, 0, 0);
+    }
+    let caller = evmCallFrame_getCaller(topFrame);
+    getPricesInWeiCommon(account_getAggregatorToPay(evmCallFrame_getAccount(topFrame, caller)));
+}
+
+impure func arbgasinfo_getPricesInWeiWithAggregator(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (address) -> (uint, ..., uint)
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(10, 0, 0);
     }
     let aggregatorAddr = address(bytearray_get256(calldata, 4));
+    getPricesInWeiCommon(aggregatorAddr);
+}
+
+impure func getPricesInWeiCommon(aggregatorAddr: address) {
     let gasPricesWei = gasAccounting_getPricesInWei(aggregatorAddr);
     let mem = bytearray_new(0);
     mem = bytearray_set256(mem, 0*32, gasPricesWei.0);

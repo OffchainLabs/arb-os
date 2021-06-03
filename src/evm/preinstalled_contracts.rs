@@ -737,14 +737,14 @@ impl<'a> _ArbGasInfo<'a> {
         }
     }
 
-    pub fn _get_prices_in_wei(
+    pub fn _get_prices_in_wei_with_aggregator(
         &self,
         machine: &mut Machine,
         aggregator: Uint256,
     ) -> Result<(Uint256, Uint256, Uint256, Uint256, Uint256, Uint256), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
             self.my_address.clone(),
-            "getPricesInWei",
+            "getPricesInWeiWithAggregator",
             &[ethabi::Token::Address(aggregator.to_h160())],
             machine,
             Uint256::zero(),
@@ -1826,7 +1826,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
     };
 
     let (l2tx, l1calldata, storage, basegas, conggas, totalgas) =
-        arbgasinfo._get_prices_in_wei(&mut machine, Uint256::zero())?;
+        arbgasinfo._get_prices_in_wei_with_aggregator(&mut machine, Uint256::zero())?;
     assert!(l2tx.is_zero());
     assert!(l1calldata.is_zero());
     assert!(storage.is_zero());
@@ -1840,7 +1840,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         ._advance_time(Uint256::one(), None, true);
 
     let (l2tx, l1calldata, storage, basegas, conggas, totalgas) =
-        arbgasinfo._get_prices_in_wei(&mut machine, Uint256::zero())?;
+        arbgasinfo._get_prices_in_wei_with_aggregator(&mut machine, Uint256::zero())?;
     println!(
         "L2 tx {}, L1 calldata {}, L2 storage {}, base gas {}, congestion gas {}, total gas {}",
         l2tx, l1calldata, storage, basegas, conggas, totalgas
@@ -2731,7 +2731,7 @@ fn test_congestion_price_adjustment() {
     assert_eq!(
         arbgasinfo
             //._get_prices_in_wei(&mut machine, randomish_address.clone())  preserve this for later integration
-            ._get_prices_in_wei(&mut machine, my_address.clone())
+            ._get_prices_in_wei_with_aggregator(&mut machine, my_address.clone())
             .unwrap()
             .4,
         Uint256::zero()
@@ -2763,7 +2763,7 @@ fn test_congestion_price_adjustment() {
 
     let prices = arbgasinfo
         //._get_prices_in_wei(&mut machine, randomish_address.clone())  preserve this for later integration
-        ._get_prices_in_wei(&mut machine, my_address.clone())
+        ._get_prices_in_wei_with_aggregator(&mut machine, my_address.clone())
         .unwrap();
     assert!(prices.4 > Uint256::zero());
 
@@ -2772,7 +2772,7 @@ fn test_congestion_price_adjustment() {
         ._advance_time(Uint256::from_u64(48), Some(Uint256::from_u64(720)), false);
     let prices2 = arbgasinfo
         //._get_prices_in_wei(&mut machine, randomish_address.clone())  preserve this for later integration
-        ._get_prices_in_wei(&mut machine, my_address.clone())
+        ._get_prices_in_wei_with_aggregator(&mut machine, my_address.clone())
         .unwrap();
     assert_eq!(prices2.4, Uint256::zero());
 }
@@ -2802,7 +2802,7 @@ fn test_set_gas_price_estimate() {
     let new_storage_price = new_gas_price.mul(&Uint256::from_u64(2_000_000_000_000));
 
     let storage_price = arbgasinfo
-        ._get_prices_in_wei(&mut machine, my_address.clone())
+        ._get_prices_in_wei_with_aggregator(&mut machine, my_address.clone())
         .unwrap()
         .2;
     assert!(storage_price != new_storage_price);
@@ -2816,7 +2816,7 @@ fn test_set_gas_price_estimate() {
         ._advance_time(Uint256::one(), None, false);
 
     let storage_price = arbgasinfo
-        ._get_prices_in_wei(&mut machine, my_address.clone())
+        ._get_prices_in_wei_with_aggregator(&mut machine, my_address.clone())
         .unwrap()
         .2;
     assert_eq!(storage_price, new_storage_price);
