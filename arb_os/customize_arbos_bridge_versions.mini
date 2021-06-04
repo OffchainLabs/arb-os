@@ -41,7 +41,10 @@ public func set_gasAccountingInfo_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) ->
     let oldPP = oldInfo.pricingParams;
     return struct {
         txState: oldInfo.txState,
-        feeConfig: oldInfo.feeConfig,
+        feeConfig: struct {
+            baseFeeMultiplier: oldInfo.feeConfig.baseFeeMultiplier,
+            shareForNetFee: oldInfo.feeConfig.shareForNetFee,
+        },
         currentPrices: struct {
             perL1CalldataUnit: oldInfo.currentPrices.perL1CalldataUnit,
             perStorageCell: oldInfo.currentPrices.perStorageCell,
@@ -159,33 +162,6 @@ func acctRemapClosure(_addr: address, oldAcct: before__accounts_Account, state: 
     };
     return state with {
         [acct.addr] = acct
-    };
-}
-
-public func set_gasAccountingInfo_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> GasAccountingInfo {
-    let old = input_globals.gasAccountingInfo;
-    let l1GasPrice = input_globals.globalL1GasPriceEstimator.estimateWei;
-    return struct {
-        txState: old.txState,
-        feeConfig: old.feeConfig,
-        currentPrices: struct {
-            perL1CalldataUnit: old.pricingParams.l1GasPerL2Tx * l1GasPrice,
-            perStorageCell: old.pricingParams.l1GasPerStorage * l1GasPrice,
-            perArbGasBase: l1GasPrice / old.pricingParams.arbGasDivisor,
-            perArbGasCongestion: old.congestionState.congestionPriceWei,
-            perArbGasTotal: (l1GasPrice / old.pricingParams.arbGasDivisor) + old.congestionState.congestionPriceWei,
-        },
-        gasRemainingThisBlock: old.gasRemainingThisBlock,
-        congestionState: old.congestionState,
-        speedLimitPerSecond: old.speedLimitPerSecond,
-        pricingParams: struct {
-            l1GasPerL1CalldataUnit: old.pricingParams.l1GasPerL1CalldataUnit,
-            l1GasPerStorage: old.pricingParams.l1GasPerStorage,
-            arbGasDivisor: old.pricingParams.arbGasDivisor,
-        },
-        gasAllocatedToThisBlock: old.gasAllocatedToThisBlock,
-        retryablePrices: old.retryablePrices,
-        allowedSenders: setOfAddresses_all(),
     };
 }
 

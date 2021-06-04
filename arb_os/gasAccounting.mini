@@ -121,11 +121,8 @@ type PricingParameters = struct {
 }
 
 type FeeConfig = struct {
-    enabled: bool,                   // if false, don't charge any fees     //FIXME: is param
-    forNetwork: address,             // where network fees go               //FIXME: is param
-    forCongestion: address,          // where congestion fees go            //FIXME: is param
-    baseFeeMultiplier: FixedPoint,   // multiply base fee by this to get total fee  //FIXME: is param
-    shareForNetFee: FixedPoint,      // total fee times this == network fee         //FIXME: is param
+    baseFeeMultiplier: FixedPoint,   // multiply base fee by this to get total fee
+    shareForNetFee: FixedPoint,      // total fee times this == network fee
 }
 
 type TxGasState = struct {        // this is the gas state of the currently running transaction
@@ -181,9 +178,6 @@ impure func setupParameters(isInit: bool) {
     };
 
     let feeConfig = struct {
-        enabled: chainParams_getOrDie(const::Atom_Param_FeesEnabled) != 0,
-        forNetwork: address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
-        forCongestion: address(chainParams_getOrDie(const::Atom_Param_CongestionFeeRecipient)),
         baseFeeMultiplier: baseFeeMultiplier,
         shareForNetFee: shareForNetFee,
     };
@@ -229,6 +223,10 @@ public impure func getGasAccountingParams() -> (uint, uint, uint) {
     );
 }
 
+impure func feesEnabled() -> bool {
+    return chainParams_getOrDie(const::Atom_Param_FeesEnabled) != 0;
+}
+
 impure func setPrices(
     feeConfig: FeeConfig,
     params: PricingParameters,
@@ -236,7 +234,7 @@ impure func setPrices(
     oldRetryablePrices: RetryablePrices,
 ) -> (GasPrices, RetryablePrices) {
     oldRetryablePrices = setRetryablePrices(oldRetryablePrices);
-    return xif (feeConfig.enabled) {
+    return xif (feesEnabled()) {
         let l1GasPrice = getL1GasPriceEstimate();
         let perArbGasBase = l1GasPrice / params.arbGasDivisor;
         let perArbGasCongestion = congestionState.congestionPriceWei;
@@ -272,7 +270,7 @@ impure func setRetryablePrices(oldRetryablePrices: RetryablePrices) -> Retryable
     return xif (oldRetryablePrices.nextUpdateTimestamp >= inbox_currentTimestamp()) {
         oldRetryablePrices
     } else {
-        xif (gasAccountingInfo.feeConfig.enabled) {
+        xif (feesEnabled()) {
             let gasPrice = getL1GasPriceEstimate();
             struct {
                 perTx: gasPrice * chainParams_getOrDie(const::Atom_Param_RetryablePriceBase),
@@ -307,7 +305,7 @@ impure func gasAccounting_getTxBaseFeeWei(aggregatorAddr: option<address>) -> ui
 }
 
 public impure func gasAccounting_getTxBaseFeeL1Gas(aggregatorAddr: option<address>) -> uint {
-    return xif (gasAccountingInfo.feeConfig.enabled) {
+    return xif (feesEnabled()) {
         xif let Some(addr) = aggregatorAddr {
             xif let Some(aggInfo) = evmCallStack_getAccountInCurrentContext(addr).aggregatorInfo {
                 aggInfo.baseTxFeeL1Gas
@@ -356,51 +354,6 @@ public impure func gasAccounting_getPricesInArbGas(aggregatorAddr: address) -> (
     );
 }
 
-public impure func gasAccounting_setFeesEnabled(enabled: bool) {
-    gasAccountingInfo = gasAccountingInfo with {
-        feeConfig: gasAccountingInfo.feeConfig with { enabled: enabled }
-    };
-    let (gasPrices, retryablePrices) = setPrices(
-        gasAccountingInfo.feeConfig,
-        gasAccountingInfo.pricingParams,
-        gasAccountingInfo.congestionState,
-        gasAccountingInfo.retryablePrices,
-    );
-    gasAccountingInfo = gasAccountingInfo with {
-        currentPrices: gasPrices
-    } with {
-        retryablePrices: retryablePrices
-    };
-    if (enabled) {
-        gasAccountingInfo = gasAccountingInfo with {
-            congestionState: initCongestionState(false)
-        };
-    }
-}
-
-public impure func gasAccounting_setChargingParams(
-    l1GasPerL1CalldataUnit: uint,
-    l1GasPerStorage: uint,
-    arbGasDivisor: uint,
-    netFeeRecipient: address,
-    congestionFeeRecipient: address,
-) {
-    gasAccountingInfo = gasAccountingInfo with {
-        pricingParams: struct {
-            l1GasPerL1CalldataUnit: l1GasPerL1CalldataUnit,
-            l1GasPerStorage: l1GasPerStorage,
-            arbGasDivisor: arbGasDivisor,
-        }
-    } with {
-        feeConfig: gasAccountingInfo.feeConfig with {
-            forNetwork: netFeeRecipient
-        } with {
-            forCongestion: congestionFeeRecipient
-        }
-    };
-    gasAccounting_postInitMessage();
-}
-
 public impure func gasAccounting_postInitMessage() {   // this runs after we have received the init message, or similar
     let gasPoolMax = int(chainParams_getOrDie(const::Atom_Param_GasPoolMax));
     if (gasAccountingInfo.congestionState.gasPool > gasPoolMax) {
@@ -415,23 +368,13 @@ public impure func gasAccounting_postInitMessage() {   // this runs after we hav
 
 public impure func gasAccounting_getFeeRecipients() -> (address, address) {
     return (
-        gasAccountingInfo.feeConfig.forNetwork,
-        gasAccountingInfo.feeConfig.forCongestion,
+        address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
+        address(chainParams_getOrDie(const::Atom_Param_CongestionFeeRecipient)),
     );
 }
 
-public impure func gasAccounting_setFeeRecipients(forNetwork: address, forCongestion: address) {
-    gasAccountingInfo = gasAccountingInfo with {
-        feeConfig: gasAccountingInfo.feeConfig with {
-            forNetwork: forNetwork
-        } with {
-            forCongestion: forCongestion
-        }
-    };
-}
-
 public impure func getAddressForReserveFundsDeposit() -> address {
-    return gasAccountingInfo.feeConfig.forCongestion;
+    return address(chainParams_getOrDie(const::Atom_Param_CongestionFeeRecipient));
 }
 
 public impure func gasAccounting_summaryToPublish() -> any {
@@ -495,7 +438,7 @@ public impure func gasAccounting_startTxCharges(
         acctStore = accountStore_payFullyFromEscrow(
             acctStore,
             const::EscrowStoreID_txGas,
-            gasAccountingInfo.feeConfig.forNetwork,
+            address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
         );
         return (const::TxResultCode_noGasFunds, acctStore);
     }
@@ -587,14 +530,14 @@ public impure func gasAccounting_endTxCharges(
     payments = deferredPayments_add(
         payments,
         const::EscrowStoreID_txGas,
-        gasAccountingInfo.feeConfig.forNetwork,
+        address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
         computeGasUsed * basePrice + storageGasUsed * txState.price,
     );
     let congestionPrice = txState.price - basePrice;
     payments = deferredPayments_add(
         payments,
         const::EscrowStoreID_txGas,
-        gasAccountingInfo.feeConfig.forCongestion,
+        address(chainParams_getOrDie(const::Atom_Param_CongestionFeeRecipient)),
         computeGasUsed * congestionPrice,
     );
 
@@ -764,7 +707,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
         };
     }
 
-    return xif ((tx.incomingRequest.sender != address(0)) && gasAccountingInfo.feeConfig.enabled && (! tx.incomingRequest.adminMode)) {
+    return xif ((tx.incomingRequest.sender != address(0)) && feesEnabled() && (! tx.incomingRequest.adminMode)) {
         if let Some(txSeqNum) = tx.seqNum {
             if (txSeqNum != account_getNextSeqNum(accountStore_get(getGlobalAccountStore(), tx.caller))) {
                 // don't charge the user if sequence number is wrong
@@ -956,7 +899,7 @@ impure func payForTxAndL1Gas(
         acctStore = xif let Some(store) = accountStore_transferEthBalance(
             acctStore,
             payer,
-            feeConfig.forNetwork,
+            address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
             payableToFee,   // safe because payerBalance >= amount and feeConfig.shareForNetFee <= 1
         ) {
             store
@@ -1054,7 +997,7 @@ public impure func getRetryableTxPrice(calldataSize: uint) -> (uint, uint) {
 public impure func getFeesForRetryableTx(
     calldataSize: uint,  // in bytes
 ) -> (uint, address, TxFeeStats) {
-    return xif (gasAccountingInfo.feeConfig.enabled) {
+    return xif (feesEnabled()) {
         let prices = gasAccountingInfo.retryablePrices;
         let calldataUnitPrice = prices.perCalldataByte / 16;  // use this to avoid roundoff issues
         let totalDue = prices.perTx + calldataSize * 16 * calldataUnitPrice;
@@ -1062,7 +1005,7 @@ public impure func getFeesForRetryableTx(
         let feeStats = txFeeStats_zero();
         (
             totalDue,
-            gasAccountingInfo.feeConfig.forNetwork,
+            address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
             feeStats with {
                 price: feeStats.price with {
                     tx: prices.perTx

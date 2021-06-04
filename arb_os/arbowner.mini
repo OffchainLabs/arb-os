@@ -46,9 +46,7 @@ use pluggables::installPluggable;
 use pluggables::callPluggable;
 use pluggables::bindContractAddressToPluggable;
 
-use gasAccounting::gasAccounting_setFeesEnabled;
 use gasAccounting::gasAccounting_getFeeRecipients;
-use gasAccounting::gasAccounting_setFeeRecipients;
 use gasAccounting::setFairGasPriceSender;
 use gasAccounting::isFairGasPriceSender;
 use gasAccounting::getSerializedFairGasPriceSenders;
