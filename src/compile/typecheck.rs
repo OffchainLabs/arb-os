@@ -61,7 +61,9 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
         match self {
             TypeCheckedNode::Statement(stat) => stat.child_nodes(),
             TypeCheckedNode::Expression(exp) => exp.child_nodes(),
-            TypeCheckedNode::StructField(field) => field.child_nodes(),
+            TypeCheckedNode::StructField(field) => {
+                vec![TypeCheckedNode::Expression(&mut field.value)]
+            }
             TypeCheckedNode::Type(tipe) => tipe.child_nodes(),
         }
     }
@@ -74,6 +76,35 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
         }
     }
 }
+
+/*impl<'a> TypeCheckedNode<'a> {
+    ///Propagates attributes down the tree. Currently only passes `codegen_print`.
+    pub fn propagate_attributes(mut nodes: Vec<TypeCheckedNode>, attributes: &Attributes) {
+        for node in nodes.iter_mut() {
+            match node {
+                TypeCheckedNode::Statement(stat) => {
+                    stat.debug_info.attributes.codegen_print =
+                        stat.debug_info.attributes.codegen_print || attributes.codegen_print;
+                    let child_attributes = stat.debug_info.attributes.clone();
+                    TypeCheckedNode::propagate_attributes(stat.child_nodes(), &child_attributes);
+                }
+                TypeCheckedNode::Expression(expr) => {
+                    expr.debug_info.attributes.codegen_print =
+                        expr.debug_info.attributes.codegen_print || attributes.codegen_print;
+                    let child_attributes = expr.debug_info.attributes.clone();
+                    TypeCheckedNode::propagate_attributes(expr.child_nodes(), &child_attributes);
+                }
+                TypeCheckedNode::StructField(field) => {
+                    field.value.debug_info.attributes.codegen_print =
+                        field.value.debug_info.attributes.codegen_print || attributes.codegen_print;
+                    let child_attributes = field.value.debug_info.attributes.clone();
+                    TypeCheckedNode::propagate_attributes(field.child_nodes(), &child_attributes);
+                }
+                _ => {}
+            }
+        }
+    }
+}*/
 
 ///An error encountered during typechecking
 #[derive(Debug)]
@@ -555,14 +586,6 @@ fn flowcheck_liveliness(
                 TypeCheckedExprKind::Loop(_body) => true,
                 _ => false,
             },
-            TypeCheckedNode::StructField(field) => {
-                process!(
-                    vec![TypeCheckedNode::Expression(&mut field.value)],
-                    problems,
-                    false
-                );
-                continue;
-            }
             _ => false,
         };
 
