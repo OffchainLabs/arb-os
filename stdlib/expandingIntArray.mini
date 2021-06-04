@@ -129,7 +129,6 @@ public func expandingIntArray_op(
     while (index >= arr.size) {
         arr = expandingIntArray_grow(arr);
     }
-    let tree = arr.contents;
     let chunk = arr.chunk;
 
     let (tree, retVal) = ear_op2(arr.contents, arr.chunk, index, closure);

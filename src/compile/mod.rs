@@ -140,6 +140,11 @@ impl CompileStruct {
                 return Err((e, file_info_chart));
             }
         };
+        //If this condition is true it means that __fixedLocationGlobal will not be at
+        // index [0], but rather [0][0] or [0][0][0] etc
+        if linked_prog.globals.len() >= 58 {
+            panic!("Too many globals defined in program, location of first global is not correct")
+        }
         postlink_compile(
             linked_prog,
             file_info_chart.clone(),

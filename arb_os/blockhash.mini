@@ -24,7 +24,7 @@ public impure func blockhash_getForBlock(blockNum: uint) -> option<bytes32> {
     };
 }
 
-public impure func blockhash_submitHash(arbBlockNum: uint, ethBlockNum: uint, inboxAccumHash: bytes32) {
+public impure func blockhash_submitHash(ethBlockNum: uint, inboxAccumHash: bytes32) {
     let b = xif(ethBlockNum+255 > blockhashes.latestBlockNum) {
         blockhashes.latestBlockNum - 255
     } else {
