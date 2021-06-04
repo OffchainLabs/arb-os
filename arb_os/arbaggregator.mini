@@ -191,7 +191,7 @@ impure func arbaggregator_setTxBaseFee(topFrame: EvmCallFrame, calldata: ByteArr
     let aggregator = address(bytearray_get256(calldata, 4));
     let fee = bytearray_get256(calldata, 36);
 
-    if ((caller != aggregator) && (Some(caller) != chainParams_getOwner()) && (caller != address(0))) {
+    if ((caller != aggregator) && (caller != chainParams_getOwner()) && (caller != address(0))) {
         evmOp_revert_knownPc(81, 0, 0);
     }
 

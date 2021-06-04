@@ -12,6 +12,8 @@ use accounts::AccountStore;
 use accounts::AggregatorInfo;
 use accounts::accountStore_forall;
 
+use evmCallStack::EvmCallFrame;
+
 use gasAccounting::GasAccountingInfo;
 
 use tracing::EvmTracer;
@@ -30,18 +32,27 @@ use core::kvs::Kvs;
 use core::kvs::builtin_kvsForall;
 
 
+public func set_globalCallStack_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
+    return None<EvmCallFrame>;
+}
+
 public func set_gasAccountingInfo_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> GasAccountingInfo {
     let oldInfo = oldGlobals.gasAccountingInfo;
     let oldPP = oldInfo.pricingParams;
     return struct {
         txState: oldInfo.txState,
         feeConfig: oldInfo.feeConfig,
-        currentPrices: oldInfo.currentPrices,
+        currentPrices: struct {
+            perL1CalldataUnit: oldInfo.currentPrices.perL1CalldataUnit,
+            perStorageCell: oldInfo.currentPrices.perStorageCell,
+            perArbGasBase: oldInfo.currentPrices.perArbGasBase,
+            perArbGasCongestion: oldInfo.currentPrices.perArbGasCongestion,
+            perArbGasTotal: oldInfo.currentPrices.perArbGasTotal,
+        },
         gasRemainingThisBlock: oldInfo.gasRemainingThisBlock,
         congestionState: oldInfo.congestionState,
         speedLimitPerSecond: oldInfo.speedLimitPerSecond,
         pricingParams: struct {
-            l1GasPerL2Tx: oldPP.l1GasPerL2Tx,
             l1GasPerL1CalldataUnit: oldPP.l1GasPerL1CalldataUnit,
             l1GasPerStorage: oldPP.l1GasPerStorage,
             arbGasDivisor: oldPP.arbGasDivisor,
