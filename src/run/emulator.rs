@@ -15,7 +15,7 @@ use crate::uint256::Uint256;
 use clap::Clap;
 use ethers_core::types::{Signature, H256};
 use std::cmp::{max, Ordering};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::TryInto;
 use std::fmt;
 use std::fs::File;
@@ -730,6 +730,7 @@ pub struct Machine {
     file_info_chart: BTreeMap<u64, FileInfo>,
     total_gas_usage: Uint256,
     trace_writer: Option<BufWriter<File>>,
+    coverage: Option<HashSet<usize>>,
 }
 
 impl Machine {
@@ -747,6 +748,7 @@ impl Machine {
             file_info_chart: program.file_info_chart,
             total_gas_usage: Uint256::zero(),
             trace_writer: None,
+            coverage: None,
         }
     }
 
@@ -862,6 +864,14 @@ impl Machine {
         } else {
             None
         }
+    }
+
+    pub fn start_coverage(&mut self) {
+        self.coverage = Some(HashSet::new());
+    }
+
+    pub fn coverage_result(&self) -> Option<HashSet<usize>> {
+        self.coverage.as_ref().map(|c| c.clone())
     }
 
     ///Starts the debugger, execution will end when the program counter of self reaches stop_pc, or
@@ -1022,6 +1032,12 @@ impl Machine {
                     if pc == spc {
                         return gas_used;
                     }
+                }
+            }
+            if let CodePt::Internal(pc) = self.get_pc().unwrap() {
+                match self.coverage.iter_mut().next() {
+                    Some(cov_set) => { cov_set.insert(pc); }
+                    None => {}
                 }
             }
             let gas_this_instruction = if let Some(gas) = self.next_op_gas() {
