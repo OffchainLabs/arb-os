@@ -14,6 +14,7 @@ use evmCallStack::evmCallStack_getTopFrameMemoryOrDie;
 use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallStack_callHitError;
 use evmCallStack::evmCallStack_addStorageCharge;
+use evmCallStack::evmCallStack_inRetryable;
 
 use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallFrame_getCallvalue;
@@ -463,10 +464,11 @@ impure func arbsys_isTopLevelCall(_topFrame: EvmCallFrame, calldata: ByteArray) 
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 70, 0, 0);
     }
+    let depth = evmCallStack_stackDepth();
     let mem = bytearray_set256(
         bytearray_new(0),
         0,
-        uint(evmCallStack_stackDepth() == 2),
+        uint( (depth == 2) || ((depth == 3) && evmCallStack_inRetryable()) ),
     );
     if (evmCallStack_setTopFrameMemory(mem)) {
         evmOp_return(0, 32);
