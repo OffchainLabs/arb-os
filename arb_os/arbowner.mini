@@ -50,7 +50,6 @@ use gasAccounting::gasAccounting_setFeesEnabled;
 use gasAccounting::gasAccounting_getFeeRecipients;
 use gasAccounting::gasAccounting_setFeeRecipients;
 use gasAccounting::setFairGasPriceSender;
-use gasAccounting::setGasAccountingParams;
 use gasAccounting::isFairGasPriceSender;
 use gasAccounting::getSerializedFairGasPriceSenders;
 use gasAccounting::allowedSenders_allowAll;

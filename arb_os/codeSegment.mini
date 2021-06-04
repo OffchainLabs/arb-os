@@ -24,7 +24,6 @@ use std::stack::stack_pop;
 use std::rlp::rlp_decodeUint;
 
 use chainParameters::chainParams_chainId;
-use gasAccounting::getGasLimitPerTx;
 
 use evmOps::evmOp_address;
 use evmOps::evmOp_balance;
