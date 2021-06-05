@@ -123,7 +123,8 @@ type FeeConfig = struct {
     forNetwork: address,             // where network fees go
     forCongestion: address,          // where congestion fees go
     baseFeeMultiplier: FixedPoint,   // multiply base fee by this to get total fee
-    shareForNetFee: FixedPoint,      // total fee times this == network fee
+    netFeeDivByBaseFee: FixedPoint,  // base fee times this == network fee
+    netFeeDivByTotalFee: FixedPoint, // total fee times this == network fee
 }
 
 var gasAccountingParams: struct {
@@ -167,7 +168,7 @@ public impure func gasAccounting_init() {    // initialize on boot, before we ha
 
     let netFeeRate = fixedPoint_new(const::NetFee_defaultRateNumerator, const::NetFee_defaultRateDenominator);
     let baseFeeMultiplier = fixedPoint_plusOne(netFeeRate);
-    let shareForNetFee = xif let Some(x) = fixedPoint_div(netFeeRate, baseFeeMultiplier) {
+    let netFeeDivByTotalFee = xif let Some(x) = fixedPoint_div(netFeeRate, baseFeeMultiplier) {
         x
     } else {
         panic
@@ -178,7 +179,8 @@ public impure func gasAccounting_init() {    // initialize on boot, before we ha
         forNetwork: address(const::Charging_DefaultNetworkFeeRecipient),
         forCongestion: address(const::Charging_DefaultCongestionFeeRecipient),
         baseFeeMultiplier: baseFeeMultiplier,
-        shareForNetFee: shareForNetFee,
+        netFeeDivByBaseFee: netFeeRate,
+        netFeeDivByTotalFee: netFeeDivByTotalFee,
     };
 
     let (gasPrices, retryablePrices) = setPrices(
@@ -929,7 +931,7 @@ impure func payForTxAndL1Gas(
         // Here we reduce the prices of those things so they include only the network fee.
         // Below we will charge the reduced price and give all of the funds for these things to the network fee.
         prices = prices with {
-            perL1CalldataUnit: fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, prices.perL1CalldataUnit)
+            perL1CalldataUnit: fixedPoint_mulByUintTrunc(feeConfig.netFeeDivByBaseFee, prices.perL1CalldataUnit)
         };
         txFeeStats_setPrices(feeStats, prices, None<address>)
     };
@@ -959,7 +961,7 @@ impure func payForTxAndL1Gas(
 
     let payableToFee = xif(preferredAggregator == recipient) {
         // We're charging full price, so only give the network fee its share.
-        fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, amount)
+        fixedPoint_mulByUintTrunc(feeConfig.netFeeDivByTotalFee, amount)
     } else {
         // We're only charging the network fee, so give all of the collected funds to the network fee.
         // (We reduced the prices above, so only the network fee funds are being collected.)
@@ -971,7 +973,7 @@ impure func payForTxAndL1Gas(
             acctStore,
             payer,
             feeConfig.forNetwork,
-            payableToFee,   // safe because payerBalance >= amount and feeConfig.shareForNetFee <= 1
+            payableToFee,   // safe because payerBalance >= amount and feeConfig.netFeeDivByTotalFee <= 1
         ) {
             store
         } else {
@@ -1209,7 +1211,7 @@ public impure func txFeeStats_setPrices(stats: TxFeeStats, prices: GasPrices, ag
                 )
             } else {
                 fixedPoint_mulByUintTrunc(
-                    gasAccountingInfo.feeConfig.shareForNetFee,
+                    gasAccountingInfo.feeConfig.netFeeDivByBaseFee,
                     gasAccounting_getTxBaseFeeWei(None<address>),
                 )
             },
