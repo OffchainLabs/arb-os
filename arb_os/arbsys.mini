@@ -370,7 +370,7 @@ impure func sendTxToL1(caller: address, destination: address, callvalue: uint, c
     evmOp_log4(
         0,
         bytearray_size(mem),
-        const::EVMLogTopicForL2ToL1Send,
+        const::eventTopic_ArbSys_L2ToL1Transaction,
         uint(destination),
         uniqueId,
         0,    // batch number will be filled in later
