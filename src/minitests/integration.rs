@@ -14,10 +14,7 @@ fn compile_run_cycle(input: String) -> Machine {
         Ok((mexe, _error_system)) => mexe,
         Err(_error_system) => panic!("failed to compile"),
     };
-    let mut machine = Machine::new(
-        mexe,
-        RuntimeEnvironment::new(None),
-    );
+    let mut machine = Machine::new(mexe, RuntimeEnvironment::new(None));
     run(&mut machine, vec![], false).unwrap();
     machine
 }
