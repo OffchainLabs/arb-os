@@ -17,21 +17,29 @@ use accounts::setGlobalAccountStore;
 use accounts::accountStore_get;
 use accounts::accountStore_set;
 use accounts::account_addToEthBalance;
+use accounts::account_checkAndIncrSeqNum;
 
 use blockhash::blockhash_submitHash;
 
 use chainParameters::chainParams_gotParamsMessage;
 use chainParameters::chainParams_chainId;
 
+use evmlogs::EvmLogs;
+
+use gasAccounting::GasUsage;
+use gasAccounting::allowedSenders_contains;
+use gasAccounting::gasAccounting_prepareTx;
 use gasAccounting::updateL1GasPriceEstimate;
 use gasAccounting::txFeeStats_zero;
 
 use messages::TxRequestData;
+use messages::processL2Request;
 
 use messageBatch::messageBatch_tryNew;
 use messageBatch::messageBatch_get;
 
 use output::outputStats_endOfBlock;
+use output::emitTxReceipt;
 
 use retrybuffer::RetryableTx;
 use retrybuffer::processRetryableTx;
@@ -439,6 +447,53 @@ public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
             }
         }
     };
+}
+
+public impure func mainRunLoop() {
+    loop {
+        let tx = inbox_getNextUnpackedRequest();
+
+        let (resultCode, request) = xif (allowedSenders_contains(tx.caller) || tx.incomingRequest.adminMode) {
+            gasAccounting_prepareTx(tx)
+        } else {
+            (const::TxResultCode_senderNotPermitted, tx)
+        };
+
+        if (resultCode == const::TxResultCode_success) {
+            if (processL2Request(request) == None<()>) {
+                // reject for message format error
+                emitTxReceipt(
+                    request.incomingRequest,
+                    const::TxResultCode_formatError,
+                    None<ByteArray>,
+                    None<EvmLogs>,
+                    None<GasUsage>,
+                    request.feeStats,
+                    false,      // don't emit tracing info because the tx was bogus
+                );
+            }
+        } else {
+            // before emitting a failure receipt, try to increment caller's sequence number
+            if (resultCode != const::TxResultCode_badSequenceNum) {
+                if let Some(seqNum) = request.seqNum {
+                    let gAcctStore = getGlobalAccountStore();
+                    if let Some(acct) = account_checkAndIncrSeqNum(accountStore_get(gAcctStore, request.caller), seqNum) {
+                        setGlobalAccountStore(accountStore_set(gAcctStore, request.caller, acct));
+                    }
+                }
+            }
+
+            emitTxReceipt(
+                request.incomingRequest,
+                resultCode,
+                None<ByteArray>,
+                None<EvmLogs>,
+                None<GasUsage>,
+                request.feeStats,
+                true,
+            );
+        }
+    }
 }
 
 impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
