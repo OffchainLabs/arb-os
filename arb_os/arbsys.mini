@@ -82,23 +82,21 @@ public impure func arbsys_txcall() {
             evmOp_revert_knownCodePc(address(const::Address_ArbSys), 0, 0, 0);
         }
         let funcCode = getFuncCode(calldata);
-        if (funcCode == 0x051038F2) {
+        if (funcCode == const::funcCode_ArbSys_arbOSVersion) {
             arbsys_arbOSVersion(topFrame, calldata);
         } elseif(funcCode == const::funcCode_ArbSys_arbChainID) {
             arbsys_arbChainID(topFrame, calldata);
-        } elseif(funcCode == 0xa3b1b31d) {
+        } elseif(funcCode == const::funcCode_ArbSys_arbBlockNumber) {
             arbsys_arbBlockNumber(topFrame, calldata);
-        } elseif(funcCode == 0x25e16063) {
+        } elseif(funcCode == const::funcCode_ArbSys_withdrawEth) {
             arbsys_withdrawEth(topFrame, calldata);
-        } elseif(funcCode == 0x928c169a) {
+        } elseif(funcCode == const::funcCode_ArbSys_sendTxToL1) {
             arbsys_sendTxToL1(topFrame, calldata);
-        } elseif(funcCode == 0x23ca0cd2) {
+        } elseif(funcCode == const::funcCode_ArbSys_getTransactionCount) {
             arbsys_getTransactionCount(topFrame, calldata);
-        } elseif(funcCode == 0xa169625f) {
+        } elseif(funcCode == const::funcCode_ArbSys_getStorageAt) {
             arbsys_getStorageAt(topFrame, calldata);
-        } elseif(funcCode == 0x3dcfdac7) {
-            arbsys_getPcTable(topFrame, calldata);
-        } elseif (funcCode == 0x08bd624c) {
+        } elseif (funcCode == const::funcCode_ArbSys_isTopLevelCall) {
             arbsys_isTopLevelCall(topFrame, calldata);
         } else {
             // unrecognized function code

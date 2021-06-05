@@ -449,10 +449,7 @@ public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
                     // else request was malformatted, ignore it and execute loop again to get another
                 }
             } elseif (msg.kind == const::L1MessageType_rollupProtocolEvent) {
-                if (msg.sender == address(0)) {
-                    let _ = callPluggable(const::PluggableModuleID_rollupTracker, msg.msgData);
-                }
-                // else request was forged or malformatted, ignore it and execute loop again to get another
+                // ignore this message type, and execute loop again to get another message
             } elseif (msg.kind == const::L1MessageType_submitRetryableTx) {
                 if let Some(txRequest) = processRetryableTx(msg) {
                     return txRequest;
@@ -597,20 +594,5 @@ func txRequestQueue_put(q: TxRequestQueue, req: TxRequestData) -> TxRequestQueue
     return struct { q: queue_put(q.q, req) };
 }
 
-type TxRequestQueueStack = struct {
-    qs: QueueStack,
-}
 
-func txRequestQueueStack_new() -> TxRequestQueueStack {
-    return struct { qs: queuestack_new() };
-}
-
-func txRequestQueueStack_get(qs: TxRequestQueueStack) -> option<(TxRequestQueueStack, TxRequestData)> {
-    let (uqs, rawMsg) = queuestack_get(qs.qs)?;
-    return Some((struct { qs: uqs }, unsafecast<TxRequestData>(rawMsg)));
-}
-
-func txRequestQueueStack_push(qs: TxRequestQueueStack, q: TxRequestQueue) -> TxRequestQueueStack {
-    return struct { qs: queuestack_push(qs.qs, q.q) };
-}
 

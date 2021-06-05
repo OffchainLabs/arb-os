@@ -1650,19 +1650,19 @@ public func evmCallFrame_shouldRevertOnStorageWrite(frame: EvmCallFrame) -> bool
     return frame.revertOnStorageWrite;
 }
 
-public func evmCallFrame_getEvmLogs(frame: EvmCallFrame) -> EvmLogs {
+public func _evmCallFrame_getEvmLogs(frame: EvmCallFrame) -> EvmLogs {
     return frame.evmLogs;
 }
 
-public func evmCallFrame_getResumeCodePoint(frame: EvmCallFrame) -> option<func()> {
+public func _evmCallFrame_getResumeCodePoint(frame: EvmCallFrame) -> option<func()> {
     return Some((frame.resumeInfo?).codePoint);
 }
 
-public func evmCallFrame_getSelfDestructQueue(frame: EvmCallFrame) -> Queue {
+public func _evmCallFrame_getSelfDestructQueue(frame: EvmCallFrame) -> Queue {
     return frame.selfDestructQueue;
 }
 
-public func evmCallFrame_getParent(frame: EvmCallFrame) -> option<EvmCallFrame> {
+public func _evmCallFrame_getParent(frame: EvmCallFrame) -> option<EvmCallFrame> {
     return frame.parent;
 }
 
@@ -1679,7 +1679,7 @@ public impure func evmCallStack_callHitError(errInfo: any) {
     }
 }
 
-func getLastFrame(topFrame: EvmCallFrame) -> EvmCallFrame {
+func _getLastFrame(topFrame: EvmCallFrame) -> EvmCallFrame {
     return xloop {
         if let Some(tf) = topFrame.parent {
             topFrame = tf;

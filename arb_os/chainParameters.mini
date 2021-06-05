@@ -39,10 +39,6 @@ public impure func chainParams_init() {
     globalChainParams = None<ChainParams>;
 }
 
-public impure func haveReceivedChainInitMessage() -> bool {
-    return globalChainParams != None<ChainParams>;
-}
-
 public impure func chainParams_gotParamsMessage(_sender: address, data: ByteArray) {
     if (globalChainParams == None<ChainParams>) {
         arbowner_init();
@@ -155,14 +151,6 @@ public impure func chainParams_speedLimitPerSecond() -> uint {
         params.arbGasSpeedLimitPerSecond
     } else {
         const::DefaultSpeedLimitPerSecond
-    };
-}
-
-public impure func chainParams_baseStake() -> (address, uint) {
-    return xif let Some(params) = globalChainParams {
-        (params.stakingToken, params.baseStake)
-    } else {
-        (address(0), 0)
     };
 }
 

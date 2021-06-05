@@ -79,14 +79,6 @@ public impure func arbStatistics_init() {
     };
 }
 
-public func arbStatistics_newForUpgrade() -> ArbStatistics {
-    return struct {
-        storage: 0,
-        arbGasUsed: 0,
-        numTxReceipts: 0,
-    };
-}
-
 public impure func arbStatistics_addToStorage(delta: int) {
     arbStats = arbStats with {
         storage: uint(int(arbStats.storage) + delta)
