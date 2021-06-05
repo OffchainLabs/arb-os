@@ -8,8 +8,6 @@ use accounts::account_getBalance;
 use accounts::accountStore_forall;
 
 use chainParameters::chainParams_getOwner;
-use chainParameters::chainParams_setOwner;
-use chainParameters::chainParams_setSecondsPerSend;
 use chainParameters::chainParams_get;
 use chainParameters::chainParams_set;
 use chainParameters::notifyParamsChanged;
@@ -37,7 +35,6 @@ use pluggables::ModuleFunction;
 use pluggables::installPluggable;
 use pluggables::bindContractAddressToPluggable;
 
-use gasAccounting::gasAccounting_getFeeRecipients;
 use gasAccounting::setFairGasPriceSender;
 use gasAccounting::isFairGasPriceSender;
 use gasAccounting::getSerializedFairGasPriceSenders;

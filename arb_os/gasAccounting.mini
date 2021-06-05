@@ -51,8 +51,6 @@ use std::stack::stack_new;
 use std::stack::stack_push;
 use std::stack::stack_pop;
 
-use chainParameters::chainParams_speedLimitPerSecond;
-
 use inbox::inbox_getNextUnpackedRequest;
 use inbox::inbox_currentArbBlockNumber;
 use inbox::inbox_currentTimestamp;
@@ -325,25 +323,6 @@ public impure func gasAccounting_getPricesInArbGas(aggregatorAddr: address) -> (
         (gasAccounting_getTxBaseFeeWei(Some(aggregatorAddr)) + arbGasPrice - 1) / arbGasPrice,   // base price for tx
         (prices.perL1CalldataUnit + arbGasPrice - 1) / arbGasPrice,  // price per L1 calldata unit
         (prices.perStorageCell + arbGasPrice - 1) / arbGasPrice,     // price per storage cell
-    );
-}
-
-public impure func gasAccounting_postInitMessage() {   // this runs after we have received the init message, or similar
-    let gasPoolMax = int(chainParams_getOrDie(const::Atom_Param_GasPoolMax));
-    if (gasAccountingInfo.congestionState.gasPool > gasPoolMax) {
-        // max sure gas pool isn't above its max
-        gasAccountingInfo = gasAccountingInfo with {
-            congestionState: gasAccountingInfo.congestionState with {
-                gasPool: gasPoolMax
-            }
-        };
-    }
-}
-
-public impure func gasAccounting_getFeeRecipients() -> (address, address) {
-    return (
-        address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
-        address(chainParams_getOrDie(const::Atom_Param_CongestionFeeRecipient)),
     );
 }
 

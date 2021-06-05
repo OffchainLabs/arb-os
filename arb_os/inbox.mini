@@ -33,8 +33,6 @@ use messageBatch::messageBatch_get;
 
 use output::outputStats_endOfBlock;
 
-use pluggables::callPluggable;
-
 use retrybuffer::RetryableTx;
 use retrybuffer::processRetryableTx;
 

@@ -168,7 +168,6 @@ pub fn make_parameters_list(
                 String::from("Compile error"),
                 format!("Could not open constants file {:?}", consts_file),
                 vec![],
-                false,
             )
         })?;
         let mut consts_string = String::new();
@@ -177,7 +176,6 @@ pub fn make_parameters_list(
                 String::from("Compile error"),
                 format!("Could not read file {:?} to a string", consts_file),
                 vec![],
-                false,
             )
         })?;
         serde_json::from_str::<ConstantsFile>(&consts_string).map_err(|_| {
@@ -185,7 +183,6 @@ pub fn make_parameters_list(
                 String::from("Compile error"),
                 format!("Could not parse {:?} as constants file", consts_file),
                 vec![],
-                false,
             )
         })?
     } else {

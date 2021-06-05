@@ -16,7 +16,7 @@ fn compile_run_cycle(input: String) -> Machine {
     };
     let mut machine = Machine::new(
         mexe,
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
+        RuntimeEnvironment::new(None),
     );
     run(&mut machine, vec![], false).unwrap();
     machine
