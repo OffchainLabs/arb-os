@@ -73,10 +73,6 @@ func outputStats_new() -> OutputStatistics {
     };
 }
 
-func outputStats_isAllZero(os: OutputStatistics) -> bool {
-    return (os.totalGasUsed + os.numTx + os.numEvmLogs + os.numLogs + os.numSends) == 0;
-}
-
 func outputStats_add(os1: OutputStatistics, os2: OutputStatistics) -> OutputStatistics {
     return struct {
         totalGasUsed: os1.totalGasUsed + os2.totalGasUsed,

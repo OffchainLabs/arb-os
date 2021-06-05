@@ -50,8 +50,6 @@ use inbox::inbox_currentArbBlockNumber;
 use inbox::inbox_currentEthBlockNumber;
 use inbox::inbox_currentTimestamp;
 
-use std::stack::stack_pop;
-
 use output::queueMessageForSend;
 
 use decompression::getGlobalAddressTable;
@@ -71,8 +69,6 @@ use std::bls::bls_makeKey;
 use std::bls::bls_marshalPublicKey;
 
 use decompression::parseAggregatorFunctionTable;
-
-use codeSegment::pcTableForCode;
 
 
 public impure func arbsys_txcall() {
@@ -428,33 +424,6 @@ impure func arbsys_getStorageAt(topFrame: EvmCallFrame, calldata: ByteArray) {
         evmOp_return(0, 32);
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 51, 0, 0);
-    }
-}
-
-impure func arbsys_getPcTable(_topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) <= 4) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 60, 0, 0);
-    }
-    let pcTable = pcTableForCode(bytearray_extract(calldata, 4, bytearray_size(calldata)-4));
-    let mem = evmCallStack_getTopFrameMemoryOrDie();
-    mem = bytearray_set256(mem, 0, 64);
-    let offset = 64;
-    loop {
-        if let Some(res) = stack_pop(pcTable) {
-            let (upct, item) = res;
-            pcTable = upct;
-            let (evmPc, avmCpHash) = unsafecast<(uint, bytes32)>(item);
-            mem = bytearray_set256(
-                bytearray_set256(mem, offset, evmPc),
-                offset+32,
-                uint(avmCpHash),
-            );
-            offset = offset + 64;
-        } else {
-            // done reading data, finish building returndata then return
-            mem = bytearray_set256(mem, 32, (offset-64)/32);
-            evmOp_return(0, offset);
-        }
     }
 }
 

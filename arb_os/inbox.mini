@@ -39,7 +39,6 @@ use retrybuffer::RetryableTx;
 use retrybuffer::processRetryableTx;
 
 use std::bytearray::ByteArray;
-use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_fromSizeAndBuffer;
 use std::bytearray::bytearray_getByte;
@@ -223,26 +222,6 @@ impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, fromSide
         timestamp: newMsg.timestamp
     } with {
         atStartOfBlock: false
-    };
-}
-
-func endOfArbBlockMessage(arbBlockNum: uint, ethBlockNum: uint, timestamp: uint) -> IncomingRequest {
-    return struct {
-        kind: const::L1MessageType_endOfBlock,
-        arbBlockNumber: arbBlockNum,
-        ethBlockNumber: ethBlockNum,
-        timestamp: timestamp,
-        sender: address(0),
-        requestId: 0,
-        msgData: bytearray_new(0),
-        provenance: struct {
-            l1SeqNum: 0,
-            parentRequestId: 0,
-            indexInParent: ~0,
-        },
-        aggregator: None<AggregatorInfo>,
-        adminMode: false,
-        gasEstimationParams: None<GasEstimationParams>,
     };
 }
 
@@ -573,26 +552,11 @@ func txRequestQueue_new() -> TxRequestQueue {
     return struct { q: queue_new() };
 }
 
-func txRequestQueue_isEmpty(q: TxRequestQueue) -> bool {
-    return queue_isEmpty(q.q);
-}
-
 func txRequestQueue_get(q: TxRequestQueue) -> option<(TxRequestQueue, TxRequestData)> {
     let (uq, item) = queue_get(q.q)?;
     return Some((struct{ q: uq }, unsafecast<TxRequestData>(item)));
 }
 
-func txRequestQueue_getOrDie(q: TxRequestQueue) -> (TxRequestQueue, TxRequestData) {
-    return xif let Some(res) = txRequestQueue_get(q) {
-        res
-    } else {
-        panic
-    };
-}
-
-func txRequestQueue_put(q: TxRequestQueue, req: TxRequestData) -> TxRequestQueue {
-    return struct { q: queue_put(q.q, req) };
-}
 
 
 

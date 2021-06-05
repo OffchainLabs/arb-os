@@ -31,10 +31,6 @@ type ChainParams = struct {
 
 var globalChainParams: option<ChainParams>;
 
-public impure func chainParams_haveDoneInit() -> bool {
-    return (unsafecast<any>(globalChainParams) != ()) && (globalChainParams != None<ChainParams>);
-}
-
 public impure func chainParams_init() {
     globalChainParams = None<ChainParams>;
 }
