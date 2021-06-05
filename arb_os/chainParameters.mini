@@ -4,6 +4,8 @@
 
 use accounts::accounts_notifyParamsChanged;
 
+use arbowner::arbowner_init;
+
 use evmCallStack::evmCallStack_callHitError;
 
 use core::kvs::Kvs;
@@ -14,6 +16,9 @@ use std::bytearray::ByteArray;
 use std::bytearray::MarshalledBytes;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
+use arbowner::arbowner_init;
+
+use std::bytearray::ByteArray;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 

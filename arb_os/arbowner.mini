@@ -1,11 +1,10 @@
 //
-// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
 //
 
 use accounts::Account;
 use accounts::getGlobalAccountStore;
 use accounts::account_getBalance;
-use accounts::account_setContractInfo;
 use accounts::accountStore_forall;
 
 use chainParameters::chainParams_getOwner;
@@ -15,8 +14,6 @@ use chainParameters::chainParams_get;
 use chainParameters::chainParams_set;
 use chainParameters::notifyParamsChanged;
 use chainParameters::chainParams_serializeAllParams;
-
-use decompression::decompressAndVerifyEcdsaSignedTx;
 
 use evmCallStack::EvmCallFrame;
 use evmCallStack::evmCallStack_topFrame;
@@ -30,20 +27,14 @@ use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallStack_stackDepth;
 use evmCallStack::evmCallStack_returnFromCall;
 use evmCallStack::evmCallStack_transferEthFromCurrent;
-use evmCallStack::evmCallStack_getAccountInCurrentContext;
-use evmCallStack::evmCallStack_setAccountInCurrentContext;
-use evmCallStack::evmCallStack_getTopFrameReturnData;
 
 use evmOps::evmOp_return;
-use evmOps::evmOp_revert;
 use evmOps::evmOp_revert_knownPc;
 use evmOps::evmOp_revert_knownCodePc;
-use evmOps::evmOp_returndatasize;
 use evmOps::doCreationOpcode;
 
 use pluggables::ModuleFunction;
 use pluggables::installPluggable;
-use pluggables::callPluggable;
 use pluggables::bindContractAddressToPluggable;
 
 use gasAccounting::gasAccounting_getFeeRecipients;
@@ -59,14 +50,9 @@ use gasAccounting::allowedSenders_serialize;
 use gasAccounting::getAddressForReserveFundsDeposit;
 use gasAccounting::setL1GasPriceEstimate;
 
-use inbox::inbox_currentArbBlockNumber;
-use inbox::inbox_currentEthBlockNumber;
-use inbox::inbox_currentTimestamp;
-
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
-use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
@@ -81,8 +67,6 @@ use std::avmcodebuilder::avmCodeBuilder_finish;
 use std::bytestream::bytestream_new;
 
 use std::rlp::keccakOfRlpEncodedUintPair;
-
-use std::storageMap::storageMap_new;
 
 
 var upgradeInProgress: option<AvmCodeBuilder>;
@@ -148,6 +132,8 @@ public impure func arbowner_txcall() {
             arbowner_isFairGasPriceSender(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_getAllFairGasPriceSenders) {
             arbowner_getAllFairGasPriceSenders(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_bindAddressToPluggable) {
+            arbowner_bindAddressToPluggable(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
