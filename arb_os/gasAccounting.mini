@@ -282,10 +282,10 @@ public impure func gasAccounting_getTxBaseFeeL1Gas(aggregatorAddr: option<addres
             xif let Some(aggInfo) = evmCallStack_getAccountInCurrentContext(addr).aggregatorInfo {
                 aggInfo.baseTxFeeL1Gas
             } else {
-                const::Charging_DefaultBaseTxFeeL1Gas
+                chainParams_getOrDie(const::Atom_Param_DefaultBaseTxFeeL1Gas)
             }
         } else {
-            const::Charging_DefaultBaseTxFeeL1Gas
+            chainParams_getOrDie(const::Atom_Param_DefaultBaseTxFeeL1Gas)
         }
     } else {
         0
@@ -293,7 +293,8 @@ public impure func gasAccounting_getTxBaseFeeL1Gas(aggregatorAddr: option<addres
 }
 
 public impure func gasAccounting_setTxBaseFeeL1Gas(aggregator: address, fee: uint) -> option<()> {
-    if ( (fee < const::Charging_MinBaseTxFeeL1Gas) || (fee > const::Charging_MaxBaseTxFeeL1Gas) ) {
+    if (    (fee < chainParams_getOrDie(const::Atom_Param_MinBaseTxFeeL1Gas))
+         || (fee > chainParams_getOrDie(const::Atom_Param_MaxBaseTxFeeL1Gas)) ) {
         return None<()>;
     }
 

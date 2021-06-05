@@ -79,6 +79,9 @@ public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade
         with { [const::Atom_Param_NetworkFeeRecipient] = uint(oldGlobals.gasAccountingInfo.feeConfig.forNetwork) }
         with { [const::Atom_Param_CongestionFeeRecipient] = uint(oldGlobals.gasAccountingInfo.feeConfig.forCongestion) }
         with { [const::Atom_Param_DefaultAggregator] = uint(oldChainParams.defaultAggregator) }
+        with { [const::Atom_Param_DefaultBaseTxFeeL1Gas] = const::Default_Param_DefaultBaseTxFeeL1Gas }
+        with { [const::Atom_Param_MinBaseTxFeeL1Gas] = const::Default_Param_MinBaseTxFeeL1Gas }
+        with { [const::Atom_Param_MaxBaseTxFeeL1Gas] = const::Default_Param_MaxBaseTxFeeL1Gas }
         with { [const::Atom_Param_ChainID] = oldChainParams.chainId }
         with { [const::Atom_Param_ChallengePeriodEthBlocks] = oldChainParams.gracePeriodBlocks }
         with { [const::Atom_Param_SpeedLimitPerSecond] = oldGlobals.gasAccountingParams.SpeedLimitPerSecond }
@@ -141,7 +144,7 @@ func acctRemapClosure(_addr: address, oldAcct: before__accounts_Account, state: 
                 struct {
                     decompressionState: aggInfo.decompressionState,
                     feeCollector: aggInfo.feeCollector,
-                    baseTxFeeL1Gas: const::Charging_DefaultBaseTxFeeL1Gas,
+                    baseTxFeeL1Gas: const::Default_Param_DefaultBaseTxFeeL1Gas,
                 }
             )
         } else {

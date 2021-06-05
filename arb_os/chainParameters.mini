@@ -48,6 +48,9 @@ public func chainParams_getDefaults() -> map<uint, uint> {
         with { [const::Atom_Param_NetworkFeeRecipient] = const::Default_Param_NetworkFeeRecipient }
         with { [const::Atom_Param_CongestionFeeRecipient] = const::Default_Param_CongestionFeeRecipient }
         with { [const::Atom_Param_DefaultAggregator] = const::Default_Param_DefaultAggregator }
+        with { [const::Atom_Param_DefaultBaseTxFeeL1Gas] = const::Default_Param_DefaultBaseTxFeeL1Gas }
+        with { [const::Atom_Param_MinBaseTxFeeL1Gas] = const::Default_Param_MinBaseTxFeeL1Gas }
+        with { [const::Atom_Param_MaxBaseTxFeeL1Gas] = const::Default_Param_MaxBaseTxFeeL1Gas }
         with { [const::Atom_Param_ChainID] = const::Default_Param_ChainID }
         with { [const::Atom_Param_ChallengePeriodEthBlocks] = const::Default_Param_ChallengePeriodEthBlocks }
         with { [const::Atom_Param_SpeedLimitPerSecond] = const::Default_Param_SpeedLimitPerSecond }
