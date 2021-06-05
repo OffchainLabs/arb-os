@@ -4,24 +4,16 @@
 
 use accounts::accounts_notifyParamsChanged;
 
-use evmCallStack::evmCallStack_callHitError;
-
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsForall;
 
-use std::bytearray::MarshalledBytes;
 use std::bytearray::ByteArray;
-use std::bytearray::MarshalledBytes;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
-use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 
-use std::bytestream::ByteStream;
 use std::bytestream::bytestream_new;
-use std::bytestream::bytestream_get64;
 use std::bytestream::bytestream_get256;
-use std::bytestream::bytestream_skipBytes;
 
 use gasAccounting::gasAccounting_notifyParamsChanged;
 
@@ -56,6 +48,9 @@ public func chainParams_getDefaults() -> map<uint, uint> {
         with { [const::Atom_Param_NetworkFeeRecipient] = const::Default_Param_NetworkFeeRecipient }
         with { [const::Atom_Param_CongestionFeeRecipient] = const::Default_Param_CongestionFeeRecipient }
         with { [const::Atom_Param_DefaultAggregator] = const::Default_Param_DefaultAggregator }
+        with { [const::Atom_Param_DefaultBaseTxFeeL1Gas] = const::Default_Param_DefaultBaseTxFeeL1Gas }
+        with { [const::Atom_Param_MinBaseTxFeeL1Gas] = const::Default_Param_MinBaseTxFeeL1Gas }
+        with { [const::Atom_Param_MaxBaseTxFeeL1Gas] = const::Default_Param_MaxBaseTxFeeL1Gas }
         with { [const::Atom_Param_ChainID] = const::Default_Param_ChainID }
         with { [const::Atom_Param_ChallengePeriodEthBlocks] = const::Default_Param_ChallengePeriodEthBlocks }
         with { [const::Atom_Param_SpeedLimitPerSecond] = const::Default_Param_SpeedLimitPerSecond }
@@ -113,16 +108,8 @@ public impure func chainParams_chainId() -> uint {
     return chainParams_getOrDie(const::Atom_Param_ChainID);
 }
 
-public impure func chainParams_speedLimitPerSecond() -> uint {
-    return chainParams_getOrDie(const::Atom_Param_SpeedLimitPerSecond);
-}
-
 public impure func chainParams_getOwner() -> address {
     return address(chainParams_getOrDie(const::Atom_Param_ChainOwner));
-}
-
-public impure func chainParams_setOwner(addr: address) {
-    return chainParams_set(const::Atom_Param_ChainOwner, uint(addr));
 }
 
 public impure func chainParams_getDefaultAggregator() -> address {
@@ -135,15 +122,6 @@ public impure func chainParams_setDefaultAggregator(newDefault: address) {
 
 public impure func chainParams_getSecondsPerSend() -> uint {
     return chainParams_getOrDie(const::Atom_Param_SecondsPerSend);
-}
-
-public impure func chainParams_setSecondsPerSend(sps: uint) {
-    chainParams_set(const::Atom_Param_SecondsPerSend, sps);
-}
-
-public impure func blocksToSeconds(numBlocks: uint) -> uint {
-    return numBlocks * chainParams_getOrDie(const::Atom_Param_SecondsPerBlockNumerator)
-                     / chainParams_getOrDie(const::Atom_Param_SecondsPerBlockDenominator);
 }
 
 public impure func chainParams_serializeAllParams() -> ByteArray {

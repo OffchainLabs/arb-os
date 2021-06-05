@@ -2,16 +2,12 @@
 // Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
 //
 
-use inbox::IncomingRequest;
 use accounts::AccountStore;
 use accounts::Account;
 use evmlogs::EvmLogs;
 use std::queue::Queue;
 use std::bytearray::ByteArray;
-use std::bytestream::ByteStream;
-use std::bytearray::MarshalledBytes;
 use std::stack::Stack;
-use std::storageMap::StorageMap;
 use messages::TxRequestData;
 
 use errorHandler::errorHandler;
@@ -25,21 +21,15 @@ use accounts::accountStore_getRetryBuffer;
 use accounts::accountStore_setRetryBuffer;
 use accounts::accountStore_transferEthBalance;
 use accounts::accountStore_destroyAccount;
-use accounts::accountStore_cloneContract;
 use accounts::accountStore_createOrAddCodeRef;
-use accounts::accountStore_codeRefExists;
-use accounts::accountStore_getEscrowBalance;
 use accounts::accountStore_payFromEscrow;
 use accounts::account_setStorageCell;
 use accounts::account_getBalance;
 use accounts::account_getAllStorage;
 use accounts::account_getStartCodePoint;
 use accounts::account_setContractInfo;
-use accounts::account_fetchAndIncrSeqNum;
 use accounts::account_incrSeqNum;
 use accounts::account_getStorageSize;
-use accounts::account_isEmpty;
-use accounts::pristineAccount;
 
 use chainParameters::chainParams_getOrDie;
 use codeSegment::getDummyAcceptContractCode;
@@ -55,11 +45,8 @@ use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
-use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_set256;
 use std::bytestream::bytestream_new;
-
-use std::keccak::keccak256;
 
 use std::storageMap::storageMap_new;
 
@@ -79,7 +66,6 @@ use gasAccounting::gasAccounting_startTxCharges;
 use gasAccounting::gasAccounting_endTxCharges;
 use gasAccounting::gasAccounting_pauseTxCharges;
 use gasAccounting::gasAccounting_resumeTxCharges;
-use gasAccounting::gasAccounting_getGasChargeAmountInArbGas;
 use gasAccounting::txFeeStats_zero;
 use gasAccounting::getAddressForReserveFundsDeposit;
 use gasAccounting::deferredPayments_apply;
@@ -167,7 +153,7 @@ type TxReturndataHook = struct {
     data: any,
 }
 
-public impure func evmCallStack_currentArbBlockNumber() -> uint {
+public impure func _evmCallStack_currentArbBlockNumber() -> uint {
     return globalCurrentTxRequest.incomingRequest.arbBlockNumber;
 }
 
@@ -205,12 +191,8 @@ public impure func setRetryBufferInCurrentContext(rbuf: RetryBuffer) {
     }
 }
 
-public impure func evmCallStack_makeEmpty() {
-    globalCallStack = None<EvmCallFrame>;
-}
-
-public impure func evmCallStack_isEmpty() -> bool {
-    return globalCallStack == None<EvmCallFrame>;
+public impure func evmCallStack_isEmpty() -> bool {                                                 
+    return globalCallStack == None<EvmCallFrame>;                                                   
 }
 
 public impure func evmCallStack_currentTxRequestGasBid() -> uint {
@@ -238,6 +220,10 @@ public impure func evmCallStack_stackDepth() -> uint {
             return depth;
         }
     };
+}
+
+public impure func evmCallStack_inRetryable() -> bool {
+    return (globalCallStack != None<EvmCallFrame>) && (globalCurrentRetryableRequest != None<IncomingRequestAndLogs>);
 }
 
 public impure func evmCallStack_stackInfo() -> (uint, (address, address), (address, address)) {
@@ -1302,60 +1288,6 @@ public impure func restoreAuxStackAndCall(
     }
 }
 
-public impure func saveAuxStack() -> Stack {
-    let ret = stack_new();
-
-    while ( ! asm() bool { auxpop auxstackempty swap1 auxpush }) {
-        let topItemFromAuxstack = asm() any {
-            auxpop
-            auxpop
-            swap1
-            auxpush
-        };
-        ret = stack_push(ret, topItemFromAuxstack);
-    }
-
-    return ret;
-}
-
-public impure func restoreAuxStack(saved: Stack) {
-    // discard everything on the auxstack, except the current frame
-    while ( ! asm() bool { auxpop auxstackempty swap1 auxpush }) {
-        asm() {
-            auxpop
-            auxpop
-            pop
-            auxpush
-        };
-    }
-
-    // restore the saved aux stack contents
-    loop {
-        if let Some(res) = stack_pop(saved) {
-            let (usaved, item) = res;
-            saved = usaved;
-            asm(item,) {
-                auxpop
-                swap1
-                auxpush
-                auxpush
-            };
-        } else {
-            return;
-        }
-    }
-}
-
-public impure func saveAvmAndAuxStacks() -> Stack {
-    asm(saveAuxStack(),) { };    // push stackified aux stack contents onto the main stack
-    return saveAvmStack();
-}
-
-public impure func restoreAvmAndAuxStacks(saved: Stack) {
-    restoreAvmStack(saved);
-    restoreAuxStack(asm() Stack { });
-}
-
 public impure func evmCallStack_topFrame() -> option<EvmCallFrame> {
     return globalCallStack;
 }
@@ -1371,26 +1303,8 @@ public impure func evmCallStack_oldestCallFrame() -> option<EvmCallFrame> {
     };
 }
 
-public impure func evmCallStack_runningAsAccount() -> option<Account> {
-    return Some((globalCallStack?).runningAsAccount);
-}
-
 public impure func evmCallStack_runningCodeFromAccount() -> option<Account> {
     return Some(evmCallFrame_runningCodeFromAccount(globalCallStack?));
-}
-
-public impure func evmCallStack_runningAsAccountAndAddr() -> option<(Account, address)> {
-    let topFrame = globalCallStack?;
-    return Some((topFrame.runningAsAccount, topFrame.runningAs));
-}
-
-public impure func evmCallStack_writeRunningAsAccount(acct: Account) -> bool {
-    return xif let Some(topFrame) = globalCallStack {
-        globalCallStack = Some(topFrame with { runningAsAccount: acct });
-        true
-    } else {
-        false
-    };
 }
 
 public impure func evmCallStack_getTopFrameReturnData() -> option<ByteArray> {
@@ -1463,7 +1377,7 @@ public impure func evmCallStack_setAccountStoreInCurrentContext(acctStore: Accou
     }
 }
 
-public impure func evmCallStack_transferEthInCurrentContext(from: address, to: address, amount: uint) -> option<()> {
+public impure func _evmCallStack_transferEthInCurrentContext(from: address, to: address, amount: uint) -> option<()> {
     if let Some(topFrame) = globalCallStack {
         globalCallStack = Some(evmCallFrame_transferEth(topFrame, from, to, amount)?);
     } else {
@@ -1661,19 +1575,19 @@ public func evmCallFrame_shouldRevertOnStorageWrite(frame: EvmCallFrame) -> bool
     return frame.revertOnStorageWrite;
 }
 
-public func evmCallFrame_getEvmLogs(frame: EvmCallFrame) -> EvmLogs {
+public func _evmCallFrame_getEvmLogs(frame: EvmCallFrame) -> EvmLogs {
     return frame.evmLogs;
 }
 
-public func evmCallFrame_getResumeCodePoint(frame: EvmCallFrame) -> option<func()> {
+public func _evmCallFrame_getResumeCodePoint(frame: EvmCallFrame) -> option<func()> {
     return Some((frame.resumeInfo?).codePoint);
 }
 
-public func evmCallFrame_getSelfDestructQueue(frame: EvmCallFrame) -> Queue {
+public func _evmCallFrame_getSelfDestructQueue(frame: EvmCallFrame) -> Queue {
     return frame.selfDestructQueue;
 }
 
-public func evmCallFrame_getParent(frame: EvmCallFrame) -> option<EvmCallFrame> {
+public func _evmCallFrame_getParent(frame: EvmCallFrame) -> option<EvmCallFrame> {
     return frame.parent;
 }
 
@@ -1690,7 +1604,7 @@ public impure func evmCallStack_callHitError(errInfo: any) {
     }
 }
 
-func getLastFrame(topFrame: EvmCallFrame) -> EvmCallFrame {
+func _getLastFrame(topFrame: EvmCallFrame) -> EvmCallFrame {
     return xloop {
         if let Some(tf) = topFrame.parent {
             topFrame = tf;

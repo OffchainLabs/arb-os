@@ -4,21 +4,47 @@
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 
+use bridge_arbos_versions::before__accounts_Account;
+
+use accounts::Account;
+use accounts::AccountStore;
+use accounts::AggregatorInfo;
+
+use evmCallStack::EvmCallFrame;
+
 use gasAccounting::GasAccountingInfo;
 
+use tracing::EvmTracer;
+use tracing::evmTracer_new;
+
+use core::kvs::Kvs;
+use core::kvs::builtin_kvsForall;
+
+
+public func set_globalCallStack_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
+    return None<EvmCallFrame>;
+}
 
 public func set_gasAccountingInfo_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> GasAccountingInfo {
     let oldInfo = oldGlobals.gasAccountingInfo;
     let oldPP = oldInfo.pricingParams;
     return struct {
         txState: oldInfo.txState,
-        feeConfig: oldInfo.feeConfig,
-        currentPrices: oldInfo.currentPrices,
+        feeConfig: struct {
+            baseFeeMultiplier: oldInfo.feeConfig.baseFeeMultiplier,
+            shareForNetFee: oldInfo.feeConfig.shareForNetFee,
+        },
+        currentPrices: struct {
+            perL1CalldataUnit: oldInfo.currentPrices.perL1CalldataUnit,
+            perStorageCell: oldInfo.currentPrices.perStorageCell,
+            perArbGasBase: oldInfo.currentPrices.perArbGasBase,
+            perArbGasCongestion: oldInfo.currentPrices.perArbGasCongestion,
+            perArbGasTotal: oldInfo.currentPrices.perArbGasTotal,
+        },
         gasRemainingThisBlock: oldInfo.gasRemainingThisBlock,
         congestionState: oldInfo.congestionState,
         speedLimitPerSecond: oldInfo.speedLimitPerSecond,
         pricingParams: struct {
-            l1GasPerL2Tx: oldPP.l1GasPerL2Tx,
             l1GasPerL1CalldataUnit: oldPP.l1GasPerL1CalldataUnit,
             l1GasPerStorage: oldPP.l1GasPerStorage,
             arbGasDivisor: oldPP.arbGasDivisor,
@@ -53,6 +79,9 @@ public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade
         with { [const::Atom_Param_NetworkFeeRecipient] = uint(oldGlobals.gasAccountingInfo.feeConfig.forNetwork) }
         with { [const::Atom_Param_CongestionFeeRecipient] = uint(oldGlobals.gasAccountingInfo.feeConfig.forCongestion) }
         with { [const::Atom_Param_DefaultAggregator] = uint(oldChainParams.defaultAggregator) }
+        with { [const::Atom_Param_DefaultBaseTxFeeL1Gas] = const::Default_Param_DefaultBaseTxFeeL1Gas }
+        with { [const::Atom_Param_MinBaseTxFeeL1Gas] = const::Default_Param_MinBaseTxFeeL1Gas }
+        with { [const::Atom_Param_MaxBaseTxFeeL1Gas] = const::Default_Param_MaxBaseTxFeeL1Gas }
         with { [const::Atom_Param_ChainID] = oldChainParams.chainId }
         with { [const::Atom_Param_ChallengePeriodEthBlocks] = oldChainParams.gracePeriodBlocks }
         with { [const::Atom_Param_SpeedLimitPerSecond] = oldGlobals.gasAccountingParams.SpeedLimitPerSecond }
@@ -85,4 +114,45 @@ public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade
         with { [const::Atom_Param_RetryableTxLifetimeSeconds] = const::Default_Param_RetryableTxLifetimeSeconds }
         with { [const::Atom_Param_ArbitrumNonZeroBalanceCallStipend] = const::Default_Param_ArbitrumNonZeroBalanceCallStipend }
     ;
+}
+
+public func set_globalAccountStore_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> AccountStore {
+    let oldGAS = oldGlobals.globalAccountStore;
+    let acctsRemapResult = builtin_kvsForall(
+        unsafecast<Kvs>(oldGAS.accounts),
+        unsafecast<func(any, any, any) -> any>(acctRemapClosure),
+        newmap<address, Account>,
+    );
+    return struct {
+        accounts: unsafecast<map<address, Account>>(acctsRemapResult),
+        retryBuffer: oldGAS.retryBuffer,
+        numContracts: oldGAS.numContracts,
+        codeRefTable: oldGAS.codeRefTable,
+        escrowStore: oldGAS.escrowStore,
+    };
+}
+
+func acctRemapClosure(_addr: address, oldAcct: before__accounts_Account, state: map<address, Account>) -> map<address, Account> {
+    let acct = struct {
+        addr: oldAcct.addr,
+        blsKey: oldAcct.blsKey,
+        nextSeqNum: oldAcct.nextSeqNum,
+        ethBalance: oldAcct.ethBalance,
+        contractInfo: oldAcct.contractInfo,
+        aggregatorInfo: xif let Some(aggInfo) = oldAcct.aggregatorInfo {
+            Some(
+                struct {
+                    decompressionState: aggInfo.decompressionState,
+                    feeCollector: aggInfo.feeCollector,
+                    baseTxFeeL1Gas: const::Default_Param_DefaultBaseTxFeeL1Gas,
+                }
+            )
+        } else {
+            None<AggregatorInfo>
+        },
+        aggregatorToPay: oldAcct.aggregatorToPay,
+    };
+    return state with {
+        [acct.addr] = acct
+    };
 }
