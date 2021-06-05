@@ -930,9 +930,6 @@ impure func payForTxAndL1Gas(
         // Tx isn't using the preferred aggregator, so only charge for the network fee, for L2 tx and L1 calldata gas.
         // Here we reduce the prices of those things so they include only the network fee.
         // Below we will charge the reduced price and give all of the funds for these things to the network fee.
-        prices = prices with {
-            perL1CalldataUnit: fixedPoint_mulByUintTrunc(feeConfig.netFeeDivByBaseFee, prices.perL1CalldataUnit)
-        };
         txFeeStats_setPrices(feeStats, prices, None<address>)
     };
 
@@ -1215,7 +1212,17 @@ public impure func txFeeStats_setPrices(stats: TxFeeStats, prices: GasPrices, ag
                     gasAccounting_getTxBaseFeeWei(None<address>),
                 )
             },
-            calldataUnit: prices.perL1CalldataUnit,
+            calldataUnit: xif let Some(addr) = aggregator {
+                fixedPoint_mulByUintTrunc(
+                    gasAccountingInfo.feeConfig.baseFeeMultiplier,
+                    prices.perL1CalldataUnit,
+                )
+            } else {
+                fixedPoint_mulByUintTrunc(
+                    gasAccountingInfo.feeConfig.netFeeDivByBaseFee,
+                    prices.perL1CalldataUnit,
+                )
+            },
             storage: prices.perStorageCell,
             compute: prices.perArbGasTotal,
         }
