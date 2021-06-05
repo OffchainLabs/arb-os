@@ -362,7 +362,7 @@ public impure func mainRunLoop() {
     }
 }
 
-impure func handleUnpackedMessage(msg: IncomingMessage) {
+impure func handleUnpackedMessage(msg: IncomingRequest) {
     if (msg.kind == const::L1MessageType_L2FundedByL1) {
         // record the calldata usage, so it can be reported in tx receipt
         msg = msg with {
