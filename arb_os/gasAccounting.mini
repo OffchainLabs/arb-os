@@ -51,7 +51,6 @@ use std::stack::stack_new;
 use std::stack::stack_push;
 use std::stack::stack_pop;
 
-use inbox::inbox_getNextUnpackedRequest;
 use inbox::inbox_currentArbBlockNumber;
 use inbox::inbox_currentTimestamp;
 
@@ -605,48 +604,45 @@ impure func switchToChargingOS() -> uint {
     };
 }
 
-// getNextRequestFromCongestionAuction implements the congestion auction. For each request, the auction
+public impure func gasAccounting_startNewBlock(arbBlockNumber: uint, timestamp: uint) {
+    // it's the first tx of a new block, so do beginning-of-block work
+    let updatedCongestionState = updateCongestionState(
+        gasAccountingInfo.congestionState,
+        arbBlockNumber,
+        timestamp
+    );
+    let gasForThisBlock = xif(updatedCongestionState.gasPool > int(0)) {
+        uint(updatedCongestionState.gasPool)
+    } else {
+        0   // gas pool has gone negative; wait until it gets positive
+    };
+    let (currentPrices, retryablePrices) = setPrices(
+       gasAccountingInfo.feeConfig,
+       gasAccountingInfo.pricingParams,
+       updatedCongestionState,
+       gasAccountingInfo.retryablePrices,
+   );
+    gasAccountingInfo = gasAccountingInfo with {
+        congestionState: updatedCongestionState
+    } with {
+        currentPrices: currentPrices
+    } with {
+        retryablePrices: retryablePrices
+    } with {
+        gasRemainingThisBlock: gasForThisBlock
+    } with {
+        gasAllocatedToThisBlock: gasForThisBlock
+    };
+}
+
+// gasAccounting_prepareTx does gas acocunting, to prepare a tx for execution. For each request, this
 //     determines (a) whether to approve the request for execution, and (b) what gas price the request will pay.
-// This uses a "pull" interface: the main run loop calls this to get the next request.
-//     This code will in turn call back to the inbox to pull in incoming requests from the L1.
-public impure func getNextRequestFromCongestionAuction() -> (
+public impure func gasAccounting_prepareTx(tx: TxRequestData) -> (
     uint,             // error code, or const::TxResultCode_success if no error
     TxRequestData,
 ) {
-    let tx = inbox_getNextUnpackedRequest();
-    if( (!allowedSenders_contains(tx.caller)) && (!tx.incomingRequest.adminMode) ) {
-        return (const::TxResultCode_senderNotPermitted, tx);
-    }
-
     if (tx.incomingRequest.arbBlockNumber > gasAccountingInfo.congestionState.lastArbBlockNumSeen) {
-        // it's the first tx of a new block, so do beginning-of-block work
-        let updatedCongestionState = updateCongestionState(
-            gasAccountingInfo.congestionState,
-            tx.incomingRequest.arbBlockNumber,
-            tx.incomingRequest.timestamp
-        );
-        let gasForThisBlock = xif(updatedCongestionState.gasPool > int(0)) {
-            uint(updatedCongestionState.gasPool)
-        } else {
-            0   // gas pool has gone negative; wait until it gets positive
-        };
-        let (currentPrices, retryablePrices) = setPrices(
-           gasAccountingInfo.feeConfig,
-           gasAccountingInfo.pricingParams,
-           updatedCongestionState,
-           gasAccountingInfo.retryablePrices,
-       );
-        gasAccountingInfo = gasAccountingInfo with {
-            congestionState: updatedCongestionState
-        } with {
-            currentPrices: currentPrices
-        } with {
-            retryablePrices: retryablePrices
-        } with {
-            gasRemainingThisBlock: gasForThisBlock
-        } with {
-            gasAllocatedToThisBlock: gasForThisBlock
-        };
+        gasAccounting_startNewBlock(tx.incomingRequest.arbBlockNumber, tx.incomingRequest.timestamp);
     }
 
     return xif ((tx.incomingRequest.sender != address(0)) && feesEnabled() && (! tx.incomingRequest.adminMode)) {

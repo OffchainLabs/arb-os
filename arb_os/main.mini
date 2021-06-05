@@ -38,10 +38,12 @@ use evmlogs::EvmLogs;
 
 use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_init;
-use gasAccounting::getNextRequestFromCongestionAuction;
+use gasAccounting::gasAccounting_prepareTx;
+use gasAccounting::allowedSenders_contains;
 
 use inbox::inbox_init;
 use inbox::emitGenesisBlockReceipt;
+use inbox::inbox_getNextUnpackedRequest;
 
 use messages::handleL2Request;
 
@@ -116,7 +118,14 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
 
 public impure func mainRunLoop() {
     loop {
-        let (resultCode, request) = getNextRequestFromCongestionAuction();
+        let tx = inbox_getNextUnpackedRequest();
+
+        let (resultCode, request) = xif (allowedSenders_contains(tx.caller) || tx.incomingRequest.adminMode) {
+            gasAccounting_prepareTx(tx)
+        } else {
+            (const::TxResultCode_senderNotPermitted, tx)
+        };
+
         if (resultCode == const::TxResultCode_success) {
             if (handleL2Request(request) == None<()>) {
                 // reject for message format error
