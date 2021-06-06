@@ -90,12 +90,10 @@ public func set_gasAccountingInfo_onUpgrade(input_globals: GlobalsBeforeUpgrade)
             enabled: old.feeConfig.enabled,
             forNetwork: old.feeConfig.forNetwork,
             forCongestion: old.feeConfig.forCongestion,
-            baseFeeMultiplier: old.feeConfig.baseFeeMultiplier,
-            netFeeDivByBaseFee: fixedPoint_new(
+            networkFeeRate: fixedPoint_new(
                 old.feeConfig.baseFeeMultiplier.val,
                 old.feeConfig.baseFeeMultiplier.shiftFactor - old.feeConfig.baseFeeMultiplier.val
             ),
-            netFeeDivByTotalFee: old.feeConfig.shareForNetFee,
         },
         currentPrices: struct {
             perL1CalldataUnit: old.currentPrices.perL1CalldataUnit,
