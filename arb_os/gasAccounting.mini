@@ -1005,12 +1005,12 @@ impure func tryToPayForL1Gas(
     return xif let Some(uAcctStore) = accountStore_transferEthBalance(acctStore, payer, recipient, totalDue) {
         setGlobalAccountStore(uAcctStore);
         (
-            true,
+            fullyPaid,
             feeStats with {
                 weiPaid: feeStats.weiPaid with {
-                    tx: weiForTx
+                    tx: feeStats.weiPaid.tx + weiForTx
                 } with {
-                    calldataUnit: weiForCalldata
+                    calldataUnit: feeStats.weiPaid.calldataUnit + weiForCalldata
                 }
             },
             totalDue,
