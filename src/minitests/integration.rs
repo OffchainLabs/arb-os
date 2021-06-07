@@ -2,6 +2,7 @@ use crate::compile::CompileStruct;
 use crate::mavm::Value;
 use crate::run::{run, Machine, RuntimeEnvironment};
 use crate::uint256::Uint256;
+use std::option::Option::None;
 use std::rc::Rc;
 
 fn compile_run_cycle(input: String) -> Machine {
@@ -14,7 +15,7 @@ fn compile_run_cycle(input: String) -> Machine {
         mexe,
         RuntimeEnvironment::new(Uint256::from_usize(1111), None),
     );
-    run(&mut machine, vec![], false).unwrap();
+    run(&mut machine, vec![], false, None).unwrap();
     machine
 }
 

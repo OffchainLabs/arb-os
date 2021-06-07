@@ -14,6 +14,8 @@ pub use runtime_env::{
     _bytes_from_bytestack, _bytestack_from_bytes, generic_compress_token_amount,
     replay_from_testlog_file, ArbosReceipt, RuntimeEnvironment,
 };
+use std::collections::HashSet;
+use std::io::Write;
 
 mod blake2b;
 mod emulator;
@@ -23,9 +25,16 @@ mod runtime_env;
 pub fn run_from_file(
     path: &Path,
     args: Vec<Value>,
+    coverage_filename: Option<String>,
     debug: bool,
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
-    run_from_file_and_env(path, args, RuntimeEnvironment::default(), debug)
+    run_from_file_and_env(
+        path,
+        args,
+        RuntimeEnvironment::default(),
+        coverage_filename,
+        debug,
+    )
 }
 ///Executes the file located at path, or starts the debugger if debug is set to true.
 ///
@@ -42,10 +51,11 @@ pub fn run_from_file_and_env(
     path: &Path,
     args: Vec<Value>,
     env: RuntimeEnvironment,
+    coverage_filename: Option<String>,
     debug: bool,
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
     let mut machine = load_from_file_and_env(path, env);
-    run(&mut machine, args, debug)
+    run(&mut machine, args, debug, coverage_filename)
 }
 
 pub fn load_from_file(path: &Path) -> Machine {
@@ -94,11 +104,30 @@ pub fn run(
     machine: &mut Machine,
     args: Vec<Value>,
     debug: bool,
+    coverage_filename: Option<String>,
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
     // We use PC 1 here because PC pushes an unwanted value--designed for a different entry ABI
+    if coverage_filename.is_some() {
+        machine.start_coverage();
+    }
     match machine.test_call(CodePt::new_internal(1), args, debug) {
-        Ok(_stack) => Ok(machine.runtime_env.get_all_raw_logs()),
+        Ok(_stack) => {
+            if let Some(coverage_fn) = coverage_filename {
+                let coverage_data = machine.coverage_result().unwrap();
+                write_coverage_data_to_file(coverage_data, coverage_fn);
+            }
+            Ok(machine.runtime_env.get_all_raw_logs())
+        }
         Err(e) => Err((e, machine.get_stack_trace())),
+    }
+}
+
+fn write_coverage_data_to_file(coverage_data: HashSet<usize>, coverage_filename: String) {
+    let mut coverage_file = File::create(coverage_filename).unwrap();
+    let mut coverage_lines: Vec<usize> = coverage_data.iter().map(|r| *r).collect();
+    coverage_lines.sort();
+    for i in coverage_lines {
+        writeln!(coverage_file, "{}", i).unwrap();
     }
 }
 

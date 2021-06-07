@@ -1036,7 +1036,9 @@ impl Machine {
             }
             if let CodePt::Internal(pc) = self.get_pc().unwrap() {
                 match self.coverage.iter_mut().next() {
-                    Some(cov_set) => { cov_set.insert(pc); }
+                    Some(cov_set) => {
+                        cov_set.insert(pc);
+                    }
                     None => {}
                 }
             }

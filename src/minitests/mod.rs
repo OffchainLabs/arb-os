@@ -8,12 +8,13 @@ use crate::uint256::Uint256;
 use num_bigint::{BigUint, RandBigInt};
 use rlp::RlpStream;
 use std::convert::TryInto;
+use std::option::Option::None;
 use std::path::Path;
 
 mod integration;
 
 fn test_from_file_with_args_and_return(path: &Path, args: Vec<Value>, ret: Value) {
-    let res = run_from_file(path, args, false);
+    let res = run_from_file(path, args, None,false);
     match res {
         Ok(res) => {
             assert_eq!(res[0], ret);
@@ -409,9 +410,9 @@ fn test_precompile5_big() {
 #[test]
 fn reinterpret_register() {
     let mut old_machine = load_from_file(Path::new("upgradetests/regcopy_old.mexe"));
-    let _ = run(&mut old_machine, vec![], false);
+    let _ = run(&mut old_machine, vec![], false, None);
     let mut new_machine = load_from_file(Path::new("upgradetests/regcopy_new.mexe"));
-    run(&mut new_machine, vec![old_machine.register], false).unwrap();
+    run(&mut new_machine, vec![old_machine.register], false, None).unwrap();
     assert_eq!(
         *new_machine.stack_top().unwrap(),
         Value::Int(Uint256::one())
@@ -429,7 +430,7 @@ fn small_upgrade() {
         Value::new_buffer(code_bytes),
     ]);
     machine.runtime_env.insert_full_inbox_contents(vec![msg]);
-    let _ = run(&mut machine, vec![], false);
+    let _ = run(&mut machine, vec![], false, None);
 
     //let mut new_machine = load_from_file(Path::new("upgradetests/regcopy_new.mexe"), rt_env);
     //run(&mut new_machine, vec![machine.register], false).unwrap();
@@ -452,7 +453,7 @@ fn small_upgrade_auto_remap() {
         Value::new_buffer(code_bytes),
     ]);
     machine.runtime_env.insert_full_inbox_contents(vec![msg]);
-    let _ = run(&mut machine, vec![], false);
+    let _ = run(&mut machine, vec![], false, None);
 
     println!("Machine state after: {:?}", machine.state);
     assert_eq!(
