@@ -17,6 +17,7 @@ TESTCONTRACTSPURE = $(TCBUILDDIR)/Add.sol/Add.json $(TCBUILDDIR)/Fibonacci.sol/F
 TESTCONTRACTS = $(ACBUILDDIR)/ArbSys.sol/ArbSys.json $(TESTCONTRACTSPURE)
 UPGRADEFILES = $(UPGRADETESTDIR)/regcopy_old.mexe $(UPGRADETESTDIR)/regcopy_new.mexe $(UPGRADETESTDIR)/upgrade1_old.mexe $(UPGRADETESTDIR)/upgrade1_new.mexe $(UPGRADETESTDIR)/upgrade2_new.mexe
 ARBOSCONTRACTS = $(ACBUILDDIR)/ArbAddressTable.sol/ArbAddressTable.json $(ACBUILDDIR)/ArbBLS.sol/ArbBLS.json $(ACBUILDDIR)/ArbFunctionTable.sol/ArbFunctionTable.json $(ACBUILDDIR)/ArbInfo.sol/ArbInfo.json $(ACBUILDDIR)/ArbOwner.sol/ArbOwner.json $(ACBUILDDIR)/ArbSys.sol/ArbSys.json $(ACBUILDDIR)/ArbosTest.sol/ArbosTest.json $(ACBUILDDIR)/ArbRetryable.sol/ArbRetryable.json
+COVERAGES = $(BUILTINDIR)/arraytest.cov $(BUILTINDIR)/globaltest.cov $(BUILTINDIR)/kvstest.cov $(BUILTINDIR)/maptest.cov $(STDDIR)/biguinttest.cov $(STDDIR)/blstest.cov $(STDDIR)/bytearraytest.cov $(STDDIR)/fixedpointtest.cov $(STDDIR)/keccaktest.cov $(STDDIR)/priorityqtest.cov $(STDDIR)/queuetest.cov $(STDDIR)/ripemd160test.cov $(STDDIR)/rlptest.cov $(STDDIR)/sha256test.cov $(STDDIR)/storageMapTest.cov
 
 COMPILEFLAGS = -c "arb_os/constants.json" -i "none"
 COMPILEFLAGSNOINLINE = -c "arb_os/constants.json"
@@ -30,7 +31,7 @@ contracts: $(TESTCONTRACTS) $(ARBOSCONTRACTS)
 $(ARBOSDIR)/contractTemplates.mini: compiler $(ARBOSCONTRACTS)
 	$(CARGORUN) make-templates
 
-$(BUILTINDIR)/kvstest.mexe: compiler $(BUILTINDIR)/kvstest.mini
+$(BUILTINDIR)/kvstest.mexe: compiler $(BUILTINDIR)/kvstest.mini $(BUILTINDIR)/kvs.mini
 	$(CARGORUN) compile $(BUILTINDIR)/kvstest.mini -o $(BUILTINDIR)/kvstest.mexe $(COMPILEFLAGS) -t
 
 $(STDDIR)/queuetest.mexe: compiler $(STDDIR)/queuetest.mini
@@ -133,7 +134,15 @@ run: compiler
 	$(CARGORUN) run "arb_os/arbos.mexe"
 
 test:
-	cargo test --release 
+	cargo test --release
+
+coverage: alltests.cov
+
+alltests.cov: compiler $(COVERAGES)
+	cat $(COVERAGES) | sort | uniq | grep -v test | grep -v Test >alltests.cov
+
+$(COVERAGES): %.cov: %.mexe
+	$(CARGORUN) run $< -c $@
 
 evmtest: $(ARBOS)
 	$(CARGORUN) evm-tests
