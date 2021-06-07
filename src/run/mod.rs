@@ -5,16 +5,17 @@
 //!Provides functionality for running mavm executables.
 
 use crate::link::LinkedProgram;
-use crate::mavm::{CodePt, Value};
+use crate::mavm::{CodePt, Value, AVMOpcode, Instruction};
 use emulator::{ExecutionError, StackTrace};
 use std::{fs::File, io::Read, path::Path};
 
+use crate::compile::FileInfo;
 pub use emulator::{Machine, ProfilerMode};
 pub use runtime_env::{
     _bytes_from_bytestack, _bytestack_from_bytes, generic_compress_token_amount,
     replay_from_testlog_file, ArbosReceipt, RuntimeEnvironment,
 };
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::io::Write;
 
 mod blake2b;
@@ -54,8 +55,13 @@ pub fn run_from_file_and_env(
     coverage_filename: Option<String>,
     debug: bool,
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
-    let mut machine = load_from_file_and_env(path, env);
-    run(&mut machine, args, debug, coverage_filename)
+    let (mut machine, file_info_table) = load_from_file_and_env_ret_file_info_table(path, env);
+    run(
+        &mut machine,
+        args,
+        debug,
+        coverage_filename.map(|cfn| (cfn, file_info_table)),
+    )
 }
 
 pub fn load_from_file(path: &Path) -> Machine {
@@ -66,7 +72,15 @@ pub fn load_from_file(path: &Path) -> Machine {
 /// more details.
 ///
 /// Will panic if the path cannot be opened or doesn't represent a valid mini executable.
+
 pub fn load_from_file_and_env(path: &Path, env: RuntimeEnvironment) -> Machine {
+    load_from_file_and_env_ret_file_info_table(path, env).0
+}
+
+pub fn load_from_file_and_env_ret_file_info_table(
+    path: &Path,
+    env: RuntimeEnvironment,
+) -> (Machine, BTreeMap<u64, FileInfo>) {
     let display = path.display();
 
     let mut file = match File::open(&path) {
@@ -87,7 +101,7 @@ pub fn load_from_file_and_env(path: &Path, env: RuntimeEnvironment) -> Machine {
 /// `RuntimeEnvironment`.
 ///
 /// Will panic if s cannot be interpreted as a mini executable.
-fn load_from_string(s: String, env: RuntimeEnvironment) -> Machine {
+fn load_from_string(s: String, env: RuntimeEnvironment) -> (Machine, BTreeMap<u64, FileInfo>) {
     let parse_result: Result<LinkedProgram, serde_json::Error> = serde_json::from_str(&s);
     let program = match parse_result {
         Ok(prog) => prog,
@@ -96,7 +110,8 @@ fn load_from_string(s: String, env: RuntimeEnvironment) -> Machine {
             panic!();
         }
     };
-    Machine::new(program, env)
+    let fic = program.file_info_chart.clone();
+    (Machine::new(program, env), fic)
 }
 
 ///Runs the specified `Machine` from its first codepoint.
@@ -104,7 +119,7 @@ pub fn run(
     machine: &mut Machine,
     args: Vec<Value>,
     debug: bool,
-    coverage_filename: Option<String>,
+    coverage_filename: Option<(String, BTreeMap<u64, FileInfo>)>,
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
     // We use PC 1 here because PC pushes an unwanted value--designed for a different entry ABI
     if coverage_filename.is_some() {
@@ -112,9 +127,9 @@ pub fn run(
     }
     match machine.test_call(CodePt::new_internal(1), args, debug) {
         Ok(_stack) => {
-            if let Some(coverage_fn) = coverage_filename {
+            if let Some(cov_info) = coverage_filename {
                 let coverage_data = machine.coverage_result().unwrap();
-                write_coverage_data_to_file(coverage_data, coverage_fn);
+                write_coverage_data_to_file(coverage_data, machine.code.get_segment(0), cov_info.1, cov_info.0);
             }
             Ok(machine.runtime_env.get_all_raw_logs())
         }
@@ -122,12 +137,21 @@ pub fn run(
     }
 }
 
-fn write_coverage_data_to_file(coverage_data: HashSet<usize>, coverage_filename: String) {
+fn write_coverage_data_to_file(
+    coverage_data: HashSet<usize>,
+    instructions: Vec<Instruction<AVMOpcode>>,
+    file_info_table: BTreeMap<u64, FileInfo>,
+    coverage_filename: String,
+) {
     let mut coverage_file = File::create(coverage_filename).unwrap();
     let mut coverage_lines: Vec<usize> = coverage_data.iter().map(|r| *r).collect();
     coverage_lines.sort();
     for i in coverage_lines {
-        writeln!(coverage_file, "{}", i).unwrap();
+        if let Some(loc) = instructions[i].debug_info.location {
+            if let Some(finfo) = file_info_table.get(&loc.file_id) {
+                writeln!(coverage_file, "{} {}", finfo.name, loc.line).unwrap();
+            }
+        }
     }
 }
 

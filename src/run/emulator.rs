@@ -260,7 +260,7 @@ impl MachineState {
 
 ///Holds AVM bytecode in a list of segments, the runtime is held on segment 0.
 #[derive(Debug)]
-struct CodeStore {
+pub struct CodeStore {
     segments: Vec<Vec<Instruction<AVMOpcode>>>,
 }
 
@@ -282,6 +282,10 @@ impl CodeStore {
     ///Gets the size of the first code segment.
     fn runtime_segment_size(&self) -> usize {
         self.segments[0].len()
+    }
+
+    pub fn get_segment(&self, index: usize) -> Vec<Instruction<AVMOpcode>> {
+        self.segments[index].clone()
     }
 
     ///Returns the `Instruction` that codept points to, or None if codept points to an invalid
@@ -721,7 +725,7 @@ pub struct Machine {
     stack: ValueStack,
     aux_stack: ValueStack,
     pub state: MachineState,
-    code: CodeStore,
+    pub code: CodeStore,
     static_val: Value,
     pub register: Value,
     err_codepoint: CodePt,
