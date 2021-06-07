@@ -3,10 +3,10 @@
  */
 
 use crate::compile::DebugInfo;
+use crate::console::ConsoleColors;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
-use crate::console::ConsoleColors;
 use ethers_core::utils::keccak256;
 use serde::de::Visitor;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
@@ -211,7 +211,7 @@ impl Instruction {
             max_func_offset,
         )
     }
-    
+
     /// The effects on the stack and auxstack the instruction entails
     pub fn effects(&self) -> Vec<OpcodeEffect> {
         let mut effects = match &self.immediate {
@@ -231,8 +231,8 @@ impl fmt::Display for Instruction<Opcode> {
         match &self.immediate {
             Some(value) => match value {
                 Value::Tuple(_) => write!(f, "[{}]\n        {}", value, self.opcode),
-                _ => write!(f, "{} {}", self.opcode, value)
-            }
+                _ => write!(f, "{} {}", self.opcode, value),
+            },
             None => write!(f, "{}", self.opcode),
         }
     }
@@ -243,8 +243,8 @@ impl fmt::Display for Instruction<AVMOpcode> {
         match &self.immediate {
             Some(value) => match value {
                 Value::Tuple(_) => write!(f, "[{}]\n        {}", value, self.opcode),
-                _ => write!(f, "[{}] {}", value, self.opcode)
-            }
+                _ => write!(f, "[{}] {}", value, self.opcode),
+            },
             None => write!(f, "{}", self.opcode),
         }
     }
@@ -895,15 +895,16 @@ impl fmt::Display for Value {
 
 impl Value {
     pub fn pretty_print(&self, label_color: &str, color: &str) -> String {
-        
         let grey = ConsoleColors::GREY;
         let reset = ConsoleColors::RESET;
-        
+
         match self {
             Value::Int(i) => format!("{}{}{}", color, i, reset),
             Value::Buffer(buf) => format!("Buffer({}{}{})", color, buf.hex_encode(), reset),
             Value::CodePoint(pc) => format!("CodePoint({}{}{})", color, pc, reset),
-            Value::Label(label) => format!("{}Label({}{}{}){}", grey, label_color, label, grey, reset),
+            Value::Label(label) => {
+                format!("{}Label({}{}{}){}", grey, label_color, label, grey, reset)
+            }
             Value::Tuple(tup) => {
                 if tup.is_empty() {
                     format!("{}_{}", grey, reset)
@@ -913,7 +914,13 @@ impl Value {
                         if i == 0 {
                             s = format!("{}{}", s, value.pretty_print(label_color, color));
                         } else {
-                            s = format!("{}{},{} {}", s, color, reset, value.pretty_print(label_color, color));
+                            s = format!(
+                                "{}{},{} {}",
+                                s,
+                                color,
+                                reset,
+                                value.pretty_print(label_color, color)
+                            );
                         }
                     }
                     format!("{}{}){}", s, color, reset)
@@ -928,7 +935,7 @@ pub enum Opcode {
     GetLocal,
     SetLocal,
     MakeFrame(usize, usize),
-    PopFrame,            // pop an inlined frame
+    PopFrame, // pop an inlined frame
     Label(Label),
     PushExternal(usize), // push codeptr of external function -- index in imported_funcs
     TupleGet(usize),     // arg is size of anysize_tuple
@@ -1161,7 +1168,7 @@ impl Opcode {
             _ => "to_name() not implemented",
         }
     }
-    
+
     /// The non-variable amount of ArbGas this opcode consumes
     pub fn base_cost(&self) -> u64 {
         match self {
@@ -1523,180 +1530,191 @@ impl AVMOpcode {
             AVMOpcode::SetBuffer256 => 0xa6,
         }
     }
-    
+
     /// The effects on the stack and auxstack the opcode entails
     pub fn effects(&self) -> Vec<OpcodeEffect> {
         match self {
             AVMOpcode::Pop => vec![OpcodeEffect::PopStack],
             AVMOpcode::AuxPush => vec![OpcodeEffect::MoveToAux],
             AVMOpcode::AuxPop => vec![OpcodeEffect::MoveToStack],
-            
+
             AVMOpcode::Dup0 => vec![OpcodeEffect::ReadStack(1), OpcodeEffect::PushStack],
             AVMOpcode::Dup1 => vec![OpcodeEffect::ReadStack(2), OpcodeEffect::PushStack],
             AVMOpcode::Dup2 => vec![OpcodeEffect::ReadStack(3), OpcodeEffect::PushStack],
-            
+
             AVMOpcode::Swap1 => vec![OpcodeEffect::SwapStack(1)],
             AVMOpcode::Swap2 => vec![OpcodeEffect::SwapStack(2)],
-            AVMOpcode::Xset
-                => vec![
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::ReadAux, OpcodeEffect::PopAux,
-                    OpcodeEffect::PushAux,
-                ],
-            AVMOpcode::Xget
-                => vec![
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::ReadAux, OpcodeEffect::PopAux,
-                    OpcodeEffect::PushStack, OpcodeEffect::PushAux,
-                ],
-            AVMOpcode::Tset
-                => vec![
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::PushStack,
-                ],
-            AVMOpcode::Tget
-                => vec![
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::PushStack,
-                ],
-            
+            AVMOpcode::Xset => vec![
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::ReadAux,
+                OpcodeEffect::PopAux,
+                OpcodeEffect::PushAux,
+            ],
+            AVMOpcode::Xget => vec![
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::ReadAux,
+                OpcodeEffect::PopAux,
+                OpcodeEffect::PushStack,
+                OpcodeEffect::PushAux,
+            ],
+            AVMOpcode::Tset => vec![
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::PushStack,
+            ],
+            AVMOpcode::Tget => vec![
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::PushStack,
+            ],
+
             AVMOpcode::Noop => vec![],
             AVMOpcode::GetPC => vec![OpcodeEffect::PushStack],
-            
+
             // for now (should really track register and static usage)
             AVMOpcode::PushStatic
-                | AVMOpcode::Rget
-                | AVMOpcode::ErrCodePoint
-                | AVMOpcode::GetGas => vec![OpcodeEffect::PushStack],
-            
-            AVMOpcode::Rset
-                | AVMOpcode::SetGas => vec![OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack],
-            
+            | AVMOpcode::Rget
+            | AVMOpcode::ErrCodePoint
+            | AVMOpcode::GetGas => vec![OpcodeEffect::PushStack],
+
+            AVMOpcode::Rset | AVMOpcode::SetGas => {
+                vec![OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack]
+            }
+
             AVMOpcode::IsZero
-                | AVMOpcode::BitwiseNeg
-                | AVMOpcode::Hash
-                | AVMOpcode::Type
-                | AVMOpcode::Keccakf
-                | AVMOpcode::Tlen
-                => vec![
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::PushStack,
-                ],
-            
+            | AVMOpcode::BitwiseNeg
+            | AVMOpcode::Hash
+            | AVMOpcode::Type
+            | AVMOpcode::Keccakf
+            | AVMOpcode::Tlen => vec![
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::PushStack,
+            ],
+
             AVMOpcode::Plus
-                | AVMOpcode::Mul
-                | AVMOpcode::Minus
-                | AVMOpcode::Div
-                | AVMOpcode::Sdiv
-                | AVMOpcode::Mod
-                | AVMOpcode::Smod
-                | AVMOpcode::Exp 
-                | AVMOpcode::SignExtend
-                | AVMOpcode::LessThan
-                | AVMOpcode::GreaterThan
-                | AVMOpcode::SLessThan
-                | AVMOpcode::SGreaterThan
-                | AVMOpcode::Equal
-                | AVMOpcode::BitwiseAnd
-                | AVMOpcode::BitwiseOr
-                | AVMOpcode::BitwiseXor
-                | AVMOpcode::Byte
-                | AVMOpcode::ShiftLeft
-                | AVMOpcode::ShiftRight
-                | AVMOpcode::ShiftArith
-                | AVMOpcode::Hash2
-                => vec![
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::PushStack,
-                ],
-            
-            AVMOpcode::AddMod 
-                | AVMOpcode::MulMod
-                | AVMOpcode::Sha256f
-                => vec![
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::PushStack,
-                ],
-            
-            AVMOpcode::EcRecover
-                => vec![
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::PushStack,
-                ],
-            
-            AVMOpcode::EcAdd
-                | AVMOpcode::EcMul
-                => vec![
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::PushStack,
-                    OpcodeEffect::PushStack,
-                ],
-            
+            | AVMOpcode::Mul
+            | AVMOpcode::Minus
+            | AVMOpcode::Div
+            | AVMOpcode::Sdiv
+            | AVMOpcode::Mod
+            | AVMOpcode::Smod
+            | AVMOpcode::Exp
+            | AVMOpcode::SignExtend
+            | AVMOpcode::LessThan
+            | AVMOpcode::GreaterThan
+            | AVMOpcode::SLessThan
+            | AVMOpcode::SGreaterThan
+            | AVMOpcode::Equal
+            | AVMOpcode::BitwiseAnd
+            | AVMOpcode::BitwiseOr
+            | AVMOpcode::BitwiseXor
+            | AVMOpcode::Byte
+            | AVMOpcode::ShiftLeft
+            | AVMOpcode::ShiftRight
+            | AVMOpcode::ShiftArith
+            | AVMOpcode::Hash2 => vec![
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::PushStack,
+            ],
+
+            AVMOpcode::AddMod | AVMOpcode::MulMod | AVMOpcode::Sha256f => vec![
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::PushStack,
+            ],
+
+            AVMOpcode::EcRecover => vec![
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::PushStack,
+            ],
+
+            AVMOpcode::EcAdd | AVMOpcode::EcMul => vec![
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::PushStack,
+                OpcodeEffect::PushStack,
+            ],
+
             AVMOpcode::Jump => vec![OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack],
-            AVMOpcode::Cjump
-                => vec![
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                ],
-            
-            AVMOpcode::InboxPeek
-                => vec![
-                    OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack,
-                    OpcodeEffect::PushStack, OpcodeEffect::ReadStack(1),    // reads itself
-                ],
-            
-            AVMOpcode::Inbox
-                => vec![
-                    OpcodeEffect::PushStack, OpcodeEffect::ReadStack(1),    // reads itself
-                ],
-            
+            AVMOpcode::Cjump => vec![
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+            ],
+
+            AVMOpcode::InboxPeek => vec![
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::PushStack,
+                OpcodeEffect::ReadStack(1), // reads itself
+            ],
+
+            AVMOpcode::Inbox => vec![
+                OpcodeEffect::PushStack,
+                OpcodeEffect::ReadStack(1), // reads itself
+            ],
+
             // when ready, we'll switch to these:
             //AVMOpcode::StackEmpty => vec![OpcodeEffect::ReadStack(1), OpcodeEffect::PushStack],
             //AVMOpcode::AuxStackEmpty => vec![OpcodeEffect::ReadStack(1), OpcodeEffect::PushStack],
-            
-            AVMOpcode::StackEmpty
-                | AVMOpcode::AuxStackEmpty
-                | AVMOpcode::EcPairing
-                => vec![OpcodeEffect::Unsure, OpcodeEffect::PushStack],
-            
+            AVMOpcode::StackEmpty | AVMOpcode::AuxStackEmpty | AVMOpcode::EcPairing => {
+                vec![OpcodeEffect::Unsure, OpcodeEffect::PushStack]
+            }
+
             AVMOpcode::Breakpoint
-                | AVMOpcode::ErrPush
-                | AVMOpcode::ErrSet 
-                | AVMOpcode::Log
-                | AVMOpcode::Send
-                | AVMOpcode::Panic
-                | AVMOpcode::Ripemd160f
-                | AVMOpcode::Blake2f
-                | AVMOpcode::DebugPrint
-                | AVMOpcode::NewBuffer
-                | AVMOpcode::GetBuffer8
-                | AVMOpcode::GetBuffer64
-                | AVMOpcode::GetBuffer256
-                | AVMOpcode::SetBuffer8
-                | AVMOpcode::SetBuffer64
-                | AVMOpcode::SetBuffer256
-                | AVMOpcode::PushInsn
-                | AVMOpcode::PushInsnImm
-                | AVMOpcode::OpenInsn
-                | AVMOpcode::Sideload
-                => vec![OpcodeEffect::Unsure],
-            
-            AVMOpcode::Zero
-                | AVMOpcode::Halt
-                => vec![OpcodeEffect::Unsure],
+            | AVMOpcode::ErrPush
+            | AVMOpcode::ErrSet
+            | AVMOpcode::Log
+            | AVMOpcode::Send
+            | AVMOpcode::Panic
+            | AVMOpcode::Ripemd160f
+            | AVMOpcode::Blake2f
+            | AVMOpcode::DebugPrint
+            | AVMOpcode::NewBuffer
+            | AVMOpcode::GetBuffer8
+            | AVMOpcode::GetBuffer64
+            | AVMOpcode::GetBuffer256
+            | AVMOpcode::SetBuffer8
+            | AVMOpcode::SetBuffer64
+            | AVMOpcode::SetBuffer256
+            | AVMOpcode::PushInsn
+            | AVMOpcode::PushInsnImm
+            | AVMOpcode::OpenInsn
+            | AVMOpcode::Sideload => vec![OpcodeEffect::Unsure],
+
+            AVMOpcode::Zero | AVMOpcode::Halt => vec![OpcodeEffect::Unsure],
         }
     }
 }
@@ -1761,7 +1779,10 @@ impl Opcode {
     pub fn pretty_print(&self, frame_color: &str, label_color: &str) -> String {
         let reset = ConsoleColors::RESET;
         match self {
-            Opcode::MakeFrame(s1, s2) => format!("MakeFrame{}({}{}{}, {}{}{})", reset, frame_color, s1, reset, frame_color, s2, reset),
+            Opcode::MakeFrame(s1, s2) => format!(
+                "MakeFrame{}({}{}{}, {}{}{})",
+                reset, frame_color, s1, reset, frame_color, s2, reset
+            ),
             Opcode::Label(label) => format!("{}{}{}", label_color, label, reset),
             _ => format!("{}", self.to_name()),
         }

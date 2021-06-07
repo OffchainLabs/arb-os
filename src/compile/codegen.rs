@@ -126,7 +126,7 @@ fn mavm_codegen_func(
         Opcode::AVMOpcode(AVMOpcode::Noop),
         debug_info,
     )); // placeholder; will replace this later
-    
+
     for (index, arg) in func.args.iter().enumerate() {
         locals.insert(arg.name, index);
     }
@@ -144,7 +144,7 @@ fn mavm_codegen_func(
         file_info_chart,
         error_system,
     )?;
-    
+
     // put makeframe Instruction at beginning of function, to build the frame (replacing placeholder)
     code[make_frame_slot] =
         Instruction::from_opcode(Opcode::MakeFrame(num_args, max_num_locals), debug_info);

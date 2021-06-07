@@ -134,10 +134,7 @@ pub fn fix_nonforward_labels(
                             Opcode::PushExternal(idx),
                             insn_in.debug_info,
                         ));
-                        code_out.push(Instruction::from_opcode(
-                            insn_in.opcode, 
-                            insn_in.debug_info
-                        ));
+                        code_out.push(Instruction::from_opcode(insn_in.opcode, insn_in.debug_info));
                     } else {
                         code_out.push(Instruction::from_opcode_imm(
                             insn_in.opcode,

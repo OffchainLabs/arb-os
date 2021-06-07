@@ -7,7 +7,7 @@
 
 use crate::link::FlowGraph;
 use crate::mavm::{AVMOpcode, Instruction, Opcode, OpcodeEffect, Value};
-use std::collections::{HashMap, HashSet, BTreeMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
 ///Removes instructions that have no effect on the output of the program.
@@ -35,148 +35,163 @@ pub fn simplify_pairs(code_in: &[Instruction]) -> Vec<Instruction> {
 pub fn peephole(graph: &FlowGraph, _debug: bool) -> (FlowGraph, bool) {
     let mut optimized = FlowGraph::default();
     let mut same = true;
-    
+
     for node in graph.node_indices() {
-        
         let block = &graph[node];
-        
+
         let better = simplify_pairs(&block);
         same = same && block.len() == better.len();
         let block = better;
-        
+
         if block.len() < 2 {
             optimized.add_node(block.clone());
             continue;
         }
-        
+
         let mut opt = Vec::with_capacity(block.len());
         let mut index = 0;
-        
+
         while index < block.len() - 1 {
-            
             let curr = &block[index];
             let next = &block[index + 1];
             let later = block.get(index + 2);
-            
+
             let immediates = (curr.immediate.as_ref(), next.immediate.as_ref());
-            
+
             match (curr.opcode, next.opcode) {
-                (Opcode::AVMOpcode(AVMOpcode::Dup0), Opcode::AVMOpcode(AVMOpcode::Pop)) => match immediates {
-                    (None, None) => {
-                        index += 2;
-                        continue;
+                (Opcode::AVMOpcode(AVMOpcode::Dup0), Opcode::AVMOpcode(AVMOpcode::Pop)) => {
+                    match immediates {
+                        (None, None) => {
+                            index += 2;
+                            continue;
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
-                (Opcode::AVMOpcode(AVMOpcode::Dup0), Opcode::AVMOpcode(AVMOpcode::Swap1)) => match immediates {
-                    (_, None) => {
-                        opt.push(curr.clone());
-                        index += 2;
-                        continue;
+                (Opcode::AVMOpcode(AVMOpcode::Dup0), Opcode::AVMOpcode(AVMOpcode::Swap1)) => {
+                    match immediates {
+                        (_, None) => {
+                            opt.push(curr.clone());
+                            index += 2;
+                            continue;
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
-                (Opcode::AVMOpcode(AVMOpcode::IsZero), Opcode::AVMOpcode(AVMOpcode::IsZero)) => match immediates {
-                    (None, None) => {
-                        index += 2;
-                        continue;
+                (Opcode::AVMOpcode(AVMOpcode::IsZero), Opcode::AVMOpcode(AVMOpcode::IsZero)) => {
+                    match immediates {
+                        (None, None) => {
+                            index += 2;
+                            continue;
+                        }
+                        (Some(value), None) => {
+                            opt.push(Instruction {
+                                opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
+                                immediate: Some(value.clone()),
+                                debug_info: curr.debug_info,
+                            });
+                            index += 2;
+                            continue;
+                        }
+                        _ => {}
                     }
-                    (Some(value), None) => {
-                        opt.push(Instruction {
-                            opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
-                            immediate: Some(value.clone()),
-                            debug_info: curr.debug_info,
-                        });
-                        index += 2;
-                        continue;
-                    }
-                    _ => {}
                 }
-                (Opcode::AVMOpcode(AVMOpcode::AuxPop), Opcode::AVMOpcode(AVMOpcode::AuxPush)) => match immediates {
-                    (None, None) => {
-                        index += 2;
-                        continue;
+                (Opcode::AVMOpcode(AVMOpcode::AuxPop), Opcode::AVMOpcode(AVMOpcode::AuxPush)) => {
+                    match immediates {
+                        (None, None) => {
+                            index += 2;
+                            continue;
+                        }
+                        (Some(value), None) => {
+                            opt.push(Instruction {
+                                opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
+                                immediate: Some(value.clone()),
+                                debug_info: curr.debug_info,
+                            });
+                            index += 2;
+                            continue;
+                        }
+                        _ => {}
                     }
-                    (Some(value), None) => {
-                        opt.push(Instruction {
-                            opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
-                            immediate: Some(value.clone()),
-                            debug_info: curr.debug_info,
-                        });
-                        index += 2;
-                        continue;
-                    }
-                    _ => {}
                 }
-                (Opcode::AVMOpcode(AVMOpcode::AuxPush), Opcode::AVMOpcode(AVMOpcode::AuxPop)) => match immediates {
-                    (None, None) => {
-                        index += 2;
-                        continue;
+                (Opcode::AVMOpcode(AVMOpcode::AuxPush), Opcode::AVMOpcode(AVMOpcode::AuxPop)) => {
+                    match immediates {
+                        (None, None) => {
+                            index += 2;
+                            continue;
+                        }
+                        (Some(value), None) => {
+                            opt.push(Instruction {
+                                opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
+                                immediate: Some(value.clone()),
+                                debug_info: curr.debug_info,
+                            });
+                            index += 2;
+                            continue;
+                        }
+                        (None, Some(value)) => {
+                            opt.push(Instruction {
+                                opcode: Opcode::AVMOpcode(AVMOpcode::Swap1),
+                                immediate: Some(value.clone()),
+                                debug_info: next.debug_info,
+                            });
+                            index += 2;
+                            continue;
+                        }
+                        _ => {}
                     }
-                    (Some(value), None) => {
-                        opt.push(Instruction {
-                            opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
-                            immediate: Some(value.clone()),
-                            debug_info: curr.debug_info,
-                        });
-                        index += 2;
-                        continue;
-                    }
-                    (None, Some(value)) => {
-                        opt.push(Instruction {
-                            opcode: Opcode::AVMOpcode(AVMOpcode::Swap1),
-                            immediate: Some(value.clone()),
-                            debug_info: next.debug_info,
-                        });
-                        index += 2;
-                        continue;
-                    }
-                    _ => {}
                 }
-                (Opcode::AVMOpcode(AVMOpcode::Swap1), Opcode::AVMOpcode(AVMOpcode::Swap1)) |
-                (Opcode::AVMOpcode(AVMOpcode::Swap2), Opcode::AVMOpcode(AVMOpcode::Swap2)) => match immediates {
-                    (None, None) => {
-                        index += 2;
-                        continue;
+                (Opcode::AVMOpcode(AVMOpcode::Swap1), Opcode::AVMOpcode(AVMOpcode::Swap1))
+                | (Opcode::AVMOpcode(AVMOpcode::Swap2), Opcode::AVMOpcode(AVMOpcode::Swap2)) => {
+                    match immediates {
+                        (None, None) => {
+                            index += 2;
+                            continue;
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
-                (Opcode::AVMOpcode(AVMOpcode::Xget), Opcode::AVMOpcode(AVMOpcode::Pop)) => match immediates {
-                    (Some(_), None) => {
-                        index += 2;
-                        continue;
+                (Opcode::AVMOpcode(AVMOpcode::Xget), Opcode::AVMOpcode(AVMOpcode::Pop)) => {
+                    match immediates {
+                        (Some(_), None) => {
+                            index += 2;
+                            continue;
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
-                (Opcode::AVMOpcode(AVMOpcode::Tget), Opcode::AVMOpcode(AVMOpcode::Pop)) => match immediates {
-                    (Some(_), None) => {
-                        opt.push(Instruction {
-                            opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
-                            immediate: None,
-                            debug_info: curr.debug_info,
-                        });
-                        index += 2;
-                        continue;
+                (Opcode::AVMOpcode(AVMOpcode::Tget), Opcode::AVMOpcode(AVMOpcode::Pop)) => {
+                    match immediates {
+                        (Some(_), None) => {
+                            opt.push(Instruction {
+                                opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
+                                immediate: None,
+                                debug_info: curr.debug_info,
+                            });
+                            index += 2;
+                            continue;
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
-                (Opcode::AVMOpcode(AVMOpcode::Noop), Opcode::AVMOpcode(AVMOpcode::Tget)) => match immediates {
-                    (Some(Value::Tuple(tup)), Some(Value::Int(spot))) => {
-                        
-                        let spot = spot.to_usize().unwrap();
-                        
-                        let value = &tup[spot];
-                        
-                        opt.push(Instruction {
-                            opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
-                            immediate: Some(value.clone()),
-                            debug_info: next.debug_info,
-                        });
-                        
-                        index += 2;
-                        continue;
+                (Opcode::AVMOpcode(AVMOpcode::Noop), Opcode::AVMOpcode(AVMOpcode::Tget)) => {
+                    match immediates {
+                        (Some(Value::Tuple(tup)), Some(Value::Int(spot))) => {
+                            let spot = spot.to_usize().unwrap();
+
+                            let value = &tup[spot];
+
+                            opt.push(Instruction {
+                                opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
+                                immediate: Some(value.clone()),
+                                debug_info: next.debug_info,
+                            });
+
+                            index += 2;
+                            continue;
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
                 (Opcode::AVMOpcode(AVMOpcode::Pop), ..) => match immediates {
                     (Some(_), None) => {
@@ -184,7 +199,7 @@ pub fn peephole(graph: &FlowGraph, _debug: bool) -> (FlowGraph, bool) {
                         continue;
                     }
                     _ => {}
-                }
+                },
                 (Opcode::AVMOpcode(AVMOpcode::Noop), ..) => match immediates {
                     (Some(value), None) => {
                         opt.push(Instruction {
@@ -196,44 +211,51 @@ pub fn peephole(graph: &FlowGraph, _debug: bool) -> (FlowGraph, bool) {
                         continue;
                     }
                     _ => {}
-                }
-                (Opcode::AVMOpcode(AVMOpcode::Xset), Opcode::AVMOpcode(AVMOpcode::Xget)) => match immediates {
-                    (Some(a), Some(b)) => {
-                        if (a == b) {
-                            opt.push(Instruction {
-                                opcode: Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                                immediate: None,
-                                debug_info: next.debug_info,
-                            });
-                            opt.push(Instruction {
-                                opcode: Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                                immediate: None,
-                                debug_info: next.debug_info,
-                            });
-                            opt.push(Instruction {
-                                opcode: Opcode::AVMOpcode(AVMOpcode::Dup0),
-                                immediate: None,
-                                debug_info: next.debug_info,
-                            });
-                            opt.push(curr.clone());
-                            same = false;
-                            index += 2;
-                            continue;
+                },
+                (Opcode::AVMOpcode(AVMOpcode::Xset), Opcode::AVMOpcode(AVMOpcode::Xget)) => {
+                    match immediates {
+                        (Some(a), Some(b)) => {
+                            if (a == b) {
+                                opt.push(Instruction {
+                                    opcode: Opcode::AVMOpcode(AVMOpcode::AuxPush),
+                                    immediate: None,
+                                    debug_info: next.debug_info,
+                                });
+                                opt.push(Instruction {
+                                    opcode: Opcode::AVMOpcode(AVMOpcode::AuxPop),
+                                    immediate: None,
+                                    debug_info: next.debug_info,
+                                });
+                                opt.push(Instruction {
+                                    opcode: Opcode::AVMOpcode(AVMOpcode::Dup0),
+                                    immediate: None,
+                                    debug_info: next.debug_info,
+                                });
+                                opt.push(curr.clone());
+                                same = false;
+                                index += 2;
+                                continue;
+                            }
                         }
+                        _ => {}
                     }
-                    _ => {}
                 }
                 _ => {}
             }
-            
+
             if let Some(last) = later {
-                
-                let immediates = (curr.immediate.as_ref(), next.immediate.as_ref(), last.immediate.as_ref());
-                
+                let immediates = (
+                    curr.immediate.as_ref(),
+                    next.immediate.as_ref(),
+                    last.immediate.as_ref(),
+                );
+
                 match (curr.opcode, next.opcode, last.opcode) {
-                    (Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                     Opcode::AVMOpcode(AVMOpcode::Pop), 
-                     Opcode::AVMOpcode(AVMOpcode::AuxPop)) => match immediates {
+                    (
+                        Opcode::AVMOpcode(AVMOpcode::AuxPush),
+                        Opcode::AVMOpcode(AVMOpcode::Pop),
+                        Opcode::AVMOpcode(AVMOpcode::AuxPop),
+                    ) => match immediates {
                         (None, None, None) => {
                             opt.push(Instruction {
                                 opcode: Opcode::AVMOpcode(AVMOpcode::Swap1),
@@ -269,32 +291,33 @@ pub fn peephole(graph: &FlowGraph, _debug: bool) -> (FlowGraph, bool) {
                             continue;
                         }
                         _ => {}
-                    }
-                    (Opcode::AVMOpcode(AVMOpcode::Noop),
-                     Opcode::AVMOpcode(AVMOpcode::Noop),
-                     Opcode::AVMOpcode(AVMOpcode::Tset)) => match immediates {
+                    },
+                    (
+                        Opcode::AVMOpcode(AVMOpcode::Noop),
+                        Opcode::AVMOpcode(AVMOpcode::Noop),
+                        Opcode::AVMOpcode(AVMOpcode::Tset),
+                    ) => match immediates {
                         (Some(value), Some(Value::Tuple(tup)), Some(Value::Int(spot))) => {
-                            
                             let spot = spot.to_usize().unwrap();
-                            
+
                             let mut updated = tup.to_vec();
                             updated[spot] = value.clone();
-                            
+
                             opt.push(Instruction {
                                 opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
                                 immediate: Some(Value::Tuple(Arc::new(updated))),
                                 debug_info: next.debug_info,
                             });
-                            
+
                             index += 3;
                             continue;
                         }
                         _ => {}
-                    }
+                    },
                     _ => {}
                 }
             }
-            
+
             opt.push(curr.clone());
             index += 1;
         }
@@ -302,7 +325,7 @@ pub fn peephole(graph: &FlowGraph, _debug: bool) -> (FlowGraph, bool) {
         same = same && opt.len() == block.len();
         optimized.add_node(opt);
     }
-    
+
     (optimized, same)
 }
 
@@ -310,19 +333,17 @@ pub fn peephole(graph: &FlowGraph, _debug: bool) -> (FlowGraph, bool) {
 pub fn xget_elision(graph: &FlowGraph, _debug: bool) -> (FlowGraph, bool) {
     let mut optimized = FlowGraph::default();
     let mut same = true;
-    
+
     for node in graph.node_indices() {
-        
         let block = &graph[node];
-        
+
         let mut data_stack = vec![];
         let mut aux_stack = vec![];
         let mut modify = HashSet::new();
-        
+
         for index in 0..block.len() {
-            
             let curr = &block[index];
-            
+
             let xset = match curr.opcode {
                 Opcode::AVMOpcode(AVMOpcode::Xset) => true,
                 _ => false,
@@ -331,9 +352,9 @@ pub fn xget_elision(graph: &FlowGraph, _debug: bool) -> (FlowGraph, bool) {
                 Opcode::AVMOpcode(AVMOpcode::Xget) => true,
                 _ => false,
             };
-            
+
             let effects = curr.effects();
-            
+
             for effect in effects {
                 match effect {
                     OpcodeEffect::PushStack => drop(data_stack.push((index, false))),
@@ -342,8 +363,8 @@ pub fn xget_elision(graph: &FlowGraph, _debug: bool) -> (FlowGraph, bool) {
                     OpcodeEffect::PopAux => drop(aux_stack.pop()),
                     OpcodeEffect::SwapStack(depth) => {
                         if depth + 1 > data_stack.len() {
-                            data_stack.clear();    // this function does something nasty
-                            aux_stack.clear();     //
+                            data_stack.clear(); // this function does something nasty
+                            aux_stack.clear(); //
                         } else if depth == 1 {
                             let lower = data_stack.pop().unwrap().clone();
                             let upper = data_stack.pop().unwrap().clone();
@@ -381,8 +402,8 @@ pub fn xget_elision(graph: &FlowGraph, _debug: bool) -> (FlowGraph, bool) {
                         match aux_stack.pop() {
                             Some(item) => drop(data_stack.push(item)),
                             None => {
-                                data_stack.clear();    // this function does something nasty
-                                aux_stack.clear();     //
+                                data_stack.clear(); // this function does something nasty
+                                aux_stack.clear(); //
                             }
                         }
                     }
@@ -390,8 +411,8 @@ pub fn xget_elision(graph: &FlowGraph, _debug: bool) -> (FlowGraph, bool) {
                         match data_stack.pop() {
                             Some(item) => drop(aux_stack.push(item)),
                             None => {
-                                data_stack.clear();    // this function does something nasty
-                                aux_stack.clear();     //
+                                data_stack.clear(); // this function does something nasty
+                                aux_stack.clear(); //
                             }
                         }
                     }
@@ -402,51 +423,42 @@ pub fn xget_elision(graph: &FlowGraph, _debug: bool) -> (FlowGraph, bool) {
                 }
             }
         }
-        
+
         let mut opt = Vec::with_capacity(block.len());
-        
+
         for index in 0..block.len() {
-            
             let curr = &block[index];
-            
+
             match modify.get(&index) {
                 None => drop(opt.push(curr.clone())),
-                Some(_) => {
-                    match curr.opcode {
-                        Opcode::AVMOpcode(AVMOpcode::Xset) => opt.extend(
-                            vec![
-                                Instruction {
-                                    opcode: Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                                    immediate: None,
-                                    debug_info: curr.debug_info,
-                                }
-                            ],
-                        ),
-                        Opcode::AVMOpcode(AVMOpcode::Xget) => opt.extend(
-                            vec![
-                                Instruction {
-                                    opcode: Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                                    immediate: None,
-                                    debug_info: curr.debug_info,
-                                },
-                                Instruction {
-                                    opcode: Opcode::AVMOpcode(AVMOpcode::Dup0),
-                                    immediate: None,
-                                    debug_info: curr.debug_info,
-                                },
-                                Instruction {
-                                    opcode: Opcode::AVMOpcode(AVMOpcode::Xset),
-                                    immediate: curr.immediate.clone(),
-                                    debug_info: curr.debug_info,
-                                }
-                            ],
-                        ),
-                        _ => panic!("Oh no! Tried to xget-elide on an incorrect index"),
-                    }
-                }
+                Some(_) => match curr.opcode {
+                    Opcode::AVMOpcode(AVMOpcode::Xset) => opt.extend(vec![Instruction {
+                        opcode: Opcode::AVMOpcode(AVMOpcode::AuxPush),
+                        immediate: None,
+                        debug_info: curr.debug_info,
+                    }]),
+                    Opcode::AVMOpcode(AVMOpcode::Xget) => opt.extend(vec![
+                        Instruction {
+                            opcode: Opcode::AVMOpcode(AVMOpcode::AuxPop),
+                            immediate: None,
+                            debug_info: curr.debug_info,
+                        },
+                        Instruction {
+                            opcode: Opcode::AVMOpcode(AVMOpcode::Dup0),
+                            immediate: None,
+                            debug_info: curr.debug_info,
+                        },
+                        Instruction {
+                            opcode: Opcode::AVMOpcode(AVMOpcode::Xset),
+                            immediate: curr.immediate.clone(),
+                            debug_info: curr.debug_info,
+                        },
+                    ]),
+                    _ => panic!("Oh no! Tried to xget-elide on an incorrect index"),
+                },
             }
         }
-        
+
         same = same && opt.len() == block.len();
         optimized.add_node(opt);
     }
@@ -457,43 +469,39 @@ pub fn xget_elision(graph: &FlowGraph, _debug: bool) -> (FlowGraph, bool) {
 pub fn xset_tail_elision(graph: &FlowGraph, _debug: bool) -> (FlowGraph, bool) {
     let mut optimized = FlowGraph::default();
     let mut same = true;
-    
+
     for node in graph.node_indices() {
-        
         let block = &graph[node];
-        
+
         if block.len() < 3 {
             optimized.add_node(block.clone());
             continue;
         }
-        
+
         let mut tails = HashMap::new();
         let mut elide = HashSet::new();
-        
+
         for index in 0..block.len() {
-            
             let curr = &block[index];
             let next = block.get(index + 1);
-            
+
             match curr.opcode {
                 Opcode::AVMOpcode(AVMOpcode::Xset) => {
                     match &curr.immediate {
                         None => tails.clear(),
                         Some(value) => match value.to_usize() {
                             None => tails.clear(),
-                            Some(int) => elide.extend(tails.insert(int, index)),    // overwrites last one
-                        }
+                            Some(int) => elide.extend(tails.insert(int, index)), // overwrites last one
+                        },
                     }
                 }
-                Opcode::AVMOpcode(AVMOpcode::Xget) => {
-                    match &curr.immediate {
+                Opcode::AVMOpcode(AVMOpcode::Xget) => match &curr.immediate {
+                    None => tails.clear(),
+                    Some(value) => match value.to_usize() {
                         None => tails.clear(),
-                        Some(value) => match value.to_usize() {
-                            None => tails.clear(),
-                            Some(int) => drop(tails.remove(&int)),
-                        }
-                    }
-                }
+                        Some(int) => drop(tails.remove(&int)),
+                    },
+                },
                 Opcode::AVMOpcode(AVMOpcode::AuxPush)
                 | Opcode::AVMOpcode(AVMOpcode::Swap1)
                 | Opcode::AVMOpcode(AVMOpcode::Swap2) => {
@@ -514,27 +522,24 @@ pub fn xset_tail_elision(graph: &FlowGraph, _debug: bool) -> (FlowGraph, bool) {
                 _ => {}
             }
         }
-        
+
         same = same && elide.len() == 0;
-        
+
         let mut opt = Vec::with_capacity(block.len());
-        
+
         for index in 0..block.len() {
-            
             let curr = &block[index];
-            
+
             match elide.contains(&index) {
                 false => opt.push(curr.clone()),
-                true => opt.push(
-                    Instruction {
-                        opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
-                        immediate: None,
-                        debug_info: curr.debug_info,
-                    }
-                ),
+                true => opt.push(Instruction {
+                    opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
+                    immediate: None,
+                    debug_info: curr.debug_info,
+                }),
             }
         }
-        
+
         optimized.add_node(opt);
     }
     (optimized, same)
@@ -545,58 +550,57 @@ pub fn xset_tail_elision(graph: &FlowGraph, _debug: bool) -> (FlowGraph, bool) {
 pub fn tuple_annihilation(graph: &FlowGraph, _debug: bool) -> (FlowGraph, bool) {
     let mut optimized = FlowGraph::default();
     let mut same = true;
-    
+
     for node in graph.node_indices() {
-        
         let block = &graph[node];
-        
+
         if block.len() < 2 {
             optimized.add_node(block.clone());
             continue;
         }
-        
+
         let mut opt = Vec::with_capacity(block.len());
-        
+
         let mut index = 0;
-        
+
         while index < block.len() - 1 {
-            
             let curr = &block[index];
             let next = &block[index + 1];
-            
+
             let immediates = (curr.immediate.as_ref(), next.immediate.as_ref());
-            
+
             match (curr.opcode, next.opcode) {
-                (Opcode::AVMOpcode(AVMOpcode::Tset), Opcode::AVMOpcode(AVMOpcode::Tget)) => match immediates {
-                    (Some(curr_value), Some(next_value)) => {
-                        
-                        if curr_value != next_value {
+                (Opcode::AVMOpcode(AVMOpcode::Tset), Opcode::AVMOpcode(AVMOpcode::Tget)) => {
+                    match immediates {
+                        (Some(curr_value), Some(next_value)) => {
+                            if curr_value != next_value {
+                                opt.push(Instruction {
+                                    opcode: Opcode::AVMOpcode(AVMOpcode::Swap1),
+                                    immediate: None,
+                                    debug_info: curr.debug_info,
+                                });
+                            }
+
                             opt.push(Instruction {
-                                opcode: Opcode::AVMOpcode(AVMOpcode::Swap1),
+                                opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
                                 immediate: None,
-                                debug_info: curr.debug_info,
+                                debug_info: next.debug_info,
                             });
+
+                            if curr_value != next_value {
+                                opt.push(next.clone());
+                            }
+
+                            same = false;
+                            index += 2;
+                            continue;
                         }
-                        
-                        opt.push(Instruction {
-                            opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
-                            immediate: None,
-                            debug_info: next.debug_info,
-                        });
-                        
-                        if curr_value != next_value {
-                            opt.push(next.clone());
-                        }
-                        
-                        same = false;
-                        index += 2;
-                        continue;
+                        _ => {}
                     }
-                    _ => {}
                 }
                 _ => {}
             }
-            
+
             opt.push(curr.clone());
             index += 1;
         }
@@ -610,29 +614,27 @@ pub fn tuple_annihilation(graph: &FlowGraph, _debug: bool) -> (FlowGraph, bool) 
 pub fn stack_reduce(graph: &FlowGraph, debug: bool) -> (FlowGraph, bool) {
     let mut optimized = FlowGraph::default();
     let mut same = true;
-    
+
     let mut global_offset = 0;
-    
+
     for node in graph.node_indices() {
-        
         let block = &graph[node];
-        
+
         let mut data_stack = vec![];
         let mut aux_stack = vec![];
         let mut replace: Vec<Vec<usize>> = vec![];
-        
+
         for index in 0..block.len() {
-            
             let effects = block[index].effects();
-            
+
             for effect in effects {
                 match effect {
                     OpcodeEffect::PushStack => drop(data_stack.push((vec![index], true))),
                     OpcodeEffect::PushAux => drop(aux_stack.push((vec![index], true))),
                     OpcodeEffect::SwapStack(depth) => {
                         if depth + 1 > data_stack.len() {
-                            data_stack.clear();    // this function does something nasty
-                            aux_stack.clear();     //
+                            data_stack.clear(); // this function does something nasty
+                            aux_stack.clear(); //
                         } else if depth == 1 {
                             let mut lower = data_stack.pop().unwrap().clone();
                             let mut upper = data_stack.pop().unwrap().clone();
@@ -700,8 +702,8 @@ pub fn stack_reduce(graph: &FlowGraph, debug: bool) -> (FlowGraph, bool) {
                                 data_stack.push((vec, alive));
                             }
                             None => {
-                                data_stack.clear();    // this function does something nasty
-                                aux_stack.clear();     //
+                                data_stack.clear(); // this function does something nasty
+                                aux_stack.clear(); //
                             }
                         }
                     }
@@ -714,8 +716,8 @@ pub fn stack_reduce(graph: &FlowGraph, debug: bool) -> (FlowGraph, bool) {
                                 aux_stack.push((vec, alive));
                             }
                             None => {
-                                data_stack.clear();    // this function does something nasty
-                                aux_stack.clear();     //
+                                data_stack.clear(); // this function does something nasty
+                                aux_stack.clear(); //
                             }
                         }
                     }
@@ -726,17 +728,16 @@ pub fn stack_reduce(graph: &FlowGraph, debug: bool) -> (FlowGraph, bool) {
                 }
             }
         }
-        
+
         let mut changes: BTreeMap<usize, Vec<Instruction>> = BTreeMap::new();
-        
+
         for places in replace {
-            
             let generator = &block[places[0]];
-            
+
             if let Opcode::AVMOpcode(AVMOpcode::Xget) = generator.opcode {
                 continue;
             }
-            
+
             if debug {
                 println!("Reduction {}", places.len());
                 for place in places.iter() {
@@ -747,18 +748,17 @@ pub fn stack_reduce(graph: &FlowGraph, debug: bool) -> (FlowGraph, bool) {
                     print!("\n");
                 }
             }
-            
+
             let places = places.into_iter().rev().map(|place| (place, &block[place]));
-            
+
             let mut born = false;
             let mut on_stack = true;
-            
+
             for (place, insn) in places {
-                
                 let mut effects = insn.effects().into_iter().rev();
-                
+
                 let mut after = vec![];
-                
+
                 while let Some(effect) = effects.next() {
                     if !born {
                         match effect {
@@ -788,10 +788,10 @@ pub fn stack_reduce(graph: &FlowGraph, debug: bool) -> (FlowGraph, bool) {
                         }
                     }
                 }
-                
+
                 let after: Vec<OpcodeEffect> = after.into_iter().rev().collect();
                 let before: Vec<OpcodeEffect> = effects.rev().collect();
-                
+
                 if debug {
                     print!("  =       \t  ");
                     for effect in &before {
@@ -802,43 +802,41 @@ pub fn stack_reduce(graph: &FlowGraph, debug: bool) -> (FlowGraph, bool) {
                         print!(" {}", effect.to_name());
                     }
                 }
-                
+
                 let mut equivalent = vec![];
-                
+
                 let mut debug_info = insn.debug_info.clone();
                 debug_info.updates += 1;
-                
+
                 if insn == generator {
                     match insn.opcode {
                         Opcode::AVMOpcode(AVMOpcode::Noop)
                         | Opcode::AVMOpcode(AVMOpcode::Rget)
                         | Opcode::AVMOpcode(AVMOpcode::AuxPush)
-                        | Opcode::AVMOpcode(AVMOpcode::PushStatic) 
+                        | Opcode::AVMOpcode(AVMOpcode::PushStatic)
                         | Opcode::AVMOpcode(AVMOpcode::Swap1)
                         | Opcode::AVMOpcode(AVMOpcode::Swap2) => {}
-                        
-                        Opcode::AVMOpcode(AVMOpcode::AuxPop) 
-                            => {
+
+                        Opcode::AVMOpcode(AVMOpcode::AuxPop) => {
+                            equivalent.push(Instruction {
+                                opcode: Opcode::AVMOpcode(AVMOpcode::AuxPop),
+                                immediate: None,
+                                debug_info: debug_info,
+                            });
+                        }
+
+                        Opcode::AVMOpcode(AVMOpcode::Dup0)
+                        | Opcode::AVMOpcode(AVMOpcode::Dup1)
+                        | Opcode::AVMOpcode(AVMOpcode::Dup2) => {
+                            if let Some(value) = &insn.immediate {
                                 equivalent.push(Instruction {
-                                    opcode: Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                                    immediate: None,
+                                    opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
+                                    immediate: Some(value.clone()),
                                     debug_info: debug_info,
                                 });
                             }
-                        
-                        Opcode::AVMOpcode(AVMOpcode::Dup0)
-                        | Opcode::AVMOpcode(AVMOpcode::Dup1)
-                        | Opcode::AVMOpcode(AVMOpcode::Dup2)
-                            => {
-                                if let Some(value) = &insn.immediate {
-                                    equivalent.push(Instruction {
-                                        opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
-                                        immediate: Some(value.clone()),
-                                        debug_info: debug_info,
-                                    });
-                                }
-                            }
-                        
+                        }
+
                         Opcode::AVMOpcode(AVMOpcode::Xset) => {
                             if let None = &insn.immediate {
                                 equivalent.push(Instruction {
@@ -852,7 +850,7 @@ pub fn stack_reduce(graph: &FlowGraph, debug: bool) -> (FlowGraph, bool) {
                                 immediate: None,
                                 debug_info: debug_info,
                             });
-                            
+
                             equivalent.push(Instruction {
                                 opcode: Opcode::AVMOpcode(AVMOpcode::AuxPop),
                                 immediate: None,
@@ -864,7 +862,7 @@ pub fn stack_reduce(graph: &FlowGraph, debug: bool) -> (FlowGraph, bool) {
                                 debug_info: debug_info,
                             });
                         }
-                        
+
                         Opcode::AVMOpcode(AVMOpcode::Plus)
                         | Opcode::AVMOpcode(AVMOpcode::Mul)
                         | Opcode::AVMOpcode(AVMOpcode::Minus)
@@ -901,7 +899,7 @@ pub fn stack_reduce(graph: &FlowGraph, debug: bool) -> (FlowGraph, bool) {
                                 debug_info: debug_info,
                             });
                         }
-                        
+
                         Opcode::AVMOpcode(AVMOpcode::Tset) => {
                             if let None = &insn.immediate {
                                 equivalent.push(Instruction {
@@ -927,7 +925,6 @@ pub fn stack_reduce(graph: &FlowGraph, debug: bool) -> (FlowGraph, bool) {
                         }
                     };
                 } else {
-                    
                     if let Some(value) = &insn.immediate {
                         equivalent.push(Instruction {
                             opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
@@ -935,23 +932,23 @@ pub fn stack_reduce(graph: &FlowGraph, debug: bool) -> (FlowGraph, bool) {
                             debug_info: debug_info,
                         });
                     }
-                    
+
                     equivalent.extend(match insn.opcode {
                         Opcode::AVMOpcode(AVMOpcode::AuxPush)
-                            | Opcode::AVMOpcode(AVMOpcode::AuxPop)
-                            | Opcode::AVMOpcode(AVMOpcode::Pop) => vec![],
-                        Opcode::AVMOpcode(AVMOpcode::Swap1) => vec![],    // check this
+                        | Opcode::AVMOpcode(AVMOpcode::AuxPop)
+                        | Opcode::AVMOpcode(AVMOpcode::Pop) => vec![],
+                        Opcode::AVMOpcode(AVMOpcode::Swap1) => vec![], // check this
                         _ => {
                             println!("Encountered {}", insn);
                             panic!("Oh no! Stack Reduction is broken :(");
                         }
                     });
                 }
-                
+
                 if debug {
                     let grey = "\x1b[90m";
                     let reset = "\x1b[0;0m";
-                    
+
                     if !equivalent.is_empty() {
                         print!("\t{}=>{} ", grey, reset);
                         for equal in &equivalent {
@@ -960,21 +957,20 @@ pub fn stack_reduce(graph: &FlowGraph, debug: bool) -> (FlowGraph, bool) {
                     }
                     println!("");
                 }
-                
+
                 changes.insert(place, equivalent);
             }
-            
+
             same = false;
         }
-        
+
         global_offset += block.len();
-        
+
         let mut opt = Vec::with_capacity(block.len());
-        
+
         for index in 0..block.len() {
-            
             let curr = &block[index];
-            
+
             match changes.get(&index) {
                 None => opt.push(curr.clone()),
                 Some(equivalent) => {

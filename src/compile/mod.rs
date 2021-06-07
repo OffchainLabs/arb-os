@@ -4,11 +4,11 @@
 
 //! Contains utilities for compiling mini source code.
 
+use crate::console::ConsoleColors;
 use crate::link::{link, postlink_compile, ExportedFunc, Import, ImportedFunc, LinkedProgram};
 use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
 use crate::stringtable::{StringId, StringTable};
-use crate::console::ConsoleColors;
 use ast::Func;
 use clap::Clap;
 use lalrpop_util::lalrpop_mod;
@@ -1325,7 +1325,7 @@ impl CompileError {
             is_warning: false,
         }
     }
-    
+
     pub fn pretty_fmt(
         &self,
         file_info_chart: &BTreeMap<u64, FileInfo>,

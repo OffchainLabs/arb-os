@@ -11,12 +11,12 @@ use super::ast::{
 };
 use crate::compile::ast::FieldInitializer;
 use crate::compile::{CompileError, ErrorSystem, InliningHeuristic};
+use crate::console::ConsoleColors;
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::{Column, Location};
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
-use crate::console::ConsoleColors;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -62,7 +62,9 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
         match self {
             TypeCheckedNode::Statement(stat) => stat.child_nodes(),
             TypeCheckedNode::Expression(exp) => exp.child_nodes(),
-            TypeCheckedNode::StructField(field) => vec![TypeCheckedNode::Expression(&mut field.value)],
+            TypeCheckedNode::StructField(field) => {
+                vec![TypeCheckedNode::Expression(&mut field.value)]
+            }
             TypeCheckedNode::Type(tipe) => tipe.child_nodes(),
         }
     }
@@ -89,7 +91,8 @@ impl<'a> TypeCheckedNode<'a> {
                     if let TypeCheckedStatementKind::Asm(ref mut vec, _) = stat.kind {
                         for insn in vec {
                             insn.debug_info.attributes.codegen_print =
-                                stat.debug_info.attributes.codegen_print || attributes.codegen_print;
+                                stat.debug_info.attributes.codegen_print
+                                    || attributes.codegen_print;
                         }
                     }
                 }

@@ -11,13 +11,13 @@ use crate::compile::{
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::{try_display_location, Location};
 use crate::stringtable::{StringId, StringTable};
+use analyze::print_code;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::{DefaultHasher, HashMap};
 use std::collections::BTreeMap;
 use std::hash::Hasher;
 use std::io;
 use xformcode::make_uninitialized_tuple;
-use analyze::print_code;
 
 use petgraph::graph::DiGraph;
 
@@ -243,26 +243,25 @@ pub fn postlink_compile(
     show_optimizations: bool,
     debug: bool,
 ) -> Result<LinkedProgram, CompileError> {
-    
     if debug {
         for insn in program.code.iter_mut() {
             insn.debug_info.attributes.codegen_print = true;
         }
     }
-    
+
     let code = program.code;
-    
+
     if debug || show_optimizations {
         print_code(&code, "initial linking", &file_info_chart);
     }
-    
+
     let (_, anon_labels) = analyze::count_labels(&code);
     let code = analyze::elide_useless_labels(&code, anon_labels);
-    
+
     if debug || show_optimizations {
         print_code(&code, "after elide useless labels", &file_info_chart);
     }
-    
+
     let mut code = code;
     loop {
         let (inlined_code, inline_count) = analyze::inline_frames(&code);
@@ -271,12 +270,12 @@ pub fn postlink_compile(
             println!("{} frames inlined", inline_count);
         }
         code = inlined_code;
-        
+
         if inline_count == 0 {
             break;
         }
     }
-    
+
     let (code, jump_table) = striplabels::fix_nonforward_labels(
         &code,
         &program.imported_funcs,
@@ -285,17 +284,17 @@ pub fn postlink_compile(
     if show_optimizations {
         print_code(&code, "fix_nonforward_labels", &file_info_chart);
     }
-    
+
     let code = xformcode::fix_tuple_size(&code, program.globals.len())?;
     if debug || show_optimizations {
         print_code(&code, "fix_tuple_size", &file_info_chart);
     }
-    
+
     let mut graph = analyze::create_cfg(&code);
-    
+
     loop {
         let mut change = false;
-        
+
         macro_rules! optimize {
             ($optimization:tt, $title:tt, $debug:expr) => {
                 let (optimized, same) = optimize::$optimization(&graph, $debug);
@@ -306,13 +305,13 @@ pub fn postlink_compile(
                 change = change || !same;
             };
         }
-        
+
         optimize!(xget_elision, "xget elision", false);
         optimize!(peephole, "peephole", false);
         optimize!(xset_tail_elision, "xset tail elision", false);
         optimize!(tuple_annihilation, "tuple annihilation", false);
         optimize!(stack_reduce, "stack reduce", false);
-        
+
         if !change {
             if show_optimizations {
                 analyze::print_cfg(&graph, &graph, "final output");
@@ -320,34 +319,42 @@ pub fn postlink_compile(
             break;
         }
     }
-    
-    let prior_size = code.iter().filter(|insn| insn.opcode.base_cost() > 0).count() as f64;
+
+    let prior_size = code
+        .iter()
+        .filter(|insn| insn.opcode.base_cost() > 0)
+        .count() as f64;
     let prior_cost = code.iter().map(|insn| insn.opcode.base_cost()).sum::<u64>() as f64;
     let code = analyze::flatten_cfg(graph);
     let after_cost = code.iter().map(|insn| insn.opcode.base_cost()).sum::<u64>() as f64;
-    let after_size = code.iter().filter(|insn| insn.opcode.base_cost() > 0).count() as f64;
-    
+    let after_size = code
+        .iter()
+        .filter(|insn| insn.opcode.base_cost() > 0)
+        .count() as f64;
+
     if show_optimizations {
         println!(
             "Instructions {} => {} = {:.2}%",
-            prior_size, after_size,
+            prior_size,
+            after_size,
             100.0 * (prior_size - after_size) / prior_size
         );
         println!(
             "ArbGas {} => {} = {:.2}%",
-            prior_cost, after_cost,
+            prior_cost,
+            after_cost,
             100.0 * (prior_cost - after_cost) / prior_cost
         );
     }
-    
+
     let (mut code, jump_table_final) =
         striplabels::strip_labels(code, &jump_table, &program.imported_funcs)?;
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
-    
+
     if debug {
         print_code(&code, "strip_labels", &file_info_chart);
     }
-    
+
     hardcode_jump_table_into_register(&mut code, &jump_table_value, test_mode);
     let avm_code: Vec<_> = code
         .into_iter()
@@ -363,7 +370,7 @@ pub fn postlink_compile(
             }
         })
         .collect::<Result<Vec<_>, CompileError>>()?;
-    
+
     if debug {
         println!("============ after full compile/link =============");
         println!("static: {}", jump_table_value);
@@ -371,9 +378,9 @@ pub fn postlink_compile(
             println!("{:04}:  {}", idx, insn);
         }
     }
-    
+
     file_info_chart.extend(program.file_info_chart.clone());
-    
+
     Ok(LinkedProgram {
         arbos_version: init_constant_table(Some(Path::new("arb_os/constants.json")))
             .unwrap()
