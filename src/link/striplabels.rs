@@ -54,12 +54,13 @@ pub fn strip_labels(
             Some(_) => {}
             None => {
                 let insn_in = insn.clone();
-                code_out.push(insn_in.replace_labels(&label_map)
-                              .map_err(|lab| CompileError::new(
-                                  String::from("Compile error"),
-                                  format!("Couldn't find a definition for label {:?} contained in instruction {:?}, most likely reference to non-existent frunction", lab, insn),
-                                  insn.debug_info.location.into_iter().collect(),
-                              )
+                code_out.push(
+                    insn_in.replace_labels(&label_map)
+                        .map_err(|lab| CompileError::new(
+                            String::from("Compile error"),
+                            format!("Couldn't find a definition for label {:?} contained in instruction {:?}, most likely reference to non-existent frunction", lab, insn),
+                            insn.debug_info.location.into_iter().collect(),
+                        )
                     )?
                 );
             }
@@ -133,7 +134,10 @@ pub fn fix_nonforward_labels(
                             Opcode::PushExternal(idx),
                             insn_in.debug_info,
                         ));
-                        code_out.push(Instruction::from_opcode(insn_in.opcode, insn_in.debug_info));
+                        code_out.push(Instruction::from_opcode(
+                            insn_in.opcode, 
+                            insn_in.debug_info
+                        ));
                     } else {
                         code_out.push(Instruction::from_opcode_imm(
                             insn_in.opcode,

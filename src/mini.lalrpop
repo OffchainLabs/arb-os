@@ -7,6 +7,7 @@ use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVarDecl, Type, Cod
 StructField, FuncArg, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant,
 OptionConst, FieldInitializer, new_func_arg, new_type_decl};
 use crate::compile::{InliningMode, ErrorSystem, CompileError};
+use crate::console::ConsoleColors;
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
 use crate::link::Import;
@@ -50,9 +51,9 @@ HeadDecl: TopLevelDecl = {
                     String::from("Parser error"),
                     format!(
                         "Constant {}{}{} is declared twice",
-                        CompileError::RED,
+                        ConsoleColors::RED,
                         n,
-                        CompileError::RESET,
+                        ConsoleColors::RESET,
                     ),
                     file_info.location(BytePos::from(lno), filename).into_iter().collect()
                 )
@@ -126,9 +127,9 @@ Attributes: Attributes = {
                         String::from("Lexer error"),
                         format!(
                             "Unrecognized attribute {}{}{}",
-                            CompileError::RED,
+                            ConsoleColors::RED,
                             unrecognized,
-                            CompileError::RESET,
+                            ConsoleColors::RESET,
                         ),
                         file_info.location(BytePos::from(lno), filename).into_iter().collect()
                     )
@@ -208,12 +209,18 @@ Ident: StringId = {
 };
 
 Expr: Expr = {
-	<lno: @L> <t:Expr> "with" "{" "[" <i:Expr> "]" "=" <v:Expr> "}" => Expr { kind: ExprKind::ArrayOrMapMod(
-		Box::new(t),
-		Box::new(i),
-		Box::new(v),),
-		debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
-	<lno: @L> <t: Expr> "with" "{" <i:Ident> ":" <e: Expr> "}" => Expr { kind: ExprKind::StructMod(Box::new(t), stringtable.name_from_id(i).to_string(), Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> <t:Expr> "with" "{" "[" <i:Expr> "]" "=" <v:Expr> "}" => Expr {
+        kind: ExprKind::ArrayOrMapMod(
+		    Box::new(t),
+		    Box::new(i),
+		    Box::new(v),
+        ),
+		debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))
+    },
+	<lno: @L> <t: Expr> "with" "{" <i:Ident> ":" <e: Expr> "}" => Expr {
+        kind: ExprKind::StructMod(Box::new(t), stringtable.name_from_id(i).to_string(), Box::new(e)), 
+        debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))
+    },
 	Expr1,
 }
 
@@ -413,7 +420,7 @@ ConstVal: Uint256 = {
                                 "Constant {}{}{} was used despite being marked as intentionally unused",
                                 error_system.warn_color,
                                 &c,
-                                CompileError::RESET,
+                                ConsoleColors::RESET,
                             ),
                             loc
                         )
@@ -428,9 +435,9 @@ ConstVal: Uint256 = {
                         String::from("Parser error"),
                         format!(
                             "Unrecognized constant {}{}{}",
-                            CompileError::RED,
+                            ConsoleColors::RED,
                             &c,
-                            CompileError::RESET,
+                            ConsoleColors::RESET,
                         ),
                         loc
                     )

@@ -16,6 +16,7 @@ use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::{Column, Location};
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
+use crate::console::ConsoleColors;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -61,7 +62,7 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
         match self {
             TypeCheckedNode::Statement(stat) => stat.child_nodes(),
             TypeCheckedNode::Expression(exp) => exp.child_nodes(),
-            TypeCheckedNode::StructField(field) => field.child_nodes(),
+            TypeCheckedNode::StructField(field) => vec![TypeCheckedNode::Expression(&mut field.value)],
             TypeCheckedNode::Type(tipe) => tipe.child_nodes(),
         }
     }
@@ -85,12 +86,24 @@ impl<'a> TypeCheckedNode<'a> {
                         stat.debug_info.attributes.codegen_print || attributes.codegen_print;
                     let child_attributes = stat.debug_info.attributes.clone();
                     TypeCheckedNode::propagate_attributes(stat.child_nodes(), &child_attributes);
+                    if let TypeCheckedStatementKind::Asm(ref mut vec, _) = stat.kind {
+                        for insn in vec {
+                            insn.debug_info.attributes.codegen_print =
+                                stat.debug_info.attributes.codegen_print || attributes.codegen_print;
+                        }
+                    }
                 }
                 TypeCheckedNode::Expression(expr) => {
                     expr.debug_info.attributes.codegen_print =
                         expr.debug_info.attributes.codegen_print || attributes.codegen_print;
                     let child_attributes = expr.debug_info.attributes.clone();
                     TypeCheckedNode::propagate_attributes(expr.child_nodes(), &child_attributes);
+                }
+                TypeCheckedNode::StructField(field) => {
+                    field.value.debug_info.attributes.codegen_print =
+                        field.value.debug_info.attributes.codegen_print || attributes.codegen_print;
+                    let child_attributes = field.value.debug_info.attributes.clone();
+                    TypeCheckedNode::propagate_attributes(field.child_nodes(), &child_attributes);
                 }
                 _ => {}
             }
@@ -586,14 +599,6 @@ fn flowcheck_liveliness(
                 TypeCheckedExprKind::Loop(_body) => true,
                 _ => false,
             },
-            TypeCheckedNode::StructField(field) => {
-                process!(
-                    vec![TypeCheckedNode::Expression(&mut field.value)],
-                    problems,
-                    false
-                );
-                continue;
-            }
             _ => false,
         };
 
@@ -700,10 +705,10 @@ impl TypeCheckedFunc {
                             "func {}{}{}'s argument {}{}{} is declared but never used",
                             error_system.warn_color,
                             string_table.name_from_id(self.name.clone()),
-                            CompileError::RESET,
+                            ConsoleColors::RESET,
                             error_system.warn_color,
                             string_table.name_from_id(arg.name.clone()),
-                            CompileError::RESET,
+                            ConsoleColors::RESET,
                         ),
                         arg.debug_info.location.into_iter().collect(),
                     ));
@@ -716,10 +721,10 @@ impl TypeCheckedFunc {
                             "func {}{}{}'s argument {}{}{} is assigned but never used",
                             error_system.warn_color,
                             string_table.name_from_id(self.name.clone()),
-                            CompileError::RESET,
+                            ConsoleColors::RESET,
                             error_system.warn_color,
                             string_table.name_from_id(arg.name.clone()),
-                            CompileError::RESET,
+                            ConsoleColors::RESET,
                         ),
                         vec![*loc],
                     ));
@@ -736,7 +741,7 @@ impl TypeCheckedFunc {
                         "value {}{}{} is assigned but never used",
                         error_system.warn_color,
                         string_table.name_from_id(id.clone()),
-                        CompileError::RESET,
+                        ConsoleColors::RESET,
                     ),
                     vec![loc],
                 ));
@@ -1217,9 +1222,9 @@ pub fn typecheck_function(
             return Err(CompileError::new_type_error(
                 format!(
                     "Func {}{}{} never returns",
-                    CompileError::RED,
+                    ConsoleColors::RED,
                     string_table.name_from_id(fd.name),
-                    CompileError::RESET,
+                    ConsoleColors::RESET,
                 ),
                 fd.debug_info.location.into_iter().collect(),
             ));
@@ -1231,9 +1236,9 @@ pub fn typecheck_function(
                     return Err(CompileError::new_type_error(
                         format!(
                             "Func {}{}{}'s last statement is not a return",
-                            CompileError::RED,
+                            ConsoleColors::RED,
                             string_table.name_from_id(fd.name),
-                            CompileError::RESET,
+                            ConsoleColors::RESET,
                         ),
                         fd.debug_info
                             .location
@@ -1250,9 +1255,9 @@ pub fn typecheck_function(
         return Err(CompileError::new_type_error(
             format!(
                 "Func {}{}{} has the same name as another top-level symbol",
-                CompileError::RED,
+                ConsoleColors::RED,
                 string_table.name_from_id(fd.name),
-                CompileError::RESET,
+                ConsoleColors::RESET,
             ),
             location_option
                 .iter()
@@ -1268,9 +1273,9 @@ pub fn typecheck_function(
             CompileError::new_type_error(
                 format!(
                     "Unknown type for function argument {}{}{}",
-                    CompileError::RED,
+                    ConsoleColors::RED,
                     string_table.name_from_id(arg.name),
-                    CompileError::RESET,
+                    ConsoleColors::RESET,
                 ),
                 arg.debug_info.location.into_iter().collect(),
             )
@@ -1279,12 +1284,12 @@ pub fn typecheck_function(
             return Err(CompileError::new_type_error(
                 format!(
                     "Func {}{}{}'s argument {}{}{} has the same name as a top-level symbol",
-                    CompileError::RED,
+                    ConsoleColors::RED,
                     string_table.name_from_id(fd.name),
-                    CompileError::RESET,
-                    CompileError::RED,
+                    ConsoleColors::RESET,
+                    ConsoleColors::RED,
                     string_table.name_from_id(arg.name),
-                    CompileError::RESET,
+                    ConsoleColors::RESET,
                 ),
                 location_option
                     .iter()

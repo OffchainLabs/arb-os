@@ -28,6 +28,9 @@ pub type TypeTree = HashMap<(Vec<String>, usize), (Type, String)>;
 pub struct DebugInfo {
     pub location: Option<Location>,
     pub attributes: Attributes,
+    /// The number of times an opcode has been changed due to optimization passes.
+    #[serde(skip)]
+    pub updates: usize,
 }
 
 ///A list of properties that an AST node has.
@@ -36,9 +39,13 @@ pub struct Attributes {
     ///Is true if the current node is a breakpoint, false otherwise.
     pub breakpoint: bool,
     pub inline: InliningMode,
+    ///Whether generated instructions should be printed to the console. Propogates.
     #[serde(skip)]
-    ///Whether generated instructions should be printed to the console.
     pub codegen_print: bool,
+    ///Whether generated instructions were the result of inlining.
+    /// The values correspond to console colors.
+    #[serde(skip)]
+    pub was_inlined: usize,
 }
 
 impl DebugInfo {
@@ -46,6 +53,7 @@ impl DebugInfo {
         DebugInfo {
             location,
             attributes,
+            updates: 0,
         }
     }
 }
@@ -55,6 +63,7 @@ impl From<Option<Location>> for DebugInfo {
         DebugInfo {
             location,
             attributes: Attributes::default(),
+            updates: 0,
         }
     }
 }

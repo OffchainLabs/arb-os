@@ -8,6 +8,7 @@ use crate::link::{link, postlink_compile, ExportedFunc, Import, ImportedFunc, Li
 use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
 use crate::stringtable::{StringId, StringTable};
+use crate::console::ConsoleColors;
 use ast::Func;
 use clap::Clap;
 use lalrpop_util::lalrpop_mod;
@@ -57,6 +58,8 @@ pub struct CompileStruct {
     pub consts_file: Option<String>,
     #[clap(short, long)]
     pub must_use_global_consts: bool,
+    #[clap(short, long)]
+    pub show_optimizations: bool,
 }
 
 #[derive(Clap, Debug)]
@@ -136,8 +139,8 @@ impl CompileStruct {
             warnings: vec![],
             warnings_are_errors: self.warnings_are_errors,
             warn_color: match self.warnings_are_errors {
-                true => CompileError::PINK,
-                false => CompileError::YELLOW,
+                true => ConsoleColors::PINK,
+                false => ConsoleColors::YELLOW,
             },
             file_info_chart: BTreeMap::new(),
         };
@@ -185,6 +188,7 @@ impl CompileStruct {
             file_info_chart.clone(),
             &mut error_system,
             self.test_mode,
+            self.show_optimizations,
             self.debug_mode,
         ) {
             Ok(idk) => idk,
@@ -334,7 +338,7 @@ impl TypeCheckedModule {
                         "use statement {}{}{} is a duplicate",
                         error_system.warn_color,
                         import.name,
-                        CompileError::RESET,
+                        ConsoleColors::RESET,
                     ),
                     prior
                         .location
@@ -376,7 +380,7 @@ impl TypeCheckedModule {
                     "use statement {}{}{} is unnecessary",
                     error_system.warn_color,
                     import.name,
-                    CompileError::RESET,
+                    ConsoleColors::RESET,
                 ),
                 import.location.into_iter().collect(),
             ));
@@ -596,9 +600,9 @@ pub fn compile_from_file(
             String::from("Compile error"),
             format!(
                 "Could not parse {}{}{} as valid path",
-                CompileError::RED,
+                ConsoleColors::RED,
                 path.display(),
-                CompileError::RESET,
+                ConsoleColors::RESET,
             ),
             vec![],
         ))
@@ -947,7 +951,7 @@ fn typecheck_programs(
                                 "func {}{}{} {}",
                                 error_system.warn_color,
                                 string_table.name_from_id(*id),
-                                CompileError::RESET,
+                                ConsoleColors::RESET,
                                 match declared_purity {
                                     true => "is impure but not marked impure",
                                     false => "is declared impure but does not contain impure code",
@@ -1003,7 +1007,7 @@ fn check_global_constants(
                     "global constant {}{}{} is never used",
                     error_system.warn_color,
                     constant,
-                    CompileError::RESET,
+                    ConsoleColors::RESET,
                 ),
                 vec![],
             ));
@@ -1106,7 +1110,7 @@ fn consume_program_callgraph(
                         "func {}{}{} is unreachable",
                         error_system.warn_color,
                         func_name,
-                        CompileError::RESET,
+                        ConsoleColors::RESET,
                     ),
                     vec![data.1],
                 ));
@@ -1265,7 +1269,7 @@ pub fn parse_from_source(
                     "Constant {}{}{} is never used",
                     error_system.warn_color,
                     constant,
-                    CompileError::RESET,
+                    ConsoleColors::RESET,
                 ),
                 vec![loc],
             ));
@@ -1321,27 +1325,21 @@ impl CompileError {
             is_warning: false,
         }
     }
-
-    const RED: &'static str = "\x1b[31;1m";
-    const BLUE: &'static str = "\x1b[34;1m";
-    const YELLOW: &'static str = "\x1b[33;1m";
-    const PINK: &'static str = "\x1b[38;5;161;1m";
-    const RESET: &'static str = "\x1b[0;0m";
-
+    
     pub fn pretty_fmt(
         &self,
         file_info_chart: &BTreeMap<u64, FileInfo>,
         warnings_are_errors: bool,
     ) -> String {
-        let blue = CompileError::BLUE;
-        let reset = CompileError::RESET;
+        let blue = ConsoleColors::BLUE;
+        let reset = ConsoleColors::RESET;
 
         let err_color = match self.is_warning {
             true => match warnings_are_errors {
-                true => CompileError::PINK,
-                false => CompileError::YELLOW,
+                true => ConsoleColors::PINK,
+                false => ConsoleColors::YELLOW,
             },
-            false => CompileError::RED,
+            false => ConsoleColors::RED,
         };
 
         let last_line = &self.locations.last();

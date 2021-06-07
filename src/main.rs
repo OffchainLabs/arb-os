@@ -27,6 +27,7 @@ mod evm;
 mod gen_code;
 mod link;
 mod mavm;
+mod console;
 #[cfg(test)]
 mod minitests;
 pub mod pos;

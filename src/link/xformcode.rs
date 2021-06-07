@@ -19,10 +19,15 @@ pub fn fix_tuple_size(
     num_globals: usize,
 ) -> Result<Vec<Instruction>, CompileError> {
     let mut code_out = Vec::new();
-    let mut locals_tree = TupleTree::new(1, true);
     let global_tree = TupleTree::new(num_globals, false);
-
+    
+    let mut locals_trees = vec![];
+    locals_trees.push(TupleTree::new(1, true));
+    
     for insn in code_in.iter() {
+        
+        let locals_tree = locals_trees.last().unwrap();
+        
         let debug_info = insn.debug_info;
         match insn.opcode {
             Opcode::MakeFrame(nargs, ntotal) => {
@@ -30,7 +35,9 @@ pub fn fix_tuple_size(
                     Opcode::AVMOpcode(AVMOpcode::AuxPush),
                     debug_info,
                 )); // move return address to aux stack
-                locals_tree = TupleTree::new(ntotal, true);
+                
+                let locals_tree = TupleTree::new(ntotal, true);
+                
                 if let Some(imm) = &insn.immediate {
                     code_out.push(Instruction::from_opcode_imm(
                         Opcode::AVMOpcode(AVMOpcode::Noop),
@@ -46,6 +53,8 @@ pub fn fix_tuple_size(
                 for lnum in 0..nargs {
                     locals_tree.write_code(true, lnum, &mut code_out, debug_info)?;
                 }
+                
+                locals_trees.push(locals_tree);
             }
             Opcode::TupleGet(size) => {
                 let ttree = TupleTree::new(size, false);
@@ -154,6 +163,29 @@ pub fn fix_tuple_size(
                     debug_info,
                 ));
                 global_tree.read_code(false, idx, &mut code_out, debug_info)?;
+            }
+            Opcode::PopFrame => {
+                locals_trees.pop();
+                code_out.push(Instruction::new(
+                    Opcode::AVMOpcode(AVMOpcode::AuxPop),
+                    match &insn.immediate {
+                        Some(v) => Some(v.clone()),
+                        None => None,
+                    },
+                    debug_info,
+                ));
+                code_out.push(Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::Pop),
+                    debug_info,
+                ));
+                code_out.push(Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::AuxPop),
+                    debug_info,
+                ));
+                code_out.push(Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::Pop),
+                    debug_info,
+                ));
             }
             Opcode::Return => {
                 code_out.push(Instruction::new(
