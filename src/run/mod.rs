@@ -5,7 +5,7 @@
 //!Provides functionality for running mavm executables.
 
 use crate::link::LinkedProgram;
-use crate::mavm::{CodePt, Value, AVMOpcode, Instruction};
+use crate::mavm::{AVMOpcode, CodePt, Instruction, Value};
 use emulator::{ExecutionError, StackTrace};
 use std::{fs::File, io::Read, path::Path};
 
@@ -129,7 +129,12 @@ pub fn run(
         Ok(_stack) => {
             if let Some(cov_info) = coverage_filename {
                 let coverage_data = machine.coverage_result().unwrap();
-                write_coverage_data_to_file(coverage_data, machine.code.get_segment(0), cov_info.1, cov_info.0);
+                write_coverage_data_to_file(
+                    coverage_data,
+                    machine.code.get_segment(0),
+                    cov_info.1,
+                    cov_info.0,
+                );
             }
             Ok(machine.runtime_env.get_all_raw_logs())
         }
