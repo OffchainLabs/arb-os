@@ -13,8 +13,13 @@ use std::path::Path;
 
 mod integration;
 
-fn test_from_file_with_args_and_return(path: &Path, args: Vec<Value>, ret: Value) {
-    let res = run_from_file(path, args, None,false);
+fn test_from_file_with_args_and_return(
+    path: &Path,
+    args: Vec<Value>,
+    ret: Value,
+    coverage_filename: Option<String>,
+) {
+    let res = run_from_file(path, args, coverage_filename, false);
     match res {
         Ok(res) => {
             assert_eq!(res[0], ret);
@@ -26,7 +31,7 @@ fn test_from_file_with_args_and_return(path: &Path, args: Vec<Value>, ret: Value
 }
 
 fn test_from_file(path: &Path) {
-    test_from_file_with_args_and_return(path, vec![], Value::Int(Uint256::zero()));
+    test_from_file_with_args_and_return(path, vec![], Value::Int(Uint256::zero()), None);
 }
 
 #[test]
@@ -103,15 +108,15 @@ fn test_biguint() {
 fn test_rlp() {
     let mut ui = Uint256::one();
     for _i in 0..100 {
-        test_rlp_uint(ui.clone(), ui.rlp_encode());
+        test_rlp_uint(ui.clone(), ui.rlp_encode(), None);
         let ui2 = ui.div(&Uint256::from_usize(2048)).unwrap(); // a valid address
-        test_rlp_uint(ui2.clone(), ui2.rlp_encode());
+        test_rlp_uint(ui2.clone(), ui2.rlp_encode(), None);
         ui = ui
             .mul(&Uint256::from_usize(19482103))
             .add(&Uint256::from_usize(91));
     }
     let ui = Uint256::from_usize(4313412);
-    test_rlp_uint(ui.clone(), ui.rlp_encode());
+    test_rlp_uint(ui.clone(), ui.rlp_encode(), None);
 
     let mut byte_testvecs = vec![
         vec![0u8],
@@ -128,9 +133,13 @@ fn test_rlp() {
         new_test_vec.push(((73 * i) % 256).try_into().unwrap());
     }
     byte_testvecs.push(new_test_vec.clone());
-    for testvec in byte_testvecs {
-        let res = rlp::encode(&testvec);
-        test_rlp_bytearray(testvec, res);
+    for (i, testvec) in byte_testvecs.iter().enumerate() {
+        let res = rlp::encode(&*testvec);
+        test_rlp_bytearray(
+            testvec.to_vec(),
+            res,
+            Some(format!("stdlib/rlptest_bv_{}.cov", i)),
+        );
     }
 
     let list3_testvecs = vec![
@@ -146,9 +155,13 @@ fn test_rlp() {
             Uint256::from_usize(4313412),
         ),
     ];
-    for testvec in list3_testvecs {
+    for (i, testvec) in list3_testvecs.iter().enumerate() {
         let res = encode_list3(testvec.clone());
-        test_rlp_list3(testvec, res);
+        test_rlp_list3(
+            testvec.clone(),
+            res,
+            Some(format!("stdlib/rlptest_ls_{}.cov", i)),
+        );
     }
 }
 
@@ -161,23 +174,29 @@ fn encode_list3(testvec: (Uint256, Vec<u8>, Uint256)) -> Vec<u8> {
     stream.out()
 }
 
-fn test_rlp_uint(ui: Uint256, correct_result: Vec<u8>) {
+fn test_rlp_uint(ui: Uint256, correct_result: Vec<u8>, coverage_filename: Option<String>) {
     test_from_file_with_args_and_return(
         Path::new("stdlib/rlptest.mexe"),
         vec![Value::Int(Uint256::zero()), Value::Int(ui)],
         _bytestack_from_bytes(&correct_result),
+        coverage_filename,
     );
 }
 
-fn test_rlp_bytearray(input: Vec<u8>, correct_result: Vec<u8>) {
+fn test_rlp_bytearray(input: Vec<u8>, correct_result: Vec<u8>, coverage_filename: Option<String>) {
     test_from_file_with_args_and_return(
         Path::new("stdlib/rlptest.mexe"),
         vec![Value::Int(Uint256::one()), _bytestack_from_bytes(&input)],
         _bytestack_from_bytes(&correct_result),
+        coverage_filename,
     );
 }
 
-fn test_rlp_list3(testvec: (Uint256, Vec<u8>, Uint256), correct_result: Vec<u8>) {
+fn test_rlp_list3(
+    testvec: (Uint256, Vec<u8>, Uint256),
+    correct_result: Vec<u8>,
+    coverage_file: Option<String>,
+) {
     test_from_file_with_args_and_return(
         Path::new("stdlib/rlptest.mexe"),
         vec![
@@ -189,6 +208,7 @@ fn test_rlp_list3(testvec: (Uint256, Vec<u8>, Uint256), correct_result: Vec<u8>)
             ]),
         ],
         _bytestack_from_bytes(&correct_result),
+        coverage_file,
     );
 }
 
