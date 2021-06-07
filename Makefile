@@ -138,7 +138,7 @@ test:
 
 coverage: alltests.cov
 
-alltests.cov: compiler $(COVERAGES)
+alltests.cov: compiler contracts $(COVERAGES)
 	cat $(COVERAGES) | sort | uniq | grep -v test | grep -v Test >alltests.cov
 
 $(COVERAGES): %.cov: %.mexe
@@ -164,5 +164,5 @@ benchmark: compiler $(TEMPLATES) $(ARBOS)
 	$(CARGORUN) make-benchmarks
 
 clean:
-	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe $(UPGRADETESTDIR)/*.mexe $(ARBOSDIR)/arbos.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/upgrade.json minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini
+	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe *.cov $(BUILTINDIR)/*.cov $(STDDIR)/*.cov $(UPGRADETESTDIR)/*.mexe $(ARBOSDIR)/arbos.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/upgrade.json minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini
 	rm -rf contracts/artifacts contracts/cache
