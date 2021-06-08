@@ -64,6 +64,8 @@ public impure func arbosTest_txcall() {
             arbosTest_setBalance(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbosTest_setStorage) {
             arbosTest_setStorage(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbosTest_setCode) {
+            arbosTest_setCode(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbosTest_getMarshalledStorage) {
             arbosTest_getMarshalledStorage(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbosTest_getAccountInfo) {
@@ -193,6 +195,7 @@ impure func arbosTest_setStorage(topFrame: EvmCallFrame, calldata: ByteArray) {
         let index = bytearray_get256(marshalledStorage, i*64);
         let value = bytearray_get256(marshalledStorage, i*64+32);
         storage = storageMap_set(storage, index, value);
+        i = i + 1;
     }
     if let Some(uAcct) = account_setStorage(acct, storage) {
         evmCallStack_setAccountInCurrentContext(addr, uAcct);

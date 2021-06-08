@@ -612,6 +612,36 @@ impl<'a> ArbSys<'a> {
             Err(ethabi::Error::from("reverted"))
         }
     }
+
+    pub fn _get_storage_at(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+        index: Uint256,
+        sender: Option<Uint256>,
+    ) -> Result<Uint256, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            sender.unwrap_or(Uint256::zero()),
+            "getStorageAt",
+            &[
+                ethabi::Token::Address(addr.to_h160()),
+                ethabi::Token::Uint(index.to_u256()),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
 }
 
 pub struct ArbAddressTable<'a> {

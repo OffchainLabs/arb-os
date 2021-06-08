@@ -53,6 +53,36 @@ impl _ArbInfo {
             Err(ethabi::Error::from("reverted"))
         }
     }
+
+    pub fn _get_code(
+        &self,
+        machine: &mut Machine,
+        addr: &Uint256,
+    ) -> Result<Vec<u8>, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::from_u64(1112),
+            "getCode",
+            &[ethabi::Token::Address(addr.to_h160())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            let return_vals =
+                ethabi::decode(&[ethabi::ParamType::Bytes], &receipts[0].get_return_data())?;
+            match return_vals[0].clone() {
+                ethabi::Token::Bytes(code) => Ok(code),
+                _ => panic!(),
+            }
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
 }
 
 pub struct _ArbOwner<'a> {
@@ -2595,6 +2625,132 @@ impl ArbosTest {
         Ok(logs[num_logs_before + 1].get_return_data())
     }
 
+    pub fn _set_nonce(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+        nonce: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "setNonce",
+            &[
+                ethabi::Token::Address(addr.to_h160()),
+                ethabi::Token::Uint(nonce.to_u256()),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            println!(
+                "arbosTest.setNonce revert code {}",
+                receipts[0].get_return_code()
+            );
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _set_balance(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+        balance: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "setBalance",
+            &[
+                ethabi::Token::Address(addr.to_h160()),
+                ethabi::Token::Uint(balance.to_u256()),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            println!(
+                "arbosTest.setBalance revert code {}",
+                receipts[0].get_return_code()
+            );
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _set_storage(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+        is_diff: bool,
+        marshalled_storage: Vec<u8>,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "setStorage",
+            &[
+                ethabi::Token::Address(addr.to_h160()),
+                ethabi::Token::Bool(is_diff),
+                ethabi::Token::Bytes(marshalled_storage),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            println!(
+                "arbosTest.setStorage revert code {}",
+                receipts[0].get_return_code()
+            );
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _set_code(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+        code: Vec<u8>,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "setCode",
+            &[
+                ethabi::Token::Address(addr.to_h160()),
+                ethabi::Token::Bytes(code),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            println!(
+                "arbosTest.setCode revert code {}",
+                receipts[0].get_return_code()
+            );
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
     pub fn get_account_info(
         &self,
         machine: &mut Machine,
@@ -2671,6 +2827,144 @@ impl ArbosTest {
         assert_eq!(receipts.len(), 1);
         Ok(receipts[0].get_return_code().to_u64().unwrap())
     }
+}
+
+#[test]
+fn test_arbostest() {
+    _evm_test_arbostest();
+}
+
+fn _evm_test_arbostest() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+    let wallet = machine.runtime_env.new_wallet();
+    let _my_address = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let arbostest = ArbosTest::new(false);
+    let arbsys = ArbSys::new(&wallet, false);
+    let arbinfo = _ArbInfo::_new(false);
+
+    let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add")).unwrap();
+    if add_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .is_err()
+    {
+        panic!("failed to deploy Add contract");
+    }
+    let contract_addr = add_contract.address;
+
+    let weird_nonce = Uint256::from_u64(134913508);
+    arbostest
+        ._set_nonce(&mut machine, contract_addr.clone(), weird_nonce.clone())
+        .unwrap();
+    assert_eq!(
+        arbsys
+            .get_transaction_count(&mut machine, contract_addr.clone())
+            .unwrap(),
+        weird_nonce.clone()
+    );
+
+    let weird_balance = Uint256::from_u64(134391375081);
+    arbostest
+        ._set_balance(&mut machine, contract_addr.clone(), weird_balance.clone())
+        .unwrap();
+    assert_eq!(
+        arbinfo._get_balance(&mut machine, &contract_addr).unwrap(),
+        weird_balance.clone()
+    );
+
+    let weird_code = "This weird code could never happen by chance."
+        .to_string()
+        .as_bytes()
+        .to_vec();
+    arbostest
+        ._set_code(&mut machine, contract_addr.clone(), weird_code.clone())
+        .unwrap();
+    assert_eq!(
+        arbinfo._get_code(&mut machine, &contract_addr).unwrap(),
+        weird_code.clone()
+    );
+
+    let storage1 = &[(13, 99), (17, 104), (110, 3)];
+    let mut marshalled = vec![];
+    for (i, v) in storage1 {
+        marshalled.extend(Uint256::from_u64(*i).to_bytes_be());
+        marshalled.extend(Uint256::from_u64(*v).to_bytes_be());
+    }
+    arbostest
+        ._set_storage(
+            &mut machine,
+            contract_addr.clone(),
+            false,
+            marshalled.clone(),
+        )
+        .unwrap();
+
+    for (i, v) in storage1 {
+        assert_eq!(
+            arbsys
+                ._get_storage_at(
+                    &mut machine,
+                    contract_addr.clone(),
+                    Uint256::from_u64(*i),
+                    None
+                )
+                .unwrap(),
+            Uint256::from_u64(*v)
+        );
+    }
+
+    let storage2 = &[(19, 88), (20, 21)];
+    let mut marshalled2 = vec![];
+    for (i, v) in storage2 {
+        marshalled2.extend(Uint256::from_u64(*i).to_bytes_be());
+        marshalled2.extend(Uint256::from_u64(*v).to_bytes_be());
+    }
+    arbostest
+        ._set_storage(&mut machine, contract_addr.clone(), true, marshalled2)
+        .unwrap();
+
+    for (i, v) in storage1 {
+        assert_eq!(
+            arbsys
+                ._get_storage_at(
+                    &mut machine,
+                    contract_addr.clone(),
+                    Uint256::from_u64(*i),
+                    None
+                )
+                .unwrap(),
+            Uint256::from_u64(*v)
+        );
+    }
+    for (i, v) in storage2 {
+        assert_eq!(
+            arbsys
+                ._get_storage_at(
+                    &mut machine,
+                    contract_addr.clone(),
+                    Uint256::from_u64(*i),
+                    None
+                )
+                .unwrap(),
+            Uint256::from_u64(*v)
+        );
+    }
+
+    arbostest
+        ._set_storage(&mut machine, contract_addr.clone(), false, marshalled)
+        .unwrap();
+    assert_eq!(
+        arbsys
+            ._get_storage_at(
+                &mut machine,
+                contract_addr.clone(),
+                Uint256::from_u64(storage2[0].0),
+                None
+            )
+            .unwrap(),
+        Uint256::zero()
+    );
 }
 
 #[test]
