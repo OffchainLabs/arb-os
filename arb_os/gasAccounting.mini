@@ -934,16 +934,24 @@ impure func payForTxAndL1Gas(
 
     // pay for network fee; if insufficient funds, pay as much as we can then return false
     if ( ! {
+        let txPrice = fixedPoint_mulByUintTrunc(feeConfig.networkFeeRate, basePriceTx);
+        let calldataUnitPrice = fixedPoint_mulByUintTrunc(feeConfig.networkFeeRate, basePriceCalldataUnit);
         let (fullyPaid, ufs, weiPaid) = tryToPayForL1Gas(
             payer,
             feeConfig.forNetwork,
-            fixedPoint_mulByUintTrunc(feeConfig.networkFeeRate, basePriceTx),
-            fixedPoint_mulByUintTrunc(feeConfig.networkFeeRate, calldataUnits * basePriceCalldataUnit),
+            txPrice,
+            calldataUnits * calldataUnitPrice,
             feeStats,
             paymentLimitWei - totalWeiPaid,
             feeStats.noFeeGasEstimationMode,
         );
-        feeStats = ufs;
+        feeStats = ufs with {
+            price: ufs.price with {
+                tx: txPrice + ufs.price.tx
+            } with {
+                calldataUnit: calldataUnitPrice + ufs.price.calldataUnit
+            }
+        };
         totalWeiPaid = totalWeiPaid + weiPaid;
         fullyPaid
     }) {
@@ -962,7 +970,13 @@ impure func payForTxAndL1Gas(
                 paymentLimitWei - totalWeiPaid,
                 feeStats.noFeeGasEstimationMode,
             );
-            feeStats = ufs;
+            feeStats = ufs with {
+               price: ufs.price with {
+                   tx: basePriceTx + ufs.price.tx
+               } with {
+                   calldataUnit: basePriceCalldataUnit + ufs.price.calldataUnit
+               }
+            };
             totalWeiPaid = totalWeiPaid + weiPaid;
             fullyPaid
         }) {
