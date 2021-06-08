@@ -512,6 +512,10 @@ public func account_getEthBalance(account: Account) -> uint {
     return account.ethBalance;
 }
 
+public func account_setEthBalance(account: Account, newBalance: uint) -> Account {
+    return account with { ethBalance: newBalance };
+}
+
 public func account_addToEthBalance(account: Account, addition: uint) -> Account {
     return account with { ethBalance: account.ethBalance + addition };
 }
@@ -655,6 +659,14 @@ public func account_getAllStorage(account: Account) -> option<StorageMap> {
     // Get the full contents of a contract's storage.
     // Return None if account doesn't have contract storage.
     return Some((account.contractInfo?).storage);
+}
+
+public func account_setStorage(account: Account, storage: StorageMap) -> option<Account> {
+    return Some(
+        account with {
+            contractInfo: Some(account.contractInfo? with { storage: storage })
+        }
+    );
 }
 
 public func account_getStorageCell(account: Account, cell: uint) -> option<uint> {
