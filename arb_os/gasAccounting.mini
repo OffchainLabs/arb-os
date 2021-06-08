@@ -932,41 +932,41 @@ impure func payForTxAndL1Gas(
         return (true, feeStats, 0);
     }
 
-    if ( ! feeStats.noFeeGasEstimationMode) {
-        // pay for network fee; if insufficient funds, pay as much as we can then return false
+    // pay for network fee; if insufficient funds, pay as much as we can then return false
+    if ( ! {
+        let (fullyPaid, ufs, weiPaid) = tryToPayForL1Gas(
+            payer,
+            feeConfig.forNetwork,
+            fixedPoint_mulByUintTrunc(feeConfig.networkFeeRate, basePriceTx),
+            fixedPoint_mulByUintTrunc(feeConfig.networkFeeRate, calldataUnits * basePriceCalldataUnit),
+            feeStats,
+            paymentLimitWei - totalWeiPaid,
+            feeStats.noFeeGasEstimationMode,
+        );
+        feeStats = ufs;
+        totalWeiPaid = totalWeiPaid + weiPaid;
+        fullyPaid
+    }) {
+        return (false, feeStats, totalWeiPaid);
+    }
+
+    if (aggregator == preferredAggregator) {
+        // pay aggregator; if insufficient funds, pay as much as we can then return false
         if ( ! {
             let (fullyPaid, ufs, weiPaid) = tryToPayForL1Gas(
                 payer,
-                feeConfig.forNetwork,
-                fixedPoint_mulByUintTrunc(feeConfig.networkFeeRate, basePriceTx),
-                fixedPoint_mulByUintTrunc(feeConfig.networkFeeRate, calldataUnits * basePriceCalldataUnit),
+                aggregator,
+                basePriceTx,
+                calldataUnits * basePriceCalldataUnit,
                 feeStats,
                 paymentLimitWei - totalWeiPaid,
+                feeStats.noFeeGasEstimationMode,
             );
             feeStats = ufs;
             totalWeiPaid = totalWeiPaid + weiPaid;
             fullyPaid
         }) {
             return (false, feeStats, totalWeiPaid);
-        }
-
-        if (aggregator == preferredAggregator) {
-            // pay aggregator; if insufficient funds, pay as much as we can then return false
-            if ( ! {
-                let (fullyPaid, ufs, weiPaid) = tryToPayForL1Gas(
-                    payer,
-                    aggregator,
-                    basePriceTx,
-                    calldataUnits * basePriceCalldataUnit,
-                    feeStats,
-                    paymentLimitWei - totalWeiPaid,
-                );
-                feeStats = ufs;
-                totalWeiPaid = totalWeiPaid + weiPaid;
-                fullyPaid
-            }) {
-                return (false, feeStats, totalWeiPaid);
-            }
         }
     }
 
@@ -980,6 +980,7 @@ impure func tryToPayForL1Gas(
     weiForCalldata: uint,
     feeStats: TxFeeStats,
     paymentLimit: uint,
+    dontActuallyPay: bool,
 ) -> (bool, TxFeeStats, uint) {    // returns (fullyPaid, updatedFeeStats, totalWeiPaid)
     let totalDue = weiForTx + weiForCalldata;
     let fullyPaid = xif (totalDue <= paymentLimit) {
@@ -991,7 +992,7 @@ impure func tryToPayForL1Gas(
 
     let acctStore = getGlobalAccountStore();
     let payerAcct = accountStore_get(acctStore, payer);
-    if (account_getEthBalance(payerAcct) < totalDue) {
+    if ((account_getEthBalance(payerAcct) < totalDue) && !dontActuallyPay){
         totalDue = account_getEthBalance(payerAcct);
         fullyPaid = false;
     }
@@ -1002,7 +1003,12 @@ impure func tryToPayForL1Gas(
         weiForCalldata = totalDue - weiForTx;
     }
 
-    return xif let Some(uAcctStore) = accountStore_transferEthBalance(acctStore, payer, recipient, totalDue) {
+    return xif let Some(uAcctStore) = accountStore_transferEthBalance(
+        acctStore,
+        payer,
+        recipient,
+        xif (dontActuallyPay) { 0 } else { totalDue }
+    ) {
         setGlobalAccountStore(uAcctStore);
         (
             fullyPaid,
