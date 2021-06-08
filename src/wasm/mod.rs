@@ -102,6 +102,41 @@ fn get_return_from_table(res: &mut Vec<Instruction>) {
     res.push(simple_op(AVMOpcode::Pop));
 }
 
+fn set_jump_table(res: &mut Vec<Instruction>) {
+    // idx, codept
+    res.push(simple_op(AVMOpcode::AuxPush)); // codept ;; idx
+    res.push(simple_op(AVMOpcode::Rget));
+    res.push(immed_op(AVMOpcode::Tget, int_from_usize(7)));
+    res.push(simple_op(AVMOpcode::AuxPop));
+    for _i in 0..LEVEL {
+        // Stack: idx, table, codept
+        res.push(simple_op(AVMOpcode::Dup0)); // idx, idx, table, codept
+        res.push(immed_op(AVMOpcode::BitwiseAnd, int_from_usize(7))); // idx (mod), idx, table
+        res.push(simple_op(AVMOpcode::Swap1)); // idx, idx (mod), table
+        res.push(immed_op(AVMOpcode::ShiftRight, int_from_usize(3))); // idx, idx (mod), table
+        res.push(simple_op(AVMOpcode::Swap2)); // table, idx (mod), idx
+        res.push(simple_op(AVMOpcode::Swap1)); // idx (mod), table, idx
+        // push idx and table to aux staxk
+        res.push(simple_op(AVMOpcode::Dup0));
+        res.push(simple_op(AVMOpcode::AuxPush));  // ;; idx (mod)
+        res.push(simple_op(AVMOpcode::Dup1));
+        res.push(simple_op(AVMOpcode::AuxPush));  // ;; table, idx (mod)
+        res.push(simple_op(AVMOpcode::Tget)); // table, idx
+        res.push(simple_op(AVMOpcode::Swap1)); // idx, table
+    }
+    res.push(simple_op(AVMOpcode::Pop));
+    res.push(simple_op(AVMOpcode::Pop)); // codept
+    // need to consume table, idx from aux stack
+    for _i in 0..LEVEL {
+        res.push(simple_op(AVMOpcode::AuxPop));  // table, codept ;; idx (mod)
+        res.push(simple_op(AVMOpcode::AuxPop));  // idx, table, codept
+        res.push(simple_op(AVMOpcode::Tset));  // table
+    }
+    res.push(simple_op(AVMOpcode::Rget));
+    res.push(immed_op(AVMOpcode::Tset, int_from_usize(7)));
+    res.push(simple_op(AVMOpcode::Rset));
+}
+
 fn cjump(res: &mut Vec<Instruction>, idx: usize) {
     get_from_table(res, Value::Label(Label::Evm(idx)));
     res.push(simple_op(AVMOpcode::Cjump));
@@ -1890,6 +1925,25 @@ pub fn make_table(tab: &[Value]) -> Value {
     table_to_tuple2(tab, 0, 0, LEVEL - 1, tab.len())
 }
 
+fn simple_table_aux(level: usize) -> Value {
+    if level == 0 {
+        let mut v = vec![];
+        for i in 0..8 {
+            v.push(int_from_usize(0))
+        }
+        return Value::new_tuple(v);
+    }
+    let mut v = vec![];
+    for i in 0..8 {
+        v.push(simple_table_aux(level - 1));
+    }
+    return Value::new_tuple(v);
+}
+
+pub fn simple_table() -> Value {
+    simple_table_aux(LEVEL - 1)
+}
+
 fn value_replace_labels(v: Value, label_map: &HashMap<Label, Value>) -> Result<Value, Label> {
     match v {
         Value::HashOnly(_,_) => Ok(v),
@@ -2274,6 +2328,7 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
         int_from_usize(1000000), // gas left
         int_from_usize(0), // Immed
         int_from_usize(0), // Instruction
+        simple_table(),
     ])));
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(1)));
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(2)));
@@ -2672,6 +2727,13 @@ fn process_wasm_inner(buffer: &[u8], init: &mut Vec<Instruction>, test_args: &[u
             init.push(simple_op(AVMOpcode::Rget));
             init.push(immed_op(AVMOpcode::Tset, int_from_usize(6)));
             init.push(simple_op(AVMOpcode::Rset));
+        }
+        if f.field().contains("cptable") {
+            init.push(simple_op(AVMOpcode::Rget));
+            init.push(immed_op(AVMOpcode::Tget, int_from_usize(6))); // codepoint
+            init.push(get_frame());
+            init.push(get64_from_buffer(0)); // idx, codept
+            set_jump_table(init);
         }
 
         // Return from function

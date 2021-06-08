@@ -2089,6 +2089,7 @@ impl Machine {
                         let opcode = self.stack.pop_usize(&self.state)?;
                         let imm = self.stack.pop(&self.state)?;
                         let cp = self.stack.pop_codepoint(&self.state)?;
+                        // println!("ins {} immed {} codept {}", opcode, imm, cp);
                         let new_cp = self.code.push_insn(opcode, Some(imm), cp);
                         if let Some(cp) = new_cp {
                             self.stack.push_codepoint(cp);

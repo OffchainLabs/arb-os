@@ -1160,6 +1160,7 @@ impl AVMOpcode {
             0xa7 => Some(AVMOpcode::RunWasm),
             0xa8 => Some(AVMOpcode::CompileWasm),
             0xa9 => Some(AVMOpcode::MakeWasm),
+            0xff => Some(AVMOpcode::Noop),
             _ => None,
         }
     }
