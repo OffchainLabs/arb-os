@@ -2272,10 +2272,17 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
         Value::new_buffer(vec![]), // IO buffer
         int_from_usize(0), // IO len
         int_from_usize(1000000), // gas left
+        int_from_usize(0), // Immed
+        int_from_usize(0), // Instruction
     ])));
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(1)));
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(2)));
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(3)));
+    init.push(simple_op(AVMOpcode::Rset));
+
+    init.push(simple_op(AVMOpcode::ErrCodePoint));
+    init.push(simple_op(AVMOpcode::Rget));
+    init.push(immed_op(AVMOpcode::Tset, int_from_usize(6)));
     init.push(simple_op(AVMOpcode::Rset));
 
     process_wasm_inner(buffer, &mut init, &vec![2], &"test".to_string(), true);
@@ -2315,6 +2322,8 @@ fn process_test(buffer: &[u8], test_args: &[u64], entry: &String, set_memory: bo
         Value::new_buffer(vec![]), // IO buffer
         int_from_usize(0), // IO len
         int_from_usize(100000), // gas left
+        int_from_usize(0), // Immed
+        int_from_usize(0), // Instruction
     ])));
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(0)));
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(1)));
@@ -2614,6 +2623,55 @@ fn process_wasm_inner(buffer: &[u8], init: &mut Vec<Instruction>, test_args: &[u
             jump(init, start_label);
             
             init.push(mk_label(end_label));
+        }
+        if f.field().contains("uintimmed") {
+            get_memory(init); // buffer
+            init.push(get_frame());
+            init.push(get64_from_buffer(0)); // address, buffer
+            init.push(immed_op(
+                AVMOpcode::Plus,
+                Value::Int(Uint256::from_usize(memory_offset)),
+            )); // address, buffer
+            init.push(simple_op(AVMOpcode::GetBuffer256));
+            init.push(simple_op(AVMOpcode::Rget));
+            init.push(immed_op(AVMOpcode::Tset, int_from_usize(5)));
+            init.push(simple_op(AVMOpcode::Rset));
+        }
+        if f.field().contains("specialimmed") {
+            init.push(push_value(Value::new_tuple(vec![
+                Value::new_buffer(vec![]), // memory
+                int_from_usize(0), // call table
+                Value::new_buffer(vec![]), // IO buffer
+                int_from_usize(0), // IO len
+                int_from_usize(1000000), // gas left
+                int_from_usize(0), // Immed
+                int_from_usize(0), // Instruction
+            ])));
+            init.push(simple_op(AVMOpcode::Rget));
+            init.push(immed_op(AVMOpcode::Tset, int_from_usize(5)));
+            init.push(simple_op(AVMOpcode::Rset));
+        }
+        if f.field().contains("pushinst") {
+            init.push(simple_op(AVMOpcode::Rget));
+            init.push(immed_op(AVMOpcode::Tget, int_from_usize(6))); // codepoint
+            init.push(get_frame());
+            init.push(get64_from_buffer(0)); // insn, codepoint
+            init.push(simple_op(AVMOpcode::PushInsn));
+            init.push(simple_op(AVMOpcode::Rget));
+            init.push(immed_op(AVMOpcode::Tset, int_from_usize(6)));
+            init.push(simple_op(AVMOpcode::Rset));
+        }
+        if f.field().contains("pushimmed") {
+            init.push(simple_op(AVMOpcode::Rget));
+            init.push(immed_op(AVMOpcode::Tget, int_from_usize(6))); // codepoint
+            init.push(simple_op(AVMOpcode::Rget));
+            init.push(immed_op(AVMOpcode::Tget, int_from_usize(5))); // immed, codepoint
+            init.push(get_frame());
+            init.push(get64_from_buffer(0)); // insn, immed, codepoint
+            init.push(simple_op(AVMOpcode::PushInsnImm));
+            init.push(simple_op(AVMOpcode::Rget));
+            init.push(immed_op(AVMOpcode::Tset, int_from_usize(6)));
+            init.push(simple_op(AVMOpcode::Rset));
         }
 
         // Return from function
