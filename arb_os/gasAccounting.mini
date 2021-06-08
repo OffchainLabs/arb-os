@@ -819,6 +819,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
             };
             payForTxAndL1Gas(
                 tx.gasPayer,
+                tx.caller,
                 aggInfo.aggregator,
                 gasAccountingInfo.feeConfig,
                 prices,
@@ -828,6 +829,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
         } else {
             payForTxAndL1Gas(
                 tx.gasPayer,
+                tx.caller,
                 None<address>,
                 gasAccountingInfo.feeConfig,
                 prices,
@@ -901,6 +903,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
 
 impure func payForTxAndL1Gas(
     payer: address,
+    sender: address,
     maybeActualAggregator: option<address>,
     feeConfig: FeeConfig,
     prices: GasPrices,
@@ -910,7 +913,7 @@ impure func payForTxAndL1Gas(
     let totalWeiPaid = 0;
     let calldataUnits = feeStats.units.calldataUnit;
 
-    let preferredAggregator = account_getAggregatorToPay(evmCallStack_getAccountInCurrentContext(payer));
+    let preferredAggregator = account_getAggregatorToPay(evmCallStack_getAccountInCurrentContext(sender));
 
     let aggregator = xif let Some(rec) = maybeActualAggregator {
         rec
@@ -955,6 +958,16 @@ impure func payForTxAndL1Gas(
         totalWeiPaid = totalWeiPaid + weiPaid;
         fullyPaid
     }) {
+        if (aggregator == preferredAggregator) {
+            // include the full price the sender would have paid, if they had had enough funds
+            feeStats = feeStats with {
+                price: feeStats.price with {
+                   tx: basePriceTx + feeStats.price.tx
+                } with {
+                   calldataUnit: basePriceCalldataUnit + feeStats.price.calldataUnit
+                }
+            };
+        }
         return (false, feeStats, totalWeiPaid);
     }
 
