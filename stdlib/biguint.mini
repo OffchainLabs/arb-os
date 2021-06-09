@@ -191,7 +191,7 @@ public func biguint_marshal(x: []uint) -> any {
     return ret;
 }
 
-#[noinline, ] public func biguint_isZero(x: []uint) -> bool {
+public func biguint_isZero(x: []uint) -> bool {
     let i = len(x);
     while(i > 0) {
         i = i-1;
@@ -202,7 +202,7 @@ public func biguint_marshal(x: []uint) -> any {
     return true;
 }
 
-#[noinline, ] public func biguint_compare(x: []uint, y: []uint) -> int {
+public func biguint_compare(x: []uint, y: []uint) -> int {
     let xSize = len(x);
     let ySize = len(y);
     let i = xSize;

@@ -242,6 +242,7 @@ fn mavm_codegen_code_block<'a>(
             Opcode::Label(bottom_label),
             debug_info,
         ));
+        let _scope = scopes.pop();
         Ok((lab_gen, code, max(num_locals, nl)))
     }
 }
@@ -360,6 +361,20 @@ fn mavm_codegen_statement(
             Ok((lg, exp_locals, HashMap::new()))
         }
         TypeCheckedStatementKind::Break(oexpr, scope_id) => {
+            println!(
+                "this is it! {} {:?}",
+                oexpr
+                    .clone()
+                    .map(|thing| thing.debug_info.location)
+                    .unwrap_or_default()
+                    .unwrap_or_default(),
+                scopes
+            );
+            println!("The value of scope_id is: {}", scope_id);
+            println!(
+                "The index of the found scope is: {:?}",
+                scopes.iter_mut().rev().position(|(s, _, _)| scope_id == s)
+            );
             let mut inner_scopes = (*scopes).clone();
             let (_scope_name, lab, t) = scopes
                 .iter_mut()
