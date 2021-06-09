@@ -46,6 +46,9 @@ pub struct Attributes {
     /// The values correspond to console colors.
     #[serde(skip)]
     pub was_inlined: usize,
+    ///Whether to use xget/xset or Towers of Hanoi when building the stack frame.
+    #[serde(skip)]
+    pub tuple_frame: bool,
 }
 
 impl DebugInfo {
@@ -55,6 +58,16 @@ impl DebugInfo {
             attributes,
             updates: 0,
         }
+    }
+    pub fn inlined(&self, was_inlined: usize) -> Self {
+        let mut debug_info = self.clone();
+        debug_info.attributes.was_inlined = was_inlined;
+        debug_info
+    }
+    pub fn propagate(&self, codegen_print: bool) -> Self {
+        let mut debug_info = self.clone();
+        debug_info.attributes.codegen_print = debug_info.attributes.codegen_print || codegen_print;
+        debug_info
     }
 }
 

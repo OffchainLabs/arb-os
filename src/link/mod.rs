@@ -255,7 +255,7 @@ pub fn postlink_compile(
         print_code(&code, "initial linking", &file_info_chart);
     }
 
-    let (_, anon_labels) = analyze::count_labels(&code);
+    let (_, anon_labels, _) = analyze::count_labels(&code);
     let code = analyze::elide_useless_labels(&code, anon_labels);
 
     if debug || show_optimizations {
@@ -291,29 +291,45 @@ pub fn postlink_compile(
     }
 
     let mut graph = analyze::create_cfg(&code);
+    //let before_optimizations = graph.clone();
 
     loop {
         let mut change = false;
-
+        
         macro_rules! optimize {
             ($optimization:tt, $title:tt, $debug:expr) => {
                 let (optimized, same) = optimize::$optimization(&graph, $debug);
                 if !same && show_optimizations {
-                    analyze::print_cfg(&graph, &optimized, $title);
+                    //analyze::print_cfg(&graph, &optimized, $title);
                 }
                 graph = optimized;
                 change = change || !same;
             };
         }
-
-        optimize!(xget_elision, "xget elision", false);
+        
+        
         optimize!(peephole, "peephole", false);
+        optimize!(xget_elision, "xget elision", false);
         optimize!(xset_tail_elision, "xset tail elision", false);
         optimize!(tuple_annihilation, "tuple annihilation", false);
         optimize!(stack_reduce, "stack reduce", false);
+        
+        /*optimize!(xget_elision, "xget elision", false);
+        optimize!(peephole, "peephole", false);
+        optimize!(xset_tail_elision, "xset tail elision", false);
+        optimize!(tuple_annihilation, "tuple annihilation", false);
+        optimize!(stack_reduce, "stack reduce", false);*/
+        
+        //optimize!(change_abi, "change abi", false);
+        
+        let code = analyze::flatten_cfg(graph);
+        let (_, anon_labels, _) = analyze::count_labels(&code);
+        let code = analyze::elide_useless_labels(&code, anon_labels);
+        graph = analyze::create_cfg(&code);
 
         if !change {
             if show_optimizations {
+                //analyze::print_cfg(&before_optimizations, &graph, "final output");
                 analyze::print_cfg(&graph, &graph, "final output");
             }
             break;

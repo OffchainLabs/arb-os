@@ -122,6 +122,7 @@ Attributes: Attributes = {
                 "inline" => attribs.inline = InliningMode::Always,
                 "noinline" => attribs.inline = InliningMode::Never,
                 "print" => attribs.codegen_print = true,
+                "tuple_frame" => attribs.tuple_frame = true,
                 unrecognized => error_system.errors.push(
                     CompileError::new(
                         String::from("Lexer error"),

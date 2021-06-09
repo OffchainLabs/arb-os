@@ -1579,13 +1579,13 @@ impl AVMOpcode {
             ],
 
             AVMOpcode::Noop => vec![],
-            AVMOpcode::GetPC => vec![OpcodeEffect::PushStack],
+            //AVMOpcode::GetPC => vec![OpcodeEffect::PushStack],
 
             // for now (should really track register and static usage)
-            AVMOpcode::PushStatic
-            | AVMOpcode::Rget
-            | AVMOpcode::ErrCodePoint
-            | AVMOpcode::GetGas => vec![OpcodeEffect::PushStack],
+            //AVMOpcode::PushStatic
+            //| AVMOpcode::Rget
+            //| AVMOpcode::ErrCodePoint
+            //| AVMOpcode::GetGas => vec![OpcodeEffect::PushStack],
 
             AVMOpcode::Rset | AVMOpcode::SetGas => {
                 vec![OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack]
@@ -1715,6 +1715,8 @@ impl AVMOpcode {
             | AVMOpcode::Sideload => vec![OpcodeEffect::Unsure],
 
             AVMOpcode::Zero | AVMOpcode::Halt => vec![OpcodeEffect::Unsure],
+            
+            _ => vec![OpcodeEffect::Unsure],
         }
     }
 }

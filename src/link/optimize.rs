@@ -610,6 +610,53 @@ pub fn tuple_annihilation(graph: &FlowGraph, _debug: bool) -> (FlowGraph, bool) 
     (optimized, same)
 }
 
+pub fn _change_abi(graph: &FlowGraph, _debug: bool) -> (FlowGraph, bool) {
+    
+    let mut optimized = FlowGraph::default();
+    let mut same = true;
+    
+    let mut global_offset = 0;
+
+    for node in graph.node_indices() {
+        let block = &graph[node];
+        
+        let mut opt = Vec::with_capacity(block.len());
+        
+        for index in 0..block.len() {
+            let curr = &block[index];
+            
+            match &curr.opcode {
+                Opcode::AVMOpcode(AVMOpcode::Xset) => opt.push(Instruction {
+                    opcode: Opcode::AVMOpcode(AVMOpcode::AuxPush),
+                    immediate: None,
+                    debug_info: curr.debug_info,
+                }),
+                Opcode::AVMOpcode(AVMOpcode::Xget) => opt.extend(vec![
+                    Instruction {
+                        opcode: Opcode::AVMOpcode(AVMOpcode::AuxPop),
+                        immediate: None,
+                        debug_info: curr.debug_info,
+                    },
+                    Instruction {
+                        opcode: Opcode::AVMOpcode(AVMOpcode::Dup0),
+                        immediate: None,
+                        debug_info: curr.debug_info,
+                    },
+                    Instruction {
+                        opcode: Opcode::AVMOpcode(AVMOpcode::Xset),
+                        immediate: curr.immediate.clone(),
+                        debug_info: curr.debug_info,
+                    },
+                ]),
+                _ => opt.push(curr.clone()),
+            }
+        }
+        optimized.add_node(opt);
+    }
+    
+    (optimized, same)
+}
+
 ///Discovers unused values and eliminates them from the stacks.
 pub fn stack_reduce(graph: &FlowGraph, debug: bool) -> (FlowGraph, bool) {
     let mut optimized = FlowGraph::default();
