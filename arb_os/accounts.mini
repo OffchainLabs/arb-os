@@ -4,6 +4,7 @@
 
 use retrybuffer::RetryBuffer;
 use retrybuffer::retryBuffer_new;
+use retrybuffer::retryBuffer_setDefaultLifetime;
 
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
@@ -11,18 +12,12 @@ use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_setByte;
 use std::bytestream::bytestream_new;
 use std::bls::BLSKey;
-use std::outputbuffer::OutputBuffer;
-use std::outputbuffer::outputBuffer_new;
-use std::outputbuffer::outputBuffer_appendByte;
-use std::outputbuffer::outputBuffer_append256;
 use std::keccak::keccak256;
 use std::storageMap::StorageMap;
 use std::storageMap::storageMap_new;
 use std::storageMap::storageMap_size;
 use std::storageMap::storageMap_get;
 use std::storageMap::storageMap_set;
-use std::storageMap::storageMap_diff;
-use std::stack::stack_pop;
 
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsSize;
@@ -30,6 +25,7 @@ use core::kvs::builtin_kvsForall;
 use core::kvs::builtin_kvsDelete;
 
 use chainParameters::chainParams_getDefaultAggregator;
+use chainParameters::chainParams_getOrDie;
 use codeSegment::translateEvmCodeSegment;
 use decompression::AggregatorDecompressionState;
 use evmCallStack::evmCallStack_addStorageCharge;
@@ -82,6 +78,7 @@ type AccountContractInfo = struct {
 type AggregatorInfo = struct {
     decompressionState: option<AggregatorDecompressionState>,
     feeCollector: address,    // address to pay this aggregator's fees to (could be, e.g., aggregator's cold wallet)
+    baseTxFeeL1Gas: uint,
 }
 
 // globalAccountStore is the authoritative source of info on accounts that exist on this chain
@@ -106,6 +103,12 @@ public func escrowStore_new() -> EscrowStore {
     return struct {
         nextKey: 1,     // key 0 is pre-reserved for escrowing the current tx's gas funds
         escrowedValues: storageMap_new(),
+    };
+}
+
+public impure func accounts_notifyParamsChanged() {
+    globalAccountStore = globalAccountStore with {
+        retryBuffer: retryBuffer_setDefaultLifetime(globalAccountStore.retryBuffer)
     };
 }
 
@@ -178,31 +181,6 @@ public func accountStore_destroyAccount(acctStore: AccountStore, addrToDestroy: 
     return accountStore_set(acctStore, addrToDestroy, pristineAccount(addrToDestroy));
 }
 
-public func accountStore_destroyAndTransferBalance(
-    acctStore: AccountStore,
-    victimAddr: address,
-    recipientAddr: address
-) -> AccountStore {
-    // Destroy the account at victimAddr, and give its Eth balance to recipientAddr.
-    // If recipientAddr == victimAddr, this burns the funds.
-
-    let victim = accountStore_get(acctStore, recipientAddr);
-    let recipient = accountStore_get(acctStore, recipientAddr);
-    return xif (victimAddr == recipientAddr) {
-        accountStore_set(
-            acctStore,
-            victimAddr,
-            account_addBalance(pristineAccount(victimAddr), victim.ethBalance),
-        )
-    } else {
-        accountStore_set(
-            accountStore_set(acctStore, recipientAddr, account_addBalance(recipient, victim.ethBalance)),
-            victimAddr,
-            pristineAccount(victimAddr),
-        )
-    };
-}
-
 public func account_isEmpty(acct: Account) -> bool {
     return (acct.nextSeqNum == 0) && (acct.ethBalance == 0) && (acct.contractInfo == None<AccountContractInfo>);
 }
@@ -263,14 +241,6 @@ public func account_getBalance(account: Account) -> uint {
     return account.ethBalance;
 }
 
-public func account_setBalance(account: Account, balance: uint) -> Account {
-    return account with { ethBalance: balance };
-}
-
-public func account_addBalance(account: Account, balance: uint) -> Account {
-    return account with { ethBalance: account.ethBalance + balance };
-}
-
 public func account_getEvmJumpTable(account: Account) -> option<map<uint, impure func()>> {
     return Some((account.contractInfo?).evmJumpTable);
 }
@@ -293,15 +263,11 @@ public func account_getNextSeqNum(account: Account) -> uint {
     return account.nextSeqNum;
 }
 
-public func account_setNextSeqNum(account: Account, num: uint) -> Account {
-    return account with { nextSeqNum: num };
-}
-
 public func account_getAggregatorDecompressionState(account: Account) -> option<AggregatorDecompressionState> {
     return (account.aggregatorInfo?).decompressionState;
 }
 
-public func account_setAggregatorDecompressionState(
+public impure func account_setAggregatorDecompressionState(
     account: Account,
     maybeState: option<AggregatorDecompressionState>,
 ) -> Account {
@@ -315,6 +281,7 @@ public func account_setAggregatorDecompressionState(
                 struct {
                     decompressionState: maybeState,
                     feeCollector: account.addr,
+                    baseTxFeeL1Gas: chainParams_getOrDie(const::Atom_Param_DefaultBaseTxFeeL1Gas),
                 }
             }
         )
@@ -333,7 +300,7 @@ public func account_getFeeCollector(account: Account) -> address {
     };
 }
 
-public func account_setFeeCollector(account: Account, newCollector: address) -> Account {
+public impure func account_setFeeCollector(account: Account, newCollector: address) -> Account {
     return account with {
         aggregatorInfo: Some(
             xif let Some(aggInfo) = account.aggregatorInfo {
@@ -344,6 +311,25 @@ public func account_setFeeCollector(account: Account, newCollector: address) -> 
                 struct {
                     decompressionState: None<AggregatorDecompressionState>,
                     feeCollector: newCollector,
+                    baseTxFeeL1Gas: chainParams_getOrDie(const::Atom_Param_DefaultBaseTxFeeL1Gas),
+                }
+            }
+        )
+    };
+}
+
+public func account_setBaseTxFeeL1Gas(account: Account, fee: uint) -> Account {
+    return account with {
+        aggregatorInfo: Some(
+            xif let Some(aggInfo) = account.aggregatorInfo {
+                aggInfo with {
+                    baseTxFeeL1Gas: fee
+                }
+            } else {
+                struct {
+                    decompressionState: None<AggregatorDecompressionState>,
+                    feeCollector: account.addr,
+                    baseTxFeeL1Gas: fee,
                 }
             }
         )
@@ -472,27 +458,6 @@ public func accountStore_createBuiltinContract(
     };
 }
 
-public func accountStore_cloneContract(
-    acctStore: AccountStore,
-    oldAddr: address, 
-    newAddr: address,
-    copyStorage: bool,
-) -> option<AccountStore> {
-    // Clone an existing contract.
-    // Return Some(updatedAccountStore), or None if something went wrong.
-    let oldAccount = accountStore_get(acctStore, oldAddr);
-    let oldContractInfo = oldAccount.contractInfo?;
-    let newAccount = oldAccount
-        with { ethBalance: 0 }
-        with { nextSeqNum: 1 };
-    if (!copyStorage) {
-        newAccount = newAccount with {
-            contractInfo: Some(oldContractInfo with { storage: storageMap_new() })
-        };
-    }
-    return Some(accountStore_set(acctStore, newAddr, newAccount));
-}
-
 public func account_getEthBalance(account: Account) -> uint {
     return account.ethBalance;
 }
@@ -567,11 +532,11 @@ public func accountStore_newEscrow(acctStore: AccountStore, payer: address, amou
     };
 }
 
-public func accountStore_getEscrowBalance(acctStore: AccountStore, key: uint) -> uint {
+public func _accountStore_getEscrowBalance(acctStore: AccountStore, key: uint) -> uint {
     return storageMap_get(acctStore.escrowStore.escrowedValues, key);
 }
 
-public func accountStore_addToEscrow(acctStore: AccountStore, key: uint, payer: address, amount: uint) -> option<AccountStore> {
+public func _accountStore_addToEscrow(acctStore: AccountStore, key: uint, payer: address, amount: uint) -> option<AccountStore> {
     let acct = accountStore_get(acctStore, payer);
     return xif (acct.ethBalance < amount) {
         None<AccountStore>
@@ -724,10 +689,6 @@ func asfaClosure(_: any, acct: Account, wrappedState: asfa_wrappedState) -> asfa
     return wrappedState with {
         innerState: wrappedState.innerClosure(acct, wrappedState.innerState)
     };
-}
-
-public func accountStore_codeRefExists(acctStore: AccountStore, codeHash: bytes32) -> bool {
-    return acctStore.codeRefTable[codeHash] != None<CodeRef>;
 }
 
 public impure func accountStore_createOrAddCodeRef(
