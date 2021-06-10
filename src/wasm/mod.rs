@@ -2124,6 +2124,9 @@ pub struct JitWasm {
     len_cell: std::rc::Rc<std::cell::RefCell<i32>>,
     gas_cell: std::rc::Rc<std::cell::RefCell<i32>>,
     extra_cell: std::rc::Rc<std::cell::RefCell<Vec<u8>>>,
+    immed_cell: std::rc::Rc<std::cell::RefCell<Value>>,
+    insn_cell: std::rc::Rc<std::cell::RefCell<Vec<Instruction>>>,
+    table_cell: std::rc::Rc<std::cell::RefCell<Vec<(usize, usize)>>>,
 }
 
 use std::fmt;
@@ -2189,8 +2192,9 @@ impl JitWasm {
                 memory
                     .read(ptr as usize, &mut tmp)
                     .expect("cannot read memory");
-                println!("{:?}", tmp);
-                immed3.replace_with(|_| Value::Int(Uint256::from_bytes(&tmp)));
+                let v = Value::Int(Uint256::from_bytes(&tmp));
+                // println!("{:?} {}", tmp, v);
+                immed3.replace_with(|_| v);
             }
         });
 
@@ -2211,6 +2215,7 @@ impl JitWasm {
         let insn_cell: Rc<RefCell<Vec<Instruction>>> = Rc::new(RefCell::new(vec![]));
         let insn1 = insn_cell.clone();
         let insn2 = insn_cell.clone();
+        let insn3 = insn_cell.clone();
 
         let push_inst_func = Func::wrap(&store, move |opcode: i32| {
             let mut vec = insn1.borrow_mut();
@@ -2232,6 +2237,12 @@ impl JitWasm {
 
         let table_cell: Rc<RefCell<Vec<(usize, usize)>>> = Rc::new(RefCell::new(vec![]));
         let table1 = table_cell.clone();
+
+        let cptable_func = Func::wrap(&store, move |offset: i32| {
+            let mut vec = table1.borrow_mut();
+            let len = insn3.borrow().len();
+            vec.push((offset as usize, len));
+        });
 
         let read_func = Func::wrap(&store, move |offset: i32| {
             let ret = cell1.borrow().read_byte(offset as u128) as i32;
@@ -2338,6 +2349,18 @@ impl JitWasm {
                         imports.push(wvec_func.clone().into())
                     } else if name.contains("wextra") {
                         imports.push(extra_write_func.clone().into())
+                    } else if name.contains("uintimmed") {
+                        imports.push(uint_immed_func.clone().into())
+                    } else if name.contains("specialimmed") {
+                        imports.push(special_immed_func.clone().into())
+                    } else if name.contains("globalimmed") {
+                        imports.push(global_immed_func.clone().into())
+                    } else if name.contains("pushimmed") {
+                        imports.push(push_immed_func.clone().into())
+                    } else if name.contains("pushinst") {
+                        imports.push(push_inst_func.clone().into())
+                    } else if name.contains("cptable") {
+                        imports.push(cptable_func.clone().into())
                     } else {
                         imports.push(error_func.clone().into())
                     }
@@ -2358,6 +2381,9 @@ impl JitWasm {
             len_cell,
             gas_cell,
             extra_cell,
+            immed_cell,
+            insn_cell,
+            table_cell,
         };
     }
 
