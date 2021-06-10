@@ -1003,7 +1003,7 @@ pub enum StatementKind {
     While(Expr, Vec<Statement>),
     Asm(Vec<Instruction>, Vec<Expr>),
     DebugPrint(Expr),
-    Assert(Expr, Expr),
+    Assert(Expr),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -769,7 +769,7 @@ pub enum TypeCheckedStatementKind {
     While(TypeCheckedExpr, Vec<TypeCheckedStatement>),
     Asm(Vec<Instruction>, Vec<TypeCheckedExpr>),
     DebugPrint(TypeCheckedExpr),
-    Assert(TypeCheckedExpr, TypeCheckedExpr),
+    Assert(TypeCheckedExpr),
 }
 
 impl AbstractSyntaxTree for TypeCheckedStatement {
@@ -781,6 +781,7 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
             | TypeCheckedStatementKind::Let(_, exp)
             | TypeCheckedStatementKind::AssignLocal(_, exp)
             | TypeCheckedStatementKind::AssignGlobal(_, exp)
+            | TypeCheckedStatementKind::Assert(exp)
             | TypeCheckedStatementKind::DebugPrint(exp) => vec![TypeCheckedNode::Expression(exp)],
             TypeCheckedStatementKind::While(exp, stats) => vec![TypeCheckedNode::Expression(exp)]
                 .into_iter()
@@ -796,12 +797,6 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
                 .collect(),
             TypeCheckedStatementKind::Break(oexp, _) => {
                 oexp.iter_mut().flat_map(|exp| exp.child_nodes()).collect()
-            }
-            TypeCheckedStatementKind::Assert(exp, print_exp) => {
-                vec![
-                    TypeCheckedNode::Expression(exp),
-                    TypeCheckedNode::Expression(print_exp),
-                ]
             }
         }
     }
@@ -1631,9 +1626,9 @@ fn typecheck_statement<'a>(
             )?;
             Ok((TypeCheckedStatementKind::DebugPrint(tce), vec![]))
         }
-        StatementKind::Assert(cond, print_expr) => {
-            let tc_cond = typecheck_expr(
-                cond,
+        StatementKind::Assert(expr) => {
+            let tce = typecheck_expr(
+                expr,
                 type_table,
                 global_vars,
                 func_table,
@@ -1641,21 +1636,14 @@ fn typecheck_statement<'a>(
                 type_tree,
                 scopes,
             )?;
-            let tc_print = typecheck_expr(
-                print_expr,
-                type_table,
-                global_vars,
-                func_table,
-                return_type,
-                type_tree,
-                scopes,
-            )?;
-            match tc_cond.get_type() {
-                Type::Bool => Ok((TypeCheckedStatementKind::Assert(tc_cond, tc_print), vec![])),
+            match tce.get_type() {
+                Type::Tuple(vec) if vec.len() == 2 && vec[0] == Type::Bool => {
+                    Ok((TypeCheckedStatementKind::Assert(tce), vec![]))
+                }
                 _ => Err(new_type_error(
                     format!(
-                        "assert condition must be bool, found {}",
-                        tc_cond.get_type().display()
+                        "assert condition must be of type (bool, any), found {}",
+                        tce.get_type().display()
                     ),
                     debug_info.location,
                 )),
