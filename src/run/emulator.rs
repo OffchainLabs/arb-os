@@ -31,7 +31,7 @@ fn get_from_table_aux(v: &Value, num: usize, depth: usize) -> Value {
         v.clone()
     } else if let Value::Tuple(vec) = v {
         let n = num & 0x7;
-        get_from_table_aux(&vec[n], num/8, depth-1)
+        get_from_table_aux(&vec[n], num / 8, depth - 1)
     } else {
         panic!("stub")
     }
@@ -303,7 +303,7 @@ impl MachineState {
 
 ///Holds AVM bytecode in a list of segments, the runtime is held on segment 0.
 #[derive(Debug)]
-struct CodeStore {
+pub struct CodeStore {
     segments: Vec<Vec<Instruction<AVMOpcode>>>,
 }
 
@@ -973,7 +973,7 @@ impl Machine {
                         println!("*************************** Debug: {}", str);
                     }
                     if let Some(location) = code.debug_info.location {
-                            let line = location.line.to_usize();
+                        let line = location.line.to_usize();
                         let column = location.column.to_usize();
                         if let Some(filename) = self.file_name_chart.get(&location.file_id) {
                             println!(
@@ -2137,13 +2137,21 @@ impl Machine {
                                     res.push(buf.read_byte(i))
                                 }
                                 println!("Result {}", hex::encode(res));
-                            },
-                            _ => {},
+                            }
+                            _ => {}
                         };
-                        println!("{}\n{}", try_display_location(insn.debug_info.location, &self.file_name_chart, true), self.arb_gas_remaining);
-						self.incr_pc();
-						Ok(true)
-					}
+                        println!(
+                            "{}\n{}",
+                            try_display_location(
+                                insn.debug_info.location,
+                                &self.file_name_chart,
+                                true
+                            ),
+                            self.arb_gas_remaining
+                        );
+                        self.incr_pc();
+                        Ok(true)
+                    }
                     AVMOpcode::GetGas => {
                         self.stack.push(Value::Int(self.arb_gas_remaining.clone()));
                         self.incr_pc();
@@ -2318,7 +2326,7 @@ impl Machine {
                         let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
                         for i in 0..2 {
-                            nbuf = nbuf.set_byte((offset+i) as u128, bytes[(1-i)+30]);
+                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[(1 - i) + 30]);
                         }
                         self.stack.push(Value::copy_buffer(nbuf));
                         self.incr_pc();
@@ -2338,7 +2346,7 @@ impl Machine {
                         let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
                         for i in 0..4 {
-                            nbuf = nbuf.set_byte((offset+i) as u128, bytes[(3-i)+28]);
+                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[(3 - i) + 28]);
                         }
                         self.stack.push(Value::copy_buffer(nbuf));
                         self.incr_pc();
@@ -2359,7 +2367,7 @@ impl Machine {
                         let bytes = val.to_bytes_be();
                         // println!("setting buffer offset {} value {} bytes {:?}", offset, val, bytes);
                         for i in 0..8 {
-                            nbuf = nbuf.set_byte((offset+i) as u128, bytes[(7-i)+24]);
+                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[(7 - i) + 24]);
                         }
                         /*
                         let mut res = [0u8; 8];
@@ -2402,10 +2410,8 @@ impl Machine {
                         self.total_gas_usage = self.total_gas_usage.sub(&gas256).unwrap();
                         self.arb_gas_remaining = self.arb_gas_remaining.add(&gas256);
 
-                        let values = vec![
-                            Value::Int(Uint256::from_usize(len)),
-                            Value::Buffer(nbuf),
-                        ];
+                        let values =
+                            vec![Value::Int(Uint256::from_usize(len)), Value::Buffer(nbuf)];
 
                         self.stack.push(Value::new_tuple(values));
                         self.incr_pc();
@@ -2427,7 +2433,14 @@ impl Machine {
                         for i in (0..init.len()).rev() {
                             let op = code_vec[i].clone();
                             // println!("Hmm {} {:?}", i, op);
-                            code_pt = self.code.push_insn(crate::wasm::get_inst(&op) as usize, op.immediate, code_pt).unwrap();
+                            code_pt = self
+                                .code
+                                .push_insn(
+                                    crate::wasm::get_inst(&op) as usize,
+                                    op.immediate,
+                                    code_pt,
+                                )
+                                .unwrap();
                             if crate::wasm::has_label(&init[i]) {
                                 // println!("Found label at {} {:?}", i, code_pt);
                                 labels.push(Value::CodePoint(code_pt))
@@ -2442,7 +2455,10 @@ impl Machine {
                         let val = Value::new_tuple(vec![Value::CodePoint(code_pt), tab.clone()]);
                         let instance = JitWasm::new(&vec);
                         self.wasm_instances.push(instance);
-                        self.stack.push(Value::WasmCodePoint(Box::new(val), self.wasm_instances.len() - 1));
+                        self.stack.push(Value::WasmCodePoint(
+                            Box::new(val),
+                            self.wasm_instances.len() - 1,
+                        ));
                         self.incr_pc();
                         println!("Prepared");
 
@@ -2467,13 +2483,16 @@ impl Machine {
                         let val = Value::new_tuple(vec![code_pt, tab.clone()]);
                         let instance = JitWasm::new(&vec);
                         self.wasm_instances.push(instance);
-                        self.stack.push(Value::WasmCodePoint(Box::new(val), self.wasm_instances.len() - 1));
+                        self.stack.push(Value::WasmCodePoint(
+                            Box::new(val),
+                            self.wasm_instances.len() - 1,
+                        ));
                         self.incr_pc();
                         println!("Made wasm codepoint");
 
                         Ok(true)
                     }
-				}
+                }
             } else {
                 Err(ExecutionError::new(
                     "invalid program counter",

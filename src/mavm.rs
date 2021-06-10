@@ -103,7 +103,6 @@ pub struct Instruction<T = Opcode> {
 }
 
 impl From<Instruction<AVMOpcode>> for Instruction {
-
     fn from(from: Instruction<AVMOpcode>) -> Self {
         let Instruction {
             opcode,
@@ -130,7 +129,12 @@ impl<T> Instruction<T> {
         }
     }
 
-    pub fn new_with_debug(opcode: T, immediate: Option<Value>, debug_info: DebugInfo, debug_str: Option<String>) -> Self {
+    pub fn new_with_debug(
+        opcode: T,
+        immediate: Option<Value>,
+        debug_info: DebugInfo,
+        debug_str: Option<String>,
+    ) -> Self {
         Instruction {
             opcode,
             immediate,
@@ -518,7 +522,7 @@ impl Value {
             Value::Int(_) => Ok(self),
             Value::CodePoint(_) => Ok(self),
             Value::Buffer(_) => Ok(self),
-            Value::HashOnly(_,_) => Ok(self),
+            Value::HashOnly(_, _) => Ok(self),
             Value::Label(label) => {
                 let maybe_pc = label_map.get(&label);
                 match maybe_pc {
@@ -563,7 +567,7 @@ impl Value {
         func_offset: usize,
     ) -> (Self, usize) {
         match self {
-            Value::HashOnly(_,_) => (self, 0),
+            Value::HashOnly(_, _) => (self, 0),
             Value::Int(_) => (self, 0),
             Value::Buffer(_) => (self, 0),
             Value::Tuple(v) => {
@@ -597,7 +601,7 @@ impl Value {
 
     pub fn xlate_labels(self, label_map: &HashMap<Label, &Label>) -> Self {
         match self {
-            Value::Int(_) | Value::CodePoint(_) | Value::Buffer(_) | Value::HashOnly(_,_) => self,
+            Value::Int(_) | Value::CodePoint(_) | Value::Buffer(_) | Value::HashOnly(_, _) => self,
             Value::Tuple(v) => {
                 let mut newv = Vec::new();
                 for val in &*v {
@@ -626,7 +630,7 @@ impl Value {
 
     pub fn value_size(&self) -> u64 {
         match self {
-            Value::HashOnly(_,sz) => *sz, // this has to be changed for table
+            Value::HashOnly(_, sz) => *sz, // this has to be changed for table
             Value::Int(_) => 1,
             Value::Buffer(_) => 1,
             Value::Tuple(v) => {
@@ -644,9 +648,12 @@ impl Value {
 
     pub fn avm_hash(&self) -> Value {
         match self {
-            Value::HashOnly(ui,_) => Value::Int(ui.clone()),
+            Value::HashOnly(ui, _) => Value::Int(ui.clone()),
             Value::Int(ui) => Value::Int(ui.avm_hash()),
-            Value::Buffer(buf) => Value::avm_hash2(&Value::Int(Uint256::from_u64(123)), &Value::Int(buf.avm_hash())),
+            Value::Buffer(buf) => Value::avm_hash2(
+                &Value::Int(Uint256::from_u64(123)),
+                &Value::Int(buf.avm_hash()),
+            ),
             Value::Tuple(v) => {
                 let mut buf = vec![];
                 buf.push(v.len() as u8);
@@ -698,7 +705,7 @@ impl fmt::Display for Value {
             Value::Buffer(buf) => {
                 write!(f, "Buffer({})", buf.hex_encode())
             }
-            Value::HashOnly(i,_) => write!(f, "HashOnly({})", i),
+            Value::HashOnly(i, _) => write!(f, "HashOnly({})", i),
             Value::CodePoint(pc) => write!(f, "CodePoint({})", pc),
             Value::WasmCodePoint(v, _) => write!(f, "WasmCodePoint({})", v),
             Value::Label(label) => write!(f, "Label({})", label),

@@ -8,15 +8,15 @@ use crate::link::LinkedProgram;
 use crate::run::{Machine, MachineState};
 // use crate::run::Machine;
 // use crate::run::emulator::MachineState;
-use crate::uint256::Uint256;
 use crate::compile::CompileStruct;
 use crate::pos::try_display_location;
+use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
 use clap::Clap;
-use compile::{CompileError};
+use compile::CompileError;
 use contracttemplates::generate_contract_template_file_or_die;
-use mavm::{Buffer, CodePt, Value, Opcode, Instruction};
 use gen_code::gen_upgrade_code;
+use mavm::{Buffer, CodePt, Instruction, Opcode, Value};
 use run::{
     profile_gen_from_file, replay_from_testlog_file, run_from_file, ProfilerMode,
     RuntimeEnvironment,
@@ -24,14 +24,13 @@ use run::{
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
-use std::io::{Read,Write};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 mod compile;
 mod contracttemplates;
 mod evm;
-mod wasm;
 mod gen_code;
 mod link;
 mod mavm;
@@ -42,6 +41,7 @@ mod run;
 mod stringtable;
 mod uint256;
 mod upload;
+mod wasm;
 
 ///Command line options for run subcommand.
 #[derive(Clap, Debug)]
@@ -161,7 +161,14 @@ enum Args {
     SerializeUpgrade(SerializeUpgrade),
 }
 
-fn run_test(buffer: &[u8], prev_memory: &Buffer, test_args: &[u64], entry: &String, init: bool, debug: bool) -> (Buffer, Option<u64>) {
+fn run_test(
+    buffer: &[u8],
+    prev_memory: &Buffer,
+    test_args: &[u64],
+    entry: &String,
+    init: bool,
+    debug: bool,
+) -> (Buffer, Option<u64>) {
     let code_0 = wasm::make_test(buffer, prev_memory, test_args, entry, init);
     let mut code = vec![];
     for i in 0..code_0.len() {
@@ -170,10 +177,11 @@ fn run_test(buffer: &[u8], prev_memory: &Buffer, test_args: &[u64], entry: &Stri
                 code.push(Instruction::new_with_debug(
                     op.clone(),
                     code_0[i].immediate.clone(),
-                    code_0[i].debug_info.clone(), 
-                    code_0[i].debug_str.clone()));
+                    code_0[i].debug_info.clone(),
+                    code_0[i].debug_str.clone(),
+                ));
             }
-            _ => {},
+            _ => {}
         }
     }
     let code_len = code.len();
@@ -200,9 +208,7 @@ fn run_test(buffer: &[u8], prev_memory: &Buffer, test_args: &[u64], entry: &Stri
         (Some(Value::Buffer(buf)), Some(Value::Int(gl))) => {
             (buf.clone(), Some(gl.to_u64().unwrap()))
         }
-        (Some(Value::Buffer(buf)), None) => {
-            (buf.clone(), Some(0))
-        }
+        (Some(Value::Buffer(buf)), None) => (buf.clone(), Some(0)),
         (Some(Value::Int(err)), _) => {
             println!("{:?}", err);
             if err == Uint256::from_signed_string("-1").unwrap() {
@@ -216,7 +222,6 @@ fn run_test(buffer: &[u8], prev_memory: &Buffer, test_args: &[u64], entry: &Stri
             (prev_memory.clone(), Some(0))
         }
     }
-
 }
 
 fn parse_list(lst: &json::JsonValue) -> Vec<u64> {
@@ -249,7 +254,9 @@ fn main() -> Result<(), CompileError> {
             let mut init = true;
             for cmd in json["commands"].members() {
                 if cmd["type"] == "module" {
-                    let mut file = File::open(format!("wasm-suite/{}", &cmd["filename"].as_str().unwrap())).unwrap();
+                    let mut file =
+                        File::open(format!("wasm-suite/{}", &cmd["filename"].as_str().unwrap()))
+                            .unwrap();
                     let mut buffer = Vec::<u8>::new();
                     file.read_to_end(&mut buffer).unwrap();
                     module_buffer = buffer;
@@ -261,13 +268,30 @@ fn main() -> Result<(), CompileError> {
                         let entry = cmd["action"]["field"].as_str().unwrap();
                         let args = parse_list(&cmd["action"]["args"]);
                         // println!("{:?}", args);
-                        let (mem, result) = run_test(&module_buffer, &cur_memory, &args, &entry.to_string(), init, false);
+                        let (mem, result) = run_test(
+                            &module_buffer,
+                            &cur_memory,
+                            &args,
+                            &entry.to_string(),
+                            init,
+                            false,
+                        );
                         let expected = parse_list(&cmd["expected"]);
                         // println!("expected {:?}", expected);
                         if expected.len() > 0 {
                             if Some(expected[0]) != result {
-                                println!("At file {} with {}({:?}): Expected {}, Got {:?}", cur_file, entry, args, expected[0], result);
-                                run_test(&module_buffer, &cur_memory, &args, &entry.to_string(), init, true);
+                                println!(
+                                    "At file {} with {}({:?}): Expected {}, Got {:?}",
+                                    cur_file, entry, args, expected[0], result
+                                );
+                                run_test(
+                                    &module_buffer,
+                                    &cur_memory,
+                                    &args,
+                                    &entry.to_string(),
+                                    init,
+                                    true,
+                                );
                             }
                         }
                         cur_memory = mem;
@@ -279,10 +303,27 @@ fn main() -> Result<(), CompileError> {
                         let entry = cmd["action"]["field"].as_str().unwrap();
                         let args = parse_list(&cmd["action"]["args"]);
                         // println!("{:?}", args);
-                        let (_mem, result) = run_test(&module_buffer, &cur_memory, &args, &entry.to_string(), init, false);
+                        let (_mem, result) = run_test(
+                            &module_buffer,
+                            &cur_memory,
+                            &args,
+                            &entry.to_string(),
+                            init,
+                            false,
+                        );
                         if result != None {
-                            println!("At file {} with {}({:?}): Expected trap, Got {:?}", cur_file, entry, args, result);
-                            run_test(&module_buffer, &cur_memory, &args, &entry.to_string(), init, true);
+                            println!(
+                                "At file {} with {}({:?}): Expected trap, Got {:?}",
+                                cur_file, entry, args, result
+                            );
+                            run_test(
+                                &module_buffer,
+                                &cur_memory,
+                                &args,
+                                &entry.to_string(),
+                                init,
+                                true,
+                            );
                         }
                         // cur_memory = mem;
                         // init = false;
@@ -318,10 +359,11 @@ fn main() -> Result<(), CompileError> {
                         code.push(Instruction::new_with_debug(
                             op.clone(),
                             code_0[i].immediate.clone(),
-                            code_0[i].debug_info.clone(), 
-                            code_0[i].debug_str.clone()));
+                            code_0[i].debug_info.clone(),
+                            code_0[i].debug_str.clone(),
+                        ));
                     }
-                    _ => {},
+                    _ => {}
                 }
             }
             let code_len = code.len();
@@ -377,9 +419,14 @@ fn main() -> Result<(), CompileError> {
                         // println!("{}", buf.read_byte(i));
                         res.push(buf.read_byte(i as u128))
                     }
-                    println!("WASM Gas used {}, Gas used {}, Result {}", 1000000 - gl.to_usize().unwrap(), used, hex::encode(res));
+                    println!(
+                        "WASM Gas used {}, Gas used {}, Result {}",
+                        1000000 - gl.to_usize().unwrap(),
+                        used,
+                        hex::encode(res)
+                    );
                 }
-                _ => println!("Unexpected output")
+                _ => println!("Unexpected output"),
             };
         }
         Args::WasmRun(fname) => {
@@ -416,9 +463,19 @@ fn main() -> Result<(), CompileError> {
                 res.push(buf.read_byte(i as u128))
             }
             if extra.len() > 1000 {
-                println!("Gas used {}, Result {}, Extra len {}", 1000000 - gas_left, hex::encode(res), extra.len());
+                println!(
+                    "Gas used {}, Result {}, Extra len {}",
+                    1000000 - gas_left,
+                    hex::encode(res),
+                    extra.len()
+                );
             } else {
-                println!("Gas used {}, Result {}, Extra {}", 1000000 - gas_left, hex::encode(res), hex::encode(&extra));
+                println!(
+                    "Gas used {}, Result {}, Extra {}",
+                    1000000 - gas_left,
+                    hex::encode(res),
+                    hex::encode(&extra)
+                );
             }
             let mut file = File::create("/home/sami/extra.bin").unwrap();
             file.write_all(&extra).unwrap();
