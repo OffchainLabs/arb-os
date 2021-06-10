@@ -2,6 +2,7 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+use std::safeMath::safeAdd;
 
 use accounts::AccountStore;
 use accounts::accountStore_init;
