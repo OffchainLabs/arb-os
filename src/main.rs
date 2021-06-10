@@ -232,6 +232,50 @@ fn parse_list(lst: &json::JsonValue) -> Vec<u64> {
     args
 }
 
+fn run_debug(code_0: Vec<Instruction>, table: Vec<(usize, usize)>) {
+    let mut code = vec![];
+    for i in code_0.iter().rev() {
+        match &i.opcode {
+            Opcode::AVMOpcode(op) => {
+                code.push(Instruction::new_with_debug(
+                    op.clone(),
+                    i.immediate.clone(),
+                    i.debug_info.clone(),
+                    i.debug_str.clone(),
+                ));
+            }
+            _ => {}
+        }
+    }
+    let code_len = code.len();
+    println!("Code length {}", code_len);
+    let env = RuntimeEnvironment::new(Uint256::from_usize(11110000), None);
+    let program = LinkedProgram {
+        code: code,
+        static_val: Value::new_tuple(vec![]),
+        arbos_version: 10,
+        // exported_funcs: vec![],
+        // imported_funcs: vec![],
+        globals: vec![],
+        file_name_chart: BTreeMap::new(),
+    };
+    let mut machine = Machine::new(program, env);
+    /*
+    for i in 0..100 {
+        machine.start_at_zero();
+        machine.run(Some(CodePt::new_internal(code_len - 1)));
+    }*/
+    let mut table_aux = vec![0; table.len()];
+    for (i, loc) in table.iter() {
+        table_aux[*i] = code_0.len() - *loc;
+    };
+    machine.start_at_zero();
+    machine.stack.push_usize(0); // io len
+    machine.stack.push(Value::new_buffer(vec![])); // io buffer
+    machine.stack.push(wasm::make_table_internal(&table_aux)); // call table
+    machine.debug(Some(CodePt::new_internal(code_len - 1)));
+}
+
 fn main() -> Result<(), CompileError> {
     let mut print_time = true;
     let start_time = Instant::now();
@@ -457,7 +501,9 @@ fn main() -> Result<(), CompileError> {
                 let (buf, len; _) = a.run(buf.clone(), param.len());
             }
             */
-            let (buf, extra, len, gas_left) = a.run(buf, param.len());
+            let (buf, extra, len, gas_left, insn, table) = a.run(buf, param.len());
+            println!("insn {:?} table {:?}", insn, table);
+            run_debug(insn, table);
             let mut res = vec![];
             for i in 0..len {
                 res.push(buf.read_byte(i as u128))
@@ -477,9 +523,11 @@ fn main() -> Result<(), CompileError> {
                     hex::encode(&extra)
                 );
             }
+            /*
             let mut file = File::create("/home/sami/extra.bin").unwrap();
             file.write_all(&extra).unwrap();
             println!("Wrote extra.bin");
+            */
         }
         Args::Compile(compile) => match do_compile(compile) {
             Ok(_) => {}

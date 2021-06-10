@@ -1939,6 +1939,10 @@ pub fn make_table(tab: &[Value]) -> Value {
     table_to_tuple2(tab, 0, 0, LEVEL - 1, tab.len())
 }
 
+pub fn make_table_internal(tab: &[usize]) -> Value {
+    table_to_tuple(tab, 0, 0, LEVEL - 1, tab.len())
+}
+
 fn simple_table_aux(level: usize) -> Value {
     if level == 0 {
         let mut v = vec![];
@@ -2387,7 +2391,7 @@ impl JitWasm {
         };
     }
 
-    pub fn run(&self, buf: Buffer, len: usize) -> (Buffer, Vec<u8>, usize, u64) {
+    pub fn run(&self, buf: Buffer, len: usize) -> (Buffer, Vec<u8>, usize, u64, Vec<Instruction>, Vec<(usize, usize)>) {
         self.cell.replace_with(|_buf| buf);
         self.len_cell.replace_with(|_len| len as i32);
         self.gas_cell.replace_with(|_gas| 1000000);
@@ -2402,6 +2406,8 @@ impl JitWasm {
             self.extra_cell.borrow().clone(),
             self.len_cell.borrow().clone() as usize,
             self.gas_cell.borrow().clone() as u64,
+            self.insn_cell.borrow().clone(),
+            self.table_cell.borrow().clone(),
         )
     }
 }
