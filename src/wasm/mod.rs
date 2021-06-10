@@ -2327,8 +2327,8 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
         int_from_usize(0), // IO len
         int_from_usize(1000000), // gas left
         int_from_usize(0), // Immed
-        int_from_usize(0), // Instruction
-        simple_table(),
+        int_from_usize(0), // Code point
+        simple_table(),    // Generated jump table
     ])));
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(1)));
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(2)));
@@ -2342,6 +2342,10 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
 
     process_wasm_inner(buffer, &mut init, &vec![2], &"test".to_string(), true);
 
+    init.push(simple_op(AVMOpcode::Rget));
+    init.push(immed_op(AVMOpcode::Tget, int_from_usize(7)));
+    init.push(simple_op(AVMOpcode::Rget));
+    init.push(immed_op(AVMOpcode::Tget, int_from_usize(6)));
     init.push(simple_op(AVMOpcode::Rget));
     init.push(immed_op(AVMOpcode::Tget, int_from_usize(4)));
     init.push(simple_op(AVMOpcode::Rget));
@@ -2693,6 +2697,15 @@ fn process_wasm_inner(buffer: &[u8], init: &mut Vec<Instruction>, test_args: &[u
             init.push(simple_op(AVMOpcode::Rset));
         }
         if f.field().contains("specialimmed") {
+            init.push(push_value(Value::new_tuple(vec![
+                Value::new_buffer(vec![]), // frame
+                int_from_usize(0), // call table
+            ])));
+            init.push(simple_op(AVMOpcode::Rget));
+            init.push(immed_op(AVMOpcode::Tset, int_from_usize(5)));
+            init.push(simple_op(AVMOpcode::Rset));
+        }
+        if f.field().contains("globalimmed") {
             init.push(push_value(Value::new_tuple(vec![
                 Value::new_buffer(vec![]), // memory
                 int_from_usize(0), // call table

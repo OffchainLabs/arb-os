@@ -5,7 +5,9 @@
 #![allow(unused_parens)]
 
 use crate::link::LinkedProgram;
-use crate::run::Machine;
+use crate::run::{Machine, MachineState};
+// use crate::run::Machine;
+// use crate::run::emulator::MachineState;
 use crate::uint256::Uint256;
 use crate::compile::CompileStruct;
 use crate::pos::try_display_location;
@@ -349,6 +351,24 @@ fn main() -> Result<(), CompileError> {
             let len = machine.stack.nth(0);
             let buf = machine.stack.nth(1);
             let gas_left = machine.stack.nth(2);
+            let codept = machine.stack.nth(3).unwrap();
+            let table = machine.stack.nth(4).unwrap();
+            println!("code {} table {}", codept, table);
+            // debug run the result
+            if let Value::CodePoint(pt) = codept {
+                while !machine.stack.is_empty() {
+                    machine.stack.pop(&MachineState::Stopped);
+                }
+                while !machine.aux_stack.is_empty() {
+                    machine.aux_stack.pop(&MachineState::Stopped);
+                }
+                machine.set_pc(pt);
+                machine.stack.push_usize(0); // io len
+                machine.stack.push(Value::new_buffer(vec![])); // io buffer
+                machine.stack.push(table); // call table
+                machine.debug(Some(CodePt::new_internal(code_len - 1)));
+            }
+
             match (len, buf, gas_left) {
                 (Some(Value::Int(a)), Some(Value::Buffer(buf)), Some(Value::Int(gl))) => {
                     let len = a.to_usize().unwrap();

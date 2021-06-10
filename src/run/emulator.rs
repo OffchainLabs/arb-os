@@ -234,7 +234,7 @@ impl ValueStack {
 impl fmt::Display for ValueStack {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Stack[")?;
-        for i in self.contents.iter().rev() {
+        for i in self.contents[0..self.ptr].iter().rev() {
             if let Value::Tuple(_) = i {
                 writeln!(f, "Tuple;;")?;
             } else {
@@ -754,7 +754,7 @@ impl FromStr for ProfilerMode {
 #[derive(Debug)]
 pub struct Machine {
     pub stack: ValueStack,
-    aux_stack: ValueStack,
+    pub aux_stack: ValueStack,
     pub state: MachineState,
     code: CodeStore,
     static_val: Value,
@@ -828,6 +828,10 @@ impl Machine {
         self.stack.push(Value::CodePoint(stop_pc));
         self.state = MachineState::Running(func_addr);
         stop_pc
+    }
+
+    pub fn set_pc(&mut self, pc: CodePt) {
+        self.state = MachineState::Running(pc);
     }
 
     ///Calls the function at address func_addr and runs until the program counter advances by the
@@ -943,13 +947,12 @@ impl Machine {
                 if let Ok(pc) = self.get_pc() {
                     println!("PC: {}", pc);
                 }
-                /*
                 println!("Stack contents: {}", self.stack);
                 if show_aux {
                     println!("Aux-stack contents: {}", self.aux_stack);
                 }
                 if show_reg {
-                    println!("Register contents: {}", self.register);
+                    // println!("Register contents: {}", self.register);
                 }
                 if !self.stack.is_empty() {
                     println!("Stack size: {}", self.stack.num_items());
@@ -957,7 +960,6 @@ impl Machine {
                 if !self.stack.is_empty() {
                     // println!("Stack top: {}", self.stack.top().unwrap());
                 }
-                */
                 println!("Gas used: {}", self.total_gas_usage);
                 if let Some(code) = self.next_opcode() {
                     if code.debug_info.attributes.breakpoint {
