@@ -118,9 +118,10 @@ StatementKind: StatementKind = {
 	"return" <e: Expr> ";" => StatementKind::Return(e),
 	"return" ";" => StatementKind::ReturnVoid(),
 	<lno: @L> "return" "None" ";" => StatementKind::Return(Expr{ kind: ExprKind::Constant(Constant::Option(OptionConst::None(Type::Every))), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))}),
-	"break" <e: Expr?> ";" => StatementKind::Break(e,None),
-	"debug" "(" <e: Expr> ")" ";" => StatementKind::DebugPrint(e),
-	"asm" "(" <a:CommaedExprs?> ")" "{" <body:AsmInsn*> "}" ";" => StatementKind::Asm(body, a.unwrap_or(vec![])),
+	"break" <e: Expr?> ";" => StatementKind::Break(e, None),
+        "debug" "(" <e: Expr> ")" ";" => StatementKind::DebugPrint(e),
+        "assert" "(" <e: Expr> "," <p: Expr> ")" ";" => StatementKind::Assert(e, p),
+        "asm" "(" <a:CommaedExprs?> ")" "{" <body:AsmInsn*> "}" ";" => StatementKind::Asm(body, a.unwrap_or(vec![])),
 }
 
 MatchPattern: MatchPattern = {

@@ -7,7 +7,7 @@
 use super::ast::{
     BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func, FuncDeclKind, GlobalVarDecl,
     MatchPattern, MatchPatternKind, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp,
-    Type, TypeTree, UnaryOp,
+    Type, TypeTree, UnaryOp, Attributes,
 };
 use crate::compile::ast::FieldInitializer;
 use crate::compile::{CompileError, FileInfo, InliningHeuristic};
@@ -77,8 +77,8 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
     }
 }
 
-/*impl<'a> TypeCheckedNode<'a> {
-    ///Propagates attributes down the tree. Currently only passes `codegen_print`.
+impl<'a> TypeCheckedNode<'a> {
+    ///Propagates attributes down the AST.
     pub fn propagate_attributes(mut nodes: Vec<TypeCheckedNode>, attributes: &Attributes) {
         for node in nodes.iter_mut() {
             match node {
@@ -87,6 +87,13 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
                         stat.debug_info.attributes.codegen_print || attributes.codegen_print;
                     let child_attributes = stat.debug_info.attributes.clone();
                     TypeCheckedNode::propagate_attributes(stat.child_nodes(), &child_attributes);
+                    if let TypeCheckedStatementKind::Asm(ref mut vec, _) = stat.kind {
+                        for insn in vec {
+                            insn.debug_info.attributes.codegen_print =
+                                stat.debug_info.attributes.codegen_print
+                                    || attributes.codegen_print;
+                        }
+                    }
                 }
                 TypeCheckedNode::Expression(expr) => {
                     expr.debug_info.attributes.codegen_print =
@@ -104,7 +111,7 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
             }
         }
     }
-}*/
+}
 
 ///An error encountered during typechecking
 #[derive(Debug)]
@@ -762,6 +769,7 @@ pub enum TypeCheckedStatementKind {
     While(TypeCheckedExpr, Vec<TypeCheckedStatement>),
     Asm(Vec<Instruction>, Vec<TypeCheckedExpr>),
     DebugPrint(TypeCheckedExpr),
+    Assert(TypeCheckedExpr, TypeCheckedExpr),
 }
 
 impl AbstractSyntaxTree for TypeCheckedStatement {
@@ -788,6 +796,9 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
                 .collect(),
             TypeCheckedStatementKind::Break(oexp, _) => {
                 oexp.iter_mut().flat_map(|exp| exp.child_nodes()).collect()
+            }
+            TypeCheckedStatementKind::Assert(exp, print_exp) => {
+                vec![TypeCheckedNode::Expression(exp), TypeCheckedNode::Expression(print_exp)]
             }
         }
     }
@@ -1083,6 +1094,10 @@ fn builtin_func_decls() -> Vec<Import> {
         Import::new(
             vec!["core".to_string(), "kvs".to_string()],
             "builtin_kvsSet".to_string(),
+        ),
+        Import::new(
+            vec!["core".to_string(), "assert".to_string()],
+            "builtin_assert".to_string(),
         ),
     ]
 }
@@ -1612,6 +1627,38 @@ fn typecheck_statement<'a>(
                 scopes,
             )?;
             Ok((TypeCheckedStatementKind::DebugPrint(tce), vec![]))
+        }
+        StatementKind::Assert(cond, print_expr) => {
+            let tc_cond = typecheck_expr(
+                cond,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+                scopes,
+            )?;
+            let tc_print = typecheck_expr(
+                print_expr,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+                scopes,
+            )?;
+            match tc_cond.get_type() {
+                Type::Bool => {
+                    Ok((TypeCheckedStatementKind::Assert(tc_cond, tc_print), vec![]))
+                }
+                _ => Err(new_type_error(
+                    format!(
+                        "assert condition must be bool, found {}",
+                        tc_cond.get_type().display()
+                    ),
+                    debug_info.location,
+                )),
+            }
         }
     }?;
     Ok((
