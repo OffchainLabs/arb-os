@@ -64,6 +64,11 @@ fn test_bytearray() {
 }
 
 #[test]
+fn test_bitstream() {
+    test_from_file(Path::new("stdlib/bitstreamtest.mexe"));
+}
+
+#[test]
 fn test_map() {
     test_from_file(Path::new("builtin/maptest.mexe"));
 }

@@ -1,0 +1,57 @@
+//
+// Copyright 2021, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_buffer;
+use std::bytearray::bytearray_slice;
+use std::bytearray::bytearray_size;
+
+
+type BitStream = struct {
+    buf: buffer,
+    offset: uint,
+    endOffset: uint,
+    originalOffset: uint,
+}
+
+public func bitstream_new(contents: ByteArray) -> BitStream {
+    let offset = 8 * bytearray_slice(contents);
+    return struct {
+        buf: bytearray_buffer(contents),
+        offset: offset,
+        endOffset: offset + 8 * bytearray_size(contents),
+        originalOffset: offset,
+    };
+}
+
+public func bitstream_atEof(bs: BitStream) -> bool {
+    return bs.offset >= bs.endOffset;
+}
+
+public func bitstream_bitsRemaining(bs: BitStream) -> uint {
+    return bs.endOffset - bs.offset;
+}
+
+public func bitstream_bitsReadSoFar(bs: BitStream) -> uint {
+    return bs.offset - bs.originalOffset;
+}
+
+public func bitstream_get(bs: BitStream, nbits: uint) -> option<(BitStream, uint)> {
+    return xif ( (nbits > 248) || (bs.offset + nbits > bs.endOffset) ) {
+        None<(BitStream, uint)>
+    } else {
+        let bitOffset = bs.offset & 0x7;
+        let byteOffset = (bs.offset & ~0x7) / 8;
+        let val = getbuffer256(bs.buf, byteOffset);
+        val = asm(bitOffset, val) uint { shl };
+        val = asm(256-nbits, val) uint { shr };
+        Some((
+            bs with {
+                offset: bs.offset + nbits
+            },
+            val,
+        ))
+    };
+}
+

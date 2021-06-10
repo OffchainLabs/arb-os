@@ -1,0 +1,59 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_set256;
+
+use std::bitstream::bitstream_new;
+use std::bitstream::bitstream_atEof;
+use std::bitstream::bitstream_bitsRemaining;
+use std::bitstream::bitstream_bitsReadSoFar;
+use std::bitstream::bitstream_get;
+
+
+impure func main() {
+	asm(tests(),) { log };
+}
+
+func tests() -> uint {
+    let ba = bytearray_new(0);
+    ba = bytearray_setByte(ba, 1, 0xf4);
+    let bs = bitstream_new(ba);
+
+    if (bitstream_bitsRemaining(bs) != 16) {
+        return 1;
+    }
+
+    if let Some(res) = bitstream_get(bs, 5) {
+        let (ubs, val) = res;
+        bs = ubs;
+        if (val != 0) {
+            return 2;
+        }
+        if (bitstream_bitsRemaining(bs) != 11) {
+            return 3;
+        }
+    } else {
+        return 4;
+    }
+
+    if let Some(res) = bitstream_get(bs, 11) {
+        let (ubs, val) = res;
+        if (val != 0xf4) {
+            return 5;
+        }
+        if ( ! bitstream_atEof(ubs)) {
+            return 6;
+        }
+        if (bitstream_bitsReadSoFar(ubs) != 16) {
+            return 7;
+        }
+    } else {
+        return 8;
+    }
+
+    return 0;
+}
