@@ -122,7 +122,13 @@ impl CompileStruct {
                 Some(path) => Some(Path::new(path)),
                 None => None,
             };
-            match compile_from_file(path, &mut file_info_chart, &self.inline, constants_path, self.release_build) {
+            match compile_from_file(
+                path,
+                &mut file_info_chart,
+                &self.inline,
+                constants_path,
+                self.release_build,
+            ) {
                 Ok(idk) => idk,
                 Err(mut e) => {
                     e.description = format!("{}", e.description);
@@ -488,7 +494,7 @@ pub fn compile_from_folder(
     typechecked_modules
         .iter_mut()
         .for_each(|module| module.flowcheck(file_info_chart));
-    
+
     // Inlining stage
     if let Some(cool) = inline {
         typechecked_modules
@@ -499,8 +505,14 @@ pub fn compile_from_folder(
     for module in &mut typechecked_modules {
         module.propagate_attributes();
     }
-    
-    let progs = codegen_programs(typechecked_modules, file_info_chart, type_tree, folder, release_build)?;
+
+    let progs = codegen_programs(
+        typechecked_modules,
+        file_info_chart,
+        type_tree,
+        folder,
+        release_build,
+    )?;
     Ok(progs)
 }
 

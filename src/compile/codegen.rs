@@ -703,18 +703,13 @@ fn mavm_codegen_statement(
             Ok((label_gen, exp_locals, HashMap::new()))
         }
         TypeCheckedStatementKind::Assert(expr, print_expr) => {
-
             if release_build {
                 // Release builds don't include asserts
                 return Ok((label_gen, 0, HashMap::new()));
             }
 
-            let call_type = Type::Func(
-                false,
-                vec![Type::Bool, Type::Any],
-                Box::new(Type::Void),
-            );
-            
+            let call_type = Type::Func(false, vec![Type::Bool, Type::Any], Box::new(Type::Void));
+
             let assert_call = TypeCheckedExpr {
                 kind: TypeCheckedExprKind::FunctionCall(
                     Box::new(TypeCheckedExpr {
@@ -730,7 +725,7 @@ fn mavm_codegen_statement(
                 ),
                 debug_info: DebugInfo::from(loc),
             };
-            
+
             let (lg, _, exp_locals) = mavm_codegen_expr(
                 &assert_call,
                 code,

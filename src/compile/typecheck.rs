@@ -5,9 +5,9 @@
 //!Converts non-type checked ast nodes to type checked versions, and other related utilities.
 
 use super::ast::{
-    BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func, FuncDeclKind, GlobalVarDecl,
-    MatchPattern, MatchPatternKind, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp,
-    Type, TypeTree, UnaryOp, Attributes,
+    Attributes, BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func, FuncDeclKind,
+    GlobalVarDecl, MatchPattern, MatchPatternKind, Statement, StatementKind, StructField,
+    TopLevelDecl, TrinaryOp, Type, TypeTree, UnaryOp,
 };
 use crate::compile::ast::FieldInitializer;
 use crate::compile::{CompileError, FileInfo, InliningHeuristic};
@@ -798,7 +798,10 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
                 oexp.iter_mut().flat_map(|exp| exp.child_nodes()).collect()
             }
             TypeCheckedStatementKind::Assert(exp, print_exp) => {
-                vec![TypeCheckedNode::Expression(exp), TypeCheckedNode::Expression(print_exp)]
+                vec![
+                    TypeCheckedNode::Expression(exp),
+                    TypeCheckedNode::Expression(print_exp),
+                ]
             }
         }
     }
@@ -1648,9 +1651,7 @@ fn typecheck_statement<'a>(
                 scopes,
             )?;
             match tc_cond.get_type() {
-                Type::Bool => {
-                    Ok((TypeCheckedStatementKind::Assert(tc_cond, tc_print), vec![]))
-                }
+                Type::Bool => Ok((TypeCheckedStatementKind::Assert(tc_cond, tc_print), vec![])),
                 _ => Err(new_type_error(
                     format!(
                         "assert condition must be bool, found {}",
