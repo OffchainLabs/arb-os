@@ -1,5 +1,5 @@
 //
-// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
 //
 
 use accounts::AccountStore;
@@ -47,8 +47,10 @@ use std::addressSet::setOfAddresses_contains;
 use std::addressSet::setOfAddresses_serialize;
 
 use std::safeMath::safeAdd;
+use std::safeMath::safeSub;
 use std::safeMath::safeMul;
 use std::safeMath::safeAddInt;
+use std::safeMath::safeSubInt;
 
 use std::stack::Stack;
 use std::stack::stack_new;
@@ -218,9 +220,9 @@ impure func setPrices(
             struct {
                 perL1CalldataUnit: fixedPoint_mulByUintTrunc(
                     feeConfig.baseFeeMultiplier,
-                    params.l1GasPerL1CalldataUnit * l1GasPrice,
+                    safeMul(params.l1GasPerL1CalldataUnit, l1GasPrice),
                 ),
-                perStorageCell: params.l1GasPerStorage * l1GasPrice,
+                perStorageCell: safeMul(params.l1GasPerStorage, l1GasPrice),
                 perArbGasBase: perArbGasBase,
                 perArbGasCongestion: perArbGasCongestion,
                 perArbGasTotal: perArbGasTotal,
@@ -248,8 +250,8 @@ impure func setRetryablePrices(oldRetryablePrices: RetryablePrices) -> Retryable
         xif (feesEnabled()) {
             let gasPrice = getL1GasPriceEstimate();
             struct {
-                perTx: gasPrice * chainParams_getOrDie(const::Atom_Param_RetryablePriceBase),
-                perCalldataByte: gasPrice * chainParams_getOrDie(const::Atom_Param_RetryablePricePerByteNumerator) /
+                perTx: safeMul(gasPrice, chainParams_getOrDie(const::Atom_Param_RetryablePriceBase)),
+                perCalldataByte: safeMul(gasPrice, chainParams_getOrDie(const::Atom_Param_RetryablePricePerByteNumerator)) /
                                             chainParams_getOrDie(const::Atom_Param_RetryablePricePerByteDenominator),
                 nextUpdateTimestamp: safeAdd(
                     inbox_currentTimestamp(),
@@ -280,7 +282,7 @@ public impure func gasAccounting_getPricesInWei(aggregatorAddr: address) -> (uin
 }
 
 impure func gasAccounting_getTxBaseFeeWei(aggregatorAddr: option<address>) -> uint {
-    return getL1GasPriceEstimate() * gasAccounting_getTxBaseFeeL1Gas(aggregatorAddr);
+    return safeMul(getL1GasPriceEstimate(), gasAccounting_getTxBaseFeeL1Gas(aggregatorAddr));
 }
 
 public impure func gasAccounting_getTxBaseFeeL1Gas(aggregatorAddr: option<address>) -> uint {
@@ -328,9 +330,9 @@ public impure func gasAccounting_getPricesInArbGas(aggregatorAddr: address) -> (
     let prices = gasAccountingInfo.currentPrices;
     let arbGasPrice = prices.perArbGasTotal;
     return (
-        (gasAccounting_getTxBaseFeeWei(Some(aggregatorAddr)) + arbGasPrice - 1) / arbGasPrice,   // base price for tx
-        (prices.perL1CalldataUnit + arbGasPrice - 1) / arbGasPrice,  // price per L1 calldata unit
-        (prices.perStorageCell + arbGasPrice - 1) / arbGasPrice,     // price per storage cell
+        safeAdd(gasAccounting_getTxBaseFeeWei(Some(aggregatorAddr)), arbGasPrice - 1) / arbGasPrice,   // base price for tx
+        safeAdd(prices.perL1CalldataUnit, arbGasPrice - 1) / arbGasPrice,  // price per L1 calldata unit
+        safeAdd(prices.perStorageCell, arbGasPrice - 1) / arbGasPrice,     // price per storage cell
     );
 }
 
@@ -392,7 +394,7 @@ public impure func gasAccounting_startTxCharges(
     };
 
     // take funds from the payer, enough to pay for maxGas at gasPrice
-    let weiToHold = maxGas * gasPrice;
+    let weiToHold = safeMul(maxGas, gasPrice);
     let (uAcctStore, amount) = accountStore_addToEscrowUpToMax(acctStore, const::EscrowStoreID_txGas, payer, weiToHold);
     acctStore = uAcctStore;
     if (amount < weiToHold) {
@@ -409,7 +411,7 @@ public impure func gasAccounting_startTxCharges(
     gasAccountingInfo = gasAccountingInfo with {
         txState: Some(struct {
             gasInReserve: 0,
-            gasReservedForStorage: maxGas - gasForComputation,
+            gasReservedForStorage: safeSub(maxGas, gasForComputation),
             originalMax: maxGas,
             price: gasPrice,
             weiHeldForGas: weiToHold,
@@ -417,13 +419,13 @@ public impure func gasAccounting_startTxCharges(
         })
     } with {
         congestionState: gasAccountingInfo.congestionState with {
-            gasPool: gasAccountingInfo.congestionState.gasPool - int(gasUsedByOS)
+            gasPool: safeSubInt(gasAccountingInfo.congestionState.gasPool, int(gasUsedByOS))
         }
     };
 
     arbStatistics_addToGasUsed(gasUsedByOS);
 
-    asm(gasForComputation * const::Charging_ArbGasPerAvmGas,) { setgas };
+    asm(safeMul(gasForComputation, const::Charging_ArbGasPerAvmGas),) { setgas };
     return (const::TxResultCode_success, acctStore);
 }
 
@@ -444,7 +446,7 @@ public impure func gasAccounting_endTxCharges(
     let txState = gasAccountingInfo.txState?;
 
     let computeGasRemaining = safeAdd(txState.gasInReserve, switchToChargingOS());
-    let computeGasUsed = (txState.originalMax - txState.gasReservedForStorage) - computeGasRemaining;
+    let computeGasUsed = safeSub(safeSub(txState.originalMax, txState.gasReservedForStorage), computeGasRemaining);
 
     arbStatistics_addToStorage(storageDelta);
 
@@ -454,33 +456,33 @@ public impure func gasAccounting_endTxCharges(
         safeAdd(gasAccountingInfo.currentPrices.perStorageCell, txState.price - 1) / txState.price
     };
     let gasNeededForStorage = xif ((storageDelta > int(0)) && (txState.price > 0)) {
-        uint(storageDelta) * storagePriceInArbGas
+        safeMul(uint(storageDelta), storagePriceInArbGas)
     } else {
         0
     };
 
-    let (confirmed, storageGasUsed, totalGasUsed, weiForStorage, weiForCompute) = xif ((computeGasUsed + gasNeededForStorage) <= txState.originalMax) {
+    let (confirmed, storageGasUsed, totalGasUsed, weiForStorage, weiForCompute) = xif (safeAdd(computeGasUsed, gasNeededForStorage) <= txState.originalMax) {
         (
             true,
             gasNeededForStorage,
             safeAdd(computeGasUsed, gasNeededForStorage),
-            gasNeededForStorage * txState.price,
-            computeGasUsed * txState.price
+            safeMul(gasNeededForStorage, txState.price),
+            safeMul(computeGasUsed, txState.price)
         )
     } else {
         (
             false,
-            txState.originalMax - computeGasUsed,
+            safeSub(txState.originalMax, computeGasUsed),
             txState.originalMax,
-            (txState.originalMax - computeGasUsed) * txState.price,
-            computeGasUsed * txState.price,
+            safeMul(safeSub(txState.originalMax, computeGasUsed), txState.price),
+            safeMul(computeGasUsed, txState.price),
         )
     };
 
     // refund the unused gas, and pay fees
     let payments = deferredPayments_new();
 
-    let refund = (txState.originalMax - totalGasUsed) * txState.price;
+    let refund = safeMul(safeSub(txState.originalMax, totalGasUsed), txState.price);
     if (refund > 0) {
         payments = deferredPayments_add(payments, const::EscrowStoreID_txGas, txState.refundTo, refund);
     }
@@ -494,17 +496,17 @@ public impure func gasAccounting_endTxCharges(
         address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
         safeAdd(safeMul(computeGasUsed, basePrice), safeMul(storageGasUsed, txState.price)),
     );
-    let congestionPrice = txState.price - basePrice;
+    let congestionPrice = safeSub(txState.price, basePrice);
     payments = deferredPayments_add(
         payments,
         const::EscrowStoreID_txGas,
         address(chainParams_getOrDie(const::Atom_Param_CongestionFeeRecipient)),
-        computeGasUsed * congestionPrice,
+        safeMul(computeGasUsed, congestionPrice),
     );
 
     gasAccountingInfo = gasAccountingInfo with {
         congestionState: gasAccountingInfo.congestionState with {
-            gasPool: gasAccountingInfo.congestionState.gasPool - int(computeGasUsed)
+            gasPool: safeSubInt(gasAccountingInfo.congestionState.gasPool, int(computeGasUsed))
         }
     } with {
         gasRemainingThisBlock: xif (gasAccountingInfo.gasRemainingThisBlock >= computeGasUsed) {
@@ -578,18 +580,18 @@ public impure func gasAccounting_resumeTxCharges(allocationRequested: uint) -> u
         gasAccountingInfo = gasAccountingInfo with {
             txState: Some(
                 txState with {
-                    gasInReserve: txState.gasInReserve - allocationRequested
+                    gasInReserve: safeSub(txState.gasInReserve, allocationRequested)
                 }
             )
         } with {
             congestionState: gasAccountingInfo.congestionState with {
-                gasPool: gasAccountingInfo.congestionState.gasPool - int(osGasUsed)
+                gasPool: safeSubInt(gasAccountingInfo.congestionState.gasPool, int(osGasUsed))
             }
         };
 
         arbStatistics_addToGasUsed(osGasUsed);
 
-        asm(allocationRequested * const::Charging_ArbGasPerAvmGas,) { setgas };  // start charging the application
+        asm(safeMul(allocationRequested, const::Charging_ArbGasPerAvmGas),) { setgas };  // start charging the application
         allocationRequested
     } else {
         // something went wrong: tried to resume tx charges when there isn't an active tx
@@ -860,7 +862,7 @@ impure func payForTxAndL1Gas(
                 acctStore,
                 payer,
                 accountStore_feeCollectorForAggregator(acctStore, recipient),
-                amount - payableToFee,  // safe because payableToFee <= amount <= payer's original balance
+                safeSub(amount, payableToFee),  // safe because payableToFee <= amount <= payer's original balance
             ) {
                 store
             } else {
@@ -870,7 +872,7 @@ impure func payForTxAndL1Gas(
     }
 
     setGlobalAccountStore(acctStore);
-    let amountForTx = feeStats.price.tx * amount / fullAmount;   // safe because fullAmount > 0
+    let amountForTx = safeMul(feeStats.price.tx, amount) / fullAmount;   // safe because fullAmount > 0
     return (
         amount == fullAmount,
         feeStats with {
@@ -883,7 +885,7 @@ impure func payForTxAndL1Gas(
             weiPaid: feeStats.weiPaid with {
                 tx: amountForTx
             } with {
-                calldataUnit: amount - amountForTx   // safe because amount >= amountForTx
+                calldataUnit: safeSub(amount, amountForTx)   // safe because amount >= amountForTx
             }
         }
     );
@@ -923,7 +925,7 @@ impure func updateCongestionState(state: CongestionState, toBlockNum: uint, toTi
         gasPool: gasPool,
         lastArbBlockNumSeen: toBlockNum,
         lastTimestampSeen: toTimestamp,
-        congestionPriceWei: totalPrice - basePrice,
+        congestionPriceWei: safeSub(totalPrice, basePrice),
     };
 }
 
@@ -968,7 +970,7 @@ public impure func getFeesForRetryableTx(
                 weiPaid: feeStats.weiPaid with {
                     tx: prices.perTx
                 } with {
-                    calldataUnit: calldataSize * 16 * calldataUnitPrice
+                    calldataUnit: safeMul(calldataSize * 16, calldataUnitPrice)
                 }
             }
         )
