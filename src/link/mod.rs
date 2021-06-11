@@ -264,6 +264,8 @@ pub fn postlink_compile(
 
     let mut code = code;
     loop {
+        break;
+        
         let (inlined_code, inline_count) = analyze::inline_frames(&code);
         if show_optimizations {
             print_code(&inlined_code, "inline frames", &file_info_chart);

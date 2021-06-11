@@ -27,6 +27,8 @@ pub fn fix_tuple_size(
     locals_trees.push(TupleTree::new(1, true));
     frame_sizes.push(1);
     tuple_frames.push(true);
+
+    let mut offset = 0;
     
     for insn in code_in.iter() {
         let locals_tree = locals_trees.last().unwrap();
@@ -45,6 +47,10 @@ pub fn fix_tuple_size(
                 let locals_tree = TupleTree::new(ntotal, true);
                 //let tuple_frame = debug_info.attributes.tuple_frame;
                 let tuple_frame = true;
+                
+                //let tuple_frame = offset % 48 != 0;
+                //offset += 1;
+                
                 tuple_frames.push(tuple_frame);
                 frame_sizes.push(ntotal);
                 

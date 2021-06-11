@@ -1,0 +1,20 @@
+
+func main() {
+    
+    let a = 32;
+    a = a * 32;
+    
+    assert({
+        let a = 1024;
+        let b = 32 * 32;
+        (a == b, true)
+    });
+
+    assert({
+        let a = 1024;
+        let b = 32 * 32;
+        (false, 64)
+    });
+
+    //assert(1, 1);
+}
