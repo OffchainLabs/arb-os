@@ -8,8 +8,8 @@ use crate::compile::FileInfo;
 use crate::console::ConsoleColors;
 use crate::link::FlowGraph;
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, OpcodeEffect, Value};
-use std::collections::{BTreeMap, HashMap, HashSet};
 use std::cmp::max;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 ///Pretty-prints a list of instructions with the lines that generated them.
 pub fn print_code(code: &Vec<Instruction>, title: &str, file_info_chart: &BTreeMap<u64, FileInfo>) {
@@ -74,7 +74,13 @@ pub fn print_code(code: &Vec<Instruction>, title: &str, file_info_chart: &BTreeM
 }
 
 ///Counts the number of each kind of label.
-pub fn count_labels(code: &Vec<Instruction>) -> (HashMap<usize, usize>, HashMap<usize, usize>, HashMap<usize, usize>) {
+pub fn count_labels(
+    code: &Vec<Instruction>,
+) -> (
+    HashMap<usize, usize>,
+    HashMap<usize, usize>,
+    HashMap<usize, usize>,
+) {
     let mut func_labels = HashMap::new();
     let mut anon_labels = HashMap::new();
     let mut external_labels = HashMap::new();
@@ -83,7 +89,9 @@ pub fn count_labels(code: &Vec<Instruction>) -> (HashMap<usize, usize>, HashMap<
         match &insn.immediate {
             Some(Value::Label(Label::Func(label))) => *func_labels.entry(*label).or_insert(0) += 1,
             Some(Value::Label(Label::Anon(label))) => *anon_labels.entry(*label).or_insert(0) += 1,
-            Some(Value::Label(Label::External(label))) => *external_labels.entry(*label).or_insert(0) += 1,
+            Some(Value::Label(Label::External(label))) => {
+                *external_labels.entry(*label).or_insert(0) += 1
+            }
             _ => {}
         }
     }
@@ -111,13 +119,12 @@ pub fn elide_useless_labels(
 
 ///Algo for hueristically picking which functions to inline.
 fn apply_inlining_heuristic(splice: &Vec<Instruction>) -> bool {
-    
     // for the time being, we'll inline all funcs f for which
     //   - f only returns once
     //   - f has no branches
-    
+
     let mut should_inline = true;
-    
+
     for curr in splice {
         match curr.opcode {
             //Opcode::Label(Label::Anon(_)) => should_inline = false,
@@ -126,7 +133,7 @@ fn apply_inlining_heuristic(splice: &Vec<Instruction>) -> bool {
             _ => {}
         }
     }
-    
+
     return should_inline;
 }
 
@@ -135,29 +142,34 @@ fn relabel_splice(
     splice: &Vec<Instruction>,
     label: Label,
     max_label: usize,
-    codegen_print: bool
+    codegen_print: bool,
 ) -> (Vec<Instruction>, usize) {
-    
-    let mut relabeled = vec![
-        Instruction {
-            opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
-            immediate: Some(Value::Label(label)),
-            debug_info: splice.first().unwrap().debug_info.inlined(2).propagate(codegen_print),
-        }
-    ];
-    
+    let mut relabeled = vec![Instruction {
+        opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
+        immediate: Some(Value::Label(label)),
+        debug_info: splice
+            .first()
+            .unwrap()
+            .debug_info
+            .inlined(2)
+            .propagate(codegen_print),
+    }];
+
     for index in 0..(splice.len() - 1) {
-        
         let curr = &splice[index];
         let debug_info = curr.debug_info.propagate(codegen_print);
-        
+
         let immediate = match &curr.immediate {
-            Some(Value::Label(Label::Anon(anon))) => Some(Value::Label(Label::Anon(anon + max_label))),
-            Some(Value::Label(Label::External(ext))) => Some(Value::Label(Label::Anon(ext + max_label))),
+            Some(Value::Label(Label::Anon(anon))) => {
+                Some(Value::Label(Label::Anon(anon + max_label)))
+            }
+            Some(Value::Label(Label::External(ext))) => {
+                Some(Value::Label(Label::Anon(ext + max_label)))
+            }
             Some(value) => Some(value.clone()),
             None => None,
         };
-        
+
         match curr.opcode {
             Opcode::Label(Label::Anon(anon)) => {
                 relabeled.push(Instruction {
@@ -202,7 +214,7 @@ fn relabel_splice(
             }
         }
     }
-    
+
     let final_return = splice.last().unwrap();
     let debug_info = final_return.debug_info.inlined(2);
     relabeled.push(Instruction {
@@ -215,21 +227,23 @@ fn relabel_splice(
         immediate: None,
         debug_info: debug_info,
     });
-    
+
     let mut new_max = max_label;
     for curr in &relabeled {
         match &curr.opcode {
-            Opcode::Label(Label::Anon(value))
-                | Opcode::Label(Label::External(value)) => new_max = max(new_max, *value),
+            Opcode::Label(Label::Anon(value)) | Opcode::Label(Label::External(value)) => {
+                new_max = max(new_max, *value)
+            }
             _ => {}
         }
         match &curr.immediate {
-            Some(Value::Label(Label::Anon(value)))
-                | Some(Value::Label(Label::External(value))) => new_max = max(new_max, *value),
+            Some(Value::Label(Label::Anon(value))) | Some(Value::Label(Label::External(value))) => {
+                new_max = max(new_max, *value)
+            }
             _ => {}
         }
     }
-    
+
     return (relabeled, new_max);
 }
 
@@ -253,7 +267,7 @@ pub fn inline_frames(code: &Vec<Instruction>) -> (Vec<Instruction>, usize) {
                 splice.push(insn);
                 reader += 1;
             }
-            
+
             if apply_inlining_heuristic(&splice) {
                 splices.insert(label, Some(splice));
             } else {
@@ -263,11 +277,14 @@ pub fn inline_frames(code: &Vec<Instruction>) -> (Vec<Instruction>, usize) {
     }
 
     let (func_labels, anon_labels, extern_labels) = count_labels(&code);
-    let mut max_label = max(*func_labels.keys().max().unwrap(), *anon_labels.keys().max().unwrap());
+    let mut max_label = max(
+        *func_labels.keys().max().unwrap(),
+        *anon_labels.keys().max().unwrap(),
+    );
     if let Some(max_ext) = extern_labels.keys().max() {
         max_label = max(max_label, *max_ext);
     }
-    
+
     let mut outgoing = HashMap::new(); // maps func labels to those that they call
     let mut incoming = HashMap::new(); // maps func labels to those that call them
 
@@ -344,18 +361,16 @@ pub fn inline_frames(code: &Vec<Instruction>) -> (Vec<Instruction>, usize) {
                 ) = (a.immediate.as_ref(), b.immediate.as_ref())
                 {
                     if *back == below && *dest != current_func.unwrap() {
-                        
                         if let Some(splice) = splices.get(dest).unwrap() {
-                            
                             // it's unsafe to inline a func f when
                             // - f is used as a function pointer
                             // - f calls someone else
                             // - f is recursive
-                            
-                            let safe_to_inline = outgoing.get(&dest).is_none() && (
-                                *func_labels.get(dest).unwrap() == incoming.get(dest).unwrap().len()
-                            );
-                            
+
+                            let safe_to_inline = outgoing.get(&dest).is_none()
+                                && (*func_labels.get(dest).unwrap()
+                                    == incoming.get(dest).unwrap().len());
+
                             if safe_to_inline {
                                 let (splice, new_max) = relabel_splice(
                                     &splice,
@@ -433,7 +448,7 @@ pub fn create_cfg(code: &Vec<Instruction>) -> FlowGraph {
             }
         }
     }
-
+    graph.add_node(vec);
     graph
 }
 

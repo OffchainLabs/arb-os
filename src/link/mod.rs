@@ -19,14 +19,15 @@ use std::hash::Hasher;
 use std::io;
 use xformcode::make_uninitialized_tuple;
 
-use petgraph::graph::DiGraph;
+use petgraph::graph::{DiGraph, NodeIndex};
+use rayon::prelude::*;
 
 use crate::compile::miniconstants::init_constant_table;
 use std::path::Path;
 pub use xformcode::{value_from_field_list, TupleTree, TUPLE_SIZE};
 
-mod analyze;
-mod optimize;
+pub mod analyze;
+pub mod optimize;
 mod striplabels;
 mod xformcode;
 
@@ -264,8 +265,8 @@ pub fn postlink_compile(
 
     let mut code = code;
     loop {
-        break;
-        
+        //break;
+
         let (inlined_code, inline_count) = analyze::inline_frames(&code);
         if show_optimizations {
             print_code(&inlined_code, "inline frames", &file_info_chart);
@@ -296,40 +297,50 @@ pub fn postlink_compile(
     //let before_optimizations = graph.clone();
 
     loop {
-        let mut change = false;
-        
+        let mut do_another_pass = false;
+
         macro_rules! optimize {
             ($optimization:tt, $title:tt, $debug:expr) => {
-                let (optimized, same) = optimize::$optimization(&graph, $debug);
-                if !same && show_optimizations {
-                    //analyze::print_cfg(&graph, &optimized, $title);
+                let blocks = graph
+                    .node_indices()
+                    .collect::<Vec<NodeIndex>>()
+                    .par_iter()
+                    .map(|node| optimize::$optimization(&graph[*node], $debug))
+                    .collect::<Vec<(Vec<Instruction>, bool)>>();
+
+                let mut optimized = FlowGraph::default();
+                let mut unchanged = true;
+
+                for (block, same) in blocks {
+                    optimized.add_node(block);
+                    unchanged = same && unchanged;
+                }
+                if !unchanged && show_optimizations {
+                    analyze::print_cfg(&graph, &optimized, $title);
                 }
                 graph = optimized;
-                change = change || !same;
+                do_another_pass = do_another_pass || !unchanged;
             };
         }
-        
-        
+
         optimize!(peephole, "peephole", false);
         optimize!(xget_elision, "xget elision", false);
         optimize!(xset_tail_elision, "xset tail elision", false);
         optimize!(tuple_annihilation, "tuple annihilation", false);
         optimize!(stack_reduce, "stack reduce", false);
-        
+
         /*optimize!(xget_elision, "xget elision", false);
         optimize!(peephole, "peephole", false);
         optimize!(xset_tail_elision, "xset tail elision", false);
         optimize!(tuple_annihilation, "tuple annihilation", false);
         optimize!(stack_reduce, "stack reduce", false);*/
         
-        //optimize!(change_abi, "change abi", false);
-        
         let code = analyze::flatten_cfg(graph);
         let (_, anon_labels, _) = analyze::count_labels(&code);
         let code = analyze::elide_useless_labels(&code, anon_labels);
         graph = analyze::create_cfg(&code);
 
-        if !change {
+        if !do_another_pass {
             if show_optimizations {
                 //analyze::print_cfg(&before_optimizations, &graph, "final output");
                 analyze::print_cfg(&graph, &graph, "final output");

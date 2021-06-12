@@ -4,6 +4,7 @@
 
 //! Contains utilities for compiling mini source code.
 
+use self::mini::DeclsParser;
 use crate::console::ConsoleColors;
 use crate::link::{link, postlink_compile, ExportedFunc, Import, ImportedFunc, LinkedProgram};
 use crate::mavm::Instruction;
@@ -13,7 +14,6 @@ use ast::Func;
 use clap::Clap;
 use lalrpop_util::lalrpop_mod;
 use lalrpop_util::ParseError;
-use mini::DeclsParser;
 use miniconstants::init_constant_table;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};

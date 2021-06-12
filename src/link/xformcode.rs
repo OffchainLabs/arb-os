@@ -23,18 +23,14 @@ pub fn fix_tuple_size(
 
     let mut locals_trees = vec![];
     let mut frame_sizes = vec![];
-    let mut tuple_frames = vec![];
     locals_trees.push(TupleTree::new(1, true));
     frame_sizes.push(1);
-    tuple_frames.push(true);
 
     let mut offset = 0;
-    
+
     for insn in code_in.iter() {
         let locals_tree = locals_trees.last().unwrap();
         let frame_size = frame_sizes.last().unwrap();
-        //let tuple_frame = *tuple_frames.last().unwrap();
-        let tuple_frame = true;
 
         let debug_info = insn.debug_info;
         match insn.opcode {
@@ -43,17 +39,12 @@ pub fn fix_tuple_size(
                     Opcode::AVMOpcode(AVMOpcode::AuxPush),
                     debug_info,
                 )); // move return address to aux stack
-                
+
                 let locals_tree = TupleTree::new(ntotal, true);
-                //let tuple_frame = debug_info.attributes.tuple_frame;
-                let tuple_frame = true;
-                
-                //let tuple_frame = offset % 48 != 0;
                 //offset += 1;
-                
-                tuple_frames.push(tuple_frame);
+
                 frame_sizes.push(ntotal);
-                
+
                 if let Some(imm) = &insn.immediate {
                     code_out.push(Instruction::from_opcode_imm(
                         Opcode::AVMOpcode(AVMOpcode::Noop),
@@ -61,33 +52,16 @@ pub fn fix_tuple_size(
                         debug_info,
                     ));
                 }
-                
-                if tuple_frame {
-                    code_out.push(Instruction::from_opcode_imm(
-                        Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                        TupleTree::make_empty(&locals_tree),
-                        debug_info,
-                    ));
-                    for lnum in 0..nargs {
-                        locals_tree.write_code(true, lnum, &mut code_out, debug_info)?;
-                    }
-                } else {
-                    for i in 0..nargs {
-                        code_out.push(Instruction {
-                            opcode: Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                            immediate: None,
-                            debug_info: debug_info.inlined(2),
-                        });
-                    }
-                    for i in 0..(ntotal-nargs) {
-                        code_out.push(Instruction {
-                            opcode: Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                            immediate: Some(Value::Int(Uint256::from_usize(100 + nargs + i))),
-                            debug_info: debug_info.inlined(2),
-                        });
-                    }
+
+                code_out.push(Instruction::from_opcode_imm(
+                    Opcode::AVMOpcode(AVMOpcode::AuxPush),
+                    TupleTree::make_empty(&locals_tree),
+                    debug_info,
+                ));
+                for lnum in 0..nargs {
+                    locals_tree.write_code(true, lnum, &mut code_out, debug_info)?;
                 }
-                
+
                 locals_trees.push(locals_tree);
             }
             Opcode::TupleGet(size) => {
@@ -140,34 +114,7 @@ pub fn fix_tuple_size(
                 if let Some(index) = &insn.immediate {
                     match index.to_usize() {
                         Some(iu) => {
-                            if tuple_frame {
-                                locals_tree.write_code(true, iu, &mut code_out, debug_info)?;
-                            } else {
-                                for i in 0..(frame_size - iu - 1) {
-                                    code_out.push(Instruction::from_opcode(
-                                        Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                                        debug_info.inlined(2),
-                                    ));
-                                    code_out.push(Instruction::from_opcode(
-                                        Opcode::AVMOpcode(AVMOpcode::Swap1),
-                                        debug_info.inlined(2),
-                                    ));
-                                }
-                                code_out.push(Instruction::from_opcode(
-                                    Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                                    debug_info.inlined(2),
-                                ));
-                                code_out.push(Instruction::from_opcode(
-                                    Opcode::AVMOpcode(AVMOpcode::Pop),
-                                    debug_info.inlined(2),
-                                ));
-                                for _ in 0..(frame_size - iu) {
-                                    code_out.push(Instruction::from_opcode(
-                                        Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                                        debug_info.inlined(2),
-                                    ));
-                                }
-                            }
+                            locals_tree.write_code(true, iu, &mut code_out, debug_info)?;
                         }
                         None => {
                             return Err(CompileError::new(
@@ -189,34 +136,7 @@ pub fn fix_tuple_size(
                 if let Some(index) = &insn.immediate {
                     match index.to_usize() {
                         Some(iu) => {
-                            if tuple_frame {
-                                locals_tree.read_code(true, iu, &mut code_out, debug_info)?;
-                            } else {
-                                for _ in 0..(frame_size - iu) {
-                                    code_out.push(Instruction::from_opcode(
-                                        Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                                        debug_info.inlined(2),
-                                    ));
-                                }
-                                code_out.push(Instruction::from_opcode(
-                                    Opcode::AVMOpcode(AVMOpcode::Dup0),
-                                    debug_info.inlined(2),
-                                ));
-                                for _ in 0..(frame_size - iu - 1) {
-                                    code_out.push(Instruction::from_opcode(
-                                        Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                                        debug_info.inlined(2),
-                                    ));
-                                    code_out.push(Instruction::from_opcode(
-                                        Opcode::AVMOpcode(AVMOpcode::Swap1),
-                                        debug_info.inlined(2),
-                                    ));
-                                }
-                                code_out.push(Instruction::from_opcode(
-                                    Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                                    debug_info.inlined(2),
-                                ));
-                            }
+                            locals_tree.read_code(true, iu, &mut code_out, debug_info)?;
                         }
                         None => {
                             return Err(CompileError::new(
@@ -253,33 +173,18 @@ pub fn fix_tuple_size(
                 global_tree.read_code(false, idx, &mut code_out, debug_info)?;
             }
             Opcode::PopFrame => {
-                
-                if tuple_frame {
-                    code_out.push(Instruction::new(
-                        Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                        match &insn.immediate {
-                            Some(v) => Some(v.clone()),
-                            None => None,
-                        },
-                        debug_info,
-                    ));
-                    code_out.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::Pop),
-                        debug_info,
-                    ));
-                } else {
-                    for i in 0..*frame_size {
-                        code_out.push(Instruction::from_opcode(
-                            Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                            debug_info.inlined(2),
-                        ));
-                        code_out.push(Instruction::from_opcode(
-                            Opcode::AVMOpcode(AVMOpcode::Pop),
-                            debug_info.inlined(2),
-                        ));
-                    }
-                }
-                
+                code_out.push(Instruction::new(
+                    Opcode::AVMOpcode(AVMOpcode::AuxPop),
+                    match &insn.immediate {
+                        Some(v) => Some(v.clone()),
+                        None => None,
+                    },
+                    debug_info,
+                ));
+                code_out.push(Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::Pop),
+                    debug_info,
+                ));
                 code_out.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::AuxPop),
                     debug_info,
@@ -288,42 +193,26 @@ pub fn fix_tuple_size(
                     Opcode::AVMOpcode(AVMOpcode::Pop),
                     debug_info,
                 ));
-                
+
                 locals_trees.pop();
                 frame_sizes.pop();
-                tuple_frames.pop();
             }
             Opcode::Return => {
-                
-                if tuple_frame {
-                    code_out.push(Instruction::new(
-                        Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                        match &insn.immediate {
-                            Some(v) => Some(v.clone()),
-                            None => None,
-                        },
-                        debug_info,
-                    ));
-                    code_out.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::Pop),
-                        debug_info,
-                    ));
-                } else {
-                    for i in 0..*frame_size {
-                        code_out.push(Instruction::from_opcode(
-                            Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                            debug_info.inlined(2),
-                        ));
-                        code_out.push(Instruction::from_opcode(
-                            Opcode::AVMOpcode(AVMOpcode::Pop),
-                            debug_info.inlined(2),
-                        ));
-                    }
-                }
-                
+                code_out.push(Instruction::new(
+                    Opcode::AVMOpcode(AVMOpcode::AuxPop),
+                    match &insn.immediate {
+                        Some(v) => Some(v.clone()),
+                        None => None,
+                    },
+                    debug_info,
+                ));
+                code_out.push(Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::Pop),
+                    debug_info,
+                ));
+
                 //locals_trees.pop();    // could get more than one
                 //frame_sizes.pop();
-                //tuple_frames.pop();
                 code_out.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::AuxPop),
                     debug_info,

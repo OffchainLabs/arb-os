@@ -1586,7 +1586,6 @@ impl AVMOpcode {
             //| AVMOpcode::Rget
             //| AVMOpcode::ErrCodePoint
             //| AVMOpcode::GetGas => vec![OpcodeEffect::PushStack],
-
             AVMOpcode::Rset | AVMOpcode::SetGas => {
                 vec![OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack]
             }
@@ -1715,7 +1714,7 @@ impl AVMOpcode {
             | AVMOpcode::Sideload => vec![OpcodeEffect::Unsure],
 
             AVMOpcode::Zero | AVMOpcode::Halt => vec![OpcodeEffect::Unsure],
-            
+
             _ => vec![OpcodeEffect::Unsure],
         }
     }
