@@ -7,6 +7,8 @@ use std::bytearray::bytearray_buffer;
 use std::bytearray::bytearray_slice;
 use std::bytearray::bytearray_size;
 
+use std::lzw::Lzw;
+
 
 type BitStream = struct {
     buf: buffer,
@@ -52,6 +54,14 @@ public func bitstream_get(bs: BitStream, nbits: uint) -> option<(BitStream, uint
             },
             val,
         ))
+    };
+}
+
+public func bitstream_skip(bs: BitStream, nbits: uint) -> option<BitStream> {
+    return xif (bs.offset + nbits <= bs.endOffset) {
+        Some(bs with { offset: bs.offset + nbits })
+    } else {
+        None<BitStream>
     };
 }
 

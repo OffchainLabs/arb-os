@@ -69,6 +69,11 @@ fn test_bitstream() {
 }
 
 #[test]
+fn test_lzw() {
+    test_from_file(Path::new("stdlib/lzwtest.mexe"));
+}
+
+#[test]
 fn test_map() {
     test_from_file(Path::new("builtin/maptest.mexe"));
 }

@@ -1,0 +1,41 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+
+use std::bitstream::bitstream_new;
+
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_setByte;
+
+use std::lzw::lzw_new;
+use std::lzw::lzw_decode;
+
+
+impure func main() {
+	asm(tests(),) { log };
+}
+
+func tests() -> uint {
+    let ba = bytearray_new(0);
+    ba = bytearray_setByte(ba, 0, 6);
+    ba = bytearray_setByte(ba, 1, 64);
+    ba = bytearray_setByte(ba, 2, 0);
+    let bs = bitstream_new(ba);
+    let lzw = lzw_new();
+    if let Some(res) = lzw_decode(lzw, bs) {
+        let (_ulzw, result) = res;
+        if (bytearray_size(result) != 1) {
+            return 1;
+        }
+        if (bytearray_getByte(result, 0) != 12) {
+            return 2;
+        }
+    } else {
+        return 3;
+    }
+
+    return 0;
+}

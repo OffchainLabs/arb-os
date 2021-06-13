@@ -1,0 +1,95 @@
+//
+// Copyright 2021, Offchain Labs, Inc. All rights reserved.
+//
+
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_extract;
+
+use std::bytestream::ByteStream;
+use std::bytestream::bytestream_atEof;
+use std::bytestream::bytestream_getByte;
+use std::bytestream::bytestream_get256;
+
+
+type Lz4 = ByteArray
+
+public func lz4_new() -> Lz4 {
+    return bytearray_new(0);
+}
+
+public func lz4_decodeBlock(lz: Lz4, input: ByteStream) -> option<(Lz4, ByteArray)> {
+    let startSize = bytearray_size(lz);
+    let moreToDo = true;
+    while(moreToDo) {
+        let (ulz, ubs, more) = lz4_decodeSequence(lz, input)?;
+        lz = ulz;
+        input = ubs;
+        moreToDo = more;
+    }
+    return Some((lz, bytearray_extract(lz, startSize, bytearray_size(lz)-startSize)));
+}
+
+public func lz4_decodeSequence(lz: Lz4, input: ByteStream) -> option<(Lz4, ByteStream, bool)> {
+    let (ubs, token) = bytestream_getByte(input)?;
+    input = ubs;
+    let literalsSize = 0xf & asm(4, token) uint { shr };
+    let continueLiteralsSize = (literalsSize == 15);
+    while(continueLiteralsSize) {
+        let (ubs, x) = bytestream_getByte(input)?;
+        input = ubs;
+        literalsSize = literalsSize + x;
+        continueLiteralsSize = (x == 255);
+    }
+
+    // read the literals and append to the output
+    while (literalsSize >= 32) {
+        let (ubs, x) = bytestream_get256(input)?;
+        input = ubs;
+        lz = bytearray_set256(lz, bytearray_size(lz), x);
+        literalsSize = literalsSize - 32;
+    }
+    while (literalsSize > 0) {
+        let (ubs, x) = bytestream_getByte(input)?;
+        input = ubs;
+        lz = bytearray_setByte(lz, bytearray_size(lz), x);
+        literalsSize = literalsSize - 1;
+    }
+
+    if (bytestream_atEof(input)) {
+        // this sequence contains only literals, so it must be the last sequence in the block
+        return Some((lz, input, false));
+    }
+
+    // get parameters for the match copy
+    let offset = {
+        let (ubs, lowByte) = bytestream_getByte(input)?;
+        let (ubs2, highByte) = bytestream_getByte(ubs)?;
+        input = ubs2;
+        lowByte + highByte*256
+    };
+    //TODO: assert(offset != 0);
+    let matchCopySize = 4 + (token & 0xf);
+    let continueMatchCopySize = (matchCopySize == 19);
+    while (continueMatchCopySize) {
+        let (ubs, x) = bytestream_getByte(input)?;
+        input = ubs;
+        matchCopySize = matchCopySize + x;
+        continueMatchCopySize = (x == 255);
+    }
+    let to = bytearray_size(lz);
+    let from = to - offset;
+    while(matchCopySize > 0) {
+        lz = bytearray_setByte(lz, to, bytearray_getByte(lz, from));
+        from = from + 1;
+        to = to + 1;
+        matchCopySize = matchCopySize - 1;
+    }
+
+    return Some((lz, input, true));
+}

@@ -1,0 +1,139 @@
+//
+// Copyright 2021, Offchain Labs, Inc. All rights reserved.
+//
+
+
+use std::lz4::Lz4;
+
+use core::array::array;
+use core::array::array_resize;
+
+use std::bitstream::BitStream;
+use std::bitstream::bitstream_get;
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_setByte;
+
+
+const Lzw_EndOfMessage = 256;
+const Lzw_Clear = 257;
+
+
+type LzwUnitSequence = struct {
+    prefix: option<LzwUnitSequence>,
+    firstUnit: uint,
+    lastUnit: uint,
+    seqHash: bytes32,
+}
+
+type Lzw = struct {
+    size: uint,
+    capacity: uint,
+    bitsPerSymbol: uint,
+    fromSymbol: []LzwUnitSequence,
+    fromHash: map<bytes32, LzwUnitSequence>
+}
+
+public func lzw_new() -> Lzw {
+    let fromSymbol = newarray<LzwUnitSequence>(512);
+    let fromHash = newmap<bytes32, LzwUnitSequence>;
+
+    let i = 0;
+    while(i < 258) {
+        let lus = struct {
+            prefix: None<LzwUnitSequence>,
+            firstUnit: i,
+            lastUnit: i,
+            seqHash: hash(bytes32(0), bytes32(i)),
+        };
+        fromSymbol = fromSymbol with { [i] = lus };
+        fromHash = fromHash with { [lus.seqHash] = lus };
+        i = i + 1;
+    }
+
+    return struct {
+        size: 258,
+        capacity: 512,
+        bitsPerSymbol: 9,
+        fromSymbol: fromSymbol,
+        fromHash: fromHash,
+    };
+}
+
+public func lzw_decode(lzw: Lzw, input: BitStream) -> option<(Lzw, ByteArray)> {
+    let ret = bytearray_new(0);
+    let lastSymbolSeen = None<uint>;
+
+    return xloop {
+        let (ubs, symbol) = bitstream_get(input, lzw.bitsPerSymbol)?;
+        input = ubs;
+        if let Some(lastSymbol) = lastSymbolSeen {
+            lzw = lzw_addSymbol(lzw, lastSymbol, lzw_getFirstUnitInSymbol(lzw, symbol, lastSymbol));
+        }
+        let (uret, lastUnit) = lzw_appendSymbolToByteArray(lzw, symbol, ret);
+        ret = uret;
+        if (lastUnit == const::Lzw_EndOfMessage) {
+            return Some((lzw, ret));
+        } elseif (lastUnit == const::Lzw_Clear) {
+            return Some((lzw_new(), ret));
+        }
+        lastSymbolSeen = Some(symbol);
+    };
+}
+
+func lzw_appendSymbolToByteArray(lzw: Lzw, symbol: uint, ba: ByteArray) -> (ByteArray, uint) {
+    return lzw_appendSequenceToByteArray(Some(lzw.fromSymbol[symbol]), ba);
+}
+
+func lzw_appendSequenceToByteArray(sequence: option<LzwUnitSequence>, ba: ByteArray) -> (ByteArray, uint) {
+    return xif let Some(seq) = sequence {
+        ba = lzw_appendSequenceToByteArray(seq.prefix, ba).0;
+        xif (seq.lastUnit < 256) {
+            (bytearray_setByte(ba, bytearray_size(ba), seq.lastUnit), seq.lastUnit)
+        } else {
+            (ba, seq.lastUnit)
+        }
+    } else {
+        (ba, const::Lzw_EndOfMessage)
+    };
+}
+
+func lzw_getFirstUnitInSymbol(lzw: Lzw, symbol: uint, backupSymbol: uint) -> uint {
+    return lzw.fromSymbol[xif (symbol < lzw.size) {  symbol } else { backupSymbol }].firstUnit;
+}
+
+func lzw_addSymbol(lzw: Lzw, symbol: uint, unit: uint) -> Lzw {
+    if (lzw.size == lzw.capacity) {
+        let newCapacity = 2 * lzw.capacity;
+        lzw = lzw with {
+            fromSymbol: unsafecast<[]LzwUnitSequence>(
+                array_resize(
+                    unsafecast<array>(lzw.fromSymbol),
+                    newCapacity,
+                    (),
+                )
+            )
+        } with {
+            bitsPerSymbol: 1 + lzw.bitsPerSymbol
+        } with {
+            capacity: newCapacity
+        };
+    }
+
+    let seq = lzw.fromSymbol[symbol];
+    let newSeq = struct {
+        prefix: Some(seq),
+        firstUnit: seq.firstUnit,
+        lastUnit: unit,
+        seqHash: hash(seq.seqHash, bytes32(unit)),
+    };
+    return lzw with {
+        fromSymbol: lzw.fromSymbol with { [lzw.size] = newSeq }
+    } with {
+        fromHash: lzw.fromHash with { [newSeq.seqHash] = newSeq }
+    } with {
+        size: 1 + lzw.size
+    };
+}
