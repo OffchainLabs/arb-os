@@ -878,7 +878,7 @@ impl fmt::Display for Value {
                 if tup.is_empty() {
                     write!(f, "_")
                 } else {
-                    let mut s = "Tuple(".to_owned();
+                    let mut s = "(".to_owned();
                     for (i, v) in tup.iter().enumerate() {
                         if i == 0 {
                             s = format!("{}{}", s, v);
@@ -909,7 +909,7 @@ impl Value {
                 if tup.is_empty() {
                     format!("{}_{}", grey, reset)
                 } else {
-                    let mut s = format!("{}Tuple({}", color, reset);
+                    let mut s = format!("{}({}", color, reset);
                     for (i, value) in tup.iter().enumerate() {
                         if i == 0 {
                             s = format!("{}{}", s, value.pretty_print(label_color, color));

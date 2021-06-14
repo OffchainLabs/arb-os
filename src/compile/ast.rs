@@ -49,6 +49,9 @@ pub struct Attributes {
     ///Whether to use xget/xset or Towers of Hanoi when building the stack frame.
     #[serde(skip)]
     pub tuple_frame: bool,
+    ///Denotes which console color to apply when debugging optimizations.
+    #[serde(skip)]
+    pub color_group: usize,
 }
 
 impl DebugInfo {
@@ -67,6 +70,11 @@ impl DebugInfo {
     pub fn propagate(&self, codegen_print: bool) -> Self {
         let mut debug_info = self.clone();
         debug_info.attributes.codegen_print = debug_info.attributes.codegen_print || codegen_print;
+        debug_info
+    }
+    pub fn color(&self, color_group: usize) -> Self {
+        let mut debug_info = self.clone();
+        debug_info.attributes.color_group = color_group;
         debug_info
     }
 }
