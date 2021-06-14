@@ -62,7 +62,7 @@
     "AVM_signextend": 11,
     "_AVM_slt": 18,
     "_AVM_smod": 7,
-    "_AVM_spush": 49,
+    "AVM_spush": 49,
     "_AVM_stackempty": 54,
     "AVM_sub": 3,
     "AVM_swap1": 67,

@@ -85,7 +85,9 @@ public func avmCodeBuilder_finish(builder: AvmCodeBuilder) -> AvmCodePoint {
 }
 
 func isSafeInstruction(insn: uint) -> bool {
-    return (insn != const::AVM_rset)
+    return (insn != const::AVM_spush)
+        && (insn != const::AVM_rpush)
+        && (insn != const::AVM_rset)
         && (insn != const::AVM_errset)
         && ((insn < 0x60) || (insn > 0x7f));   // various unsafe instructions
 }
