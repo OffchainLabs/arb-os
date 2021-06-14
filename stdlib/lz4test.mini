@@ -1,0 +1,25 @@
+//
+// Copyright 2021, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::bytearray::bytearray_fromSizeAndBuffer;
+use std::bytearray::bytearray_toSizeAndBuffer;
+
+use std::bytestream::bytestream_new;
+
+use std::lz4::lz4_new;
+use std::lz4::lz4_decodeBlock;
+
+
+impure func main(buf: buffer, nbytes: uint) {
+    let ba = bytearray_fromSizeAndBuffer(nbytes, buf);
+
+    let lz = lz4_new();
+
+    if let Some(res) = lz4_decodeBlock(lz, bytestream_new(ba)) {
+        let (_ulz, result) = res;
+        asm(bytearray_toSizeAndBuffer(result),) { log };
+    } else {
+        asm((),) { log };
+    }
+}
