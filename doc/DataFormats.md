@@ -91,6 +91,8 @@ A message of this type directs ArbOS to end the current Arbitrum block and start
 
 This message type encodes an L2 transaction that is funded by calldata provided at L1. The type-specific data must be the same as an L2 message of subtype 0 or 1.
 
+The "callvalue" field of the L2 message is treated differently for this message type. In particular, the callvalue supplied to the transaction is `max(0, callvalue-maxGas*gasPrice)`, where `callvalue`, `maxGas`, and `gasPrice` are the values in the L2 message.
+
 **Message type 8: Rollup protocol event**
 
 [This is not yet documented.]

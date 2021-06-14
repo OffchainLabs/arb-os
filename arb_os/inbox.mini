@@ -385,7 +385,7 @@ impure func handleUnpackedMessage(msg: IncomingRequest) {
                     account_addToEthBalance(accountStore_get(gAcctStore, msg.sender), callvalue)
                 )
             );
-            if let Some(txRequest) = translateUnsignedTx(msg) {
+            if let Some(txRequest) = translateUnsignedTx(msg, true) {
                 handleArrivingTx(txRequest);
             }
             // else request was malformatted, ignore it but don't undo the deposit
@@ -399,7 +399,7 @@ impure func handleUnpackedMessage(msg: IncomingRequest) {
                     account_addToEthBalance(accountStore_get(gAcctStore, msg.sender), callvalue)
                 )
             );
-            if let Some(txRequest) = translateUnsignedTx(msg) {
+            if let Some(txRequest) = translateUnsignedTx(msg, true) {
                 handleArrivingTx(txRequest);
             }
             // else request was malformatted, ignore it but don't undo the deposit
@@ -434,7 +434,7 @@ impure func handleUnpackedMessage(msg: IncomingRequest) {
             // else signature was invalid, ignore msg
         } else {
             // subtype must be unsigned EOA, unsigned contract, or nonmutating
-            if let Some(txRequest) = translateUnsignedTx(msg) {
+            if let Some(txRequest) = translateUnsignedTx(msg, false) {
                 handleArrivingTx(txRequest);
             }
             // else request was malformatted, ignore it
@@ -494,7 +494,7 @@ impure func handleArrivingTx(tx: TxRequestData) {
     }
 }
 
-impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
+impure func translateUnsignedTx(request: IncomingRequest, deductGasFromCallvalue: bool) -> option<TxRequestData> {
     let inStream = bytestream_new(request.msgData);
     let (us, subtype) = bytestream_getByte(inStream)?;
     inStream = us;
@@ -528,6 +528,11 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
             ))
         };
     }
+
+    if (deductGasFromCallvalue) {
+        value = xif (value > maxGas*gasPrice) { value - maxGas*gasPrice } else { 0 };
+    }
+
     return Some(
         struct {
             maxGas: maxGas,
