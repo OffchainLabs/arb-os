@@ -437,6 +437,7 @@ fn main() -> Result<(), CompileError> {
             let len = machine.stack.nth(0);
             let buf = machine.stack.nth(1);
             let gas_left = machine.stack.nth(2);
+            /*
             let codept = machine.stack.nth(3).unwrap();
             let table = machine.stack.nth(4).unwrap();
             println!("code {} table {}", codept, table);
@@ -453,7 +454,7 @@ fn main() -> Result<(), CompileError> {
                 machine.stack.push(Value::new_buffer(vec![])); // io buffer
                 machine.stack.push(table); // call table
                 machine.debug(Some(CodePt::new_internal(code_len - 1)));
-            }
+            }*/
 
             match (len, buf, gas_left) {
                 (Some(Value::Int(a)), Some(Value::Buffer(buf)), Some(Value::Int(gl))) => {

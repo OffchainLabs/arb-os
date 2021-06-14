@@ -1378,10 +1378,6 @@ impl Machine {
                 AVMOpcode::SetBuffer8 => 100,
                 AVMOpcode::SetBuffer64 => 100,
                 AVMOpcode::SetBuffer256 => 100,
-                AVMOpcode::GetBuffer16 => 10,
-                AVMOpcode::GetBuffer32 => 10,
-                AVMOpcode::SetBuffer16 => 100,
-                AVMOpcode::SetBuffer32 => 100,
                 AVMOpcode::RunWasm => 1000000,
                 AVMOpcode::CompileWasm => 100,
                 AVMOpcode::MakeWasm => 100,
@@ -2227,44 +2223,6 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
-                    AVMOpcode::GetBuffer16 => {
-                        let offset = self.stack.pop_usize(&self.state)?;
-                        let buf = self.stack.pop_buffer(&self.state)?;
-                        if offset + 1 < offset {
-                            return Err(ExecutionError::new(
-                                "buffer overflow",
-                                &self.state,
-                                Some(Value::Int(Uint256::from_usize(offset))),
-                            ));
-                        }
-                        let mut res = [0u8; 2];
-                        for i in 0..2 {
-                            res[i] = buf.read_byte((offset + (1 - i)) as u128);
-                        }
-                        // println!("getting buffer offset {} value {:?}", offset, res);
-                        self.stack.push_uint(Uint256::from_bytes(&res));
-                        self.incr_pc();
-                        Ok(true)
-                    }
-                    AVMOpcode::GetBuffer32 => {
-                        let offset = self.stack.pop_usize(&self.state)?;
-                        let buf = self.stack.pop_buffer(&self.state)?;
-                        if offset + 3 < offset {
-                            return Err(ExecutionError::new(
-                                "buffer overflow",
-                                &self.state,
-                                Some(Value::Int(Uint256::from_usize(offset))),
-                            ));
-                        }
-                        let mut res = [0u8; 4];
-                        for i in 0..4 {
-                            res[i] = buf.read_byte((offset + (3 - i)) as u128);
-                        }
-                        // println!("getting buffer offset {} value {:?}", offset, res);
-                        self.stack.push_uint(Uint256::from_bytes(&res));
-                        self.incr_pc();
-                        Ok(true)
-                    }
                     AVMOpcode::GetBuffer64 => {
                         let offset = self.stack.pop_usize(&self.state)?;
                         let buf = self.stack.pop_buffer(&self.state)?;
@@ -2277,7 +2235,7 @@ impl Machine {
                         }
                         let mut res = [0u8; 8];
                         for i in 0..8 {
-                            res[i] = buf.read_byte((offset + (7 - i)) as u128);
+                            res[i] = buf.read_byte((offset + i) as u128);
                         }
                         // println!("getting buffer offset {} value {:?}", offset, res);
                         self.stack.push_uint(Uint256::from_bytes(&res));
@@ -2312,46 +2270,6 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
-                    AVMOpcode::SetBuffer16 => {
-                        let offset = self.stack.pop_usize(&self.state)?;
-                        if offset + 1 < offset {
-                            return Err(ExecutionError::new(
-                                "buffer overflow",
-                                &self.state,
-                                Some(Value::Int(Uint256::from_usize(offset))),
-                            ));
-                        }
-                        let val = self.stack.pop_uint(&self.state)?;
-                        let buf = self.stack.pop_buffer(&self.state)?;
-                        let mut nbuf = buf;
-                        let bytes = val.to_bytes_be();
-                        for i in 0..2 {
-                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[(1 - i) + 30]);
-                        }
-                        self.stack.push(Value::copy_buffer(nbuf));
-                        self.incr_pc();
-                        Ok(true)
-                    }
-                    AVMOpcode::SetBuffer32 => {
-                        let offset = self.stack.pop_usize(&self.state)?;
-                        if offset + 3 < offset {
-                            return Err(ExecutionError::new(
-                                "buffer overflow",
-                                &self.state,
-                                Some(Value::Int(Uint256::from_usize(offset))),
-                            ));
-                        }
-                        let val = self.stack.pop_uint(&self.state)?;
-                        let buf = self.stack.pop_buffer(&self.state)?;
-                        let mut nbuf = buf;
-                        let bytes = val.to_bytes_be();
-                        for i in 0..4 {
-                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[(3 - i) + 28]);
-                        }
-                        self.stack.push(Value::copy_buffer(nbuf));
-                        self.incr_pc();
-                        Ok(true)
-                    }
                     AVMOpcode::SetBuffer64 => {
                         let offset = self.stack.pop_usize(&self.state)?;
                         if offset + 7 < offset {
@@ -2367,7 +2285,7 @@ impl Machine {
                         let bytes = val.to_bytes_be();
                         // println!("setting buffer offset {} value {} bytes {:?}", offset, val, bytes);
                         for i in 0..8 {
-                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[(7 - i) + 24]);
+                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[i + 24]);
                         }
                         /*
                         let mut res = [0u8; 8];

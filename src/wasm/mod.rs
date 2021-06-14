@@ -304,11 +304,12 @@ fn store_byte(res: &mut Vec<Instruction>, offset: usize) {
     set_memory(res);
 }
 
-fn check_memory(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize, num: usize) {
+fn generate_store(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize, num: usize) {
+    res.push(simple_op(AVMOpcode::Dup1));
     res.push(immed_op(
         AVMOpcode::Plus,
         Value::Int(Uint256::from_usize(offset as usize + num - 1)),
-    )); // address
+    )); // address, value, buffer, value, address
     get_memory(res);
     res.push(get64_from_buffer(0));
     res.push(immed_op(
@@ -318,134 +319,49 @@ fn check_memory(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize, n
     res.push(simple_op(AVMOpcode::GreaterThan));
     res.push(simple_op(AVMOpcode::IsZero));
     cjump(res, 1);
-}
-
-fn generate_store8(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize) {
-    res.push(simple_op(AVMOpcode::Dup1));
-    check_memory(res, offset, memory_offset, 1);
-    // value, address
     let offset = memory_offset + (offset as usize);
-    res.push(simple_op(AVMOpcode::Swap1)); // address, value
-    res.push(immed_op(
-        AVMOpcode::Plus,
-        Value::Int(Uint256::from_usize(offset)),
-    )); // address, value
-    get_memory(res); // buffer, address, value
-    res.push(simple_op(AVMOpcode::Swap2)); // value, address, buffer
-    res.push(simple_op(AVMOpcode::Swap1)); // address, value, buffer
-    res.push(simple_op(AVMOpcode::SetBuffer8)); // buffer
-    set_memory(res);
+    for i in 0..num {
+        store_byte(res, offset + i);
+        res.push(immed_op(
+            AVMOpcode::ShiftRight,
+            Value::Int(Uint256::from_usize(8)),
+        ));
+    }
+    res.push(simple_op(AVMOpcode::Pop));
+    res.push(simple_op(AVMOpcode::Pop));
 }
 
-fn generate_store16(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize) {
-    res.push(simple_op(AVMOpcode::Dup1));
-    check_memory(res, offset, memory_offset, 2);
-    // value, address
-    let offset = memory_offset + (offset as usize);
-    res.push(simple_op(AVMOpcode::Swap1)); // address, value
-    res.push(immed_op(
-        AVMOpcode::Plus,
-        Value::Int(Uint256::from_usize(offset)),
-    )); // address, value, buffer
-    get_memory(res); // buffer, address, value
-    res.push(simple_op(AVMOpcode::Swap2)); // value, address, buffer
-    res.push(simple_op(AVMOpcode::Swap1)); // address, value, buffer
-    res.push(simple_op(AVMOpcode::SetBuffer16)); // buffer
-    set_memory(res);
-}
-
-fn generate_store32(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize) {
-    res.push(simple_op(AVMOpcode::Dup1));
-    check_memory(res, offset, memory_offset, 4);
-    // value, address
-    let offset = memory_offset + (offset as usize);
-    res.push(simple_op(AVMOpcode::Swap1)); // address, value
-    res.push(immed_op(
-        AVMOpcode::Plus,
-        Value::Int(Uint256::from_usize(offset)),
-    )); // address, value, buffer
-    get_memory(res); // buffer, address, value
-    res.push(simple_op(AVMOpcode::Swap2)); // value, address, buffer
-    res.push(simple_op(AVMOpcode::Swap1)); // address, value, buffer
-    res.push(simple_op(AVMOpcode::SetBuffer32)); // buffer
-    set_memory(res);
-}
-
-fn generate_store64(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize) {
-    res.push(simple_op(AVMOpcode::Dup1));
-    check_memory(res, offset, memory_offset, 8);
-    // value, address
-    let offset = memory_offset + (offset as usize);
-    res.push(simple_op(AVMOpcode::Swap1)); // address, value
-    res.push(immed_op(
-        AVMOpcode::Plus,
-        Value::Int(Uint256::from_usize(offset)),
-    )); // address, value, buffer
-    get_memory(res); // buffer, address, value
-    res.push(simple_op(AVMOpcode::Swap2)); // value, address, buffer
-    res.push(simple_op(AVMOpcode::Swap1)); // address, value, buffer
-    res.push(simple_op(AVMOpcode::SetBuffer64)); // buffer
-    set_memory(res);
-}
-
-fn generate_load8(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize) {
+fn generate_load(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize, num: usize) {
     res.push(simple_op(AVMOpcode::Dup0));
-    check_memory(res, offset, memory_offset, 1);
-    // address
+    res.push(immed_op(
+        AVMOpcode::Plus,
+        Value::Int(Uint256::from_usize(offset as usize + num - 1)),
+    )); // address, value, buffer, value, address
+    get_memory(res);
+    res.push(get64_from_buffer(0));
+    res.push(immed_op(
+        AVMOpcode::Mul,
+        Value::Int(Uint256::from_usize(1 << 16)),
+    ));
+    res.push(simple_op(AVMOpcode::GreaterThan));
+    res.push(simple_op(AVMOpcode::IsZero));
+    cjump(res, 1);
 
     let offset = memory_offset + (offset as usize);
     res.push(immed_op(
-        AVMOpcode::Plus,
-        Value::Int(Uint256::from_usize(offset)),
-    )); // address
-    get_memory(res); // buffer, address
-    res.push(simple_op(AVMOpcode::Swap1)); // address, buffer
-    res.push(simple_op(AVMOpcode::GetBuffer8));
-}
-
-fn generate_load16(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize) {
-    res.push(simple_op(AVMOpcode::Dup0));
-    check_memory(res, offset, memory_offset, 2);
-    // address
-
-    let offset = memory_offset + (offset as usize);
-    res.push(immed_op(
-        AVMOpcode::Plus,
-        Value::Int(Uint256::from_usize(offset)),
-    )); // address
-    get_memory(res); // buffer, address
-    res.push(simple_op(AVMOpcode::Swap1)); // address, buffer
-    res.push(simple_op(AVMOpcode::GetBuffer16));
-}
-
-fn generate_load32(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize) {
-    res.push(simple_op(AVMOpcode::Dup0));
-    check_memory(res, offset, memory_offset, 4);
-    // address
-
-    let offset = memory_offset + (offset as usize);
-    res.push(immed_op(
-        AVMOpcode::Plus,
-        Value::Int(Uint256::from_usize(offset)),
-    )); // address
-    get_memory(res); // buffer, address
-    res.push(simple_op(AVMOpcode::Swap1)); // address, buffer
-    res.push(simple_op(AVMOpcode::GetBuffer32));
-}
-
-fn generate_load64(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize) {
-    res.push(simple_op(AVMOpcode::Dup0));
-    check_memory(res, offset, memory_offset, 8);
-    // address
-
-    let offset = memory_offset + (offset as usize);
-    res.push(immed_op(
-        AVMOpcode::Plus,
-        Value::Int(Uint256::from_usize(offset)),
-    )); // address
-    get_memory(res); // buffer, address
-    res.push(simple_op(AVMOpcode::Swap1)); // address, buffer
-    res.push(simple_op(AVMOpcode::GetBuffer64));
+        AVMOpcode::Noop,
+        Value::Int(Uint256::from_usize(0)),
+    ));
+    for i in 0..num {
+        res.push(immed_op(
+            AVMOpcode::ShiftLeft,
+            Value::Int(Uint256::from_usize(8)),
+        ));
+        load_byte(res, offset + num - 1 - i);
+        res.push(simple_op(AVMOpcode::BitwiseOr));
+    }
+    res.push(simple_op(AVMOpcode::Swap1));
+    res.push(simple_op(AVMOpcode::Pop));
 }
 
 fn signed_op32_swap(res: &mut Vec<Instruction>, op: AVMOpcode) {
@@ -1323,30 +1239,30 @@ fn handle_function(
 
             I64Store(_, offset) => {
                 ptr = ptr - 2;
-                generate_store64(&mut res, *offset, memory_offset);
+                generate_store(&mut res, *offset, memory_offset, 8);
             }
 
             I32Store(_, offset) | I64Store32(_, offset) => {
                 ptr = ptr - 2;
-                generate_store32(&mut res, *offset, memory_offset);
+                generate_store(&mut res, *offset, memory_offset, 4);
             }
 
             I32Store16(_, offset) | I64Store16(_, offset) => {
                 ptr = ptr - 2;
-                generate_store16(&mut res, *offset, memory_offset);
+                generate_store(&mut res, *offset, memory_offset, 2);
             }
 
             I32Store8(_, offset) | I64Store8(_, offset) => {
                 ptr = ptr - 2;
-                generate_store8(&mut res, *offset, memory_offset);
+                generate_store(&mut res, *offset, memory_offset, 1);
             }
 
             I64Load(_, offset) => {
-                generate_load64(&mut res, *offset, memory_offset);
+                generate_load(&mut res, *offset, memory_offset, 8);
             }
 
             I32Load(_, offset) => {
-                generate_load32(&mut res, *offset, memory_offset);
+                generate_load(&mut res, *offset, memory_offset, 4);
                 res.push(immed_op(
                     AVMOpcode::BitwiseAnd,
                     Value::Int(Uint256::from_usize(0xffffffff)),
@@ -1354,19 +1270,19 @@ fn handle_function(
             }
 
             I64Load32U(_, offset) => {
-                generate_load32(&mut res, *offset, memory_offset);
+                generate_load(&mut res, *offset, memory_offset, 4);
             }
 
             I32Load16U(_, offset) | I64Load16U(_, offset) => {
-                generate_load16(&mut res, *offset, memory_offset);
+                generate_load(&mut res, *offset, memory_offset, 2);
             }
 
             I32Load8U(_, offset) | I64Load8U(_, offset) => {
-                generate_load8(&mut res, *offset, memory_offset);
+                generate_load(&mut res, *offset, memory_offset, 1);
             }
 
             I64Load32S(_, offset) => {
-                generate_load32(&mut res, *offset, memory_offset);
+                generate_load(&mut res, *offset, memory_offset, 4);
                 res.push(simple_op(AVMOpcode::Dup0));
                 res.push(immed_op(
                     AVMOpcode::ShiftRight,
@@ -1384,7 +1300,7 @@ fn handle_function(
             }
 
             I64Load16S(_, offset) => {
-                generate_load16(&mut res, *offset, memory_offset);
+                generate_load(&mut res, *offset, memory_offset, 2);
                 res.push(simple_op(AVMOpcode::Dup0));
                 res.push(immed_op(
                     AVMOpcode::ShiftRight,
@@ -1402,7 +1318,7 @@ fn handle_function(
             }
 
             I32Load16S(_, offset) => {
-                generate_load16(&mut res, *offset, memory_offset);
+                generate_load(&mut res, *offset, memory_offset, 2);
                 res.push(simple_op(AVMOpcode::Dup0));
                 res.push(immed_op(
                     AVMOpcode::ShiftRight,
@@ -1420,7 +1336,7 @@ fn handle_function(
             }
 
             I64Load8S(_, offset) => {
-                generate_load8(&mut res, *offset, memory_offset);
+                generate_load(&mut res, *offset, memory_offset, 1);
                 res.push(simple_op(AVMOpcode::Dup0));
                 res.push(immed_op(
                     AVMOpcode::ShiftRight,
@@ -1438,7 +1354,7 @@ fn handle_function(
             }
 
             I32Load8S(_, offset) => {
-                generate_load8(&mut res, *offset, memory_offset);
+                generate_load(&mut res, *offset, memory_offset, 1);
                 res.push(simple_op(AVMOpcode::Dup0));
                 res.push(immed_op(
                     AVMOpcode::ShiftRight,
@@ -2707,7 +2623,7 @@ fn process_wasm_inner(
             init.push(get_frame());
             init.push(get64_from_buffer(0)); // pointer
             init.push(simple_op(AVMOpcode::Swap1));
-            generate_store8(init, 0, memory_offset);
+            generate_store(init, 0, memory_offset, 1);
 
             // increment counters
             init.push(get_frame());
@@ -2767,7 +2683,7 @@ fn process_wasm_inner(
             // Read from memory
             init.push(get_frame());
             init.push(get64_from_buffer(0)); // pointer
-            generate_load8(init, 0, memory_offset);
+            generate_load(init, 0, memory_offset, 1);
             // Write to IO
             get_buffer(init);
             init.push(simple_op(AVMOpcode::Swap1));
