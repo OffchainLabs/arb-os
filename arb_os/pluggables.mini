@@ -44,7 +44,7 @@ var moduleManager: ModuleManager;
 public impure func pluggables_init() {
     moduleManager = struct {
         capacity: 1,
-        modules: newarray<option<ModuleState>>(1) with { [0] = None<ModuleState> },
+        modules: newarray<option<ModuleState> >(1) with { [0] = None<ModuleState> },
     };
 }
 
@@ -78,7 +78,7 @@ public impure func installPluggable(id: uint, newFunc: ModuleFunction, keepState
         moduleManager = moduleManager with {
             capacity: newCapacity
         } with {
-            modules: unsafecast<[]option<ModuleState>>(
+            modules: unsafecast<[]option<ModuleState> >(
                 array_resize(
                     unsafecast<array>(moduleManager.modules),
                     newCapacity,

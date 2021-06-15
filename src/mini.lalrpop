@@ -214,8 +214,8 @@ BinaryOpMidfix3: BinaryOp = {
 
 Expr4: Expr = {
 	<lno: @L> <l:Expr4> "|" <r:Expr5> => Expr::new_binary(BinaryOp::BitwiseOr, l, r, file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> <l:Expr4> "SHL" <r:Expr5> => Expr::new_binary(BinaryOp::ShiftLeft, r, l, file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> <l:Expr4> "SHR" <r:Expr5> => Expr::new_binary(BinaryOp::ShiftRight, r, l, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> <l:Expr4> "<<" <r:Expr5> => Expr::new_binary(BinaryOp::ShiftLeft, r, l, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> <l:Expr4> ">>" <r:Expr5> => Expr::new_binary(BinaryOp::ShiftRight, r, l, file_info.location(BytePos::from(lno),filename)),
 	Expr5,
 };
 

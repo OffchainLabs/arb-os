@@ -246,7 +246,7 @@ func rsw_get(rsw: RollupSlidingWindow, index: uint) -> option<RollupNode> {
     if ((index < rsw.nextOut) || (index >= rsw.nextIn)) {
         return None;
     }
-    return unsafecast<option<RollupNode>>(queue_nth(rsw.contents, index-rsw.nextOut));  // correctly returns None if subtraction underflows
+    return unsafecast<option<RollupNode> >(queue_nth(rsw.contents, index-rsw.nextOut));  // correctly returns None if subtraction underflows
 }
 
 func rsw_set(rsw: RollupSlidingWindow, index: uint, node: RollupNode) -> option<RollupSlidingWindow> {

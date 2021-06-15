@@ -694,7 +694,7 @@ impl Type {
                     include_pathname,
                     type_tree,
                 );
-                (format!("option<{}>", display), subtypes)
+                (format!("option<{}> ", display), subtypes)
             }
         }
     }
