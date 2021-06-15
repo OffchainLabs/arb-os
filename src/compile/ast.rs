@@ -30,12 +30,15 @@ pub struct DebugInfo {
     pub attributes: Attributes,
 }
 
-///A list of properties that an AST node has, currently only contains breakpoints.
+///A list of properties that an AST node has.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Attributes {
     ///Is true if the current node is a breakpoint, false otherwise.
     pub breakpoint: bool,
     pub inline: InliningMode,
+    ///Whether node should be pruned in a release build.
+    #[serde(skip)]
+    pub codegen_print: bool,
 }
 
 impl DebugInfo {
@@ -1051,6 +1054,7 @@ pub enum StatementKind {
     While(Expr, Vec<Statement>),
     Asm(Vec<Instruction>, Vec<Expr>),
     DebugPrint(Expr),
+    Assert(Expr),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
