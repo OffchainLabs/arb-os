@@ -206,7 +206,7 @@
     "TraceEvent_create": 2,
     "TraceEvent_create2": 3,
     "TwoToThe32": 4294967296,
-    "TxResultCode_badSequenceNum": 5,
+    "_TxResultCode_reserved_was_badSequenceNum": 5,
     "TxResultCode_cannotDeployAtAddress": 7,
     "TxResultCode_congestion": 2,
     "TxResultCode_exceededTxGasLimit": 8,
@@ -219,6 +219,8 @@
     "TxResultCode_noGasFunds": 3,
     "TxResultCode_revert": 1,
     "TxResultCode_senderNotPermitted": 13,
+    "TxResultCode_sequenceNumberTooLow": 14,
+    "TxResultCode_sequenceNumberTooHigh": 15,
     "TxResultCode_success": 0,
     "TxResultCode_unknownFailure": 255
   },
