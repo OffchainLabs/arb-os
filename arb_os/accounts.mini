@@ -124,7 +124,7 @@ public impure func setGlobalAccountStore(acctStore: AccountStore) {
 }
 
 public func accountStore_healthCheck(acctStore: AccountStore) -> option<()> {
-    healthCheck_verifyTuple(acctStore, 4)?;
+    healthCheck_verifyTuple(acctStore, 5)?;
 
     healthCheck_verifyMap(acctStore.accounts)?;
     if ( ! unsafecast<bool>(accountStore_forall(acctStore, accountHealthCheckIterator, true)) ) {

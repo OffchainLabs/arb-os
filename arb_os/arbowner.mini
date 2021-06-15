@@ -416,7 +416,7 @@ impure func arbowner_deployContract(topFrame: EvmCallFrame, calldata: ByteArray)
 }
 
 // function arbosHealthCheck() external view returns(bool);  // problems reported via debugprints
-impure func arbowner_arbosHealthCheck(topFrame: EvmCallFrame, calldata: ByteArray) {
+impure func arbowner_arbosHealthCheck(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(170, 0, 0);
     }

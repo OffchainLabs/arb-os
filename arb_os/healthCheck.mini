@@ -10,7 +10,6 @@ use gasAccounting::gasAccounting_getPricesInWei;
 
 public impure func healthCheck() -> option<()> {
     accountStore_healthCheck(getGlobalAccountStore())?;
-
     healthCheck_verifyTuple(gasAccounting_getPricesInWei(), 6)?;
 
     return Some(());
