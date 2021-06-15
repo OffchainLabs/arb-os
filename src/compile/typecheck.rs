@@ -2605,6 +2605,39 @@ fn typecheck_expr(
                 type_tree,
                 scopes,
             )?)),
+            ExprKind::UnionCast(expr, tipe) => {
+                let tc_expr = typecheck_expr(
+                    expr,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    scopes,
+                )?;
+                if let Type::Union(types) = tc_expr.get_type() {
+                    if types.iter().any(|t| t == tipe) {
+                        Ok(TypeCheckedExprKind::Cast(Box::new(tc_expr), tipe.clone()))
+                    } else {
+                        Err(new_type_error(
+                            format!(
+                                "Type {} is not a member of {}",
+                                tipe.display(),
+                                tc_expr.get_type().display()
+                            ),
+                            debug_info.location,
+                        ))
+                    }
+                } else {
+                    Err(new_type_error(
+                        format!(
+                            "Tried to unioncast from non-union type \"{}\"",
+                            tc_expr.get_type().display()
+                        ),
+                        debug_info.location,
+                    ))
+                }
+            }
         }?,
         debug_info,
     })

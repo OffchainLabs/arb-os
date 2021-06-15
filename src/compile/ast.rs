@@ -719,7 +719,7 @@ impl Type {
                 (format!("option<{}>", display), subtypes)
             }
             Type::Union(types) => {
-                let mut s = String::from("union<\n");
+                let mut s = String::from("union<");
                 let mut subtypes = HashSet::new();
                 for tipe in types {
                     let (name, new_subtypes) = tipe.display_indented(
@@ -1181,6 +1181,7 @@ pub enum ExprKind {
     If(Box<Expr>, CodeBlock, Option<CodeBlock>),
     IfLet(StringId, Box<Expr>, CodeBlock, Option<CodeBlock>),
     Loop(Vec<Statement>),
+    UnionCast(Box<Expr>, Type),
     NewBuffer,
 }
 
