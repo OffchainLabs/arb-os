@@ -470,7 +470,10 @@ impl<'a> _ArbOwner<'a> {
         }
 
         if receipts[0].succeeded() {
-            println!("arbos health check returned {}", Uint256::from_bytes(&receipts[0].get_return_data()));
+            println!(
+                "arbos health check returned {}",
+                Uint256::from_bytes(&receipts[0].get_return_data())
+            );
             Ok(Uint256::from_bytes(&receipts[0].get_return_data()) != Uint256::zero())
         } else {
             Err(ethabi::Error::from("reverted"))
