@@ -22,7 +22,7 @@ use std::avmcodebuilder::AvmCodePoint;
 use std::avmcodebuilder::pushInstruction;
 use std::avmcodebuilder::pushInstructionImm;
 use std::avmcodebuilder::pushValue;
-
+use std::avmcodebuilder::pushEvmInsnCall;
 
 type EvmInstruction = struct {
     opcode: uint,
@@ -574,29 +574,5 @@ impure func pushSwapn(
             )
         )
     };
-}
-
-impure func pushEvmInsnCall(evmOpNum: uint, code: AvmCodePoint) -> AvmCodePoint {
-    // Some EVM instructions compile to a procedure call to some Mini code.
-    // Generate the appropriate procedure call.
-    // Note that the EVM code will already have put the args to the call on the stack,
-    //     and the Mini code will leave return values on the stack.
-    return pushValue(
-        evmOpNum,
-        pushValue(
-            code,
-            pushInstruction(
-                const::AVM_rpush,
-                pushInstructionImm(
-                    const::AVM_tget,
-                    0,
-                    pushInstruction(
-                        const::AVM_jump,
-                        code,
-                    ),
-                ),
-            ),
-        ),
-    );
 }
 

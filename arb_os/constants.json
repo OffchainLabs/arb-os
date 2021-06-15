@@ -74,6 +74,7 @@
     "_AVM_xget": 83,
     "_AVM_xor": 24,
     "_AVM_xset": 84,
+    "AVM_pseudoOp_evmOp": 255,
     "Address_ArbAddressTable": 102,
     "Address_ArbAggregator": 109,
     "Address_ArbBLS": 103,

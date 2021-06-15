@@ -13,6 +13,7 @@ type AvmCodePoint = impure func()
 
 type AvmCodeBuilder = struct {
     requireSafe: bool,
+    allowEvmOps: bool,
     code: AvmCodePoint,
     size: uint,
     codeMap: map<uint, AvmCodePoint>,
@@ -33,10 +34,35 @@ public impure func pushValue(val: any, restOfCode: AvmCodePoint) -> AvmCodePoint
     return asm(const::AVM_nop, val, restOfCode) AvmCodePoint { pushinsnimm };
 }
 
-public impure func avmCodeBuilder_new(requireSafe: bool) -> AvmCodeBuilder {
+public impure func pushEvmInsnCall(evmOpNum: uint, code: AvmCodePoint) -> AvmCodePoint {
+    // Some EVM instructions compile to a procedure call to some Mini code.
+    // Generate the appropriate procedure call.
+    // Note that the EVM code will already have put the args to the call on the stack,
+    //     and the Mini code will leave return values on the stack.
+    return pushValue(
+        evmOpNum,
+        pushValue(
+            code,
+            pushInstruction(
+                const::AVM_rpush,
+                pushInstructionImm(
+                    const::AVM_tget,
+                    0,
+                    pushInstruction(
+                        const::AVM_jump,
+                        code,
+                    ),
+                ),
+            ),
+        ),
+    );
+}
+
+public impure func avmCodeBuilder_new(requireSafe: bool, allowEvmOps: bool) -> AvmCodeBuilder {
     let code = asm() AvmCodePoint { errcodept };
     return struct {
         requireSafe: requireSafe,
+        allowEvmOps: allowEvmOps,
         code: code,
         size: 1,
         codeMap: newmap<uint, AvmCodePoint> with { [0] = code },
@@ -62,18 +88,36 @@ public impure func avmCodeBuilder_append(builder: AvmCodeBuilder, stream: ByteSt
         } else {
             let (ustr, val) = unmarshalValue(stream, codeMap)?;
             stream = ustr;
-            code = pushInstructionImm(insn, val, code);
+            if (builder.allowEvmOps && (insn == const::AVM_pseudoOp_evmOp)) {
+                if let Some(opNum) = getValueIfUint(val) {
+                    if (opNum < const::NumEvmOps) {
+                        code = pushEvmInsnCall(opNum, code);
+                    }
+                }
+                // otherwise ignore, because EVM op number was invalid
+            } else {
+                code = pushInstructionImm(insn, val, code);
+            }
         }
         codeMap = codeMap with { [size] = code };
         size = size+1;
     }
 
-    return Some(struct {
-        requireSafe: requireSafe,
-        code: code,
-        size: size,
-        codeMap: codeMap,
+    return Some(builder with {
+        code: code
+    } with {
+        size: size
+    } with {
+        codeMap: codeMap
     });
+}
+
+func getValueIfUint(val: any) -> option<uint> {
+    return xif (asm(val,) uint { gettype } == 0) {
+        Some(unsafecast<uint>(val))
+    } else {
+        None<uint>
+    };
 }
 
 public func avmCodeBuilder_getCodeHash(builder: AvmCodeBuilder) -> bytes32 {

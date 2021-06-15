@@ -14,15 +14,33 @@ use evmCallStack::EvmCallFrame;
 
 use gasAccounting::GasAccountingInfo;
 
-use tracing::EvmTracer;
-use tracing::evmTracer_new;
-
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsForall;
 
 
 public func set_globalCallStack_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
     return None<EvmCallFrame>;
+}
+
+public func set_upgradeInProgress_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade
+) -> option<
+    struct {
+        requireSafe: bool,
+        allowEvmOps: bool,
+        code: impure func(),
+        size: uint,
+        codeMap: map<uint,impure func()>,
+    }
+> {
+    return None<
+        struct {
+            requireSafe: bool,
+            allowEvmOps: bool,
+            code: impure func(),
+            size: uint,
+            codeMap: map<uint,impure func()>,
+        }
+    >;
 }
 
 public func set_gasAccountingInfo_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> GasAccountingInfo {

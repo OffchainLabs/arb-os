@@ -18,7 +18,7 @@ impure func main() {
     let (sz, buf) = asm() (uint, buffer) { inbox };
     let stream = bytestream_new(bytearray_fromSizeAndBuffer(sz, buf));
 
-    let builder = avmCodeBuilder_new(false);
+    let builder = avmCodeBuilder_new(false, false);
     builder = xif let Some(bu) = avmCodeBuilder_append(builder, stream) {
         bu
     } else {

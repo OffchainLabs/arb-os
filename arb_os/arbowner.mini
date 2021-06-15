@@ -158,7 +158,7 @@ impure func arbowner_startCodeUpload(_topFrame: EvmCallFrame, calldata: ByteArra
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 20, 0, 0);
     }
-    upgradeInProgress = Some(avmCodeBuilder_new(false));
+    upgradeInProgress = Some(avmCodeBuilder_new(false, false));
     evmOp_return(0, 0);
 }
 
