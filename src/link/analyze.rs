@@ -497,12 +497,6 @@ pub fn print_cfg(prior: &FlowGraph, after: &FlowGraph, title: &str) {
         let prior_cost: u64 = prior_block.iter().map(|insn| insn.opcode.base_cost()).sum();
         let after_cost: u64 = after_block.iter().map(|insn| insn.opcode.base_cost()).sum();
 
-        let prior_updates: usize = prior_block
-            .iter()
-            .map(|insn| insn.debug_info.updates)
-            .max()
-            .unwrap();
-
         let (prior_stack, prior_aux, prior_confused) = eval_stacks(&prior_block);
         let (after_stack, after_aux, after_confused) = eval_stacks(&after_block);
 

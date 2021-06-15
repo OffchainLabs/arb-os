@@ -26,11 +26,11 @@ pub fn fix_tuple_size(
     locals_trees.push(TupleTree::new(1, true));
     frame_sizes.push(1);
 
-    let mut offset = 0;
+    //let mut offset = 0;
 
     for insn in code_in.iter() {
         let locals_tree = locals_trees.last().unwrap();
-        let frame_size = frame_sizes.last().unwrap();
+        //let frame_size = frame_sizes.last().unwrap();
 
         let debug_info = insn.debug_info;
         match insn.opcode {

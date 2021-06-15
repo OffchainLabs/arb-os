@@ -5,7 +5,6 @@
 //!Provides functions for modifying a sequence of Instructions to improve performance and lower gas
 //! costs.
 
-use crate::link::FlowGraph;
 use crate::console::ConsoleColors;
 use crate::mavm::{AVMOpcode, Instruction, Opcode, OpcodeEffect, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -597,108 +596,49 @@ pub fn tuple_annihilation(block: &Block, _debug: bool) -> (Block, bool) {
     (opt, same)
 }
 
-pub fn _change_abi(graph: &FlowGraph, _debug: bool) -> (FlowGraph, bool) {
-    let mut optimized = FlowGraph::default();
-    let mut same = true;
-
-    let mut global_offset = 0;
-
-    for node in graph.node_indices() {
-        let block = &graph[node];
-
-        let mut opt = Vec::with_capacity(block.len());
-
-        for index in 0..block.len() {
-            let curr = &block[index];
-
-            match &curr.opcode {
-                Opcode::AVMOpcode(AVMOpcode::Xset) => opt.push(Instruction {
-                    opcode: Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                    immediate: None,
-                    debug_info: curr.debug_info,
-                }),
-                Opcode::AVMOpcode(AVMOpcode::Xget) => opt.extend(vec![
-                    Instruction {
-                        opcode: Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                        immediate: None,
-                        debug_info: curr.debug_info,
-                    },
-                    Instruction {
-                        opcode: Opcode::AVMOpcode(AVMOpcode::Dup0),
-                        immediate: None,
-                        debug_info: curr.debug_info,
-                    },
-                    Instruction {
-                        opcode: Opcode::AVMOpcode(AVMOpcode::Xset),
-                        immediate: curr.immediate.clone(),
-                        debug_info: curr.debug_info,
-                    },
-                ]),
-                _ => opt.push(curr.clone()),
-            }
-        }
-        optimized.add_node(opt);
-    }
-
-    (optimized, same)
-}
-
-#[derive(Clone)]
-struct StackEntry {
-    created: Option<usize>,
-    moved: Vec<usize>,
-    used: Vec<usize>,
-    value: Option<Value>,
-    children: Vec<StackEntry>,
+#[derive(Clone, Debug, Default)]
+pub struct StackEntry {
+    created: Option<usize>,            // where this stack entry comes into existence
+    moved: Vec<usize>,                 // every time entry is moved but not read
+    duped: Vec<usize>,                 // every time entry is duplicated
+    used: Vec<usize>,                  // every time value is actually used for something
+    killed: Option<usize>,             // where this value is ultimately consumed
+    value: Option<Value>,              // the actual value of this stack entry
+    replaced: Option<Value>,           // what this value gets replaced with
+    children: Vec<StackEntry>,         // the nested child entries
 }
 impl StackEntry {
-    fn new(created: usize, moved: Vec<usize>, used: Vec<usize>, children: Vec<Self>) -> Self {
-        StackEntry {
-            created: Some(created),
-            moved: moved,
-            used: used,
-            value: None,
-            children: vec![],
-        }
-    }
     fn blank() -> Self {
-        StackEntry {
-            created: None,
-            moved: vec![],
-            used: vec![],
-            value: None,
-            children: vec![],
-        }
+        StackEntry::default()
     }
-    fn from(created: Option<usize>, value: &Value) -> Self {
+    fn new(created: usize, value: Option<&Value>) -> Self {
+	StackEntry::from(Some(created), value)
+    }
+    fn from(created: Option<usize>, value: Option<&Value>) -> Self {
         let mut entry = StackEntry::blank();
         entry.created = created;
-        if let Value::Tuple(vec) = value {
-            for value in &**vec {
-                entry.children.push(StackEntry::from(None, &value));
+	entry.value = value.cloned();
+        if let Some(Value::Tuple(vec)) = value {
+            for sub_value in vec.iter() {
+                entry.children.push(StackEntry::from(created, Some(sub_value)));
             }
         }
         return entry;
     }
-    fn shift(&mut self, starting_at: usize, amount: isize) {
-	if let Some(ref mut created) = self.created {
-	    if *created >= starting_at {
-		*created = (*created as isize + amount) as usize
-	    }
-	}
-	self.moved.iter_mut().filter(|x| **x >= starting_at).for_each(|x| *x = (*x as isize + amount) as usize);
-	self.used.iter_mut().filter(|x| **x >= starting_at).for_each(|x| *x = (*x as isize + amount) as usize);
-	//self.moved.iter_mut().for_each(|x| *x = (*x as isize + amount) as usize);
-	//self.used.iter_mut().for_each(|x| *x = (*x as isize + amount) as usize);
+    fn use_all(&mut self, user: usize) {
 	for child in &mut self.children {
-	    child.shift(starting_at, amount);
+	    child.use_all(user);
 	}
+	self.used.push(user);
+    }
+    fn use_children(&mut self, user: usize) {
+	self.use_all(user);
+	self.used.pop();
     }
 }
 
-///Discovers unused values and eliminates them from the stacks.
-pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
-    let mut same = true;
+/// Discovers values that are never used.
+pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, StackEntry>, usize> {
     let mut data_stack: Vec<StackEntry> = vec![];
     let mut aux_stack:  Vec<StackEntry> = vec![];
     let mut eliminate: BTreeMap<usize, StackEntry> = BTreeMap::new();
@@ -714,25 +654,21 @@ pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
         };
     }
     fn analyze(entry: &StackEntry, eliminate: &mut BTreeMap<usize, StackEntry>) {
-        
         for child in &entry.children {
             analyze(child, eliminate);
         }
-        
         match entry.created {
-            Some(index) if entry.used.len() == 0 => {
+            Some(index) if entry.used.len() == 0 && entry.killed.is_some() => {
                 eliminate.insert(index, entry.clone());    // peel children off
             }
             _ => {}
         }
     }
     
-    let mut raised_error = false;
-    
     for index in 0..block.len() {
         
         match &block[index].immediate {
-            Some(value) => data_stack.push(StackEntry::from(Some(index), value)),
+            Some(value) => data_stack.push(StackEntry::new(index, Some(value))),
             None => {}
         }
         
@@ -742,33 +678,36 @@ pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
                 match data_stack.len() {
                     x if x >= 1 => {
                         let entry = &mut data_stack[x - 1];
-                        let duplicate = entry.clone();
-                        entry.used.push(index);
-                        data_stack.push(StackEntry::new(index, vec![], vec![], vec![duplicate]));
+                        let duplicate = entry.value.clone();
+			entry.use_children(index);
+			entry.duped.push(index);
+                        data_stack.push(StackEntry::new(index, duplicate.as_ref()));
                     }
-                    _ => data_stack.push(StackEntry::new(index, vec![], vec![], vec![])),
+                    _ => data_stack.push(StackEntry::new(index, None)),
                 }
             }
             Opcode::AVMOpcode(AVMOpcode::Dup1) => {
                 match data_stack.len() {
                     x if x >= 2 => {
                         let entry = &mut data_stack[x - 2];
-                        let duplicate = entry.clone();
-                        entry.used.push(index);
-                        data_stack.push(StackEntry::new(index, vec![], vec![], vec![duplicate]));
+                        let duplicate = entry.value.clone();
+                        entry.use_children(index);
+			entry.duped.push(index);
+                        data_stack.push(StackEntry::new(index, duplicate.as_ref()));
                     }
-                    _ => data_stack.push(StackEntry::new(index, vec![], vec![], vec![])),
+                    _ => data_stack.push(StackEntry::new(index, None)),
                 }
             }
             Opcode::AVMOpcode(AVMOpcode::Dup2) => {
                 match data_stack.len() {
                     x if x >= 3 => {
                         let entry = &mut data_stack[x - 3];
-                        let duplicate = entry.clone();
-                        entry.used.push(index);
-                        data_stack.push(StackEntry::new(index, vec![], vec![], vec![duplicate]));
+                        let duplicate = entry.value.clone();
+                        entry.use_children(index);
+			entry.duped.push(index);
+                        data_stack.push(StackEntry::new(index, duplicate.as_ref()));
                     }
-                    _ => data_stack.push(StackEntry::new(index, vec![], vec![], vec![])),
+                    _ => data_stack.push(StackEntry::new(index, None)),
                 }
             }
             Opcode::AVMOpcode(AVMOpcode::Swap1) => {
@@ -790,7 +729,7 @@ pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
             }
             Opcode::AVMOpcode(AVMOpcode::Pop) => {
                 let mut entry = draw!(data_stack);
-		entry.moved.push(index);
+		entry.killed = Some(index);
                 analyze!(entry);
             }
             Opcode::AVMOpcode(AVMOpcode::Tset) => {
@@ -798,121 +737,194 @@ pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
                 let mut b = draw!(data_stack);    // tuple
                 let mut c = draw!(data_stack);    // value
                 a.used.push(index);
+                a.killed = Some(index);
                 b.used.push(index);
                 c.moved.push(index);
-                
-                let safe = match &a.value {
-                    Some(Value::Int(offset)) => match offset.to_usize() {
-                        Some(offset) => match &b.value {
-                            Some(Value::Tuple(vec)) if vec.len() > offset => true,
-                            _ => false,
-                        }
-                        _ => false,
+		
+		match &c.value {
+		    Some(_) => match &a.value {
+			Some(Value::Int(offset)) => match offset.to_usize() {
+                            Some(offset) => match &b.value {
+				Some(Value::Tuple(vec)) if offset < vec.len() => {}
+				_ => return Err(index),
+                            }
+                            _ => return Err(index),
+			}
+			_ => return Err(index),
                     }
-                    _ => false,
-                };
-                
-                if !safe {
-                    raised_error = true;
-                    break;
-                }
+		    _ => return Err(index),
+		}
                 
                 let offset = a.value.as_ref().unwrap().to_usize().unwrap();
-                analyze!(a);
+
+                let tuple = match &b.value {
+                    Some(Value::Tuple(tuple)) => tuple,
+                    _ => unreachable!(),
+                };
+                let value = match &c.value {
+                    Some(value) => value,
+                    _ => unreachable!(),
+                };
+                
+                let mut updated = tuple.to_vec();
+                updated[offset] = value.clone();
+                let updated = Value::new_tuple(updated);
+                
+		b.children[offset].killed = Some(index);
+                b.children[offset].replaced = Some(updated.clone());
+                
                 analyze!(b.children[offset]);
+                analyze!(a);
+                
+                b.value = Some(updated);
                 b.children[offset] = c;
                 data_stack.push(b);
             }
+	    Opcode::AVMOpcode(AVMOpcode::Tget) => {
+		let mut a = draw!(data_stack);    // index
+                let mut b = draw!(data_stack);    // tuple
+                a.used.push(index);
+                b.used.push(index);
+		a.killed = Some(index);
+		b.killed = Some(index);
+		
+		match &a.value {
+                    Some(Value::Int(offset)) => match offset.to_usize() {
+                        Some(offset) => match &b.value {
+                            Some(Value::Tuple(vec)) if offset < vec.len() => {}
+                            _ => return Err(index),
+                        }
+                        _ => return Err(index),
+                    }
+                    _ => return Err(index),
+                }
+		
+		let offset = a.value.as_ref().unwrap().to_usize().unwrap();
+		for (spot, child) in b.children.iter().enumerate() {
+		    if spot != offset {
+			analyze!(child);
+		    }
+		}
+		analyze!(a);
+                
+		let mut pulled = b.children.swap_remove(offset);
+                pulled.created = Some(index);
+                data_stack.push(pulled);
+	    }
             _ => {
-                raised_error = true;
-                break;
+		return Err(index);
             }
         }
     }
     
-    if raised_error {
-        // We encountered some combination of instructions that will
-        // raise an error. It's probably best to just not optimize anything.
-        return (block.clone(), true);
-    }
+    Ok(eliminate)
+}
+
+///Discovers unused values and eliminates them from the stacks.
+pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
+    let mut same = true;
     
-    // Apply the eliminations one at a time in case of overlap.
     let mut opt = block.clone();
     let mut color_group = 1;
-    let mut eliminate: Vec<(usize, StackEntry)> = eliminate.into_iter().collect();
-    let elim_count = eliminate.len();
-    for elim_index in 0..elim_count {
-	let (created, entry) = eliminate[elim_index].clone();    // unclone this
-
-	print_code(&opt, "before next", &BTreeMap::new());
-
-	// shifting & debug print
-	println!("Eliminating {} {:?} {:?}", created, entry.moved, entry.created);
+    loop {
+	if debug {
+	    print_code(&opt, "before reduction", &BTreeMap::new());
+	}
+	
+	let eliminate = match discover_unused(&opt, debug) {
+	    Ok(eliminate) => eliminate,
+	    Err(_) => {
+		// We encountered some combination of instructions that will
+		// raise an error. It's probably best to just not optimize anything.
+		return (opt.clone(), true);
+	    }
+	};
+	
+	if eliminate.len() == 0 {
+	    return (opt, same);
+	}
+        
+	let eliminate: Vec<(usize, StackEntry)> = eliminate.into_iter().collect();
+	
+	let (created, entry) = eliminate.into_iter().next().unwrap();
 	
 	let elimination = {
 	    let mut elimination = vec![];
 	    
-	    let generator = &opt[created];
-	    
-	    let mut elim = match &generator.opcode {
-		Opcode::AVMOpcode(AVMOpcode::Noop)
-		| Opcode::AVMOpcode(AVMOpcode::Swap1) => vec![],
-		Opcode::AVMOpcode(AVMOpcode::Dup0)
-		| Opcode::AVMOpcode(AVMOpcode::Dup1)
-		| Opcode::AVMOpcode(AVMOpcode::Dup2) => {
-		    match &generator.immediate {
-			Some(value) => vec![Instruction::from_opcode_imm(
-			    Opcode::AVMOpcode(AVMOpcode::Noop),
-			    value.clone(),
-			    generator.debug_info.color(color_group),
-			)],
-			None => vec![],
-		    }
-		}
-		Opcode::AVMOpcode(AVMOpcode::Swap2) =>
-                    vec![Instruction::from_opcode(
-			Opcode::AVMOpcode(AVMOpcode::Swap1),
-			generator.debug_info.color(color_group),
-                    )],
-		Opcode::AVMOpcode(AVMOpcode::Tset) => {
-		    vec![]
-		}
-		_ => vec![],
-            };
-	    
-	    if debug && elim.len() == 0 {
-		elim.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Noop),
-                    generator.debug_info.color(color_group),
-		));
-            }
-	    elimination.push((created, elim));
-	    
-	    for index in entry.moved {
-		let insn = &opt[index];
+	    let reduce_generator = |created: usize| -> Vec<(usize, Vec<Instruction>)> {
+		let generator = &opt[created];
+		let debug_info = generator.debug_info.color(color_group);
 		
-		// Special case where instruction both creates and moves a value.
-		// Pop's and Swap's are already handled in the generator block above.
-		if index == created {
-		    match &insn.opcode {
-			Opcode::AVMOpcode(AVMOpcode::Pop)
-			| Opcode::AVMOpcode(AVMOpcode::Swap1)
-			| Opcode::AVMOpcode(AVMOpcode::Swap2) => continue,
-			
-			// a noop might seem to "move" a value if it came from a prior reduction.
-			Opcode::AVMOpcode(AVMOpcode::Noop) => continue,
-			_ => {}
-		    }
-		}
-		
-		let mut elim = match &insn.opcode {
-                    Opcode::AVMOpcode(AVMOpcode::Pop) => vec![],
-		    Opcode::AVMOpcode(AVMOpcode::Swap1) => {
-			match &insn.immediate {
+		let mut elim = match &generator.opcode {
+		    Opcode::AVMOpcode(AVMOpcode::Noop)
+	            | Opcode::AVMOpcode(AVMOpcode::Swap1) => vec![],
+		    Opcode::AVMOpcode(AVMOpcode::Dup0)
+		    | Opcode::AVMOpcode(AVMOpcode::Dup1)
+                    | Opcode::AVMOpcode(AVMOpcode::Dup2) => {
+			match &generator.immediate {
 			    Some(value) => vec![Instruction::from_opcode_imm(
 				Opcode::AVMOpcode(AVMOpcode::Noop),
 				value.clone(),
-				insn.debug_info.color(color_group),
+				debug_info,
+			    )],
+			    None => vec![],
+			}
+		    }
+		    Opcode::AVMOpcode(AVMOpcode::Swap2) =>
+			vec![Instruction::from_opcode(
+			    Opcode::AVMOpcode(AVMOpcode::Swap1),
+			    debug_info,
+			)],
+		    Opcode::AVMOpcode(AVMOpcode::Tset) => {
+			vec![]
+		    }
+                    Opcode::AVMOpcode(AVMOpcode::Tget) => {
+                        let mut elim = vec![Instruction::from_opcode(
+			    Opcode::AVMOpcode(AVMOpcode::Pop),
+			    debug_info,
+			)];
+                        if let None = &generator.immediate {
+			    elim.push(Instruction::from_opcode(
+				Opcode::AVMOpcode(AVMOpcode::Pop),
+				debug_info,
+			    ));
+			}
+                        elim
+                    }
+		    _ => vec![],
+		};
+		
+		if debug && elim.len() == 0 {
+		    elim.push(Instruction::from_opcode(
+			Opcode::AVMOpcode(AVMOpcode::Noop),
+			debug_info,
+		    ));
+		}
+		vec![(created, elim)]
+	    };
+	    
+	    let reduce_mover = |created: usize, index: usize | -> Vec<(usize, Vec<Instruction>)> {
+		let mover = &opt[index];
+                let debug_info = mover.debug_info.color(color_group);
+		
+		// Special case where instruction both creates and moves a value.
+		// Pop's and Swap's are already handled in the generator lambda above.
+		if index == created {
+		    match &mover.opcode {
+			Opcode::AVMOpcode(AVMOpcode::Swap1)
+			| Opcode::AVMOpcode(AVMOpcode::Swap2) => return vec![],
+                        x => unreachable!("Insn {} moved it's own value", x),
+		    }
+		}
+		
+		let mut elim = match &mover.opcode {
+                    Opcode::AVMOpcode(AVMOpcode::Pop) => vec![],
+		    Opcode::AVMOpcode(AVMOpcode::Swap1) => {
+			match &mover.immediate {
+			    Some(value) => vec![Instruction::from_opcode_imm(
+				Opcode::AVMOpcode(AVMOpcode::Noop),
+				value.clone(),
+				mover.debug_info.color(color_group),
 			    )],
 			    None => vec![],
 			}
@@ -923,17 +935,39 @@ pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
 			// * is being eliminated, the stack ends up the same way:
 			//     a b * => * b a  ==>  swap1
 			//     a * b => b * a  ==>  swap1
-			match &insn.immediate {
+			match &mover.immediate {
 			    Some(value) => vec![Instruction::from_opcode_imm(
 				Opcode::AVMOpcode(AVMOpcode::Swap1),
 				value.clone(),
-				insn.debug_info.color(color_group),
+				mover.debug_info.color(color_group),
 			    )],
 			    None => vec![Instruction::from_opcode(
 				Opcode::AVMOpcode(AVMOpcode::Swap1),
-				insn.debug_info.color(color_group),
+				mover.debug_info.color(color_group),
 			    )],
 			}
+		    }
+		    Opcode::AVMOpcode(AVMOpcode::Tset) => {
+			let mut reduction = vec![];
+			if let None = &mover.immediate {
+			    reduction.push(Instruction {
+                                opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
+                                immediate: None,
+                                debug_info: debug_info,
+			    });
+                        }
+                        reduction.push(Instruction {
+			    opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
+			    immediate: None,
+			    debug_info: debug_info,
+                        });
+                        reduction.push(Instruction {
+			    opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
+			    immediate: None,
+			    debug_info: debug_info,
+                        });
+			
+			reduction
 		    }
                     _ => vec![],
 		};
@@ -941,17 +975,123 @@ pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
 		if debug && elim.len() == 0 {
                     elim.push(Instruction::from_opcode(
 			Opcode::AVMOpcode(AVMOpcode::Noop),
-			generator.debug_info.color(color_group),
+			opt[created].debug_info.color(color_group),
                     ));
 		}
-		elimination.push((index, elim));
+		vec![(index, elim)]
 	    };
+            
+            let reduce_killer = |created: usize, index: usize, replaced: Option<Value>| -> Vec<(usize, Vec<Instruction>)> {
+		let killer = &opt[index];
+                let debug_info = killer.debug_info.color(color_group);
+		
+		// Special case where instruction both creates and kills a value.
+		// Pop's are already handled in the generator lambda above.
+		if index == created {
+		    match &killer.opcode {
+			Opcode::AVMOpcode(AVMOpcode::Pop) => return vec![],
+			x => unreachable!("Insn {} killed it's own value", x),
+		    }
+		}
+		
+		let mut elim = match &killer.opcode {
+                    Opcode::AVMOpcode(AVMOpcode::Pop) => vec![],
+		    Opcode::AVMOpcode(AVMOpcode::Swap1) => {
+			match &killer.immediate {
+			    Some(value) => vec![Instruction::from_opcode_imm(
+				Opcode::AVMOpcode(AVMOpcode::Noop),
+				value.clone(),
+				killer.debug_info.color(color_group),
+			    )],
+			    None => vec![],
+			}
+		    }
+		    Opcode::AVMOpcode(AVMOpcode::Swap2) => {
+			// Observe the following identity to understand why
+			// a swap1 is always correct. Regardless of which value
+			// * is being eliminated, the stack ends up the same way:
+			//     a b * => * b a  ==>  swap1
+			//     a * b => b * a  ==>  swap1
+			match &killer.immediate {
+			    Some(value) => vec![Instruction::from_opcode_imm(
+				Opcode::AVMOpcode(AVMOpcode::Swap1),
+				value.clone(),
+				killer.debug_info.color(color_group),
+			    )],
+			    None => vec![Instruction::from_opcode(
+				Opcode::AVMOpcode(AVMOpcode::Swap1),
+				killer.debug_info.color(color_group),
+			    )],
+			}
+		    }
+		    Opcode::AVMOpcode(AVMOpcode::Tset) => {
+			let mut reduction = vec![];
+			if let None = &killer.immediate {
+			    reduction.push(Instruction {
+                                opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
+                                immediate: None,
+                                debug_info: debug_info,
+			    });
+                        }
+                        reduction.push(Instruction {
+			    opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
+			    immediate: None,
+			    debug_info: debug_info,
+                        });
+                        reduction.push(Instruction {
+			    opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
+			    immediate: None,
+			    debug_info: debug_info,
+                        });
+			
+			reduction
+		    }
+                    _ => vec![],
+		};
+                
+                if let Some(replaced) = replaced {
+                    elim.push(Instruction::from_opcode_imm(
+                        Opcode::AVMOpcode(AVMOpcode::Noop),
+                        replaced,
+                        debug_info,
+                    ));
+                }
+		
+		if debug && elim.len() == 0 {
+                    elim.push(Instruction::from_opcode(
+			Opcode::AVMOpcode(AVMOpcode::Noop),
+			opt[created].debug_info.color(color_group),
+                    ));
+		}
+		vec![(index, elim)]
+	    };
+            
 
-	    //if debug {
-		println!("Elimination {}", created);
+            match &entry.replaced {
+                Some(replaced) => {
+                    elimination.extend(reduce_killer(created, entry.killed.unwrap(), Some(replaced.clone())));
+                }
+                None => {
+                    elimination.extend(reduce_generator(created));
+	            for index in entry.moved {
+		        elimination.extend(reduce_mover(created, index));
+	            }
+                    elimination.extend(reduce_killer(created, entry.killed.unwrap(), None));
+                }
+            }
+	    
+	    if debug {
+		println!(
+		    "Elimination {} {}",
+		    created,
+		    match &entry.replaced {
+			Some(_) => format!("using {}", entry.killed.unwrap()),
+			None => String::from(""),
+		    }
+		);
 		for (index, reduction) in &elimination {
 		    print!(
-			"  - {} {} {}\t=>",
+			"  - {} {} {}\t=> ",
 			index,
 			&opt[*index].opcode,
 			match &opt[*index].immediate {
@@ -961,17 +1101,17 @@ pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
 		    );
 		    for insn in reduction {
 			print!(
-			    " {} {}",
+			    " {}{}",
 			    insn.opcode,
 			    match &insn.immediate {
-				Some(value) => format!("{} ", value.pretty_print(ConsoleColors::RESET, ConsoleColors::PINK)),
+				Some(value) => format!(" {} ", value.pretty_print(ConsoleColors::RESET, ConsoleColors::PINK)),
 				None => String::from(""),
 			    },
 			);
 		    }
 		    println!("");
 		}
-	    //}
+	    }
 	    
 	    color_group += 1;
 	    elimination
@@ -986,214 +1126,12 @@ pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
 	
 	for index in 0..opt.len() {
 	    match reductions.get(&index) {
-		Some(reduction) => {
-		    let shift = reduction.len() as isize - 1;
-		    //for future in (elim_index+1)..elim_count {
-		    for future in (elim_index+1)..elim_count {
-			// We need to correct future eliminations since the indices they were built on
-			// are now off by the change in instruction count right here.
-			if eliminate[future].0 >= index {
-			    eliminate[future].0 = (eliminate[future].0 as isize + shift) as usize;
-			}
-			eliminate[future].1.shift(index, shift);
-			// function that never returns
-			// do not put a return addr on the stack
-		    }
-		    reduced.extend(reduction.clone());
-		}
+		Some(reduction) => reduced.extend(reduction.clone()),
 		None => reduced.push(opt[index].clone()),
 	    }
 	}
-	
+        
 	opt = reduced;
+        same = false;
     }
-    
-    (opt, same)
-    
-    /*
-    for places in replace {
-        let mut born = false;
-        let mut on_stack = true;
-
-        for (place, insn) in places {
-            while let Some(effect) = effects.next() {
-                if !born {
-                    match effect {
-                        OpcodeEffect::PopStack => {
-                            on_stack = true;
-                            born = true;
-                            break;
-                        }
-                        OpcodeEffect::PopAux => {
-                            on_stack = false;
-                            born = true;
-                            break;
-                        }
-                        _ => after.push(effect),
-                    }
-                } else if on_stack {
-                    match effect {
-                        OpcodeEffect::PushStack => break,
-                        OpcodeEffect::MoveToStack => on_stack = false,
-                        _ => after.push(effect),
-                    }
-                } else {
-                    match effect {
-                        OpcodeEffect::PushAux => break,
-                        OpcodeEffect::MoveToAux => on_stack = true,
-                        _ => after.push(effect),
-                    }
-                }
-            }
-	
-            if insn == generator {
-                match insn.opcode {
-                    Opcode::AVMOpcode(AVMOpcode::Noop)
-                        | Opcode::AVMOpcode(AVMOpcode::Rget)
-                        | Opcode::AVMOpcode(AVMOpcode::AuxPush)
-                        | Opcode::AVMOpcode(AVMOpcode::PushStatic)
-                        | Opcode::AVMOpcode(AVMOpcode::Swap1) => {}
-                    
-                    Opcode::AVMOpcode(AVMOpcode::Swap2) => {}    // def wrong
-
-                    Opcode::AVMOpcode(AVMOpcode::AuxPop) => {
-                        equivalent.push(Instruction {
-                            opcode: Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                            immediate: None,
-                            debug_info: debug_info,
-                        });
-                    }
-
-                    Opcode::AVMOpcode(AVMOpcode::Dup0)
-                        | Opcode::AVMOpcode(AVMOpcode::Dup1)
-                        | Opcode::AVMOpcode(AVMOpcode::Dup2) => {
-                            if let Some(value) = &insn.immediate {
-                                equivalent.push(Instruction {
-                                    opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
-                                    immediate: Some(value.clone()),
-                                    debug_info: debug_info,
-                                });
-                            }
-                        }
-
-                    Opcode::AVMOpcode(AVMOpcode::Xset) => {
-                        if let None = &insn.immediate {
-                            equivalent.push(Instruction {
-                                opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
-                                immediate: None,
-                                debug_info: debug_info,
-                            });
-                        }
-                        equivalent.push(Instruction {
-                            opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
-                            immediate: None,
-                            debug_info: debug_info,
-                        });
-
-                        equivalent.push(Instruction {
-                            opcode: Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                            immediate: None,
-                            debug_info: debug_info,
-                        });
-                        equivalent.push(Instruction {
-                            opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
-                            immediate: None,
-                            debug_info: debug_info,
-                        });
-                    }
-                    
-                    Opcode::AVMOpcode(AVMOpcode::StackEmpty) => {
-                        if let Some(value) = &insn.immediate {
-                            equivalent.push(Instruction {
-                                opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
-                                immediate: Some(value.clone()),
-                                debug_info: debug_info,
-                            });
-                        }
-                    }
-                    
-                    Opcode::AVMOpcode(AVMOpcode::Plus)
-                        | Opcode::AVMOpcode(AVMOpcode::Mul)
-                        | Opcode::AVMOpcode(AVMOpcode::Minus)
-                        | Opcode::AVMOpcode(AVMOpcode::Div)
-                        | Opcode::AVMOpcode(AVMOpcode::Sdiv)
-                        | Opcode::AVMOpcode(AVMOpcode::Mod)
-                        | Opcode::AVMOpcode(AVMOpcode::Smod)
-                        | Opcode::AVMOpcode(AVMOpcode::Exp)
-                        | Opcode::AVMOpcode(AVMOpcode::SignExtend)
-                        | Opcode::AVMOpcode(AVMOpcode::LessThan)
-                        | Opcode::AVMOpcode(AVMOpcode::GreaterThan)
-                        | Opcode::AVMOpcode(AVMOpcode::SLessThan)
-                        | Opcode::AVMOpcode(AVMOpcode::SGreaterThan)
-                        | Opcode::AVMOpcode(AVMOpcode::Equal)
-                        | Opcode::AVMOpcode(AVMOpcode::BitwiseAnd)
-                        | Opcode::AVMOpcode(AVMOpcode::BitwiseOr)
-                        | Opcode::AVMOpcode(AVMOpcode::BitwiseXor)
-                        | Opcode::AVMOpcode(AVMOpcode::Byte)
-                        | Opcode::AVMOpcode(AVMOpcode::ShiftLeft)
-                        | Opcode::AVMOpcode(AVMOpcode::ShiftRight)
-                        | Opcode::AVMOpcode(AVMOpcode::ShiftArith)
-                        | Opcode::AVMOpcode(AVMOpcode::Hash2)
-                        | Opcode::AVMOpcode(AVMOpcode::Tget) => {
-                            if let None = &insn.immediate {
-                                equivalent.push(Instruction {
-                                    opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
-                                    immediate: None,
-                                    debug_info: debug_info,
-                                });
-                            }
-                            equivalent.push(Instruction {
-                                opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
-                                immediate: None,
-                                debug_info: debug_info,
-                            });
-                        }
-
-                    Opcode::AVMOpcode(AVMOpcode::Tset) => {
-                        if let None = &insn.immediate {
-                            equivalent.push(Instruction {
-                                opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
-                                immediate: None,
-                                debug_info: debug_info,
-                            });
-                        }
-                        equivalent.push(Instruction {
-                            opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
-                            immediate: None,
-                            debug_info: debug_info,
-                        });
-                        equivalent.push(Instruction {
-                            opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
-                            immediate: None,
-                            debug_info: debug_info,
-                        });
-                    }
-                    _ => {
-                        println!("\nEncountered generator {}", insn);
-                        panic!("Oh no! Stack Reduction is broken :(");
-                    }
-                };
-            } else {
-                if let Some(value) = &insn.immediate {
-                    equivalent.push(Instruction {
-                        opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
-                        immediate: Some(value.clone()),
-                        debug_info: debug_info,
-                    });
-                }
- 
-                equivalent.extend(match insn.opcode {
-                    Opcode::AVMOpcode(AVMOpcode::AuxPush)
-                        | Opcode::AVMOpcode(AVMOpcode::AuxPop)
-                        | Opcode::AVMOpcode(AVMOpcode::Pop) => vec![],
-                    Opcode::AVMOpcode(AVMOpcode::Swap1) => vec![], // check this
-                    Opcode::AVMOpcode(AVMOpcode::Swap2) => {
-                        vec![]
-                    }
-                    _ => {
-                        println!("\nEncountered {}", insn);
-                        panic!("Oh no! Stack Reduction is broken :(");
-                    }
-                });
-            }*/
 }
