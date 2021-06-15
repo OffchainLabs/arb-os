@@ -10,6 +10,8 @@ interface ArbSys {
      */
     function arbOSVersion() external pure returns (uint);
 
+    function arbChainID() external view returns(uint);
+
     /**
     * @notice Get Arbitrum block number (distinct from L1 block number; Arbitrum genesis block has block number 0)
     * @return block number as int
@@ -31,8 +33,6 @@ interface ArbSys {
     * @return a unique identifier for this L2-to-L1 transaction.
     */
     function sendTxToL1(address destination, bytes calldata calldataForL1) external payable returns(uint);
-
-
 
     /** 
     * @notice get the number of transactions issued by the given external account or the account sequence number of the given contract

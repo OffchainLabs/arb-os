@@ -11,10 +11,16 @@ interface ArbOwner {
     function setFeesEnabled(bool enabled) external;
     function getFeeRecipients() external view returns (address, address);
     function setFeeRecipients(address netFeeRecipient, address congestionFeeRecipient) external;
-    function setFairGasPriceSender(address addr) external;
+
+    function setFairGasPriceSender(address addr, bool isFairGasPriceSender) external;
+    function isFairGasPriceSender(address addr) external view returns(bool);
+    function getAllFairGasPriceSenders() external view returns(bytes memory);
+
     function setGasAccountingParams(uint speedLimitPerBlock, uint gasPoolMax, uint maxTxGasLimit) external;
 
     function setSecondsPerSend(uint blocksPerSend) external;
+
+    function setL1GasPriceEstimate(uint priceInGwei) external;
 
     // Deploy a contract on the chain
     // The contract is deployed as if it was submitted by deemedSender with deemedNonce
@@ -27,11 +33,24 @@ interface ArbOwner {
     function startCodeUpload() external;
     function continueCodeUpload(bytes calldata marshalledCode) external;
     function getUploadedCodeHash() external view returns(bytes32);
-    function finishCodeUploadAsArbosUpgrade(bytes32 requiredCodeHash) external;
     function finishCodeUploadAsPluggable(uint id, bool keepState) external;
+
+    // Install the currently uploaded code as an ArbOS upgrade.
+    // Revert if the hash of the uploaded code bytes does not equal newCodeHash
+    // Revert if (oldCodeHash != 0) && (oldCodeHash != [hash of code bytes from the previous ArbOS upgrade]
+    function finishCodeUploadAsArbosUpgrade(bytes32 newCodeHash, bytes32 oldCodeHash) external;
 
     // Bind an address to a pluggable, so the pluggable can be a contract.
     function bindAddressToPluggable(address addr, uint pluggableId) external;
+
+    // Manage the set of allowed senders
+    // address 0 and the chain owner are always allowed to send, even if not on the list
+    function allowAllSenders() external;
+    function allowOnlyOwnerToSend() external;
+    function isAllowedSender(address addr) external view returns(bool);
+    function addAllowedSender(address addr) external;
+    function removeAllowedSender(address addr) external;
+    function getAllAllowedSenders() external view returns(bytes memory);  // reverts if all or nearly all senders are allowed
 
     function getTotalOfEthBalances() external view returns(uint);
 

@@ -138,7 +138,7 @@ impure func tests() -> uint {
 }
 
 func struct9test() -> uint {
-    let theStruct = struct {
+    let _theStruct = struct {
         field0: 0,
         field1: 1,
         field2: 2,

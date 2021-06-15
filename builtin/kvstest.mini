@@ -14,7 +14,7 @@ impure func main() {
 	asm(tests(),) { log };
 }
 
-impure func tests() -> uint {
+func tests() -> uint {
 	let s = builtin_kvsNew();
 	if (builtin_kvsGet(s, 17) != None<any>) {
 		return 1;
@@ -147,6 +147,6 @@ func getSomeOr(x: option<any>, backupVal: any) -> any {
 	};
 }
 
-func sumForKvsIterator(key: any, value: any, state: any) -> any {
+func sumForKvsIterator(_key: any, value: any, state: any) -> any {
 	return unsafecast<uint>(value) + unsafecast<uint>(state);
 }
