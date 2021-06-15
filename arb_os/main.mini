@@ -62,11 +62,7 @@ use output::output_init;
 use output::txReceipts_init;
 use output::emitTxReceipt;
 
-use pluggables::pluggables_init;
-
 use precompiles::precompiles_init;
-
-use rollupTracker::rollupTracker_init;
 
 use std::bytearray::MarshalledBytes;
 use std::bytearray::ByteArray;
@@ -105,7 +101,6 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         errorHandler_init();
         arbStatistics_init();
 
-        pluggables_init();
         codeSegment_init();
         chainParams_init();
         output_init();
@@ -119,7 +114,6 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         inbox_init();
         accountStore_init();
         txReceipts_init();
-        rollupTracker_init();
         if (initializePreinstalls(false) == None<()>) {
             panic;   // don't try to run without preinstalls and precompiles
         }

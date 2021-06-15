@@ -21,10 +21,6 @@ use accounts::accountStore_get;
 use accounts::accountStore_set;
 use accounts::accountStore_createBuiltinContract;
 
-use pluggables::ModuleFunction;
-use pluggables::installPluggable;
-use pluggables::bindContractAddressToPluggable;
-
 use std::biguint::biguint_fromBytes;
 use std::biguint::biguint_modexp;
 use std::biguint::biguint_toBytes;
@@ -83,21 +79,13 @@ public impure func precompiles_init(acctStore: AccountStore, isUpgrade: bool) ->
         false,
         isUpgrade,
     )?;
-
-    installPluggable(
-        const::PluggableModuleID_precompile_0x05,
-        unsafecast<ModuleFunction>(precompile_0x05_pluggable),
-        isUpgrade,
-    )?;
-    acctStore = accountStore_set(
+    acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x05),
-        bindContractAddressToPluggable(
-            accountStore_get(acctStore, address(0x05)),
-            const::PluggableModuleID_precompile_0x05,
-        ),
-    );
-
+        makeTrampoline(precompile_0x05),
+        false,
+        isUpgrade,
+    )?;
     acctStore = accountStore_createBuiltinContract(
     	acctStore,
         address(0x06),

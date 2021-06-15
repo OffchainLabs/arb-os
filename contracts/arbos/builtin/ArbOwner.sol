@@ -33,15 +33,11 @@ interface ArbOwner {
     function startCodeUpload() external;
     function continueCodeUpload(bytes calldata marshalledCode) external;
     function getUploadedCodeHash() external view returns(bytes32);
-    function finishCodeUploadAsPluggable(uint id, bool keepState) external;
 
     // Install the currently uploaded code as an ArbOS upgrade.
     // Revert if the hash of the uploaded code bytes does not equal newCodeHash
     // Revert if (oldCodeHash != 0) && (oldCodeHash != [hash of code bytes from the previous ArbOS upgrade]
     function finishCodeUploadAsArbosUpgrade(bytes32 newCodeHash, bytes32 oldCodeHash) external;
-
-    // Bind an address to a pluggable, so the pluggable can be a contract.
-    function bindAddressToPluggable(address addr, uint pluggableId) external;
 
     // Manage the set of allowed senders
     // address 0 and the chain owner are always allowed to send, even if not on the list
