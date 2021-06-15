@@ -7,6 +7,7 @@ use accounts::getGlobalAccountStore;
 use accounts::account_getBalance;
 use accounts::account_setContractInfo;
 use accounts::accountStore_forall;
+use accounts::accountStore_getTotalOfEscrowedEth;
 
 use chainParameters::chainParams_getOwner;
 use chainParameters::chainParams_setOwner;
@@ -366,11 +367,13 @@ impure func arbowner_getTotalOfEthBalances(_topFrame: EvmCallFrame, calldata: By
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 150, 0, 0);
     }
+    let acctStore = getGlobalAccountStore();
     let total = unsafecast<uint>(accountStore_forall(
-        getGlobalAccountStore(),
+        acctStore,
         unsafecast<func(Account, any) -> any>(totalEthClosure),
         0
     ));
+    total = total + accountStore_getTotalOfEscrowedEth(acctStore);
     if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, total))) {
         evmOp_return(0, 32);
     } else {

@@ -22,6 +22,7 @@ use std::storageMap::storageMap_size;
 use std::storageMap::storageMap_get;
 use std::storageMap::storageMap_set;
 use std::storageMap::storageMap_diff;
+use std::storageMap::storageMap_forall;
 use std::stack::stack_pop;
 
 use core::kvs::Kvs;
@@ -634,6 +635,20 @@ public func accountStore_payFullyFromEscrow(acctStore: AccountStore, key: uint, 
             escrowedValues: storageMap_set(acctStore.escrowStore.escrowedValues, key, 0)
         }
     };
+}
+
+public func accountStore_getTotalOfEscrowedEth(acctStore: AccountStore) -> uint {
+    return unsafecast<uint>(
+        storageMap_forall(
+            acctStore.escrowStore.escrowedValues,
+            unsafecast<func(uint, uint, any) -> any>(asgtoeeClosure),
+            0,
+        )
+    );
+}
+
+func asgtoeeClosure(_key: uint, balance: uint, total: uint) -> uint {
+    return total + balance;
 }
 
 public func account_getAllStorage(account: Account) -> option<StorageMap> {
