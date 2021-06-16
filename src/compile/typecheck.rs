@@ -3380,8 +3380,6 @@ fn typecheck_binary_op_const(
         | BinaryOp::NotEqual
         | BinaryOp::BitwiseAnd
         | BinaryOp::BitwiseOr
-        | BinaryOp::ShiftLeft
-        | BinaryOp::ShiftRight
         | BinaryOp::BitwiseXor
         | BinaryOp::Hash => {
             if t1 == t2 {
@@ -3453,6 +3451,71 @@ fn typecheck_binary_op_const(
                 Err(new_type_error(
                     format!(
                         "invalid argument types to logical or: \"{}\" and \"{}\"",
+                        t1.display(),
+                        t2.display()
+                    ),
+                    loc,
+                ))
+            }
+        }
+        BinaryOp::ShiftLeft | BinaryOp::ShiftRight => {
+            if t1 == Type::Uint || t1 == Type::Int {
+                Ok(TypeCheckedExprKind::Const(
+                    Value::Int(match t2 {
+                        Type::Uint => {
+                            let x = val1.to_usize().ok_or_else(|| {
+                                new_type_error(
+                                    format!(
+                                        "Attempt to shift {} left by {}, causing overflow",
+                                        val1, val2
+                                    ),
+                                    loc,
+                                )
+                            })?;
+                            if op == BinaryOp::ShiftLeft {
+                                val2.shift_left(x)
+                            } else {
+                                val2.shift_right(x)
+                            }
+                        }
+                        Type::Int => {
+                            if val1.non_negative() {
+                                val1.shift_left(val2.to_usize().ok_or_else(|| {
+                                    new_type_error(
+                                        format!(
+                                            "Attempt to shift {} left by {}, causing overflow",
+                                            val1, val2
+                                        ),
+                                        loc,
+                                    )
+                                })?)
+                            } else {
+                                return Err(new_type_error(
+                                    format!(
+                                        "Attempt to shift {} left by {}, causing overflow",
+                                        val1, val2
+                                    ),
+                                    loc,
+                                ));
+                            }
+                        }
+                        _ => {
+                            return Err(new_type_error(
+                                format!(
+                                    "Attempt to shift a {} by a {}, must be integers",
+                                    t1.display(),
+                                    t2.display()
+                                ),
+                                loc,
+                            ))
+                        }
+                    }),
+                    t1,
+                ))
+            } else {
+                Err(new_type_error(
+                    format!(
+                        "Attempt to shift a {} by a {}, both types must be integers",
                         t1.display(),
                         t2.display()
                     ),

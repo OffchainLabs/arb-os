@@ -371,7 +371,7 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
                     immediateCalldata = bytearray_set256(
                         immediateCalldata,
                         0,
-                        asm(256-32, const::funcCode_ArbRetryableTx_redeem) uint { shl },
+                        const::funcCode_ArbRetryableTx_redeem << (256-32),
                     );
                     immediateCalldata = bytearray_set256(immediateCalldata, 4, txId);
 

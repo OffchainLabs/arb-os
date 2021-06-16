@@ -98,7 +98,7 @@ public func sha256hasher_push256(h: Sha256Hasher, val: uint) -> Sha256Hasher {
             ) bytes32 { sha256f }
         } with {
             buf: unsafecast<[2]uint>((
-                asm(8*(32-offset), val) uint { shl },
+                val << 8*(32-offset),
                 0
             ))
         } with {

@@ -410,6 +410,10 @@ impl Uint256 {
         let hash_result = keccak256(&bytes1);
         Uint256::from_bytes(&hash_result)
     }
+
+    pub fn non_negative(&self) -> bool {
+        !(self < &Self::zero())
+    }
 }
 
 impl PartialOrd for Uint256 {
