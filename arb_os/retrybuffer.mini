@@ -2,8 +2,8 @@
 // Copyright 2021, Offchain Labs, Inc. All rights reserved.
 //
 
-use accounts::getGlobalAccountStore;
-use accounts::setGlobalAccountStore;
+use accounts::safeGetGlobalAccountStore;
+use accounts::safeSetGlobalAccountStore;
 use accounts::accountStore_get;
 use accounts::accountStore_set;
 use accounts::accountStore_getRetryBuffer;
@@ -21,6 +21,8 @@ use evmCallStack::setRetryBufferInCurrentContext;
 use evmCallStack::evmCallStack_callRetryableTxAndReturn;
 use evmCallStack::evmCallStack_transferEthFromEscrow;
 use evmCallStack::evmCallStack_currentTxRequestGasBid;
+use evmCallStack::evmCallStack_getAccountStoreInCurrentContext;
+use evmCallStack::evmCallStack_setAccountStoreInCurrentContext;
 
 use evmlogs::EvmLogs;
 use evmlogs::evmlogs_empty;
@@ -249,12 +251,12 @@ public impure func retryBuffer_delete(rbuf: RetryBuffer, txId: uint, withRefund:
             // credit the escrowed callvalue back to the beneficiary
             if (evmCallStack_isEmpty()) {
                 if let Some(astore) = accountStore_payFromEscrow(
-                    getGlobalAccountStore(),
+                    evmCallStack_getAccountStoreInCurrentContext(),
                     rtx.callvalueEscrowKey,
                     rtx.beneficiary,
                     rtx.callvalue
                 ) {
-                    setGlobalAccountStore(astore);
+                    evmCallStack_setAccountStoreInCurrentContext(astore);
                 }  // else something went badly wrong and we can't refund the callvalue
             } else {
                 // try to refund from the escrow, ignoring errors (which should never happen)
@@ -287,8 +289,8 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
 
     if (creditBack == address(0)) { creditBack = sender; }
 
-    let rbuffer = retryBuffer_trimTwo(getGlobalAccountStore().retryBuffer);
-    let acctStore = getGlobalAccountStore() with { retryBuffer: rbuffer };
+    let rbuffer = retryBuffer_trimTwo(safeGetGlobalAccountStore().retryBuffer);
+    let acctStore = safeGetGlobalAccountStore() with { retryBuffer: rbuffer };
 
     // deposited funds from L1 go into the sender's account
     if (deposit > 0) {
@@ -455,7 +457,7 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
         None<TxRequestData>
     };
 
-    setGlobalAccountStore(acctStore);
+    safeSetGlobalAccountStore(acctStore);
 
     return ret;
 }

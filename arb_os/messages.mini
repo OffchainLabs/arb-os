@@ -1,13 +1,13 @@
 //
-// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
 //
 
 
 use std::bytearray::ByteArray;
 use evmlogs::EvmLogs;
 
-use accounts::getGlobalAccountStore;
-use accounts::setGlobalAccountStore;
+use accounts::safeGetGlobalAccountStore;
+use accounts::safeSetGlobalAccountStore;
 use accounts::accountStore_get;
 use accounts::accountStore_set;
 use accounts::account_fetchAndIncrSeqNum;
@@ -33,11 +33,11 @@ use inbox::IncomingRequest;
 
 impure func fetchAndIncrSequenceNum(addr: address) -> uint {
     // Fetch sequence number, and increment it
-    let globalAS = getGlobalAccountStore();
+    let globalAS = safeGetGlobalAccountStore();
     let (ret, updatedAcct) = account_fetchAndIncrSeqNum(
         accountStore_get(globalAS, addr)
     );
-    setGlobalAccountStore(
+    safeSetGlobalAccountStore(
         accountStore_set(
             globalAS,
             addr,
@@ -68,7 +68,7 @@ public impure func processL2Request(
 ) -> option<()> {   // return None if message is malformatted; otherwise handle errors and return Some(()); if no error, never return
     if let Some(sequenceNum) = request.seqNum {
         if (account_getNextSeqNum(
-                accountStore_get(getGlobalAccountStore(), request.caller)
+                accountStore_get(safeGetGlobalAccountStore(), request.caller)
             ) != sequenceNum) {
             // bad sequence number error
             emitTxReceipt(
@@ -111,7 +111,7 @@ public impure func processL2Request(
             calleeAddr: address(keccakOfRlpEncodedUintPair(uint(request.caller), request.seqNum?))
         };
 
-        if (account_hasContract(accountStore_get(getGlobalAccountStore(), request.calleeAddr))) {
+        if (account_hasContract(accountStore_get(safeGetGlobalAccountStore(), request.calleeAddr))) {
             // there's already an account at that address, revert the call
             // should never happen -- this is just defensive code
             emitTxReceipt(

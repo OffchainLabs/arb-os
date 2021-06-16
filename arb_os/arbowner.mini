@@ -3,7 +3,6 @@
 //
 
 use accounts::Account;
-use accounts::getGlobalAccountStore;
 use accounts::account_getBalance;
 use accounts::accountStore_forall;
 
@@ -25,6 +24,7 @@ use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallStack_stackDepth;
 use evmCallStack::evmCallStack_returnFromCall;
 use evmCallStack::evmCallStack_transferEthFromCurrent;
+use evmCallStack::evmCallStack_getAccountStoreInCurrentContext;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
@@ -292,7 +292,7 @@ impure func arbowner_getTotalOfEthBalances(_topFrame: EvmCallFrame, calldata: By
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 150, 0, 0);
     }
     let total = unsafecast<uint>(accountStore_forall(
-        getGlobalAccountStore(),
+        evmCallStack_getAccountStoreInCurrentContext(),
         unsafecast<func(Account, any) -> any>(totalEthClosure),
         0
     ));
