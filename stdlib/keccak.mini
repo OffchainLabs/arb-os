@@ -83,23 +83,23 @@ public func keccak_permutation(s: [7]uint) -> [7]uint {
 }
 
 public func flipEndian64(x: uint) -> uint {
-    x = (0xff00ff00ff00ff00 & asm(  8, x) uint { shl }) | (0x00ff00ff00ff00ff & asm(  8, x) uint { shr });
-    x = (0xffff0000ffff0000 & asm( 16, x) uint { shl }) | (0x0000ffff0000ffff & asm( 16, x) uint { shr });
-    x = (0xffffffff00000000 & asm( 32, x) uint { shl }) | (0x00000000ffffffff & asm( 32, x) uint { shr });
+    x = (0xff00ff00ff00ff00 & (x << 8)) | (0x00ff00ff00ff00ff & (x >> 8));
+    x = (0xffff0000ffff0000 & (x << 16)) | (0x0000ffff0000ffff & (x >> 16));
+    x = (0xffffffff00000000 & (x << 32)) | (0x00000000ffffffff & (x >> 32));
     return x;
 }
 
 public func flipEndian256(x: uint) -> uint {
-    x =   (0xff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00 & asm(  8, x) uint { shl })
-        | (0x00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff & asm(  8, x) uint { shr });
-    x =   (0xffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000 & asm( 16, x) uint { shl })
-        | (0x0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff & asm( 16, x) uint { shr });
-    x =   (0xffffffff00000000ffffffff00000000ffffffff00000000ffffffff00000000 & asm( 32, x) uint { shl })
-        | (0x00000000ffffffff00000000ffffffff00000000ffffffff00000000ffffffff & asm( 32, x) uint { shr });
-    x =   (0xffffffffffffffff0000000000000000ffffffffffffffff0000000000000000 & asm( 64, x) uint { shl })
-        | (0x0000000000000000ffffffffffffffff0000000000000000ffffffffffffffff & asm( 64, x) uint { shr });
-    x =   (0xffffffffffffffffffffffffffffffff00000000000000000000000000000000 & asm(128, x) uint { shl })
-        | (0x00000000000000000000000000000000ffffffffffffffffffffffffffffffff & asm(128, x) uint { shr });
+    x =   (0xff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00 & (x << 8))
+        | (0x00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff & (x >> 8));
+    x =   (0xffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000 & (x << 16))
+        | (0x0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff & (x >> 16));
+    x =   (0xffffffff00000000ffffffff00000000ffffffff00000000ffffffff00000000 & (x << 32))
+        | (0x00000000ffffffff00000000ffffffff00000000ffffffff00000000ffffffff & (x >> 32));
+    x =   (0xffffffffffffffff0000000000000000ffffffffffffffff0000000000000000 & (x << 64))
+        | (0x0000000000000000ffffffffffffffff0000000000000000ffffffffffffffff & (x >> 64));
+    x =   (0xffffffffffffffffffffffffffffffff00000000000000000000000000000000 & (x << 128))
+        | (0x00000000000000000000000000000000ffffffffffffffffffffffffffffffff & (x >> 128));
     return x;
 }
 
