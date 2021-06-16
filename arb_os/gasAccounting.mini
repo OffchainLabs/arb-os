@@ -773,9 +773,13 @@ public impure func getNextRequestFromCongestionAuction() -> (
 
     return xif ((tx.incomingRequest.sender != address(0)) && gasAccountingInfo.feeConfig.enabled && (! tx.incomingRequest.adminMode)) {
         if let Some(txSeqNum) = tx.seqNum {
-            if (txSeqNum != account_getNextSeqNum(accountStore_get(getGlobalAccountStore(), tx.caller))) {
-                // don't charge the user if sequence number is wrong
-                return (const::TxResultCode_badSequenceNum, tx);
+            let expectedSeqNum = account_getNextSeqNum(accountStore_get(getGlobalAccountStore(), tx.caller));
+
+            // don't charge the user if sequence number is wrong
+            if (txSeqNum < expectedSeqNum) {
+                return (const::TxResultCode_sequenceNumberTooLow, tx);
+            } elseif (txSeqNum > expectedSeqNum) {
+                return (const::TxResultCode_sequenceNumberTooHigh, tx);
             }
         }
 
