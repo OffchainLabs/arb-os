@@ -709,7 +709,7 @@ impure func switchToChargingOS() -> uint {
     // switch to charging the OS for gas, if we aren't already
     // return amount of the tx's gas that is still unused
     let avmGasRemaining = asm() uint { getgas };
-    return xif (avmGasRemaining >= asm(255, 1) uint { shl }) {
+    return xif (avmGasRemaining >= (1 << 255)) {
         // we were already charging the OS, tx has nothing remaining
         0
     } else {
