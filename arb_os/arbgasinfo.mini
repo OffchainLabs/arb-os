@@ -28,7 +28,7 @@ public impure func arbgasinfo_txcall() {
         if (bytearray_size(calldata) < 4) {
             evmOp_revert_knownPc(0, 0, 0);
         }
-        let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
+        let funcCode = (bytearray_get256(calldata, 0) >> 224);
         if (funcCode == 0x41b247a8) {
             arbgasinfo_getPricesInWei(topFrame, calldata);
         } elseif (funcCode == 0x02199f34) {

@@ -479,7 +479,7 @@ public impure func precompile_0x09() { // Blake2
             evmOp_revert_knownPc(0, 0, 0);
         }
 
-        let numRounds = asm(256-32, bytearray_get256(calldata, 0)) uint { shr };
+        let numRounds = (bytearray_get256(calldata, 0) >> (256-32));
         if (numRounds > 0xffff) {
             evmOp_revert_knownPc(1, 0, 0);
         }
