@@ -102,6 +102,10 @@ Mini has the following types:
 
 > a hash map, which maps keys of one type to values of another type
 
+`union<` *type1*, *type2*, ... `>`
+
+> an untagged union type that can values from any of *type1*, *type2*, etc. There must be explicit casts to convert to and from its component types. This is done via `newunion` and `unioncast`.
+
 `struct` { *name1: type1 , name2 : type2 , ...* }
 
 > a struct with one or more named, typed fields (a compound type)
@@ -374,6 +378,10 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 > Create a new map object, initially empty.
 
+`unioncast<` *type* `>(` *expression* `)`
+
+> Converts from a type of `union<`*type1*, *type2*,...`>` to *type*, where *type* must be a member of *type1*, *type2*,.... This is an unsafe operation, as which type the union contains is not checked. 
+
 `unsafecast` < *type* > ( *expression*  )
 
 > Evaluate *expression*, and then treat the in-memory representation of the result as an object having type *type*. This is an unsafe operation.  It is most often used to convert a value of type `any` into a more specific type, when the programmer knows the real type of the value.  
@@ -385,6 +393,10 @@ Mini never automatically converts types to make an operation succeed.  Programme
 `None`<*type*>
 
 > Creates an optional value of type option<*type*> with no inner value 
+
+`newunion<` *type1*, *type2*, ... `>(` *expression* `)`
+
+> Creates a value of type `union<*type1*, *type2*, ... >` from an *expression* of any of *type1* *type2*
 
 *arrExpression* [ *indexExpression* ]
 
