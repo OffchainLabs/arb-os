@@ -1,5 +1,7 @@
 
-// This file is used for bootstrapping the upgrade build process. Don't edit it unless you know what you're doing.
+// This file is machine-generated. Don't edit it unless you know what you're doing.
+
+s you know what you're doing.
 
 type GlobalsBeforeUpgrade = struct {
     unused: uint,

@@ -40,7 +40,7 @@ type StorageMap = struct {
     size: uint,
 }
 
-type StorageMapNode = [8]any
+type StorageMapNode = union<[8]StorageMapNode, StorageMapCell, ()>
 
 type StorageMapCell = struct {
     key: uint,
@@ -50,7 +50,7 @@ type StorageMapCell = struct {
 
 public func storageMap_new() -> StorageMap {
     return struct {
-        tree: unsafecast<StorageMapNode>(0),
+        tree: newunion<[8]StorageMapNode, StorageMapCell, ()>(()),
         size: 0,
     };
 }
@@ -63,19 +63,19 @@ public func storageMap_get(kvs: StorageMap, key: uint) -> uint {
     let s = kvs.tree;
     let reductionFactor = 1;
     return xloop {
-        if (s == unsafecast<StorageMapNode>(0)) {
+        if (s == newunion<[8]StorageMapNode, StorageMapCell, ()>(())) {
             // empty subtree
             return 0;
         } elseif (asm(s,) uint { length } == 2) {
             // singleton item
-            if (key == unsafecast<StorageMapCell>(s).key) {
-                return unsafecast<StorageMapCell>(s).value;
+            if (key == unioncast<StorageMapCell>(s).key) {
+                return unioncast<StorageMapCell>(s).value;
             } else {
                 return 0;
             }
         } else {
             // still at an internal node of the tree; walk downward and try again
-            s = unsafecast<StorageMapNode>(s[(key/reductionFactor) & 0x7]);
+            s = unioncast<[8]StorageMapNode>(s)[(key/reductionFactor) & 0x7];
             reductionFactor = reductionFactor * 8;
         }
     };
@@ -86,7 +86,7 @@ public func storageMap_get(kvs: StorageMap, key: uint) -> uint {
 // Then we use the Unwinder to guide our traversal back up the tree and to remind us of the
 //      writes we need to do on that upward traversal.
 type Unwinder = struct {
-    kvs: [8]any,
+    kvs: [8]StorageMapNode,
     index: uint,
     next: option<Unwinder>,
 }
@@ -95,9 +95,9 @@ type Unwinder = struct {
     let (utree, maybeUnwinder, delta) = storageMap_set2(s.tree, key, value);
     return xloop {
         if let Some(unwinder) = maybeUnwinder {
-            utree = unwinder.kvs with {
+            utree = newunion<[8]StorageMapNode, StorageMapCell, ()>(unwinder.kvs with {
                 [unwinder.index] = utree
-            };
+            });
             maybeUnwinder = unwinder.next;
         } else {
             if (delta != int(0)) {
@@ -112,14 +112,14 @@ public func storageMap_set2(s: StorageMapNode, key: uint, value: uint) -> (Stora
     let reductionFactor = 1;
     let unwinder = None<Unwinder>;
     return xloop {
-        if (s == unsafecast<StorageMapNode>(0)) {
+        if (s == newunion<[8]StorageMapNode, StorageMapCell, ()>(())) {
             if (value == 0) {
                 // writing zero to an empty slot; do nothing
                 return (s, unwinder, int(0));
             } else {
                 // writing non-zero to empty slot; create a singleton item
                 return (
-                    unsafecast<StorageMapNode>(
+                    newunion<[8]StorageMapNode, StorageMapCell, ()>(
                         struct {
                             key: key,
                             value: value
@@ -130,20 +130,20 @@ public func storageMap_set2(s: StorageMapNode, key: uint, value: uint) -> (Stora
                 );
             }
         } elseif (asm(s,) uint { length } == 2) {
-            let kid = unsafecast<StorageMapCell>(s);
+            let kid = unioncast<StorageMapCell>(s);
             if (kid.key == key) {
                 // overwriting an existing item with same key
                 if (value == 0) {
                     // delete existing item
                     return (
-                        unsafecast<StorageMapNode>(0),
+                        newunion<[8]StorageMapNode, StorageMapCell, ()>(()),
                         unwinder,
                         -1s,
                     );
                 } else {
                     // update existing item with new value
                     return (
-                        unsafecast<StorageMapNode>(kid with { value: value }),
+                        newunion<[8]StorageMapNode, StorageMapCell, ()>(kid with { value: value }),
                         unwinder,
                         int(0)
                     );
@@ -152,9 +152,9 @@ public func storageMap_set2(s: StorageMapNode, key: uint, value: uint) -> (Stora
                 // already found a singleton here
                 // create new internal node and push singleton into it
                 // then loop back and try again
-                s = unsafecast<StorageMapNode>(newfixedarray(8, 0)) with {
+                s = newunion<[8]StorageMapNode, StorageMapCell, ()>(newfixedarray(8, newunion<[8]StorageMapNode, StorageMapCell, ()>(())) with {
                     [(kid.key/reductionFactor) & 0x7] = kid
-                };
+                });
             }
         } else {
             // traversing an internal node
@@ -166,7 +166,7 @@ public func storageMap_set2(s: StorageMapNode, key: uint, value: uint) -> (Stora
                 index: slot,
                 next: unwinder,
             });
-            s = unsafecast<StorageMapNode>(s[slot]);
+            s = unioncast<[8]StorageMapNode>(s)[slot];
             reductionFactor = reductionFactor * 8;
         }
     };
@@ -304,3 +304,4 @@ func smSerNZHelper(index: uint, value: uint, state: any) -> any {
         )
     };
 }
+
