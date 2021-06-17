@@ -828,6 +828,7 @@ impl PartialEq for Type {
             }
             (Type::Nominal(p1, id1), Type::Nominal(p2, id2)) => (p1, id1) == (p2, id2),
             (Type::Option(x), Type::Option(y)) => *x == *y,
+            (Type::Union(x), Type::Union(y)) => type_vectors_equal(x, y),
             (_, _) => false,
         }
     }
