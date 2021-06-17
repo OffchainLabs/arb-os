@@ -2189,7 +2189,10 @@ fn typecheck_expr(
                     scopes,
                 )?;
                 let tc_type = tc_expr.get_type();
-                if types.iter().any(|t| *t == tc_type) {
+                if types
+                    .iter()
+                    .any(|t| t.assignable(&tc_type, type_tree, HashSet::new()))
+                {
                     Ok(TypeCheckedExprKind::Cast(
                         Box::new(tc_expr),
                         Type::Union(types.clone()),
@@ -2651,9 +2654,7 @@ fn typecheck_expr(
                     type_tree,
                     scopes,
                 )?;
-                if let Type::Union(types) =
-                    tc_expr.get_type().get_representation(type_tree).unwrap()
-                {
+                if let Type::Union(types) = tc_expr.get_type().get_representation(type_tree)? {
                     if types.iter().any(|t| t == tipe) {
                         Ok(TypeCheckedExprKind::Cast(Box::new(tc_expr), tipe.clone()))
                     } else {
