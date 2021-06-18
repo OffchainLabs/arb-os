@@ -162,7 +162,7 @@ public func storageMap_set2(s: StorageMapNode, key: uint, value: uint) -> (Stora
             // then move one level down the tree
             let slot = (key / reductionFactor) & 0x7;
             unwinder = Some(struct {
-                kvs: s,
+                kvs: unioncast<[8]StorageMapNode>(s),
                 index: slot,
                 next: unwinder,
             });
@@ -190,22 +190,23 @@ public func storageMap_forall(
 }
 
 public func storageMap_forall_tree(
-    t: StorageMapNode,
+    s: StorageMapNode,
     closure: func(uint, uint, any) -> any,
     state: any
 ) -> any {
-    return xif (t == unsafecast<StorageMapNode>(0)) {
+
+    return xif (s == newunion<[8]StorageMapNode, StorageMapCell, ()>(())) {
         state
-    } elseif (asm(t,) uint { length } == 2) {
+    } elseif (asm(s,) uint { length } == 2) {
         closure(
-            unsafecast<StorageMapCell>(t).key,
-            unsafecast<StorageMapCell>(t).value,
+            unioncast<StorageMapCell>(s).key,
+            unioncast<StorageMapCell>(s).value,
             state
         )
    } else {
         let i = 0;
         while (i < 8) {
-            state = storageMap_forall_tree(unsafecast<StorageMapNode>(t[i]), closure, state);
+            state = storageMap_forall_tree(unioncast<[8]StorageMapNode>(s)[i], closure, state);
             i = i+1;
         }
         state
