@@ -52,6 +52,8 @@ pub struct CompileStruct {
     pub inline: Option<InliningHeuristic>,
     #[clap(short, long)]
     pub consts_file: Option<String>,
+    #[clap(short, long)]
+    pub release_build: bool,
 }
 
 #[derive(Clap, Debug)]
@@ -120,7 +122,13 @@ impl CompileStruct {
                 Some(path) => Some(Path::new(path)),
                 None => None,
             };
-            match compile_from_file(path, &mut file_info_chart, &self.inline, constants_path) {
+            match compile_from_file(
+                path,
+                &mut file_info_chart,
+                &self.inline,
+                constants_path,
+                self.release_build,
+            ) {
                 Ok(idk) => idk,
                 Err(mut e) => {
                     e.description = format!("{}", e.description);
@@ -140,6 +148,11 @@ impl CompileStruct {
                 return Err((e, file_info_chart));
             }
         };
+        //If this condition is true it means that __fixedLocationGlobal will not be at
+        // index [0], but rather [0][0] or [0][0][0] etc
+        if linked_prog.globals.len() >= 58 {
+            panic!("Too many globals defined in program, location of first global is not correct")
+        }
         postlink_compile(
             linked_prog,
             file_info_chart.clone(),
@@ -206,6 +219,13 @@ impl TypeCheckedModule {
             )
         }
         self.checked_funcs = new_funcs;
+    }
+    ///Propagates inherited attributes down top-level decls.
+    fn propagate_attributes(&mut self) {
+        for func in &mut self.checked_funcs {
+            let attributes = func.debug_info.attributes.clone();
+            TypeCheckedNode::propagate_attributes(func.child_nodes(), &attributes);
+        }
     }
     ///Reasons about the control flow within the typechecked AST
     fn flowcheck(&mut self, file_info_chart: &BTreeMap<u64, FileInfo>) {
@@ -368,6 +388,7 @@ pub fn compile_from_file(
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     inline: &Option<InliningHeuristic>,
     constants_path: Option<&Path>,
+    release_build: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let library = path
         .parent()
@@ -394,6 +415,7 @@ pub fn compile_from_file(
             file_info_chart,
             inline,
             constants_path,
+            release_build,
         )
     } else if let (Some(parent), Some(file_name)) = (path.parent(), path.file_stem()) {
         compile_from_folder(
@@ -410,6 +432,7 @@ pub fn compile_from_file(
             file_info_chart,
             inline,
             constants_path,
+            release_build,
         )
     } else {
         Err(CompileError::new(
@@ -446,6 +469,7 @@ pub fn compile_from_folder(
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     inline: &Option<InliningHeuristic>,
     constants_path: Option<&Path>,
+    release_build: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let (mut programs, import_map) =
         create_program_tree(folder, library, main, file_info_chart, constants_path)?;
@@ -478,7 +502,17 @@ pub fn compile_from_folder(
             .for_each(|module| module.inline(cool));
     }
 
-    let progs = codegen_programs(typechecked_modules, file_info_chart, type_tree, folder)?;
+    for module in &mut typechecked_modules {
+        module.propagate_attributes();
+    }
+
+    let progs = codegen_programs(
+        typechecked_modules,
+        file_info_chart,
+        type_tree,
+        folder,
+        release_build,
+    )?;
     Ok(progs)
 }
 
@@ -751,6 +785,7 @@ fn codegen_programs(
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     type_tree: TypeTree,
     folder: &Path,
+    release_build: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let mut progs = vec![];
     for TypeCheckedModule {
@@ -768,6 +803,7 @@ fn codegen_programs(
             &imported_funcs,
             &global_vars,
             file_info_chart,
+            release_build,
         )
         .map_err(|e| {
             CompileError::new(

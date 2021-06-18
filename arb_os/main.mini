@@ -39,6 +39,7 @@ use evmCallStack::evmCallStack_makeEmpty;
 
 use evmOps::evmOps_init;
 use evmOps::evmOp_return;
+use evmOps::dispatchForEvmOp;
 
 use evmlogs::EvmLogs;
 
@@ -78,6 +79,9 @@ use std::storageMap::StorageMap;
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 use bridge_arbos_versions::remapGlobalsForUpgrade;
 
+// The compiler will always put __fixedLocationGlobal in slot 0 of the AVM Register,
+//     so we can rely on it not moving across upgrades.
+var __fixedLocationGlobal: impure func(uint);    // points to EVM op dispatch function
 
 impure func main(oldGlobals: GlobalsBeforeUpgrade) {
     if (unsafecast<any>(oldGlobals) != ()) {
@@ -90,6 +94,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         // now re-do the initializations that set up pointers into the ArbOS code
         errorHandler_init();
         evmOps_init();
+        __fixedLocationGlobal = dispatchForEvmOp;
         codeSegment_init();
 
         if (initializePreinstalls(true) == None<()>) {
@@ -109,6 +114,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         gasAccounting_init();
         evmCallStack_init();
         evmOps_init();
+        __fixedLocationGlobal = dispatchForEvmOp;
         blockhash_init();
         inbox_init();
         accountStore_init();
@@ -145,7 +151,7 @@ public impure func mainRunLoop() {
             }
         } else {
             // before emitting a failure receipt, try to increment caller's sequence number
-            if (resultCode != const::TxResultCode_badSequenceNum) {
+            if ( (resultCode != const::TxResultCode_sequenceNumberTooLow) && (resultCode != const::TxResultCode_sequenceNumberTooHigh) ) {
                 if let Some(seqNum) = request.seqNum {
                     let gAcctStore = getGlobalAccountStore();
                     if let Some(acct) = account_checkAndIncrSeqNum(accountStore_get(gAcctStore, request.caller), seqNum) {

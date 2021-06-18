@@ -32,6 +32,7 @@ use evmCallStack::evmCallStack_getTopFrameReturnData;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert;
+use evmOps::evmOp_revert_knownPc;
 use evmOps::evmOp_revert_knownCodePc;
 use evmOps::evmOp_returndatasize;
 use evmOps::doCreationOpcode;
@@ -46,7 +47,16 @@ use gasAccounting::gasAccounting_getFeeRecipients;
 use gasAccounting::gasAccounting_setFeeRecipients;
 use gasAccounting::setFairGasPriceSender;
 use gasAccounting::setGasAccountingParams;
+use gasAccounting::isFairGasPriceSender;
+use gasAccounting::getSerializedFairGasPriceSenders;
+use gasAccounting::allowedSenders_allowAll;
+use gasAccounting::allowedSenders_allowNone;
+use gasAccounting::allowedSenders_contains;
+use gasAccounting::allowedSenders_add;
+use gasAccounting::allowedSenders_remove;
+use gasAccounting::allowedSenders_serialize;
 use gasAccounting::getAddressForReserveFundsDeposit;
+use gasAccounting::setL1GasPriceEstimate;
 
 use inbox::inbox_currentArbBlockNumber;
 use inbox::inbox_currentEthBlockNumber;
@@ -59,6 +69,7 @@ use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_copy;
 
 use std::avmcodebuilder::AvmCodeBuilder;
 use std::avmcodebuilder::avmCodeBuilder_new;
@@ -74,9 +85,11 @@ use std::storageMap::storageMap_new;
 
 
 var upgradeInProgress: option<AvmCodeBuilder>;
+var previousArbosUpgradeHash: bytes32;
 
 public impure func arbowner_init() {
     upgradeInProgress = None<AvmCodeBuilder>;
+    previousArbosUpgradeHash = bytes32(0);
 }
 
 public impure func arbowner_txcall() {
@@ -114,6 +127,10 @@ public impure func arbowner_txcall() {
             arbowner_setFeeRecipients(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_setFairGasPriceSender) {
             arbowner_setFairGasPriceSender(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_isFairGasPriceSender) {
+            arbowner_isFairGasPriceSender(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_getAllFairGasPriceSenders) {
+            arbowner_getAllFairGasPriceSenders(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_setSecondsPerSend) {
             arbowner_setSecondsPerSend(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_setGasAccountingParams) {
@@ -122,6 +139,20 @@ public impure func arbowner_txcall() {
             arbowner_getTotalOfEthBalances(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_deployContract) {
             arbowner_deployContract(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_allowAllSenders) {
+            arbowner_allowAllSenders(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_allowOnlyOwnerToSend) {
+            arbowner_allowOnlyOwnerToSend(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_isAllowedSender) {
+            arbowner_isAllowedSender(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_addAllowedSender) {
+            arbowner_addAllowedSender(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_removeAllowedSender) {
+            arbowner_removeAllowedSender(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_getAllAllowedSenders) {
+            arbowner_getAllAllowedSenders(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_setL1GasPriceEstimate) {
+            arbowner_setL1GasPriceEstimate(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
@@ -190,10 +221,10 @@ impure func arbowner_setFeeRecipients(_topFrame: EvmCallFrame, calldata: ByteArr
 }
 
 impure func arbowner_setFairGasPriceSender(_topFrame: EvmCallFrame, calldata: ByteArray) { // (address)
-    if (bytearray_size(calldata) != 36) {
+    if (bytearray_size(calldata) != 68) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 210, 0, 0);
     }
-    setFairGasPriceSender(address(bytearray_get256(calldata, 4)));
+    setFairGasPriceSender(address(bytearray_get256(calldata, 4)), bytearray_get256(calldata, 36)!=0);
     evmOp_return(0, 0);
 }
 
@@ -250,8 +281,9 @@ impure func arbowner_getUploadedCodeHash(_topFrame: EvmCallFrame, calldata: Byte
     }
 }
 
+// function finishCodeUploadAsArbosUpgrade(bytes32 newCodeHash, bytes32 oldCodeHash) external;
 impure func arbowner_finishCodeUploadAsArbosUpgrade(_topFrame: EvmCallFrame, calldata: ByteArray) { // ()
-    if (bytearray_size(calldata) != 36) {
+    if (bytearray_size(calldata) != 68) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 40, 0, 0);
     }
 
@@ -261,15 +293,20 @@ impure func arbowner_finishCodeUploadAsArbosUpgrade(_topFrame: EvmCallFrame, cal
     }
 
     if let Some(upgrade) = upgradeInProgress {
-        let requiredCodeHash = bytes32(bytearray_get256(calldata, 4));
-        if (avmCodeBuilder_getCodeHash(upgrade) != requiredCodeHash) {
+        let newCodeHash = bytes32(bytearray_get256(calldata, 4));
+        let oldCodeHash = bytes32(bytearray_get256(calldata, 36));
+        if (avmCodeBuilder_getCodeHash(upgrade) != newCodeHash) {
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 42, 0, 0);
+        }
+        if ((oldCodeHash != bytes32(0)) && (oldCodeHash != previousArbosUpgradeHash)) {
+            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 43, 0, 0);
         }
         let upgradeCodePoint = unsafecast<impure func()>(avmCodeBuilder_finish(upgrade));
         upgradeInProgress = None<AvmCodeBuilder>;
+        previousArbosUpgradeHash = newCodeHash;
         let _ = evmCallStack_returnFromCall(true, 0, 0, Some(upgradeCodePoint));
     } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 43, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 44, 0, 0);
     }
 }
 
@@ -373,6 +410,144 @@ impure func arbowner_deployContract(topFrame: EvmCallFrame, calldata: ByteArray)
     }
 }
 
+// function isFairGasPriceSender(address addr) external view returns(bool);
+impure func arbowner_isFairGasPriceSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(170, 0, 0);
+    }
+    let mem = bytearray_set256(
+        bytearray_new(0),
+        0,
+        uint(isFairGasPriceSender(address(bytearray_get256(calldata, 4)))),
+    );
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownPc(171, 0, 0);
+    }
+}
+
+// function getAllFairGasPriceSenders() external view returns(bytes memory);
+impure func arbowner_getAllFairGasPriceSenders(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(180, 0, 0);
+    }
+    if let Some(serialized) = getSerializedFairGasPriceSenders() {
+        let mem = bytearray_copy(
+            serialized,
+            0,
+            bytearray_set256(
+                bytearray_set256(
+                    bytearray_new(0),
+                    0,
+                    32,
+                ),
+                32,
+                bytearray_size(serialized),
+            ),
+            64,
+            bytearray_size(serialized),  // don't need to round up, because already a multiple of 32
+        );
+        if (evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_return(0, bytearray_size(mem));
+        } else {
+            evmOp_revert_knownPc(181, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownPc(182, 0, 0);
+    }
+}
+
+// function allowAllSenders() external;
+impure func arbowner_allowAllSenders(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(190, 0, 0);
+    }
+    allowedSenders_allowAll();
+    evmOp_return(0, 0);
+}
+
+// function allowOnlyOwnerToSend() external;
+impure func arbowner_allowOnlyOwnerToSend(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(200, 0, 0);
+    }
+    allowedSenders_allowNone();
+    evmOp_return(0, 0);
+}
+
+// function isAllowedSender(address addr) external view returns(bool);
+impure func arbowner_isAllowedSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(210, 0, 0);
+    }
+    let mem = bytearray_set256(
+        bytearray_new(0),
+        0,
+        uint(allowedSenders_contains(address(bytearray_get256(calldata, 4))))
+    );
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownPc(211, 0, 0);
+    }
+}
+
+// function addAllowedSender(address addr) external;
+impure func arbowner_addAllowedSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(220, 0, 0);
+    }
+    allowedSenders_add(address(bytearray_get256(calldata, 4)));
+    evmOp_return(0, 0);
+}
+
+// function removeAllowedSender(address addr) external;
+impure func arbowner_removeAllowedSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(230, 0, 0);
+    }
+    allowedSenders_remove(address(bytearray_get256(calldata, 4)));
+    evmOp_return(0, 0);
+}
+
+// function getAllAllowedSenders() external view returns(bytes memory);
+impure func arbowner_getAllAllowedSenders(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(240, 0, 0);
+    }
+    if let Some(serialized) = allowedSenders_serialize() {
+        let size = bytearray_size(serialized);
+        let mem = bytearray_copy(
+            serialized,
+            0,
+            bytearray_set256(
+                bytearray_set256(bytearray_new(0), 0, 64),
+                32,
+                size,    // no need to round up, because size is already a multiple of 32
+            ),
+            64,
+            size,
+        );
+        if (evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_return(0, 64+size);
+        } else {
+            evmOp_revert_knownPc(241, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownPc(242, 0, 0);
+    }
+}
+
+// function setL1GasPriceEstimate(uint priceInGwei) external;
+impure func arbowner_setL1GasPriceEstimate(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(250, 0, 0);
+    }
+    let newGasPrice = bytearray_get256(calldata, 4);
+    setL1GasPriceEstimate(newGasPrice);
+    evmOp_return(0, 0);
+}
 
 
 
