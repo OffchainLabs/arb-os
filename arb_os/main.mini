@@ -12,6 +12,7 @@ use accounts::accountStore_set;
 use accounts::accountStore_createAccountFromEvmCode;
 use accounts::accountStore_upgradeContractFromEvmCode;
 use accounts::account_checkAndIncrSeqNum;
+use accounts::account_setStorageCell;
 
 use arbstatistics::arbStatistics_init;
 
@@ -99,6 +100,20 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
 
         if (initializePreinstalls(true) == None<()>) {
             panic;   // don't try to run without preinstalls and precompiles
+        }
+
+        // special-case fix for the WETH9 TransparentUpgradableProxy contract
+        if (arbosVersion() == 33) {
+            let addr = address(0x82aF49447D8a07e3bd95BD0d56f35241523fBab1);
+            let location = 0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103;
+            let value = 0xd570ace65c43af47101fc6250fd6fc63d1c22a86;
+            let acctStore = getGlobalAccountStore();
+            let acct = accountStore_get(acctStore, addr);
+            if let Some(updatedAcct) = account_setStorageCell(acct, location, value) {
+                setGlobalAccountStore(accountStore_set(acctStore, addr, updatedAcct));
+            } else {
+                asm(40000,) { debugprint };
+            }
         }
     } else {
         // this is a clean start, not an upgrade
