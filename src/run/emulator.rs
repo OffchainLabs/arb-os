@@ -7,7 +7,7 @@
 use super::RuntimeEnvironment;
 use crate::compile::{CompileError, DebugInfo, FileInfo};
 use crate::link::LinkedProgram;
-use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Value};
+use crate::mavm::{Opcode, AVMOpcode, Buffer, CodePt, Instruction, Value};
 use crate::pos::{try_display_location, Location};
 use crate::run::blake2b::blake2bf_instruction;
 use crate::run::ripemd160port;
@@ -28,7 +28,7 @@ const MAX_PAIRING_SIZE: u64 = 30;
 ///Represents a stack of `Value`s
 #[derive(Debug, Default, Clone)]
 pub struct ValueStack {
-    contents: im::Vector<Value>,
+    pub contents: im::Vector<Value>,
 }
 
 impl ValueStack {
@@ -717,8 +717,8 @@ impl FromStr for ProfilerMode {
 ///Represents the state of execution of a AVM program including the code it is compiled from.
 #[derive(Debug)]
 pub struct Machine {
-    stack: ValueStack,
-    aux_stack: ValueStack,
+    pub stack: ValueStack,
+    pub aux_stack: ValueStack,
     pub state: MachineState,
     code: CodeStore,
     static_val: Value,
@@ -729,6 +729,36 @@ pub struct Machine {
     file_info_chart: BTreeMap<u64, FileInfo>,
     total_gas_usage: Uint256,
     trace_writer: Option<BufWriter<File>>,
+}
+
+impl From<Vec<Instruction>> for Machine {
+    fn from(mut code: Vec<Instruction>) -> Self {
+        code.push(Instruction::from_opcode(
+            Opcode::AVMOpcode(AVMOpcode::Halt),
+            DebugInfo::default().propagate(true),
+        ));
+        Machine {
+            stack: ValueStack::new(),
+            aux_stack: ValueStack::new(),
+            state: MachineState::Stopped,
+            code: CodeStore::new(code.into_iter().filter_map(|insn| match insn.opcode {
+                Opcode::AVMOpcode(avm_op) => Some(Instruction::<AVMOpcode> {
+                    opcode: avm_op,
+                    immediate: insn.immediate,
+                    debug_info: insn.debug_info,
+                }),
+                _ => None,
+            }).collect()),
+            static_val: Value::none(),
+            register: Value::none(),
+            err_codepoint: CodePt::Null,
+            arb_gas_remaining: Uint256::zero().bitwise_neg(),
+            runtime_env: RuntimeEnvironment::default(),
+            file_info_chart: BTreeMap::new(),
+            total_gas_usage: Uint256::zero(),
+            trace_writer: None,
+        }
+    }
 }
 
 impl Machine {
@@ -748,7 +778,7 @@ impl Machine {
             trace_writer: None,
         }
     }
-
+    
     #[cfg(test)]
     pub fn stack_top(&self) -> Option<&Value> {
         self.stack.contents.last()
@@ -1027,7 +1057,8 @@ impl Machine {
                 gas_used += gas;
                 gas
             } else {
-                println!("Warning: next opcode does not have a gas cost");
+                panic!("Warning: next opcode does not have a gas cost");
+                //println!("Warning: next opcode does not have a gas cost");
                 1
             };
 

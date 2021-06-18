@@ -10,6 +10,7 @@ use crate::mavm::{AVMOpcode, Instruction, Opcode, OpcodeEffect, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use crate::link::analyze::{print_code};
+use crate::link::analyze::{print_cfg, create_cfg};
 
 type Block = Vec<Instruction>;
 
@@ -598,29 +599,36 @@ pub fn tuple_annihilation(block: &Block, _debug: bool) -> (Block, bool) {
 
 #[derive(Clone, Debug, Default)]
 pub struct StackEntry {
-    created: Option<usize>,            // where this stack entry comes into existence
-    moved: Vec<usize>,                 // every time entry is moved but not read
-    duped: Vec<usize>,                 // every time entry is duplicated
-    used: Vec<usize>,                  // every time value is actually used for something
-    killed: Option<usize>,             // where this value is ultimately consumed
-    value: Option<Value>,              // the actual value of this stack entry
-    replaced: Option<Value>,           // what this value gets replaced with
-    children: Vec<StackEntry>,         // the nested child entries
+    created: Option<usize>,         // where this stack entry comes into existence
+    moved: Vec<usize>,              // every time entry is moved but not read
+    duped: Vec<(usize, Value)>,     // every time entry is duplicated
+    used: Vec<usize>,               // every time value is actually used for something
+    killed: Option<usize>,          // where this value is ultimately consumed
+    value: Value,                   // the actual value of this stack entry
+    replaced: Option<Value>,        // what this value gets replaced with
+    was_immediate: bool,            // whether value came into existence as an immediate
+    children: Vec<StackEntry>,      // the nested child entries
+    block_id: Option<usize>,        // unique sequence number to differentiate blocked values
+    blocks: Vec<usize>,             // values that can only be eliminated if this gets eliminated
 }
 impl StackEntry {
     fn blank() -> Self {
         StackEntry::default()
     }
     fn new(created: usize, value: Option<&Value>) -> Self {
-	StackEntry::from(Some(created), value)
+	StackEntry::from(Some(created), value, false)
     }
-    fn from(created: Option<usize>, value: Option<&Value>) -> Self {
+    fn new_immediate(created: usize, value: Option<&Value>) -> Self {
+        StackEntry::from(Some(created), value, true)
+    }
+    fn from(created: Option<usize>, value: Option<&Value>, was_immediate: bool) -> Self {
         let mut entry = StackEntry::blank();
         entry.created = created;
 	entry.value = value.cloned();
+        entry.was_immediate = was_immediate;
         if let Some(Value::Tuple(vec)) = value {
             for sub_value in vec.iter() {
-                entry.children.push(StackEntry::from(created, Some(sub_value)));
+                entry.children.push(StackEntry::from(created, Some(sub_value), was_immediate));
             }
         }
         return entry;
@@ -641,25 +649,65 @@ impl StackEntry {
 pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, StackEntry>, usize> {
     let mut data_stack: Vec<StackEntry> = vec![];
     let mut aux_stack:  Vec<StackEntry> = vec![];
-    let mut eliminate: BTreeMap<usize, StackEntry> = BTreeMap::new();
+    let mut eliminate:  BTreeMap<usize, StackEntry> = BTreeMap::new();
+    let mut blocked:    BTreeMap<usize, (usize, StackEntry)> = BTreeMap::new();
+    let mut next_block: usize = 0;
     
     macro_rules! draw {
         ($stack:expr) => {
             $stack.pop().unwrap_or(StackEntry::blank())
         }
     }
+    macro_rules! block {
+        ($entry:expr) => {{
+            let mut entry = $entry;
+            match &mut entry.block_id {
+                Some(id) => {
+                    let (count, _) = blocked.get_mut(&id).expect("blocked entry not in tree");
+                    *count += 1;
+                }
+                None => {
+                    entry.block_id = Some(next_block);
+                    blocked.insert(next_block, (1, entry.clone()));
+                    next_block += 1;
+                }
+            }
+            entry.block_id.expect("blocked entry was not assigned an id")
+        }};
+    }
     macro_rules! analyze {
         ($entry:expr) => {
-            analyze(&$entry, &mut eliminate);
+            analyze(&$entry, &mut eliminate, &mut blocked);
         };
     }
-    fn analyze(entry: &StackEntry, eliminate: &mut BTreeMap<usize, StackEntry>) {
+    fn analyze(
+        entry: &StackEntry,
+        eliminate: &mut BTreeMap<usize, StackEntry>,
+        blocked: &mut BTreeMap<usize, (usize, StackEntry)>,
+    ) {        
         for child in &entry.children {
-            analyze(child, eliminate);
+            analyze(child, eliminate, blocked);
         }
+        
         match entry.created {
             Some(index) if entry.used.len() == 0 && entry.killed.is_some() => {
+                
+                println!("blocks {:#?}", /*entry,*/ entry.blocks);
+                
+                match &entry.block_id {
+                    Some(id) if blocked.get(id).is_some() => return,
+                    _ => {}
+                }
+                
                 eliminate.insert(index, entry.clone());    // peel children off
+                
+                for id in &entry.blocks {
+                    let (count, blocked_entry) = blocked.remove(&id).unwrap();
+                    match count {
+                        1 => analyze(&blocked_entry, eliminate, blocked),
+                        x => drop(blocked.insert(*id, (x - 1, blocked_entry))),
+                    }
+                }
             }
             _ => {}
         }
@@ -668,47 +716,53 @@ pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, Sta
     for index in 0..block.len() {
         
         match &block[index].immediate {
-            Some(value) => data_stack.push(StackEntry::new(index, Some(value))),
+            Some(value) => data_stack.push(StackEntry::new_immediate(index, Some(value))),
             None => {}
         }
         
         match &block[index].opcode {
             Opcode::AVMOpcode(AVMOpcode::Noop) => {}
             Opcode::AVMOpcode(AVMOpcode::Dup0) => {
-                match data_stack.len() {
-                    x if x >= 1 => {
-                        let entry = &mut data_stack[x - 1];
-                        let duplicate = entry.value.clone();
-			entry.use_children(index);
-			entry.duped.push(index);
-                        data_stack.push(StackEntry::new(index, duplicate.as_ref()));
-                    }
-                    _ => data_stack.push(StackEntry::new(index, None)),
+                let mut a = draw!(data_stack);
+                let duplicate = a.value.clone();
+                //a.use_children(index);
+                match &duplicate {
+                    Some(value) => a.duped.push((index, value.clone())),
+                    None => a.used.push(index),
                 }
+                data_stack.push(a);
+                data_stack.push(StackEntry::new(index, duplicate.as_ref()));
             }
             Opcode::AVMOpcode(AVMOpcode::Dup1) => {
-                match data_stack.len() {
-                    x if x >= 2 => {
-                        let entry = &mut data_stack[x - 2];
-                        let duplicate = entry.value.clone();
-                        entry.use_children(index);
-			entry.duped.push(index);
-                        data_stack.push(StackEntry::new(index, duplicate.as_ref()));
-                    }
-                    _ => data_stack.push(StackEntry::new(index, None)),
+                let mut a = draw!(data_stack);
+                let mut b = draw!(data_stack);
+                let duplicate = b.value.clone();
+                //b.use_children(index);
+                match &duplicate {
+                    Some(value) => b.duped.push((index, value.clone())),
+                    None => b.used.push(index),
                 }
+                a.moved.push(index);
+                data_stack.push(b);
+                data_stack.push(a);
+                data_stack.push(StackEntry::new(index, duplicate.as_ref()));
             }
             Opcode::AVMOpcode(AVMOpcode::Dup2) => {
-                match data_stack.len() {
-                    x if x >= 3 => {
-                        let entry = &mut data_stack[x - 3];
-                        let duplicate = entry.value.clone();
-                        entry.use_children(index);
-			entry.duped.push(index);
-                        data_stack.push(StackEntry::new(index, duplicate.as_ref()));
-                    }
-                    _ => data_stack.push(StackEntry::new(index, None)),
+                let mut a = draw!(data_stack);
+                let mut b = draw!(data_stack);
+                let mut c = draw!(data_stack);
+                let duplicate = c.value.clone();
+                //c.use_children(index);
+                match &duplicate {
+                    Some(value) => c.duped.push((index, value.clone())),
+                    None => c.used.push(index),
                 }
+                b.moved.push(index);
+                a.moved.push(index);
+                data_stack.push(c);
+                data_stack.push(b);
+                data_stack.push(a);
+                data_stack.push(StackEntry::new(index, duplicate.as_ref()));
             }
             Opcode::AVMOpcode(AVMOpcode::Swap1) => {
                 let a = draw!(data_stack);
@@ -740,30 +794,33 @@ pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, Sta
                 a.killed = Some(index);
                 b.used.push(index);
                 c.moved.push(index);
-		
-		match &c.value {
-		    Some(_) => match &a.value {
-			Some(Value::Int(offset)) => match offset.to_usize() {
-                            Some(offset) => match &b.value {
-				Some(Value::Tuple(vec)) if offset < vec.len() => {}
-				_ => return Err(index),
-                            }
-                            _ => return Err(index),
-			}
-			_ => return Err(index),
-                    }
-		    _ => return Err(index),
-		}
+                analyze!(a);
                 
-                let offset = a.value.as_ref().unwrap().to_usize().unwrap();
-
+                macro_rules! bail {
+                    () => {{
+                        data_stack.push(StackEntry::new(index, None));
+                        continue;
+                    }}
+                };
+                
                 let tuple = match &b.value {
                     Some(Value::Tuple(tuple)) => tuple,
-                    _ => unreachable!(),
+                    Some(Value::Unknown) => bail!(),
+                    Some(_) => return Err(index),
+                    _ => bail!(),
+                };
+                let offset = match &a.value {
+                    Some(Value::Int(offset)) => match offset.to_usize() {
+                        Some(offset) if offset < tuple.len() => offset,
+                        _ => return Err(index),
+                    }
+                    Some(Value::Unknown) => bail!(),
+                    Some(_) => return Err(index),
+                    _ => bail!(),
                 };
                 let value = match &c.value {
                     Some(value) => value,
-                    _ => unreachable!(),
+                    _ => &Value::Unknown,
                 };
                 
                 let mut updated = tuple.to_vec();
@@ -773,8 +830,11 @@ pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, Sta
 		b.children[offset].killed = Some(index);
                 b.children[offset].replaced = Some(updated.clone());
                 
+                if let Value::Unknown = &value {
+                    c.blocks.push(block!(b.children[offset].clone()));
+                }
+                
                 analyze!(b.children[offset]);
-                analyze!(a);
                 
                 b.value = Some(updated);
                 b.children[offset] = c;
@@ -787,30 +847,120 @@ pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, Sta
                 b.used.push(index);
 		a.killed = Some(index);
 		b.killed = Some(index);
-		
-		match &a.value {
+                analyze!(a);
+                //analyze!(b);
+                
+                macro_rules! bail {
+                    () => {{
+                        data_stack.push(StackEntry::new(index, None));
+                        continue;
+                    }}
+                };
+                
+                let tuple = match &b.value {
+                    Some(Value::Tuple(tuple)) => tuple,
+                    Some(Value::Unknown) => bail!(),
+                    Some(_) => return Err(index),
+                    _ => bail!(),
+                };
+                let offset = match &a.value {
                     Some(Value::Int(offset)) => match offset.to_usize() {
-                        Some(offset) => match &b.value {
-                            Some(Value::Tuple(vec)) if offset < vec.len() => {}
-                            _ => return Err(index),
-                        }
+                        Some(offset) if offset < tuple.len() => offset,
                         _ => return Err(index),
                     }
-                    _ => return Err(index),
-                }
+                    Some(Value::Unknown) => bail!(),
+                    Some(_) => return Err(index),
+                    _ => bail!(),
+                };
 		
-		let offset = a.value.as_ref().unwrap().to_usize().unwrap();
 		for (spot, child) in b.children.iter().enumerate() {
 		    if spot != offset {
 			analyze!(child);
 		    }
 		}
-		analyze!(a);
                 
-		let mut pulled = b.children.swap_remove(offset);
+                let mut pulled = b.children.swap_remove(offset);
+                let mut folded = pulled.clone();
+                folded.killed = Some(index);
+                folded.replaced = folded.value.clone();
+                analyze!(folded);
                 pulled.created = Some(index);
                 data_stack.push(pulled);
+                
+		/*let mut pulled = b.children.swap_remove(offset);
+                pulled.created = Some(index);
+                data_stack.push(pulled);*/
 	    }
+            Opcode::AVMOpcode(AVMOpcode::Plus) => {
+                let mut a = draw!(data_stack);
+                let mut b = draw!(data_stack);
+                a.used.push(index);
+                b.used.push(index);
+                analyze!(a);
+                analyze!(b);
+                
+                macro_rules! bail {
+                    () => {{
+                        data_stack.push(StackEntry::new(index, None));
+                        continue;
+                    }}
+                };
+                
+                let left = match &a.value {
+                    Some(Value::Int(value)) => value,
+                    Some(Value::Unknown) => bail!(),
+                    Some(_) => return Err(index),
+                    None => bail!(),
+                };
+                let right = match &b.value {
+                    Some(Value::Int(value)) => value,
+                    Some(Value::Unknown) => bail!(),
+                    Some(_) => return Err(index),
+                    None => bail!(),
+                };
+                
+                let result = StackEntry::new(index, Some(&Value::Int(left.add(right))));
+                let mut folded = result.clone();
+                folded.killed = Some(index);
+                folded.replaced = folded.value.clone();
+                analyze!(folded);
+                data_stack.push(result);
+            }
+            Opcode::AVMOpcode(AVMOpcode::Minus) => {
+                let mut a = draw!(data_stack);
+                let mut b = draw!(data_stack);
+                a.used.push(index);
+                b.used.push(index);
+                analyze!(a);
+                analyze!(b);
+                
+                macro_rules! bail {
+                    () => {{
+                        data_stack.push(StackEntry::new(index, None));
+                        continue;
+                    }}
+                };
+                
+                let left = match &a.value {
+                    Some(Value::Int(value)) => value,
+                    Some(Value::Unknown) => bail!(),
+                    Some(_) => return Err(index),
+                    None => bail!(),
+                };
+                let right = match &b.value {
+                    Some(Value::Int(value)) => value,
+                    Some(Value::Unknown) => bail!(),
+                    Some(_) => return Err(index),
+                    None => bail!(),
+                };
+                
+                let result = StackEntry::new(index, Some(&Value::Int(left.unchecked_sub(right))));
+                let mut folded = result.clone();
+                folded.killed = Some(index);
+                folded.replaced = folded.value.clone();
+                analyze!(folded);
+                data_stack.push(result);
+            }
             _ => {
 		return Err(index);
             }
@@ -823,6 +973,32 @@ pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, Sta
 ///Discovers unused values and eliminates them from the stacks.
 pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
     let mut same = true;
+    let insert_noops = false;
+
+    // Algorithm notes
+    //   discover_unused() returns a list of stack items that we can provably elide.
+    //   We select the first one and eliminate it by applying a serious of reductions
+    //   across each instruction that depends on said item. This is repeated until
+    //   there's nothing left to elide. The reason we call discover_unused() after each
+    //   elimination is that the indecies (among other subtlties) become incorrect
+    //   after elision.
+    
+    macro_rules! create {
+        ($opcode:tt, $debug_info:expr) => {
+            Instruction {
+		opcode: Opcode::AVMOpcode(AVMOpcode::$opcode),
+		immediate: None,
+		debug_info: $debug_info,
+	    }
+        };
+        ($opcode:tt, $value:expr, $debug_info:expr) => {
+            Instruction {
+		opcode: Opcode::AVMOpcode(AVMOpcode::$opcode),
+		immediate: $value,
+		debug_info: $debug_info,
+	    }
+        };
+    }
     
     let mut opt = block.clone();
     let mut color_group = 1;
@@ -857,48 +1033,45 @@ pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
 		
 		let mut elim = match &generator.opcode {
 		    Opcode::AVMOpcode(AVMOpcode::Noop)
+                    | Opcode::AVMOpcode(AVMOpcode::Pop)
 	            | Opcode::AVMOpcode(AVMOpcode::Swap1) => vec![],
-		    Opcode::AVMOpcode(AVMOpcode::Dup0)
-		    | Opcode::AVMOpcode(AVMOpcode::Dup1)
-                    | Opcode::AVMOpcode(AVMOpcode::Dup2) => {
-			match &generator.immediate {
-			    Some(value) => vec![Instruction::from_opcode_imm(
-				Opcode::AVMOpcode(AVMOpcode::Noop),
-				value.clone(),
-				debug_info,
-			    )],
+		    Opcode::AVMOpcode(AVMOpcode::Dup0) => {
+                        match &generator.immediate {
+			    Some(value) => vec![create!(Noop, generator.immediate.clone(), debug_info)],
 			    None => vec![],
 			}
-		    }
-		    Opcode::AVMOpcode(AVMOpcode::Swap2) =>
-			vec![Instruction::from_opcode(
-			    Opcode::AVMOpcode(AVMOpcode::Swap1),
-			    debug_info,
-			)],
-		    Opcode::AVMOpcode(AVMOpcode::Tset) => {
-			vec![]
-		    }
-                    Opcode::AVMOpcode(AVMOpcode::Tget) => {
-                        let mut elim = vec![Instruction::from_opcode(
-			    Opcode::AVMOpcode(AVMOpcode::Pop),
-			    debug_info,
-			)];
-                        if let None = &generator.immediate {
-			    elim.push(Instruction::from_opcode(
-				Opcode::AVMOpcode(AVMOpcode::Pop),
-				debug_info,
-			    ));
-			}
-                        elim
                     }
-		    _ => vec![],
+		    Opcode::AVMOpcode(AVMOpcode::Dup1) => {
+                        match &entry.was_immediate {
+			    true => vec![create!(Dup0, debug_info)],
+			    false => vec![create!(Noop, generator.immediate.clone(), debug_info)],
+		        }
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::Dup2) => {
+			match &entry.was_immediate {
+			    true => vec![create!(Dup1, debug_info)],
+			    false => vec![create!(Noop, generator.immediate.clone(), debug_info)],
+		        }
+		    }
+		    Opcode::AVMOpcode(AVMOpcode::Swap2) => vec![create!(Swap1, debug_info)],
+                    Opcode::AVMOpcode(AVMOpcode::Tget) => {
+                        match &generator.immediate {
+                            Some(_) => vec![create!(Pop, debug_info)],
+                            None => vec![create!(Pop, debug_info), create!(Pop, debug_info)],
+                        }
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::Plus) |
+                    Opcode::AVMOpcode(AVMOpcode::Minus) => {
+                        match &generator.immediate {
+                            Some(_) => vec![create!(Pop, debug_info)],
+                            None => vec![create!(Pop, debug_info), create!(Pop, debug_info)],
+                        }
+                    }
+		    x => unreachable!("Insn {} generated a value", x),
 		};
 		
-		if debug && elim.len() == 0 {
-		    elim.push(Instruction::from_opcode(
-			Opcode::AVMOpcode(AVMOpcode::Noop),
-			debug_info,
-		    ));
+		if insert_noops && elim.len() == 0 {
+		    elim.push(create!(Noop, debug_info));
 		}
 		vec![(created, elim)]
 	    };
@@ -908,11 +1081,14 @@ pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
                 let debug_info = mover.debug_info.color(color_group);
 		
 		// Special case where instruction both creates and moves a value.
-		// Pop's and Swap's are already handled in the generator lambda above.
+		// Dups's and Swap's are already handled in the generator lambda above.
 		if index == created {
 		    match &mover.opcode {
 			Opcode::AVMOpcode(AVMOpcode::Swap1)
-			| Opcode::AVMOpcode(AVMOpcode::Swap2) => return vec![],
+			| Opcode::AVMOpcode(AVMOpcode::Swap2)
+                        | Opcode::AVMOpcode(AVMOpcode::Dup0)
+                        | Opcode::AVMOpcode(AVMOpcode::Dup1)
+                        | Opcode::AVMOpcode(AVMOpcode::Dup2) => return vec![],
                         x => unreachable!("Insn {} moved it's own value", x),
 		    }
 		}
@@ -921,11 +1097,7 @@ pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
                     Opcode::AVMOpcode(AVMOpcode::Pop) => vec![],
 		    Opcode::AVMOpcode(AVMOpcode::Swap1) => {
 			match &mover.immediate {
-			    Some(value) => vec![Instruction::from_opcode_imm(
-				Opcode::AVMOpcode(AVMOpcode::Noop),
-				value.clone(),
-				mover.debug_info.color(color_group),
-			    )],
+			    Some(value) => vec![create!(Noop, Some(value.clone()), debug_info)],
 			    None => vec![],
 			}
 		    }
@@ -936,47 +1108,30 @@ pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
 			//     a b * => * b a  ==>  swap1
 			//     a * b => b * a  ==>  swap1
 			match &mover.immediate {
-			    Some(value) => vec![Instruction::from_opcode_imm(
-				Opcode::AVMOpcode(AVMOpcode::Swap1),
-				value.clone(),
-				mover.debug_info.color(color_group),
-			    )],
-			    None => vec![Instruction::from_opcode(
-				Opcode::AVMOpcode(AVMOpcode::Swap1),
-				mover.debug_info.color(color_group),
-			    )],
+			    Some(value) => vec![create!(Swap1, Some(value.clone()), debug_info)],
+			    None => vec![create!(Swap1, debug_info)],
 			}
 		    }
 		    Opcode::AVMOpcode(AVMOpcode::Tset) => {
 			let mut reduction = vec![];
 			if let None = &mover.immediate {
-			    reduction.push(Instruction {
-                                opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
-                                immediate: None,
-                                debug_info: debug_info,
-			    });
+			    reduction.push(create!(Pop, None, debug_info));
                         }
-                        reduction.push(Instruction {
-			    opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
-			    immediate: None,
-			    debug_info: debug_info,
-                        });
-                        reduction.push(Instruction {
-			    opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
-			    immediate: None,
-			    debug_info: debug_info,
-                        });
-			
+                        reduction.push(create!(Pop, None, debug_info));
+			reduction.push(create!(Pop, None, debug_info));
 			reduction
 		    }
-                    _ => vec![],
+                    Opcode::AVMOpcode(AVMOpcode::Dup1) => {
+                        vec![create!(Dup0, mover.immediate.clone(), debug_info)]
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::Dup2) => {
+                        vec![create!(Dup1, mover.immediate.clone(), debug_info)]
+                    }
+                    x => unreachable!("A {} made a movement", x),
 		};
 		
-		if debug && elim.len() == 0 {
-                    elim.push(Instruction::from_opcode(
-			Opcode::AVMOpcode(AVMOpcode::Noop),
-			opt[created].debug_info.color(color_group),
-                    ));
+		if insert_noops && elim.len() == 0 {
+                    elim.push(create!(Noop, debug_info));
 		}
 		vec![(index, elim)]
 	    };
@@ -984,25 +1139,24 @@ pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
             let reduce_killer = |created: usize, index: usize, replaced: Option<Value>| -> Vec<(usize, Vec<Instruction>)> {
 		let killer = &opt[index];
                 let debug_info = killer.debug_info.color(color_group);
+                let mut elim = vec![];
 		
 		// Special case where instruction both creates and kills a value.
-		// Pop's are already handled in the generator lambda above.
+		// These are already handled in the generator lambda above.
 		if index == created {
-		    match &killer.opcode {
-			Opcode::AVMOpcode(AVMOpcode::Pop) => return vec![],
+		    elim.extend(match &killer.opcode {
+			Opcode::AVMOpcode(AVMOpcode::Pop) => vec![],
+                        Opcode::AVMOpcode(AVMOpcode::Plus) => vec![],
+                        Opcode::AVMOpcode(AVMOpcode::Minus) => vec![],
 			x => unreachable!("Insn {} killed it's own value", x),
-		    }
+		    });
 		}
 		
-		let mut elim = match &killer.opcode {
+		elim.extend(match &killer.opcode {
                     Opcode::AVMOpcode(AVMOpcode::Pop) => vec![],
 		    Opcode::AVMOpcode(AVMOpcode::Swap1) => {
 			match &killer.immediate {
-			    Some(value) => vec![Instruction::from_opcode_imm(
-				Opcode::AVMOpcode(AVMOpcode::Noop),
-				value.clone(),
-				killer.debug_info.color(color_group),
-			    )],
+			    Some(value) => vec![create!(Noop, Some(value.clone()), debug_info)],
 			    None => vec![],
 			}
 		    }
@@ -1013,59 +1167,84 @@ pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
 			//     a b * => * b a  ==>  swap1
 			//     a * b => b * a  ==>  swap1
 			match &killer.immediate {
-			    Some(value) => vec![Instruction::from_opcode_imm(
-				Opcode::AVMOpcode(AVMOpcode::Swap1),
-				value.clone(),
-				killer.debug_info.color(color_group),
-			    )],
-			    None => vec![Instruction::from_opcode(
-				Opcode::AVMOpcode(AVMOpcode::Swap1),
-				killer.debug_info.color(color_group),
-			    )],
+			    Some(value) => vec![create!(Swap1, Some(value.clone()), debug_info)],
+			    None => vec![create!(Swap1, debug_info)],
 			}
 		    }
 		    Opcode::AVMOpcode(AVMOpcode::Tset) => {
-			let mut reduction = vec![];
-			if let None = &killer.immediate {
-			    reduction.push(Instruction {
-                                opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
-                                immediate: None,
-                                debug_info: debug_info,
-			    });
+                        match &killer.immediate {
+                            Some(_) => vec![
+                                create!(Pop, debug_info), create!(Pop, debug_info)
+                            ],
+                            None => vec![
+                                create!(Pop, debug_info), create!(Pop, debug_info),
+                                create!(Pop, debug_info),
+                            ],
                         }
-                        reduction.push(Instruction {
-			    opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
-			    immediate: None,
-			    debug_info: debug_info,
-                        });
-                        reduction.push(Instruction {
-			    opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
-			    immediate: None,
-			    debug_info: debug_info,
-                        });
-			
-			reduction
 		    }
-                    _ => vec![],
-		};
+                    Opcode::AVMOpcode(AVMOpcode::Tget) => {
+                        match &killer.immediate {
+                            Some(_) => vec![
+                                create!(Pop, debug_info)
+                            ],
+                            None => vec![
+                                create!(Pop, debug_info), create!(Pop, debug_info)
+                            ],
+                        }
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::Plus)
+                    | Opcode::AVMOpcode(AVMOpcode::Minus) => {
+                        match &killer.immediate {
+                            Some(_) => vec![create!(Pop, debug_info)],
+                            None => vec![create!(Pop, debug_info), create!(Pop, debug_info)],
+                        }
+		    }
+                    x => unreachable!("Insn {} killed a value", x),
+		});
                 
                 if let Some(replaced) = replaced {
-                    elim.push(Instruction::from_opcode_imm(
-                        Opcode::AVMOpcode(AVMOpcode::Noop),
-                        replaced,
-                        debug_info,
-                    ));
+                    elim.push(create!(Noop, Some(replaced), debug_info));
                 }
 		
-		if debug && elim.len() == 0 {
-                    elim.push(Instruction::from_opcode(
-			Opcode::AVMOpcode(AVMOpcode::Noop),
-			opt[created].debug_info.color(color_group),
-                    ));
+		if insert_noops && elim.len() == 0 {
+                    elim.push(create!(Noop, debug_info));
 		}
 		vec![(index, elim)]
 	    };
             
+            let reduce_duplicator = |created: usize, index: usize, value: Value| -> Vec<(usize, Vec<Instruction>)> {
+		let duplicator = &opt[index];
+		let debug_info = duplicator.debug_info.color(color_group);
+                
+                // Special case where instruction both creates and dupes a value.
+		// These are already handled in the generator lambda above.
+                if index == created {
+		    match &duplicator.opcode {
+                        Opcode::AVMOpcode(AVMOpcode::Dup0) => return vec![],
+                        x => unreachable!("Insn {} duped it's own value", x),
+		    }
+		}
+		
+		let mut elim = match &duplicator.opcode {
+		    Opcode::AVMOpcode(AVMOpcode::Dup0)
+                    | Opcode::AVMOpcode(AVMOpcode::Dup1)
+                    | Opcode::AVMOpcode(AVMOpcode::Dup2) => {
+                        match &duplicator.immediate {
+                            Some(_) => vec![
+                                create!(Noop, duplicator.immediate.clone(), debug_info),
+                                create!(Noop, Some(value), debug_info),
+                            ],
+                            None => vec![create!(Noop, Some(value), debug_info)],
+                        }
+                    }
+		    x => unreachable!("Insn {} duplicated a value", x),
+		};
+		
+		if insert_noops && elim.len() == 0 {
+		    elim.push(create!(Noop, debug_info));
+		}
+		vec![(index, elim)]
+	    };
 
             match &entry.replaced {
                 Some(replaced) => {
@@ -1076,6 +1255,9 @@ pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
 	            for index in entry.moved {
 		        elimination.extend(reduce_mover(created, index));
 	            }
+                    for (index, value) in entry.duped {
+                        elimination.extend(reduce_duplicator(created, index, value));
+                    }
                     elimination.extend(reduce_killer(created, entry.killed.unwrap(), None));
                 }
             }
@@ -1113,7 +1295,8 @@ pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
 		}
 	    }
 	    
-	    color_group += 1;
+	    //color_group += 1;
+            color_group = 6;
 	    elimination
 	};
 	
@@ -1130,7 +1313,8 @@ pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
 		None => reduced.push(opt[index].clone()),
 	    }
 	}
-        
+
+        print_cfg(&create_cfg(&opt), &create_cfg(&reduced), "Elide unused");
 	opt = reduced;
         same = false;
     }

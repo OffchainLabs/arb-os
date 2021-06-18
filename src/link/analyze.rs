@@ -518,7 +518,8 @@ pub fn print_cfg(prior: &FlowGraph, after: &FlowGraph, title: &str) {
                 after_cost,
                 reset,
             ),
-            format!(
+            String::from(""),
+            /*format!(
                 "{}{}{}, {}{}{}{}",
                 match after_stack == prior_stack {
                     true => grey,
@@ -536,7 +537,7 @@ pub fn print_cfg(prior: &FlowGraph, after: &FlowGraph, title: &str) {
                     false => "",
                 },
                 reset
-            ),
+            ),*/
         );
 
         let mut prior_iter = prior_block.iter().peekable();

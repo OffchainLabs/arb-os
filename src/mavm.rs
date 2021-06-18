@@ -667,6 +667,7 @@ pub enum Value {
     CodePoint(CodePt),
     Label(Label),
     Buffer(Buffer),
+    Unknown,
 }
 
 impl Value {
@@ -730,6 +731,9 @@ impl Value {
             Value::Label(_) => {
                 panic!("tried to run type instruction on a label");
             }
+            Value::Unknown => {
+                panic!("tried to run type instruction on an unknown");
+            }
         }
     }
 
@@ -753,6 +757,7 @@ impl Value {
                 }
                 Ok(Value::new_tuple(new_vec))
             }
+            Value::Unknown => panic!("tried to replace an unknown's potential label"),
         }
     }
 
@@ -799,6 +804,7 @@ impl Value {
                     label.relocate(int_offset, ext_offset, func_offset);
                 (Value::Label(new_label), new_func_offset)
             }
+            Value::Unknown => panic!("Tried to relocate an unknown"),
         }
     }
 
@@ -816,6 +822,7 @@ impl Value {
                 Some(label2) => Value::Label(**label2),
                 None => self,
             },
+            Value::Unknown => panic!("tried to xlate_labels an unknown")
         }
     }
 
@@ -823,6 +830,7 @@ impl Value {
     pub fn to_usize(&self) -> Option<usize> {
         match self {
             Value::Int(i) => i.to_usize(),
+            Value::Unknown => panic!("unsure if value is convertable"),
             _ => None,
         }
     }
@@ -847,6 +855,7 @@ impl Value {
             Value::Label(label) => {
                 Value::avm_hash2(&Value::Int(Uint256::from_usize(2)), &label.avm_hash())
             }
+            Value::Unknown => panic!("Tried to hash an unknown"),
         }
     }
 
@@ -889,6 +898,7 @@ impl fmt::Display for Value {
                     write!(f, "{})", s)
                 }
             }
+            Value::Unknown => write!(f, "???"),
         }
     }
 }
@@ -926,6 +936,7 @@ impl Value {
                     format!("{}{}){}", s, color, reset)
                 }
             }
+            Value::Unknown => format!("{}???{}", color, reset),
         }
     }
 }
