@@ -167,8 +167,10 @@ pub fn fuzz_optimizer(data: &[u8], detail: bool) {
     code = vec![
 
         create!(Dup0),
-        create!(Swap1),
         create!(Pop),
+        
+        //create!(Noop, Some(Value::new_tuple(vec![Value::new_tuple(vec![])]))),
+        //create!(Tset, Some(Value::Int(Uint256::from_usize(0)))),
         
         //create!(Noop, Some(Value::Int(Uint256::from_usize(64)))),
         //create!(Noop, Some(Value::new_tuple(vec![Value::Int(Uint256::from_usize(173))]))),

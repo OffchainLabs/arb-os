@@ -615,20 +615,20 @@ impl StackEntry {
     fn blank() -> Self {
         StackEntry::default()
     }
-    fn new(created: usize, value: Option<&Value>) -> Self {
+    fn new(created: usize, value: &Value) -> Self {
 	StackEntry::from(Some(created), value, false)
     }
-    fn new_immediate(created: usize, value: Option<&Value>) -> Self {
+    fn new_immediate(created: usize, value: &Value) -> Self {
         StackEntry::from(Some(created), value, true)
     }
-    fn from(created: Option<usize>, value: Option<&Value>, was_immediate: bool) -> Self {
+    fn from(created: Option<usize>, value: &Value, was_immediate: bool) -> Self {
         let mut entry = StackEntry::blank();
         entry.created = created;
-	entry.value = value.cloned();
+	entry.value = value.clone();
         entry.was_immediate = was_immediate;
-        if let Some(Value::Tuple(vec)) = value {
+        if let Value::Tuple(vec) = value {
             for sub_value in vec.iter() {
-                entry.children.push(StackEntry::from(created, Some(sub_value), was_immediate));
+                entry.children.push(StackEntry::from(created, sub_value, was_immediate));
             }
         }
         return entry;
@@ -689,34 +689,29 @@ pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, Sta
             analyze(child, eliminate, blocked);
         }
         
-        match entry.created {
-            Some(index) if entry.used.len() == 0 && entry.killed.is_some() => {
-                
-                println!("blocks {:#?}", /*entry,*/ entry.blocks);
-                
-                match &entry.block_id {
-                    Some(id) if blocked.get(id).is_some() => return,
-                    _ => {}
-                }
-                
-                eliminate.insert(index, entry.clone());    // peel children off
-                
-                for id in &entry.blocks {
-                    let (count, blocked_entry) = blocked.remove(&id).unwrap();
-                    match count {
-                        1 => analyze(&blocked_entry, eliminate, blocked),
-                        x => drop(blocked.insert(*id, (x - 1, blocked_entry))),
-                    }
+        if entry.used.len() == 0 && entry.killed.is_some() {
+            
+            for id in &entry.blocks {
+                let (count, blocked_entry) = blocked.remove(&id).unwrap();
+                match count {
+                    1 => analyze(&blocked_entry, eliminate, blocked),
+                    x => drop(blocked.insert(*id, (x - 1, blocked_entry))),
                 }
             }
-            _ => {}
+            
+            match entry.created {
+                Some(index) => {
+                    eliminate.insert(index, entry.clone());    // peel children off
+                }
+                _ => {}
+            }
         }
     }
     
     for index in 0..block.len() {
         
         match &block[index].immediate {
-            Some(value) => data_stack.push(StackEntry::new_immediate(index, Some(value))),
+            Some(value) => data_stack.push(StackEntry::new_immediate(index, value)),
             None => {}
         }
         
@@ -726,26 +721,29 @@ pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, Sta
                 let mut a = draw!(data_stack);
                 let duplicate = a.value.clone();
                 //a.use_children(index);
-                match &duplicate {
+                
+                /*match &duplicate {
                     Some(value) => a.duped.push((index, value.clone())),
                     None => a.used.push(index),
-                }
+            }*/
+                //a.duped.push((index, value.clone()));
+                
                 data_stack.push(a);
-                data_stack.push(StackEntry::new(index, duplicate.as_ref()));
+                data_stack.push(StackEntry::new(index, &duplicate));
             }
             Opcode::AVMOpcode(AVMOpcode::Dup1) => {
                 let mut a = draw!(data_stack);
                 let mut b = draw!(data_stack);
                 let duplicate = b.value.clone();
                 //b.use_children(index);
-                match &duplicate {
+                /*match &duplicate {
                     Some(value) => b.duped.push((index, value.clone())),
                     None => b.used.push(index),
-                }
+                }*/
                 a.moved.push(index);
                 data_stack.push(b);
                 data_stack.push(a);
-                data_stack.push(StackEntry::new(index, duplicate.as_ref()));
+                data_stack.push(StackEntry::new(index, &duplicate));
             }
             Opcode::AVMOpcode(AVMOpcode::Dup2) => {
                 let mut a = draw!(data_stack);
@@ -753,16 +751,16 @@ pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, Sta
                 let mut c = draw!(data_stack);
                 let duplicate = c.value.clone();
                 //c.use_children(index);
-                match &duplicate {
+                /*match &duplicate {
                     Some(value) => c.duped.push((index, value.clone())),
                     None => c.used.push(index),
-                }
+                }*/
                 b.moved.push(index);
                 a.moved.push(index);
                 data_stack.push(c);
                 data_stack.push(b);
                 data_stack.push(a);
-                data_stack.push(StackEntry::new(index, duplicate.as_ref()));
+                data_stack.push(StackEntry::new(index, &duplicate));
             }
             Opcode::AVMOpcode(AVMOpcode::Swap1) => {
                 let a = draw!(data_stack);
@@ -798,30 +796,26 @@ pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, Sta
                 
                 macro_rules! bail {
                     () => {{
-                        data_stack.push(StackEntry::new(index, None));
+                        data_stack.push(StackEntry::new(index, &Value::Unknown));
                         continue;
                     }}
-                };
+                }
                 
                 let tuple = match &b.value {
-                    Some(Value::Tuple(tuple)) => tuple,
-                    Some(Value::Unknown) => bail!(),
-                    Some(_) => return Err(index),
-                    _ => bail!(),
+                    Value::Tuple(tuple) => tuple,
+                    Value::Unknown => bail!(),
+                    _ => return Err(index),
                 };
                 let offset = match &a.value {
-                    Some(Value::Int(offset)) => match offset.to_usize() {
+                    Value::Int(offset) => match offset.to_usize() {
                         Some(offset) if offset < tuple.len() => offset,
                         _ => return Err(index),
                     }
-                    Some(Value::Unknown) => bail!(),
-                    Some(_) => return Err(index),
-                    _ => bail!(),
+                    Value::Unknown => bail!(),
+                    _ => return Err(index),
                 };
-                let value = match &c.value {
-                    Some(value) => value,
-                    _ => &Value::Unknown,
-                };
+                
+                let value = &c.value;
                 
                 let mut updated = tuple.to_vec();
                 updated[offset] = value.clone();
@@ -830,13 +824,13 @@ pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, Sta
 		b.children[offset].killed = Some(index);
                 b.children[offset].replaced = Some(updated.clone());
                 
-                if let Value::Unknown = &value {
-                    c.blocks.push(block!(b.children[offset].clone()));
-                }
+                //if let Value::Unknown = value {
+                    b.blocks.push(block!(b.children[offset].clone()));
+            //}
                 
                 analyze!(b.children[offset]);
                 
-                b.value = Some(updated);
+                b.value = updated;
                 b.children[offset] = c;
                 data_stack.push(b);
             }
@@ -852,25 +846,23 @@ pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, Sta
                 
                 macro_rules! bail {
                     () => {{
-                        data_stack.push(StackEntry::new(index, None));
+                        data_stack.push(StackEntry::new(index, &Value::Unknown));
                         continue;
                     }}
-                };
+                }
                 
                 let tuple = match &b.value {
-                    Some(Value::Tuple(tuple)) => tuple,
-                    Some(Value::Unknown) => bail!(),
-                    Some(_) => return Err(index),
-                    _ => bail!(),
+                    Value::Tuple(tuple) => tuple,
+                    Value::Unknown => bail!(),
+                    _ => return Err(index),
                 };
                 let offset = match &a.value {
-                    Some(Value::Int(offset)) => match offset.to_usize() {
+                    Value::Int(offset) => match offset.to_usize() {
                         Some(offset) if offset < tuple.len() => offset,
                         _ => return Err(index),
                     }
-                    Some(Value::Unknown) => bail!(),
-                    Some(_) => return Err(index),
-                    _ => bail!(),
+                    Value::Unknown => bail!(),
+                    _ => return Err(index),
                 };
 		
 		for (spot, child) in b.children.iter().enumerate() {
@@ -882,7 +874,7 @@ pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, Sta
                 let mut pulled = b.children.swap_remove(offset);
                 let mut folded = pulled.clone();
                 folded.killed = Some(index);
-                folded.replaced = folded.value.clone();
+                folded.replaced = Some(folded.value.clone());
                 analyze!(folded);
                 pulled.created = Some(index);
                 data_stack.push(pulled);
@@ -901,28 +893,26 @@ pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, Sta
                 
                 macro_rules! bail {
                     () => {{
-                        data_stack.push(StackEntry::new(index, None));
+                        data_stack.push(StackEntry::new(index, &Value::Unknown));
                         continue;
                     }}
-                };
+                }
                 
                 let left = match &a.value {
-                    Some(Value::Int(value)) => value,
-                    Some(Value::Unknown) => bail!(),
-                    Some(_) => return Err(index),
-                    None => bail!(),
+                    Value::Int(value) => value,
+                    Value::Unknown => bail!(),
+                    _ => return Err(index),
                 };
                 let right = match &b.value {
-                    Some(Value::Int(value)) => value,
-                    Some(Value::Unknown) => bail!(),
-                    Some(_) => return Err(index),
-                    None => bail!(),
+                    Value::Int(value) => value,
+                    Value::Unknown => bail!(),
+                    _ => return Err(index),
                 };
                 
-                let result = StackEntry::new(index, Some(&Value::Int(left.add(right))));
+                let result = StackEntry::new(index, &Value::Int(left.add(right)));
                 let mut folded = result.clone();
                 folded.killed = Some(index);
-                folded.replaced = folded.value.clone();
+                folded.replaced = Some(folded.value.clone());
                 analyze!(folded);
                 data_stack.push(result);
             }
@@ -936,28 +926,26 @@ pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, Sta
                 
                 macro_rules! bail {
                     () => {{
-                        data_stack.push(StackEntry::new(index, None));
+                        data_stack.push(StackEntry::new(index, &Value::Unknown));
                         continue;
                     }}
-                };
+                }
                 
                 let left = match &a.value {
-                    Some(Value::Int(value)) => value,
-                    Some(Value::Unknown) => bail!(),
-                    Some(_) => return Err(index),
-                    None => bail!(),
+                    Value::Int(value) => value,
+                    Value::Unknown => bail!(),
+                    _ => return Err(index),
                 };
                 let right = match &b.value {
-                    Some(Value::Int(value)) => value,
-                    Some(Value::Unknown) => bail!(),
-                    Some(_) => return Err(index),
-                    None => bail!(),
+                    Value::Int(value) => value,
+                    Value::Unknown => bail!(),
+                    _ => return Err(index),
                 };
                 
-                let result = StackEntry::new(index, Some(&Value::Int(left.unchecked_sub(right))));
+                let result = StackEntry::new(index, &Value::Int(left.unchecked_sub(right)));
                 let mut folded = result.clone();
                 folded.killed = Some(index);
-                folded.replaced = folded.value.clone();
+                folded.replaced = Some(folded.value.clone());
                 analyze!(folded);
                 data_stack.push(result);
             }
@@ -973,7 +961,7 @@ pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, Sta
 ///Discovers unused values and eliminates them from the stacks.
 pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
     let mut same = true;
-    let insert_noops = false;
+    let insert_noops = true;
 
     // Algorithm notes
     //   discover_unused() returns a list of stack items that we can provably elide.
