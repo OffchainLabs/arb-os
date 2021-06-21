@@ -104,7 +104,7 @@ Mini has the following types:
 
 `union<` *type1*, *type2*, ... `>`
 
-> an untagged union type that can values from any of *type1*, *type2*, etc. There must be explicit casts to convert to and from its component types. This is done via `newunion` and `unioncast`.
+> an untagged union type that can hold values from any of *type1*, *type2*, etc. There must be explicit casts to convert to and from its component types. This is done via `newunion` and `unioncast`.
 
 `struct` { *name1: type1 , name2 : type2 , ...* }
 
