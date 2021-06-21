@@ -3478,27 +3478,15 @@ fn typecheck_binary_op_const(
                                 val2.shift_right(x)
                             }
                         }
-                        Type::Int => {
-                            if val1.non_negative() {
-                                val1.shift_left(val2.to_usize().ok_or_else(|| {
-                                    new_type_error(
-                                        format!(
-                                            "Attempt to shift {} left by {}, causing overflow",
-                                            val1, val2
-                                        ),
-                                        loc,
-                                    )
-                                })?)
-                            } else {
-                                return Err(new_type_error(
-                                    format!(
-                                        "Attempt to shift {} left by {}, causing overflow",
-                                        val1, val2
-                                    ),
-                                    loc,
-                                ));
-                            }
-                        }
+                        Type::Int => val1.shift_left(val2.to_usize().ok_or_else(|| {
+                            new_type_error(
+                                format!(
+                                    "Attempt to shift {} left by {}, causing overflow",
+                                    val1, val2
+                                ),
+                                loc,
+                            )
+                        })?),
                         _ => {
                             return Err(new_type_error(
                                 format!(
