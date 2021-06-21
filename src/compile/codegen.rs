@@ -479,6 +479,7 @@ fn mavm_codegen_statement(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                release_build,
             )?;
             label_gen = lg;
             code = c;
@@ -495,75 +496,6 @@ fn mavm_codegen_statement(
             num_locals = max(num_locals, exp_locals);
             Ok((label_gen, num_locals, bindings))
         }
-        TypeCheckedStatementKind::Let(pat, expr) => match &pat.kind {
-            MatchPatternKind::Simple(name) => {
-                let slot_num = num_locals;
-                let (lg, c, exp_locals) = mavm_codegen_expr(
-                    expr,
-                    code,
-                    num_locals,
-                    &locals,
-                    label_gen,
-                    string_table,
-                    import_func_map,
-                    global_var_map,
-                    prepushed_vals,
-                    scopes,
-                    file_info_chart,
-                    release_build,
-                )?;
-                let mut bindings = HashMap::new();
-                bindings.insert(*name, slot_num);
-                num_locals += 1;
-                num_locals = max(num_locals, exp_locals);
-                label_gen = lg;
-                code = c;
-                code.push(Instruction::from_opcode_imm(
-                    Opcode::SetLocal,
-                    Value::Int(Uint256::from_usize(slot_num)),
-                    debug,
-                ));
-                Ok((label_gen, num_locals, bindings))
-            }
-            MatchPatternKind::Tuple(pattern) => {
-                let (lg, c, exp_locals) = mavm_codegen_expr(
-                    expr,
-                    code,
-                    num_locals,
-                    &locals,
-                    label_gen,
-                    string_table,
-                    import_func_map,
-                    global_var_map,
-                    prepushed_vals,
-                    scopes,
-                    file_info_chart,
-                    release_build,
-                )?;
-                label_gen = lg;
-                code = c;
-                let mut pairs = HashMap::new();
-                let mut binding_types = Vec::new();
-                for (i, sub_pat) in pattern.clone().iter().enumerate() {
-                    match &sub_pat.kind {
-                        MatchPatternKind::Simple(name) => {
-                            pairs.insert(*name, num_locals + i);
-                            binding_types.push((*name, num_locals + i));
-                        }
-                        MatchPatternKind::Tuple(_) => {
-                            return Err(new_codegen_error(
-                                "nested pattern not supported in pattern-match let".to_string(),
-                                loc,
-                            ));
-                        }
-                    }
-                }
-                mavm_codegen_tuple_pattern(code, pattern, num_locals, debug);
-                num_locals += pattern.len();
-                num_locals = max(num_locals, exp_locals);
-                Ok((label_gen, num_locals, pairs))
-            }
-        },
         TypeCheckedStatementKind::AssignLocal(name, expr) => {
             let slot_num = match locals.get(name) {
                 Some(slot) => slot,
