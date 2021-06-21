@@ -283,6 +283,18 @@ func tests() -> uint {
         return 50;
     }
 
+    let ba = bytearray_set256(bytearray_new(0), 0, 0x202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f);
+    ba = bytearray_extract(ba, 1, 2);
+    let res = bytearray_get64(ba, 0);
+    if (res != 0x2122000000000000) {
+        return 60;
+    }
+
+    res = bytearray_get256(ba, 0);
+    if (res != 0x2122000000000000000000000000000000000000000000000000000000000000) {
+        return 61;
+    }
+
     return testCalldataUnitCounting();
 }
 
