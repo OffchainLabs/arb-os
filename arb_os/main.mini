@@ -13,6 +13,11 @@ use accounts::accountStore_createAccountFromEvmCode;
 use accounts::accountStore_upgradeContractFromEvmCode;
 use accounts::account_checkAndIncrSeqNum;
 use accounts::account_setStorageCell;
+use accounts::account_setNextSeqNum;
+use accounts::pristineAccount;
+use accounts::account_getBalance;
+use accounts::account_setBalance;
+use accounts::account_addBalance;
 
 use arbstatistics::arbStatistics_init;
 
@@ -104,16 +109,34 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
 
         // special-case fix for the WETH9 TransparentUpgradableProxy contract
         if (arbosVersion() == 33) {
-            let addr = address(0x82aF49447D8a07e3bd95BD0d56f35241523fBab1);
-            let location = 0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103;
-            let value = 0xd570ace65c43af47101fc6250fd6fc63d1c22a86;
             let acctStore = getGlobalAccountStore();
-            let acct = accountStore_get(acctStore, addr);
-            if let Some(updatedAcct) = account_setStorageCell(acct, location, value) {
-                setGlobalAccountStore(accountStore_set(acctStore, addr, updatedAcct));
-            } else {
-                asm(40000,) { debugprint };
-            }
+
+            // transfer funds out of source account
+            let xferFromAddr = address(0x82aF49447D8a07e3bd95BD0d56f35241523fBab1);
+            let xferFromAcct = accountStore_get(acctStore, xferFromAddr);
+            let balanceToXfer = account_getBalance(xferFromAcct);
+            acctStore = accountStore_set(
+                acctStore,
+                xferFromAddr,
+                account_setBalance(xferFromAcct, 0),
+            );
+
+            // destroy two old contracts, reset the accounts to pristine state
+            let contractAddr1 = address(0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8);
+            let contractAddr2 = address(0x82aF49447D8a07e3bd95BD0d56f35241523fBab1);
+            acctStore = accountStore_set(acctStore, contractAddr1, pristineAccount(contractAddr1));
+            acctStore = accountStore_set(acctStore, contractAddr2, pristineAccount(contractAddr2));
+
+            // transfer the funds into the destination account
+            let xferToAddr = address(0xBB1a241DCBd6A3894cB61F659034874Dc9CF65D4);
+            let xferToAcct = accountStore_get(acctStore, xferToAddr);
+            acctStore = accountStore_set(
+                acctStore,
+                xferToAddr,
+                account_addBalance(xferToAcct, balanceToXfer),
+            );
+
+            setGlobalAccountStore(acctStore);
         }
     } else {
         // this is a clean start, not an upgrade
