@@ -11,6 +11,7 @@ use accounts::accountStore_get;
 use accounts::accountStore_set;
 use accounts::accountStore_createAccountFromEvmCode;
 use accounts::accountStore_upgradeContractFromEvmCode;
+use accounts::accountStore_transferEthBalance;
 use accounts::account_checkAndIncrSeqNum;
 use accounts::account_setStorageCell;
 use accounts::account_setNextSeqNum;
@@ -135,6 +136,19 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
                 xferToAddr,
                 account_addBalance(xferToAcct, balanceToXfer),
             );
+
+            // do another ETH rescue
+            acctStore = xif let Some(uas) = accountStore_transferEthBalance(
+                acctStore,
+                address(0x4Dbd4fc535Ac27206064B68FfCf827b0A60BAB3f),
+                address(0x1FcCBE3369eada96887A3b2857B57bBA65E83Dc1),
+                account_getBalance(accountStore_get(acctStore, address(0x4Dbd4fc535Ac27206064B68FfCf827b0A60BAB3f))),
+            ) {
+                uas
+            } else {
+                // this shouldn't be possible, but be safe anyway
+                acctStore
+            };
 
             setGlobalAccountStore(acctStore);
         }
