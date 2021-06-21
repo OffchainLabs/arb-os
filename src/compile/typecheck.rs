@@ -3459,15 +3459,15 @@ fn typecheck_binary_op_const(
             }
         }
         BinaryOp::ShiftLeft | BinaryOp::ShiftRight => {
-            if t1 == Type::Uint || t1 == Type::Int {
+            if t1 == Type::Uint {
                 Ok(TypeCheckedExprKind::Const(
                     Value::Int(match t2 {
-                        Type::Uint => {
+                        Type::Uint | Type::Int | Type::Bytes32 => {
                             let x = val1.to_usize().ok_or_else(|| {
                                 new_type_error(
                                     format!(
                                         "Attempt to shift {} left by {}, causing overflow",
-                                        val1, val2
+                                        val2, val1
                                     ),
                                     loc,
                                 )
@@ -3478,21 +3478,12 @@ fn typecheck_binary_op_const(
                                 val2.shift_right(x)
                             }
                         }
-                        Type::Int => val1.shift_left(val2.to_usize().ok_or_else(|| {
-                            new_type_error(
-                                format!(
-                                    "Attempt to shift {} left by {}, causing overflow",
-                                    val1, val2
-                                ),
-                                loc,
-                            )
-                        })?),
                         _ => {
                             return Err(new_type_error(
                                 format!(
-                                    "Attempt to shift a {} by a {}, must be integers",
-                                    t1.display(),
-                                    t2.display()
+                                    "Attempt to shift a {} by a {}, must shift an integer type by a uint",
+                                    t2.display(),
+                                    t1.display()
                                 ),
                                 loc,
                             ))
@@ -3503,9 +3494,9 @@ fn typecheck_binary_op_const(
             } else {
                 Err(new_type_error(
                     format!(
-                        "Attempt to shift a {} by a {}, both types must be integers",
-                        t1.display(),
-                        t2.display()
+                        "Attempt to shift a {} by a {}, must shift an integer type by a uint",
+                        t2.display(),
+                        t1.display()
                     ),
                     loc,
                 ))
