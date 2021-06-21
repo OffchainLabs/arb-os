@@ -1141,10 +1141,20 @@ fn handle_function(
                 // Save func ptr
                 res.push(simple_op(AVMOpcode::AuxPush));
                 // push new frame to aux stack
+                res.push(simple_op(AVMOpcode::NewBuffer));
+                res.push(push_value(Value::new_tuple(vec![
+                    // Value::new_buffer(vec![]),
+                    int_from_usize(0),
+                    Value::Label(Label::Evm(return_label)),
+                ])));
+                res.push(push_value(int_from_usize(0)));
+                res.push(simple_op(AVMOpcode::Tset));
+                res.push(simple_op(AVMOpcode::AuxPush));
+                /*
                 res.push(push_frame(Value::new_tuple(vec![
                     Value::new_buffer(vec![]),
                     Value::Label(Label::Evm(return_label)),
-                ])));
+                ])));*/
                 // Push args to frame
                 for i in 0..ftype.params().len() {
                     res.push(get_frame());
@@ -2125,9 +2135,10 @@ impl JitWasm {
                     int_from_usize(0),         // call table
                     Value::new_buffer(vec![]), // IO buffer
                     int_from_usize(0),         // IO len
-                    int_from_usize(1000000),   // gas left
+                    int_from_usize(1000000000),   // gas left
                     int_from_usize(0),         // Immed
-                    int_from_usize(0),         // Instruction
+                    int_from_usize(0),         // Code point
+                    simple_table(),            // Generated jump table
                 ])
             });
         });
@@ -2310,7 +2321,7 @@ impl JitWasm {
     pub fn run(&self, buf: Buffer, len: usize) -> (Buffer, Vec<u8>, usize, u64, Vec<Instruction>, Vec<(usize, usize)>) {
         self.cell.replace_with(|_buf| buf);
         self.len_cell.replace_with(|_len| len as i32);
-        self.gas_cell.replace_with(|_gas| 1000000);
+        self.gas_cell.replace_with(|_gas| 1000000000);
 
         let _res = match self.instance.get_typed_func::<(), (i32)>("test") {
             Ok(f) => get_answer(f) as i64,
@@ -2358,7 +2369,7 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
         int_from_usize(0),         // call table
         Value::new_buffer(vec![]), // IO buffer
         int_from_usize(0),         // IO len
-        int_from_usize(1000000),   // gas left
+        int_from_usize(1000000000),   // gas left
         int_from_usize(0),         // Immed
         int_from_usize(0),         // Code point
         simple_table(),            // Generated jump table

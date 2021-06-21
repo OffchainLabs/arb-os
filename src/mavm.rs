@@ -399,8 +399,8 @@ impl Buffer {
         let mut root = self.root.borrow_mut();
         let size = if offset >= self.size {
             if offset > 1000 {
-                root.resize(100000000, 0u8);
-                100000000
+                root.resize(3000000000, 0u8);
+                3000000000
             } else {
                 root.resize(1001, 0u8);
                 1001

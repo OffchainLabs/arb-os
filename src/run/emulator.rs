@@ -1068,14 +1068,13 @@ impl Machine {
         let mut gas_used = 0;
         let orig_gas = self.total_gas_usage.clone().to_u64().unwrap();
         while self.state.is_running() {
-            /*
             if let Some(spc) = stop_pc {
                 if let MachineState::Running(pc) = self.state {
                     if pc == spc {
-                        let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
+                        // let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
                         // gas_used
-                        return final_gas - orig_gas
-                        // return gas_used;
+                        // return final_gas - orig_gas
+                        return gas_used;
                     }
                 }
             }
@@ -1122,30 +1121,30 @@ impl Machine {
                         write!(trace_writer, "\n").unwrap();
                     }
                 }
-            }*/
+            }
 
             match self.run_one(false) {
                 Ok(still_runnable) => {
                     if !still_runnable {
-                        /*
                         self.total_gas_usage = self
                             .total_gas_usage
                             .sub(&Uint256::from_u64(gas_this_instruction))
                             .unwrap();
+                        println!("gas used {}", gas_used);
                         return gas_used - gas_this_instruction;
-                        */
-                        return 0;
                     }
                 }
                 Err(e) => {
                     self.state = MachineState::Error(e);
+                    println!("gas used 1 {}", gas_used);
                     return gas_used;
                 }
             }
         }
-        let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
-        // gas_used
-        final_gas - orig_gas
+        // let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
+        println!("gas used 2 {}", gas_used);
+        gas_used
+        // final_gas - orig_gas
     }
 
     ///Generates a `ProfilerData` from a run of self with args from address 0.
@@ -1447,21 +1446,17 @@ impl Machine {
                 if let Some(val) = &insn.immediate {
                     self.stack.push(val.clone());
                 }
-                /*
-                let gas_remaining_before = if let Some(gas) = self.next_op_gas() {
-                    let gas256 = Uint256::from_u64(gas);
-                    let gas_remaining_before = self.arb_gas_remaining.clone();
-                    if let Some(remaining) = self.arb_gas_remaining.sub(&gas256) {
-                        self.arb_gas_remaining = remaining;
-                        self.total_gas_usage = self.total_gas_usage.add(&gas256);
-                    } else {
-                        self.arb_gas_remaining = Uint256::max_uint();
-                        return Err(ExecutionError::new("Out of ArbGas", &self.state, None));
+                {
+                    self.counter = self.counter + 1;
+                    // println!("{}, stack sz {}", str, stack_len);
+                    // println!("{}", str);
+                    if self.counter % 1000000 == 0 {
+                        if let Value::Tuple(t) = self.register.clone() {
+                            println!("Instruction {} gas {}", self.counter, t[4]);
+                        }
                     }
-                    gas_remaining_before
-                } else {
-                    self.arb_gas_remaining.clone()
-                };*/
+                }
+                /*
                 if let Some(_str) = &insn.debug_str {
                     self.counter = self.counter + 1;
                     // println!("{}, stack sz {}", str, stack_len);
@@ -1471,7 +1466,7 @@ impl Machine {
                             println!("Wasm instruction {} gas {}", self.counter, t[4]);
                         }
                     }
-                };
+                };*/
                 match insn.opcode {
                     AVMOpcode::Noop => {
                         self.incr_pc();
@@ -2031,7 +2026,7 @@ impl Machine {
                             }
                             None => {
                                 // machine is blocked, waiting for nonempty inbox
-                                // self.arb_gas_remaining = gas_remaining_before;
+                                /// self.arb_gas_remaining = gas_remaining_before;
                                 self.stack.push_uint(bn); // put stack back the way it was
                                 Ok(false)
                             }

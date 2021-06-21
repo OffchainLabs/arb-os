@@ -232,6 +232,13 @@ fn parse_list(lst: &json::JsonValue) -> Vec<u64> {
     args
 }
 
+fn getFile(fname: &String) -> Vec<u8> {
+    let mut file = File::open(&fname).unwrap();
+    let mut buffer = Vec::<u8>::new();
+    file.read_to_end(&mut buffer).unwrap();
+    buffer
+}
+
 fn run_debug(code_0: Vec<Instruction>, table: Vec<(usize, usize)>) {
     let mut code = vec![];
     for i in code_0.iter().rev() {
@@ -269,11 +276,35 @@ fn run_debug(code_0: Vec<Instruction>, table: Vec<(usize, usize)>) {
     for (i, loc) in table.iter() {
         table_aux[*i] = code_0.len() - *loc;
     };
+    let buf = getFile(&"/home/sami/arb-os/wasm-tests/test-buffer.wasm".to_string());
     machine.start_at_zero();
-    machine.stack.push_usize(0); // io len
-    machine.stack.push(Value::new_buffer(vec![])); // io buffer
+    machine.stack.push_usize(buf.len()); // io len
+    machine.stack.push(Value::new_buffer(buf)); // io buffer
     machine.stack.push(wasm::make_table_internal(&table_aux)); // call table
-    machine.debug(Some(CodePt::new_internal(code_len - 1)));
+    // machine.debug(Some(CodePt::new_internal(code_len - 1)));
+    let used = machine.run(Some(CodePt::new_internal(code_len - 1)));
+
+    let len = machine.stack.nth(0);
+    let buf = machine.stack.nth(1);
+    let gas_left = machine.stack.nth(2);
+
+    match (len, buf, gas_left) {
+        (Some(Value::Int(a)), Some(Value::Buffer(buf)), Some(Value::Int(gl))) => {
+            let len = a.to_usize().unwrap();
+            let mut res = vec![];
+            for i in 0..len {
+                // println!("{}", buf.read_byte(i));
+                res.push(buf.read_byte(i as u128))
+            }
+            println!(
+                "WASM Gas used {}, Gas used {}, Result {}",
+                1000000000 - gl.to_usize().unwrap(),
+                used,
+                hex::encode(res)
+            );
+        }
+        _ => println!("Unexpected output"),
+    };
 }
 
 fn main() -> Result<(), CompileError> {
@@ -466,7 +497,7 @@ fn main() -> Result<(), CompileError> {
                     }
                     println!(
                         "WASM Gas used {}, Gas used {}, Result {}",
-                        1000000 - gl.to_usize().unwrap(),
+                        1000000000 - gl.to_usize().unwrap(),
                         used,
                         hex::encode(res)
                     );
@@ -503,7 +534,7 @@ fn main() -> Result<(), CompileError> {
             }
             */
             let (buf, extra, len, gas_left, insn, table) = a.run(buf, param.len());
-            println!("insn {:?} table {:?}", insn, table);
+            // println!("insn {:?} table {:?}", insn, table);
             run_debug(insn, table);
             let mut res = vec![];
             for i in 0..len {
@@ -512,14 +543,14 @@ fn main() -> Result<(), CompileError> {
             if extra.len() > 1000 {
                 println!(
                     "Gas used {}, Result {}, Extra len {}",
-                    1000000 - gas_left,
+                    1000000000 - gas_left,
                     hex::encode(res),
                     extra.len()
                 );
             } else {
                 println!(
                     "Gas used {}, Result {}, Extra {}",
-                    1000000 - gas_left,
+                    1000000000 - gas_left,
                     hex::encode(res),
                     hex::encode(&extra)
                 );
