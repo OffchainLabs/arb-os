@@ -29,6 +29,7 @@ use blockhash::blockhash_init;
 
 use chainParameters::chainParams_init;
 use chainParameters::chainParams_haveDoneInit;
+use chainParameters::chainParams_chainId;
 
 use codeSegment::codeSegment_init;
 use codeSegment::translateEvmCodeSegment;
@@ -108,8 +109,8 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
             panic;   // don't try to run without preinstalls and precompiles
         }
 
-        // special-case fix for the WETH9 TransparentUpgradableProxy contract
-        if (arbosVersion() == 33) {
+        // special-case fix for the WETH9 TransparentUpgradableProxy contract, on mainnet only
+        if ((arbosVersion() == 33) && (chainParams_chainId() == 42161)) {
             let acctStore = getGlobalAccountStore();
 
             // transfer funds out of source account
