@@ -667,7 +667,7 @@ pub enum Value {
     CodePoint(CodePt),
     Label(Label),
     Buffer(Buffer),
-    Unknown,
+    Unknown(usize),
 }
 
 impl Value {
@@ -731,7 +731,7 @@ impl Value {
             Value::Label(_) => {
                 panic!("tried to run type instruction on a label");
             }
-            Value::Unknown => {
+            Value::Unknown(_) => {
                 panic!("tried to run type instruction on an unknown");
             }
         }
@@ -757,7 +757,7 @@ impl Value {
                 }
                 Ok(Value::new_tuple(new_vec))
             }
-            Value::Unknown => panic!("tried to replace an unknown's potential label"),
+            Value::Unknown(_) => panic!("tried to replace an unknown's potential label"),
         }
     }
 
@@ -804,7 +804,7 @@ impl Value {
                     label.relocate(int_offset, ext_offset, func_offset);
                 (Value::Label(new_label), new_func_offset)
             }
-            Value::Unknown => panic!("Tried to relocate an unknown"),
+            Value::Unknown(_) => panic!("Tried to relocate an unknown"),
         }
     }
 
@@ -822,7 +822,7 @@ impl Value {
                 Some(label2) => Value::Label(**label2),
                 None => self,
             },
-            Value::Unknown => panic!("tried to xlate_labels an unknown")
+            Value::Unknown(_) => panic!("tried to xlate_labels an unknown")
         }
     }
 
@@ -830,7 +830,7 @@ impl Value {
     pub fn to_usize(&self) -> Option<usize> {
         match self {
             Value::Int(i) => i.to_usize(),
-            Value::Unknown => panic!("unsure if value is convertable"),
+            Value::Unknown(_) => panic!("unsure if value is convertable"),
             _ => None,
         }
     }
@@ -855,7 +855,7 @@ impl Value {
             Value::Label(label) => {
                 Value::avm_hash2(&Value::Int(Uint256::from_usize(2)), &label.avm_hash())
             }
-            Value::Unknown => panic!("Tried to hash an unknown"),
+            Value::Unknown(_) => panic!("Tried to hash an unknown"),
         }
     }
 
@@ -876,7 +876,7 @@ impl Value {
 
 impl Default for Value {
     fn default() -> Self {
-        Value::Unknown
+        Value::Unknown(0)
     }
 }
 
@@ -904,7 +904,7 @@ impl fmt::Display for Value {
                     write!(f, "{})", s)
                 }
             }
-            Value::Unknown => write!(f, "???"),
+            Value::Unknown(i) => write!(f, "???({})", i),
         }
     }
 }
@@ -942,7 +942,7 @@ impl Value {
                     format!("{}{}){}", s, color, reset)
                 }
             }
-            Value::Unknown => format!("{}???{}", color, reset),
+            Value::Unknown(i) => format!("{}Arg({}{}{}{}){}", grey, color, i, reset, grey, reset),
         }
     }
 }
@@ -966,6 +966,8 @@ pub enum Opcode {
     Len,
     LogicalAnd,
     LogicalOr,
+    Pull(usize),
+    Dup(usize),
     AVMOpcode(AVMOpcode),
 }
 
@@ -1182,13 +1184,25 @@ impl Opcode {
             Opcode::LogicalAnd => "logicaland",
             Opcode::LogicalOr => "logicalor",
             Opcode::PopFrame => "PopFrame",
+            Opcode::Swap(_) => "SwapN",
+            Opcode::Dup(_) => "DupN",
             _ => "to_name() not implemented",
+        }
+    }
+    
+    pub fn to_full(&self) -> String {
+        match self {
+            Opcode::Swap(depth) => format!("Swap({})", depth),
+            Opcode::Dup(depth) => format!("Dup({})", depth),
+            _ => self.to_name().to_string(),
         }
     }
 
     /// The non-variable amount of ArbGas this opcode consumes
     pub fn base_cost(&self) -> u64 {
         match self {
+            Opcode::Swap(depth) => *depth as u64, // TODO THIS IS WRONG
+            Opcode::Dup(depth) => *depth as u64, // TODO THIS IS WRONG
             Opcode::AVMOpcode(AVMOpcode::Zero) => 5,
             Opcode::AVMOpcode(AVMOpcode::Plus) => 3,
             Opcode::AVMOpcode(AVMOpcode::Mul) => 3,
@@ -1782,7 +1796,7 @@ impl fmt::Display for Opcode {
         match self {
             Opcode::MakeFrame(s1, s2) => write!(f, "MakeFrame({}, {})", s1, s2),
             Opcode::Label(label) => label.fmt(f),
-            _ => write!(f, "{}", self.to_name()),
+            _ => write!(f, "{}", self.to_full()),
         }
     }
 }
@@ -1796,13 +1810,14 @@ impl fmt::Display for AVMOpcode {
 impl Opcode {
     pub fn pretty_print(&self, frame_color: &str, label_color: &str) -> String {
         let reset = ConsoleColors::RESET;
+        let grey = ConsoleColors::GREY;
         match self {
             Opcode::MakeFrame(s1, s2) => format!(
                 "MakeFrame{}({}{}{}, {}{}{})",
                 reset, frame_color, s1, reset, frame_color, s2, reset
             ),
             Opcode::Label(label) => format!("{}{}{}", label_color, label, reset),
-            _ => format!("{}", self.to_name()),
+            _ => format!("{}", self.to_full()),
         }
     }
 }

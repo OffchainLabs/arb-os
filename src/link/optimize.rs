@@ -7,10 +7,20 @@
 
 use crate::console::ConsoleColors;
 use crate::mavm::{AVMOpcode, Instruction, Opcode, OpcodeEffect, Value};
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::sync::Arc;
 use crate::link::analyze::{print_code};
 use crate::link::analyze::{print_cfg, create_cfg};
+use crate::compile::DebugInfo;
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::sync::Arc;
+use std::convert::TryInto;
+use petgraph::Direction;
+use petgraph::visit::EdgeRef;
+use petgraph::graph::{DiGraph, NodeIndex, EdgeIndex, EdgeReference};
+use petgraph::stable_graph::{StableGraph};
+use petgraph::dot::{Dot, Config};
+use rand::{thread_rng, SeedableRng};
+use rand::rngs::{SmallRng};
+use rand::seq::SliceRandom;
 
 type Block = Vec<Instruction>;
 
@@ -796,14 +806,14 @@ pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, Sta
                 
                 macro_rules! bail {
                     () => {{
-                        data_stack.push(StackEntry::new(index, &Value::Unknown));
+                        data_stack.push(StackEntry::new(index, &Value::Unknown(0)));
                         continue;
                     }}
                 }
                 
                 let tuple = match &b.value {
                     Value::Tuple(tuple) => tuple,
-                    Value::Unknown => bail!(),
+                    Value::Unknown(_) => bail!(),
                     _ => return Err(index),
                 };
                 let offset = match &a.value {
@@ -811,7 +821,7 @@ pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, Sta
                         Some(offset) if offset < tuple.len() => offset,
                         _ => return Err(index),
                     }
-                    Value::Unknown => bail!(),
+                    Value::Unknown(_) => bail!(),
                     _ => return Err(index),
                 };
                 
@@ -846,14 +856,14 @@ pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, Sta
                 
                 macro_rules! bail {
                     () => {{
-                        data_stack.push(StackEntry::new(index, &Value::Unknown));
+                        data_stack.push(StackEntry::new(index, &Value::Unknown(0)));
                         continue;
                     }}
                 }
                 
                 let tuple = match &b.value {
                     Value::Tuple(tuple) => tuple,
-                    Value::Unknown => bail!(),
+                    Value::Unknown(_) => bail!(),
                     _ => return Err(index),
                 };
                 let offset = match &a.value {
@@ -861,7 +871,7 @@ pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, Sta
                         Some(offset) if offset < tuple.len() => offset,
                         _ => return Err(index),
                     }
-                    Value::Unknown => bail!(),
+                    Value::Unknown(_) => bail!(),
                     _ => return Err(index),
                 };
 		
@@ -893,19 +903,19 @@ pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, Sta
                 
                 macro_rules! bail {
                     () => {{
-                        data_stack.push(StackEntry::new(index, &Value::Unknown));
+                        data_stack.push(StackEntry::new(index, &Value::Unknown(0)));
                         continue;
                     }}
                 }
                 
                 let left = match &a.value {
                     Value::Int(value) => value,
-                    Value::Unknown => bail!(),
+                    Value::Unknown(_) => bail!(),
                     _ => return Err(index),
                 };
                 let right = match &b.value {
                     Value::Int(value) => value,
-                    Value::Unknown => bail!(),
+                    Value::Unknown(_) => bail!(),
                     _ => return Err(index),
                 };
                 
@@ -926,19 +936,19 @@ pub fn discover_unused(block: &Block, debug: bool) -> Result<BTreeMap<usize, Sta
                 
                 macro_rules! bail {
                     () => {{
-                        data_stack.push(StackEntry::new(index, &Value::Unknown));
+                        data_stack.push(StackEntry::new(index, &Value::Unknown(0)));
                         continue;
                     }}
                 }
                 
                 let left = match &a.value {
                     Value::Int(value) => value,
-                    Value::Unknown => bail!(),
+                    Value::Unknown(_) => bail!(),
                     _ => return Err(index),
                 };
                 let right = match &b.value {
                     Value::Int(value) => value,
-                    Value::Unknown => bail!(),
+                    Value::Unknown(_) => bail!(),
                     _ => return Err(index),
                 };
                 
@@ -1306,4 +1316,514 @@ pub fn stack_reduce(block: &Block, debug: bool) -> (Block, bool) {
 	opt = reduced;
         same = false;
     }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct StackValue {
+    created: Option<usize>,       // where this stack entry comes into existence
+    value: Value,                 // the actual value of this stack entry
+    which: usize,                 // which output value from its generating insn this came frome
+}
+impl StackValue {
+    fn blank() -> Self {
+        StackValue::default()
+    }
+    fn new(created: usize, value: &Value, which: usize) -> Self {
+        StackValue {
+            created: Some(created),
+            value: value.clone(),
+            which: which,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum NodeType {
+    AVMOpcode(AVMOpcode),
+    Value(Value),
+    Argument(usize),
+    Output,
+    GlobalState,
+    Function(usize, usize),
+}
+
+impl NodeType {
+    fn is_prunable(&self) -> bool {
+        match self {
+            NodeType::AVMOpcode(_) => true,
+            NodeType::Value(_) => true,
+            NodeType::Argument(_) => false,
+            NodeType::Output => false,
+            NodeType::GlobalState => false,
+            NodeType::Function(..) => true,
+        }
+    }
+    fn pretty_print(&self) -> String {
+        let reset = ConsoleColors::RESET;
+        let pink = ConsoleColors::PINK;
+        let grey = ConsoleColors::GREY;
+        match self {
+            NodeType::AVMOpcode(avm_op) => format!("{}\t", Opcode::AVMOpcode(*avm_op).pretty_print(pink, pink)),
+            NodeType::Value(value) => format!("{}\t", value.pretty_print(pink, pink)),
+            NodeType::Argument(arg) => format!("Arg {}{}{}\t", pink, arg, reset),
+            NodeType::Output => String::from("Output\t"),
+            NodeType::GlobalState => String::from("Global State"),
+            NodeType::Function(inputs, outputs) => format!(
+                "{}func({}{}{}{},{}{}{}{}){}", grey, reset, pink, inputs, reset, pink, outputs, reset, grey, reset),
+        }
+    }
+}
+
+pub type ValueGraph = StableGraph<NodeType, (usize, usize)>;
+pub type PrintGraph = StableGraph<String, (usize, usize)>;
+
+pub fn graph_reduce(block: &Block, debug: bool) -> (Block, bool) {
+    let mut same = true;
+    
+    let debug_info = block[0].debug_info.propagate(true);
+    
+    macro_rules! create {
+        ($opcode:ident) => {
+            Instruction {
+		opcode: Opcode::AVMOpcode(AVMOpcode::$opcode),
+		immediate: None,
+		debug_info: debug_info,
+	    }
+        };
+        ($opcode:ident, $value:expr) => {
+            Instruction {
+		opcode: Opcode::AVMOpcode(AVMOpcode::$opcode),
+		immediate: $value,
+		debug_info: debug_info,
+	    }
+        };
+    }
+    
+    let mut nooped = Vec::with_capacity(block.len());
+    for curr in block.iter() {
+        nooped.extend(
+            match &curr.opcode {
+                Opcode::AVMOpcode(AVMOpcode::Noop) => vec![curr.clone()],
+                opcode => match &curr.immediate {
+                    Some(value) => vec![
+                        create!(Noop, Some(value.clone())),
+                        Instruction::from_opcode(opcode.clone(), debug_info),
+                    ],
+                    None => vec![curr.clone()],
+                }
+            }
+        );
+    }
+    let block = nooped;
+
+    let mut arg_count = 0;
+    let mut data_stack: VecDeque<(isize, usize)> = VecDeque::new();
+    let mut aux_stack:  VecDeque<(isize, usize)> = VecDeque::new();
+    
+    let mut graph = ValueGraph::default();
+    let mut index_to_node = HashMap::new();
+    
+    macro_rules! touch {
+        ($stack:expr, $count:expr) => {
+            let stack = &mut $stack;
+            let count = $count as usize;
+            for touched in 0..(count.saturating_sub(stack.len())) {
+                arg_count += 1;
+                index_to_node.insert(-arg_count, graph.add_node(NodeType::Argument(arg_count as usize)));
+                stack.push_front((-arg_count, 0));
+            }
+        };
+    }
+    
+    for (index, curr) in block.iter().enumerate().map(|(index, curr)| (index as isize, curr)) {
+
+        match &curr.opcode {
+            Opcode::AVMOpcode(AVMOpcode::Noop) => {
+                match &curr.immediate {
+                    Some(value) => index_to_node.insert(index, graph.add_node(NodeType::Value(value.clone()))),
+                    None => continue,
+                };
+            }
+            Opcode::AVMOpcode(avm_op) => drop(index_to_node.insert(index, graph.add_node(NodeType::AVMOpcode(avm_op.clone())))),
+            _ => panic!("Graph reduce should never encounter a virtual opcode"),
+        }
+        
+        let effects = curr.effects();
+        
+        let mut output_number = 0;
+        let mut input_number = 0;
+        
+        for effect in effects {
+            match effect {
+                OpcodeEffect::PopStack => {
+                    touch!(data_stack, 1);
+                    data_stack.pop_back();
+                }
+                OpcodeEffect::PushStack => {
+                    data_stack.push_back((index, output_number));
+                    output_number += 1;
+                }
+                OpcodeEffect::ReadStack(depth) => {
+                    touch!(data_stack, depth);
+                    let (producer, which) = data_stack[data_stack.len() - depth];
+                    let this_node = index_to_node.get(&index).unwrap();
+                    let that_node = index_to_node.get(&producer).unwrap();
+                    graph.add_edge(*this_node, *that_node, (which, input_number));
+                    input_number += 1;
+                }
+                OpcodeEffect::SwapStack(depth) => {
+                    touch!(data_stack, depth);
+                    let swapped = data_stack.swap_remove_back(data_stack.len() - depth - 1).unwrap();
+                    data_stack.push_back(swapped);
+                }
+                x => panic!("effect not yet handled: {}", x.to_name()),
+            }
+        }
+    }
+    
+    let output_node = graph.add_node(NodeType::Output);
+    let mut output_count = 0;
+    
+    while let Some((producer, _)) = data_stack.pop_back() {
+        let node = index_to_node.get(&producer).unwrap();
+        graph.add_edge(output_node, *node, (0, output_count));    // todo handle multi-value
+        output_count += 1;
+    }
+    
+    fn prune_graph(graph: &mut ValueGraph) {
+        loop {
+            let node_count = graph.node_count();
+            graph.retain_nodes(|this, node| {
+                !this[node].is_prunable() || this.neighbors_directed(node, Direction::Incoming).count() > 0
+            });
+            if graph.node_count() == node_count {
+                break;
+            }
+        }
+    }
+    
+    fn relink(graph: &mut ValueGraph, node: NodeIndex) {
+        
+        let input_edges: Vec<EdgeIndex> = graph.edges_directed(node, Direction::Outgoing).map(|e| e.id()).collect();
+        
+        let mut de_duplicated = vec![];
+        let mut tget_elided = vec![];
+        //let mut tset_elided = vec![];
+        
+        // de-duplicate
+        for edge in input_edges {
+            let (_, input) = graph.edge_endpoints(edge).unwrap();
+            de_duplicated.push((*graph.edge_weight(edge).unwrap(), find_original(graph, input)));
+            relink(graph, input);
+            graph.remove_edge(edge);
+        }
+        
+        // elide tget's
+        for (weight, input) in de_duplicated {
+            match &graph[input] {
+                NodeType::AVMOpcode(avm_op) if avm_op == &AVMOpcode::Tget => {
+                    
+                    let mut inputs: Vec<_> = graph.neighbors_directed(input, Direction::Outgoing).collect();
+                    inputs.sort();
+                    let [tuple_node, offset_node]: [NodeIndex; 2] = inputs.try_into().unwrap();
+                    
+                    match &graph[offset_node] {
+                        NodeType::Value(Value::Int(offset)) if offset.to_usize().is_some() => {
+                            tget_elided.push((weight, tget_elision(graph, tuple_node, offset.to_usize().unwrap())));
+                        }
+                        _ => tget_elided.push((weight, input)),
+                    }
+                }
+                _ => tget_elided.push((weight, input)),
+            }
+        }
+        
+        for (weight, input) in tget_elided {
+            graph.add_edge(node, input, weight);
+            //relink(graph, input);
+        }
+        
+        fn find_original(graph: &ValueGraph, node: NodeIndex) -> NodeIndex {
+            match &graph[node] {
+                NodeType::Value(_) => node,
+                NodeType::Argument(_) => node,
+                NodeType::AVMOpcode(avm_op) => match avm_op {
+                    AVMOpcode::Dup0
+                    | AVMOpcode::Dup1
+                    | AVMOpcode::Dup2 => {
+                        find_original(graph, graph.neighbors_directed(node, Direction::Outgoing).next().unwrap())
+                    }
+                    AVMOpcode::Noop
+                    | AVMOpcode::Swap1
+                    | AVMOpcode::Swap2 => unreachable!("{} should have been eliminated", avm_op),
+                    _ => node,
+                }
+                x => panic!("Not implemented for {}", x.pretty_print()),
+            }
+        }
+        
+        fn tget_elision(graph: &ValueGraph, node: NodeIndex, offset: usize) -> NodeIndex {
+            match &graph[node] {
+                NodeType::Value(_) => node,
+                NodeType::Argument(_) => node,
+                NodeType::AVMOpcode(avm_op) => match avm_op {
+                    AVMOpcode::Tset => {
+                        let mut inputs: Vec<_> = graph.neighbors_directed(node, Direction::Outgoing).collect();
+                        inputs.sort();
+                        
+                        let [tuple_node, offset_node, value_node]: [NodeIndex; 3] = inputs.try_into().unwrap();
+                        
+                        println!("{:?}\n{} {:?}\n{:?}", &graph[tuple_node], offset, &graph[offset_node], &graph[value_node]);
+                        
+                        match &graph[offset_node] {
+                            NodeType::Value(Value::Int(set_offset)) if set_offset.to_usize().is_some() => {
+                                match offset == set_offset.to_usize().unwrap() {
+                                    true => value_node,
+                                    false => tget_elision(graph, tuple_node, offset), // need to match against tuple
+                                }
+                            }
+                            _ => node,
+                        }
+                    }
+                    _ => node,
+                }
+                x => panic!("Not implemented for {}", x.pretty_print()),
+            }
+        }
+    }
+    
+    
+    loop {
+        let node_count = graph.node_count();
+        prune_graph(&mut graph);
+        relink(&mut graph, output_node);
+        prune_graph(&mut graph);
+        if graph.node_count() == node_count {
+            break;
+        }
+    }
+    
+    for node in graph.node_indices() {
+        let grey = ConsoleColors::GREY;
+        let reset = ConsoleColors::RESET;
+        let neighbors = graph.neighbors_directed(node, Direction::Outgoing);
+        print!("{}{:>3}{}  {}  ", grey, node.index(), reset, graph[node].pretty_print());
+        for node in neighbors {
+            print!("{}{},{} ", node.index(), grey, reset);
+        }
+        println!();
+    }
+
+    
+    let mut node_to_slot = BTreeMap::new();
+    let mut slot_to_node = vec![];
+    for node in graph.node_indices() {
+        if let NodeType::Argument(arg) = &graph[node] {
+            node_to_slot.insert(node, arg_count as usize - *arg);
+        }
+    }
+    for node in node_to_slot.keys().rev() {
+        slot_to_node.push(*node);
+    }
+    
+    //println!("slots: {:#?}", node_to_slot);
+    println!("nodes: {:#?}", slot_to_node);
+    
+    fn codegen(
+        graph: &mut ValueGraph,
+        node_to_slot: &mut BTreeMap<NodeIndex, usize>,
+        slot_to_node: &mut Vec<NodeIndex>,
+        node: NodeIndex,
+        debug_info: DebugInfo,
+        entropy: &mut SmallRng,
+    ) -> Vec<Instruction> {
+
+        if node_to_slot.len() != slot_to_node.len() {
+            panic!("Slot assignments are inconsistent");
+        }
+        
+        macro_rules! create {
+            ($opcode:expr) => {
+                Instruction {
+		    opcode: $opcode,
+		    immediate: None,
+		    debug_info: debug_info.color(debug_info.attributes.color_group + 1),
+	        }
+            };
+            ($opcode:ident, $value:expr) => {
+                Instruction {
+		    opcode: Opcode::AVMOpcode(AVMOpcode::$opcode),
+		    immediate: Some($value),
+		    debug_info: debug_info.color(debug_info.attributes.color_group + 1),
+	        }
+            };
+        }
+        
+        match &graph[node] {
+            NodeType::Argument(_) => return vec![],
+            NodeType::Value(value) => {
+                if let None = node_to_slot.get(&node) {
+                    node_to_slot.insert(node, node_to_slot.len());
+                    slot_to_node.push(node);
+                }
+                return vec![create!(Noop, value.clone())];
+            }
+            _ => {}
+        }
+        
+        struct Info {
+            code: Vec<Instruction>,
+            connect: (usize, usize),
+            degree: usize,
+            input: NodeIndex,
+            slot: usize,
+        }
+        
+        let mut input_edges: Vec<EdgeIndex> = graph.edges_directed(node, Direction::Outgoing).map(|e| e.id()).collect();
+        input_edges.sort();
+        input_edges.shuffle(entropy);
+        
+        let mut inputs = vec![];
+        
+        for edge in input_edges.clone() {
+            let input = graph.edge_endpoints(edge).unwrap().1;
+            inputs.push(Info {
+                input: input,
+                code: codegen(
+                    graph, node_to_slot, slot_to_node, input, debug_info.color(debug_info.attributes.color_group + 1), entropy
+                ),
+                connect: (0, 0),    // gets overwritten
+                degree: 0,          // gets overwritten
+                slot: 0,            // gets overwritten
+            });
+        }
+        for (edge, mut info) in input_edges.iter().zip(inputs.iter_mut()) {
+            info.connect = *graph.edge_weight(*edge).unwrap();
+            info.degree = graph.neighbors_directed(info.input, Direction::Incoming).count();
+            info.slot = *node_to_slot.get(&info.input).expect(&format!("no slot assigned for input {}", info.input.index()));
+        }
+        for edge in input_edges {
+            graph.remove_edge(edge);
+        }
+        
+        //inputs.sort_by(|a, b| a.connect.1.cmp(&b.connect.1));
+        
+        let mut code = vec![];
+        
+        for info in inputs.iter() {
+            code.extend(info.code.clone());
+            /*if info.degree > 1 {
+            code.extend(create!(AVMOpcode::Dup0));
+            }*/
+        }
+        
+        for info in inputs.iter_mut() {
+            
+            let top_slot = node_to_slot.len() - 1;
+            let dest_slot = top_slot - info.connect.1;
+            let start_slot = *node_to_slot.get(&info.input).expect("no slot assigned");
+            
+            println!("top {} {:?} {} {} {:?}", top_slot, info.input, dest_slot, start_slot, slot_to_node);
+            
+            if start_slot == dest_slot {
+                continue;
+            }
+            
+            // How to swap * and &
+            //   0 * 1 2 & 3 4
+            //   0 4 1 2 & 3 *  (start, top)
+            //   0 4 1 2 * 3 &  (dest, top)
+            //   0 & 1 2 * 3 4  (start, top)
+            
+            // How to swap * and & when dest is top (not the same as above!)
+            //   0 * 1 2 &
+            //   0 & 1 2 *  (start, top)
+            
+            // How to swap a dup'd * into &
+            //     | 0 * 1 2 & 3 4
+            //     | 0 * 1 2 & 3 4 *  (dup start)
+            //     | 0 * 1 2 * 3 4 &  (dest, new top)
+            //   & | 0 * 1 2 * 3 4    (auxpush => auxpop later)
+            
+            if dest_slot == top_slot || start_slot == top_slot {
+                code.push(create!(Opcode::Swap((dest_slot as isize - start_slot as isize).abs() as usize)));
+            } else {
+                code.extend(vec![
+                    create!(Opcode::Swap(top_slot - start_slot)),
+                    create!(Opcode::Swap(top_slot - dest_slot)),
+                    create!(Opcode::Swap(top_slot - start_slot)),
+                ]);
+            }
+            
+            let tmp = slot_to_node[start_slot];
+            slot_to_node[start_slot] = slot_to_node[dest_slot];
+            slot_to_node[dest_slot] = tmp;
+            
+            node_to_slot.insert(slot_to_node[start_slot], start_slot);
+            node_to_slot.insert(slot_to_node[dest_slot], dest_slot);
+        }
+        
+        //println!("  => final slots {:?}\n", slot_to_node);
+        
+        for info in inputs.into_iter() {
+            node_to_slot.remove(&slot_to_node.pop().unwrap());
+        }
+        
+        match &graph[node] {
+            NodeType::Output => {}
+            NodeType::AVMOpcode(avm_op) => {
+                code.push(create!(Opcode::AVMOpcode(*avm_op)));
+                node_to_slot.insert(node, node_to_slot.len());
+                slot_to_node.push(node);
+            }
+            x => panic!("not implemented for {:#?}", x),
+        }
+        
+        code
+    }
+    
+    //let mut entropy: SmallRng = thread_rng();
+    let mut entropy: SmallRng = SeedableRng::seed_from_u64(2);
+    
+    let mut opt = block.clone();
+    
+    for _ in 0..8 {
+        
+        let alt = codegen(
+            &mut graph.clone(),
+            &mut node_to_slot.clone(),
+            &mut slot_to_node.clone(),
+            output_node,
+            debug_info,
+            &mut entropy
+        );
+        
+        let alt_cost = alt.iter().map(|insn| insn.opcode.base_cost()).sum::<u64>();
+        let opt_cost = opt.iter().map(|insn| insn.opcode.base_cost()).sum::<u64>();
+        
+        if alt_cost < opt_cost {
+            opt = alt;
+        }
+    }
+    
+    println!("{:#?}", node_to_slot);
+    println!("{:#?}", slot_to_node);
+    
+    /*let print_graph = graph.map(
+        |_, node| format!("{} {}", node.pretty_print());
+        |_, edge| Some(edge)
+    );
+    println!("{}", format!("{:?}", Dot::with_config(&print_graph, &[Config::EdgeNoLabel]))
+             .replace("\\u{1b}", "\x1b")
+             .replace("\"", "")
+             .replace("\\", "")
+             .replace("[ ]", "")
+             .replace("[ ", "")
+             .replace(" ]", "")
+             .replace(" label = ", "\t")
+    );*/
+
+    //let opt = block.clone();
+    
+    (opt, same)
 }

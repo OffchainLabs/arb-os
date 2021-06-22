@@ -165,9 +165,36 @@ pub fn fuzz_optimizer(data: &[u8], detail: bool) {
     
     
     code = vec![
+        create!(Noop, Some(Value::new_tuple(vec![
+            Value::new_tuple(vec![]), Value::new_tuple(vec![]), Value::new_tuple(vec![])
+        ]))),
+        create!(Tset, Some(Value::Int(Uint256::from_usize(0)))),
+        create!(Tset, Some(Value::Int(Uint256::from_usize(1)))),
+        create!(Dup0),
+        create!(Tget, Some(Value::Int(Uint256::from_usize(0)))),
+        create!(Swap1, Some(Value::Int(Uint256::from_usize(32)))),
+        create!(Minus),
+        create!(Swap1),
+        create!(Tget, Some(Value::Int(Uint256::from_usize(1)))),
+        create!(Swap1, Some(Value::Int(Uint256::from_usize(64)))),
+        create!(Mul),
 
         create!(Dup0),
-        create!(Pop),
+        
+        //create!(Dup0),    // these cancel
+        //create!(Plus),
+        //create!(Pop),     // ------------
+
+        /*create!(Noop, Some(Value::new_tuple(vec![
+            Value::new_tuple(vec![]), Value::new_tuple(vec![])
+        ]))),
+        create!(Tset, Some(Value::Int(Uint256::from_usize(0)))),
+        create!(Tget, Some(Value::Int(Uint256::from_usize(0)))),
+        //create!(Noop, Some(Value::Int(Uint256::from_usize(16)))),
+        create!(Swap1, Some(Value::Int(Uint256::from_usize(32)))),
+        create!(Swap2, Some(Value::Int(Uint256::from_usize(64)))),
+        create!(AddMod),*/
+        
         
         //create!(Noop, Some(Value::new_tuple(vec![Value::new_tuple(vec![])]))),
         //create!(Tset, Some(Value::Int(Uint256::from_usize(0)))),
@@ -190,11 +217,13 @@ pub fn fuzz_optimizer(data: &[u8], detail: bool) {
     if detail {
         print_code(&block, "unoptimized", &BTreeMap::new());
     }
-    let (opt, _) = stack_reduce(&block, detail);
+    let (opt, _) = graph_reduce(&block, detail);
     
     if detail {
-        print_cfg(&create_cfg(&block), &create_cfg(&opt), "quick maths");
+        print_cfg(&create_cfg(&block), &create_cfg(&opt), "graph reduce");
     }
+    
+    return;
     
     // check that the stacks have been preserved
     let (prior_stack, prior_aux, prior_confused) = eval_stacks(&block);
