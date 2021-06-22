@@ -1103,6 +1103,7 @@ fn builtin_func_decls() -> Vec<Import> {
 ///Sorts the `TopLevelDecl`s into collections based on their type
 pub fn sort_top_level_decls(
     decls: &[TopLevelDecl],
+    builtins: bool,
 ) -> (
     Vec<Import>,
     Vec<Func>,
@@ -1110,7 +1111,7 @@ pub fn sort_top_level_decls(
     Vec<GlobalVarDecl>,
     HashMap<usize, Type>,
 ) {
-    let mut imports = builtin_func_decls();
+    let mut imports = if builtins { builtin_func_decls() }  else { vec![] };
     let mut funcs = Vec::new();
     let mut named_types = HashMap::new();
     let mut func_table = HashMap::new();

@@ -54,6 +54,8 @@ pub struct CompileStruct {
     pub consts_file: Option<String>,
     #[clap(short, long)]
     pub release_build: bool,
+    #[clap(short, long)]
+    pub no_builtins: bool,
 }
 
 #[derive(Clap, Debug)]
@@ -128,6 +130,7 @@ impl CompileStruct {
                 &self.inline,
                 constants_path,
                 self.release_build,
+                !self.no_builtins,
             ) {
                 Ok(idk) => idk,
                 Err(mut e) => {
@@ -389,6 +392,7 @@ pub fn compile_from_file(
     inline: &Option<InliningHeuristic>,
     constants_path: Option<&Path>,
     release_build: bool,
+    builtins: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let library = path
         .parent()
@@ -416,6 +420,7 @@ pub fn compile_from_file(
             inline,
             constants_path,
             release_build,
+            builtins,
         )
     } else if let (Some(parent), Some(file_name)) = (path.parent(), path.file_stem()) {
         compile_from_folder(
@@ -433,6 +438,7 @@ pub fn compile_from_file(
             inline,
             constants_path,
             release_build,
+            builtins,
         )
     } else {
         Err(CompileError::new(
@@ -470,9 +476,10 @@ pub fn compile_from_folder(
     inline: &Option<InliningHeuristic>,
     constants_path: Option<&Path>,
     release_build: bool,
+    builtins: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let (mut programs, import_map) =
-        create_program_tree(folder, library, main, file_info_chart, constants_path)?;
+        create_program_tree(folder, library, main, file_info_chart, constants_path, builtins)?;
     resolve_imports(&mut programs, &import_map)?;
     //Conversion of programs from `HashMap` to `Vec` for typechecking
     let type_tree = create_type_tree(&programs);
@@ -538,6 +545,7 @@ fn create_program_tree(
     main: &str,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     constants_path: Option<&Path>,
+    builtins: bool,
 ) -> Result<
     (
         HashMap<Vec<String>, Module>,
@@ -602,6 +610,7 @@ fn create_program_tree(
         let mut string_table = StringTable::new();
         let (imports, funcs, named_types, global_vars, hm) = typecheck::sort_top_level_decls(
             &parse_from_source(source, file_id, &name, &mut string_table, constants_path)?,
+            builtins
         );
         paths.append(&mut imports.iter().map(|imp| imp.path.clone()).collect());
         import_map.insert(name.clone(), imports);
