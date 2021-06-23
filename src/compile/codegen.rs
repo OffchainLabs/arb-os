@@ -138,9 +138,21 @@ fn mavm_codegen_func(
     )?;
     label_gen = lg;
 
-    // put makeframe Instruction at beginning of function, to build the frame (replacing placeholder)
-    code[make_frame_slot] =
-        Instruction::from_opcode(Opcode::MakeFrame(num_args, max_num_locals), debug_info);
+    if let Type::Func(_, _, ret) = func.tipe {
+        // put makeframe Instruction at beginning of function, to build the frame (replacing placeholder)
+        code[make_frame_slot] = Instruction::from_opcode(
+            Opcode::MakeFrame(num_args, max_num_locals, &*ret != &Type::Every),
+            debug_info,
+        );
+    } else {
+        return Err(new_codegen_error(
+            format!(
+                "type checking bug: function with non function type \"{}\"",
+                func.tipe.display()
+            ),
+            debug_info.location,
+        ));
+    }
     Ok((label_gen, code))
 }
 
@@ -1234,7 +1246,7 @@ fn mavm_codegen_expr<'a>(
             ));
             Ok((label_gen, code, num_locals))
         }
-        TypeCheckedExprKind::FunctionCall(fexpr, args, _, _) => {
+        TypeCheckedExprKind::FunctionCall(fexpr, args, func_type, _) => {
             let n_args = args.len();
             let (ret_label, lg) = label_gen.next();
             label_gen = lg;
@@ -1258,11 +1270,14 @@ fn mavm_codegen_expr<'a>(
                 label_gen = lg;
                 code = c;
             }
-            code.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Noop),
-                Value::Label(ret_label),
-                debug,
-            ));
+            //this is the thing that pushes the address to the stack
+            if &Type::Every != func_type {
+                code.push(Instruction::from_opcode_imm(
+                    Opcode::AVMOpcode(AVMOpcode::Noop),
+                    Value::Label(ret_label),
+                    debug,
+                ));
+            }
             let (lg, c, fexpr_locals) = mavm_codegen_expr(
                 fexpr,
                 code,

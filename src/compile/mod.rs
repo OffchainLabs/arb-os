@@ -478,8 +478,14 @@ pub fn compile_from_folder(
     release_build: bool,
     builtins: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
-    let (mut programs, import_map) =
-        create_program_tree(folder, library, main, file_info_chart, constants_path, builtins)?;
+    let (mut programs, import_map) = create_program_tree(
+        folder,
+        library,
+        main,
+        file_info_chart,
+        constants_path,
+        builtins,
+    )?;
     resolve_imports(&mut programs, &import_map)?;
     //Conversion of programs from `HashMap` to `Vec` for typechecking
     let type_tree = create_type_tree(&programs);
@@ -610,7 +616,7 @@ fn create_program_tree(
         let mut string_table = StringTable::new();
         let (imports, funcs, named_types, global_vars, hm) = typecheck::sort_top_level_decls(
             &parse_from_source(source, file_id, &name, &mut string_table, constants_path)?,
-            builtins
+            builtins,
         );
         paths.append(&mut imports.iter().map(|imp| imp.path.clone()).collect());
         import_map.insert(name.clone(), imports);

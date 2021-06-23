@@ -159,6 +159,7 @@ Type: Type = {
 	<i: "impure"?> "func" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => Type::Func(i.is_some(), a, Box::new(r.unwrap_or(Type::Void))),
 	"any" => Type::Any,
 	"option<" <t1:Type> ">" => Type::Option(Box::new(t1)),
+	"every" => Type::Every,
 	Ident => Type::Nominal(current_path.to_owned(), <>),
 };
 

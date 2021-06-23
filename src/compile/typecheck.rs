@@ -1111,7 +1111,11 @@ pub fn sort_top_level_decls(
     Vec<GlobalVarDecl>,
     HashMap<usize, Type>,
 ) {
-    let mut imports = if builtins { builtin_func_decls() }  else { vec![] };
+    let mut imports = if builtins {
+        builtin_func_decls()
+    } else {
+        vec![]
+    };
     let mut funcs = Vec::new();
     let mut named_types = HashMap::new();
     let mut func_table = HashMap::new();

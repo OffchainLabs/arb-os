@@ -25,11 +25,13 @@ pub fn fix_tuple_size(
     for insn in code_in.iter() {
         let debug_info = insn.debug_info;
         match insn.opcode {
-            Opcode::MakeFrame(nargs, ntotal) => {
-                code_out.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                    debug_info,
-                )); // move return address to aux stack
+            Opcode::MakeFrame(nargs, ntotal, return_address) => {
+                if return_address {
+                    code_out.push(Instruction::from_opcode(
+                        Opcode::AVMOpcode(AVMOpcode::AuxPush),
+                        debug_info,
+                    )); // move return address to aux stack
+                }
                 locals_tree = TupleTree::new(ntotal, true);
                 if let Some(imm) = &insn.immediate {
                     code_out.push(Instruction::from_opcode_imm(
