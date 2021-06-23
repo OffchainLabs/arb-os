@@ -42,8 +42,6 @@ use inbox::emitGenesisBlockReceipt;
 use output::output_init;
 use output::txReceipts_init;
 
-use pluggables::pluggables_init;
-
 use precompiles::precompiles_init;
 
 use std::bytearray::bytearray_unmarshalBytes;
@@ -79,7 +77,6 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         chainParams_init();
         arbStatistics_init();
 
-        pluggables_init();
         codeSegment_init();
         output_init();
         decompression_init();

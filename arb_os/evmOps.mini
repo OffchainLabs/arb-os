@@ -139,10 +139,6 @@ public impure func evmOps_init() {
 
 }
 
-public impure func getEvmOpJumpTable() -> [const::NumEvmOps]impure func() {
-    return evmOpJumpTable;
-}
-
 #[noinline, ] public impure func dispatchForEvmOp(index: uint) {
     asm(evmOpJumpTable[index],) {
         auxpop pop   // discard this function's call frame

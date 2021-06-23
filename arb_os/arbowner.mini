@@ -19,8 +19,6 @@ use evmCallStack::evmCallStack_callHitError;
 use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallFrame_getCaller;
 use evmCallStack::evmCallFrame_getCallvalue;
-use evmCallStack::evmCallFrame_getAccount;
-use evmCallStack::evmCallStack_setAccount;
 use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallStack_stackDepth;
 use evmCallStack::evmCallStack_returnFromCall;
@@ -30,10 +28,6 @@ use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
 use evmOps::evmOp_revert_knownCodePc;
 use evmOps::doCreationOpcode;
-
-use pluggables::ModuleFunction;
-use pluggables::installPluggable;
-use pluggables::bindContractAddressToPluggable;
 
 use gasAccounting::setFairGasPriceSender;
 use gasAccounting::isFairGasPriceSender;
@@ -95,8 +89,6 @@ public impure func arbowner_txcall() {
             arbowner_getUploadedCodeHash(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_finishCodeUploadAsArbosUpgrade) {
            arbowner_finishCodeUploadAsArbosUpgrade(topFrame, calldata);
-        } elseif (funcCode == const::funcCode_ArbOwner_finishCodeUploadAsPluggable) {
-           arbowner_finishCodeUploadAsPluggable(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_addToReserveFunds) {
             arbowner_addToReserveFunds(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_getChainParameter) {
@@ -129,8 +121,6 @@ public impure func arbowner_txcall() {
             arbowner_isFairGasPriceSender(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_getAllFairGasPriceSenders) {
             arbowner_getAllFairGasPriceSenders(topFrame, calldata);
-        } elseif (funcCode == const::funcCode_ArbOwner_bindAddressToPluggable) {
-            arbowner_bindAddressToPluggable(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
@@ -222,40 +212,6 @@ impure func arbowner_finishCodeUploadAsArbosUpgrade(_topFrame: EvmCallFrame, cal
         let _ = evmCallStack_returnFromCall(true, 0, 0, Some(upgradeCodePoint));
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 44, 0, 0);
-    }
-}
-
-impure func arbowner_finishCodeUploadAsPluggable(_topFrame: EvmCallFrame, calldata: ByteArray) { // ()
-    if (bytearray_size(calldata) != 68) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 50, 0, 0);
-    }
-    let id = bytearray_get256(calldata, 4);
-    let keepState = bytearray_get256(calldata, 36) != 0;
-    if let Some(upgrade) = upgradeInProgress {
-        if let Some(_) = installPluggable(id, unsafecast<ModuleFunction>(avmCodeBuilder_finish(upgrade)), keepState) {
-            evmOp_return(0, 0);
-        } else {
-            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 51, 0, 0);
-        }
-    } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 52, 0, 0);
-    }
-}
-
-impure func arbowner_bindAddressToPluggable(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, uint)
-    if (bytearray_size(calldata) != 68) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 60, 0, 0);
-    }
-    let addr = address(bytearray_get256(calldata, 4));
-    let pluggableId = bytearray_get256(calldata, 36);
-
-    let acct = evmCallFrame_getAccount(topFrame, addr);
-    acct = bindContractAddressToPluggable(acct, pluggableId);
-    let success = evmCallStack_setAccount(addr, acct);
-    if (success) {
-        evmOp_return(0, 0);
-    } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 61, 0, 0);
     }
 }
 

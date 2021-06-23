@@ -2502,7 +2502,7 @@ fn _test_arb_stats() -> Result<(), ethabi::Error> {
     assert_eq!(storage, Uint256::from_u64(0));
     // assert_eq!(_arbgas, Uint256::from_u64(1_490_972));  // disable this because it will vary over versions
     assert_eq!(txs, Uint256::from_u64(0));
-    assert_eq!(contracts, Uint256::from_u64(19));
+    assert_eq!(contracts, Uint256::from_u64(20));
     Ok(())
 }
 
