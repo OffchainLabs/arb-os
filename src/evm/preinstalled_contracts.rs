@@ -1455,7 +1455,7 @@ pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), et
     let tx_id = machine.runtime_env.insert_tx_message(
         my_addr.clone(),
         Uint256::from_u64(1000000000),
-        Uint256::zero(),
+        None,
         my_addr.clone(),
         Uint256::from_u64(10000),
         &vec![],
@@ -2660,7 +2660,7 @@ impl ArbosTest {
         let _tx_id = machine.runtime_env.insert_tx_message(
             caller_addr,
             Uint256::from_usize(1_000_000_000),
-            Uint256::zero(),
+            None,
             callee_addr,
             callvalue,
             &calldata,
