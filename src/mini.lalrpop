@@ -61,8 +61,13 @@ TypeDecl: TypeDecl = {
 }
 
 FuncDecl: Func = {
-	<lno: @L> <attribs: ("#[" <Attributes> "]")?> <p: "public"?> <imp: "impure"?> "func" <i:Ident> "(" <fa:FuncArgs> ")" <t: ("->" <Type>)?> <cb:CodeBlock> =>
+	<lno: @L> <attribs: ("#[" <Attributes> "]")?> <p: "public"?> <imp: "impure"?> "func" <i:Ident> "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> =>
 	        Func::new(i, imp.is_some(), fa, t.unwrap_or(Type::Void), cb, p.is_some(), DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default())),
+}
+
+Return: Type = {
+    "->" <Type> => <>,
+    "noreturn" => Type::Every,
 }
 
 FuncArgs: Vec<FuncArg> = {
