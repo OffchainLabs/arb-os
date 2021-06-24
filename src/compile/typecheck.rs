@@ -1348,7 +1348,6 @@ fn typecheck_statement<'a>(
     let kind = &statement.kind;
     let debug_info = statement.debug_info;
     let (stat, binds) = match kind {
-        StatementKind::Noop() => Ok((TypeCheckedStatementKind::Noop(), vec![])),
         StatementKind::ReturnVoid() => {
             if Type::Void.assignable(return_type, type_tree, HashSet::new()) {
                 Ok((TypeCheckedStatementKind::ReturnVoid(), vec![]))

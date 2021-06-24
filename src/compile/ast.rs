@@ -993,7 +993,6 @@ pub struct Statement {
 ///A raw statement containing no debug information that has not yet been type checked.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum StatementKind {
-    Noop(),
     ReturnVoid(),
     Return(Expr),
     Break(Option<Expr>, Option<String>),
