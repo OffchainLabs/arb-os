@@ -42,18 +42,18 @@ public impure func errorHandler() {
 
 
     if (inErrorHandler) {
-        asm(666,) { debugprint };
+        debug(666);
     } else {
         inErrorHandler = true;
         if (asm() uint { getgas } > (~0 - 500)) {
             // application ran out of ArbGas
             // duplicate stackInfo call inside both arms of loop, to make sure it happens after the gas check
             let (txid, addrs, parentAddrs) = evmCallStack_stackInfo();
-            asm((665, txid, addrs, parentAddrs),) { debugprint };
+            debug((665, txid, addrs, parentAddrs));
         } else {
             // some other error
             let (txid, addrs, parentAddrs) = evmCallStack_stackInfo();
-            asm((666, txid, addrs, parentAddrs),) { debugprint };
+            debug((666, txid, addrs, parentAddrs));
         }
     }
 

@@ -1591,7 +1591,7 @@ public func _evmCallFrame_getParent(frame: EvmCallFrame) -> option<EvmCallFrame>
 }
 
 public impure func evmCallStack_callHitError(errInfo: any) {
-    asm((664, errInfo),) { debugprint };
+    debug((664, errInfo));
     if (evmCallStack_returnFromCall(false, 0, 0, None<impure func()>) == None<()>) {
         // something has gone seriously wrong with the evmCallStack
         // recover by clearing the evmCallStack, refunding unused gas, and jumping back to the error handler

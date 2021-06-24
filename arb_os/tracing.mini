@@ -37,7 +37,7 @@ public impure func evmTracer_emit() {
             theStack = us;
             val = (item, val);
         } else {
-            asm((20000, val),) { debugprint };
+            debug((20000, val));
             return;
         }
     }

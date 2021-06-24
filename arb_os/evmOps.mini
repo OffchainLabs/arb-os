@@ -926,7 +926,7 @@ public impure func evmOp_revert(memOffset: uint, memNbytes: uint) {
 
 public impure func evmOp_revert_knownCodePc(codeAddr: address, evmPc: uint, memOffset: uint, memNbytes: uint) {
     let (txid, addrs, parentAddrs) = evmCallStack_stackInfo();
-    asm((10000, codeAddr, evmPc, txid, addrs, parentAddrs),) { debugprint };
+    debug((10000, codeAddr, evmPc, txid, addrs, parentAddrs));
     evmOp_revert(memOffset, memNbytes);
 }
 

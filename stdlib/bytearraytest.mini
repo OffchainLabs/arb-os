@@ -170,8 +170,8 @@ func tests() -> uint {
     let mb2 = bytearray_marshalFull(ba2);
     let mb3 = bytearray_marshalFull(ba3);
     if (mb2 != mb3) {
-        asm(mb2, ) { debugprint };
-        asm(mb3, ) { debugprint };
+        debug(mb2);
+        debug(mb3);
         return 16;
     }
 

@@ -128,11 +128,11 @@ func testRlpHasher() {
     if let Some(res) = rlp_decodeMessageInfo(bytestream_new(oldBuf)) {
         let (_, tx) = res;
         if (keccak256(oldBuf, 0, bytearray_size(oldBuf)) != rlp_encodeAndHashMessageInfoForSignature(tx, Some(tx.v))) {
-            asm(12,) { debugprint };
+            debug(12);
             panic;
         }
     } else {
-        asm(13,) { debugprint };
+        debug(13);
         panic;
     }
 

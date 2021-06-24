@@ -1114,7 +1114,7 @@ public func deferredPayments_apply(acctStore: AccountStore, dp: DeferredPayments
             if let Some(uAcctStore) = accountStore_payFromEscrow(acctStore, escrowKey, recipient, amount) {
                 acctStore = uAcctStore;
             } else {
-                asm(11000,) { debugprint };
+                debug(11000);
                 return None<AccountStore>;
             }
         } else {

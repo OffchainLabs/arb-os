@@ -259,7 +259,7 @@ public impure func retryBuffer_delete(rbuf: RetryBuffer, txId: uint, withRefund:
             } else {
                 // try to refund from the escrow, ignoring errors (which should never happen)
                 if (evmCallStack_transferEthFromEscrow(rtx.callvalueEscrowKey, rtx.beneficiary, rtx.callvalue) == None<()>) {
-                    asm(11001,) { debugprint };
+                    debug(11001);
                 }
             }
         }
