@@ -212,9 +212,17 @@ Values of type `anytype` do not have any representation that is understood by th
 
 > Create a new local variable and initialize it with the value of *expression*.  The compiler infers that the new variable has the same type as *expression* .  The variable goes out of scope when execution leaves the current codeblock.  If the new variable has the same name as an already-existing variable, it will mask the existing variable definition for as long as the new variable is in scope.
 
-`let` ( *name1* , *name2*, ... ) = *expression* ;
+`let` ( *nameorbinding1* , *nameorbinding2*, ... ) = *expression* ;
 
-> Create multiple new variables based on unpacking a tuple. *expression* must be a tuple type, with the number of fields in the tuple equal to the number of names on the left-hand side.  The compiler creates a new local variable for each name on the left-hand side, and infers the type of each new variable based on the type of the corresponding field of the right-hand side tuple.
+> Where each nameorbinding may be:
+
+*identifier*
+
+> Or
+
+**identifier*
+
+> Creates or assigns to multiple variables based on unpacking a tuple. If the *nameorbinding* is an identifier it creates a new variable, if *nameorbinding* is **identifier* it assigns to an existing variable with that name.  *expression* must be a tuple type, with the number of fields in the tuple equal to the number of names on the left-hand side.  The compiler creates a new local variable for each name on the left-hand side, and infers the type of each new variable based on the type of the corresponding field of the right-hand side tuple.
 >
 > [Potential improvement: Allow left-hand side names to be replaced by `_`, allowing unneeded components to be discarded without creating a variable.]
 >
