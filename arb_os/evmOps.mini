@@ -700,7 +700,7 @@ public impure func evmOp_log4(
 }
 
 public impure func evmOp_gas() -> uint {
-    return (pushGas()) / const::Charging_ArbGasPerAvmGas;
+    return (getGas()) / const::Charging_ArbGasPerAvmGas;
 }
 
 #[noinline, ] public impure func evmOp_callAndReturn(

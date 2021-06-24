@@ -540,7 +540,7 @@ public impure func redeemRetryableTxInTx(txToRedeem: uint) -> (bool, ByteArray) 
                 rtx with {
                     l1Message: adjustGasInfoInFakeIncomingRequest(
                         rtx.l1Message,
-                        63 * (pushGas()) / (64 * const::Charging_ArbGasPerAvmGas),  // inner tx will get approximately this much gas
+                        63 * (getGas()) / (64 * const::Charging_ArbGasPerAvmGas),  // inner tx will get approximately this much gas
                         evmCallStack_currentTxRequestGasBid(),
                     )
                 }

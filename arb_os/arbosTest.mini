@@ -181,7 +181,7 @@ impure func arbosTest_burnArbGas(_topFrame: EvmCallFrame, calldata: ByteArray) {
         evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 30, 0, 0);
     }
     let gasToBurn = bytearray_get256(calldata, 4) * const::Charging_DefaultArbGasDivisor;
-    let gasLeft = pushGas();
+    let gasLeft = getGas();
     if (gasToBurn >= gasLeft) {
         gasToBurn = gasLeft - 1;
     }
