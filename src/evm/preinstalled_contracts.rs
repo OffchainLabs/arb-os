@@ -5,6 +5,7 @@ use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
 use ethers_core::utils::keccak256;
 use ethers_signers::{Signer, Wallet};
+use std::option::Option::None;
 use std::path::Path;
 
 pub struct _ArbInfo {
@@ -322,11 +323,17 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
-    pub fn _start_code_upload(&self, machine: &mut Machine) -> Result<(), ethabi::Error> {
+    pub fn _start_code_upload(
+        &self,
+        machine: &mut Machine,
+        last_upgrade_hash: Option<Uint256>,
+    ) -> Result<(), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function_compressed(
             self.my_address.clone(),
             "startCodeUpload",
-            &[],
+            &[ethabi::Token::FixedBytes(
+                last_upgrade_hash.unwrap_or(Uint256::zero()).to_bytes_be(),
+            )],
             machine,
             Uint256::zero(),
             self.wallet,
@@ -1543,7 +1550,7 @@ fn _try_upgrade(
     previous_upgrade_hash: Option<Uint256>,
 ) -> Result<Option<Uint256>, ethabi::Error> {
     let uploader = CodeUploader::_new_from_file(mexe_path);
-    arbowner._start_code_upload(machine)?;
+    arbowner._start_code_upload(machine, None)?;
 
     let mut accum = vec![];
     for buf in uploader.instructions {
@@ -1717,7 +1724,7 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
 
     arbowner._give_ownership(&mut machine, my_addr, true)?;
 
-    arbowner._start_code_upload(&mut machine)?;
+    arbowner._start_code_upload(&mut machine, None)?;
 
     let mcode = vec![0x90u8, 1u8, 0u8, 42u8]; // debugprint(42)
     arbowner._continue_code_upload(&mut machine, mcode)?;
