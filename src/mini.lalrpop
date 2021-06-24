@@ -125,7 +125,7 @@ StatementKind: StatementKind = {
 }
 
 MatchPattern: MatchPattern = {
-	<Ident> => MatchPattern::new_simple(<>,()),
+	<Ident> => MatchPattern::new_bind(<>,()),
 	"*"<Ident> => MatchPattern::new_assign(<>,()),
 	"(" <CommaedMatchPatterns> ")" => MatchPattern::new_tuple(<>,()),
 }

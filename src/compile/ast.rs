@@ -1015,15 +1015,15 @@ pub struct MatchPattern<T = ()> {
 ///Either a single identifier or a tuple of identifiers, used in mini let bindings.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MatchPatternKind<T> {
-    Simple(StringId),
+    Bind(StringId),
     Assign(StringId),
     Tuple(Vec<T>),
 }
 
 impl<T> MatchPattern<T> {
-    pub fn new_simple(id: StringId, cached: T) -> Self {
+    pub fn new_bind(id: StringId, cached: T) -> Self {
         Self {
-            kind: MatchPatternKind::Simple(id),
+            kind: MatchPatternKind::Bind(id),
             cached,
         }
     }

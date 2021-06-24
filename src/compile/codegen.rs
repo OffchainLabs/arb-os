@@ -726,7 +726,7 @@ fn mavm_codegen_tuple_pattern(
     debug_info: DebugInfo,
 ) -> Result<(usize, HashMap<usize, usize>, HashSet<usize>), CodegenError> {
     match &pattern.kind {
-        MatchPatternKind::Simple(name) => {
+        MatchPatternKind::Bind(name) => {
             let mut bindings = HashMap::new();
             bindings.insert(*name, local_slot_num_base);
             code.push(Instruction::from_opcode_imm(

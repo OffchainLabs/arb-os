@@ -305,7 +305,7 @@ fn inline(
                                     func.args
                                         .iter()
                                         .map(|arg| {
-                                            TypeCheckedMatchPattern::new_simple(
+                                            TypeCheckedMatchPattern::new_bind(
                                                 arg.name,
                                                 arg.tipe.clone(),
                                             )
@@ -820,7 +820,7 @@ pub type TypeCheckedMatchPattern = MatchPattern<Type>;
 impl TypeCheckedMatchPattern {
     fn collect_identifiers(&self) -> Vec<StringId> {
         match &self.kind {
-            MatchPatternKind::Simple(id) => vec![*id],
+            MatchPatternKind::Bind(id) => vec![*id],
             MatchPatternKind::Assign(id) => vec![*id],
             MatchPatternKind::Tuple(pats) => pats
                 .iter()
@@ -1490,9 +1490,9 @@ fn typecheck_statement<'a>(
                 ));
             }
             match &pat.kind {
-                MatchPatternKind::Simple(name) => Ok((
+                MatchPatternKind::Bind(name) => Ok((
                     TypeCheckedStatementKind::Let(
-                        TypeCheckedMatchPattern::new_simple(*name, tce_type.clone()),
+                        TypeCheckedMatchPattern::new_bind(*name, tce_type.clone()),
                         tc_expr,
                     ),
                     vec![(*name, tce_type)],
@@ -1686,8 +1686,8 @@ fn typecheck_patvec(
                 }
                 let pat = &patterns[i];
                 match &pat.kind {
-                    MatchPatternKind::Simple(name) => {
-                        tc_pats.push(TypeCheckedMatchPattern::new_simple(*name, rhs_type.clone()));
+                    MatchPatternKind::Bind(name) => {
+                        tc_pats.push(TypeCheckedMatchPattern::new_bind(*name, rhs_type.clone()));
                         bindings.push((*name, rhs_type.clone()));
                     }
                     MatchPatternKind::Assign(name) => {
