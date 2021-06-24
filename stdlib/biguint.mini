@@ -427,7 +427,7 @@ public func biguint_divmod(x: []uint, y: []uint) -> option<([]uint, []uint)> {
         if let Some(diff) = biguint_subtract(x, ybnt) {
             x = diff;
         } else {
-            panic;
+            error;
         }
     }
 
@@ -466,7 +466,7 @@ public func biguint_divmod(x: []uint, y: []uint) -> option<([]uint, []uint)> {
             ) {
                 x = diff;
             } else {
-                panic;
+                error;
             }
         }
         i = i-1;
@@ -502,7 +502,7 @@ public func biguint_mod(x: []uint, y: []uint) -> option<[]uint> {
         if let Some(diff) = biguint_subtract(x, ybnt) {
             x = diff;
         } else {
-            panic;
+            error;
         }
     }
 
@@ -536,10 +536,10 @@ public func biguint_mod(x: []uint, y: []uint) -> option<[]uint> {
             ) {
                 x = diff;
             } else {
-                panic;
+                error;
             }
         }
-        if (x[i] != 0) { panic; }
+        if (x[i] != 0) { error; }
         i = i-1;
     }
     return Some(biguint_shiftRight(x, shiftBits));

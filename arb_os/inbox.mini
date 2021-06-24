@@ -547,7 +547,7 @@ func incomingRequestQueue_getOrDie(q: IncomingRequestQueue) -> (IncomingRequestQ
     return xif let Some(res) = incomingRequestQueue_get(q) {
         res
     } else {
-        panic
+        error
     };
 }
 
@@ -594,7 +594,7 @@ func txRequestQueue_getOrDie(q: TxRequestQueue) -> (TxRequestQueue, TxRequestDat
     return xif let Some(res) = txRequestQueue_get(q) {
         res
     } else {
-        panic
+        error
     };
 }
 

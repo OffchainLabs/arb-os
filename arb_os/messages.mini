@@ -186,5 +186,5 @@ public impure func handleL2Request(
         initEvmCallStack(callKind, request, None<ByteArray>, None<uint>);  // should never return
     }
 
-    return panic;   // this should never be reached
+    return error;   // this should never be reached
 }

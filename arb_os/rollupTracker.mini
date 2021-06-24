@@ -32,7 +32,7 @@ public impure func rollupTracker_init() {
     ) {
         return;
     } else {
-        panic;
+        error;
     }
 }
 

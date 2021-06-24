@@ -106,7 +106,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         codeSegment_init();
 
         if (initializePreinstalls(true) == None<()>) {
-            panic;   // don't try to run without preinstalls and precompiles
+            error;   // don't try to run without preinstalls and precompiles
         }
 
         // special-case fix for the WETH9 TransparentUpgradableProxy contract, on mainnet only
@@ -174,7 +174,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         txReceipts_init();
         rollupTracker_init();
         if (initializePreinstalls(false) == None<()>) {
-            panic;   // don't try to run without preinstalls and precompiles
+            error;   // don't try to run without preinstalls and precompiles
         }
 
         // advance the Arbitrum block number, and emit a block receipt

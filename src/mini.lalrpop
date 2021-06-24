@@ -312,7 +312,9 @@ Expr13: Expr = {
 	"(" <e: Expr> ")" => <>,
 	<lno: @L> <cb: CodeBlockNew> => Expr { kind: ExprKind::CodeBlock(cb), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> "(" <c: CommaedExprs?> ")" => Expr { kind: ExprKind::Tuple(c.unwrap_or(vec![])), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
-	<lno: @L> "panic" => Expr { kind: ExprKind::Panic, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+        <lno: @L> "error" => Expr { kind: ExprKind::Error, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+        <lno: @L> "pushGas" "(" ")" => Expr { kind: ExprKind::PushGas, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+        <lno: @L> "setGas" "(" <e:Expr> ")" => Expr { kind: ExprKind::SetGas(Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> <i: Ident> => Expr { kind: ExprKind::VariableRef(i), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 }
 

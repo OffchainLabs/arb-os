@@ -212,7 +212,7 @@ fn strip_returns(to_strip: &mut TypeCheckedNode, _state: &(), _mut_state: &mut (
                                 debug_info: inner.debug_info,
                             }],
                             Some(Box::new(TypeCheckedExpr {
-                                kind: TypeCheckedExprKind::Panic,
+                                kind: TypeCheckedExprKind::Error,
                                 debug_info: inner.debug_info,
                             })),
                             None,
@@ -895,7 +895,9 @@ pub enum TypeCheckedExprKind {
     StructMod(Box<TypeCheckedExpr>, usize, Box<TypeCheckedExpr>, Type),
     Cast(Box<TypeCheckedExpr>, Type),
     Asm(Type, Vec<Instruction>, Vec<TypeCheckedExpr>),
-    Panic,
+    Error,
+    PushGas,
+    SetGas(Box<TypeCheckedExpr>),
     Try(Box<TypeCheckedExpr>, Type),
     If(
         Box<TypeCheckedExpr>,
@@ -922,9 +924,11 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             | TypeCheckedExprKind::Const(_, _)
             | TypeCheckedExprKind::NewBuffer
             | TypeCheckedExprKind::NewMap(_)
-            | TypeCheckedExprKind::Panic => vec![],
+            | TypeCheckedExprKind::PushGas
+            | TypeCheckedExprKind::Error => vec![],
             TypeCheckedExprKind::UnaryOp(_, exp, _)
             | TypeCheckedExprKind::Variant(exp)
+            | TypeCheckedExprKind::SetGas(exp)
             | TypeCheckedExprKind::TupleRef(exp, _, _)
             | TypeCheckedExprKind::DotRef(exp, _, _, _)
             | TypeCheckedExprKind::NewArray(exp, _, _)
@@ -1016,7 +1020,9 @@ impl TypeCheckedExpr {
     pub fn get_type(&self) -> Type {
         match &self.kind {
             TypeCheckedExprKind::NewBuffer => Type::Buffer,
-            TypeCheckedExprKind::Panic => Type::Every,
+            TypeCheckedExprKind::Error => Type::Every,
+            TypeCheckedExprKind::PushGas => Type::Uint,
+            TypeCheckedExprKind::SetGas(_t) => Type::Void,
             TypeCheckedExprKind::UnaryOp(_, _, t) => t.clone(),
             TypeCheckedExprKind::Binary(_, _, _, t) => t.clone(),
             TypeCheckedExprKind::Trinary(_, _, _, _, t) => t.clone(),
@@ -1736,7 +1742,7 @@ fn typecheck_expr(
     Ok(TypeCheckedExpr {
         kind: match &expr.kind {
             ExprKind::NewBuffer => Ok(TypeCheckedExprKind::NewBuffer),
-            ExprKind::Panic => Ok(TypeCheckedExprKind::Panic),
+            ExprKind::Error => Ok(TypeCheckedExprKind::Error),
             ExprKind::UnaryOp(op, subexpr) => {
                 let tc_sub = typecheck_expr(
                     subexpr,
@@ -2463,6 +2469,29 @@ fn typecheck_expr(
                         ),
                         loc,
                     )),
+                }
+            }
+            ExprKind::PushGas => Ok(TypeCheckedExprKind::PushGas),
+            ExprKind::SetGas(expr) => {
+                let expr = typecheck_expr(
+                    expr,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    scopes,
+                )?;
+                if expr.get_type() != Type::Uint {
+                    Err(new_type_error(
+                        format!(
+                            "SetGas(_) requires a uint, found a {}",
+                            expr.get_type().display()
+                        ),
+                        debug_info.location,
+                    ))
+                } else {
+                    Ok(TypeCheckedExprKind::SetGas(Box::new(expr)))
                 }
             }
             ExprKind::If(cond, block, else_block) => {
