@@ -2393,7 +2393,7 @@ fn do_ecmul(x0: Uint256, x1: Uint256, nui: Uint256) -> Result<(Uint256, Uint256)
     let p = if px == Fq::zero() && py == Fq::zero() {
         G1::zero()
     } else {
-        AffineG1::new(px, py).unwrap().into()
+        AffineG1::new(px, py).map_err(|_| "Not on curve")?.into()
     };
 
     if let Some(ret) = AffineG1::from_jacobian(p * n) {
