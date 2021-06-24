@@ -333,7 +333,6 @@ fn mavm_codegen_statement(
     let debug = statement.debug_info;
     let loc = statement.debug_info.location;
     match &statement.kind {
-        TypeCheckedStatementKind::Noop() => Ok((label_gen, 0, HashMap::new())),
         TypeCheckedStatementKind::ReturnVoid() => {
             code.push(Instruction::from_opcode(Opcode::Return, debug));
             Ok((label_gen, 0, HashMap::new()))

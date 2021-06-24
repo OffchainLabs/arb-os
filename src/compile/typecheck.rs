@@ -758,7 +758,6 @@ pub struct TypeCheckedStatement {
 ///A mini statement that has been type checked.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TypeCheckedStatementKind {
-    Noop(),
     ReturnVoid(),
     Return(TypeCheckedExpr),
     Break(Option<TypeCheckedExpr>, String),
@@ -775,7 +774,7 @@ pub enum TypeCheckedStatementKind {
 impl AbstractSyntaxTree for TypeCheckedStatement {
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
         match &mut self.kind {
-            TypeCheckedStatementKind::Noop() | TypeCheckedStatementKind::ReturnVoid() => vec![],
+            TypeCheckedStatementKind::ReturnVoid() => vec![],
             TypeCheckedStatementKind::Return(exp)
             | TypeCheckedStatementKind::Expression(exp)
             | TypeCheckedStatementKind::Let(_, exp)
@@ -801,8 +800,7 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
         }
     }
     fn is_pure(&mut self) -> bool {
-        if let TypeCheckedStatementKind::Noop() | TypeCheckedStatementKind::ReturnVoid() = self.kind
-        {
+        if let TypeCheckedStatementKind::ReturnVoid() = self.kind {
             true
         } else if let TypeCheckedStatementKind::AssignGlobal(_, _) = self.kind {
             false
