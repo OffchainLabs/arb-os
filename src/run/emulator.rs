@@ -2108,7 +2108,8 @@ impl Machine {
                         let x0 = self.stack.pop_uint(&self.state)?;
                         let x1 = self.stack.pop_uint(&self.state)?;
                         let n = self.stack.pop_uint(&self.state)?;
-                        let (z0, z1) = do_ecmul(x0, x1, n);
+                        let (z0, z1) = do_ecmul(x0, x1, n)
+                            .map_err(|msg| ExecutionError::new(&msg, &self.state, None))?;
                         self.stack.push_uint(z1);
                         self.stack.push_uint(z0);
                         self.incr_pc();
@@ -2382,12 +2383,12 @@ fn do_ecadd(x0: Uint256, x1: Uint256, y0: Uint256, y1: Uint256) -> (Uint256, Uin
     }
 }
 
-fn do_ecmul(x0: Uint256, x1: Uint256, nui: Uint256) -> (Uint256, Uint256) {
+fn do_ecmul(x0: Uint256, x1: Uint256, nui: Uint256) -> Result<(Uint256, Uint256), &'static str> {
     use parity_bn::{AffineG1, Fq, Fr, Group, G1};
 
-    let px = Fq::from_slice(&x0.to_bytes_be()).unwrap();
-    let py = Fq::from_slice(&x1.to_bytes_be()).unwrap();
-    let n = Fr::from_slice(&nui.to_bytes_be()).unwrap();
+    let px = Fq::from_slice(&x0.to_bytes_be()).map_err(|_| "Invalid slice")?;
+    let py = Fq::from_slice(&x1.to_bytes_be()).map_err(|_| "Invalid slice")?;
+    let n = Fr::from_slice(&nui.to_bytes_be()).map_err(|_| "Invalid slice")?;
 
     let p = if px == Fq::zero() && py == Fq::zero() {
         G1::zero()
@@ -2400,12 +2401,12 @@ fn do_ecmul(x0: Uint256, x1: Uint256, nui: Uint256) -> (Uint256, Uint256) {
         ret.x().to_big_endian(&mut out_buf_0).unwrap();
         let mut out_buf_1 = vec![0u8; 32];
         ret.y().to_big_endian(&mut out_buf_1).unwrap();
-        (
+        Ok((
             Uint256::from_bytes(&out_buf_0),
             Uint256::from_bytes(&out_buf_1),
-        )
+        ))
     } else {
-        (Uint256::zero(), Uint256::zero())
+        Ok((Uint256::zero(), Uint256::zero()))
     }
 }
 
