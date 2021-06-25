@@ -2098,7 +2098,8 @@ impl Machine {
                         let x1 = self.stack.pop_uint(&self.state)?;
                         let y0 = self.stack.pop_uint(&self.state)?;
                         let y1 = self.stack.pop_uint(&self.state)?;
-                        let (z0, z1) = do_ecadd(x0, x1, y0, y1);
+                        let (z0, z1) = do_ecadd(x0, x1, y0, y1)
+                            .map_err(|msg| ExecutionError::new(&msg, &self.state, None))?;
                         self.stack.push_uint(z1);
                         self.stack.push_uint(z0);
                         self.incr_pc();
@@ -2350,23 +2351,28 @@ fn do_ecrecover(
     }
 }
 
-fn do_ecadd(x0: Uint256, x1: Uint256, y0: Uint256, y1: Uint256) -> (Uint256, Uint256) {
+fn do_ecadd(
+    x0: Uint256,
+    x1: Uint256,
+    y0: Uint256,
+    y1: Uint256,
+) -> Result<(Uint256, Uint256), &'static str> {
     use parity_bn::{AffineG1, Fq, Group, G1};
 
-    let px = Fq::from_slice(&x0.to_bytes_be()).unwrap();
-    let py = Fq::from_slice(&x1.to_bytes_be()).unwrap();
-    let qx = Fq::from_slice(&y0.to_bytes_be()).unwrap();
-    let qy = Fq::from_slice(&y1.to_bytes_be()).unwrap();
+    let px = Fq::from_slice(&x0.to_bytes_be()).map_err(|_| "Invalid slice")?;
+    let py = Fq::from_slice(&x1.to_bytes_be()).map_err(|_| "Invalid slice")?;
+    let qx = Fq::from_slice(&y0.to_bytes_be()).map_err(|_| "Invalid slice")?;
+    let qy = Fq::from_slice(&y1.to_bytes_be()).map_err(|_| "Invalid slice")?;
 
     let p = if px == Fq::zero() && py == Fq::zero() {
         G1::zero()
     } else {
-        AffineG1::new(px, py).unwrap().into()
+        AffineG1::new(px, py).map_err(|_| "Not on curve")?.into()
     };
     let q = if qx == Fq::zero() && qy == Fq::zero() {
         G1::zero()
     } else {
-        AffineG1::new(qx, qy).unwrap().into()
+        AffineG1::new(qx, qy).map_err(|_| "Not on curve")?.into()
     };
 
     if let Some(ret) = AffineG1::from_jacobian(p + q) {
@@ -2374,12 +2380,12 @@ fn do_ecadd(x0: Uint256, x1: Uint256, y0: Uint256, y1: Uint256) -> (Uint256, Uin
         ret.x().to_big_endian(&mut out_buf_0).unwrap();
         let mut out_buf_1 = vec![0u8; 32];
         ret.y().to_big_endian(&mut out_buf_1).unwrap();
-        (
+        Ok((
             Uint256::from_bytes(&out_buf_0),
             Uint256::from_bytes(&out_buf_1),
-        )
+        ))
     } else {
-        (Uint256::zero(), Uint256::zero())
+        Ok((Uint256::zero(), Uint256::zero()))
     }
 }
 
