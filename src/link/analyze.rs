@@ -739,6 +739,8 @@ pub fn eval_stacks(code: &Vec<Instruction>) -> (isize, isize, bool) {
                     stack -= 1;
                     aux += 1
                 }
+                OpcodeEffect::ReadGlobal => {}
+                OpcodeEffect::WriteGlobal => {}
                 OpcodeEffect::Unsure => confused = true,
             }
         }

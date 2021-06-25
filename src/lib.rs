@@ -105,8 +105,20 @@ pub fn fuzz_optimizer(data: &[u8], detail: bool) {
         }
         
         allow!(
-            Noop, Pop, Swap1, Swap2, Dup0, Dup1, Dup2, Tset, Tget,
-            Plus, //Mul, Minus, Exp
+            Noop, Pop, Swap1, Swap2, Dup0, Dup1, Dup2, Tset, Tget, Tlen,
+            Rget, Rset,
+            Plus, Mul, Minus, Div, Sdiv, Mod, Smod, AddMod, MulMod, Exp, SignExtend,
+            LessThan, GreaterThan, SLessThan, SGreaterThan, Equal, IsZero,
+            BitwiseAnd, BitwiseOr, BitwiseXor, BitwiseNeg, Byte, ShiftLeft, ShiftRight, ShiftArith,
+            Hash, Type, Keccakf, Sha256f,
+            
+            EcAdd, EcMul, EcPairing, EcRecover
+            
+            // AuxPush, AuxPop, Xget, Xset,
+            // GetGas, SetGas, Halt, Panic, Inbox, InboxPeek, Send, Log, Breakpoint
+            // DebugPrint, SideLoad, OpenInsn, PushInsnImm, PushInsn
+            // StackEmpty, AuxStackEmpty,
+            // NewBuffer, GetBuffer8, GetBuffer64, GetBuffer256, SetBuffer8, SetBuffer64, SetBuffer256,
         );
 	
         let curr = Instruction {
@@ -133,39 +145,25 @@ pub fn fuzz_optimizer(data: &[u8], detail: bool) {
 		debug_info: DebugInfo::default().propagate(true),
 	    }
         };
+        (@virtual $opcode:tt($order:expr)) => {
+            Instruction {
+		opcode: Opcode::$opcode($order),
+		immediate: None,
+		debug_info: DebugInfo::default().propagate(true),
+	    }
+        };
     }
     
-    {/*let code = vec![
-        create!(Noop),
-        create!(Noop, Some(Value::new_tuple(vec![
-            Value::new_tuple(vec![]),
-        ]))),
-        create!(Tset, Some(Value::Int(Uint256::from_usize(0)))),
-    ];*/
-    /*let code = vec![
-        create!(Noop, Some(Value::Int(Uint256::from_usize(1)))),
-        create!(Noop, Some(Value::Int(Uint256::from_usize(2)))),
-        create!(Noop, Some(Value::Int(Uint256::from_usize(2)))),
-        create!(Plus, None),
-        create!(Minus, None),
-    ];*/
     
-    /*let code = vec![
-        create!(Noop, Some(Value::new_tuple(vec![
-	    Value::new_tuple(vec![]), Value::new_tuple(vec![]),
-	]))),
-        create!(Noop, Some(Value::Int(Uint256::from_usize(64)))),
-        create!(Dup0),
-        create!(Swap2),
-        create!(Swap1),
-        create!(Swap2, Some(Value::Int(Uint256::from_usize(96)))),
-        create!(Tset, Some(Value::Int(Uint256::from_usize(1)))),
-    ];*/}
+    
+    /*code = vec![
 
-    
-    
-    code = vec![
-        create!(Noop, Some(Value::new_tuple(vec![
+        /*create!(Rset),
+        create!(Rget),
+        create!(Rget),
+        create!(Dup0),*/
+        
+        /*create!(Noop, Some(Value::new_tuple(vec![
             Value::new_tuple(vec![]), Value::new_tuple(vec![]), Value::new_tuple(vec![])
         ]))),
         create!(Tset, Some(Value::Int(Uint256::from_usize(0)))),
@@ -177,10 +175,8 @@ pub fn fuzz_optimizer(data: &[u8], detail: bool) {
         create!(Swap1),
         create!(Tget, Some(Value::Int(Uint256::from_usize(1)))),
         create!(Swap1, Some(Value::Int(Uint256::from_usize(64)))),
-        create!(Mul),
+        create!(Mul),*/
 
-        create!(Dup0),
-        
         //create!(Dup0),    // these cancel
         //create!(Plus),
         //create!(Pop),     // ------------
@@ -194,45 +190,41 @@ pub fn fuzz_optimizer(data: &[u8], detail: bool) {
         create!(Swap1, Some(Value::Int(Uint256::from_usize(32)))),
         create!(Swap2, Some(Value::Int(Uint256::from_usize(64)))),
         create!(AddMod),*/
-        
-        
-        //create!(Noop, Some(Value::new_tuple(vec![Value::new_tuple(vec![])]))),
-        //create!(Tset, Some(Value::Int(Uint256::from_usize(0)))),
-        
-        //create!(Noop, Some(Value::Int(Uint256::from_usize(64)))),
-        //create!(Noop, Some(Value::new_tuple(vec![Value::Int(Uint256::from_usize(173))]))),
-        //create!(Tset, Some(Value::Int(Uint256::from_usize(0)))),
-        
-        //create!(Dup0),
-        //create!(Swap1),
-        
-        //create!(Pop),
-        
-        //create!(Tget, Some(Value::Int(Uint256::from_usize(0)))),
-        //create!(Pop),
-    ];
+    ];*/
     
-    let block = code;
 
+    let block = code;
     if detail {
         print_code(&block, "unoptimized", &BTreeMap::new());
     }
-    let (opt, _) = graph_reduce(&block, detail);
     
+    /*let (opt, _) = devirtualize(&block, detail);
+    if detail {
+        print_cfg(&create_cfg(&block), &create_cfg(&opt), "de-virtualize");
+    }
+    return;*/
+    
+    let opt = match graph_reduce(&block, detail) {
+        Ok((opt, _)) => opt,
+        Err(_) => vec![create!(Panic)],
+    };
     if detail {
         print_cfg(&create_cfg(&block), &create_cfg(&opt), "graph reduce");
     }
     
-    return;
+    let (opt, _) = devirtualize(&opt, detail);
+    if detail {
+        print_cfg(&create_cfg(&block), &create_cfg(&opt), "de-virtualize");
+    }
     
     // check that the stacks have been preserved
-    let (prior_stack, prior_aux, prior_confused) = eval_stacks(&block);
+    /*let (prior_stack, prior_aux, prior_confused) = eval_stacks(&block);
     let (after_stack, after_aux, after_confused) = eval_stacks(&opt);
     
     if after_confused || after_stack != prior_stack || after_aux != prior_aux {
         print_code(&block, "deleterious", &BTreeMap::new());
         panic!("Optimization didn't preserve the stacks!");
-    }
+    }*/
     
     // check that execution is equivalent
     let mut prior_machine = Machine::from(block.clone());
@@ -249,6 +241,12 @@ pub fn fuzz_optimizer(data: &[u8], detail: bool) {
             machine.stack.push(Value::Int(Uint256::from_usize(4 - i)));
             machine.aux_stack.push(Value::Int(Uint256::from_usize(i)));
         }
+        machine.register = Value::new_tuple(vec![
+            Value::Int(Uint256::from_usize(0)),
+            Value::Int(Uint256::from_usize(1)),
+            Value::new_tuple(vec![Value::new_tuple(vec![]), Value::new_tuple(vec![])]),
+            Value::new_tuple(vec![Value::Int(Uint256::from_usize(0)), Value::Int(Uint256::from_usize(0))]),
+        ]);
         machine.start_at_zero();
         machine.run(None);
     }

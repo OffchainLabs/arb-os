@@ -220,6 +220,8 @@ impl Instruction {
         };
         effects.extend(match &self.opcode {
             Opcode::AVMOpcode(avm_op) => avm_op.effects(),
+            Opcode::Dup(depth) => vec![OpcodeEffect::ReadStack(*depth), OpcodeEffect::PushStack],
+            Opcode::Pull(depth) => vec![OpcodeEffect::Unsure],
             _ => vec![OpcodeEffect::Unsure],
         });
         effects
@@ -1184,7 +1186,7 @@ impl Opcode {
             Opcode::LogicalAnd => "logicaland",
             Opcode::LogicalOr => "logicalor",
             Opcode::PopFrame => "PopFrame",
-            Opcode::Swap(_) => "SwapN",
+            Opcode::Pull(_) => "PullN",
             Opcode::Dup(_) => "DupN",
             _ => "to_name() not implemented",
         }
@@ -1192,7 +1194,7 @@ impl Opcode {
     
     pub fn to_full(&self) -> String {
         match self {
-            Opcode::Swap(depth) => format!("Swap({})", depth),
+            Opcode::Pull(depth) => format!("Pull({})", depth),
             Opcode::Dup(depth) => format!("Dup({})", depth),
             _ => self.to_name().to_string(),
         }
@@ -1201,8 +1203,9 @@ impl Opcode {
     /// The non-variable amount of ArbGas this opcode consumes
     pub fn base_cost(&self) -> u64 {
         match self {
-            Opcode::Swap(depth) => *depth as u64, // TODO THIS IS WRONG
-            Opcode::Dup(depth) => *depth as u64, // TODO THIS IS WRONG
+            Opcode::Pull(0) => 0, // TODO UPDATE
+            Opcode::Pull(depth) => 2 + 2 * (depth.saturating_sub(2)) as u64,
+            Opcode::Dup(depth)  => 1 + 2 * (depth.saturating_sub(2)) as u64,
             Opcode::AVMOpcode(AVMOpcode::Zero) => 5,
             Opcode::AVMOpcode(AVMOpcode::Plus) => 3,
             Opcode::AVMOpcode(AVMOpcode::Mul) => 3,
@@ -1617,9 +1620,11 @@ impl AVMOpcode {
             //| AVMOpcode::Rget
             //| AVMOpcode::ErrCodePoint
             //| AVMOpcode::GetGas => vec![OpcodeEffect::PushStack],
-            AVMOpcode::Rset | AVMOpcode::SetGas => {
+            AVMOpcode::SetGas => {
                 vec![OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack]
             }
+            AVMOpcode::Rget => vec![OpcodeEffect::ReadGlobal, OpcodeEffect::PushStack],
+            AVMOpcode::Rset => vec![OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack, OpcodeEffect::WriteGlobal],
 
             AVMOpcode::IsZero
             | AVMOpcode::BitwiseNeg
@@ -1671,6 +1676,11 @@ impl AVMOpcode {
                 OpcodeEffect::PushStack,
             ],
 
+            AVMOpcode::EcPairing => vec![
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::PushStack
+            ],
             AVMOpcode::EcRecover => vec![
                 OpcodeEffect::ReadStack(1),
                 OpcodeEffect::PopStack,
@@ -1682,7 +1692,6 @@ impl AVMOpcode {
                 OpcodeEffect::PopStack,
                 OpcodeEffect::PushStack,
             ],
-
             AVMOpcode::EcAdd | AVMOpcode::EcMul => vec![
                 OpcodeEffect::ReadStack(1),
                 OpcodeEffect::PopStack,
@@ -1719,7 +1728,7 @@ impl AVMOpcode {
             // when ready, we'll switch to these:
             //AVMOpcode::StackEmpty => vec![OpcodeEffect::ReadStack(1), OpcodeEffect::PushStack],
             //AVMOpcode::AuxStackEmpty => vec![OpcodeEffect::ReadStack(1), OpcodeEffect::PushStack],
-            AVMOpcode::StackEmpty | AVMOpcode::AuxStackEmpty | AVMOpcode::EcPairing => {
+            AVMOpcode::StackEmpty | AVMOpcode::AuxStackEmpty => {
                 vec![OpcodeEffect::Unsure, OpcodeEffect::PushStack]
             }
 
@@ -1745,7 +1754,7 @@ impl AVMOpcode {
             | AVMOpcode::Sideload => vec![OpcodeEffect::Unsure],
 
             AVMOpcode::Zero | AVMOpcode::Halt => vec![OpcodeEffect::Unsure],
-
+            
             _ => vec![OpcodeEffect::Unsure],
         }
     }
@@ -1762,6 +1771,8 @@ pub enum OpcodeEffect {
     PushAux,
     ReadAux,
     MoveToAux,
+    WriteGlobal,
+    ReadGlobal,
     Unsure,
 }
 
@@ -1777,6 +1788,8 @@ impl OpcodeEffect {
             OpcodeEffect::PushAux => "'push",
             OpcodeEffect::ReadAux => "'read",
             OpcodeEffect::MoveToAux => "'move",
+            OpcodeEffect::WriteGlobal => "write_global",
+            OpcodeEffect::ReadGlobal => "read_global",
             OpcodeEffect::Unsure => "?",
         }
     }
