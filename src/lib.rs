@@ -17,6 +17,7 @@ pub mod stringtable;
 pub mod uint256;
 pub mod upload;
 
+use crate::console::{ConsoleColors};
 use crate::run::{Machine, MachineState};
 use crate::mavm::{Instruction, Opcode, AVMOpcode, Value};
 use crate::uint256::{Uint256};
@@ -107,17 +108,18 @@ pub fn fuzz_optimizer(data: &[u8], detail: bool) {
         allow!(
             Noop, Pop, Swap1, Swap2, Dup0, Dup1, Dup2, Tset, Tget, Tlen,
             Rget, Rset,
+            EcAdd, EcMul, EcPairing, EcRecover,
             Plus, Mul, Minus, Div, Sdiv, Mod, Smod, AddMod, MulMod, Exp, SignExtend,
             LessThan, GreaterThan, SLessThan, SGreaterThan, Equal, IsZero,
             BitwiseAnd, BitwiseOr, BitwiseXor, BitwiseNeg, Byte, ShiftLeft, ShiftRight, ShiftArith,
             Hash, Type, Keccakf, Sha256f,
             
-            EcAdd, EcMul, EcPairing, EcRecover
+            AuxPush, AuxPop,
             
             // AuxPush, AuxPop, Xget, Xset,
             // GetGas, SetGas, Halt, Panic, Inbox, InboxPeek, Send, Log, Breakpoint
             // DebugPrint, SideLoad, OpenInsn, PushInsnImm, PushInsn
-            // StackEmpty, AuxStackEmpty,
+            // StackEmpty, AuxStackEmpty, PushStatic
             // NewBuffer, GetBuffer8, GetBuffer64, GetBuffer256, SetBuffer8, SetBuffer64, SetBuffer256,
         );
 	
@@ -153,15 +155,24 @@ pub fn fuzz_optimizer(data: &[u8], detail: bool) {
 	    }
         };
     }
-    
-    
+    macro_rules! int {
+        ($value:expr) => {
+            Some(Value::Int(Uint256::from_usize($value)))
+        };
+    }
     
     /*code = vec![
-
-        /*create!(Rset),
-        create!(Rget),
-        create!(Rget),
-        create!(Dup0),*/
+        create!(Pop), create!(Pop), create!(Pop), create!(Pop),
+        create!(Pop), create!(Pop), create!(Pop), create!(Pop),
+        
+        create!(Noop, int!(4)),
+        create!(Noop, int!(8)),
+        create!(Noop, int!(2)),
+        create!(Noop, int!(2)),
+        create!(Noop, int!(2)),
+        create!(Noop, int!(1)),
+        create!(EcMul),
+    ];*/
         
         /*create!(Noop, Some(Value::new_tuple(vec![
             Value::new_tuple(vec![]), Value::new_tuple(vec![]), Value::new_tuple(vec![])
@@ -176,11 +187,6 @@ pub fn fuzz_optimizer(data: &[u8], detail: bool) {
         create!(Tget, Some(Value::Int(Uint256::from_usize(1)))),
         create!(Swap1, Some(Value::Int(Uint256::from_usize(64)))),
         create!(Mul),*/
-
-        //create!(Dup0),    // these cancel
-        //create!(Plus),
-        //create!(Pop),     // ------------
-
         /*create!(Noop, Some(Value::new_tuple(vec![
             Value::new_tuple(vec![]), Value::new_tuple(vec![])
         ]))),
@@ -190,7 +196,6 @@ pub fn fuzz_optimizer(data: &[u8], detail: bool) {
         create!(Swap1, Some(Value::Int(Uint256::from_usize(32)))),
         create!(Swap2, Some(Value::Int(Uint256::from_usize(64)))),
         create!(AddMod),*/
-    ];*/
     
 
     let block = code;
@@ -267,6 +272,14 @@ pub fn fuzz_optimizer(data: &[u8], detail: bool) {
     ) {
         print_code(&block, "deleterious", &BTreeMap::new());
         print_cfg(&create_cfg(&block), &create_cfg(&opt), "crash");
+
+        let grey = ConsoleColors::GREY;
+        let reset = ConsoleColors::RESET;
+        
+        for (prior, after) in prior_machine.stack.contents.iter().zip(after_machine.stack.contents.iter()) {
+            println!("{:>24}    {}{:<24}{}", prior, grey, after, reset);
+        }
+        println!("Optimization is incorrect");
         panic!("Optimization is incorrect");
     }
 }

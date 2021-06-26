@@ -1611,13 +1611,12 @@ impl AVMOpcode {
                 OpcodeEffect::PopStack,
                 OpcodeEffect::PushStack,
             ],
-
+            
             AVMOpcode::Noop => vec![],
             //AVMOpcode::GetPC => vec![OpcodeEffect::PushStack],
-
+            
             // for now (should really track register and static usage)
             //AVMOpcode::PushStatic
-            //| AVMOpcode::Rget
             //| AVMOpcode::ErrCodePoint
             //| AVMOpcode::GetGas => vec![OpcodeEffect::PushStack],
             AVMOpcode::SetGas => {
@@ -1625,7 +1624,7 @@ impl AVMOpcode {
             }
             AVMOpcode::Rget => vec![OpcodeEffect::ReadGlobal, OpcodeEffect::PushStack],
             AVMOpcode::Rset => vec![OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack, OpcodeEffect::WriteGlobal],
-
+            
             AVMOpcode::IsZero
             | AVMOpcode::BitwiseNeg
             | AVMOpcode::Hash
@@ -1636,7 +1635,7 @@ impl AVMOpcode {
                 OpcodeEffect::PopStack,
                 OpcodeEffect::PushStack,
             ],
-
+            
             AVMOpcode::Plus
             | AVMOpcode::Mul
             | AVMOpcode::Minus
@@ -1692,9 +1691,19 @@ impl AVMOpcode {
                 OpcodeEffect::PopStack,
                 OpcodeEffect::PushStack,
             ],
-            AVMOpcode::EcAdd | AVMOpcode::EcMul => vec![
+            AVMOpcode::EcAdd => vec![
                 OpcodeEffect::ReadStack(1),
                 OpcodeEffect::PopStack,
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::PushStack,
+                OpcodeEffect::PushStack,
+            ],
+            AVMOpcode::EcMul => vec![
                 OpcodeEffect::ReadStack(1),
                 OpcodeEffect::PopStack,
                 OpcodeEffect::ReadStack(1),

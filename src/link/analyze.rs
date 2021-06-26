@@ -519,12 +519,13 @@ pub fn print_cfg(prior: &FlowGraph, after: &FlowGraph, title: &str) {
                 reset,
             ),
             format!(
-                "{}{}{}, {}{}{}{}",
+                "{}{}{}{}, {}{}{}{}",
                 match after_stack == prior_stack {
                     true => grey,
                     false => pink,
                 },
                 after_stack - prior_stack,
+                reset,
                 grey,
                 match after_aux == prior_aux {
                     true => grey,
