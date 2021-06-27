@@ -174,7 +174,13 @@ public func bytearray_get64(ba: ByteArray, offset: uint) -> uint {
             let mask = asm(8*bytesToRead, 1) uint { shl } - 1;
             return asm(8*(8-bytesToRead), mask & getbuffer64(ba.contents, offset+bytesToRead-8)) uint { shl };
         } else {
-            return getbuffer64(ba.contents, offset);
+            return asm(
+                64-8*bytesToRead,
+                asm(
+                    64-8*bytesToRead,
+                    getbuffer64(ba.contents, offset),
+                ) uint { shr }
+            ) uint { shl };
         }
     }
     offset = offset + ba.sliceOffset;
@@ -194,7 +200,13 @@ public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
             let mask = asm(8*bytesToRead, 1) uint { shl } - 1;
             return asm(8*(32-bytesToRead), mask & getbuffer256(ba.contents, offset+bytesToRead-32)) uint { shl };
         } else {
-            return getbuffer256(ba.contents, offset);
+            return asm(
+                256-8*bytesToRead,
+                asm(
+                    256-8*bytesToRead,
+                    getbuffer256(ba.contents, offset),
+                ) uint { shr }
+            ) uint { shl };
         }
     }
     offset = offset + ba.sliceOffset;
