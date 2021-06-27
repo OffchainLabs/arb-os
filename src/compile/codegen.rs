@@ -830,7 +830,7 @@ fn mavm_codegen_expr<'a>(
             ));
             Ok((label_gen, code, num_locals))
         }
-        TypeCheckedExprKind::PushGas => {
+        TypeCheckedExprKind::GetGas => {
             code.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::PushGas),
                 debug,

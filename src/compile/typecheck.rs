@@ -896,7 +896,7 @@ pub enum TypeCheckedExprKind {
     Cast(Box<TypeCheckedExpr>, Type),
     Asm(Type, Vec<Instruction>, Vec<TypeCheckedExpr>),
     Error,
-    PushGas,
+    GetGas,
     SetGas(Box<TypeCheckedExpr>),
     Try(Box<TypeCheckedExpr>, Type),
     If(
@@ -924,7 +924,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             | TypeCheckedExprKind::Const(_, _)
             | TypeCheckedExprKind::NewBuffer
             | TypeCheckedExprKind::NewMap(_)
-            | TypeCheckedExprKind::PushGas
+            | TypeCheckedExprKind::GetGas
             | TypeCheckedExprKind::Error => vec![],
             TypeCheckedExprKind::UnaryOp(_, exp, _)
             | TypeCheckedExprKind::Variant(exp)
@@ -999,18 +999,22 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
         }
     }
     fn is_pure(&mut self) -> bool {
-        if let TypeCheckedExprKind::GlobalVariableRef(_, _) = self.kind {
-            false
-        } else if let TypeCheckedExprKind::FuncRef(_, tipe) = &self.kind {
-            if let Type::Func(impure, _, _) = tipe {
-                !*impure
-            } else {
-                panic!("Internal error: func ref has non function type")
+        match &mut self.kind {
+            TypeCheckedExprKind::FuncRef(_, tipe) => {
+                if let Type::Func(impure, _, _) = tipe {
+                    !*impure
+                } else {
+                    panic!("Internal error: func ref has non function type")
+                }
             }
-        } else if let TypeCheckedExprKind::Asm(_, instrs, args) = &mut self.kind {
-            instrs.iter().all(|inst| inst.is_pure()) && args.iter_mut().all(|expr| expr.is_pure())
-        } else {
-            self.child_nodes().iter_mut().all(|node| node.is_pure())
+            TypeCheckedExprKind::Asm(_, insns, args) => {
+                insns.iter().all(|insn| insn.is_pure())
+                    && args.iter_mut().all(|expr| expr.is_pure())
+            }
+            TypeCheckedExprKind::GlobalVariableRef(_, _)
+            | TypeCheckedExprKind::GetGas
+            | TypeCheckedExprKind::SetGas(_) => false,
+            _ => self.child_nodes().iter_mut().all(|node| node.is_pure()),
         }
     }
 }
@@ -1021,7 +1025,7 @@ impl TypeCheckedExpr {
         match &self.kind {
             TypeCheckedExprKind::NewBuffer => Type::Buffer,
             TypeCheckedExprKind::Error => Type::Every,
-            TypeCheckedExprKind::PushGas => Type::Uint,
+            TypeCheckedExprKind::GetGas => Type::Uint,
             TypeCheckedExprKind::SetGas(_t) => Type::Void,
             TypeCheckedExprKind::UnaryOp(_, _, t) => t.clone(),
             TypeCheckedExprKind::Binary(_, _, _, t) => t.clone(),
@@ -2471,7 +2475,7 @@ fn typecheck_expr(
                     )),
                 }
             }
-            ExprKind::PushGas => Ok(TypeCheckedExprKind::PushGas),
+            ExprKind::GetGas => Ok(TypeCheckedExprKind::GetGas),
             ExprKind::SetGas(expr) => {
                 let expr = typecheck_expr(
                     expr,

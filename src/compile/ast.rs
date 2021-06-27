@@ -1129,7 +1129,7 @@ pub enum ExprKind {
     UnsafeCast(Box<Expr>, Type),
     Asm(Type, Vec<Instruction>, Vec<Expr>),
     Error,
-    PushGas,
+    GetGas,
     SetGas(Box<Expr>),
     Try(Box<Expr>),
     If(Box<Expr>, CodeBlock, Option<CodeBlock>),
