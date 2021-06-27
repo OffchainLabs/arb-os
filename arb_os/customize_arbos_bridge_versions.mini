@@ -163,10 +163,8 @@ public func set_gasAccountingInfo_onUpgrade(input_globals: GlobalsBeforeUpgrade)
     return struct {
         txState: old.txState,
         feeConfig: struct {
-            enabled: old.feeConfig.enabled,
-            forNetwork: old.feeConfig.forNetwork,
-            forCongestion: old.feeConfig.forCongestion,
-            networkFeeRate: fixedPoint_new(
+            baseFeeMultiplier: old.feeConfig.baseFeeMultiplier,
+            shareForNetFee: fixedPoint_new(
                 old.feeConfig.baseFeeMultiplier.val,
                 old.feeConfig.baseFeeMultiplier.shiftFactor - old.feeConfig.baseFeeMultiplier.val
             ),
