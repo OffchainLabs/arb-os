@@ -77,7 +77,7 @@ impl RuntimeEnvironment {
         owner: Option<Uint256>,
     ) -> Self {
         let mut ret = RuntimeEnvironment {
-            chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
+            chain_id: 42161,
             chain_address,
             l1_inbox: vec![],
             current_block_num: blocknum,

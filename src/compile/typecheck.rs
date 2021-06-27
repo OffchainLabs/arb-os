@@ -5,9 +5,9 @@
 //!Converts non-type checked ast nodes to type checked versions, and other related utilities.
 
 use super::ast::{
-    BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func, FuncDeclKind, GlobalVarDecl,
-    MatchPattern, MatchPatternKind, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp,
-    Type, TypeTree, UnaryOp,
+    Attributes, BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func, FuncDeclKind,
+    GlobalVarDecl, MatchPattern, MatchPatternKind, Statement, StatementKind, StructField,
+    TopLevelDecl, TrinaryOp, Type, TypeTree, UnaryOp,
 };
 use crate::compile::ast::FieldInitializer;
 use crate::compile::{CompileError, FileInfo, InliningHeuristic};
@@ -61,7 +61,9 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
         match self {
             TypeCheckedNode::Statement(stat) => stat.child_nodes(),
             TypeCheckedNode::Expression(exp) => exp.child_nodes(),
-            TypeCheckedNode::StructField(field) => field.child_nodes(),
+            TypeCheckedNode::StructField(field) => {
+                vec![TypeCheckedNode::Expression(&mut field.value)]
+            }
             TypeCheckedNode::Type(tipe) => tipe.child_nodes(),
         }
     }
@@ -71,6 +73,42 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
             TypeCheckedNode::Expression(exp) => exp.is_pure(),
             TypeCheckedNode::StructField(field) => field.is_pure(),
             TypeCheckedNode::Type(_) => true,
+        }
+    }
+}
+
+impl<'a> TypeCheckedNode<'a> {
+    ///Propagates attributes down the AST.
+    pub fn propagate_attributes(mut nodes: Vec<TypeCheckedNode>, attributes: &Attributes) {
+        for node in nodes.iter_mut() {
+            match node {
+                TypeCheckedNode::Statement(stat) => {
+                    stat.debug_info.attributes.codegen_print =
+                        stat.debug_info.attributes.codegen_print || attributes.codegen_print;
+                    let child_attributes = stat.debug_info.attributes.clone();
+                    TypeCheckedNode::propagate_attributes(stat.child_nodes(), &child_attributes);
+                    if let TypeCheckedStatementKind::Asm(ref mut vec, _) = stat.kind {
+                        for insn in vec {
+                            insn.debug_info.attributes.codegen_print =
+                                stat.debug_info.attributes.codegen_print
+                                    || attributes.codegen_print;
+                        }
+                    }
+                }
+                TypeCheckedNode::Expression(expr) => {
+                    expr.debug_info.attributes.codegen_print =
+                        expr.debug_info.attributes.codegen_print || attributes.codegen_print;
+                    let child_attributes = expr.debug_info.attributes.clone();
+                    TypeCheckedNode::propagate_attributes(expr.child_nodes(), &child_attributes);
+                }
+                TypeCheckedNode::StructField(field) => {
+                    field.value.debug_info.attributes.codegen_print =
+                        field.value.debug_info.attributes.codegen_print || attributes.codegen_print;
+                    let child_attributes = field.value.debug_info.attributes.clone();
+                    TypeCheckedNode::propagate_attributes(field.child_nodes(), &child_attributes);
+                }
+                _ => {}
+            }
         }
     }
 }
@@ -555,14 +593,6 @@ fn flowcheck_liveliness(
                 TypeCheckedExprKind::Loop(_body) => true,
                 _ => false,
             },
-            TypeCheckedNode::StructField(field) => {
-                process!(
-                    vec![TypeCheckedNode::Expression(&mut field.value)],
-                    problems,
-                    false
-                );
-                continue;
-            }
             _ => false,
         };
 
@@ -739,6 +769,7 @@ pub enum TypeCheckedStatementKind {
     While(TypeCheckedExpr, Vec<TypeCheckedStatement>),
     Asm(Vec<Instruction>, Vec<TypeCheckedExpr>),
     DebugPrint(TypeCheckedExpr),
+    Assert(TypeCheckedExpr),
 }
 
 impl AbstractSyntaxTree for TypeCheckedStatement {
@@ -750,6 +781,7 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
             | TypeCheckedStatementKind::Let(_, exp)
             | TypeCheckedStatementKind::AssignLocal(_, exp)
             | TypeCheckedStatementKind::AssignGlobal(_, exp)
+            | TypeCheckedStatementKind::Assert(exp)
             | TypeCheckedStatementKind::DebugPrint(exp) => vec![TypeCheckedNode::Expression(exp)],
             TypeCheckedStatementKind::While(exp, stats) => vec![TypeCheckedNode::Expression(exp)]
                 .into_iter()
@@ -1061,6 +1093,10 @@ fn builtin_func_decls() -> Vec<Import> {
             vec!["core".to_string(), "kvs".to_string()],
             "builtin_kvsSet".to_string(),
         ),
+        Import::new(
+            vec!["core".to_string(), "assert".to_string()],
+            "builtin_assert".to_string(),
+        ),
     ]
 }
 
@@ -1105,12 +1141,18 @@ pub fn sort_top_level_decls(
 pub fn typecheck_top_level_decls(
     funcs: Vec<Func>,
     named_types: HashMap<usize, Type>,
-    global_vars: Vec<GlobalVarDecl>,
+    mut global_vars: Vec<GlobalVarDecl>,
     string_table: StringTable,
     func_map: HashMap<usize, Type>,
     checked_funcs: &mut Vec<TypeCheckedFunc>,
     type_tree: &TypeTree,
 ) -> Result<(Vec<ExportedFunc>, Vec<GlobalVarDecl>, StringTable), TypeError> {
+    if let Some(var) = global_vars
+        .iter()
+        .position(|var| &var.name == "__fixedLocationGlobal")
+    {
+        global_vars.swap(0, var)
+    }
     let global_vars_map = global_vars
         .iter()
         .enumerate()
@@ -1583,6 +1625,29 @@ fn typecheck_statement<'a>(
                 scopes,
             )?;
             Ok((TypeCheckedStatementKind::DebugPrint(tce), vec![]))
+        }
+        StatementKind::Assert(expr) => {
+            let tce = typecheck_expr(
+                expr,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+                scopes,
+            )?;
+            match tce.get_type() {
+                Type::Tuple(vec) if vec.len() == 2 && vec[0] == Type::Bool => {
+                    Ok((TypeCheckedStatementKind::Assert(tce), vec![]))
+                }
+                _ => Err(new_type_error(
+                    format!(
+                        "assert condition must be of type (bool, any), found {}",
+                        tce.get_type().display()
+                    ),
+                    debug_info.location,
+                )),
+            }
         }
     }?;
     Ok((
@@ -2113,6 +2178,36 @@ fn typecheck_expr(
                 Box::new(key_type.clone()),
                 Box::new(value_type.clone()),
             ))),
+            ExprKind::NewUnion(types, expr) => {
+                let tc_expr = typecheck_expr(
+                    expr,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    scopes,
+                )?;
+                let tc_type = tc_expr.get_type();
+                if types
+                    .iter()
+                    .any(|t| t.assignable(&tc_type, type_tree, HashSet::new()))
+                {
+                    Ok(TypeCheckedExprKind::Cast(
+                        Box::new(tc_expr),
+                        Type::Union(types.clone()),
+                    ))
+                } else {
+                    Err(new_type_error(
+                        format!(
+                            "Type {} is not a member of type union: {}",
+                            tc_type.display(),
+                            Type::Union(types.clone()).display()
+                        ),
+                        loc,
+                    ))
+                }
+            }
             ExprKind::StructInitializer(fieldvec) => {
                 let mut tc_fields = Vec::new();
                 let mut tc_fieldtypes = Vec::new();
@@ -2618,6 +2713,39 @@ fn typecheck_expr(
                 type_tree,
                 scopes,
             )?)),
+            ExprKind::UnionCast(expr, tipe) => {
+                let tc_expr = typecheck_expr(
+                    expr,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    scopes,
+                )?;
+                if let Type::Union(types) = tc_expr.get_type().get_representation(type_tree)? {
+                    if types.iter().any(|t| t == tipe) {
+                        Ok(TypeCheckedExprKind::Cast(Box::new(tc_expr), tipe.clone()))
+                    } else {
+                        Err(new_type_error(
+                            format!(
+                                "Type {} is not a member of {}",
+                                tipe.display(),
+                                tc_expr.get_type().display()
+                            ),
+                            debug_info.location,
+                        ))
+                    }
+                } else {
+                    Err(new_type_error(
+                        format!(
+                            "Tried to unioncast from non-union type \"{}\"",
+                            tc_expr.get_type().display()
+                        ),
+                        debug_info.location,
+                    ))
+                }
+            }
         }?,
         debug_info,
     })

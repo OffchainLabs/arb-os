@@ -5,7 +5,6 @@
 //!Contains types and utilities for constructing the mini AST
 
 use super::typecheck::{new_type_error, TypeError};
-use crate::compile::ast::TypeMismatch::FuncArgLength;
 use crate::compile::path_display;
 use crate::compile::typecheck::{
     AbstractSyntaxTree, InliningMode, PropertiesList, TypeCheckedNode,
@@ -31,12 +30,15 @@ pub struct DebugInfo {
     pub attributes: Attributes,
 }
 
-///A list of properties that an AST node has, currently only contains breakpoints.
+///A list of properties that an AST node has.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Attributes {
     ///Is true if the current node is a breakpoint, false otherwise.
     pub breakpoint: bool,
     pub inline: InliningMode,
+    ///Whether node should be pruned in a release build.
+    #[serde(skip)]
+    pub codegen_print: bool,
 }
 
 impl DebugInfo {
@@ -98,6 +100,7 @@ pub enum Type {
     Any,
     Every,
     Option(Box<Type>),
+    Union(Vec<Type>),
 }
 
 impl AbstractSyntaxTree for Type {
@@ -113,7 +116,9 @@ impl AbstractSyntaxTree for Type {
             | Type::Any
             | Type::Every
             | Type::Nominal(_, _) => vec![],
-            Type::Tuple(types) => types.iter_mut().map(|t| TypeCheckedNode::Type(t)).collect(),
+            Type::Tuple(types) | Type::Union(types) => {
+                types.iter_mut().map(|t| TypeCheckedNode::Type(t)).collect()
+            }
             Type::Array(tipe) | Type::FixedArray(tipe, _) | Type::Option(tipe) => {
                 vec![TypeCheckedNode::Type(tipe)]
             }
@@ -446,6 +451,13 @@ impl Type {
                     false
                 }
             }
+            Type::Union(types) => {
+                if let Ok(Type::Union(types2)) = rhs.get_representation(type_tree) {
+                    type_vectors_assignable(types, &types2, type_tree, seen)
+                } else {
+                    false
+                }
+            }
         }
     }
 
@@ -550,7 +562,7 @@ impl Type {
                         }
                     }
                     if args.len() != args2.len() {
-                        return Some(FuncArgLength(args.len(), args2.len()));
+                        return Some(TypeMismatch::FuncArgLength(args.len(), args2.len()));
                     }
                     if let Some(inner) = ret.first_mismatch(ret2, type_tree, seen) {
                         return Some(TypeMismatch::FuncReturn(Box::new(inner)));
@@ -588,6 +600,21 @@ impl Type {
                     inner
                         .first_mismatch(&inner2, type_tree, seen)
                         .map(|mismatch| TypeMismatch::Option(Box::new(mismatch)))
+                } else {
+                    Some(TypeMismatch::Type(self.clone(), rhs.clone()))
+                }
+            }
+            Type::Union(types) => {
+                if let Ok(Type::Union(types2)) = rhs.get_representation(type_tree) {
+                    for (index, (left, right)) in types.iter().zip(types2.iter()).enumerate() {
+                        if let Some(inner) = left.first_mismatch(right, type_tree, seen.clone()) {
+                            return Some(TypeMismatch::Union(index, Box::new(inner)));
+                        }
+                    }
+                    if types.len() != types2.len() {
+                        return Some(TypeMismatch::UnionLength(types.len(), types2.len()));
+                    }
+                    None
                 } else {
                     Some(TypeMismatch::Type(self.clone(), rhs.clone()))
                 }
@@ -694,6 +721,7 @@ impl Type {
             Type::Any => (Value::none(), true),
             Type::Every => (Value::none(), false),
             Type::Option(_) => (Value::new_tuple(vec![Value::Int(Uint256::zero())]), true),
+            Type::Union(_) => (Value::none(), false),
         }
     }
 
@@ -880,6 +908,24 @@ impl Type {
                 );
                 (format!("option<{}>", display), subtypes)
             }
+            Type::Union(types) => {
+                let mut s = String::from("union<");
+                let mut subtypes = HashSet::new();
+                for tipe in types {
+                    let (name, new_subtypes) = tipe.display_indented(
+                        indent_level + 1,
+                        separator,
+                        prefix,
+                        include_pathname,
+                        type_tree,
+                    );
+                    s.push_str(&name);
+                    s.push_str(", ");
+                    subtypes.extend(new_subtypes);
+                }
+                s.push('>');
+                (s, subtypes)
+            }
         }
     }
 }
@@ -1021,6 +1067,7 @@ impl PartialEq for Type {
             }
             (Type::Nominal(p1, id1), Type::Nominal(p2, id2)) => (p1, id1) == (p2, id2),
             (Type::Option(x), Type::Option(y)) => *x == *y,
+            (Type::Union(x), Type::Union(y)) => type_vectors_equal(x, y),
             (_, _) => false,
         }
     }
@@ -1057,6 +1104,8 @@ pub enum TypeMismatch {
         inner: Box<TypeMismatch>,
     },
     Option(Box<TypeMismatch>),
+    Union(usize, Box<TypeMismatch>),
+    UnionLength(usize, usize),
     Purity,
 }
 
@@ -1111,6 +1160,12 @@ impl fmt::Display for TypeMismatch {
                     inner
                 ),
                 TypeMismatch::Option(mismatch) => format!("in inner option type: {}", mismatch),
+                TypeMismatch::Union(index, mismatch) =>
+                    format!("In type {} of union: {}", index + 1, mismatch),
+                TypeMismatch::UnionLength(left, right) => format!(
+                    "left func has {} args but right func has {} args",
+                    left, right
+                ),
                 TypeMismatch::Purity => format!("assigning impure function to pure function"),
             }
         )
@@ -1239,6 +1294,7 @@ pub enum StatementKind {
     While(Expr, Vec<Statement>),
     Asm(Vec<Instruction>, Vec<Expr>),
     DebugPrint(Expr),
+    Assert(Expr),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1359,6 +1415,7 @@ pub enum ExprKind {
     NewArray(Box<Expr>, Type),
     NewFixedArray(usize, Option<Box<Expr>>),
     NewMap(Type, Type),
+    NewUnion(Vec<Type>, Box<Expr>),
     ArrayOrMapMod(Box<Expr>, Box<Expr>, Box<Expr>),
     StructMod(Box<Expr>, String, Box<Expr>),
     WeakCast(Box<Expr>, Type),
@@ -1371,6 +1428,7 @@ pub enum ExprKind {
     If(Box<Expr>, CodeBlock, Option<CodeBlock>),
     IfLet(StringId, Box<Expr>, CodeBlock, Option<CodeBlock>),
     Loop(Vec<Statement>),
+    UnionCast(Box<Expr>, Type),
     NewBuffer,
 }
 

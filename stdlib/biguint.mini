@@ -343,9 +343,8 @@ public func biguint_mul(x: []uint, y: []uint) -> []uint {
     while(i <= t) {
         let carry = 0;
         let j = 0;
-        let uv = 0;
         while(j <= n) {
-            uv = ret[i+j] + x[j]*y[i] + carry;
+            let uv = ret[i+j] + x[j]*y[i] + carry;
             carry = divDigit(uv);
             ret = ret with { [i+j] = modDigit(uv) };
             j = j+1;
