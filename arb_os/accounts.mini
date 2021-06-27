@@ -280,7 +280,7 @@ public func account_setAggregatorDecompressionState(
     };
 }
 
-public func accountStore_feeCollectorForAggregator(acctStore: AccountStore, agg: address) -> address {
+public func _accountStore_feeCollectorForAggregator(acctStore: AccountStore, agg: address) -> address {
     return account_getFeeCollector(accountStore_get(acctStore, agg));
 }
 
