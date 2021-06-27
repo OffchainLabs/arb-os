@@ -14,8 +14,9 @@ use evmCallStack::EvmCallFrame;
 
 use gasAccounting::GasAccountingInfo;
 
-use tracing::EvmTracer;
-use tracing::evmTracer_new;
+use std::fixedpoint::fixedPoint_new;
+
+use std::addressSet::setOfAddresses_all;
 
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsForall;
@@ -155,5 +156,37 @@ func acctRemapClosure(_addr: address, oldAcct: before__accounts_Account, state: 
     };
     return state with {
         [acct.addr] = acct
+    };
+}
+
+public func set_gasAccountingInfo_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> GasAccountingInfo {
+    let old = input_globals.gasAccountingInfo;
+    return struct {
+        txState: old.txState,
+        feeConfig: struct {
+            baseFeeMultiplier: old.feeConfig.baseFeeMultiplier,
+            shareForNetFee: fixedPoint_new(
+                old.feeConfig.baseFeeMultiplier.val,
+                old.feeConfig.baseFeeMultiplier.shiftFactor - old.feeConfig.baseFeeMultiplier.val
+            ),
+        },
+        currentPrices: struct {
+            perL1CalldataUnit: old.currentPrices.perL1CalldataUnit,
+            perStorageCell: old.currentPrices.perStorageCell,
+            perArbGasBase: old.currentPrices.perArbGasBase,
+            perArbGasCongestion: old.currentPrices.perArbGasCongestion,
+            perArbGasTotal: old.currentPrices.perArbGasTotal,
+        },
+        gasRemainingThisBlock: old.gasRemainingThisBlock,
+        congestionState: old.congestionState,
+        speedLimitPerSecond: old.speedLimitPerSecond,
+        pricingParams: struct {
+            l1GasPerL1CalldataUnit: old.pricingParams.l1GasPerL1CalldataUnit,
+            l1GasPerStorage: old.pricingParams.l1GasPerStorage,
+            arbGasDivisor: old.pricingParams.arbGasDivisor,
+        },
+        gasAllocatedToThisBlock: old.gasAllocatedToThisBlock,
+        retryablePrices: old.retryablePrices,
+        allowedSenders: setOfAddresses_all(),
     };
 }
