@@ -11,13 +11,11 @@ use core::kvs::builtin_kvsForall;
 use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
 use accounts::accountStore_get;
-use accounts::accountStore_feeCollectorForAggregator;
 use accounts::accountStore_addToEscrowUpToMax;
 use accounts::accountStore_payFullyFromEscrow;
 use accounts::accountStore_payFromEscrow;
 use accounts::accountStore_transferEthBalance;
 use accounts::account_getEthBalance;
-use accounts::accountStore_transferEthBalance;
 use accounts::account_getNextSeqNum;
 use accounts::account_getAggregatorToPay;
 use accounts::account_setBaseTxFeeL1Gas;
@@ -36,8 +34,8 @@ use messages::TxRequestData;
 use std::fixedpoint::FixedPoint;
 use std::fixedpoint::fixedPoint_new;
 use std::fixedpoint::fixedPoint_mulByUintTrunc;
-use std::fixedpoint::fixedPoint_div;
 use std::fixedpoint::fixedPoint_plusOne;
+use std::fixedpoint::fixedPoint_div;
 
 use std::addressSet::SetOfAddresses;
 use std::addressSet::setOfAddresses_emptySet;
@@ -200,7 +198,7 @@ impure func feesEnabled() -> bool {
 }
 
 impure func setPrices(
-    feeConfig: FeeConfig,
+    _feeConfig: FeeConfig,
     params: PricingParameters,
     congestionState: CongestionState,
     oldRetryablePrices: RetryablePrices,
@@ -210,6 +208,7 @@ impure func setPrices(
         let l1GasPrice = getL1GasPriceEstimate();
         let perArbGasBase = l1GasPrice / params.arbGasDivisor;
         let perArbGasCongestion = congestionState.congestionPriceWei;
+
         let perArbGasTotal = perArbGasBase + perArbGasCongestion;
         (
             struct {
@@ -260,7 +259,7 @@ impure func setRetryablePrices(oldRetryablePrices: RetryablePrices) -> Retryable
 public impure func gasAccounting_getPricesInWei(aggregatorAddr: address) -> (uint, uint, uint, uint, uint, uint) {
     // This is intended to return data to users, so we add the network fee, to make get the total price they'll pay.
     let prices = gasAccountingInfo.currentPrices;
-    let addNetworkFeeRate = fixedPoint_plusOne(gasAccountingInfo.feeConfig.networkFeeRate);
+    let addNetworkFeeRate = gasAccountingInfo.feeConfig.baseFeeMultiplier;
     return (
         fixedPoint_mulByUintTrunc(addNetworkFeeRate, gasAccounting_getTxBaseFeeWei(Some(aggregatorAddr))),
         fixedPoint_mulByUintTrunc(addNetworkFeeRate, prices.perL1CalldataUnit),
@@ -318,7 +317,7 @@ public impure func getCurrentBlockGasLimit() -> uint {
 
 public impure func gasAccounting_getPricesInArbGas(aggregatorAddr: address) -> (uint, uint, uint) {  // don't include price of ArbGas, which is 1
     let prices = gasAccountingInfo.currentPrices;
-    let addNetworkFee = fixedPoint_plusOne(gasAccountingInfo.feeConfig.networkFeeRate);
+    let addNetworkFee = gasAccountingInfo.feeConfig.baseFeeMultiplier;
     let arbGasPrice = prices.perArbGasTotal;
     let txBaseFeeWei = fixedPoint_mulByUintTrunc(addNetworkFee, gasAccounting_getTxBaseFeeWei(Some(aggregatorAddr)));
     let calldataFeeWei = fixedPoint_mulByUintTrunc(addNetworkFee, prices.perL1CalldataUnit);
@@ -818,17 +817,18 @@ impure func payForTxAndL1Gas(
 
     // pay for network fee; if insufficient funds, pay as much as we can then return false
     if ( ! {
-        let txPrice = fixedPoint_mulByUintTrunc(feeConfig.networkFeeRate, basePriceTx);
-        let calldataUnitPrice = fixedPoint_mulByUintTrunc(feeConfig.networkFeeRate, basePriceCalldataUnit);
+        let txPrice = fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, basePriceTx);
+        let calldataUnitPrice = fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, basePriceCalldataUnit);
         let (fullyPaid, ufs, weiPaid) = tryToPayForL1Gas(
             payer,
             address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
-            payableToFee,   // safe because payerBalance >= amount and feeConfig.shareForNetFee <= 1
-        ) {
-            store
-        } else {
-            panic  // should never happen -- we just checked the balance
-        };
+            txPrice,
+            calldataUnits * calldataUnitPrice,
+            feeStats,
+            paymentLimitWei,
+            feeStats.noFeeGasEstimationMode,
+        );
+        feeStats = ufs;
         totalWeiPaid = totalWeiPaid + weiPaid;
         fullyPaid
     }) {
