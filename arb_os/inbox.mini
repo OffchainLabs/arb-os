@@ -472,7 +472,7 @@ impure func handleArrivingTx(tx: TxRequestData) {
         }
     } else {
         // before emitting a failure receipt, try to increment caller's sequence number
-        if (resultCode != const::TxResultCode_badSequenceNum) {
+        if ((resultCode != const::TxResultCode_sequenceNumberTooLow) && (resultCode != const::TxResultCode_sequenceNumberTooHigh)) {
             if let Some(seqNum) = request.seqNum {
                 let gAcctStore = getGlobalAccountStore();
                 if let Some(acct) = account_checkAndIncrSeqNum(accountStore_get(gAcctStore, request.caller), seqNum) {
