@@ -217,10 +217,7 @@ impure func setPrices(
         let perArbGasTotal = safeAdd(perArbGasBase, perArbGasCongestion);
         (
             struct {
-                perL1CalldataUnit: fixedPoint_mulByUintTrunc(
-                    feeConfig.baseFeeMultiplier,
-                    safeMul(params.l1GasPerL1CalldataUnit, l1GasPrice),
-                ),
+                perL1CalldataUnit: safeMul(params.l1GasPerL1CalldataUnit, l1GasPrice),
                 perStorageCell: safeMul(params.l1GasPerStorage, l1GasPrice),
                 perArbGasBase: perArbGasBase,
                 perArbGasCongestion: perArbGasCongestion,
@@ -329,13 +326,17 @@ public impure func getCurrentBlockGasLimit() -> uint {
 
 public impure func gasAccounting_getPricesInArbGas(aggregatorAddr: address) -> (uint, uint, uint) {  // don't include price of ArbGas, which is 1
     let prices = gasAccountingInfo.currentPrices;
-    let addNetworkFee = gasAccountingInfo.feeConfig.baseFeeMultiplier;
     let arbGasPrice = prices.perArbGasTotal;
-    let txBaseFeeWei = fixedPoint_mulByUintTrunc(addNetworkFee, gasAccounting_getTxBaseFeeWei(Some(aggregatorAddr)));
-    let calldataFeeWei = fixedPoint_mulByUintTrunc(addNetworkFee, prices.perL1CalldataUnit);
+    let baseFeeMultiplier = gasAccountingInfo.feeConfig.baseFeeMultiplier;
     return (
-        safeAdd(gasAccounting_getTxBaseFeeWei(Some(aggregatorAddr)), arbGasPrice - 1) / arbGasPrice,   // base price for tx
-        safeAdd(prices.perL1CalldataUnit, arbGasPrice - 1) / arbGasPrice,  // price per L1 calldata unit
+        safeAdd(
+            fixedPoint_mulByUintTrunc(baseFeeMultiplier, gasAccounting_getTxBaseFeeWei(Some(aggregatorAddr))),
+            arbGasPrice - 1
+        ) / arbGasPrice,   // base price for tx
+        safeAdd(
+            fixedPoint_mulByUintTrunc(baseFeeMultiplier, prices.perL1CalldataUnit),
+            arbGasPrice - 1
+        ) / arbGasPrice,  // price per L1 calldata unit
         safeAdd(prices.perStorageCell, arbGasPrice - 1) / arbGasPrice,     // price per storage cell
     );
 }
@@ -703,7 +704,7 @@ public impure func gasAccounting_prepareTx(tx: TxRequestData) -> (
             return (const::TxResultCode_gasPriceTooLow, tx);
         }
 
-        let (fullyPaid, feeStats, totalWeiPaid) = xif let Some(aggInfo) = tx.incomingRequest.aggregator {
+        let (fullyPaid, feeStats, _totalWeiPaid) = xif let Some(aggInfo) = tx.incomingRequest.aggregator {
             tx = tx with {
                 feeStats: tx.feeStats with {
                     units: tx.feeStats.units with { calldataUnit: aggInfo.calldataUnits }
@@ -748,7 +749,7 @@ public impure func gasAccounting_prepareTx(tx: TxRequestData) -> (
             tx = tx with {
                 feeStats: tx.feeStats with {
                     units: tx.feeStats.units with {
-                        calldataUnit: aggInfo.calldataUnits
+                        calldataUnit: feeStats.units.calldataUnit
                     }
                 }
             };
