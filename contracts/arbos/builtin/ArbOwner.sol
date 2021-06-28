@@ -21,7 +21,8 @@ interface ArbOwner {
 
     // To upgrade ArbOS, the owner calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload
     // the code to be installed as the upgrade, then calls finishArbosUpgrade to complete the upgrade and start executing the new code.
-    function startCodeUpload() external;
+    // startCodeUpload will revert unless oldCodeHash equals either zero or the hash of the last ArbOS upgrade
+    function startCodeUpload(bytes32 oldCodeHash) external;
     function continueCodeUpload(bytes calldata marshalledCode) external;
     function getUploadedCodeHash() external view returns(bytes32);
 
@@ -29,6 +30,9 @@ interface ArbOwner {
     // Revert if the hash of the uploaded code bytes does not equal newCodeHash
     // Revert if (oldCodeHash != 0) && (oldCodeHash != [hash of code bytes from the previous ArbOS upgrade]
     function finishCodeUploadAsArbosUpgrade(bytes32 newCodeHash, bytes32 oldCodeHash) external;
+
+    // Get the code hash of the last upgrade that was installed, or zero if there hasn't been an upgrade on this chain
+    function getLastUpgradeHash() external view returns(bytes32);
 
     // Get and set chain parameters
     function getChainParameter(uint which) external view returns(uint);

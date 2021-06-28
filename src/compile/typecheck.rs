@@ -76,7 +76,7 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
 }
 
 impl<'a> TypeCheckedNode<'a> {
-    ///Propagates attributes down the tree. Currently only passes `codegen_print`.
+    ///Propagates attributes down the AST.
     pub fn propagate_attributes(mut nodes: Vec<TypeCheckedNode>, attributes: &Attributes) {
         for node in nodes.iter_mut() {
             match node {
@@ -85,12 +85,25 @@ impl<'a> TypeCheckedNode<'a> {
                         stat.debug_info.attributes.codegen_print || attributes.codegen_print;
                     let child_attributes = stat.debug_info.attributes.clone();
                     TypeCheckedNode::propagate_attributes(stat.child_nodes(), &child_attributes);
+                    if let TypeCheckedStatementKind::Asm(ref mut vec, _) = stat.kind {
+                        for insn in vec {
+                            insn.debug_info.attributes.codegen_print =
+                                stat.debug_info.attributes.codegen_print
+                                    || attributes.codegen_print;
+                        }
+                    }
                 }
                 TypeCheckedNode::Expression(expr) => {
                     expr.debug_info.attributes.codegen_print =
                         expr.debug_info.attributes.codegen_print || attributes.codegen_print;
                     let child_attributes = expr.debug_info.attributes.clone();
                     TypeCheckedNode::propagate_attributes(expr.child_nodes(), &child_attributes);
+                }
+                TypeCheckedNode::StructField(field) => {
+                    field.value.debug_info.attributes.codegen_print =
+                        field.value.debug_info.attributes.codegen_print || attributes.codegen_print;
+                    let child_attributes = field.value.debug_info.attributes.clone();
+                    TypeCheckedNode::propagate_attributes(field.child_nodes(), &child_attributes);
                 }
                 _ => {}
             }
@@ -786,6 +799,7 @@ pub enum TypeCheckedStatementKind {
     While(TypeCheckedExpr, Vec<TypeCheckedStatement>),
     Asm(Vec<Instruction>, Vec<TypeCheckedExpr>),
     DebugPrint(TypeCheckedExpr),
+    Assert(TypeCheckedExpr),
 }
 
 impl AbstractSyntaxTree for TypeCheckedStatement {
@@ -797,6 +811,7 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
             | TypeCheckedStatementKind::Let(_, exp)
             | TypeCheckedStatementKind::AssignLocal(_, exp)
             | TypeCheckedStatementKind::AssignGlobal(_, exp)
+            | TypeCheckedStatementKind::Assert(exp)
             | TypeCheckedStatementKind::DebugPrint(exp) => vec![TypeCheckedNode::Expression(exp)],
             TypeCheckedStatementKind::While(exp, stats) => vec![TypeCheckedNode::Expression(exp)]
                 .into_iter()
@@ -1712,6 +1727,30 @@ fn typecheck_statement<'a>(
                 scopes,
             )?;
             Ok((TypeCheckedStatementKind::DebugPrint(tce), vec![]))
+        }
+        StatementKind::Assert(expr) => {
+            let tce = typecheck_expr(
+                expr,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+                undefinable_ids,
+                scopes,
+            )?;
+            match tce.get_type() {
+                Type::Tuple(vec) if vec.len() == 2 && vec[0] == Type::Bool => {
+                    Ok((TypeCheckedStatementKind::Assert(tce), vec![]))
+                }
+                _ => Err(CompileError::new_type_error(
+                    format!(
+                        "assert condition must be of type (bool, any), found {}",
+                        tce.get_type().display()
+                    ),
+                    debug_info.location.into_iter().collect(),
+                )),
+            }
         }
     }?;
     Ok((
