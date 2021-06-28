@@ -89,7 +89,7 @@ A message of this type directs ArbOS to end the current Arbitrum block and start
 
 **Message type 7: L2 transaction funded by L1**
 
-This message type encodes an L2 transaction that is funded by calldata provided at L1. The type-specific data must be the same as an L2 message of subtype 0 or 1.
+This message type encodes an L2 transaction that is funded by value provided at L1. The type-specific data must be the same as an L2 message of subtype 0 or 1.
 
 **Message type 8: Rollup protocol event**
 
@@ -275,11 +275,19 @@ Possible return codes are:
 	1: tx reverted
 	2: tx dropped due to L2 congestion
 	3: insufficient funds to pay for ArbGas
-	4: insufficient balance
-	5: bad sequence number
+	4: insufficient balance for callvalue
+	5: [no longer used (previously: bad sequence number, superseded by 14 and 15)]
 	6: message format error
     7: cannot deploy at requested address
-	255: unknown error
+    8: exceeded tx gas limit
+    9: insufficient gas to cover L1 charges
+  10: below minimum gas for a tx
+  11: gas price too low
+  12: no gas to auto-redeem retryable ticket
+  13: sender not permitted
+  14: sequence number too low
+  15: sequence number too high
+255: unknown error
 
 EVM logs are formatted as an EVM value, as a linked list in reverse order, such as this: (*log3*, (*log2*, (*log1*, (*log0*, () ) ) ) ). In this example there are four EVM log items, with the first one being *log0* and the last being *log3*.  Each EVM log is structured as an AVM tuple *(address, (dataSize, dataBuffer), topic0, topic1, ...)*, with as many topics as are present in that particular EVM log item.
 
