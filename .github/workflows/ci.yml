@@ -51,7 +51,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y \
             libasound2-dev libudev-dev build-essential pkg-config libssl-dev
 
-      - name: Install Rust ${{ matrix.rust }}
+      - name: Install rust ${{ matrix.rust }}
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -59,7 +59,7 @@ jobs:
           override: true
           components: ${{ matrix.rust == 'nightly' && 'llvm-tools-preview' || '' }}
 
-      - name: Install grcov if supported for Rust ${{ matrix.rust }}
+      - name: Install grcov if supported for rust ${{ matrix.rust }}
         uses: actions-rs/install@v0.1
         if: matrix.rust == 'nightly'
         with:
@@ -83,7 +83,7 @@ jobs:
           command: build
           args: --all
 
-      - name: Set up code-coverage instrumentation if supported for Rust ${{ matrix.rust }}
+      - name: Set up code-coverage instrumentation if supported for rust ${{ matrix.rust }}
         if: matrix.rust == 'nightly'
         run: |
           echo LLVM_PROFILE_FILE="your_name-%p-%m.profraw" >> $GITHUB_ENV
@@ -95,16 +95,16 @@ jobs:
         run: |
           sudo npm install -g yarn && cd contracts && yarn install
 
-      - name: Make and test ArbOs
+      - name: Make and test ArbOS
         run: make clean && make
 
       - name: Check if ArbOS changed
         run: git update-index --refresh && git diff-index HEAD --
 
-      - name: Create code-coverage files if supported for Rust ${{ matrix.rust }}
+      - name: Create code-coverage files if supported for rust ${{ matrix.rust }}
         if: matrix.rust == 'nightly'
         run: |
-          grcov . --binary-path ./target/debug/ -s . -t lcov --branch --ignore-not-existing -o lcov.info
+          grcov . --binary-path ./target/release/ -s . -t lcov --branch --ignore-not-existing -o lcov.info
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1
