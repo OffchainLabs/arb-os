@@ -835,6 +835,7 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
                 release_build,
             )?;
             c.push(Instruction::from_opcode(

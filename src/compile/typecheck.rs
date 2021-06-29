@@ -2649,15 +2649,16 @@ fn typecheck_expr(
                     func_table,
                     return_type,
                     type_tree,
+                    undefinable_ids,
                     scopes,
                 )?;
                 if expr.get_type() != Type::Uint {
-                    Err(new_type_error(
+                    Err(CompileError::new_type_error(
                         format!(
                             "SetGas(_) requires a uint, found a {}",
                             expr.get_type().display()
                         ),
-                        debug_info.location,
+                        debug_info.location.into_iter().collect(),
                     ))
                 } else {
                     Ok(TypeCheckedExprKind::SetGas(Box::new(expr)))
