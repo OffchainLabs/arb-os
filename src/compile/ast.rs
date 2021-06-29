@@ -1086,6 +1086,13 @@ impl<T> MatchPattern<T> {
     }
 }
 
+///An identifier or array index for left-hand-side substructure assignments
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SubData {
+    Dot(StringId),
+    ArrayOrMap(Expr),
+}
+
 ///Represents a constant mini value of type Option<T> for some type T.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum OptionConst {
