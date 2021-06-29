@@ -4,9 +4,6 @@
 
 //!Contains types and utilities for constructing the mini AST
 
-use super::typecheck::{new_type_error, TypeError};
-use crate::compile::path_display;
-use crate::compile::ast::TypeMismatch::FuncArgLength;
 use crate::compile::typecheck::{
     AbstractSyntaxTree, InliningMode, PropertiesList, TypeCheckedNode,
 };

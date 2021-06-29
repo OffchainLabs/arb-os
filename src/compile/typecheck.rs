@@ -2310,6 +2310,7 @@ fn typecheck_expr(
                     func_table,
                     return_type,
                     type_tree,
+                    undefinable_ids,
                     scopes,
                 )?;
                 let tc_type = tc_expr.get_type();
@@ -2322,13 +2323,13 @@ fn typecheck_expr(
                         Type::Union(types.clone()),
                     ))
                 } else {
-                    Err(new_type_error(
+                    Err(CompileError::new_type_error(
                         format!(
                             "Type {} is not a member of type union: {}",
                             tc_type.display(),
                             Type::Union(types.clone()).display()
                         ),
-                        loc,
+                        loc.into_iter().collect(),
                     ))
                 }
             }
@@ -2793,28 +2794,29 @@ fn typecheck_expr(
                     func_table,
                     return_type,
                     type_tree,
+                    undefinable_ids,
                     scopes,
                 )?;
                 if let Type::Union(types) = tc_expr.get_type().get_representation(type_tree)? {
                     if types.iter().any(|t| t == tipe) {
                         Ok(TypeCheckedExprKind::Cast(Box::new(tc_expr), tipe.clone()))
                     } else {
-                        Err(new_type_error(
+                        Err(CompileError::new_type_error(
                             format!(
                                 "Type {} is not a member of {}",
                                 tipe.display(),
                                 tc_expr.get_type().display()
                             ),
-                            debug_info.location,
+                            debug_info.location.into_iter().collect(),
                         ))
                     }
                 } else {
-                    Err(new_type_error(
+                    Err(CompileError::new_type_error(
                         format!(
                             "Tried to unioncast from non-union type \"{}\"",
                             tc_expr.get_type().display()
                         ),
-                        debug_info.location,
+                        debug_info.location.into_iter().collect(),
                     ))
                 }
             }
@@ -3680,12 +3682,12 @@ fn typecheck_binary_op_const(
                     Value::Int(match t2 {
                         Type::Uint | Type::Int | Type::Bytes32 => {
                             let x = val1.to_usize().ok_or_else(|| {
-                                new_type_error(
+                                CompileError::new_type_error(
                                     format!(
                                         "Attempt to shift {} left by {}, causing overflow",
                                         val2, val1
                                     ),
-                                    loc,
+                                    loc.into_iter().collect(),
                                 )
                             })?;
                             if op == BinaryOp::ShiftLeft {
@@ -3695,26 +3697,26 @@ fn typecheck_binary_op_const(
                             }
                         }
                         _ => {
-                            return Err(new_type_error(
+                            return Err(CompileError::new_type_error(
                                 format!(
                                     "Attempt to shift a {} by a {}, must shift an integer type by a uint",
                                     t2.display(),
                                     t1.display()
                                 ),
-                                loc,
+                                loc.into_iter().collect(),
                             ))
                         }
                     }),
                     t1,
                 ))
             } else {
-                Err(new_type_error(
+                Err(CompileError::new_type_error(
                     format!(
                         "Attempt to shift a {} by a {}, must shift an integer type by a uint",
                         t2.display(),
                         t1.display()
                     ),
-                    loc,
+                    loc.into_iter().collect(),
                 ))
             }
         }

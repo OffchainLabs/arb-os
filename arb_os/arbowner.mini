@@ -81,9 +81,7 @@ public impure func arbowner_txcall() {
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 1, 0, 0);
         }
         let funcCode = (bytearray_get256(calldata, 0) >> 224);
-        if (funcCode == const::funcCode_ArbOwner_giveOwnership) {
-            arbowner_giveOwnership(topFrame, calldata);
-        } elseif (funcCode == const::funcCode_ArbOwner_startCodeUpload) {
+        if (funcCode == const::funcCode_ArbOwner_startCodeUpload) {
             arbowner_startCodeUpload(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_startCodeUploadWithCheck) {
             arbowner_startCodeUploadWithCheck(topFrame, calldata);
