@@ -85,7 +85,7 @@ impl<'a> _ArbOwner<'a> {
         force_owner: bool, // force the message to come from address zero, which is an owner
     ) -> Result<(), ethabi::Error> {
         let param_id = _param_id_from_name(param_name);
-        let (receipts, _sends) = self.contract_abi.call_function(
+        let (receipts, _sends) = self.contract_abi._call_function_from_contract(
             if force_owner {
                 Uint256::zero()
             } else {
@@ -122,7 +122,7 @@ impl<'a> _ArbOwner<'a> {
         force_owner: bool, // force the message to come from address zero, which is an owner
     ) -> Result<Uint256, ethabi::Error> {
         let param_id = _param_id_from_name(param_name);
-        let (receipts, _sends) = self.contract_abi.call_function(
+        let (receipts, _sends) = self.contract_abi._call_function_from_contract(
             if force_owner {
                 Uint256::zero()
             } else {
@@ -1506,6 +1506,12 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
+    machine.runtime_env.insert_eth_deposit_message(Uint256::zero(), Uint256::zero(), Uint256::_from_eth(100000));
+    machine.runtime_env.insert_eth_deposit_message(my_addr.clone(), my_addr.clone(), Uint256::_from_eth(100000));
+    let deployer_addr = Uint256::from_u64(1025);
+    machine.runtime_env.insert_eth_deposit_message(deployer_addr.clone(), deployer_addr.clone(), Uint256::_from_eth(100000));
+    let _ = machine.run(None);
+
     let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
     if add_contract
         .deploy(&[], &mut machine, Uint256::zero(), None, false)
@@ -1519,7 +1525,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys_orig_binding._arbos_version(&mut machine)?,
-        Uint256::from_u64(29),
+        Uint256::from_u64(35),
     );
 
     arbowner._give_ownership(&mut machine, my_addr, true)?;

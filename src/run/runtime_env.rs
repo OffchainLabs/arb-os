@@ -897,7 +897,13 @@ impl ArbosReceipt {
             6 => "message format error",
             7 => "cannot deploy at address",
             8 => "exceeded tx gas limit",
-            9 => "below minimum ArbGas for contract tx",
+            9 => "insufficient gas for base fee",
+            10 => "below minimum ArbGas for contract tx",
+            11 => "gas price too low",
+            12 => "no gas for auto-redeem",
+            13 => "sender not permitted",
+            14 => "sequence number too low",
+            15 => "sequence number too high",
             _ => "unknown error",
         }
         .to_string()
