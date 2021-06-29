@@ -298,7 +298,9 @@ pub fn postlink_compile(
 
     loop {
         let mut do_another_pass = false;
-
+        
+        type Block = Vec<Instruction>;
+        
         macro_rules! optimize {
             ($optimization:tt, $title:tt, $debug:expr) => {
                 let blocks = graph
@@ -322,12 +324,24 @@ pub fn postlink_compile(
                 do_another_pass = do_another_pass || !unchanged;
             };
         }
+        
+        
+        for _ in 0..16 {
+            optimize!(peephole, "peephole", false);
+        }
 
-        optimize!(peephole, "peephole", false);
-        optimize!(xget_elision, "xget elision", false);
+        let (optimized, _) = optimize::graph_reduce(&graph, false)?;
+        graph = optimized;
+        
+        for _ in 0..16 {
+            optimize!(peephole, "peephole", false);
+        }
+        
+        //optimize!(peephole, "peephole", false);
+        /*optimize!(xget_elision, "xget elision", false);
         optimize!(xset_tail_elision, "xset tail elision", false);
         optimize!(tuple_annihilation, "tuple annihilation", false);
-        optimize!(stack_reduce, "stack reduce", false);
+        optimize!(stack_reduce, "stack reduce", false);*/
 
         /*optimize!(xget_elision, "xget elision", false);
         optimize!(peephole, "peephole", false);
@@ -335,10 +349,10 @@ pub fn postlink_compile(
         optimize!(tuple_annihilation, "tuple annihilation", false);
         optimize!(stack_reduce, "stack reduce", false);*/
         
-        let code = analyze::flatten_cfg(graph);
+        /*let code = analyze::flatten_cfg(graph);
         let (_, anon_labels, _) = analyze::count_labels(&code);
         let code = analyze::elide_useless_labels(&code, anon_labels);
-        graph = analyze::create_cfg(&code);
+        graph = analyze::create_cfg(&code);*/
 
         if !do_another_pass {
             if show_optimizations {
@@ -347,6 +361,7 @@ pub fn postlink_compile(
             }
             break;
         }
+        break;
     }
 
     let prior_size = code

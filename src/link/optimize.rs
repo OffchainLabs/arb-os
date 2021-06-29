@@ -7,9 +7,10 @@
 
 use crate::console::ConsoleColors;
 use crate::mavm::{AVMOpcode, Instruction, Opcode, OpcodeEffect, Value};
-use crate::link::analyze::{print_code};
-use crate::link::analyze::{print_cfg, create_cfg};
-use crate::compile::DebugInfo;
+use crate::uint256::Uint256;
+use crate::link::{FlowGraph};
+use crate::link::analyze::{print_code, print_cfg, create_cfg, flatten_cfg};
+use crate::compile::{DebugInfo, CompileError};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::convert::TryInto;
@@ -94,24 +95,6 @@ pub fn peephole(block: &Block, _debug: bool) -> (Block, bool) {
                 match immediates {
                     (_, None) => {
                         opt.push(curr.clone());
-                        index += 2;
-                        continue;
-                    }
-                    _ => {}
-                }
-            }
-            (Opcode::AVMOpcode(AVMOpcode::IsZero), Opcode::AVMOpcode(AVMOpcode::IsZero)) => {
-                match immediates {
-                    (None, None) => {
-                        index += 2;
-                        continue;
-                    }
-                    (Some(value), None) => {
-                        opt.push(Instruction {
-                            opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
-                            immediate: Some(value.clone()),
-                            debug_info: curr.debug_info,
-                        });
                         index += 2;
                         continue;
                     }
@@ -1339,11 +1322,11 @@ impl StackValue {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum NodeType {
     AVMOpcode(AVMOpcode),
     Value(Value),
-    Argument(usize),
+    Argument(usize, bool),
     Output,
     GlobalState,
     Function(usize, usize),
@@ -1353,7 +1336,7 @@ impl NodeType {
         match self {
             NodeType::AVMOpcode(_) => true,
             NodeType::Value(_) => true,
-            NodeType::Argument(_) => false,
+            NodeType::Argument(..) => false,
             NodeType::Output => false,
             NodeType::GlobalState => true,  // safe since the final global state is the last input to the output node
             NodeType::Function(..) => true,
@@ -1362,11 +1345,18 @@ impl NodeType {
     fn pretty_print(&self) -> String {
         let reset = ConsoleColors::RESET;
         let pink = ConsoleColors::PINK;
+        let mint = ConsoleColors::MINT;
         let grey = ConsoleColors::GREY;
         match self {
             NodeType::AVMOpcode(avm_op) => format!("{}\t", Opcode::AVMOpcode(*avm_op).pretty_print(pink, pink)),
             NodeType::Value(value) => format!("{}\t", value.pretty_print(pink, pink)),
-            NodeType::Argument(arg) => format!("Arg {}{}{}\t", pink, arg, reset),
+            NodeType::Argument(arg, aux) => format!(
+                "Arg {}{}{}\t",
+                match aux {
+                    false => pink,
+                    true => mint,
+                }, arg, reset
+            ),
             NodeType::Output => String::from("Output\t"),
             NodeType::GlobalState => String::from("Globals\t"),
             NodeType::Function(inputs, outputs) => format!(
@@ -1392,14 +1382,15 @@ impl EdgeType {
 pub type ValueGraph = StableGraph<NodeType, EdgeType>;
 pub type PrintGraph = StableGraph<String, (usize, usize)>;
 
-pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueGraph, String)> {
+pub fn graph_reduce_block(block: &Block, detail: bool) -> Result<(Block, bool), (ValueGraph, String)> {
     let mut same = true;
-
+    
     if block.len() == 0 {
         return Ok((block.clone(), same));
     }
     
     let debug_info = block[0].debug_info.propagate(true);
+    let unoptimized_block = block.clone();
     
     macro_rules! create {
         ($opcode:ident) => {
@@ -1418,24 +1409,46 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
         };
     }
     
+    // Move all immediates to a preceeding noop. This avoids special-casing later.
     let mut nooped = Vec::with_capacity(block.len());
     for curr in block.iter() {
-        nooped.extend(
-            match &curr.opcode {
-                Opcode::AVMOpcode(AVMOpcode::Noop) => vec![curr.clone()],
-                opcode => match &curr.immediate {
-                    Some(value) => vec![
-                        create!(Noop, Some(value.clone())),
-                        Instruction::from_opcode(opcode.clone(), debug_info),
-                    ],
-                    None => vec![curr.clone()],
-                }
+        nooped.extend(match &curr.opcode {
+            Opcode::AVMOpcode(AVMOpcode::Noop) => vec![curr.clone()],
+            opcode => match &curr.immediate {
+                Some(value) => vec![
+                    create!(Noop, Some(value.clone())),
+                    Instruction::from_opcode(opcode.clone(), debug_info),
+                ],
+                None => vec![curr.clone()],
             }
-        );
+        });
     }
     let block = nooped;
+
+    if detail {
+        print_code(&block, "noop'd", &BTreeMap::new());
+    }
     
-    print_code(&block, "noop'd", &BTreeMap::new());
+    let mut xtransformed = Vec::with_capacity(block.len());
+    for curr in block.iter() {
+        xtransformed.extend(match &curr.opcode {
+            Opcode::AVMOpcode(AVMOpcode::Xset) => vec![
+                create!(AuxPop),
+                create!(Swap1),
+                create!(Tset),
+                create!(AuxPush),
+            ],
+            Opcode::AVMOpcode(AVMOpcode::Xget) => vec![
+                create!(AuxPop),
+                create!(Dup0),
+                create!(AuxPush),
+                create!(Swap1),
+                create!(Tget),
+            ],
+            _ => vec![curr.clone()],
+        });
+    }
+    let block = xtransformed;
     
     let mut arg_count = 0;
     let mut data_stack: VecDeque<(isize, usize)> = VecDeque::new();
@@ -1448,11 +1461,12 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
     
     macro_rules! touch {
         ($stack:expr, $count:expr) => {
+            let aux = &$stack as *const _ == &aux_stack as *const _;    // check if this is the aux stack
             let stack = &mut $stack;
             let count = $count as usize;
             for touched in 0..(count.saturating_sub(stack.len())) {
                 arg_count += 1;
-                index_to_node.insert(-arg_count, graph.add_node(NodeType::Argument(arg_count as usize)));
+                index_to_node.insert(-arg_count, graph.add_node(NodeType::Argument(arg_count as usize, aux)));
                 stack.push_front((-arg_count, 0));
             }
         };
@@ -1468,7 +1482,7 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
                 };
             }
             Opcode::AVMOpcode(avm_op) => drop(index_to_node.insert(index, graph.add_node(NodeType::AVMOpcode(avm_op.clone())))),
-            _ => panic!("Graph reduce should never encounter a virtual opcode"),
+            x => panic!("Graph reduce should never encounter a virtual opcode {:?}", x),
         };
         
         let effects = curr.effects();
@@ -1507,7 +1521,14 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
                     let (producer, which) = data_stack[data_stack.len() - depth];
                     let this_node = *index_to_node.get(&index).unwrap();
                     let that_node = *index_to_node.get(&producer).unwrap();
-                    //println!("read {} {}", producer, which);
+                    graph.add_edge(this_node, that_node, EdgeType::Connect(which, input_number));
+                    input_number += 1;
+                }
+                OpcodeEffect::ReadAux => {
+                    touch!(aux_stack, 1);
+                    let (producer, which) = aux_stack[aux_stack.len() - 1];
+                    let this_node = *index_to_node.get(&index).unwrap();
+                    let that_node = *index_to_node.get(&producer).unwrap();
                     graph.add_edge(this_node, that_node, EdgeType::Connect(which, input_number));
                     input_number += 1;
                 }
@@ -1530,21 +1551,30 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
                         graph.add_edge(this_node, read.clone(), EdgeType::Meta);
                     }
                 }
-                x => panic!("effect not yet handled: {}", x.to_name()),
+                x => panic!("effect not yet handled: {} {:?}", x.to_name(), &curr.opcode),
             }
         }
     }
     
     // anything left on the stack is necessarily an output of this block
     let output_node = graph.add_node(NodeType::Output);
-    let mut output_count = 0;
     
+    let mut aux_output_count = 0;
+    for (producer, output_number) in aux_stack.iter().rev() {
+        let node = *index_to_node.get(&producer).unwrap();
+        graph.add_edge(output_node, node, EdgeType::Connect(*output_number, aux_stack.len() - 1 - aux_output_count));
+        //graph.add_edge(output_node, node, EdgeType::Connect(*output_number, aux_output_count));
+        aux_output_count += 1;
+    }
+    
+    graph.add_edge(output_node, global_state, EdgeType::Meta);
+    
+    let mut output_count = 0;
     while let Some((producer, output_number)) = data_stack.pop_back() {
-        let node = index_to_node.get(&producer).unwrap();
-        graph.add_edge(output_node, *node, EdgeType::Connect(output_number, output_count));
+        let node = *index_to_node.get(&producer).unwrap();
+        graph.add_edge(output_node, node, EdgeType::Connect(output_number, aux_output_count + output_count));
         output_count += 1;
     }
-    graph.add_edge(output_node, global_state, EdgeType::Meta);
     
     /// Prunes nodes whose values are never consumed.
     fn prune_graph(graph: &mut ValueGraph) {
@@ -1565,6 +1595,34 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
         edges.sort_by_key(|e| e.weight().input_number());
         let mut inputs: Vec<_> = edges.into_iter().map(|e| (graph.edge_endpoints(e.id()).unwrap().1, e.id())).collect();
         inputs
+    }
+    
+    fn typecheck(graph: &ValueGraph) -> Result<(), String> {
+        
+        for node in graph.node_indices() {
+            
+            match &graph[node] {
+                NodeType::AVMOpcode(AVMOpcode::Tset) => {
+                    
+                    let [(offset_node, _), (tuple_node, _), (_value_node, _)]: [(NodeIndex, EdgeIndex); 3]
+                        = sorted_neighbors(graph, node).try_into().expect("Tset should have 3 inputs");
+                    
+                    let offset = match &graph[offset_node] {
+                        NodeType::Value(Value::Int(offset)) if offset.to_usize().is_some() => offset.to_usize().unwrap(),
+                        NodeType::Value(_) => return Err("Found a Tset with a provably bad offset.".to_string()),
+                        _ => continue,
+                    };
+                    match &graph[tuple_node] {
+                        NodeType::Value(Value::Tuple(vec)) if offset < vec.len() => {}
+                        NodeType::AVMOpcode(AVMOpcode::Tset | AVMOpcode::Tget | AVMOpcode::Rget) => {}
+                        NodeType::Argument(..) => {}
+                        _ => return Err("Found a Tset with a provably bad tuple.".to_string()),
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(())
     }
     
     /// Replaces an edge with one deeper in the graph that provably results in the consumer
@@ -1618,7 +1676,7 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
                         NodeType::Value(Value::Tuple(vec)) if offset < vec.len() => input = tuple_node,
                         NodeType::AVMOpcode(AVMOpcode::Tset) => input = tuple_node,
                         NodeType::AVMOpcode(AVMOpcode::Tget | AVMOpcode::Rget) => continue,
-                        NodeType::Argument(_) => continue,
+                        NodeType::Argument(..) => continue,
                         _ => return Err("Found a Tget with provably bad tuple value.".to_string()),
                     };
                     tuple_offset = Some(offset);
@@ -1650,7 +1708,7 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
                             }
                             NodeType::AVMOpcode(AVMOpcode::Tset) => input = tuple_node,
                             NodeType::AVMOpcode(AVMOpcode::Tget | AVMOpcode::Rget) => continue,
-                            NodeType::Argument(_) => continue,
+                            NodeType::Argument(..) => continue,
                             _ => return Err("Found a Tset with a provably bad tuple.".to_string()),
                         };
                         same = false;
@@ -1675,10 +1733,163 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
         Ok(())
     }
     
-    let original_graph = graph.clone();
-    print_graph(&graph);
+    fn elide_tsets(graph: &mut ValueGraph) {
+        
+        let tsets: Vec<_> = graph.node_indices().filter(|node| graph[*node] == NodeType::AVMOpcode(AVMOpcode::Tset)).collect();
+        
+        for tset in tsets {
+            
+            let [(offset_node, offset_edge), (tuple_node, tuple_edge), (value_node, value_edge)]: [(NodeIndex, EdgeIndex); 3]
+                = sorted_neighbors(graph, tset).try_into().expect("Tset should have 3 inputs");
+            
+            let offset = match &graph[offset_node] {
+                NodeType::Value(Value::Int(offset)) if offset.to_usize().is_some() => offset.to_usize().unwrap(),
+                _ => continue,
+            };
+            let tuple = match &graph[tuple_node] {
+                NodeType::Value(Value::Tuple(vec)) if offset < vec.len() => tuple_node,
+                NodeType::AVMOpcode(AVMOpcode::Tset) => tuple_node,
+                _ => continue,
+            };
+            
+            let mut input = tuple;
+            let mut tset_path = vec![];
+            loop {
+                match graph[input] {
+                    NodeType::Value(Value::Tuple(ref vec)) if offset < vec.len() => {
+                        // see if we can apply the tset to this tuple using values we know about
+                        
+                        // TODO build a tset tree where the tuple is the root and walk backwards
+                        if tset_path.len() > 0 {
+                            break;
+                        }
+                        
+                        let inner = match graph[value_node] {
+                            NodeType::Value(ref value) => value.clone(),
+                            _ => break,
+                        };
+                        
+                        let mut new_tuple = vec.to_vec();
+                        new_tuple[offset] = inner;
+                        
+                        /*if graph.neighbors_directed(input, Direction::Incoming).count() == 1 {
+                            // Nothing else depends on this node's value, so let's update it.
+                            graph[input] = NodeType::Value(Value::new_tuple(new_tuple.clone()));
+                        }*/
+                        
+                        graph[tset] = NodeType::Value(Value::new_tuple(new_tuple));
+                        graph.remove_edge(offset_edge);
+                        graph.remove_edge(tuple_edge);
+                        graph.remove_edge(value_edge);
+                        break;
+                    }
+                    NodeType::AVMOpcode(AVMOpcode::Tset) => {
+                        // see if this tset kills another
+                        
+                        let [(offset_node, offset_edge), (tuple_node, _), (value_node, value_edge)]: [(NodeIndex, EdgeIndex); 3]
+                            = sorted_neighbors(graph, input).try_into().expect("Tset should have 3 inputs");
+                        
+                        let prior_offset = match &graph[offset_node] {
+                            NodeType::Value(Value::Int(offset)) if offset.to_usize().is_some() => offset.to_usize().unwrap(),
+                            _ => break,
+                        };
+                        
+                        let degree = graph.edges_directed(input, Direction::Incoming).count();
+                        
+                        if offset == prior_offset && degree == 1 {
+                            // this prior tset assigns a value that's never used since
+                            // the original overwrites it.
+                            graph[input] = NodeType::AVMOpcode(AVMOpcode::Dup0);
+                            graph.remove_edge(offset_edge);
+                            graph.remove_edge(value_edge);
+                            break;
+                        }
+                        
+                        // TODO build a tset tree where the tuple is the root and walk backwards
+                        if degree == 1 {
+                            tset_path.push(tuple_node);
+                            input = tuple_node;
+                            continue;
+                        }
+                    }
+                    _ => {},
+                }
+                break;
+            }
+        }
+    }
     
-    for _ in 0..8 {
+    fn constant_folding(graph: &mut ValueGraph) -> Result<(), String> {
+        
+        let nodes: Vec<_> = graph.node_indices().collect();
+        
+        for node in nodes {
+            macro_rules! inputs {
+                ($count:expr) => {{
+                    let inputs: [(NodeIndex, EdgeIndex); $count] = sorted_neighbors(graph, node)
+                        .try_into().expect(&format!("{:?} should have {} inputs", graph[node], $count));
+                    inputs
+                }};
+            };
+            macro_rules! compute {
+                (1, |$va:ident| $func:expr) => {{
+                    let [(a, ea)] = inputs!(1);
+                    match &graph[a] {
+                        NodeType::Value(Value::Int($va)) => {
+                            graph[node] = NodeType::Value(Value::Int($func));
+                            graph.remove_edge(ea);
+                        }
+                        NodeType::Value(_) => {
+                            return Err(format!("Found a unary op with a bad input {:?}.", graph[a]));
+                        }
+                        _ => continue,
+                    }
+                }};
+                (2, |$va:ident, $vb:ident| $func:expr) => {{
+                    let [(a, ea), (b, eb)] = inputs!(2);
+                    match (&graph[a], &graph[b]) {
+                        (NodeType::Value(Value::Int($va)), NodeType::Value(Value::Int($vb))) => {
+                            graph[node] = NodeType::Value(Value::Int($func));
+                            graph.remove_edge(ea);
+                            graph.remove_edge(eb);
+                        }
+                        (NodeType::Value(_), NodeType::Value(_)) => return Err(format!("Found a binary op with bad inputs.")),
+                        _ => continue,
+                    }
+                }};
+            };
+            
+            let zero = Uint256::from_usize(0);
+            let one = Uint256::from_usize(1);
+            
+            match graph[node] {
+                NodeType::AVMOpcode(AVMOpcode::BitwiseNeg)   => compute!(1, |a   | a.bitwise_neg()   ),
+              //NodeType::AVMOpcode(AVMOpcode::Hash)         => compute!(1, |a   | a.avm_hash()      ),
+                NodeType::AVMOpcode(AVMOpcode::Plus)         => compute!(2, |a, b| a.add(b)          ),
+                NodeType::AVMOpcode(AVMOpcode::Minus)        => compute!(2, |a, b| a.unchecked_sub(b)),
+                NodeType::AVMOpcode(AVMOpcode::Mul)          => compute!(2, |a, b| a.mul(b)          ),
+                NodeType::AVMOpcode(AVMOpcode::Exp)          => compute!(2, |a, b| a.exp(b)          ),
+                NodeType::AVMOpcode(AVMOpcode::BitwiseAnd)   => compute!(2, |a, b| a.bitwise_and(b)),
+                NodeType::AVMOpcode(AVMOpcode::BitwiseOr)    => compute!(2, |a, b| a.bitwise_or(b)),
+                NodeType::AVMOpcode(AVMOpcode::BitwiseXor)   => compute!(2, |a, b| a.bitwise_xor(b)),
+                NodeType::AVMOpcode(AVMOpcode::Hash2)        => compute!(2, |a, b| Uint256::avm_hash2(a, b)),
+                NodeType::AVMOpcode(AVMOpcode::LessThan)     => compute!(2, |a, b| if a < b { one } else { zero }),
+                NodeType::AVMOpcode(AVMOpcode::GreaterThan)  => compute!(2, |a, b| if a > b { one } else { zero }),
+                NodeType::AVMOpcode(AVMOpcode::Equal)        => compute!(2, |a, b| if a == b { one } else { zero }),
+                NodeType::AVMOpcode(AVMOpcode::SLessThan)    => compute!(2, |a, b| if a.s_less_than(b) { one } else { zero }),
+                NodeType::AVMOpcode(AVMOpcode::SGreaterThan) => compute!(2, |a, b| if b.s_less_than(a) { one } else { zero }),
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+    
+    let original_graph = graph.clone();
+    if detail {
+        print_graph(&graph);
+    }
+    
+    for _ in 0..64 {
         let node_count = graph.node_count();
         prune_graph(&mut graph);
         let edges: Vec<_> = graph.edge_indices().collect();
@@ -1688,11 +1899,19 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
             }
         }
         prune_graph(&mut graph);
+        elide_tsets(&mut graph);
+        prune_graph(&mut graph);
+        constant_folding(&mut graph).map_err(|stat| (original_graph.clone(), stat))?;
         if graph.node_count() == node_count {
             break;
         }
+        if detail {
+            print_graph(&graph);
+        }
     }
-    print_graph(&graph);
+    if detail {
+        print_graph(&graph);
+    }
     
     /// Prints the graph in a human-readable format. A prime (') is used to indicate the second output
     /// value of a given node, should one exist. Edges in pink are meta.
@@ -1727,10 +1946,11 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
     }
     
     /// Prints the items on the stack, along with their producer's output number.
-    fn print_slots(title: &str, slots: &Vec<(NodeIndex, usize)>, node: NodeIndex) {
+    fn print_slots(title: &str, slots: &Vec<(NodeIndex, usize)>, aux_slots: &Vec<(NodeIndex, usize)>, node: NodeIndex) {
         println!(
-            "  => {} slots for node({}) [{}]", title,
-            node.index(), slots.iter().map(
+            "  => {} slots for node({}) [{}] [{}]", title,
+            node.index(),
+            slots.iter().map(
                 |slot| format!(
                     "{}{}",
                     slot.0.index(),
@@ -1738,17 +1958,31 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
                         0 => "",
                         _ => "'",
                     })
-            ).collect::<Vec<_>>().join(", ")
+            ).collect::<Vec<_>>().join(", "),
+            aux_slots.iter().map(
+                |slot| format!(
+                    "{}{}",
+                    slot.0.index(),
+                    match slot.1 {
+                        0 => "",
+                        _ => "'",
+                    })
+            ).collect::<Vec<_>>().join(", "),
         );
     }
     
-    let mut slots: Vec<(NodeIndex, usize)> = vec![];
+    let mut slots = vec![];
+    let mut aux_slots = vec![];
     for node in graph.node_indices() {
-        if let NodeType::Argument(arg) = &graph[node] {
-            slots.push((node, 0));
+        if let NodeType::Argument(arg, aux) = &graph[node] {
+            match aux {
+                false => slots.push((node, 0)),
+                true => aux_slots.push((node, 0)),
+            }
         }
     }
     slots.reverse();
+    aux_slots.reverse();
     
     /// Creates a new set of instructions from a value graph. Randomization is employed to vary
     /// the order in which values are generated, as changing the order changes the number of
@@ -1756,7 +1990,9 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
     fn codegen(
         original: &ValueGraph,
         graph: &mut ValueGraph,
-        slots: &mut Vec<(NodeIndex, usize)>,
+        slots: &mut Vec<(NodeIndex, usize)>,        // values on the data stack
+        aux_slots: &mut Vec<(NodeIndex, usize)>,    // values that are on the aux stack
+        aux_outputs: usize,                         // values that should be put on the aux stack at the end
         completed: &mut HashSet<NodeIndex>,
         node: NodeIndex,
         debug_info: DebugInfo,
@@ -1783,6 +2019,11 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
         let mut code = vec![];
         
         if let NodeType::Output = &graph[node] {
+
+            /*if detail {
+                print_slots("first", slots, aux_slots, node);
+            }*/
+            
             // Before codegening anything, we need to make sure unused items on the stack
             // created in the callee are removed. We can't just not codegen / prune them,
             // since these were generated elsewhere.
@@ -1790,7 +2031,6 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
             let mut used_args = vec![];
             for arg in slots.iter().rev() {
                 let degree = graph.neighbors_directed(arg.0, Direction::Incoming).count();
-                println!("degree {}", degree);
                 if degree != 0 {
                     used_args.push(*arg);
                 } else {
@@ -1800,14 +2040,34 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
             }
             used_args.reverse();
             *slots = used_args;
+            
+            // By eliminating instructions like xset and xget, we've transformed the graph
+            // to never have an instruction take an input directly from the aux stack. Hence,
+            // we can move each item from the aux stack to the data stack in advance.
+            
+            let mut used_args = vec![];
+            for arg in aux_slots.iter().rev() {
+                let degree = graph.neighbors_directed(arg.0, Direction::Incoming).count();
+                if degree != 0 {
+                    used_args.push(*arg);
+                    code.push(create!(Opcode::AVMOpcode(AVMOpcode::AuxPop)));
+                } else {
+                    code.push(create!(Opcode::AVMOpcode(AVMOpcode::AuxPop)));
+                    code.push(create!(Opcode::AVMOpcode(AVMOpcode::Pop)));
+                }
+            }
+            slots.extend(used_args.into_iter());
+            aux_slots.clear();
         }
         
         if completed.contains(&node) {
-            println!("We've already done node({})", node.index());
+            //println!("We've already done node({})", node.index());
             return vec![];
         }
-        
-        print_slots("prior", slots, node);
+
+        /*if detail {
+            print_slots("prior", slots, aux_slots, node);
+        }*/
         
         struct Info {
             code: Vec<Instruction>,
@@ -1830,7 +2090,8 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
                 input: input,
                 edge: edge,
                 code: codegen(
-                    original, graph, slots, completed, input, debug_info.color(debug_info.attributes.color_group + 1), entropy
+                    original, graph, slots, aux_slots, aux_outputs, completed, input,
+                    debug_info.color(debug_info.attributes.color_group + 1), entropy
                 ),
                 edge_type: EdgeType::Meta,    // gets overwritten
                 start_degree: 0,    // gets overwritten
@@ -1905,16 +2166,18 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
             let should_pull =
                 info.final_degree == 0 &&                     // insn consumes the input
                 info.start_degree == info.prior_degree;       // this is the first use of the input
-
-            println!(
-                "{} {:>2} {} => {} {:?}",
-                match should_pull {
-                    true => "pull",
-                    false => "dupe",
-                },
-                info.input.index(), start_slot, top_slot,
-                slots.iter().map(|(node, out)| (node.index(), out)).collect::<Vec<_>>()
-            );
+            
+            /*if detail {
+                println!(
+                    "{} {:>2} {} => {} {:?}",
+                    match should_pull {
+                        true => "pull",
+                        false => "dupe",
+                    },
+                    info.input.index(), start_slot, top_slot,
+                    slots.iter().map(|(node, out)| (node.index(), out)).collect::<Vec<_>>()
+                );
+            }*/
             
             if should_pull {
                 if start_slot != top_slot {
@@ -1930,23 +2193,44 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
                 let duped = slots[start_slot];
                 slots.push(duped);
             }
-            
-            println!(
-                "          => {} {:?}",
-                top_slot, slots.iter().map(|(node, out)| (node.index(), out)).collect::<Vec<_>>()
-            );
+
+            /*if detail {
+                println!(
+                    "          => {} {:?}",
+                    top_slot, slots.iter().map(|(node, out)| (node.index(), out)).collect::<Vec<_>>()
+                );
+            }*/
         }
-        
-        print_slots("inner", slots, node);
-        
-        for _ in inputs.into_iter().filter(|info| matches!(info.edge_type, EdgeType::Connect(..))) {
-            &slots.pop();
+
+        /*if detail {
+            print_slots("inner", slots, aux_slots, node);
+        }*/
+
+        let inputs_iter = inputs.into_iter().filter(|info| matches!(info.edge_type, EdgeType::Connect(..))).rev();
+        match &graph[node] {
+            NodeType::Output => {
+                let mut aux_pushes_left = aux_outputs;
+                for _ in inputs_iter {
+                    match aux_pushes_left {
+                        0 => drop(slots.pop()),
+                        _ => {
+                            aux_slots.push(slots.pop().expect("Tried to AuxPush a value that wasn't there"));
+                            code.push(create!(Opcode::AVMOpcode(AVMOpcode::AuxPush)));
+                            aux_pushes_left -= 1;
+                        }
+                    }
+                }
+            }
+            _ =>
+                for _ in inputs_iter {
+                    slots.pop();
+                }
         }
         
         match &graph[node] {
             NodeType::Output => {}
             NodeType::GlobalState => {}
-            NodeType::Argument(_) => {}
+            NodeType::Argument(_, _aux) => {}
             NodeType::AVMOpcode(avm_op) => {
                 code.push(create!(Opcode::AVMOpcode(*avm_op)));
                 let mut output_number = 0;
@@ -1985,32 +2269,38 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
             x => panic!("not implemented for {:#?}", x),
         }
 
-        print_slots("final", slots, node);
+        /*if detail {
+            print_slots("final", slots, aux_slots, node);
+        }*/
         
         completed.insert(node);
         code
     }
     
-    let mut opt = block.clone();
+    let mut opt = unoptimized_block.clone();
     let mut original = graph.clone();
     let mut entropy: SmallRng = SeedableRng::seed_from_u64(2);
     
-    for _ in 0..1 {
+    for _ in 0..8 {
         // attempt to codegen a better set of instructions than the best found so far.
         
         let alt = codegen(
             &original,
             &mut graph.clone(),
             &mut slots.clone(),
+            &mut aux_slots.clone(),
+            aux_output_count,
             &mut HashSet::new(),
             output_node,
             debug_info,
             &mut entropy
         );
-        let alt = peephole(&alt);
+        let alt = peephole2(&alt);
+        let (alt, _) = devirtualize(&alt, false);
+        let (alt, _) = peephole(&alt, false);
         
         let alt_cost = alt.iter().map(|insn| insn.opcode.base_cost()).sum::<u64>();
-        let opt_cost = 100 * opt.iter().map(|insn| insn.opcode.base_cost()).sum::<u64>();
+        let opt_cost = opt.iter().map(|insn| insn.opcode.base_cost()).sum::<u64>();
         
         if alt_cost < opt_cost {
             opt = alt;
@@ -2018,7 +2308,7 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
     }
     
     /// Employes simple optimizations to reduce the burden of pulls and swaps.
-    fn peephole(block: &Block) -> Block {
+    fn peephole2(block: &Block) -> Block {
         
         return block.clone();
         
@@ -2117,7 +2407,6 @@ pub fn graph_reduce(block: &Block, debug: bool) -> Result<(Block, bool), (ValueG
     );*/
 
     //let opt = block.clone();
-    
     Ok((opt, same))
 }
 
@@ -2175,4 +2464,58 @@ pub fn devirtualize(block: &Block, debug: bool) -> (Block, bool) {
     }
     
     (opt, same)
+}
+
+pub fn graph_reduce(graph: &FlowGraph, detail: bool) -> Result<(FlowGraph, bool), CompileError> {
+    let mut same = true;
+    
+    let code = flatten_cfg(graph.clone());
+    
+    let mut opt = vec![];
+    let mut block = vec![];
+    for (index, curr) in code.iter().enumerate() {
+        
+        macro_rules! split {
+            (@internal $opcode:ident) => {
+                curr.opcode == Opcode::AVMOpcode(AVMOpcode::$opcode)
+            };
+            (@internal $opcode:ident, $($remaining:ident),+) => {
+                split!(@internal $opcode) || split!(@internal $($remaining),+)
+            };
+            ($($opcodes:ident),* $(,)?) => {
+                let should_split =
+                    split!(@internal $($opcodes),*)          // insn isn't supported
+                    || index == code.len() - 1               // this is the last insn
+                    || match curr.opcode {
+                        Opcode::AVMOpcode(_) => false,
+                        _ => true,                           // this is a virtual insn
+                    };
+                
+                if should_split {
+                    let (reduced, _) =
+                        graph_reduce_block(&block, detail).expect("Encountered error");
+                    
+                    opt.extend(reduced);
+                    opt.push(curr.clone());
+                    block = vec![];
+                } else {
+                    block.push(curr.clone());
+                }
+            };
+        }
+        
+        split!(
+            // those that induce branching
+            Jump, Cjump,
+            
+            // those that are out of the scope of the current optimizer
+            GetGas, SetGas, Halt, Panic, Inbox, InboxPeek, Send, Log, Breakpoint, DebugPrint,
+            Sideload, OpenInsn, StackEmpty, AuxStackEmpty, ErrCodePoint, ErrSet, Blake2f,
+        );
+    }
+    
+    let optimized = create_cfg(&opt);
+    
+    print_cfg(&create_cfg(&block), &optimized, "graph reduce");
+    Ok((optimized, same))
 }

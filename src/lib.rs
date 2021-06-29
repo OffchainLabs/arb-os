@@ -106,21 +106,40 @@ pub fn fuzz_optimizer(data: &[u8], detail: bool) {
         }
         
         allow!(
-            Noop, Pop, Swap1, Swap2, Dup0, Dup1, Dup2, Tset, Tget, Tlen,
+            // primatives
+            Noop, Pop, Swap1, Swap2, Dup0, Dup1, Dup2, Tset, Tget,
+            
+            // those that involve global state
             Rget, Rset,
+            
+            // those that produce multiple outputs
             EcAdd, EcMul, EcPairing, EcRecover,
+            
+            // those that use the aux stack
+            AuxPush, AuxPop, Xget, Xset,
+            
+            // simple instructions
             Plus, Mul, Minus, Div, Sdiv, Mod, Smod, AddMod, MulMod, Exp, SignExtend,
             LessThan, GreaterThan, SLessThan, SGreaterThan, Equal, IsZero,
             BitwiseAnd, BitwiseOr, BitwiseXor, BitwiseNeg, Byte, ShiftLeft, ShiftRight, ShiftArith,
-            Hash, Type, Keccakf, Sha256f,
+            Hash, Type, Keccakf, Sha256f, PushStatic, Tlen, Ripemd160f, PushInsn, PushInsnImm,
             
-            AuxPush, AuxPop,
+            // those that involve buffers
+            NewBuffer, GetBuffer8, GetBuffer64, GetBuffer256, SetBuffer8, SetBuffer64, SetBuffer256,
             
-            // AuxPush, AuxPop, Xget, Xset,
-            // GetGas, SetGas, Halt, Panic, Inbox, InboxPeek, Send, Log, Breakpoint
-            // DebugPrint, SideLoad, OpenInsn, PushInsnImm, PushInsn
-            // StackEmpty, AuxStackEmpty, PushStatic
-            // NewBuffer, GetBuffer8, GetBuffer64, GetBuffer256, SetBuffer8, SetBuffer64, SetBuffer256,
+            // those that induce branching
+            // Jump, Cjump,
+            
+            // those that would create issues to add
+            //     Blake2f,           - has a variable cost function
+            //     ErrCodePoint,      - the emulator can't check for equality with these
+            //     SetGas, GetGas,    - optimization changes these in ways that make correctness impossible to check
+            //     Halt, Panic,
+            //     Inbox, InboxPeek,  
+            
+            // those that are out of the scope of the current optimizer
+            //   Send, Log, Breakpoint, DebugPrint,
+            //   SideLoad, OpenInsn, PushInsnImm, PushInsn, StackEmpty, AuxStackEmpty, ErrCodePoint
         );
 	
         let curr = Instruction {
@@ -161,43 +180,6 @@ pub fn fuzz_optimizer(data: &[u8], detail: bool) {
         };
     }
     
-    /*code = vec![
-        create!(Pop), create!(Pop), create!(Pop), create!(Pop),
-        create!(Pop), create!(Pop), create!(Pop), create!(Pop),
-        
-        create!(Noop, int!(4)),
-        create!(Noop, int!(8)),
-        create!(Noop, int!(2)),
-        create!(Noop, int!(2)),
-        create!(Noop, int!(2)),
-        create!(Noop, int!(1)),
-        create!(EcMul),
-    ];*/
-        
-        /*create!(Noop, Some(Value::new_tuple(vec![
-            Value::new_tuple(vec![]), Value::new_tuple(vec![]), Value::new_tuple(vec![])
-        ]))),
-        create!(Tset, Some(Value::Int(Uint256::from_usize(0)))),
-        create!(Tset, Some(Value::Int(Uint256::from_usize(1)))),
-        create!(Dup0),
-        create!(Tget, Some(Value::Int(Uint256::from_usize(0)))),
-        create!(Swap1, Some(Value::Int(Uint256::from_usize(32)))),
-        create!(Minus),
-        create!(Swap1),
-        create!(Tget, Some(Value::Int(Uint256::from_usize(1)))),
-        create!(Swap1, Some(Value::Int(Uint256::from_usize(64)))),
-        create!(Mul),*/
-        /*create!(Noop, Some(Value::new_tuple(vec![
-            Value::new_tuple(vec![]), Value::new_tuple(vec![])
-        ]))),
-        create!(Tset, Some(Value::Int(Uint256::from_usize(0)))),
-        create!(Tget, Some(Value::Int(Uint256::from_usize(0)))),
-        //create!(Noop, Some(Value::Int(Uint256::from_usize(16)))),
-        create!(Swap1, Some(Value::Int(Uint256::from_usize(32)))),
-        create!(Swap2, Some(Value::Int(Uint256::from_usize(64)))),
-        create!(AddMod),*/
-    
-
     let block = code;
     if detail {
         print_code(&block, "unoptimized", &BTreeMap::new());
@@ -209,8 +191,8 @@ pub fn fuzz_optimizer(data: &[u8], detail: bool) {
     }
     return;*/
     
-    let opt = match graph_reduce(&block, detail) {
-        Ok((opt, _)) => opt,
+    let opt = match graph_reduce(&create_cfg(&block), detail) {
+        Ok((opt, _)) => flatten_cfg(opt),
         Err(_) => vec![create!(Panic)],
     };
     if detail {
@@ -281,5 +263,10 @@ pub fn fuzz_optimizer(data: &[u8], detail: bool) {
         }
         println!("Optimization is incorrect");
         panic!("Optimization is incorrect");
+    }
+    
+    if &after_machine.arb_gas_remaining < &prior_machine.arb_gas_remaining {
+        println!("Optimization lowers performance");
+        panic!("Optimization lowers performance");
     }
 }

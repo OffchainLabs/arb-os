@@ -1288,6 +1288,8 @@ impl Opcode {
             Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => 100,
             Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => 100,
             Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => 100,
+            Opcode::AVMOpcode(AVMOpcode::Blake2f) => 0,    // TODO
+            Opcode::AVMOpcode(x) => panic!("Unable to determine cost for {}", x),
             _ => 0,
         }
     }
@@ -1613,17 +1615,14 @@ impl AVMOpcode {
             ],
             
             AVMOpcode::Noop => vec![],
-            //AVMOpcode::GetPC => vec![OpcodeEffect::PushStack],
             
-            // for now (should really track register and static usage)
-            //AVMOpcode::PushStatic
-            //| AVMOpcode::ErrCodePoint
-            //| AVMOpcode::GetGas => vec![OpcodeEffect::PushStack],
             AVMOpcode::SetGas => {
                 vec![OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack]
             }
             AVMOpcode::Rget => vec![OpcodeEffect::ReadGlobal, OpcodeEffect::PushStack],
             AVMOpcode::Rset => vec![OpcodeEffect::ReadStack(1), OpcodeEffect::PopStack, OpcodeEffect::WriteGlobal],
+            AVMOpcode::PushStatic
+            | AVMOpcode::ErrCodePoint => vec![OpcodeEffect::PushStack],
             
             AVMOpcode::IsZero
             | AVMOpcode::BitwiseNeg
@@ -1657,7 +1656,8 @@ impl AVMOpcode {
             | AVMOpcode::ShiftLeft
             | AVMOpcode::ShiftRight
             | AVMOpcode::ShiftArith
-            | AVMOpcode::Hash2 => vec![
+            | AVMOpcode::Hash2
+            | AVMOpcode::PushInsn => vec![
                 OpcodeEffect::ReadStack(1),
                 OpcodeEffect::PopStack,
                 OpcodeEffect::ReadStack(1),
@@ -1665,7 +1665,11 @@ impl AVMOpcode {
                 OpcodeEffect::PushStack,
             ],
 
-            AVMOpcode::AddMod | AVMOpcode::MulMod | AVMOpcode::Sha256f => vec![
+            AVMOpcode::AddMod
+            | AVMOpcode::MulMod
+            | AVMOpcode::Sha256f
+            | AVMOpcode::Ripemd160f
+            | AVMOpcode::PushInsnImm => vec![
                 OpcodeEffect::ReadStack(1),
                 OpcodeEffect::PopStack,
                 OpcodeEffect::ReadStack(1),
@@ -1733,38 +1737,51 @@ impl AVMOpcode {
                 OpcodeEffect::PushStack,
                 OpcodeEffect::ReadStack(1), // reads itself
             ],
-
-            // when ready, we'll switch to these:
-            //AVMOpcode::StackEmpty => vec![OpcodeEffect::ReadStack(1), OpcodeEffect::PushStack],
-            //AVMOpcode::AuxStackEmpty => vec![OpcodeEffect::ReadStack(1), OpcodeEffect::PushStack],
+            
+            AVMOpcode::NewBuffer => vec![OpcodeEffect::PushStack],                
+            AVMOpcode::GetBuffer8
+            | AVMOpcode::GetBuffer64
+            | AVMOpcode::GetBuffer256 => vec![
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::PushStack,
+            ],
+            AVMOpcode::SetBuffer8
+            | AVMOpcode::SetBuffer64
+            | AVMOpcode::SetBuffer256 => vec![
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::PushStack,
+            ],
+            AVMOpcode::Blake2f => vec![
+                OpcodeEffect::ReadStack(1),
+                OpcodeEffect::PopStack,
+                OpcodeEffect::PushStack,
+            ],
+            
             AVMOpcode::StackEmpty | AVMOpcode::AuxStackEmpty => {
                 vec![OpcodeEffect::Unsure, OpcodeEffect::PushStack]
             }
-
+            
             AVMOpcode::Breakpoint
             | AVMOpcode::ErrPush
             | AVMOpcode::ErrSet
             | AVMOpcode::Log
             | AVMOpcode::Send
             | AVMOpcode::Panic
-            | AVMOpcode::Ripemd160f
-            | AVMOpcode::Blake2f
             | AVMOpcode::DebugPrint
-            | AVMOpcode::NewBuffer
-            | AVMOpcode::GetBuffer8
-            | AVMOpcode::GetBuffer64
-            | AVMOpcode::GetBuffer256
-            | AVMOpcode::SetBuffer8
-            | AVMOpcode::SetBuffer64
-            | AVMOpcode::SetBuffer256
-            | AVMOpcode::PushInsn
-            | AVMOpcode::PushInsnImm
             | AVMOpcode::OpenInsn
-            | AVMOpcode::Sideload => vec![OpcodeEffect::Unsure],
-
-            AVMOpcode::Zero | AVMOpcode::Halt => vec![OpcodeEffect::Unsure],
+            | AVMOpcode::Sideload
+            | AVMOpcode::GetPC
+            | AVMOpcode::GetGas => vec![OpcodeEffect::Unsure],
             
-            _ => vec![OpcodeEffect::Unsure],
+            AVMOpcode::Zero | AVMOpcode::Halt => vec![OpcodeEffect::Unsure],
         }
     }
 }
