@@ -7,6 +7,7 @@
 use crate::compile::CompileError;
 use crate::evm::{contract_path, AbiForContract};
 use crate::uint256::Uint256;
+use keccak_hash::keccak;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs::File;
@@ -20,6 +21,8 @@ pub struct ConstantsFile {
     hex: BTreeMap<String, String>,
     contract_folder: String,
     contract: BTreeSet<String>,
+    parameters_int: BTreeMap<String, u64>,
+    parameters_hex: BTreeMap<String, String>,
 }
 
 ///Creates a fixed list of globally accessible constants.
@@ -34,7 +37,6 @@ pub fn init_constant_table(
                 String::from("Compile error"),
                 format!("Could not open constants file {:?}", consts_file),
                 vec![],
-                false,
             )
         })?;
         let mut consts_string = String::new();
@@ -43,7 +45,6 @@ pub fn init_constant_table(
                 String::from("Compile error"),
                 format!("Could not read file {:?} to a string", consts_file),
                 vec![],
-                false,
             )
         })?;
         serde_json::from_str::<ConstantsFile>(&consts_string).map_err(|_| {
@@ -51,7 +52,6 @@ pub fn init_constant_table(
                 String::from("Compile error"),
                 format!("Could not parse {:?} as constants file", consts_file),
                 vec![],
-                false,
             )
         })?
     } else {
@@ -66,6 +66,27 @@ pub fn init_constant_table(
         ret.insert(s.to_string(), Uint256::from_string_hex(&u).unwrap());
     }
 
+    for (s, i) in consts.parameters_int {
+        let mut ss = s.as_bytes();
+        ret.insert(
+            "Atom_Param_".to_owned() + &s,
+            Uint256::from_bytes(keccak(&mut ss).as_bytes()),
+        );
+        ret.insert("Default_Param_".to_owned() + &s, Uint256::from_u64(i));
+    }
+
+    for (s, i) in consts.parameters_hex {
+        let mut ss = s.as_bytes();
+        ret.insert(
+            "Atom_Param_".to_owned() + &s,
+            Uint256::from_bytes(keccak(&mut ss).as_bytes()),
+        );
+        ret.insert(
+            "Default_Param_".to_owned() + &s,
+            Uint256::from_string_hex(&i).unwrap(),
+        );
+    }
+
     for builtin in consts.contract {
         let fcodes =
             func_codes_for_builtin_contract(&consts.contract_folder, &builtin).map_err(|e| {
@@ -73,7 +94,6 @@ pub fn init_constant_table(
                     String::from("Compile error"),
                     format!("Error accessing builtin function {}: {}", builtin, e),
                     vec![],
-                    false,
                 )
             })?;
         for (name, code) in fcodes {
@@ -86,7 +106,6 @@ pub fn init_constant_table(
                     String::from("Compile error"),
                     format!("Error accessing builtin event {}: {}", builtin, e),
                     vec![],
-                    false,
                 )
             })?;
         for (name, topic) in etopics {
@@ -135,5 +154,50 @@ fn event_topics_for_builtin_contract(
             ))
         }
     }
+    Ok(ret)
+}
+
+pub fn make_parameters_list(
+    constants_path: Option<&Path>,
+) -> Result<BTreeMap<String, String>, CompileError> {
+    let mut ret = BTreeMap::new();
+
+    let consts = if let Some(consts_file) = constants_path {
+        let mut file = File::open(consts_file).map_err(|_| {
+            CompileError::new(
+                String::from("Compile error"),
+                format!("Could not open constants file {:?}", consts_file),
+                vec![],
+            )
+        })?;
+        let mut consts_string = String::new();
+        file.read_to_string(&mut consts_string).map_err(|_| {
+            CompileError::new(
+                String::from("Compile error"),
+                format!("Could not read file {:?} to a string", consts_file),
+                vec![],
+            )
+        })?;
+        serde_json::from_str::<ConstantsFile>(&consts_string).map_err(|_| {
+            CompileError::new(
+                String::from("Compile error"),
+                format!("Could not parse {:?} as constants file", consts_file),
+                vec![],
+            )
+        })?
+    } else {
+        ConstantsFile::default()
+    };
+
+    for (s, _) in consts.parameters_int {
+        let mut ss = s.as_bytes();
+        ret.insert("".to_owned() + &s, hex::encode(keccak(&mut ss).as_bytes()));
+    }
+
+    for (s, _) in consts.parameters_hex {
+        let mut ss = s.as_bytes();
+        ret.insert("".to_owned() + &s, hex::encode(keccak(&mut ss).as_bytes()));
+    }
+
     Ok(ret)
 }
