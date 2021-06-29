@@ -334,7 +334,11 @@ impl<'a> _ArbOwner<'a> {
         )];
         let (receipts, _sends) = self.contract_abi.call_function_compressed(
             self.my_address.clone(),
-            if with_check { "startCodeUploadWithCheck" } else { "startCodeUpload" },
+            if with_check {
+                "startCodeUploadWithCheck"
+            } else {
+                "startCodeUpload"
+            },
             if with_check { arg } else { &[] },
             machine,
             Uint256::zero(),
