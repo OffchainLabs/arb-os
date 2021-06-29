@@ -299,6 +299,13 @@ impl Type {
                     false
                 }
             }
+            Type::Union(inner) => {
+                if let Ok(Type::Union(inner2)) = rhs.get_representation(type_tree) {
+                    type_vectors_covariant_castable(&*inner2, inner, type_tree, seen.clone())
+                } else {
+                    false
+                }
+            }
         }
     }
 
@@ -393,6 +400,13 @@ impl Type {
             Type::Option(inner) => {
                 if let Ok(Type::Option(inner2)) = rhs.get_representation(type_tree) {
                     inner.castable(&inner2, type_tree, seen)
+                } else {
+                    false
+                }
+            }
+            Type::Union(inner) => {
+                if let Ok(Type::Union(inner2)) = rhs.get_representation(type_tree) {
+                    type_vectors_castable(&*inner2, inner, type_tree, seen.clone())
                 } else {
                     false
                 }
