@@ -1109,7 +1109,7 @@ fn builtin_func_decls() -> Vec<Import> {
 ///Sorts the `TopLevelDecl`s into collections based on their type
 pub fn sort_top_level_decls(
     decls: &[TopLevelDecl],
-    _file_path: Vec<String>,
+    file_path: Vec<String>,
     builtins: bool,
 ) -> (
     Vec<Import>,
@@ -1120,6 +1120,9 @@ pub fn sort_top_level_decls(
 ) {
     let mut imports = if builtins {
         builtin_func_decls()
+            .into_iter()
+            .filter(|imp| imp.path != file_path)
+            .collect()
     } else {
         vec![]
     };
