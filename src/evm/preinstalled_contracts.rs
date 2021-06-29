@@ -1506,10 +1506,22 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
-    machine.runtime_env.insert_eth_deposit_message(Uint256::zero(), Uint256::zero(), Uint256::_from_eth(100000));
-    machine.runtime_env.insert_eth_deposit_message(my_addr.clone(), my_addr.clone(), Uint256::_from_eth(100000));
+    machine.runtime_env.insert_eth_deposit_message(
+        Uint256::zero(),
+        Uint256::zero(),
+        Uint256::_from_eth(100000),
+    );
+    machine.runtime_env.insert_eth_deposit_message(
+        my_addr.clone(),
+        my_addr.clone(),
+        Uint256::_from_eth(100000),
+    );
     let deployer_addr = Uint256::from_u64(1025);
-    machine.runtime_env.insert_eth_deposit_message(deployer_addr.clone(), deployer_addr.clone(), Uint256::_from_eth(100000));
+    machine.runtime_env.insert_eth_deposit_message(
+        deployer_addr.clone(),
+        deployer_addr.clone(),
+        Uint256::_from_eth(100000),
+    );
     let _ = machine.run(None);
 
     let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
