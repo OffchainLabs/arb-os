@@ -12,7 +12,6 @@ use std::bytearray::bytearray_copy;
 
 use std::bytestream::bytestream_new;
 
-use std::storageMap::storageMap_new;
 use std::storageMap::storageMap_serialize;
 use std::storageMap::storageMap_deserialize;
 
@@ -63,7 +62,7 @@ public impure func arbosTest_txcall() {
 }
 
 func getFuncCode(ba: ByteArray) -> uint {
-    return asm(224, bytearray_get256(ba, 0)) uint { shr };
+    return bytearray_get256(ba, 0) >> 224;
 }
 
 impure func arbosTest_installAccount(topFrame: EvmCallFrame, calldata: ByteArray) { // (bool, uint, uint, bytes, bytes)

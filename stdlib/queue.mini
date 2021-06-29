@@ -155,7 +155,7 @@ public func queuestack_push(qs: QueueStack, q: Queue) -> QueueStack {
 
 func queuestack_stripEmpties(qs: QueueStack) -> QueueStack {
     return xloop {
-        if let Some(cell) = unsafecast<option<QueueStackCell>>(qs) {   // cast is safe but compiler doesn't know that
+        if let Some(cell) = unsafecast<option<QueueStackCell> >(qs) {   // cast is safe but compiler doesn't know that
             if (queue_isEmpty(cell.head)) {
                 qs = cell.rest;
             } else {

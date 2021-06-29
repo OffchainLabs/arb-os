@@ -4,30 +4,18 @@
 
 
 use std::bytearray::ByteArray;
-use std::bytestream::ByteStream;
-use std::bytearray::MarshalledBytes;
-use accounts::AccountStore;
-use accounts::Account;
 use evmlogs::EvmLogs;
-use std::storageMap::StorageMap;
 
 use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
 use accounts::accountStore_get;
 use accounts::accountStore_set;
-use accounts::accountStore_transferEthBalance;
-use accounts::accountStore_createAccountFromEvmCode;
-use accounts::account_checkAndIncrSeqNum;
 use accounts::account_fetchAndIncrSeqNum;
 use accounts::account_hasContract;
-
-use accounts::account_incrSeqNum;
 use accounts::account_getNextSeqNum;
-use accounts::account_getStartCodePoint;
 
 use evmCallStack::initEvmCallStack;
 use evmCallStack::initEvmCallStackForConstructor;
-use evmCallStack::evmCallStack_runningCodeFromAccount;
 
 use gasAccounting::GasUsage;
 use gasAccounting::TxFeeStats;
@@ -37,41 +25,11 @@ use output::emitTxReceipt;
 use retrybuffer::RetryableTx;
 
 use std::bytearray::bytearray_new;
-use std::bytearray::bytearray_size;
-use std::bytearray::bytearray_extract;
-
-use std::bytestream::bytestream_new;
-use std::bytestream::bytestream_getByte;
-use std::bytestream::bytestream_get256;
-use std::bytestream::bytestream_skipBytes;
-use std::bytestream::bytestream_getRemainingBytes;
 
 use std::rlp::keccakOfRlpEncodedUintPair;
 
-use codeSegment::translateEvmCodeSegment;
-
 use inbox::IncomingRequest;
 
-use gasAccounting::GasUsage;
-
-
-impure func verifyAndIncrSequenceNum(addr: address, seqNum: uint) -> option<()> {
-    // Verify the sequence number on a message.
-    // If it matches, increment the next expected seq num, and return Some(()).
-    // Else, change nothing and return None.
-    let globalAS = getGlobalAccountStore();
-    setGlobalAccountStore(
-        accountStore_set(
-            globalAS,
-            addr,
-            account_checkAndIncrSeqNum(
-                accountStore_get(globalAS, addr),
-                seqNum
-            )?
-        )
-    );
-    return Some(());
-}
 
 impure func fetchAndIncrSequenceNum(addr: address) -> uint {
     // Fetch sequence number, and increment it
@@ -105,7 +63,7 @@ type TxRequestData = struct {
     fromRetryable: option<RetryableTx>,
 }
 
-public impure func handleL2Request(
+public impure func processL2Request(
     request: TxRequestData
 ) -> option<()> {   // return None if message is malformatted; otherwise handle errors and return Some(()); if no error, never return
     if let Some(sequenceNum) = request.seqNum {
