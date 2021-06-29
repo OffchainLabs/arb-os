@@ -327,13 +327,15 @@ impl<'a> _ArbOwner<'a> {
         &self,
         machine: &mut Machine,
         last_upgrade_hash: Option<Uint256>,
+        with_check: bool,
     ) -> Result<(), ethabi::Error> {
+        let arg = &[ethabi::Token::FixedBytes(
+            last_upgrade_hash.unwrap_or(Uint256::zero()).to_bytes_be(),
+        )];
         let (receipts, _sends) = self.contract_abi.call_function_compressed(
             self.my_address.clone(),
-            "startCodeUpload",
-            &[ethabi::Token::FixedBytes(
-                last_upgrade_hash.unwrap_or(Uint256::zero()).to_bytes_be(),
-            )],
+            if with_check { "startCodeUploadWithCheck" } else { "startCodeUpload" },
+            if with_check { arg } else { &[] },
             machine,
             Uint256::zero(),
             self.wallet,
@@ -1543,7 +1545,8 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     arbowner._give_ownership(&mut machine, my_addr, true)?;
 
     let mexe_path = Path::new("arb_os/arbos-upgrade.mexe");
-    let _previous_upgrade_hash = _try_upgrade(&arbowner, &mut machine, &mexe_path, None)?.unwrap();
+    let _previous_upgrade_hash =
+        _try_upgrade(&arbowner, &mut machine, &mexe_path, None, false)?.unwrap();
 
     let wallet2 = machine.runtime_env.new_wallet();
     let arbsys = ArbSys::new(&wallet2, false);
@@ -1566,9 +1569,10 @@ fn _try_upgrade(
     machine: &mut Machine,
     mexe_path: &Path,
     previous_upgrade_hash: Option<Uint256>,
+    with_check: bool,
 ) -> Result<Option<Uint256>, ethabi::Error> {
     let uploader = CodeUploader::_new_from_file(mexe_path);
-    arbowner._start_code_upload(machine, None)?;
+    arbowner._start_code_upload(machine, None, with_check)?;
 
     let mut accum = vec![];
     for buf in uploader.instructions {
@@ -1742,7 +1746,7 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
 
     arbowner._give_ownership(&mut machine, my_addr, true)?;
 
-    arbowner._start_code_upload(&mut machine, None)?;
+    arbowner._start_code_upload(&mut machine, None, true)?;
 
     let mcode = vec![0x90u8, 1u8, 0u8, 42u8]; // debugprint(42)
     arbowner._continue_code_upload(&mut machine, mcode)?;
