@@ -1109,7 +1109,8 @@ fn builtin_func_decls() -> Vec<Import> {
 ///Sorts the `TopLevelDecl`s into collections based on their type
 pub fn sort_top_level_decls(
     decls: &[TopLevelDecl],
-    file_path: Vec<String>,
+    _file_path: Vec<String>,
+    builtins: bool,
 ) -> (
     Vec<Import>,
     BTreeMap<StringId, Func>,

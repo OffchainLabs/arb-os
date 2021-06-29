@@ -661,6 +661,7 @@ pub fn compile_from_folder(
         file_info_chart,
         constants_path,
         error_system,
+        builtins,
     )?;
 
     resolve_imports(&mut programs, &import_map, error_system)?;
@@ -739,6 +740,7 @@ fn create_program_tree(
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     constants_path: Option<&Path>,
     error_system: &mut ErrorSystem,
+    builtins: bool,
 ) -> Result<
     (
         HashMap<Vec<String>, Module>,
@@ -812,6 +814,7 @@ fn create_program_tree(
                 error_system,
             )?,
             path.clone(),
+            builtins,
         );
         paths.append(&mut imports.iter().map(|imp| imp.path.clone()).collect());
         import_map.insert(path.clone(), imports.clone());
