@@ -48,6 +48,8 @@ var *name* : *type* ;
 
 `[public] [impure] func` *name* ( *argname1: type1, argname2: type2, ...* ) [-> *returntype] codeblock*
 
+`[public] [impure] func` *name* ( *argname1: type1, argname2: type2, ...* ) `noreturn` codeblock*
+
 > This declares a function and provides its code.
 >
 > The `public` modifier is optional.  It indicates that the function can be called by code outside this source code file. Non-public functions cannot be called directly by outside code.  (However, pointers to non-public functions can be passed to outside code, and this would allow the pointed-to function to be called by outside code.)
@@ -59,6 +61,10 @@ var *name* : *type* ;
 > If there is a `returntype`, the function will return a single value of the specified type. (We'll see below that the type can be a tuple, allowing multiple values to be packaged together into a single return value.)
 >
 > If there is a `returntype`, the compiler must be able to infer that execution cannot reach the end of *codeblock* (so that the function terminates via a `return` statement, or the function runs forever). If the compiler is unable to verify this, it will generate an error.
+>
+> If `returntype` is `every`, then the function cannot return, because no return value can exist. The compiler will verify that the function cannot return. If the compiler is unable to verify this, it will generate an error.
+>
+> Declaring a function as `noreturn` is equivalent to declaring that the function returns `every`.  
 
 ## Types
 
@@ -122,6 +128,10 @@ Mini has the following types:
 
 > a value of unknown type
 
+`every`
+
+> a type that has no values, so that no value of this type can ever exist
+
 ## Equality and assignability for types
 
 Two types are equal if they have the same structure. Type aliases, as defined by non-import declarations, do not create a new type but simply define a shorthand method for referring to the underlying type.  (For example, after the declaration "`type foo = uint`", foo and uint are the same type.)
@@ -143,6 +153,8 @@ Two map types are equal if their key types are equal and their value types are e
 Two option types are equal if their inner types are equal
 
 `any` equals itself.
+
+`every` equals itself.
 
 Each imported type equals itself.
 
