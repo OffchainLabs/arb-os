@@ -151,10 +151,14 @@ fn write_coverage_data_to_file(
     let mut coverage_file = File::create(coverage_filename).unwrap();
     let mut coverage_lines: Vec<usize> = coverage_data.iter().map(|r| *r).collect();
     coverage_lines.sort();
-    for i in coverage_lines {
-        if let Some(loc) = instructions[i].debug_info.location {
-            if let Some(finfo) = file_info_table.get(&loc.file_id) {
-                writeln!(coverage_file, "{} {}", finfo.name, loc.line).unwrap();
+
+    for (index, insn) in instructions.into_iter().enumerate() {
+        if let Some(loc) = insn.debug_info.location {
+            if let Some(info) = file_info_table.get(&loc.file_id) {
+                match coverage_data.contains(&index) {
+                    true => drop(writeln!(coverage_file, "+ {} {}", info.name, loc.line)),
+                    false => drop(writeln!(coverage_file, "- {} {}", info.name, loc.line)),
+                }
             }
         }
     }

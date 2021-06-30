@@ -17,7 +17,6 @@ TESTCONTRACTSPURE = $(TCBUILDDIR)/Add.sol/Add.json $(TCBUILDDIR)/Fibonacci.sol/F
 TESTCONTRACTS = $(ACBUILDDIR)/ArbSys.sol/ArbSys.json $(TESTCONTRACTSPURE)
 UPGRADEFILES = $(UPGRADETESTDIR)/regcopy_old.mexe $(UPGRADETESTDIR)/regcopy_new.mexe $(UPGRADETESTDIR)/upgrade1_old.mexe $(UPGRADETESTDIR)/upgrade1_new.mexe $(UPGRADETESTDIR)/upgrade2_new.mexe
 ARBOSCONTRACTS = $(ACBUILDDIR)/ArbAddressTable.sol/ArbAddressTable.json $(ACBUILDDIR)/ArbBLS.sol/ArbBLS.json $(ACBUILDDIR)/ArbFunctionTable.sol/ArbFunctionTable.json $(ACBUILDDIR)/ArbInfo.sol/ArbInfo.json $(ACBUILDDIR)/ArbOwner.sol/ArbOwner.json $(ACBUILDDIR)/ArbSys.sol/ArbSys.json $(ACBUILDDIR)/ArbosTest.sol/ArbosTest.json $(ACBUILDDIR)/ArbRetryable.sol/ArbRetryable.json
-COVERAGES = $(BUILTINDIR)/arraytest.cov $(BUILTINDIR)/globaltest.cov $(BUILTINDIR)/kvstest.cov $(BUILTINDIR)/maptest.cov $(STDDIR)/biguinttest.cov $(STDDIR)/blstest.cov $(STDDIR)/bytearraytest.cov $(STDDIR)/fixedpointtest.cov $(STDDIR)/keccaktest.cov $(STDDIR)/priorityqtest.cov $(STDDIR)/queuetest.cov $(STDDIR)/ripemd160test.cov $(STDDIR)/sha256test.cov $(STDDIR)/storageMapTest.cov
 
 COMPILEFLAGS = -c "arb_os/constants.json" -i "none"
 COMPILEFLAGSNOINLINE = -c "arb_os/constants.json"
@@ -138,12 +137,9 @@ test:
 
 coverage: alltests.cov
 
-alltests.cov: compiler contracts $(COVERAGES) $(STDDIR)/rlptest.mexe
-	cargo test --release -- minitests::test_rlp
-	cat $(BUILTINDIR)/*.cov $(STDDIR)/*.cov | sort | uniq | grep -v test | grep -v Test >alltests.cov
-
-$(COVERAGES): %.cov: %.mexe
-	$(CARGORUN) run $< -c $@
+alltests.cov: compiler contracts
+	cat coverage/*/*.cov | sort -r | uniq | sort | uniq -f 1 | sort -k2,2 -k3,3n | grep -v test | grep -v Test > coverage/alltests.cov
+	./coverage/mini-coverage.sh ./coverage/alltests.cov >> lcov.info
 
 evmtest: $(ARBOS)
 	$(CARGORUN) evm-tests
@@ -165,5 +161,5 @@ benchmark: compiler $(TEMPLATES) $(ARBOS)
 	$(CARGORUN) make-benchmarks
 
 clean:
-	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe *.cov $(BUILTINDIR)/*.cov $(STDDIR)/*.cov $(UPGRADETESTDIR)/*.mexe $(ARBOSDIR)/arbos.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/upgrade.json minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini
+	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe *.cov coverage/*/*.cov $(BUILTINDIR)/*.cov $(STDDIR)/*.cov $(UPGRADETESTDIR)/*.mexe $(ARBOSDIR)/arbos.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/upgrade.json minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini lcov.info
 	rm -rf contracts/artifacts contracts/cache

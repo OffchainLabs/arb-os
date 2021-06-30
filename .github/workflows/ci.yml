@@ -105,6 +105,7 @@ jobs:
         if: matrix.rust == 'nightly'
         run: |
           grcov . --binary-path ./target/release/ -s . -t lcov --branch --ignore-not-existing -o lcov.info
+          make coverage
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1

@@ -31,7 +31,21 @@ fn test_from_file_with_args_and_return(
 }
 
 fn test_from_file(path: &Path) {
-    test_from_file_with_args_and_return(path, vec![], Value::Int(Uint256::zero()), None);
+    test_from_file_with_args_and_return(
+        path,
+        vec![],
+        Value::Int(Uint256::zero()),
+        Some({
+            let mut file = Path::new("coverage")
+                .join(path)
+                .to_str()
+                .unwrap()
+                .to_string();
+            let length = file.len();
+            file.truncate(length - 4);
+            file + "cov"
+        }),
+    );
 }
 
 #[test]
@@ -138,7 +152,7 @@ fn test_rlp() {
         test_rlp_bytearray(
             testvec.to_vec(),
             res,
-            Some(format!("stdlib/rlptest_bv_{}.cov", i)),
+            Some(format!("coverage/stdlib/rlptest_bv_{}.cov", i)),
         );
     }
 
@@ -160,7 +174,7 @@ fn test_rlp() {
         test_rlp_list3(
             testvec.clone(),
             res,
-            Some(format!("stdlib/rlptest_ls_{}.cov", i)),
+            Some(format!("coverage/stdlib/rlptest_ls_{}.cov", i)),
         );
     }
 }
