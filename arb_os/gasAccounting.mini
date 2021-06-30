@@ -915,7 +915,7 @@ impure func tryToPayForL1Gas(
         false
     };
 
-    let acctStore = getGlobalAccountStore();
+    let acctStore = safeGetGlobalAccountStore();
     let payerAcct = accountStore_get(acctStore, payer);
     if ((account_getEthBalance(payerAcct) < totalDue) && !dontActuallyPay){
         totalDue = account_getEthBalance(payerAcct);

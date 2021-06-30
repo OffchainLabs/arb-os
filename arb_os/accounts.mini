@@ -116,7 +116,7 @@ public impure func accounts_notifyParamsChanged() {
 public impure func safeGetGlobalAccountStore() -> AccountStore {
     if ( ! evmCallStack_isEmpty()) {
         asm(668,) { debugprint };
-        panic;
+        error;
     }
     return globalAccountStore;
 }
@@ -124,7 +124,7 @@ public impure func safeGetGlobalAccountStore() -> AccountStore {
 public impure func safeSetGlobalAccountStore(acctStore: AccountStore) {
     if ( ! evmCallStack_isEmpty()) {
         asm(669,) { debugprint };
-        panic;
+        error;
     }
     globalAccountStore = acctStore;
 }
