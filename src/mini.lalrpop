@@ -109,7 +109,7 @@ Attributes: Attributes = {
 
 StatementKind: StatementKind = {
 	"while" "(" <e: Expr> ")" <cb: CodeBlock> => StatementKind::While(e, cb),
-	<lno: @L> "for" <i:Ident> "from" <l:UnsignedInteger> "to" <u:UnsignedInteger> <mut cb:CodeBlock> =>
+	<lno: @L> "for" <i:Ident> "start-from" <l:UnsignedInteger> "run-to" <u:UnsignedInteger> <mut cb:CodeBlock> =>
     StatementKind::Expression(
         Expr {
             kind:

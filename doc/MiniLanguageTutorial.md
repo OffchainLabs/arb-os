@@ -202,7 +202,7 @@ Values of type `anytype` do not have any representation that is understood by th
 
 > Like a loop, except *condition*  (which must be an expression of type `bool`) is evaluated before each iteration, and the loop terminates if *condition* is found to be false.
 
-`for` identifier `from` number `to` number2 *codeblock*
+`for` identifier `start-from` number `run-to` number2 *codeblock*
 
 > Like a while loop, except creates an variable *identifier* that starts at *number* and increments by 1 until it reaches *number2*, where it exits the loop.  Running from *3* to *5* will run the contents of the loop twice.
 
