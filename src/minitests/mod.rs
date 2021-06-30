@@ -36,14 +36,10 @@ fn test_from_file(path: &Path) {
         vec![],
         Value::Int(Uint256::zero()),
         Some({
-            let mut file = Path::new("coverage")
-                .join(path)
-                .to_str()
-                .unwrap()
-                .to_string();
+            let mut file = path.to_str().unwrap().to_string();
             let length = file.len();
             file.truncate(length - 4);
-            file + "cov"
+            "coverage/".to_string() + &file.replace("/", "-") + "cov"
         }),
     );
 }
@@ -152,7 +148,7 @@ fn test_rlp() {
         test_rlp_bytearray(
             testvec.to_vec(),
             res,
-            Some(format!("coverage/stdlib/rlptest_bv_{}.cov", i)),
+            Some(format!("coverage/rlptest_bv_{}.cov", i)),
         );
     }
 
@@ -174,7 +170,7 @@ fn test_rlp() {
         test_rlp_list3(
             testvec.clone(),
             res,
-            Some(format!("coverage/stdlib/rlptest_ls_{}.cov", i)),
+            Some(format!("coverage/rlptest_ls_{}.cov", i)),
         );
     }
 }

@@ -148,7 +148,8 @@ fn write_coverage_data_to_file(
     file_info_table: BTreeMap<u64, FileInfo>,
     coverage_filename: String,
 ) {
-    let mut coverage_file = File::create(coverage_filename).unwrap();
+    let mut coverage_file = File::create(coverage_filename.clone())
+        .expect(&format!("Could not open {}", coverage_filename));
     let mut coverage_lines: Vec<usize> = coverage_data.iter().map(|r| *r).collect();
     coverage_lines.sort();
 
