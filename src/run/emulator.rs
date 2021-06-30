@@ -1235,9 +1235,9 @@ impl Machine {
         if let MachineState::Running(pc) = self.state {
             Some(match self.code.get_insn(pc)?.opcode {
                 AVMOpcode::Zero => 5,
-                AVMOpcode::Plus => 3,
+                AVMOpcode::Add => 3,
                 AVMOpcode::Mul => 3,
-                AVMOpcode::Minus => 3,
+                AVMOpcode::Sub => 3,
                 AVMOpcode::Div => 4,
                 AVMOpcode::Sdiv => 7,
                 AVMOpcode::Mod => 4,
@@ -1262,19 +1262,19 @@ impl Machine {
                 AVMOpcode::ShiftArith => 4,
                 AVMOpcode::Hash => 7,
                 AVMOpcode::Type => 3,
-                AVMOpcode::Hash2 => 8,
+                AVMOpcode::EthHash2 => 8,
                 AVMOpcode::Keccakf => 600,
                 AVMOpcode::Sha256f => 250,
                 AVMOpcode::Ripemd160f => 250, //TODO: measure and update this
                 AVMOpcode::Blake2f => self.gas_for_blake2f(),
                 AVMOpcode::Pop => 1,
-                AVMOpcode::PushStatic => 1,
-                AVMOpcode::Rget => 1,
+                AVMOpcode::Spush => 1,
+                AVMOpcode::Rpush => 1,
                 AVMOpcode::Rset => 2,
                 AVMOpcode::Jump => 4,
                 AVMOpcode::Cjump => 4,
                 AVMOpcode::StackEmpty => 2,
-                AVMOpcode::GetPC => 1,
+                AVMOpcode::PCpush => 1,
                 AVMOpcode::AuxPush => 1,
                 AVMOpcode::AuxPop => 1,
                 AVMOpcode::AuxStackEmpty => 2,
@@ -1296,14 +1296,14 @@ impl Machine {
                 AVMOpcode::Send => 100,
                 AVMOpcode::InboxPeek => 40,
                 AVMOpcode::Inbox => 40,
-                AVMOpcode::Panic => 5,
+                AVMOpcode::Error => 5,
                 AVMOpcode::Halt => 10,
                 AVMOpcode::ErrCodePoint => 25,
                 AVMOpcode::PushInsn => 25,
                 AVMOpcode::PushInsnImm => 25,
                 AVMOpcode::OpenInsn => 25,
                 AVMOpcode::DebugPrint => 1,
-                AVMOpcode::GetGas => 1,
+                AVMOpcode::PushGas => 1,
                 AVMOpcode::SetGas => 1,
                 AVMOpcode::EcRecover => 20_000,
                 AVMOpcode::EcAdd => 3500,
@@ -1401,7 +1401,7 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
-                    AVMOpcode::Zero | AVMOpcode::Panic => {
+                    AVMOpcode::Zero | AVMOpcode::Error => {
                         Err(ExecutionError::new("panicked", &self.state, None))
                     }
                     AVMOpcode::Jump => {
@@ -1418,12 +1418,12 @@ impl Machine {
                         }
                         Ok(true)
                     }
-                    AVMOpcode::GetPC => {
+                    AVMOpcode::PCpush => {
                         self.stack.push_codepoint(self.get_pc()?);
                         self.incr_pc();
                         Ok(true)
                     }
-                    AVMOpcode::Rget => {
+                    AVMOpcode::Rpush => {
                         self.stack.push(self.register.clone());
                         self.incr_pc();
                         Ok(true)
@@ -1434,7 +1434,7 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
-                    AVMOpcode::PushStatic => {
+                    AVMOpcode::Spush => {
                         self.stack.push(self.static_val.clone());
                         self.incr_pc();
                         Ok(true)
@@ -1623,14 +1623,14 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
-                    AVMOpcode::Plus => {
+                    AVMOpcode::Add => {
                         let r1 = self.stack.pop_uint(&self.state)?;
                         let r2 = self.stack.pop_uint(&self.state)?;
                         self.stack.push_uint(r1.add(&r2));
                         self.incr_pc();
                         Ok(true)
                     }
-                    AVMOpcode::Minus => {
+                    AVMOpcode::Sub => {
                         let r1 = self.stack.pop_uint(&self.state)?;
                         let r2 = self.stack.pop_uint(&self.state)?;
                         self.stack.push_uint(r1.unchecked_sub(&r2));
@@ -1880,7 +1880,7 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
-                    AVMOpcode::Hash2 => {
+                    AVMOpcode::EthHash2 => {
                         let r1 = self.stack.pop_uint(&self.state)?;
                         let r2 = self.stack.pop_uint(&self.state)?;
                         self.stack.push_uint(Uint256::avm_hash2(&r1, &r2));
@@ -2065,7 +2065,7 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
-                    AVMOpcode::GetGas => {
+                    AVMOpcode::PushGas => {
                         self.stack.push(Value::Int(self.arb_gas_remaining.clone()));
                         self.incr_pc();
                         Ok(true)
@@ -2097,7 +2097,8 @@ impl Machine {
                         let x1 = self.stack.pop_uint(&self.state)?;
                         let y0 = self.stack.pop_uint(&self.state)?;
                         let y1 = self.stack.pop_uint(&self.state)?;
-                        let (z0, z1) = do_ecadd(x0, x1, y0, y1);
+                        let (z0, z1) = do_ecadd(x0, x1, y0, y1)
+                            .map_err(|msg| ExecutionError::new(&msg, &self.state, None))?;
                         self.stack.push_uint(z1);
                         self.stack.push_uint(z0);
                         self.incr_pc();
@@ -2107,7 +2108,8 @@ impl Machine {
                         let x0 = self.stack.pop_uint(&self.state)?;
                         let x1 = self.stack.pop_uint(&self.state)?;
                         let n = self.stack.pop_uint(&self.state)?;
-                        let (z0, z1) = do_ecmul(x0, x1, n);
+                        let (z0, z1) = do_ecmul(x0, x1, n)
+                            .map_err(|msg| ExecutionError::new(&msg, &self.state, None))?;
                         self.stack.push_uint(z1);
                         self.stack.push_uint(z0);
                         self.incr_pc();
@@ -2348,23 +2350,28 @@ fn do_ecrecover(
     }
 }
 
-fn do_ecadd(x0: Uint256, x1: Uint256, y0: Uint256, y1: Uint256) -> (Uint256, Uint256) {
+fn do_ecadd(
+    x0: Uint256,
+    x1: Uint256,
+    y0: Uint256,
+    y1: Uint256,
+) -> Result<(Uint256, Uint256), &'static str> {
     use parity_bn::{AffineG1, Fq, Group, G1};
 
-    let px = Fq::from_slice(&x0.to_bytes_be()).unwrap();
-    let py = Fq::from_slice(&x1.to_bytes_be()).unwrap();
-    let qx = Fq::from_slice(&y0.to_bytes_be()).unwrap();
-    let qy = Fq::from_slice(&y1.to_bytes_be()).unwrap();
+    let px = Fq::from_slice(&x0.to_bytes_be()).map_err(|_| "Invalid slice")?;
+    let py = Fq::from_slice(&x1.to_bytes_be()).map_err(|_| "Invalid slice")?;
+    let qx = Fq::from_slice(&y0.to_bytes_be()).map_err(|_| "Invalid slice")?;
+    let qy = Fq::from_slice(&y1.to_bytes_be()).map_err(|_| "Invalid slice")?;
 
     let p = if px == Fq::zero() && py == Fq::zero() {
         G1::zero()
     } else {
-        AffineG1::new(px, py).unwrap().into()
+        AffineG1::new(px, py).map_err(|_| "Not on curve")?.into()
     };
     let q = if qx == Fq::zero() && qy == Fq::zero() {
         G1::zero()
     } else {
-        AffineG1::new(qx, qy).unwrap().into()
+        AffineG1::new(qx, qy).map_err(|_| "Not on curve")?.into()
     };
 
     if let Some(ret) = AffineG1::from_jacobian(p + q) {
@@ -2372,26 +2379,26 @@ fn do_ecadd(x0: Uint256, x1: Uint256, y0: Uint256, y1: Uint256) -> (Uint256, Uin
         ret.x().to_big_endian(&mut out_buf_0).unwrap();
         let mut out_buf_1 = vec![0u8; 32];
         ret.y().to_big_endian(&mut out_buf_1).unwrap();
-        (
+        Ok((
             Uint256::from_bytes(&out_buf_0),
             Uint256::from_bytes(&out_buf_1),
-        )
+        ))
     } else {
-        (Uint256::zero(), Uint256::zero())
+        Ok((Uint256::zero(), Uint256::zero()))
     }
 }
 
-fn do_ecmul(x0: Uint256, x1: Uint256, nui: Uint256) -> (Uint256, Uint256) {
+fn do_ecmul(x0: Uint256, x1: Uint256, nui: Uint256) -> Result<(Uint256, Uint256), &'static str> {
     use parity_bn::{AffineG1, Fq, Fr, Group, G1};
 
-    let px = Fq::from_slice(&x0.to_bytes_be()).unwrap();
-    let py = Fq::from_slice(&x1.to_bytes_be()).unwrap();
-    let n = Fr::from_slice(&nui.to_bytes_be()).unwrap();
+    let px = Fq::from_slice(&x0.to_bytes_be()).map_err(|_| "Invalid slice")?;
+    let py = Fq::from_slice(&x1.to_bytes_be()).map_err(|_| "Invalid slice")?;
+    let n = Fr::from_slice(&nui.to_bytes_be()).map_err(|_| "Invalid slice")?;
 
     let p = if px == Fq::zero() && py == Fq::zero() {
         G1::zero()
     } else {
-        AffineG1::new(px, py).unwrap().into()
+        AffineG1::new(px, py).map_err(|_| "Not on curve")?.into()
     };
 
     if let Some(ret) = AffineG1::from_jacobian(p * n) {
@@ -2399,12 +2406,12 @@ fn do_ecmul(x0: Uint256, x1: Uint256, nui: Uint256) -> (Uint256, Uint256) {
         ret.x().to_big_endian(&mut out_buf_0).unwrap();
         let mut out_buf_1 = vec![0u8; 32];
         ret.y().to_big_endian(&mut out_buf_1).unwrap();
-        (
+        Ok((
             Uint256::from_bytes(&out_buf_0),
             Uint256::from_bytes(&out_buf_1),
-        )
+        ))
     } else {
-        (Uint256::zero(), Uint256::zero())
+        Ok((Uint256::zero(), Uint256::zero()))
     }
 }
 

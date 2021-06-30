@@ -310,8 +310,6 @@ func hashIncomingRequest(req: IncomingRequest) -> bytes32 {
 }
 
 public impure func mainRunLoop() {
-    let msg = unsafecast<IncomingRequest>(());   // value will be re-initialized before use
-    
     loop {
         if let Some(res) = txRequestQueue_get(globalInputQueue.txQ) {
             let (newQ, tx) = res;
@@ -319,45 +317,46 @@ public impure func mainRunLoop() {
                 txQ: newQ
             };
             handleArrivingTx(unsafecast<TxRequestData>(tx));
-        }
-        if let Some(res) = incomingRequestQueueStack_get(globalInputQueue.batchQ) {
-            let (newQ, umsg) = res;
-            globalInputQueue = globalInputQueue with {
-                batchQ: newQ
-            };
-            msg = umsg;
         } else {
-            msg = inbox_get();
-        }
+            let msg = xif let Some(res) = incomingRequestQueueStack_get(globalInputQueue.batchQ) {
+                let (newQ, umsg) = res;
+                globalInputQueue = globalInputQueue with {
+                    batchQ: newQ
+                };
+                umsg
+            } else {
+                inbox_get()
+            };
 
-        if let Some(batch) = messageBatch_tryNew(msg) {
-            // it's a batch message, so unpack its components and queue them
-            let moreToDo = true;
-            let queue = incomingRequestQueue_new();
-            while (moreToDo) {
-                if let Some(res) = messageBatch_get(batch) {
-                    let (newMsg, restOfBatch) = res;
-                    queue = incomingRequestQueue_put(queue, newMsg);
-                    batch = restOfBatch;
-                } else {
-                    moreToDo = false;
+            if let Some(batch) = messageBatch_tryNew(msg) {
+                // it's a batch message, so unpack its components and queue them
+                let moreToDo = true;
+                let queue = incomingRequestQueue_new();
+                while (moreToDo) {
+                    if let Some(res) = messageBatch_get(batch) {
+                        let (newMsg, restOfBatch) = res;
+                        queue = incomingRequestQueue_put(queue, newMsg);
+                        batch = restOfBatch;
+                    } else {
+                        moreToDo = false;
+                    }
                 }
+                globalInputQueue = globalInputQueue with {
+                    batchQ: incomingRequestQueueStack_push(globalInputQueue.batchQ, queue)
+                };
+            } elseif (    (msg.kind == const::L1MessageType_L2 || msg.kind == const::L1MessageType_L2ForGasEstimation)
+                       && (bytearray_getByte(msg.msgData, 0) == const::L2MessageType_blsBatch) ) {
+               if let Some(updatedQ) = decompressAndVerifyBLSSignedTxBatch(
+                    msg.msgData,
+                    msg,
+                    unsafecast<Queue>(globalInputQueue.txQ)
+                ) {
+                    globalInputQueue = globalInputQueue with { txQ: unsafecast<TxRequestQueue>(updatedQ) };
+                }
+                // else BLS batch was bad, so ignore it
+            } else {
+                handleUnpackedMessage(msg);
             }
-            globalInputQueue = globalInputQueue with {
-                batchQ: incomingRequestQueueStack_push(globalInputQueue.batchQ, queue)
-            };
-        } elseif (    (msg.kind == const::L1MessageType_L2 || msg.kind == const::L1MessageType_L2ForGasEstimation)
-                   && (bytearray_getByte(msg.msgData, 0) == const::L2MessageType_blsBatch) ) {
-           if let Some(updatedQ) = decompressAndVerifyBLSSignedTxBatch(
-                msg.msgData,
-                msg,
-                unsafecast<Queue>(globalInputQueue.txQ)
-            ) {
-                globalInputQueue = globalInputQueue with { txQ: unsafecast<TxRequestQueue>(updatedQ) };
-            }
-            // else BLS batch was bad, so ignore it
-        } else {
-            handleUnpackedMessage(msg);
         }
     }
 }
@@ -473,7 +472,7 @@ impure func handleArrivingTx(tx: TxRequestData) {
         }
     } else {
         // before emitting a failure receipt, try to increment caller's sequence number
-        if (resultCode != const::TxResultCode_badSequenceNum) {
+        if ((resultCode != const::TxResultCode_sequenceNumberTooLow) && (resultCode != const::TxResultCode_sequenceNumberTooHigh)) {
             if let Some(seqNum) = request.seqNum {
                 let gAcctStore = safeGetGlobalAccountStore();
                 if let Some(acct) = account_checkAndIncrSeqNum(accountStore_get(gAcctStore, request.caller), seqNum) {
@@ -571,7 +570,7 @@ func incomingRequestQueue_getOrDie(q: IncomingRequestQueue) -> (IncomingRequestQ
     return xif let Some(res) = incomingRequestQueue_get(q) {
         res
     } else {
-        panic
+        error
     };
 }
 
@@ -609,7 +608,3 @@ func txRequestQueue_get(q: TxRequestQueue) -> option<(TxRequestQueue, TxRequestD
     let (uq, item) = queue_get(q.q)?;
     return Some((struct{ q: uq }, unsafecast<TxRequestData>(item)));
 }
-
-
-
-

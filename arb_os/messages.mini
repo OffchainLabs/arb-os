@@ -67,13 +67,16 @@ public impure func processL2Request(
     request: TxRequestData
 ) -> option<()> {   // return None if message is malformatted; otherwise handle errors and return Some(()); if no error, never return
     if let Some(sequenceNum) = request.seqNum {
-        if (account_getNextSeqNum(
-                accountStore_get(safeGetGlobalAccountStore(), request.caller)
-            ) != sequenceNum) {
+        let expectedSeqNum = account_getNextSeqNum(accountStore_get(safeGetGlobalAccountStore(), request.caller));
+        if (sequenceNum != expectedSeqNum) {
             // bad sequence number error
             emitTxReceipt(
                 request.incomingRequest,
-                const::TxResultCode_badSequenceNum,
+                xif (sequenceNum < expectedSeqNum) {
+                    const::TxResultCode_sequenceNumberTooLow
+                } else {
+                    const::TxResultCode_sequenceNumberTooHigh
+                },
                 None<ByteArray>,
                 None<EvmLogs>,
                 None<GasUsage>,
@@ -141,5 +144,5 @@ public impure func processL2Request(
         initEvmCallStack(callKind, request, None<ByteArray>, None<uint>);  // should never return
     }
 
-    return panic;   // this should never be reached
+    return error;   // this should never be reached
 }

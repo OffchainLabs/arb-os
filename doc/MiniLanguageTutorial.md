@@ -48,6 +48,8 @@ var *name* : *type* ;
 
 `[public] [impure] func` *name* ( *argname1: type1, argname2: type2, ...* ) [-> *returntype] codeblock*
 
+`[public] [impure] func` *name* ( *argname1: type1, argname2: type2, ...* ) `noreturn` codeblock*
+
 > This declares a function and provides its code.
 >
 > The `public` modifier is optional.  It indicates that the function can be called by code outside this source code file. Non-public functions cannot be called directly by outside code.  (However, pointers to non-public functions can be passed to outside code, and this would allow the pointed-to function to be called by outside code.)
@@ -59,6 +61,10 @@ var *name* : *type* ;
 > If there is a `returntype`, the function will return a single value of the specified type. (We'll see below that the type can be a tuple, allowing multiple values to be packaged together into a single return value.)
 >
 > If there is a `returntype`, the compiler must be able to infer that execution cannot reach the end of *codeblock* (so that the function terminates via a `return` statement, or the function runs forever). If the compiler is unable to verify this, it will generate an error.
+>
+> If `returntype` is `every`, then the function cannot return, because no return value can exist. The compiler will verify that the function cannot return. If the compiler is unable to verify this, it will generate an error.
+>
+> Declaring a function as `noreturn` is equivalent to declaring that the function returns `every`.  
 
 ## Types
 
@@ -102,6 +108,10 @@ Mini has the following types:
 
 > a hash map, which maps keys of one type to values of another type
 
+`union<` *type1*, *type2*, ... `>`
+
+> an untagged union type that can hold values from any of *type1*, *type2*, etc. There must be explicit casts to convert to and from its component types. This is done via `newunion` and `unioncast`.
+
 `struct` { *name1: type1 , name2 : type2 , ...* }
 
 > a struct with one or more named, typed fields (a compound type)
@@ -117,6 +127,10 @@ Mini has the following types:
 `any`
 
 > a value of unknown type
+
+`every`
+
+> a type that has no values, so that no value of this type can ever exist
 
 ## Equality and assignability for types
 
@@ -139,6 +153,8 @@ Two map types are equal if their key types are equal and their value types are e
 Two option types are equal if their inner types are equal
 
 `any` equals itself.
+
+`every` equals itself.
 
 Each imported type equals itself.
 
@@ -374,6 +390,10 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 > Create a new map object, initially empty.
 
+`unioncast<` *type* `>(` *expression* `)`
+
+> Converts from a type of `union<`*type1*, *type2*,...`>` to *type*, where *type* must be a member of *type1*, *type2*,.... This is an unsafe operation, as which type the union contains is not checked. 
+
 `unsafecast` < *type* > ( *expression*  )
 
 > Evaluate *expression*, and then treat the in-memory representation of the result as an object having type *type*. This is an unsafe operation.  It is most often used to convert a value of type `any` into a more specific type, when the programmer knows the real type of the value.  
@@ -385,6 +405,10 @@ Mini never automatically converts types to make an operation succeed.  Programme
 `None`<*type*>
 
 > Creates an optional value of type option<*type*> with no inner value 
+
+`newunion<` *type1*, *type2*, ... `>(` *expression* `)`
+
+> Creates a value of type `union<*type1*, *type2*, ... >` from an *expression* of any of *type1* *type2*
 
 *arrExpression* [ *indexExpression* ]
 

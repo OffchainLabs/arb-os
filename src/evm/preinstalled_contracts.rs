@@ -5,6 +5,7 @@ use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
 use ethers_core::utils::keccak256;
 use ethers_signers::{Signer, Wallet};
+use std::option::Option::None;
 use std::path::Path;
 
 pub struct _ArbInfo {
@@ -84,7 +85,7 @@ impl<'a> _ArbOwner<'a> {
         force_owner: bool, // force the message to come from address zero, which is an owner
     ) -> Result<(), ethabi::Error> {
         let param_id = _param_id_from_name(param_name);
-        let (receipts, _sends) = self.contract_abi.call_function(
+        let (receipts, _sends) = self.contract_abi._call_function_from_contract(
             if force_owner {
                 Uint256::zero()
             } else {
@@ -121,7 +122,7 @@ impl<'a> _ArbOwner<'a> {
         force_owner: bool, // force the message to come from address zero, which is an owner
     ) -> Result<Uint256, ethabi::Error> {
         let param_id = _param_id_from_name(param_name);
-        let (receipts, _sends) = self.contract_abi.call_function(
+        let (receipts, _sends) = self.contract_abi._call_function_from_contract(
             if force_owner {
                 Uint256::zero()
             } else {
@@ -322,11 +323,23 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
-    pub fn _start_code_upload(&self, machine: &mut Machine) -> Result<(), ethabi::Error> {
+    pub fn _start_code_upload(
+        &self,
+        machine: &mut Machine,
+        last_upgrade_hash: Option<Uint256>,
+        with_check: bool,
+    ) -> Result<(), ethabi::Error> {
+        let arg = &[ethabi::Token::FixedBytes(
+            last_upgrade_hash.unwrap_or(Uint256::zero()).to_bytes_be(),
+        )];
         let (receipts, _sends) = self.contract_abi.call_function_compressed(
             self.my_address.clone(),
-            "startCodeUpload",
-            &[],
+            if with_check {
+                "startCodeUploadWithCheck"
+            } else {
+                "startCodeUpload"
+            },
+            if with_check { arg } else { &[] },
             machine,
             Uint256::zero(),
             self.wallet,
@@ -1455,7 +1468,7 @@ pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), et
     let tx_id = machine.runtime_env.insert_tx_message(
         my_addr.clone(),
         Uint256::from_u64(1000000000),
-        Uint256::zero(),
+        None,
         my_addr.clone(),
         Uint256::from_u64(10000),
         &vec![],
@@ -1499,6 +1512,24 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
+    machine.runtime_env.insert_eth_deposit_message(
+        Uint256::zero(),
+        Uint256::zero(),
+        Uint256::_from_eth(100000),
+    );
+    machine.runtime_env.insert_eth_deposit_message(
+        my_addr.clone(),
+        my_addr.clone(),
+        Uint256::_from_eth(100000),
+    );
+    let deployer_addr = Uint256::from_u64(1025);
+    machine.runtime_env.insert_eth_deposit_message(
+        deployer_addr.clone(),
+        deployer_addr.clone(),
+        Uint256::_from_eth(100000),
+    );
+    let _ = machine.run(None);
+
     let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
     if add_contract
         .deploy(&[], &mut machine, Uint256::zero(), None, false)
@@ -1512,13 +1543,14 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys_orig_binding._arbos_version(&mut machine)?,
-        Uint256::from_u64(29),
+        Uint256::from_u64(35),
     );
 
     arbowner._give_ownership(&mut machine, my_addr, true)?;
 
     let mexe_path = Path::new("arb_os/arbos-upgrade.mexe");
-    let _previous_upgrade_hash = _try_upgrade(&arbowner, &mut machine, &mexe_path, None)?.unwrap();
+    let _previous_upgrade_hash =
+        _try_upgrade(&arbowner, &mut machine, &mexe_path, None, false)?.unwrap();
 
     let wallet2 = machine.runtime_env.new_wallet();
     let arbsys = ArbSys::new(&wallet2, false);
@@ -1541,9 +1573,10 @@ fn _try_upgrade(
     machine: &mut Machine,
     mexe_path: &Path,
     previous_upgrade_hash: Option<Uint256>,
+    with_check: bool,
 ) -> Result<Option<Uint256>, ethabi::Error> {
     let uploader = CodeUploader::_new_from_file(mexe_path);
-    arbowner._start_code_upload(machine)?;
+    arbowner._start_code_upload(machine, None, with_check)?;
 
     let mut accum = vec![];
     for buf in uploader.instructions {
@@ -1717,7 +1750,7 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
 
     arbowner._give_ownership(&mut machine, my_addr, true)?;
 
-    arbowner._start_code_upload(&mut machine)?;
+    arbowner._start_code_upload(&mut machine, None, true)?;
 
     let mcode = vec![0x90u8, 1u8, 0u8, 42u8]; // debugprint(42)
     arbowner._continue_code_upload(&mut machine, mcode)?;
@@ -1923,7 +1956,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         "L2 tx {}, L1 calldata {}, L2 storage {}, base gas {}, congestion gas {}, total gas {}",
         l2tx, l1calldata, storage, basegas, conggas, totalgas
     );
-    assert_eq!(l2tx, Uint256::from_u64(600000000000000));
+    assert_eq!(l2tx, Uint256::from_u64(690000000000000));
     assert_eq!(l1calldata, Uint256::from_u64(172500000000));
     assert_eq!(storage, Uint256::from_u64(300000000000000));
     assert_eq!(basegas, Uint256::from_u64(1500000000));
@@ -1936,7 +1969,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         "L2 tx / ag {}, L1 calldata / ag {}, L2 storage / ag {}",
         l2tx, l1calldata, storage
     );
-    assert_eq!(l2tx, Uint256::from_u64(400000));
+    assert_eq!(l2tx, Uint256::from_u64(460000));
     assert_eq!(l1calldata, Uint256::from_u64(115));
     assert_eq!(storage, Uint256::from_u64(200000));
 
@@ -2502,7 +2535,7 @@ fn _test_arb_stats() -> Result<(), ethabi::Error> {
     assert_eq!(storage, Uint256::from_u64(0));
     // assert_eq!(_arbgas, Uint256::from_u64(1_490_972));  // disable this because it will vary over versions
     assert_eq!(txs, Uint256::from_u64(0));
-    assert_eq!(contracts, Uint256::from_u64(19));
+    assert_eq!(contracts, Uint256::from_u64(20));
     Ok(())
 }
 
@@ -2660,7 +2693,7 @@ impl ArbosTest {
         let _tx_id = machine.runtime_env.insert_tx_message(
             caller_addr,
             Uint256::from_usize(1_000_000_000),
-            Uint256::zero(),
+            None,
             callee_addr,
             callvalue,
             &calldata,

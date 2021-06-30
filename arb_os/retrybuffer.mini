@@ -240,7 +240,7 @@ public impure func retryBuffer_delete(rbuf: RetryBuffer, txId: uint, withRefund:
     return xif let Some(rtx) = retryBuffer_get(rbuf, txId) {
         // delete the tx
         rbuf = rbuf with {
-            byTxId: unsafecast<map<uint, RetryableTx>>(
+            byTxId: unsafecast<map<uint, RetryableTx> >(
                 builtin_kvsDelete(unsafecast<Kvs>(rbuf.byTxId), txId)
             )
         };
@@ -378,7 +378,7 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
                     immediateCalldata = bytearray_set256(
                         immediateCalldata,
                         0,
-                        asm(256-32, const::funcCode_ArbRetryableTx_redeem) uint { shl },
+                        const::funcCode_ArbRetryableTx_redeem << (256-32),
                     );
                     immediateCalldata = bytearray_set256(immediateCalldata, 4, txId);
 
@@ -547,7 +547,7 @@ public impure func redeemRetryableTxInTx(txToRedeem: uint) -> (bool, ByteArray) 
                 rtx with {
                     l1Message: adjustGasInfoInFakeIncomingRequest(
                         rtx.l1Message,
-                        63 * (asm() uint { getgas }) / (64 * const::Charging_ArbGasPerAvmGas),  // inner tx will get approximately this much gas
+                        63 * (getGas()) / (64 * const::Charging_ArbGasPerAvmGas),  // inner tx will get approximately this much gas
                         evmCallStack_currentTxRequestGasBid(),
                     )
                 }

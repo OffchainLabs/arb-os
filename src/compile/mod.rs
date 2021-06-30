@@ -57,6 +57,10 @@ pub struct CompileStruct {
     pub consts_file: Option<String>,
     #[clap(short, long)]
     pub must_use_global_consts: bool,
+    #[clap(short, long)]
+    pub release_build: bool,
+    #[clap(short, long)]
+    pub no_builtins: bool,
 }
 
 #[derive(Clap, Debug)]
@@ -158,6 +162,8 @@ impl CompileStruct {
                 constants_path,
                 self.must_use_global_consts,
                 &mut error_system,
+                self.release_build,
+                !self.no_builtins,
             ) {
                 Ok(idk) => idk,
                 Err(err) => {
@@ -285,7 +291,7 @@ impl TypeCheckedModule {
         }
         self.checked_funcs = new_funcs;
     }
-    ///Propagates inherited attributes down top-level decls. Currently only passes `codegen_print`.
+    ///Propagates inherited attributes down top-level decls.
     fn propagate_attributes(&mut self) {
         for (_id, func) in &mut self.checked_funcs {
             let attributes = func.debug_info.attributes.clone();
@@ -552,6 +558,8 @@ pub fn compile_from_file(
     constants_path: Option<&Path>,
     must_use_global_consts: bool,
     error_system: &mut ErrorSystem,
+    release_build: bool,
+    builtins: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let library = path
         .parent()
@@ -580,6 +588,8 @@ pub fn compile_from_file(
             constants_path,
             must_use_global_consts,
             error_system,
+            release_build,
+            builtins,
         )
     } else if let (Some(parent), Some(file_name)) = (path.parent(), path.file_stem()) {
         compile_from_folder(
@@ -597,6 +607,8 @@ pub fn compile_from_file(
             constants_path,
             must_use_global_consts,
             error_system,
+            release_build,
+            builtins,
         )
     } else {
         Err(CompileError::new(
@@ -639,6 +651,8 @@ pub fn compile_from_folder(
     constants_path: Option<&Path>,
     must_use_global_consts: bool,
     error_system: &mut ErrorSystem,
+    release_build: bool,
+    builtins: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let (mut programs, import_map) = create_program_tree(
         folder,
@@ -647,6 +661,7 @@ pub fn compile_from_folder(
         file_info_chart,
         constants_path,
         error_system,
+        builtins,
     )?;
 
     resolve_imports(&mut programs, &import_map, error_system)?;
@@ -697,6 +712,7 @@ pub fn compile_from_folder(
         error_system,
         type_tree,
         folder,
+        release_build,
     )?;
     Ok(progs)
 }
@@ -724,6 +740,7 @@ fn create_program_tree(
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     constants_path: Option<&Path>,
     error_system: &mut ErrorSystem,
+    builtins: bool,
 ) -> Result<
     (
         HashMap<Vec<String>, Module>,
@@ -797,6 +814,7 @@ fn create_program_tree(
                 error_system,
             )?,
             path.clone(),
+            builtins,
         );
         paths.append(&mut imports.iter().map(|imp| imp.path.clone()).collect());
         import_map.insert(path.clone(), imports.clone());
@@ -1130,6 +1148,7 @@ fn codegen_programs(
     error_system: &mut ErrorSystem,
     type_tree: TypeTree,
     folder: &Path,
+    release_build: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let mut progs = vec![];
     for TypeCheckedModule {
@@ -1152,6 +1171,7 @@ fn codegen_programs(
             &global_vars,
             file_info_chart,
             error_system,
+            release_build,
         )
         .map_err(|e| {
             CompileError::new(
