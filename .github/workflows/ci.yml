@@ -112,6 +112,6 @@ jobs:
         if: matrix.rust == 'nightly'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: lcov.info, lcov-mini.info
+          files: ./lcov.info,./lcov-mini.info
           fail_ci_if_error: true
-          verbose: false
+          verbose: true
