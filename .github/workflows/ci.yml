@@ -65,6 +65,7 @@ jobs:
         with:
           crate: grcov
           version: latest
+          use-tool-cache: true
 
       - name: Cache rust build products
         uses: actions/cache@v2
