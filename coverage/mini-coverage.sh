@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 
 LINES=$(cat $1 | awk '{$3="DA:"$3","$1; $1=""; sub(/\+/, 1); sub(/\-/, 0); sub(/^ /, ""); sub(/^std::/, "stdlib/"); sub(/^core::/, "builtin/"); print $0}')
 
