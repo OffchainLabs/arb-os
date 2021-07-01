@@ -250,6 +250,18 @@ Values of type `anytype` do not have any representation that is understood by th
 
 > Assign a new value to an existing variable, which can be a global variable or a local variable. The type of *expression* must be assignable to the variable's type.
 
+`set` *name* ( .*field1*, .*field2*, ... ) = *expression* ;
+
+> Assign to an existing variable a copy of its current value with the indicated field set to *expression*. The type of *expression* must be assignable to the field's type.
+
+`set` *name* [ *indexExpression* ] = *expression;
+
+> Assign to an existing variable a copy of its current value with the indicated array field value for index *indexExpression* set to *expression*. The access is bounds-checked, and will panic at runtime if the index is outside the bounds of the array. The type of *expression* must be assignable within the array.
+
+`set` *name* [ *keyExpression* ] = *expression;
+
+> Assign to an existing variable a copy of its current value with the indicated map field value for key *keyExpression* set to *expression*. The key is added rather than modified if it did not exist in the original map. The type of *expression* must be assignable within the map.
+
 `return` ;
 
 > Return from the current function. This is an error if the function has a *returntype*.
