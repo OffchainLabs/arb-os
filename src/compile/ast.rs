@@ -1009,6 +1009,7 @@ pub enum StatementKind {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MatchPattern<T = ()> {
     pub(crate) kind: MatchPatternKind<MatchPattern<T>>,
+    pub(crate) debug_info: DebugInfo,
     pub(crate) cached: T,
 }
 
@@ -1021,21 +1022,24 @@ pub enum MatchPatternKind<T> {
 }
 
 impl<T> MatchPattern<T> {
-    pub fn new_bind(id: StringId, cached: T) -> Self {
+    pub fn new_bind(id: StringId, debug_info: DebugInfo, cached: T) -> Self {
         Self {
             kind: MatchPatternKind::Bind(id),
+            debug_info,
             cached,
         }
     }
-    pub fn new_assign(id: StringId, cached: T) -> Self {
+    pub fn new_assign(id: StringId, debug_info: DebugInfo, cached: T) -> Self {
         Self {
             kind: MatchPatternKind::Assign(id),
+            debug_info,
             cached,
         }
     }
-    pub fn new_tuple(id: Vec<MatchPattern<T>>, cached: T) -> Self {
+    pub fn new_tuple(id: Vec<MatchPattern<T>>, debug_info: DebugInfo, cached: T) -> Self {
         Self {
             kind: MatchPatternKind::Tuple(id),
+            debug_info,
             cached,
         }
     }

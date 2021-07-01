@@ -307,10 +307,12 @@ fn inline(
                                         .map(|arg| {
                                             TypeCheckedMatchPattern::new_bind(
                                                 arg.name,
+                                                arg.debug_info,
                                                 arg.tipe.clone(),
                                             )
                                         })
                                         .collect(),
+                                    func.debug_info,
                                     Type::Tuple(
                                         func.args.iter().map(|arg| arg.tipe.clone()).collect(),
                                     ),
@@ -511,34 +513,54 @@ fn flowcheck_liveliness(
                 TypeCheckedStatementKind::Let(pat, expr) => {
                     process!(vec![TypeCheckedNode::Expression(expr)], problems, false);
 
-                    let ids: BTreeMap<StringId, Location> = pat
+                    let ids: Vec<(StringId, bool, Location)> = pat
                         .collect_identifiers()
                         .iter()
-                        .map(|id| {
-                            (id.clone(), {
-                                // we can't know the location exactly at this point,
-                                // so we shift past the 'let' keyword
-                                let mut loc = stat.debug_info.location.unwrap().clone();
-                                loc.column = Column::from(loc.column.to_usize() + 4);
+                        .map(|(id, assigns, debug_info)| {
+                            (id.clone(), *assigns, {
+                                // since assign-type patterns prefix the variable with a star,
+                                // we have to shift over by one to line up the arrow.
+                                let mut loc = debug_info.location.unwrap().clone();
+                                loc.column = Column::from(
+                                    loc.column.to_usize()
+                                        + match assigns {
+                                            true => 1,
+                                            false => 0,
+                                        },
+                                );
                                 loc
                             })
                         })
                         .collect();
 
-                    for id in ids.keys() {
-                        if let Some(_) = born.get(id) {
+                    for (id, assigns, loc) in ids.iter() {
+                        if *assigns {
                             if let Some(loc) = alive.get(id) {
-                                problems.push((*loc, id.clone()))
+                                problems.push((*loc, id.clone()));
                             }
-                        }
+                            if let None = born.get(id) {
+                                reborn.insert(id.clone(), stat.debug_info.location.unwrap());
+                            }
+                            if !alive.contains_key(id) && !born.contains(id) && !killed.contains(id)
+                            {
+                                rescue.insert(id.clone());
+                            }
+                            alive.insert(*id, *loc);
+                        } else {
+                            if let Some(_) = born.get(id) {
+                                if let Some(loc) = alive.get(id) {
+                                    problems.push((*loc, id.clone()))
+                                }
+                            }
 
-                        if !alive.contains_key(id) && !born.contains(id) && !killed.contains(id) {
-                            rescue.insert(id.clone());
+                            if !alive.contains_key(id) && !born.contains(id) && !killed.contains(id)
+                            {
+                                rescue.insert(id.clone());
+                            }
+                            born.insert(*id);
+                            alive.insert(*id, *loc);
                         }
                     }
-
-                    born.extend(&mut ids.keys());
-                    alive.extend(&ids);
                     continue;
                 }
                 TypeCheckedStatementKind::While(..) => true,
@@ -818,10 +840,10 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
 pub type TypeCheckedMatchPattern = MatchPattern<Type>;
 
 impl TypeCheckedMatchPattern {
-    fn collect_identifiers(&self) -> Vec<StringId> {
+    fn collect_identifiers(&self) -> Vec<(StringId, bool, DebugInfo)> {
         match &self.kind {
-            MatchPatternKind::Bind(id) => vec![*id],
-            MatchPatternKind::Assign(id) => vec![*id],
+            MatchPatternKind::Bind(id) => vec![(*id, false, self.debug_info)],
+            MatchPatternKind::Assign(id) => vec![(*id, true, self.debug_info)],
             MatchPatternKind::Tuple(pats) => pats
                 .iter()
                 .flat_map(|pat| pat.collect_identifiers())
@@ -1492,7 +1514,7 @@ fn typecheck_statement<'a>(
             match &pat.kind {
                 MatchPatternKind::Bind(name) => Ok((
                     TypeCheckedStatementKind::Let(
-                        TypeCheckedMatchPattern::new_bind(*name, tce_type.clone()),
+                        TypeCheckedMatchPattern::new_bind(*name, pat.debug_info, tce_type.clone()),
                         tc_expr,
                     ),
                     vec![(*name, tce_type)],
@@ -1503,7 +1525,7 @@ fn typecheck_statement<'a>(
                         typecheck_patvec(tce_type.clone(), pats.to_vec(), debug_info.location)?;
                     Ok((
                         TypeCheckedStatementKind::Let(
-                            TypeCheckedMatchPattern::new_tuple(tc_pats, tce_type),
+                            TypeCheckedMatchPattern::new_tuple(tc_pats, pat.debug_info, tce_type),
                             tc_expr,
                         ),
                         bindings,
@@ -1687,11 +1709,19 @@ fn typecheck_patvec(
                 let pat = &patterns[i];
                 match &pat.kind {
                     MatchPatternKind::Bind(name) => {
-                        tc_pats.push(TypeCheckedMatchPattern::new_bind(*name, rhs_type.clone()));
+                        tc_pats.push(TypeCheckedMatchPattern::new_bind(
+                            *name,
+                            pat.debug_info,
+                            rhs_type.clone(),
+                        ));
                         bindings.push((*name, rhs_type.clone()));
                     }
                     MatchPatternKind::Assign(name) => {
-                        tc_pats.push(TypeCheckedMatchPattern::new_assign(*name, rhs_type.clone()));
+                        tc_pats.push(TypeCheckedMatchPattern::new_assign(
+                            *name,
+                            pat.debug_info,
+                            rhs_type.clone(),
+                        ));
                     }
                     MatchPatternKind::Tuple(_) => {
                         //TODO: implement this properly
