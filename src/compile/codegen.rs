@@ -778,7 +778,7 @@ fn mavm_codegen_tuple_pattern(
                 let (num_new_bindings, new_bindings, new_assignments) = mavm_codegen_tuple_pattern(
                     code,
                     pat,
-                    local_slot_num_base + i,
+                    local_slot_num_base + num_bindings,
                     locals,
                     global_var_map,
                     string_table,
