@@ -145,11 +145,7 @@ fn test_rlp() {
     byte_testvecs.push(new_test_vec.clone());
     for (i, testvec) in byte_testvecs.iter().enumerate() {
         let res = rlp::encode(&*testvec);
-        test_rlp_bytearray(
-            testvec.to_vec(),
-            res,
-            Some(format!("rlptest_bv_{}.cov", i)),
-        );
+        test_rlp_bytearray(testvec.to_vec(), res, Some(format!("rlptest_bv_{}.cov", i)));
     }
 
     let list3_testvecs = vec![
@@ -167,11 +163,7 @@ fn test_rlp() {
     ];
     for (i, testvec) in list3_testvecs.iter().enumerate() {
         let res = encode_list3(testvec.clone());
-        test_rlp_list3(
-            testvec.clone(),
-            res,
-            Some(format!("rlptest_ls_{}.cov", i)),
-        );
+        test_rlp_list3(testvec.clone(), res, Some(format!("rlptest_ls_{}.cov", i)));
     }
 }
 
@@ -412,6 +404,8 @@ fn test_precompile5_small() {
             panic!("{}", e);
         }
     }
+
+    machine.write_coverage("test_precompile5_small".to_string());
 }
 
 #[test]
@@ -435,6 +429,8 @@ fn test_precompile5_big() {
             panic!("{}", e);
         }
     }
+
+    machine.write_coverage("test_precompile5_big".to_string());
 }
 
 #[test]

@@ -55,12 +55,7 @@ pub fn run_from_file_and_env(
     debug: bool,
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
     let (mut machine, _) = load_from_file_and_env_ret_file_info_table(path, env);
-    run(
-        &mut machine,
-        args,
-        debug,
-        coverage_filename,
-    )
+    run(&mut machine, args, debug, coverage_filename)
 }
 
 pub fn load_from_file(path: &Path) -> Machine {

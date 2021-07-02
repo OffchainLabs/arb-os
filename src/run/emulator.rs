@@ -872,7 +872,7 @@ impl Machine {
     pub fn start_coverage(&mut self) {
         self.coverage = Some(HashSet::new());
     }
-    
+
     ///Starts the debugger, execution will end when the program counter of self reaches stop_pc, or
     /// an error state is reached.
     ///
@@ -2271,7 +2271,7 @@ impl Machine {
 
         let mut coverage_file =
             File::create(PathBuf::from("coverage/").join(name.clone() + ".cov"))
-            .expect(&format!("Could not create coverage for {}", name));
+                .expect(&format!("Could not create coverage for {}", name));
 
         for (index, insn) in self.code.segments.iter().flatten().enumerate() {
             if let Some(loc) = insn.debug_info.location {
