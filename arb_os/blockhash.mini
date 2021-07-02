@@ -28,7 +28,7 @@ public impure func blockhash_submitHash(ethBlockNum: uint, inboxAccumHash: bytes
     } else {
         ethBlockNum
     };
-    while (b <= ethBlockNum) {
+    while (b <= ethBlockNum) {  //FORLOOP
         set blockhashes.oldHashes[b%256] = hash(bytes32(b), inboxAccumHash);
         b = b + 1;
     }
