@@ -37,7 +37,7 @@ use arbgasinfo::arbgasinfo_txcall;
 use arbosTest::arbosTest_txcall;
 use arbaddresstable::arbAddressTable_txcall;
 use arbbls::arbBLS_txcall;
-use arbsys::arbFunctionTable_txcall;
+use arbfunctiontable::arbFunctionTable_txcall;
 use arbaggregator::arbaggregator_txcall;
 use arbretryable::arbretryable_txcall;
 use arbstatistics::arbStatistics_txcall;

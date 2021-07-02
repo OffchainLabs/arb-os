@@ -13,48 +13,22 @@ use evmCallStack::evmCallStack_setAccount;
 use evmCallStack::evmCallStack_getTopFrameMemoryOrDie;
 use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallStack_callHitError;
-use evmCallStack::evmCallStack_inRetryable;
 
 use evmCallStack::evmCallFrame_getCalldata;
-use evmCallStack::evmCallFrame_getCallvalue;
 use evmCallStack::evmCallFrame_getAccount;
-use evmCallStack::evmCallFrame_runningAsAddress;
 use evmCallStack::evmCallFrame_getCaller;
 
-use evmOps::evmOp_log4;
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownCodePc;
-use evmOps::evmOp_sload;
-use evmOps::evmOp_sstore;
 
-use accounts::account_getNextSeqNum;
-use accounts::account_getStorageCell;
-use accounts::account_deductFromEthBalance;
 use accounts::account_setBlsKey;
 use accounts::account_getBlsKey;
-use accounts::account_setAggregatorDecompressionState;
 
-use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
-use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_get256;
-use std::bytearray::bytearray_set256;
-use std::bytearray::bytearray_extract;
-use std::bytearray::bytearray_copy;
-
-use inbox::inbox_currentArbBlockNumber;
-use inbox::inbox_currentEthBlockNumber;
-use inbox::inbox_currentTimestamp;
-
-use output::queueMessageForSend;
-
-use decompression::getFromFunctionTable;
-use decompression::functionTableSize;
 
 use std::bls::bls_makeKey;
 use std::bls::bls_marshalPublicKey;
-
-use decompression::parseAggregatorFunctionTable;
 
 
 public impure func arbBLS_txcall() {
