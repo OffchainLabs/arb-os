@@ -1354,6 +1354,7 @@ pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), et
             .unwrap();
     }
 
+    machine.write_coverage("test_payment_to_self".to_string());
     Ok(())
 }
 
@@ -1403,6 +1404,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbos_version_orig = arbsys_orig_binding._arbos_version(&mut machine)?;
     assert_eq!(arbos_version, arbos_version_orig);
 
+    machine.write_coverage("test_upgrade_arbos_over_itself_impl".to_string());
     Ok(())
 }
 
@@ -1565,6 +1567,7 @@ pub fn _evm_run_with_gas_charging(
             .unwrap();
     }
 
+    machine.write_coverage("test_gas_charging_fully_funded".to_string());
     Ok(true)
 }
 
@@ -1616,6 +1619,7 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
             .unwrap();
     }
 
+    machine.write_coverage("test_arbowner".to_string());
     Ok(())
 }
 
@@ -1671,6 +1675,8 @@ fn _evm_test_arb_fair_gas_price_list() {
         ((lis[0] == addr1.clone()) && (lis[1] == addr3.clone()))
             || ((lis[0] == addr3.clone()) && (lis[1] == addr1.clone()))
     );
+
+    machine.write_coverage("test_arb_fair_gas_price_list".to_string());
 }
 
 #[test]
@@ -1740,6 +1746,7 @@ pub fn _evm_test_tx_with_extra_gas(
             .unwrap();
     }
 
+    machine.write_coverage("test_run_tx_with_extra_gas".to_string());
     Ok(())
 }
 
@@ -1826,6 +1833,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
             .unwrap();
     }
 
+    machine.write_coverage("test_arbgasinfo".to_string());
     Ok(())
 }
 
@@ -1863,6 +1871,7 @@ pub fn _evm_test_rate_control(log_to: Option<&Path>, debug: bool) -> Result<(), 
             .unwrap();
     }
 
+    machine.write_coverage("evm_test_rate_control".to_string());
     Ok(())
 }
 
@@ -1969,6 +1978,7 @@ pub fn _do_rollup_tracker_ops() {
 
     let _ = machine.run(None);
 
+    machine.write_coverage("test_rollup_tracker".to_string());
     // There isn't really a result we can check here, so this test just confirms that nothing crashes.
 }
 
@@ -2139,6 +2149,7 @@ pub fn _evm_test_arbaggregator(log_to: Option<&Path>, debug: bool) -> Result<(),
             .unwrap();
     }
 
+    machine.write_coverage("test_arbaggregator".to_string());
     Ok(())
 }
 
@@ -2308,6 +2319,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
             .unwrap();
     }
 
+    machine.write_coverage("test_retryable".to_string());
     Ok(())
 }
 
@@ -2331,6 +2343,7 @@ fn _test_arb_stats() -> Result<(), ethabi::Error> {
     // assert_eq!(_arbgas, Uint256::from_u64(1_490_972));  // disable this because it will vary over versions
     assert_eq!(txs, Uint256::from_u64(0));
     assert_eq!(contracts, Uint256::from_u64(19));
+    machine.write_coverage("test_arb_statistics".to_string());
     Ok(())
 }
 
@@ -2397,6 +2410,8 @@ fn _evm_test_allowed_senders() {
     assert!(arbowner
         ._is_allowed_sender(&mut machine, addr2.clone())
         .unwrap());
+
+    machine.write_coverage("test_allowed_senders".to_string());
 }
 
 pub struct ArbosTest {
@@ -2630,6 +2645,7 @@ fn test_eventual_congestion_reject() {
             Err(_) => panic!(),
         };
         if res_code == 2 {
+            machine.write_coverage("test_eventual_congestion_reject".to_string());
             return;
         } // we hit congestion, as expected
         assert_eq!(res_code, 0); // we should report success, if haven't hit congestion yet
@@ -2708,6 +2724,8 @@ fn test_congestion_price_adjustment() {
         ._get_prices_in_wei(&mut machine)
         .unwrap();
     assert_eq!(prices2.4, Uint256::zero());
+
+    machine.write_coverage("test_congestion_price_adjustment".to_string());
 }
 
 #[test]
@@ -2748,4 +2766,6 @@ fn test_set_gas_price_estimate() {
 
     let storage_price = arbgasinfo._get_prices_in_wei(&mut machine).unwrap().2;
     assert_eq!(storage_price, new_storage_price);
+
+    machine.write_coverage("test_set_gas_price_estimate".to_string());
 }

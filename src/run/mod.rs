@@ -54,12 +54,12 @@ pub fn run_from_file_and_env(
     coverage_filename: Option<String>,
     debug: bool,
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
-    let (mut machine, file_info_table) = load_from_file_and_env_ret_file_info_table(path, env);
+    let (mut machine, _) = load_from_file_and_env_ret_file_info_table(path, env);
     run(
         &mut machine,
         args,
         debug,
-        coverage_filename.map(|cfn| (cfn, file_info_table)),
+        coverage_filename,
     )
 }
 
@@ -92,7 +92,7 @@ pub fn load_from_file_and_env_ret_file_info_table(
         Err(why) => panic!("couldn't read {}: {:?}", display, why),
         Ok(_) => s,
     };
-    
+
     load_from_string(s, env)
 }
 
@@ -118,7 +118,7 @@ pub fn run(
     machine: &mut Machine,
     args: Vec<Value>,
     debug: bool,
-    coverage_filename: Option<(String, BTreeMap<u64, FileInfo>)>,
+    coverage_filename: Option<String>,
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
     // We use PC 1 here because PC pushes an unwanted value--designed for a different entry ABI
     if coverage_filename.is_some() {
@@ -127,14 +127,7 @@ pub fn run(
     match machine.test_call(CodePt::new_internal(1), args, debug) {
         Ok(_stack) => {
             if let Some(cov_info) = coverage_filename {
-                /*let coverage_data = machine.coverage_result().unwrap();
-                write_coverage_data_to_file(
-                    coverage_data,
-                    machine.code.get_segment(0),
-                    cov_info.1,
-                    cov_info.0,
-                );*/
-                machine.write_coverage(cov_info.0);
+                machine.write_coverage(cov_info);
             }
             Ok(machine.runtime_env.get_all_raw_logs())
         }

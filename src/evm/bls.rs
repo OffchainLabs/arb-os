@@ -68,7 +68,7 @@ pub fn _evm_test_bls_registry(log_to: Option<&Path>, debug: bool) {
             .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
             .unwrap();
     }
-    
+
     machine.write_coverage("evm_test_bls_registry".to_string());
 }
 
