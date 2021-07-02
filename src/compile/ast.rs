@@ -1135,9 +1135,10 @@ impl<T> MatchPattern<T> {
             cached,
         }
     }
-    pub fn collect_identifiers(&self) -> Vec<StringId> {
+    pub fn collect_identifiers(&self) -> Vec<(StringId, bool, DebugInfo)> {
         match &self.kind {
-            MatchPatternKind::Bind(id) => vec![*id],
+            MatchPatternKind::Bind(id) => vec![(*id, false, self.debug_info)],
+            MatchPatternKind::Assign(id) => vec![(*id, true, self.debug_info)],
             MatchPatternKind::Tuple(pats) => pats
                 .iter()
                 .flat_map(|pat| pat.collect_identifiers())

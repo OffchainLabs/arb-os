@@ -1628,7 +1628,7 @@ fn typecheck_statement<'a>(
                 }
             };
 
-            for id in pat.collect_identifiers() {
+            for (id, _, _) in pat.collect_identifiers() {
                 if let Some(location_option) = undefinable_ids.get(&id) {
                     return Err(CompileError::new_type_error(
                         String::from("Variable has the same name as a top-level symbol"),
