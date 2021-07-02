@@ -395,7 +395,7 @@ fn test_call_to_precompile5(
 #[test]
 fn test_precompile5_small() {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
     let my_addr = Uint256::from_usize(1025);
 
     match test_call_to_precompile5(
@@ -417,7 +417,7 @@ fn test_precompile5_small() {
 #[test]
 fn test_precompile5_big() {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
     let my_addr = Uint256::from_usize(1025);
 
     let mut rng = rand::thread_rng();

@@ -198,7 +198,7 @@ fn start_test(blocknum: Uint256, timestamp: Uint256) -> (Machine, ArbosTest) {
         None,
     );
     let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let arbos_test = ArbosTest::new(false);
 

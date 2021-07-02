@@ -20,7 +20,7 @@ use std::convert::TryInto;
 use std::fmt;
 use std::fs::File;
 use std::io::{stdin, BufWriter, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 const MAX_PAIRING_SIZE: u64 = 30;
@@ -763,8 +763,11 @@ impl Machine {
 
     ///Pushes 0 to the stack and sets the program counter to the first instruction. Used by the EVM
     /// compiler.
-    pub fn start_at_zero(&mut self) {
+    pub fn start_at_zero(&mut self, start_coverage: bool) {
         self.state = MachineState::Running(CodePt::Internal(0));
+        if start_coverage {
+            self.start_coverage();
+        }
     }
 
     ///Returns a stack trace of the current state of the machine.
@@ -2265,6 +2268,27 @@ impl Machine {
                 &self.state,
                 None,
             ))
+        }
+    }
+
+    pub fn write_coverage(&self, name: &'static str) {
+        let data = match &self.coverage {
+            Some(coverage) => coverage,
+            None => return,
+        };
+
+        let mut coverage_file =
+            File::create(PathBuf::from("coverage/").join(name.to_string() + ".cov")).unwrap();
+
+        for (index, insn) in self.code.segments.iter().flatten().enumerate() {
+            if let Some(loc) = insn.debug_info.location {
+                if let Some(info) = self.file_info_chart.get(&loc.file_id) {
+                    match data.contains(&index) {
+                        true => drop(writeln!(coverage_file, "+ {} {}", info.name, loc.line)),
+                        false => drop(writeln!(coverage_file, "- {} {}", info.name, loc.line)),
+                    }
+                }
+            }
         }
     }
 }

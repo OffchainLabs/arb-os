@@ -1303,7 +1303,7 @@ fn test_payment_to_self() {
 
 pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let my_addr = Uint256::from_u64(1025);
 
@@ -1364,7 +1364,7 @@ fn _test_upgrade_arbos_to_different_version() {
 
 fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos_before.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1466,7 +1466,7 @@ pub fn _evm_run_with_gas_charging(
     // returns Ok(true) if success, Ok(false) if insufficient gas money, Err otherwise
     use std::convert::TryFrom;
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1578,7 +1578,7 @@ fn test_arbowner() {
 
 pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1626,7 +1626,7 @@ fn test_arb_fair_gas_price_list() {
 
 fn _evm_test_arb_fair_gas_price_list() {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let wallet = machine.runtime_env.new_wallet();
     let _my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1686,7 +1686,7 @@ pub fn _evm_test_tx_with_extra_gas(
     debug: bool,
 ) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1753,7 +1753,7 @@ fn test_arbgasinfo() {
 
 pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1831,7 +1831,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
 
 pub fn _evm_test_rate_control(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1873,7 +1873,7 @@ fn test_rollup_tracker() {
 
 pub fn _do_rollup_tracker_ops() {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let wallet = machine.runtime_env.new_wallet();
     let owner = Uint256::from_bytes(wallet.address().as_bytes());
@@ -2040,7 +2040,7 @@ fn test_arbaggregator() {
 
 pub fn _evm_test_arbaggregator(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -2152,7 +2152,7 @@ fn test_retryable() {
 
 pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let my_addr = Uint256::from_u64(1234);
 
@@ -2318,7 +2318,7 @@ fn test_arb_statistics() {
 
 fn _test_arb_stats() -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let arbstats = _ArbStatistics::_new(false);
 
@@ -2341,7 +2341,8 @@ fn test_allowed_senders() {
 
 fn _evm_test_allowed_senders() {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
+
     let wallet = machine.runtime_env.new_wallet();
 
     let arbowner = _ArbOwner::_new(&wallet, false);
@@ -2599,7 +2600,8 @@ impl ArbosTest {
 #[test]
 fn test_eventual_congestion_reject() {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
+
     let wallet = machine.runtime_env.new_wallet();
     let my_address = Uint256::from_bytes(wallet.address().as_bytes());
 
@@ -2638,7 +2640,8 @@ fn test_eventual_congestion_reject() {
 #[test]
 fn test_congestion_price_adjustment() {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
+
     let wallet = machine.runtime_env.new_wallet();
     let my_address = Uint256::from_bytes(wallet.address().as_bytes());
 
@@ -2710,7 +2713,8 @@ fn test_congestion_price_adjustment() {
 #[test]
 fn test_set_gas_price_estimate() {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
+
     let wallet = machine.runtime_env.new_wallet();
     let my_address = Uint256::from_bytes(wallet.address().as_bytes());
 
