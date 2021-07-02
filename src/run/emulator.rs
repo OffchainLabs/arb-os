@@ -284,10 +284,6 @@ impl CodeStore {
         self.segments[0].len()
     }
 
-    pub fn get_segment(&self, index: usize) -> Vec<Instruction<AVMOpcode>> {
-        self.segments[index].clone()
-    }
-
     ///Returns the `Instruction` that codept points to, or None if codept points to an invalid
     /// location.
     ///
@@ -876,11 +872,7 @@ impl Machine {
     pub fn start_coverage(&mut self) {
         self.coverage = Some(HashSet::new());
     }
-
-    pub fn coverage_result(&self) -> Option<HashSet<usize>> {
-        self.coverage.as_ref().map(|c| c.clone())
-    }
-
+    
     ///Starts the debugger, execution will end when the program counter of self reaches stop_pc, or
     /// an error state is reached.
     ///
@@ -2271,14 +2263,15 @@ impl Machine {
         }
     }
 
-    pub fn write_coverage(&self, name: &'static str) {
+    pub fn write_coverage(&self, name: String) {
         let data = match &self.coverage {
             Some(coverage) => coverage,
             None => return,
         };
 
         let mut coverage_file =
-            File::create(PathBuf::from("coverage/").join(name.to_string() + ".cov")).unwrap();
+            File::create(PathBuf::from("coverage/").join(name.clone() + ".cov"))
+            .expect(&format!("Could not create coverage for {}", name));
 
         for (index, insn) in self.code.segments.iter().flatten().enumerate() {
             if let Some(loc) = insn.debug_info.location {

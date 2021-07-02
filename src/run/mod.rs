@@ -5,7 +5,7 @@
 //!Provides functionality for running mavm executables.
 
 use crate::link::LinkedProgram;
-use crate::mavm::{AVMOpcode, CodePt, Instruction, Value};
+use crate::mavm::{CodePt, Value};
 use emulator::{ExecutionError, StackTrace};
 use std::{fs::File, io::Read, path::Path};
 
@@ -15,8 +15,7 @@ pub use runtime_env::{
     _bytes_from_bytestack, _bytestack_from_bytes, generic_compress_token_amount,
     replay_from_testlog_file, ArbosReceipt, RuntimeEnvironment,
 };
-use std::collections::{BTreeMap, HashSet};
-use std::io::Write;
+use std::collections::BTreeMap;
 
 mod blake2b;
 mod emulator;
@@ -93,7 +92,7 @@ pub fn load_from_file_and_env_ret_file_info_table(
         Err(why) => panic!("couldn't read {}: {:?}", display, why),
         Ok(_) => s,
     };
-
+    
     load_from_string(s, env)
 }
 
@@ -128,40 +127,18 @@ pub fn run(
     match machine.test_call(CodePt::new_internal(1), args, debug) {
         Ok(_stack) => {
             if let Some(cov_info) = coverage_filename {
-                let coverage_data = machine.coverage_result().unwrap();
+                /*let coverage_data = machine.coverage_result().unwrap();
                 write_coverage_data_to_file(
                     coverage_data,
                     machine.code.get_segment(0),
                     cov_info.1,
                     cov_info.0,
-                );
+                );*/
+                machine.write_coverage(cov_info.0);
             }
             Ok(machine.runtime_env.get_all_raw_logs())
         }
         Err(e) => Err((e, machine.get_stack_trace())),
-    }
-}
-
-fn write_coverage_data_to_file(
-    coverage_data: HashSet<usize>,
-    instructions: Vec<Instruction<AVMOpcode>>,
-    file_info_table: BTreeMap<u64, FileInfo>,
-    coverage_filename: String,
-) {
-    let mut coverage_file = File::create(coverage_filename.clone())
-        .expect(&format!("Could not open {}", coverage_filename));
-    let mut coverage_lines: Vec<usize> = coverage_data.iter().map(|r| *r).collect();
-    coverage_lines.sort();
-
-    for (index, insn) in instructions.into_iter().enumerate() {
-        if let Some(loc) = insn.debug_info.location {
-            if let Some(info) = file_info_table.get(&loc.file_id) {
-                match coverage_data.contains(&index) {
-                    true => drop(writeln!(coverage_file, "+ {} {}", info.name, loc.line)),
-                    false => drop(writeln!(coverage_file, "- {} {}", info.name, loc.line)),
-                }
-            }
-        }
     }
 }
 

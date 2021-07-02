@@ -68,6 +68,8 @@ pub fn _evm_test_bls_registry(log_to: Option<&Path>, debug: bool) {
             .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
             .unwrap();
     }
+    
+    machine.write_coverage("evm_test_bls_registry".to_string());
 }
 
 fn _to_32_bytes_be(bi: &BigUint) -> Vec<u8> {
@@ -570,5 +572,6 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
             .unwrap();
     }
 
+    machine.write_coverage("evm_test_bls_signed_batch".to_string());
     Ok(())
 }

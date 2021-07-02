@@ -38,8 +38,8 @@ fn test_from_file(path: &Path) {
         Some({
             let mut file = path.to_str().unwrap().to_string();
             let length = file.len();
-            file.truncate(length - 4);
-            "coverage/".to_string() + &file.replace("/", "-") + "cov"
+            file.truncate(length - 5);
+            file.replace("/", "-")
         }),
     );
 }
@@ -148,7 +148,7 @@ fn test_rlp() {
         test_rlp_bytearray(
             testvec.to_vec(),
             res,
-            Some(format!("coverage/rlptest_bv_{}.cov", i)),
+            Some(format!("rlptest_bv_{}.cov", i)),
         );
     }
 
@@ -170,7 +170,7 @@ fn test_rlp() {
         test_rlp_list3(
             testvec.clone(),
             res,
-            Some(format!("coverage/rlptest_ls_{}.cov", i)),
+            Some(format!("rlptest_ls_{}.cov", i)),
         );
     }
 }
