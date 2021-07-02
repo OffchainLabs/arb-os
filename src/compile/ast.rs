@@ -1137,7 +1137,7 @@ impl<T> MatchPattern<T> {
     }
     pub fn collect_identifiers(&self) -> Vec<StringId> {
         match &self.kind {
-            MatchPatternKind::Simple(id) => vec![*id],
+            MatchPatternKind::Bind(id) => vec![*id],
             MatchPatternKind::Tuple(pats) => pats
                 .iter()
                 .flat_map(|pat| pat.collect_identifiers())

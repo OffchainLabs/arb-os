@@ -1606,14 +1606,14 @@ fn typecheck_statement<'a>(
                     debug_info.location.into_iter().collect(),
                 ));
             }
-            match &pat.kind {
-                MatchPatternKind::Bind(name) => Ok((
+            let (stat, bindings) = match &pat.kind {
+                MatchPatternKind::Bind(name) => (
                     TypeCheckedStatementKind::Let(
                         TypeCheckedMatchPattern::new_bind(*name, pat.debug_info, tce_type.clone()),
                         tc_expr,
                     ),
                     vec![(*name, tce_type)],
-                )),
+                ),
                 MatchPatternKind::Assign(_) => unimplemented!(),
                 MatchPatternKind::Tuple(pats) => {
                     let (tc_pats, bindings) =

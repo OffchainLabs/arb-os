@@ -466,6 +466,7 @@ fn mavm_codegen_statement(
                 prepushed_vals,
                 scopes,
                 file_info_chart,
+                error_system,
                 release_build,
             )?;
             label_gen = lg;
