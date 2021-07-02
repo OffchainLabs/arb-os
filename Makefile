@@ -62,6 +62,12 @@ $(STDDIR)/fixedpointtest.mexe: $(STDDIR)/fixedpointtest.mini $(STDDIR)/fixedpoin
 $(STDDIR)/bytearraybench.mexe: $(BUILTINMAOS) $(STDDIR)/bytearraybench.mini $(STDLIB)
 	$(CARGORUN) compile $(STDDIR)/bytearraybench.mini $(STDLIB) -o $(STDDIR)/bytearraybench.mexe $(COMPILEFLAGS) -t
 
+$(STDDIR)/rlpbench.mexe: $(BUILTINMAOS) $(STDDIR)/rlpbench.mini $(STDLIB)
+	$(CARGORUN) compile $(STDDIR)/rlpbench.mini $(STDLIB) -o $(STDDIR)/rlpbench.mexe $(COMPILEFLAGS) -t
+
+$(STDDIR)/rlpbench2.mexe: $(BUILTINMAOS) $(STDDIR)/rlpbench2.mini $(STDLIB)
+	$(CARGORUN) compile $(STDDIR)/rlpbench2.mini $(STDLIB) -o $(STDDIR)/rlpbench2.mexe $(COMPILEFLAGS) -t
+
 $(STDDIR)/codebuffer.mexe: $(BUILTINMAOS) $(STDDIR)/codebuffer.mini $(STDLIB)
 	$(CARGORUN) compile $(STDDIR)/codebuffer.mini $(STDLIB) -o $(STDDIR)/codebuffer.mexe
 

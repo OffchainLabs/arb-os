@@ -398,9 +398,12 @@ impl Buffer {
     pub fn set_byte(&self, offset: u128, val: u8) -> Self {
         let mut root = self.root.borrow_mut();
         let size = if offset >= self.size {
-            if offset > 1000 {
+            if offset > 20000 {
                 root.resize(3000000000, 0u8);
                 3000000000
+            } else if offset > 1000 {
+                root.resize(20001, 0u8);
+                20001
             } else {
                 root.resize(1001, 0u8);
                 1001

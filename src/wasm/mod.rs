@@ -2222,7 +2222,7 @@ impl JitWasm {
                     for i in offset..offset + len {
                         tmp.push(buf.read_byte(i as u128));
                     }
-                    println!("{:?}", tmp);
+                    // println!("{:?}", tmp);
                     memory
                         .write(ptr as usize, &tmp)
                         .expect("cannot write memory");
@@ -2240,7 +2240,7 @@ impl JitWasm {
                         memory
                             .read(ptr as usize, &mut tmp)
                             .expect("cannot read memory");
-                        println!("{:?}", tmp);
+                        // println!("{:?}", tmp);
 
                         cell4.replace_with(|buf| {
                             let mut res = buf.clone();

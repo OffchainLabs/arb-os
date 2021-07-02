@@ -528,14 +528,12 @@ fn main() -> Result<(), CompileError> {
             // wasm::run_jit(&buffer, &param);
             let a = wasm::JitWasm::new(&buffer);
             let buf = Buffer::from_bytes(param.to_vec());
-            /*
             for i in 0..1000000 {
-                let (buf, len; _) = a.run(buf.clone(), param.len());
+                a.run(buf.clone(), param.len());
             }
-            */
             let (buf, extra, len, gas_left, insn, table) = a.run(buf, param.len());
             // println!("insn {:?} table {:?}", insn, table);
-            run_debug(insn, table);
+            // run_debug(insn, table);
             let mut res = vec![];
             for i in 0..len {
                 res.push(buf.read_byte(i as u128))

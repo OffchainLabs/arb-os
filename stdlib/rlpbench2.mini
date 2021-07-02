@@ -1,0 +1,83 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::bytearray::ByteArray;
+use std::bytestream::ByteStream;
+use std::bytearray::MarshalledBytes;
+
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_copy;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_buffer;
+
+use std::bytestream::bytestream_new;
+
+use std::keccak::keccak256;
+
+use std::rlp::rlp_encodeUint;
+use std::rlp::rlp_encodeAddress;
+use std::rlp::rlp_encodeBytes;
+use std::rlp::rlp_encodeList;
+use std::rlp::rlp_encodeMessageInfo;
+use std::rlp::rlp_encodeAndHashMessageInfoForSignature;
+use std::rlp::rlp_decodeMessageInfo;
+
+use std::rlp::rlp_decodeUint;
+use std::rlp::rlp_decodeAddress;
+use std::rlp::rlp_decodeBytes;
+
+use std::rlp::bytesNeededToRepresentUint;
+
+func main() {
+
+    let buf = #include "/home/sami/rlp.wasm";
+    let ln = 16261;
+	debug(123456564);
+    let compiled = asm(ln, buf,) any { compilewasm };
+	debug(123);
+
+    let seqNum = 0;
+    let gasPrice = 31;
+    let gasLimit = uint(hash(0));
+    let to = uint(3919850193);
+    let value = uint(hash(gasLimit));
+    let data = randomByteArray();
+    let v = uint(hash(value));
+    let r = 0;
+    let s = 0;
+
+    let acc = 0;
+    while (acc < 1000000) {
+        acc = acc + 1;
+        let ba = bytearray_new(0);
+        let ba = bytearray_set256(ba, 32*0, seqNum);
+        let ba = bytearray_set256(ba, 32*1, gasPrice);
+        let ba = bytearray_set256(ba, 32*2, gasLimit);
+        let ba = bytearray_set256(ba, 32*3, to);
+        let ba = bytearray_set256(ba, 32*4, value);
+        let ba = bytearray_set256(ba, 32*5, bytearray_size(data));
+        let ba = bytearray_set256(ba, 32*6, v);
+        let ba = bytearray_set256(ba, 32*7, r);
+        let ba = bytearray_set256(ba, 32*8, s);
+        let ba = bytearray_copy(data, 0, ba, 32*9, bytearray_size(data));
+
+        let ba_buf = bytearray_buffer(ba);
+        // let res = asm(bytearray_size(ba),ba_buf,compiled) any { runwasm };
+
+   }
+}
+
+
+func randomByteArray() -> ByteArray {
+    let ret = bytearray_new(0);
+    let i = 0;
+    while (i < 1) {
+        ret = bytearray_set256(ret, 32*i, uint(hash(i+1017)));
+        i = i+1;
+    }
+    return ret;
+}

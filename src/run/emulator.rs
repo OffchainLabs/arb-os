@@ -1126,10 +1126,12 @@ impl Machine {
             match self.run_one(false) {
                 Ok(still_runnable) => {
                     if !still_runnable {
+                        /*
                         self.total_gas_usage = self
                             .total_gas_usage
                             .sub(&Uint256::from_u64(gas_this_instruction))
                             .unwrap();
+                        */
                         println!("gas used {}", gas_used);
                         return gas_used - gas_this_instruction;
                     }
@@ -1450,11 +1452,12 @@ impl Machine {
                     self.counter = self.counter + 1;
                     // println!("{}, stack sz {}", str, stack_len);
                     // println!("{}", str);
+                    /*
                     if self.counter % 1000000 == 0 {
                         if let Value::Tuple(t) = self.register.clone() {
                             println!("Instruction {} gas {}", self.counter, t[4]);
                         }
-                    }
+                    }*/
                 }
                 /*
                 if let Some(_str) = &insn.debug_str {
@@ -2320,7 +2323,7 @@ impl Machine {
                         let (nbuf, _, len, gas_left, _, _) = self.wasm_instances[idx].run(buf, arg);
 
                         let gas256 = Uint256::from_u64(gas_left);
-                        self.total_gas_usage = self.total_gas_usage.sub(&gas256).unwrap();
+                        // self.total_gas_usage = self.total_gas_usage.sub(&gas256).unwrap();
                         self.arb_gas_remaining = self.arb_gas_remaining.add(&gas256);
 
                         let values =
