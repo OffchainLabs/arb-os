@@ -25,11 +25,13 @@ pub fn fix_tuple_size(
     for insn in code_in.iter() {
         let debug_info = insn.debug_info;
         match insn.opcode {
-            Opcode::MakeFrame(nargs, ntotal) => {
-                code_out.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                    debug_info,
-                )); // move return address to aux stack
+            Opcode::MakeFrame(nargs, ntotal, return_address) => {
+                if return_address {
+                    code_out.push(Instruction::from_opcode(
+                        Opcode::AVMOpcode(AVMOpcode::AuxPush),
+                        debug_info,
+                    )); // move return address to aux stack
+                }
                 locals_tree = TupleTree::new(ntotal, true);
                 if let Some(imm) = &insn.immediate {
                     code_out.push(Instruction::from_opcode_imm(
@@ -59,7 +61,6 @@ pub fn fix_tuple_size(
                                 String::from("Compile error: fix_tuple_size"),
                                 "index too large".to_string(),
                                 debug_info.location.into_iter().collect(),
-                                false,
                             ))
                         }
                     }
@@ -68,7 +69,6 @@ pub fn fix_tuple_size(
                         String::from("Compile error: fix_tuple_size"),
                         "TupleGet without immediate arg".to_string(),
                         debug_info.location.into_iter().collect(),
-                        false,
                     ));
                 }
             }
@@ -84,7 +84,6 @@ pub fn fix_tuple_size(
                                 String::from("Compile error: fix_tuple_size"),
                                 "TupleSet index too large".to_string(),
                                 debug_info.location.into_iter().collect(),
-                                false,
                             ))
                         }
                     }
@@ -93,7 +92,6 @@ pub fn fix_tuple_size(
                         String::from("Compile error: fix_tuple_size"),
                         "TupleSet without immediate arg".to_string(),
                         debug_info.location.into_iter().collect(),
-                        false,
                     ));
                 }
             }
@@ -108,7 +106,6 @@ pub fn fix_tuple_size(
                                 String::from("Compile error: fix_tuple_size"),
                                 "index too large".to_string(),
                                 debug_info.location.into_iter().collect(),
-                                false,
                             ))
                         }
                     }
@@ -117,7 +114,6 @@ pub fn fix_tuple_size(
                         String::from("Compile error: fix_tuple_size"),
                         "SetLocal without immediate arg".to_string(),
                         debug_info.location.into_iter().collect(),
-                        false,
                     ));
                 }
             }
@@ -132,7 +128,6 @@ pub fn fix_tuple_size(
                                 String::from("Compile error: fix_tuple_size"),
                                 "index too large".to_string(),
                                 debug_info.location.into_iter().collect(),
-                                false,
                             ))
                         }
                     }
@@ -141,13 +136,12 @@ pub fn fix_tuple_size(
                         String::from("Compile error: fix_tuple_size"),
                         "GetLocal without immediate arg".to_string(),
                         debug_info.location.into_iter().collect(),
-                        false,
                     ));
                 }
             }
             Opcode::SetGlobalVar(idx) => {
                 code_out.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Rget),
+                    Opcode::AVMOpcode(AVMOpcode::Rpush),
                     debug_info,
                 ));
                 global_tree.write_code(false, idx, &mut code_out, debug_info)?;
@@ -158,7 +152,7 @@ pub fn fix_tuple_size(
             }
             Opcode::GetGlobalVar(idx) => {
                 code_out.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Rget),
+                    Opcode::AVMOpcode(AVMOpcode::Rpush),
                     debug_info,
                 ));
                 global_tree.read_code(false, idx, &mut code_out, debug_info)?;
@@ -408,7 +402,6 @@ impl TupleTree {
                     String::from("Compile error: TupleTree::read_code"),
                     "out-of-bounds read".to_string(),
                     debug_info.location.into_iter().collect(),
-                    false,
                 ))
             }
         }
@@ -494,7 +487,6 @@ impl TupleTree {
                 String::from("Compile error: TupleTree::write_code"),
                 "out-of-bounds write".to_string(),
                 debug_info.location.into_iter().collect(),
-                false,
             ));
         } else {
             code.push(Instruction::from_opcode(

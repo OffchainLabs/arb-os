@@ -1,27 +1,21 @@
 //
-// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
 //
 
 
 use accounts::AccountStore;
 use accounts::accountStore_init;
-use accounts::getGlobalAccountStore;
-use accounts::setGlobalAccountStore;
-use accounts::accountStore_get;
-use accounts::accountStore_set;
+use accounts::safeGetGlobalAccountStore;
+use accounts::safeSetGlobalAccountStore;
 use accounts::accountStore_createAccountFromEvmCode;
 use accounts::accountStore_upgradeContractFromEvmCode;
-use accounts::account_checkAndIncrSeqNum;
 
 use arbstatistics::arbStatistics_init;
-
-use arbsys::arbosVersion;
-use arbsys::arbsys_txcall;
+use arbowner::arbowner_init;
 
 use blockhash::blockhash_init;
 
 use chainParameters::chainParams_init;
-use chainParameters::chainParams_haveDoneInit;
 
 use codeSegment::codeSegment_init;
 use codeSegment::translateEvmCodeSegment;
@@ -35,46 +29,23 @@ use decompression::decompression_init;
 use errorHandler::errorHandler_init;
 
 use evmCallStack::evmCallStack_init;
-use evmCallStack::evmCallStack_makeEmpty;
 
 use evmOps::evmOps_init;
-use evmOps::evmOp_return;
 use evmOps::dispatchForEvmOp;
 
-use evmlogs::EvmLogs;
-
-use tracing::evmTracer_clear;
-
-use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_init;
-use gasAccounting::getNextRequestFromCongestionAuction;
-use gasAccounting::txFeeStats_zero;
 
-use inbox::IncomingRequest;
 use inbox::inbox_init;
-use inbox::inbox_get;
+use inbox::mainRunLoop;
 use inbox::emitGenesisBlockReceipt;
-
-use messages::TxRequestData;
-use messages::handleL2Request;
 
 use output::output_init;
 use output::txReceipts_init;
-use output::emitTxReceipt;
-
-use pluggables::pluggables_init;
 
 use precompiles::precompiles_init;
 
-use rollupTracker::rollupTracker_init;
-
-use std::bytearray::MarshalledBytes;
-use std::bytearray::ByteArray;
-use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_unmarshalBytes;
-use std::bytestream::ByteStream;
 use std::bytestream::bytestream_new;
-use std::storageMap::StorageMap;
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 use bridge_arbos_versions::remapGlobalsForUpgrade;
@@ -98,16 +69,15 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         codeSegment_init();
 
         if (initializePreinstalls(true) == None<()>) {
-            panic;   // don't try to run without preinstalls and precompiles
+            error;   // don't try to run without preinstalls and precompiles
         }
     } else {
         // this is a clean start, not an upgrade
         errorHandler_init();
+        chainParams_init();
         arbStatistics_init();
 
-        pluggables_init();
         codeSegment_init();
-        chainParams_init();
         output_init();
         decompression_init();
         inbox_init();
@@ -118,10 +88,10 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         blockhash_init();
         inbox_init();
         accountStore_init();
+        arbowner_init();
         txReceipts_init();
-        rollupTracker_init();
         if (initializePreinstalls(false) == None<()>) {
-            panic;   // don't try to run without preinstalls and precompiles
+            error;   // don't try to run without preinstalls and precompiles
         }
 
         // advance the Arbitrum block number, and emit a block receipt
@@ -133,48 +103,8 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
     mainRunLoop();
 }
 
-public impure func mainRunLoop() {
-    loop {
-        let (resultCode, request) = getNextRequestFromCongestionAuction();
-        if (resultCode == const::TxResultCode_success) {
-            if (handleL2Request(request) == None<()>) {
-                // reject for message format error
-                emitTxReceipt(
-                    request.incomingRequest,
-                    const::TxResultCode_formatError,
-                    None<ByteArray>,
-                    None<EvmLogs>,
-                    None<GasUsage>,
-                    request.feeStats,
-                    false,      // don't emit tracing info because the tx was bogus
-                );
-            }
-        } else {
-            // before emitting a failure receipt, try to increment caller's sequence number
-            if ( (resultCode != const::TxResultCode_sequenceNumberTooLow) && (resultCode != const::TxResultCode_sequenceNumberTooHigh) ) {
-                if let Some(seqNum) = request.seqNum {
-                    let gAcctStore = getGlobalAccountStore();
-                    if let Some(acct) = account_checkAndIncrSeqNum(accountStore_get(gAcctStore, request.caller), seqNum) {
-                        setGlobalAccountStore(accountStore_set(gAcctStore, request.caller, acct));
-                    }
-                }
-            }
-
-            emitTxReceipt(
-                request.incomingRequest,
-                resultCode,
-                None<ByteArray>,
-                None<EvmLogs>,
-                None<GasUsage>,
-                request.feeStats,
-                true,
-            );
-        }
-    }
-}
-
 impure func initializePreinstalls(isUpgrade: bool) -> option<()> {
-    let acctStore = getGlobalAccountStore();
+    let acctStore = safeGetGlobalAccountStore();
 
     let code = bytearray_unmarshalBytes(getArbInfoCode())?;
     let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
@@ -203,7 +133,7 @@ impure func initializePreinstalls(isUpgrade: bool) -> option<()> {
     // set up precompiled contracts
     acctStore = precompiles_init(acctStore, isUpgrade)?;
 
-    setGlobalAccountStore(acctStore);
+    safeSetGlobalAccountStore(acctStore);
 
     return Some(());
 }
