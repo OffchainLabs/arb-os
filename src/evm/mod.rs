@@ -763,7 +763,7 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
     let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
-    machine.start_at_zero(false);
+    machine.start_at_zero(true);
 
     machine.runtime_env.insert_eth_deposit_message(
         my_addr.clone(),
@@ -875,6 +875,7 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
             .unwrap();
     }
 
+    machine.write_coverage("_evm_xcontract_call_using_sequencer_batch".to_string());
     Ok(true)
 }
 
@@ -891,7 +892,7 @@ pub fn _evm_xcontract_call_sequencer_slow_path(
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
     let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
-    machine.start_at_zero(false);
+    machine.start_at_zero(true);
 
     machine.runtime_env.insert_eth_deposit_message(
         my_addr.clone(),
@@ -1003,6 +1004,7 @@ pub fn _evm_xcontract_call_sequencer_slow_path(
             .unwrap();
     }
 
+    machine.write_coverage("_evm_xcontract_call_sequencer_slow_path".to_string());
     Ok(true)
 }
 
@@ -1018,7 +1020,7 @@ pub fn _evm_xcontract_call_using_compressed_batch(
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
     let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
-    machine.start_at_zero(false);
+    machine.start_at_zero(true);
 
     machine.runtime_env.insert_eth_deposit_message(
         my_addr.clone(),
@@ -1120,6 +1122,7 @@ pub fn _evm_xcontract_call_using_compressed_batch(
             .unwrap();
     }
 
+    machine.write_coverage("_evm_xcontract_call_using_compressed_batch".to_string());
     Ok(true)
 }
 
@@ -1136,7 +1139,7 @@ pub fn _evm_xcontract_call_sequencer_reordering(
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
     let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
-    machine.start_at_zero(false);
+    machine.start_at_zero(true);
 
     machine.runtime_env.insert_eth_deposit_message(
         my_addr.clone(),
@@ -1259,6 +1262,7 @@ pub fn _evm_xcontract_call_sequencer_reordering(
             .unwrap();
     }
 
+    machine.write_coverage("_evm_xcontract_call_sequencer_reordering".to_string());
     Ok(true)
 }
 
@@ -1274,7 +1278,7 @@ pub fn _evm_xcontract_call_using_compressed_batch_2(
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
     let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
-    machine.start_at_zero(false);
+    machine.start_at_zero(true);
 
     machine.runtime_env.insert_eth_deposit_message(
         my_addr.clone(),
@@ -1373,6 +1377,7 @@ pub fn _evm_xcontract_call_using_compressed_batch_2(
             .unwrap();
     }
 
+    machine.write_coverage("_evm_xcontract_call_using_compressed_batch_2".to_string());
     Ok(true)
 }
 
