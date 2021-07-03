@@ -8,6 +8,8 @@ use crate::evm::preinstalled_contracts::{ArbosTest, _ArbInfo};
 use crate::run::{load_from_file, load_from_file_and_env, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use ethers_signers::Signer;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::path::Path;
 
 use crate::compile::miniconstants::init_constant_table;
@@ -51,7 +53,7 @@ pub fn evm_xcontract_call_with_constructors(
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero(false);
+    machine.start_at_zero(true);
 
     let my_addr = Uint256::from_usize(1025);
     machine.runtime_env.insert_eth_deposit_message(
@@ -125,6 +127,7 @@ pub fn evm_xcontract_call_with_constructors(
             .unwrap();
     }
 
+    machine.write_coverage("test_crosscontract_call_with_constructors".to_string());
     Ok(true)
 }
 
@@ -202,6 +205,7 @@ pub fn _evm_tx_with_deposit(
             .unwrap();
     }
 
+    machine.write_coverage("test_tx_with_deposit".to_string());
     Ok(true)
 }
 
@@ -302,7 +306,7 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
             .unwrap();
     }
 
-    machine.write_coverage("evm_test_arbsys_direct".to_string());
+    machine.write_coverage("test_arbsys_direct".to_string());
     Ok(())
 }
 
@@ -359,7 +363,7 @@ pub fn evm_test_function_table_access(
             .unwrap();
     }
 
-    machine.write_coverage("evm_test_function_table_access".to_string());
+    machine.write_coverage("test_function_table_access".to_string());
     Ok(())
 }
 
@@ -392,7 +396,7 @@ pub fn _basic_evm_add_test(log_to: Option<&Path>, debug: bool) -> Result<(), eth
             .unwrap();
     }
 
-    machine.write_coverage("basic_evm_add_test".to_string());
+    machine.write_coverage("test_evm_add_code".to_string());
     Ok(())
 }
 
@@ -443,7 +447,7 @@ pub fn _underfunded_nested_call_test(
             .unwrap();
     }
 
-    machine.write_coverage("underfunded_nested_call_test".to_string());
+    machine.write_coverage("test_underfunded_nested_call".to_string());
     Ok(())
 }
 
@@ -559,7 +563,7 @@ pub fn _evm_test_callback(log_to: Option<&Path>, debug: bool) -> Result<(), etha
             .unwrap();
     }
 
-    machine.write_coverage("evm_test_callback".to_string());
+    machine.write_coverage("test_l2_to_l1_call".to_string());
     Ok(())
 }
 
@@ -627,7 +631,7 @@ pub fn evm_test_create(
             .unwrap();
     }
 
-    machine.write_coverage("evm_test_create".to_string());
+    machine.write_coverage("test_create_opcode".to_string());
     Ok(true)
 }
 
@@ -643,7 +647,7 @@ pub fn evm_xcontract_call_using_batch(
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
     let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
-    machine.start_at_zero(false);
+    machine.start_at_zero(true);
 
     machine.runtime_env.insert_eth_deposit_message(
         my_addr.clone(),
@@ -742,6 +746,7 @@ pub fn evm_xcontract_call_using_batch(
             .unwrap();
     }
 
+    machine.write_coverage("test_crosscontract_call_using_batch".to_string());
     Ok(true)
 }
 
@@ -1373,7 +1378,7 @@ pub fn _evm_xcontract_call_using_compressed_batch_2(
 
 pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero(false);
+    machine.start_at_zero(true);
 
     match AbiForContract::new_from_file(&test_contract_path("Add")) {
         Ok(mut contract) => {
@@ -1396,11 +1401,13 @@ pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
             .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
             .unwrap();
     }
+
+    machine.write_coverage("test_direct_deploy_add".to_string());
 }
 
 pub fn _evm_pay_eoa_from_contract(log_to: Option<&Path>, debug: bool) {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero(false);
+    machine.start_at_zero(true);
 
     let add_contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
         Ok(mut contract) => {
@@ -1457,6 +1464,8 @@ pub fn _evm_pay_eoa_from_contract(log_to: Option<&Path>, debug: bool) {
             .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
             .unwrap();
     }
+
+    machine.write_coverage("test_pay_eoa_from_contract".to_string());
 }
 
 pub fn _evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
@@ -1638,13 +1647,13 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
             .unwrap();
     }
 
-    machine.write_coverage("evm_test_arbsys".to_string());
+    machine.write_coverage("test_arbsys".to_string());
 }
 
 pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
     use std::convert::TryFrom;
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero(false);
+    machine.start_at_zero(true);
 
     let my_addr = Uint256::from_usize(1025);
     let contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
@@ -1701,6 +1710,7 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
             .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
             .unwrap();
     }
+    machine.write_coverage("test_direct_deploy_and_call_add".to_string());
 }
 
 pub fn _evm_test_contract_call(log_to: Option<&Path>, debug: bool) {
@@ -1766,7 +1776,7 @@ pub fn _evm_test_contract_call(log_to: Option<&Path>, debug: bool) {
             .unwrap();
     }
 
-    machine.write_coverage("evm_test_contract_call".to_string());
+    machine.write_coverage("test_call_from_contract".to_string());
 }
 
 pub fn evm_direct_deploy_and_compressed_call_add(log_to: Option<&Path>, debug: bool) {
@@ -1774,7 +1784,7 @@ pub fn evm_direct_deploy_and_compressed_call_add(log_to: Option<&Path>, debug: b
     let mut rt_env = RuntimeEnvironment::default();
     let wallet = rt_env.new_wallet();
     let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
-    machine.start_at_zero(false);
+    machine.start_at_zero(true);
 
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
     let contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
@@ -1832,6 +1842,8 @@ pub fn evm_direct_deploy_and_compressed_call_add(log_to: Option<&Path>, debug: b
             .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
             .unwrap();
     }
+
+    machine.write_coverage("test_direct_deploy_and_compressed_call_add".to_string());
 }
 
 #[test]
@@ -1870,7 +1882,7 @@ fn _evm_reverter_factory_test_impl() {
 
 pub fn evm_payment_to_empty_address(log_to: Option<&Path>, debug: bool) {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero(false);
+    machine.start_at_zero(true);
 
     let my_addr = Uint256::from_u64(1025);
     let dest_addr = Uint256::from_u64(4242);
@@ -1908,11 +1920,13 @@ pub fn evm_payment_to_empty_address(log_to: Option<&Path>, debug: bool) {
             .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
             .unwrap();
     }
+
+    machine.write_coverage("test_payment_to_empty_address".to_string());
 }
 
 pub fn evm_eval_sha256(log_to: Option<&Path>, debug: bool) {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero(false);
+    machine.start_at_zero(true);
 
     let my_addr = Uint256::from_u64(1025);
 
@@ -1954,6 +1968,8 @@ pub fn evm_eval_sha256(log_to: Option<&Path>, debug: bool) {
             .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
             .unwrap();
     }
+
+    machine.write_coverage("test_sha256_precompile".to_string());
 }
 
 pub fn _evm_ecpairing_precompile(_log_to: Option<&Path>, debug: bool) {
@@ -1981,6 +1997,10 @@ pub fn _evm_ecpairing_precompile(_log_to: Option<&Path>, debug: bool) {
 fn _evm_ecpairing_precompile_test_one(calldata: &str, result: bool, debug: bool) {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero(true);
+
+    let mut hasher = DefaultHasher::new();
+    calldata.hash(&mut hasher);
+    let input_hash = hasher.finish();
 
     let my_addr = Uint256::from_u64(1025);
     let calldata = hex::decode(calldata).unwrap();
@@ -2010,7 +2030,7 @@ fn _evm_ecpairing_precompile_test_one(calldata: &str, result: bool, debug: bool)
     let return_uint = Uint256::from_bytes(&return_data);
     assert_eq!(return_uint == Uint256::one(), result);
 
-    machine.write_coverage("evm_ecpairing_precompile_test_one".to_string());
+    machine.write_coverage(format!("test_ecpairing_precompile-{:x}", input_hash));
 
     //if let Some(path) = log_to {
     //    machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
@@ -2019,7 +2039,7 @@ fn _evm_ecpairing_precompile_test_one(calldata: &str, result: bool, debug: bool)
 
 pub fn _evm_eval_ripemd160(log_to: Option<&Path>, debug: bool) {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero(false);
+    machine.start_at_zero(true);
 
     let my_addr = Uint256::from_u64(1025);
     let tx_id = machine.runtime_env.insert_tx_message(
@@ -2059,6 +2079,8 @@ pub fn _evm_eval_ripemd160(log_to: Option<&Path>, debug: bool) {
             .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
             .unwrap();
     }
+
+    machine.write_coverage("test_ripemd160_precompile".to_string());
 }
 
 #[test]

@@ -335,5 +335,5 @@ fn _test_eth_blake_precompile_impl() {
         assert_eq!(y.map(|s| hex::decode(s).unwrap()), yret);
     }
 
-    machine.write_coverage("blake2b".to_string());
+    machine.write_coverage("test_eth_blake_precompile".to_string());
 }

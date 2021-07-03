@@ -1404,7 +1404,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbos_version_orig = arbsys_orig_binding._arbos_version(&mut machine)?;
     assert_eq!(arbos_version, arbos_version_orig);
 
-    machine.write_coverage("test_upgrade_arbos_over_itself_impl".to_string());
+    machine.write_coverage("test_upgrade_arbos_to_different_version".to_string());
     Ok(())
 }
 
@@ -1473,9 +1473,11 @@ pub fn _evm_run_with_gas_charging(
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
-    machine
-        .runtime_env
-        .insert_eth_deposit_message(my_addr.clone(), my_addr.clone(), funding);
+    machine.runtime_env.insert_eth_deposit_message(
+        my_addr.clone(),
+        my_addr.clone(),
+        funding.clone(),
+    );
     let _gas_used = if debug {
         machine.debug(None)
     } else {
@@ -1531,6 +1533,7 @@ pub fn _evm_run_with_gas_charging(
 
     if !logs[0].succeeded() {
         if logs[0].get_return_code() == Uint256::from_u64(3) {
+            machine.write_coverage(format!("test_gas_charging_{}", funding));
             return Ok(false);
         } else {
             panic!();
@@ -1567,7 +1570,7 @@ pub fn _evm_run_with_gas_charging(
             .unwrap();
     }
 
-    machine.write_coverage("test_gas_charging_fully_funded".to_string());
+    machine.write_coverage(format!("test_gas_charging_{}", funding));
     Ok(true)
 }
 

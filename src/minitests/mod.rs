@@ -145,7 +145,7 @@ fn test_rlp() {
     byte_testvecs.push(new_test_vec.clone());
     for (i, testvec) in byte_testvecs.iter().enumerate() {
         let res = rlp::encode(&*testvec);
-        test_rlp_bytearray(testvec.to_vec(), res, Some(format!("rlptest_bv_{}.cov", i)));
+        test_rlp_bytearray(testvec.to_vec(), res, Some(format!("rlptest_bv_{}", i)));
     }
 
     let list3_testvecs = vec![
@@ -163,7 +163,7 @@ fn test_rlp() {
     ];
     for (i, testvec) in list3_testvecs.iter().enumerate() {
         let res = encode_list3(testvec.clone());
-        test_rlp_list3(testvec.clone(), res, Some(format!("rlptest_ls_{}.cov", i)));
+        test_rlp_list3(testvec.clone(), res, Some(format!("rlptest_ls_{}", i)));
     }
 }
 
@@ -455,6 +455,7 @@ fn small_upgrade() {
         Value::Int(Uint256::from_usize(code_bytes.len())),
         Value::new_buffer(code_bytes),
     ]);
+    machine.start_coverage();
     machine.runtime_env.insert_full_inbox_contents(vec![msg]);
     let _ = run(&mut machine, vec![], false, None);
 
@@ -465,6 +466,7 @@ fn small_upgrade() {
         *machine.stack_top().unwrap(),
         Value::Int(Uint256::from_u64(42))
     );
+    machine.write_coverage("small_upgrade".to_string());
 }
 
 #[test]
@@ -478,6 +480,7 @@ fn small_upgrade_auto_remap() {
         Value::Int(Uint256::from_usize(code_bytes.len())),
         Value::new_buffer(code_bytes),
     ]);
+    machine.start_coverage();
     machine.runtime_env.insert_full_inbox_contents(vec![msg]);
     let _ = run(&mut machine, vec![], false, None);
 
@@ -486,4 +489,5 @@ fn small_upgrade_auto_remap() {
         *machine.stack_top().unwrap(),
         Value::Int(Uint256::from_u64(42))
     );
+    machine.write_coverage("small_upgrade_auto_remap".to_string());
 }
