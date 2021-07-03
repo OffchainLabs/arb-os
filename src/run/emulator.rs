@@ -2226,12 +2226,12 @@ impl Machine {
                         Ok(true)
                     }
                     AVMOpcode::SetBuffer64 => {
-                        let offset = self.stack.pop_usize(&self.state)?;
-                        if offset + 7 < offset {
+                        let offset = self.stack.pop_usize(&self.state)? as u64;
+                        if offset.overflowing_add(7).1 {
                             return Err(ExecutionError::new(
                                 "buffer overflow",
                                 &self.state,
-                                Some(Value::Int(Uint256::from_usize(offset))),
+                                Some(Value::Int(Uint256::from_usize(offset as usize))),
                             ));
                         }
                         let val = self.stack.pop_uint(&self.state)?;
@@ -2239,19 +2239,19 @@ impl Machine {
                         let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
                         for i in 0..8 {
-                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[i]);
+                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[i as usize]);
                         }
                         self.stack.push(Value::copy_buffer(nbuf));
                         self.incr_pc();
                         Ok(true)
                     }
                     AVMOpcode::SetBuffer256 => {
-                        let offset = self.stack.pop_usize(&self.state)?;
-                        if offset + 31 < offset {
+                        let offset = self.stack.pop_usize(&self.state)? as u64;
+                        if offset.overflowing_add(31).1 {
                             return Err(ExecutionError::new(
                                 "buffer overflow",
                                 &self.state,
-                                Some(Value::Int(Uint256::from_usize(offset))),
+                                Some(Value::Int(Uint256::from_usize(offset as usize))),
                             ));
                         }
                         let val = self.stack.pop_uint(&self.state)?;
@@ -2259,7 +2259,7 @@ impl Machine {
                         let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
                         for i in 0..32 {
-                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[i]);
+                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[i as usize]);
                         }
                         self.stack.push(Value::copy_buffer(nbuf));
                         self.incr_pc();

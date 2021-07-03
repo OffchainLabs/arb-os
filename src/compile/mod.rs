@@ -1308,6 +1308,10 @@ impl CompileError {
         }
     }
 
+    pub fn from_debug(title: &'static str, description: String, debug_info: DebugInfo) -> Self {
+        CompileError::new(String::from(title), description, debug_info.location.into_iter().collect())
+    }
+
     pub fn new_warning(title: String, description: String, locations: Vec<Location>) -> Self {
         CompileError {
             title,

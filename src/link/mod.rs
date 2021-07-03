@@ -265,20 +265,20 @@ pub fn postlink_compile(
 
     let mut code = code;
     loop {
-        //break;
-
+        break;
+        
         let (inlined_code, inline_count) = analyze::inline_frames(&code);
         if show_optimizations {
             print_code(&inlined_code, "inline frames", &file_info_chart);
             println!("{} frames inlined", inline_count);
         }
         code = inlined_code;
-
+        
         if inline_count == 0 {
             break;
         }
     }
-
+    
     let (code, jump_table) = striplabels::fix_nonforward_labels(
         &code,
         &program.imported_funcs,
@@ -287,15 +287,19 @@ pub fn postlink_compile(
     if show_optimizations {
         print_code(&code, "fix_nonforward_labels", &file_info_chart);
     }
-
+    
     let code = xformcode::fix_tuple_size(&code, program.globals.len())?;
     if debug || show_optimizations {
         print_code(&code, "fix_tuple_size", &file_info_chart);
     }
-
-    let mut graph = analyze::create_cfg(&code);
-    //let before_optimizations = graph.clone();
-
+    
+    let graph = analyze::create_cfg(&code);
+    let before_optimizations = graph.clone();
+    
+    let code = optimize::graph_reduce(&code, show_optimizations)?;
+    let graph = analyze::create_cfg(&code);
+    
+    /*
     loop {
         let mut do_another_pass = false;
         
@@ -324,6 +328,8 @@ pub fn postlink_compile(
                 do_another_pass = do_another_pass || !unchanged;
             };
         }
+        
+        
         
         
         for _ in 0..16 {
@@ -356,14 +362,19 @@ pub fn postlink_compile(
 
         if !do_another_pass {
             if show_optimizations {
-                //analyze::print_cfg(&before_optimizations, &graph, "final output");
-                analyze::print_cfg(&graph, &graph, "final output");
+                analyze::print_cfg(&before_optimizations, &graph, "final output");
             }
             break;
         }
         break;
     }
-
+    */
+    
+    if show_optimizations {
+        //analyze::cost_composition(&code);
+        analyze::print_cfg(&before_optimizations, &graph, "final output");
+    }
+    
     let prior_size = code
         .iter()
         .filter(|insn| insn.opcode.base_cost() > 0)
@@ -375,8 +386,9 @@ pub fn postlink_compile(
         .iter()
         .filter(|insn| insn.opcode.base_cost() > 0)
         .count() as f64;
-
+    
     if show_optimizations {
+        //analyze::cost_composition(&code);
         println!(
             "Instructions {} => {} = {:.2}%",
             prior_size,
@@ -390,7 +402,7 @@ pub fn postlink_compile(
             100.0 * (prior_cost - after_cost) / prior_cost
         );
     }
-
+    
     let (mut code, jump_table_final) =
         striplabels::strip_labels(code, &jump_table, &program.imported_funcs)?;
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);

@@ -11,6 +11,10 @@ use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, OpcodeEffect, Value};
 use std::cmp::max;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+type Block = Vec<Instruction>;
+type Source = Vec<Instruction>;
+
+
 ///Pretty-prints a list of instructions with the lines that generated them.
 pub fn print_code(code: &Vec<Instruction>, title: &str, file_info_chart: &BTreeMap<u64, FileInfo>) {
     let grey = ConsoleColors::GREY;
@@ -84,6 +88,8 @@ pub fn count_labels(
     let mut func_labels = HashMap::new();
     let mut anon_labels = HashMap::new();
     let mut external_labels = HashMap::new();
+
+    // TODO: NEED TO CHECK INNER VALUES FOR TUPLES
 
     for insn in code {
         match &insn.immediate {
@@ -747,4 +753,32 @@ pub fn eval_stacks(code: &Vec<Instruction>) -> (isize, isize, bool) {
         }
     }
     (stack, aux, confused)
+}
+
+pub fn cost_composition(code: &Block) {
+    
+    println!("\nCost composition");
+
+    // xset 42 => 34
+    // xget  6 =>  5
+    // tset 30 => 29
+    // tget  2 =>  2
+    
+    let mut opcodes = [0.0; 256];
+    
+    for curr in code {
+        match curr.opcode {
+            Opcode::AVMOpcode(avm_op) => opcodes[avm_op.to_number() as usize] += curr.opcode.base_cost() as f64,
+            _ => {}
+        }
+    }
+    let total: f64 = opcodes.iter().sum();
+    opcodes.iter_mut().for_each(|cost| *cost = 100.0 * *cost / total);
+    
+    for (opcode, cost) in opcodes.iter().enumerate() {
+        match AVMOpcode::from_number(opcode) {
+            Some(opcode) if cost > &0.0 => println!("{:>16} {:.2}%", opcode, cost),
+            _ => {}
+        }
+    }
 }

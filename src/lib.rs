@@ -21,7 +21,7 @@ use crate::console::{ConsoleColors};
 use crate::run::{Machine, MachineState};
 use crate::mavm::{Instruction, Opcode, AVMOpcode, Value};
 use crate::uint256::{Uint256};
-use crate::compile::{DebugInfo};
+use crate::compile::{DebugInfo, CompileError};
 use crate::link::optimize::*;
 use crate::link::analyze::*;
 use std::collections::BTreeMap;
@@ -41,6 +41,13 @@ impl Reader<'_> {
 	    self.done = true;
 	    0
 	}
+    }
+    fn get_bytes(&mut self, count: usize) -> Vec<u8> {
+        let mut bytes = vec![];
+        for _ in 0..count {
+            bytes.push(self.get_byte());
+        }
+        bytes
     }
     fn get_usize(&mut self) -> usize {
 	self.get_byte() as usize
@@ -66,9 +73,13 @@ pub fn fuzz_optimizer(data: &[u8], detail: bool) {
             Some(avm) => Opcode::AVMOpcode(avm),
             None => Opcode::AVMOpcode(AVMOpcode::Noop),
         };
-        let immediate = match entropy.get_byte() {
+
+        let value_type = entropy.get_usize();
+        
+        let immediate = match value_type as u8 {
             0..=64 => None,
-	    65..=192 => Some(Value::Int(Uint256::from_usize(entropy.get_usize() % 16))),
+	    65..=160 => Some(Value::Int(Uint256::from_usize(entropy.get_usize() % 16))),
+            161..=192 => Some(Value::new_buffer(entropy.get_bytes(value_type % 8))),
             _ => {
 		fn deserialize(entropy: &mut Reader, level: usize) -> Value {
 		    let length = entropy.get_byte() % 4;
@@ -184,24 +195,18 @@ pub fn fuzz_optimizer(data: &[u8], detail: bool) {
     if detail {
         print_code(&block, "unoptimized", &BTreeMap::new());
     }
+
+    let mut proof = None;
     
-    /*let (opt, _) = devirtualize(&block, detail);
-    if detail {
-        print_cfg(&create_cfg(&block), &create_cfg(&opt), "de-virtualize");
-    }
-    return;*/
-    
-    let opt = match graph_reduce(&create_cfg(&block), detail) {
-        Ok((opt, _)) => flatten_cfg(opt),
-        Err(_) => vec![create!(Panic)],
+    let opt = match graph_reduce(&block, detail) {
+        Ok(opt) => opt,
+        Err(error) => {
+            proof = Some(error);
+            vec![create!(Panic)]
+        }
     };
     if detail {
         print_cfg(&create_cfg(&block), &create_cfg(&opt), "graph reduce");
-    }
-    
-    let (opt, _) = devirtualize(&opt, detail);
-    if detail {
-        print_cfg(&create_cfg(&block), &create_cfg(&opt), "de-virtualize");
     }
     
     // check that the stacks have been preserved
@@ -243,6 +248,9 @@ pub fn fuzz_optimizer(data: &[u8], detail: bool) {
     }
     
     if let MachineState::Error(_) = &after_machine.state {
+        if let Some(bad_proof) = proof {
+            bad_proof.print(&BTreeMap::new(), false);
+        }
         print_code(&block, "deleterious", &BTreeMap::new());
         print_cfg(&create_cfg(&block), &create_cfg(&opt), "crash");
         panic!("Optimization causes machine to crash");
