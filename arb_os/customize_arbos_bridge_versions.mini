@@ -4,6 +4,8 @@
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 
+use accounts::AccountStore;
+
 use evmCallStack::EvmCallFrame;
 
 

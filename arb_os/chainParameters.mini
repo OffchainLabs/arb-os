@@ -79,8 +79,7 @@ public impure func chainParams_gotParamsMessage(data: ByteArray) {
     let stream = bytestream_new(data);
     loop {
         let paramId = xif let Some(res) = bytestream_get256(stream) {
-            let (ustr, pid) = res;  //MIXEDLET
-            stream = ustr;
+            let (*stream, pid) = res;
             pid
         } else {
             notifyParamsChanged();
@@ -88,8 +87,7 @@ public impure func chainParams_gotParamsMessage(data: ByteArray) {
             0
         };
         let value = xif let Some(res) = bytestream_get256(stream) {
-            let (ustr, val) = res;  //MIXEDLET
-            stream = ustr;
+            let (*stream, val) = res;
             val
         } else {
             notifyParamsChanged();

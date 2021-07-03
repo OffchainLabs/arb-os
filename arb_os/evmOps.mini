@@ -57,8 +57,8 @@ use codeSegment::getDummyAcceptContractCode;
 
 use std::storageMap::storageMap_new;
 
-use evmCallStack::evmCallStack_currentTimestamp;
-use evmCallStack::evmCallStack_currentEthBlockNumber;
+use inbox::inbox_currentTimestamp;
+use inbox::inbox_currentEthBlockNumber;
 
 use gasAccounting::getArbGasPrice;
 use gasAccounting::getCurrentBlockGasLimit;
@@ -409,11 +409,11 @@ public impure func evmOp_returndatacopy(memAddr: uint, dataOffset: uint, nbytes:
 }
 
 public impure func evmOp_timestamp() -> uint {
-    return evmCallStack_currentTimestamp();
+    return inbox_currentTimestamp();
 }
 
 public impure func evmOp_number() -> uint {
-    return evmCallStack_currentEthBlockNumber();
+    return inbox_currentEthBlockNumber();
 }
 
 public impure func evmOp_mload(memAddr: uint) -> uint {
