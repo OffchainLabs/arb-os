@@ -228,8 +228,9 @@ SubData: SubData = {
 }
 
 MatchPattern: MatchPattern = {
-	<Ident> => MatchPattern::new_simple(<>,()),
-	"(" <CommaedMatchPatterns> ")" => MatchPattern::new_tuple(<>,()),
+    <lno: @L> <i: Ident> => MatchPattern::new_bind(i, DebugInfo::from(file_info.location(BytePos::from(lno), filename)), ()),
+    <lno: @L> "*"<i: Ident> => MatchPattern::new_assign(i, DebugInfo::from(file_info.location(BytePos::from(lno), filename)), ()),
+    <lno: @L> "(" <c: CommaedMatchPatterns> ")" => MatchPattern::new_tuple(c, DebugInfo::from(file_info.location(BytePos::from(lno), filename)), ()),
 }
 
 CommaedMatchPatterns: Vec<MatchPattern> = {
