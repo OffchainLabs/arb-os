@@ -1354,32 +1354,44 @@ pub enum StatementKind {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MatchPattern<T = ()> {
     pub(crate) kind: MatchPatternKind<MatchPattern<T>>,
+    pub(crate) debug_info: DebugInfo,
     pub(crate) cached: T,
 }
 
 ///Either a single identifier or a tuple of identifiers, used in mini let bindings.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MatchPatternKind<T> {
-    Simple(StringId),
+    Bind(StringId),
+    Assign(StringId),
     Tuple(Vec<T>),
 }
 
 impl<T> MatchPattern<T> {
-    pub fn new_simple(id: StringId, cached: T) -> Self {
+    pub fn new_bind(id: StringId, debug_info: DebugInfo, cached: T) -> Self {
         Self {
-            kind: MatchPatternKind::Simple(id),
+            kind: MatchPatternKind::Bind(id),
+            debug_info,
             cached,
         }
     }
-    pub fn new_tuple(id: Vec<MatchPattern<T>>, cached: T) -> Self {
+    pub fn new_assign(id: StringId, debug_info: DebugInfo, cached: T) -> Self {
+        Self {
+            kind: MatchPatternKind::Assign(id),
+            debug_info,
+            cached,
+        }
+    }
+    pub fn new_tuple(id: Vec<MatchPattern<T>>, debug_info: DebugInfo, cached: T) -> Self {
         Self {
             kind: MatchPatternKind::Tuple(id),
+            debug_info,
             cached,
         }
     }
-    pub fn collect_identifiers(&self) -> Vec<StringId> {
+    pub fn collect_identifiers(&self) -> Vec<(StringId, bool, DebugInfo)> {
         match &self.kind {
-            MatchPatternKind::Simple(id) => vec![*id],
+            MatchPatternKind::Bind(id) => vec![(*id, false, self.debug_info)],
+            MatchPatternKind::Assign(id) => vec![(*id, true, self.debug_info)],
             MatchPatternKind::Tuple(pats) => pats
                 .iter()
                 .flat_map(|pat| pat.collect_identifiers())

@@ -8,8 +8,8 @@ use std::bytearray::ByteArray;
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsForall;
 
-use accounts::getGlobalAccountStore;
-use accounts::setGlobalAccountStore;
+use accounts::safeGetGlobalAccountStore;
+use accounts::safeSetGlobalAccountStore;
 use accounts::accountStore_get;
 use accounts::accountStore_addToEscrowUpToMax;
 use accounts::accountStore_payFullyFromEscrow;
@@ -664,7 +664,7 @@ public impure func gasAccounting_prepareTx(tx: TxRequestData) -> (
 
     return xif ((tx.incomingRequest.sender != address(0)) && feesEnabled() && (! tx.incomingRequest.adminMode)) {
         if let Some(txSeqNum) = tx.seqNum {
-            let expectedSeqNum = account_getNextSeqNum(accountStore_get(getGlobalAccountStore(), tx.caller));
+            let expectedSeqNum = account_getNextSeqNum(accountStore_get(safeGetGlobalAccountStore(), tx.caller));
 
             // don't charge the user if sequence number is wrong
             if (txSeqNum < expectedSeqNum) {
@@ -694,7 +694,7 @@ public impure func gasAccounting_prepareTx(tx: TxRequestData) -> (
             }
             if (gep.ignoreMaxGas) {
                 tx = tx with {
-                    maxGas: account_getEthBalance(accountStore_get(getGlobalAccountStore(), tx.gasPayer)) / gasAccountingInfo.currentPrices.perArbGasTotal
+                    maxGas: account_getEthBalance(accountStore_get(safeGetGlobalAccountStore(), tx.gasPayer)) / gasAccountingInfo.currentPrices.perArbGasTotal
                 };
             }
             gep.computeGasLimit
@@ -760,7 +760,7 @@ public impure func gasAccounting_prepareTx(tx: TxRequestData) -> (
 
         xif (tx.incomingRequest.kind == const::L1MessageType_L2ForGasEstimation) {
             let gasPrice = gasAccountingInfo.currentPrices.perArbGasTotal;
-            let gasPayerFunds = account_getEthBalance(accountStore_get(getGlobalAccountStore(), tx.gasPayer));
+            let gasPayerFunds = account_getEthBalance(accountStore_get(safeGetGlobalAccountStore(), tx.gasPayer));
             xif (tx.value >= gasPayerFunds) {
                 (const::TxResultCode_insufficientBalance, tx)
             } else {
@@ -876,19 +876,19 @@ impure func payForTxAndL1Gas(
                 payer,
                 aggregator,
                 basePriceTx,
-                calldataUnits * basePriceCalldataUnit,
+                safeMul(calldataUnits, basePriceCalldataUnit),
                 feeStats,
-                paymentLimitWei - totalWeiPaid,
+                safeSub(paymentLimitWei, totalWeiPaid),
                 feeStats.noFeeGasEstimationMode,
             );
             feeStats = ufs with {
                price: ufs.price with {
-                   tx: basePriceTx + ufs.price.tx
+                   tx: safeAdd(basePriceTx, ufs.price.tx)
                } with {
-                   calldataUnit: basePriceCalldataUnit + ufs.price.calldataUnit
+                   calldataUnit: safeAdd(basePriceCalldataUnit, ufs.price.calldataUnit)
                }
             };
-            totalWeiPaid = totalWeiPaid + weiPaid;
+            totalWeiPaid = safeAdd(totalWeiPaid, weiPaid);
             fullyPaid
         }) {
             return (false, feeStats, totalWeiPaid);
@@ -915,7 +915,7 @@ impure func tryToPayForL1Gas(
         false
     };
 
-    let acctStore = getGlobalAccountStore();
+    let acctStore = safeGetGlobalAccountStore();
     let payerAcct = accountStore_get(acctStore, payer);
     if ((account_getEthBalance(payerAcct) < totalDue) && !dontActuallyPay){
         totalDue = account_getEthBalance(payerAcct);
@@ -934,7 +934,7 @@ impure func tryToPayForL1Gas(
         recipient,
         xif (dontActuallyPay) { 0 } else { totalDue }
     ) {
-        setGlobalAccountStore(uAcctStore);
+        safeSetGlobalAccountStore(uAcctStore);
         (
             fullyPaid,
             feeStats with {
