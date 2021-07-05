@@ -2608,6 +2608,78 @@ fn typecheck_expr(
                     ))
                 }
             }
+            ExprKind::WeakCast(expr, t) => {
+                let tc_expr = typecheck_expr(
+                    expr,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    undefinable_ids,
+                    scopes,
+                )?;
+                if t.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
+                    Ok(TypeCheckedExprKind::Cast(Box::new(tc_expr), t.clone()))
+                } else {
+                    Err(CompileError::new_type_error(
+                        format!(
+                            "Cannot weak cast from type {} to type {}",
+                            tc_expr.get_type().display(),
+                            t.display()
+                        ),
+                        debug_info.location.into_iter().collect(),
+                    ))
+                }
+            }
+            ExprKind::Cast(expr, t) => {
+                let tc_expr = typecheck_expr(
+                    expr,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    undefinable_ids,
+                    scopes,
+                )?;
+                if t.castable(&tc_expr.get_type(), type_tree, HashSet::new()) {
+                    Ok(TypeCheckedExprKind::Cast(Box::new(tc_expr), t.clone()))
+                } else {
+                    Err(CompileError::new_type_error(
+                        format!(
+                            "Cannot cast from type {} to type {}",
+                            tc_expr.get_type().display(),
+                            t.display()
+                        ),
+                        debug_info.location.into_iter().collect(),
+                    ))
+                }
+            }
+            ExprKind::CovariantCast(expr, t) => {
+                let tc_expr = typecheck_expr(
+                    expr,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    undefinable_ids,
+                    scopes,
+                )?;
+                if t.covariant_castable(&tc_expr.get_type(), type_tree, HashSet::new()) {
+                    Ok(TypeCheckedExprKind::Cast(Box::new(tc_expr), t.clone()))
+                } else {
+                    Err(CompileError::new_type_error(
+                        format!(
+                            "Cannot covariant cast from type {} to type {}",
+                            tc_expr.get_type().display(),
+                            t.display()
+                        ),
+                        debug_info.location.into_iter().collect(),
+                    ))
+                }
+            }
             ExprKind::UnsafeCast(expr, t) => Ok(TypeCheckedExprKind::Cast(
                 Box::new(typecheck_expr(
                     expr,
