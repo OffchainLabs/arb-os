@@ -96,7 +96,7 @@ struct Module {
 }
 
 ///Represents the contents of a source file after type checking is done.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct TypeCheckedModule {
     /// List of functions defined locally within the source file that have been validated by
     /// typechecking

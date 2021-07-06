@@ -776,14 +776,14 @@ impl TypeCheckedFunc {
 }
 
 ///A mini statement that has been type checked.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TypeCheckedStatement {
     pub kind: TypeCheckedStatementKind,
     pub debug_info: DebugInfo,
 }
 
 ///A mini statement that has been type checked.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TypeCheckedStatementKind {
     ReturnVoid(),
     Return(TypeCheckedExpr),
@@ -873,14 +873,14 @@ impl TypeCheckedMatchPattern {
 }
 
 ///A mini expression with associated `DebugInfo` that has been type checked.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TypeCheckedExpr {
     pub kind: TypeCheckedExprKind,
     pub debug_info: DebugInfo,
 }
 
 ///A mini expression that has been type checked.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TypeCheckedExprKind {
     NewBuffer,
     UnaryOp(UnaryOp, Box<TypeCheckedExpr>, Type),
@@ -3634,7 +3634,7 @@ fn typecheck_binary_op_const(
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TypeCheckedCodeBlock {
     pub body: Vec<TypeCheckedStatement>,
     pub ret_expr: Option<Box<TypeCheckedExpr>>,
