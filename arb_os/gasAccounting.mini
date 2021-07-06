@@ -199,7 +199,7 @@ public impure func getGasAccountingParams() -> (uint, uint, uint) {
     );
 }
 
-impure func feesEnabled() -> bool {
+public impure func feesEnabled() -> bool {
     return chainParams_getOrDie(const::Atom_Param_FeesEnabled) != 0;
 }
 
