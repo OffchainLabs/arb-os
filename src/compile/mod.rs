@@ -244,7 +244,7 @@ impl TypeCheckedModule {
         let mut s = String::new();
         let _ = writeln!(s, "{}", self.name);
         for func in &mut self.checked_funcs {
-            let _ = writeln!(s, "  function: {}", func.name);
+            let _ = writeln!(s, "  {}", func.display_string());
             for statement in &mut func.code {
                 let _ = writeln!(
                     s,

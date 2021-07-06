@@ -48,9 +48,7 @@ pub trait AbstractSyntaxTree {
         }
     }
     fn is_pure(&mut self) -> bool;
-    fn display_string(&self) -> String; /*{
-                                            unimplemented!()
-                                        }*/
+    fn display_string(&self) -> String;
 }
 
 ///Represents a mutable reference to any AST node.
@@ -181,7 +179,7 @@ impl AbstractSyntaxTree for TypeCheckedFunc {
         self.code.iter_mut().all(|statement| statement.is_pure())
     }
     fn display_string(&self) -> String {
-        unimplemented!()
+        format!("function: {}", self.name)
     }
 }
 
@@ -1108,10 +1106,6 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             TypeCheckedExprKind::If(_, _, _, _) => format!("if"),
             TypeCheckedExprKind::IfLet(_, _, _, _, _) => format!("if let"),
             TypeCheckedExprKind::Loop(_) => format!("loop"),
-            other => {
-                println!("{:?}", other);
-                unimplemented!()
-            }
         }
     }
 }
@@ -3692,7 +3686,7 @@ impl AbstractSyntaxTree for TypeCheckedCodeBlock {
                 .unwrap_or(true)
     }
     fn display_string(&self) -> String {
-        unimplemented!()
+        format!("codeblock")
     }
 }
 

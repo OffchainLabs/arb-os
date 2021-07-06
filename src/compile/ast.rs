@@ -137,7 +137,7 @@ impl AbstractSyntaxTree for Type {
         true
     }
     fn display_string(&self) -> String {
-        unimplemented!()
+        self.display()
     }
 }
 
@@ -1237,6 +1237,7 @@ impl UnaryOp {
         format!(
             "{}",
             match self {
+                UnaryOp::Minus => "unary minus",
                 UnaryOp::BitwiseNeg => "~",
                 UnaryOp::Not => "!",
                 UnaryOp::Hash => "hash 1 item",
@@ -1245,10 +1246,6 @@ impl UnaryOp {
                 UnaryOp::ToInt => "int cast",
                 UnaryOp::ToBytes32 => "bytes32 cast",
                 UnaryOp::ToAddress => "address cast",
-                other => {
-                    println!("{:?}", other);
-                    unimplemented!()
-                }
             }
         )
     }
@@ -1297,6 +1294,8 @@ impl BinaryOp {
                 BinaryOp::Times => "*",
                 BinaryOp::Div => "/",
                 BinaryOp::Mod => "%",
+                BinaryOp::Sdiv => unimplemented!(),
+                BinaryOp::Smod => unimplemented!(),
                 BinaryOp::LessThan => "<",
                 BinaryOp::GreaterThan => ">",
                 BinaryOp::LessEq => "<=",
@@ -1310,14 +1309,14 @@ impl BinaryOp {
                 BinaryOp::BitwiseAnd => "&",
                 BinaryOp::BitwiseOr => "|",
                 BinaryOp::BitwiseXor => "^",
+                BinaryOp::ShiftLeft => unimplemented!(),
+                BinaryOp::ShiftRight => unimplemented!(),
+                BinaryOp::_LogicalAnd => unimplemented!(),
+                BinaryOp::LogicalOr => unimplemented!(),
                 BinaryOp::Hash => "hash 2 items",
                 BinaryOp::GetBuffer8 => "get buffer 8",
                 BinaryOp::GetBuffer64 => "get buffer 64",
                 BinaryOp::GetBuffer256 => "get buffer 256",
-                other => {
-                    println!("{:?}", other);
-                    unimplemented!()
-                }
             }
         )
     }
