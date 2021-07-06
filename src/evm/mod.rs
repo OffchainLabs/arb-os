@@ -635,6 +635,11 @@ pub fn evm_test_create(
     Ok(true)
 }
 
+#[test]
+fn test_xcontract_call_using_batch() {
+    assert!(evm_xcontract_call_using_batch(None, false, false).is_ok());
+}
+
 pub fn evm_xcontract_call_using_batch(
     log_to: Option<&Path>,
     debug: bool,
