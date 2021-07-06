@@ -239,6 +239,15 @@ impl TypeCheckedModule {
             )
         }
     }
+    fn show_ast(&mut self) {
+        println!("{}", self.name);
+        for func in &mut self.checked_funcs {
+            println!("  function: {}", func.name);
+            for statement in &mut func.code {
+                display_indented(&mut TypeCheckedNode::Statement(statement))
+            }
+        }
+    }
 }
 
 ///Represents a mini program or module that has been compiled and possibly linked, but has not had
@@ -482,13 +491,7 @@ pub fn compile_from_folder(
     let mut typechecked_modules = typecheck_programs(&type_tree, modules, file_info_chart)?;
 
     for module in &mut typechecked_modules {
-        println!("{}", module.name);
-        for func in &mut module.checked_funcs {
-            println!("  function: {}", func.name);
-            for statement in &mut func.code {
-                display_indented(&mut TypeCheckedNode::Statement(statement))
-            }
-        }
+        module.show_ast();
     }
 
     // Control flow analysis stage

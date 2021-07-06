@@ -98,7 +98,8 @@ fn disp(node: &mut TypeCheckedNode, _state: &(), mut_state: &mut usize) -> bool 
 }
 
 pub fn display_indented(node: &mut TypeCheckedNode) {
-    node.recursive_apply(disp, &(), &mut 2)
+    println!("    {}", node.display_string());
+    node.recursive_apply(disp, &(), &mut 3)
 }
 
 impl<'a> TypeCheckedNode<'a> {
