@@ -492,7 +492,9 @@ pub fn compile_from_folder(
     let mut typechecked_modules = typecheck_programs(&type_tree, modules, file_info_chart)?;
 
     for module in &mut typechecked_modules {
+        println!("{}", module.name);
         for func in &mut module.checked_funcs {
+            println!("  {}", func.name);
             for statement in &mut func.code {
                 display_indented(&mut TypeCheckedNode::Statement(statement))
             }
