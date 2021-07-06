@@ -24,6 +24,7 @@ use std::io::{self, Read};
 use std::path::Path;
 use typecheck::TypeCheckedFunc;
 
+use crate::compile::typecheck::display_indented;
 pub use ast::{DebugInfo, GlobalVarDecl, StructField, TopLevelDecl, Type, TypeTree};
 pub use source::Lines;
 use std::str::FromStr;
@@ -489,6 +490,14 @@ pub fn compile_from_folder(
         out
     });
     let mut typechecked_modules = typecheck_programs(&type_tree, modules, file_info_chart)?;
+
+    for module in &mut typechecked_modules {
+        for func in &mut module.checked_funcs {
+            for statement in &mut func.code {
+                display_indented(&mut TypeCheckedNode::Statement(statement))
+            }
+        }
+    }
 
     // Control flow analysis stage
     typechecked_modules

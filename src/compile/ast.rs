@@ -136,6 +136,9 @@ impl AbstractSyntaxTree for Type {
     fn is_pure(&mut self) -> bool {
         true
     }
+    fn display_string(&self) -> String {
+        unimplemented!()
+    }
 }
 
 impl Type {
@@ -1229,6 +1232,28 @@ pub enum UnaryOp {
     ToAddress,
 }
 
+impl UnaryOp {
+    pub fn to_name(&self) -> String {
+        format!(
+            "{}",
+            match self {
+                UnaryOp::BitwiseNeg => "~",
+                UnaryOp::Not => "!",
+                UnaryOp::Hash => "hash 1 item",
+                UnaryOp::Len => "len",
+                UnaryOp::ToUint => "uint cast",
+                UnaryOp::ToInt => "int cast",
+                UnaryOp::ToBytes32 => "bytes32 cast",
+                UnaryOp::ToAddress => "address cast",
+                other => {
+                    println!("{:?}", other);
+                    unimplemented!()
+                }
+            }
+        )
+    }
+}
+
 ///A mini binary operator.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum BinaryOp {
@@ -1262,11 +1287,60 @@ pub enum BinaryOp {
     GetBuffer256,
 }
 
+impl BinaryOp {
+    pub fn to_name(&self) -> String {
+        format!(
+            "{}",
+            match self {
+                BinaryOp::Plus => "+",
+                BinaryOp::Minus => "-",
+                BinaryOp::Times => "*",
+                BinaryOp::Div => "/",
+                BinaryOp::Mod => "%",
+                BinaryOp::LessThan => "<",
+                BinaryOp::GreaterThan => ">",
+                BinaryOp::LessEq => "<=",
+                BinaryOp::GreaterEq => ">=",
+                BinaryOp::SLessThan => "< signed",
+                BinaryOp::SGreaterThan => "> signed",
+                BinaryOp::SLessEq => "<= signed",
+                BinaryOp::SGreaterEq => ">= signed",
+                BinaryOp::Equal => "==",
+                BinaryOp::NotEqual => "!=",
+                BinaryOp::BitwiseAnd => "&",
+                BinaryOp::BitwiseOr => "|",
+                BinaryOp::BitwiseXor => "^",
+                BinaryOp::Hash => "hash 2 items",
+                BinaryOp::GetBuffer8 => "get buffer 8",
+                BinaryOp::GetBuffer64 => "get buffer 64",
+                BinaryOp::GetBuffer256 => "get buffer 256",
+                other => {
+                    println!("{:?}", other);
+                    unimplemented!()
+                }
+            }
+        )
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TrinaryOp {
     SetBuffer8,
     SetBuffer64,
     SetBuffer256,
+}
+
+impl TrinaryOp {
+    pub fn to_name(&self) -> String {
+        format!(
+            "{}",
+            match self {
+                TrinaryOp::SetBuffer8 => "set buffer 8",
+                TrinaryOp::SetBuffer64 => "set buffer 64",
+                TrinaryOp::SetBuffer256 => "set buffer 256",
+            }
+        )
+    }
 }
 
 ///Used in StructInitializer expressions to map expressions to fields of the struct.

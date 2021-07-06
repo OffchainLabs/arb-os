@@ -45,6 +45,9 @@ pub trait AbstractSyntaxTree {
         }
     }
     fn is_pure(&mut self) -> bool;
+    fn display_string(&self) -> String; /*{
+                                            unimplemented!()
+                                        }*/
 }
 
 ///Represents a mutable reference to any AST node.
@@ -75,6 +78,23 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
             TypeCheckedNode::Type(_) => true,
         }
     }
+    fn display_string(&self) -> String {
+        match self {
+            TypeCheckedNode::Statement(stat) => stat.display_string(),
+            TypeCheckedNode::Expression(exp) => exp.display_string(),
+            TypeCheckedNode::StructField(field) => field.display_string(),
+            TypeCheckedNode::Type(tipe) => tipe.display_string(),
+        }
+    }
+}
+
+fn disp(node: &mut TypeCheckedNode, state: &(), mut_state: &mut ()) -> bool {
+    println!("{}", node.display_string());
+    true
+}
+
+pub fn display_indented(node: &mut TypeCheckedNode) {
+    node.recursive_apply(disp, &(), &mut ())
 }
 
 impl<'a> TypeCheckedNode<'a> {
@@ -145,6 +165,9 @@ impl AbstractSyntaxTree for TypeCheckedFunc {
     }
     fn is_pure(&mut self) -> bool {
         self.code.iter_mut().all(|statement| statement.is_pure())
+    }
+    fn display_string(&self) -> String {
+        unimplemented!()
     }
 }
 
@@ -811,6 +834,24 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
             self.child_nodes().iter_mut().all(|node| node.is_pure())
         }
     }
+    fn display_string(&self) -> String {
+        format!(
+            "{}",
+            match self.kind {
+                TypeCheckedStatementKind::ReturnVoid() => "return void",
+                TypeCheckedStatementKind::Return(_) => "return",
+                TypeCheckedStatementKind::Break(_, _) => "break",
+                TypeCheckedStatementKind::Expression(_) => "expression statement",
+                TypeCheckedStatementKind::Let(_, _) => "let",
+                TypeCheckedStatementKind::While(_, _) => "while",
+                TypeCheckedStatementKind::AssignLocal(_, _) => "=",
+                TypeCheckedStatementKind::AssignGlobal(_, _) => "global =",
+                TypeCheckedStatementKind::Asm(_, _) => "asm statement",
+                TypeCheckedStatementKind::DebugPrint(_) => "print",
+                TypeCheckedStatementKind::Assert(_) => "assert",
+            }
+        )
+    }
 }
 
 pub type TypeCheckedMatchPattern = MatchPattern<Type>;
@@ -1007,6 +1048,58 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             self.child_nodes().iter_mut().all(|node| node.is_pure())
         }
     }
+    fn display_string(&self) -> String {
+        match &self.kind {
+            TypeCheckedExprKind::NewBuffer => format!("new buffer"),
+            TypeCheckedExprKind::UnaryOp(op, _, _) => format!("{}", op.to_name()),
+            TypeCheckedExprKind::Binary(op, _, _, _) => format!("{}", op.to_name()),
+            TypeCheckedExprKind::Trinary(op, _, _, _, _) => format!("{}", op.to_name()),
+            TypeCheckedExprKind::ShortcutOr(_, _) => format!("shortcut or"),
+            TypeCheckedExprKind::ShortcutAnd(_, _) => format!("shortcut and"),
+            TypeCheckedExprKind::LocalVariableRef(id, _) => format!("variable ref at id {}", id),
+            TypeCheckedExprKind::GlobalVariableRef(id, _) => {
+                format!("global variable ref at id {}", id)
+            }
+            TypeCheckedExprKind::Variant(_) => format!("Some"),
+            TypeCheckedExprKind::FuncRef(i, _) => format!("func ref to {}", i),
+            TypeCheckedExprKind::TupleRef(_, i, _) => {
+                format!("tuple ref field {}", i.add(&Uint256::one()))
+            }
+            TypeCheckedExprKind::DotRef(_, i, j, _) => {
+                format!("dot ref to var {} field {}", i, j + 1)
+            }
+            TypeCheckedExprKind::Const(a, _) => format!("{}", a),
+            TypeCheckedExprKind::FunctionCall(_, _, _, _) => format!("Function call"),
+            TypeCheckedExprKind::CodeBlock(_) => format!("codeblock"),
+            TypeCheckedExprKind::StructInitializer(_, _) => format!("struct initializer"),
+            TypeCheckedExprKind::ArrayRef(_, _, _) => format!("array ref"),
+            TypeCheckedExprKind::FixedArrayRef(_, _, len, _) => {
+                format!("fixed array ref size {}", len)
+            }
+            TypeCheckedExprKind::MapRef(_, _, _) => format!("map ref"),
+            TypeCheckedExprKind::Tuple(_, _) => format!("tuple of"),
+            TypeCheckedExprKind::NewArray(_, _, _) => format!("new array"),
+            TypeCheckedExprKind::NewFixedArray(len, _, _) => format!("new array length {}", len),
+            TypeCheckedExprKind::NewMap(_) => format!("new map"),
+            TypeCheckedExprKind::ArrayMod(_, _, _, _) => format!("array mod"),
+            TypeCheckedExprKind::FixedArrayMod(_, _, _, index, _) => {
+                format!("fixed array mod at {}", index)
+            }
+            TypeCheckedExprKind::MapMod(_, _, _, _) => format!("map mod"),
+            TypeCheckedExprKind::StructMod(_, index, _, _) => format!("struct mod at {}", index),
+            TypeCheckedExprKind::Cast(_, tipe) => format!("Cast to {}", tipe.display()),
+            TypeCheckedExprKind::Asm(_, _, _) => format!("asm"),
+            TypeCheckedExprKind::Panic => format!("panic"),
+            TypeCheckedExprKind::Try(_, _) => format!("?"),
+            TypeCheckedExprKind::If(_, _, _, _) => format!("if"),
+            TypeCheckedExprKind::IfLet(_, _, _, _, _) => format!("if let"),
+            TypeCheckedExprKind::Loop(_) => format!("loop"),
+            other => {
+                println!("{:?}", other);
+                unimplemented!()
+            }
+        }
+    }
 }
 
 impl TypeCheckedExpr {
@@ -1060,6 +1153,9 @@ impl AbstractSyntaxTree for TypeCheckedFieldInitializer {
     }
     fn is_pure(&mut self) -> bool {
         self.value.is_pure()
+    }
+    fn display_string(&self) -> String {
+        self.value.display_string()
     }
 }
 
@@ -3580,6 +3676,9 @@ impl AbstractSyntaxTree for TypeCheckedCodeBlock {
                 .as_mut()
                 .map(|expr| expr.is_pure())
                 .unwrap_or(true)
+    }
+    fn display_string(&self) -> String {
+        unimplemented!()
     }
 }
 
