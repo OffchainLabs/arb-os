@@ -445,16 +445,6 @@ pub fn compile_from_file(
     }
 }
 
-///Prints the AST nodes with indentation representing their depth, currently not used.
-fn _print_node(node: &mut TypeCheckedNode, state: &String, mut_state: &mut usize) -> bool {
-    for _ in 0..*mut_state {
-        print!("{}", state);
-    }
-    println!("{:?}", node);
-    *mut_state += 1;
-    true
-}
-
 ///Compiles a `Vec<CompiledProgram>` from a folder or generates a `CompileError` if a problem is
 ///encountered during compilation.
 ///
@@ -494,7 +484,7 @@ pub fn compile_from_folder(
     for module in &mut typechecked_modules {
         println!("{}", module.name);
         for func in &mut module.checked_funcs {
-            println!("  {}", func.name);
+            println!("  function: {}", func.name);
             for statement in &mut func.code {
                 display_indented(&mut TypeCheckedNode::Statement(statement))
             }
