@@ -4,6 +4,7 @@
 
 //! Contains utilities for compiling mini source code.
 
+use crate::compile::typecheck::display_indented;
 use crate::link::{link, postlink_compile, ExportedFunc, Import, ImportedFunc, LinkedProgram};
 use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
@@ -17,17 +18,17 @@ use miniconstants::init_constant_table;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
 use std::path::Path;
+use std::str::FromStr;
 use typecheck::TypeCheckedFunc;
 
-use crate::compile::typecheck::display_indented;
 pub use ast::{DebugInfo, GlobalVarDecl, StructField, TopLevelDecl, Type, TypeTree};
 pub use source::Lines;
-use std::str::FromStr;
 pub use typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNode};
 
 mod ast;
@@ -239,14 +240,20 @@ impl TypeCheckedModule {
             )
         }
     }
-    fn show_ast(&mut self) {
-        println!("{}", self.name);
+    fn show_ast(&mut self) -> String {
+        let mut s = String::new();
+        let _ = writeln!(s, "{}", self.name);
         for func in &mut self.checked_funcs {
-            println!("  function: {}", func.name);
+            let _ = writeln!(s, "  function: {}", func.name);
             for statement in &mut func.code {
-                display_indented(&mut TypeCheckedNode::Statement(statement))
+                let _ = writeln!(
+                    s,
+                    "{}",
+                    display_indented(&mut TypeCheckedNode::Statement(statement))
+                );
             }
         }
+        s
     }
 }
 
@@ -491,7 +498,7 @@ pub fn compile_from_folder(
     let mut typechecked_modules = typecheck_programs(&type_tree, modules, file_info_chart)?;
 
     for module in &mut typechecked_modules {
-        module.show_ast();
+        println!("{}", module.show_ast());
     }
 
     // Control flow analysis stage

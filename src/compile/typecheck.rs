@@ -17,7 +17,10 @@ use crate::pos::{Column, Location};
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::fmt::Write;
+use std::rc::Rc;
 
 type TypeTable = HashMap<usize, Type>;
 
@@ -88,18 +91,24 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
     }
 }
 
-fn disp(node: &mut TypeCheckedNode, _state: &(), mut_state: &mut usize) -> bool {
-    for _ in 0..*mut_state {
-        print!("  ");
+fn disp(
+    node: &mut TypeCheckedNode,
+    _state: &(),
+    mut_state: &mut (usize, Rc<RefCell<String>>),
+) -> bool {
+    for _ in 0..mut_state.0 {
+        let _ = write!(*mut_state.1.borrow_mut(), "  ");
     }
-    println!("{}", node.display_string());
-    *mut_state += 1;
+    let _ = writeln!(*mut_state.1.borrow_mut(), "{}", node.display_string());
+    mut_state.0 += 1;
     true
 }
 
-pub fn display_indented(node: &mut TypeCheckedNode) {
-    println!("    {}", node.display_string());
-    node.recursive_apply(disp, &(), &mut 3)
+pub fn display_indented(node: &mut TypeCheckedNode) -> String {
+    let mut r = (3, Rc::new(RefCell::new(String::new())));
+    let _ = writeln!(*r.1.borrow_mut(), "    {}", node.display_string());
+    node.recursive_apply(disp, &(), &mut r);
+    r.1.take()
 }
 
 impl<'a> TypeCheckedNode<'a> {
