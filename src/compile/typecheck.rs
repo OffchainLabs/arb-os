@@ -88,13 +88,17 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
     }
 }
 
-fn disp(node: &mut TypeCheckedNode, state: &(), mut_state: &mut ()) -> bool {
+fn disp(node: &mut TypeCheckedNode, _state: &(), mut_state: &mut usize) -> bool {
+    for _ in 0..*mut_state {
+        print!("  ");
+    }
     println!("{}", node.display_string());
+    *mut_state += 1;
     true
 }
 
 pub fn display_indented(node: &mut TypeCheckedNode) {
-    node.recursive_apply(disp, &(), &mut ())
+    node.recursive_apply(disp, &(), &mut 1)
 }
 
 impl<'a> TypeCheckedNode<'a> {
