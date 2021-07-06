@@ -138,6 +138,9 @@ test:
 coverage: alltests.cov
 
 alltests.cov: compiler contracts
+	rm coverage/test_upgrade_arbos_to_different_version.cov
+	rm coverage/small_upgrade_auto_remap.cov
+	rm coverage/small_upgrade.cov
 	cat coverage/*.cov | sort -r | uniq | sort | uniq -f 1 | sort -k2,2 -k3,3n | grep -v test | grep -v Test > coverage/alltests.cov
 	./coverage/mini-coverage.sh ./coverage/alltests.cov > lcov-mini.info
 
