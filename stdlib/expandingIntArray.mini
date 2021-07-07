@@ -2,7 +2,6 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-use std::bytearray::OpClosureFunc;
 use std::bytearray::opClosure;
 
 type ExpandingIntArray = struct {
@@ -129,7 +128,6 @@ public func expandingIntArray_op(
     while (index >= arr.size) {
         arr = expandingIntArray_grow(arr);
     }
-    let chunk = arr.chunk;
 
     let (tree, retVal) = ear_op2(arr.contents, arr.chunk, index, closure);
     return (

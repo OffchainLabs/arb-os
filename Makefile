@@ -20,9 +20,9 @@ ARBOSCONTRACTS = $(ACBUILDDIR)/ArbAddressTable.sol/ArbAddressTable.json $(ACBUIL
 
 COMPILEFLAGS = -c "arb_os/constants.json" -i "none"
 COMPILEFLAGSNOINLINE = -c "arb_os/constants.json"
+EXTRACOMPILEFLAGSFORARBOS = -m
 
-
-all: $(ARBOSCONTRACTS) $(TESTFILES) $(TESTCONTRACTS) $(TEMPLATES) $(UPGRADEFILES) arbos upgrade test
+all: $(ARBOSCONTRACTS) $(TESTFILES) $(TESTCONTRACTS) $(TEMPLATES) $(UPGRADEFILES) arbos upgrade paramslist test
 arbos: $(ARBOSDIR)/arbos.mexe
 upgrade: $(ARBOSDIR)/upgrade.json
 contracts: $(TESTCONTRACTS) $(ARBOSCONTRACTS)
@@ -103,11 +103,11 @@ $(UPGRADETESTDIR)/upgrade2_new.mexe: compiler $(UPGRADETESTDIR)/upgrade2_old.mex
 
 $(ARBOSDIR)/arbos-upgrade.mexe: compiler $(TESTCONTRACTS) $(ARBOSDIR) $(STDDIR) $(BUILTINDIR) $(TEMPLATES) src/compile/miniconstants.rs
 	cp $(ARBOSDIR)/dummy_version_bridge.mini $(ARBOSDIR)/bridge_arbos_versions.mini
-	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe" $(COMPILEFLAGS)
+	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe" $(COMPILEFLAGS) $(EXTRACOMPILEFLAGSFORARBOS)
 	$(CARGORUN) gen-upgrade-code $(ARBOSDIR)/arbos_before.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/bridge_arbos_versions.mini customize_arbos_bridge_versions $(ARBOSDIR)/upgrade.toml
-	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe" $(COMPILEFLAGS)
+	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe" $(COMPILEFLAGS) $(EXTRACOMPILEFLAGSFORARBOS)
 	$(CARGORUN) gen-upgrade-code $(ARBOSDIR)/arbos_before.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/bridge_arbos_versions.mini customize_arbos_bridge_versions $(ARBOSDIR)/upgrade.toml
-	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe" $(COMPILEFLAGS)
+	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe" $(COMPILEFLAGS) $(EXTRACOMPILEFLAGSFORARBOS)
 	cp $(ARBOSDIR)/bridge_arbos_versions.mini $(ARBOSDIR)/save_bridge_for_debugging.mini
 	cp $(ARBOSDIR)/dummy_version_bridge.mini $(ARBOSDIR)/bridge_arbos_versions.mini
 
@@ -118,13 +118,18 @@ $(BUILTINDIR)/maptest.mexe: compiler $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
 	$(CARGORUN) compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe $(COMPILEFLAGS) -t
 
 $(ARBOSDIR)/arbos.mexe: compiler $(TESTCONTRACTS) $(ARBOSDIR) $(STDDIR) $(BUILTINDIR) $(TEMPLATES) src/compile/miniconstants.rs
-	$(CARGORUN) compile "arb_os" -o "arb_os/arbos.mexe" $(COMPILEFLAGS)
+	$(CARGORUN) compile "arb_os" -o "arb_os/arbos.mexe" $(COMPILEFLAGS) $(EXTRACOMPILEFLAGSFORARBOS)
 
 $(TESTCONTRACTSPURE): $(TCSRCDIR)
 	(cd contracts; yarn install; yarn build)
 
 $(ARBOSCONTRACTS): $(ACSRCDIR)
 	(cd contracts; yarn install; yarn build)
+
+paramslist: parameters.json
+
+parameters.json: compiler $(ARBOSDIR)/constants.json
+	$(CARGORUN) make-parameters-list -c $(ARBOSDIR)/constants.json >parameters.json
 
 compiler:
 	cargo build --release
@@ -134,6 +139,8 @@ run: compiler
 
 test:
 	cargo test --release 
+
+evmtest: compiler $(ARBOS)
 
 evmtest: $(ARBOS)
 	$(CARGORUN) evm-tests
@@ -148,11 +155,14 @@ testlogs: compiler $(TEMPLATES) $(ARBOS)
 	mkdir testlogs
 	$(CARGORUN) make-test-logs >/dev/null
 
-evmdebug: all
+evmdebug: compiler all
 	$(CARGORUN) evm-debug
 
 benchmark: compiler $(TEMPLATES) $(ARBOS)
 	$(CARGORUN) make-benchmarks
+
+./target/release/mini: src/* src/*/*
+	cargo build --release
 
 clean:
 	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe $(UPGRADETESTDIR)/*.mexe $(ARBOSDIR)/arbos.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/upgrade.json minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini

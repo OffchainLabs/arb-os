@@ -2,20 +2,13 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-use accounts::Account;
-use evmCallStack::EvmCallFrame;
-use evmlogs::EvmLogs;
 use std::avmcodebuilder::AvmCodePoint;
 use std::bytearray::ByteArray;
-use std::bytestream::ByteStream;
-use std::bytearray::MarshalledBytes;
 use std::stack::Stack;
-use std::storageMap::StorageMap;
 
 use blockhash::blockhash_getForBlock;
 
 use chainParameters::chainParams_chainId;
-use errorHandler::errorHandler;
 
 use evmCallStack::evmCallStack_stackInfo;
 use evmCallStack::evmCallStack_topFrame;
@@ -42,10 +35,8 @@ use evmCallStack::evmCallFrame_runningCodeFromAccount;
 use evmCallStack::evmCallFrame_getAccount;
 use evmCallStack::evmCallFrame_getCaller;
 use evmCallStack::evmCallFrame_getMemory;
-use evmCallStack::evmCallFrame_getResumeCodePoint;
 use evmCallStack::evmCallFrame_getCallvalue;
 use evmCallStack::evmCallFrame_getCalldata;
-use evmCallStack::evmCallFrame_getEvmLogs;
 use evmCallStack::evmCallFrame_shouldRevertOnStorageWrite;
 
 use accounts::accountStore_createOrAddCodeRef;
@@ -69,8 +60,6 @@ use std::storageMap::storageMap_new;
 use evmCallStack::evmCallStack_currentTimestamp;
 use evmCallStack::evmCallStack_currentEthBlockNumber;
 
-use evmlogs::evmlogs_empty;
-
 use gasAccounting::getArbGasPrice;
 use gasAccounting::getCurrentBlockGasLimit;
 
@@ -79,7 +68,6 @@ use tracing::evmTracer_pushCreate2;
 
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
-use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
@@ -88,8 +76,6 @@ use std::bytearray::bytearray_copy;
 use std::bytearray::bytearray_toSizeAndBuffer;
 use std::bytestream::bytestream_new;
 
-use std::stack::stack_pop;
-use std::stack::stack_isEmpty;
 use std::stack::stack_discardDeepestItems;
 
 use codeSegment::translateEvmCodeSegment;
@@ -151,10 +137,6 @@ public impure func evmOps_init() {
         with  { [const::EvmOp_chainId] = unsafecast<impure func()>(chainParams_chainId) }
         with  { [const::EvmOp_gas] = unsafecast<impure func()>(evmOp_gas) };
 
-}
-
-public impure func getEvmOpJumpTable() -> [const::NumEvmOps]impure func() {
-    return evmOpJumpTable;
 }
 
 #[noinline, ] public impure func dispatchForEvmOp(index: uint) {
@@ -498,8 +480,8 @@ public impure func evmOp_sstore(storageAddr: uint, value: uint) {
         if (evmCallFrame_shouldRevertOnStorageWrite(topFrame)) {
             // the currently running code was given a gas amount that wouldn't allow a storage write on EVM
             // for compatibility with EVM code that uses gas limit to prevent writes, we cause out-of-gas error here
-            asm(1,) { setgas };
-            let _ = asm(1,1) uint { plus };  // will get an out-of-gas error on this instruction
+            setGas(1);
+            let _ = asm(1,1) uint { add };  // will get an out-of-gas error on this instruction
         } else {
             if let Some(_) = evmCallStack_setTopFrameStorageCell(
                 storageAddr,
@@ -525,14 +507,14 @@ public impure func evmOp_getjumpaddr(evm_pc: uint) -> impure func() {
             } else {
                 evm_error();   // EVM code tried to jump to a forbidden EVM jump destination
                 evmCallStack_callHitError(11);
-                panic;
+                error;
             }
         }
     }
 
     evm_runtimePanic(21);
     evmCallStack_callHitError(12);
-    return panic;
+    return error;
 }
 
 public impure func evmOp_msize() -> uint {
@@ -568,7 +550,7 @@ public impure func evmOp_log0(
     }
 
     evm_runtimePanic(23);
-    panic;
+    error;
 }
 
 public impure func evmOp_log1(
@@ -597,7 +579,7 @@ public impure func evmOp_log1(
     }
 
     evm_runtimePanic(24);
-    panic;
+    error;
 }
 
 public impure func evmOp_log2(
@@ -628,7 +610,7 @@ public impure func evmOp_log2(
     }
 
     evm_runtimePanic(25);
-    panic;
+    error;
 }
 
 public impure func evmOp_log3(
@@ -661,7 +643,7 @@ public impure func evmOp_log3(
     }
 
     evm_runtimePanic(26);
-    panic;
+    error;
 }
 
 public impure func evmOp_log4(
@@ -696,11 +678,11 @@ public impure func evmOp_log4(
     }
 
     evm_runtimePanic(27);
-    panic;
+    error;
 }
 
 public impure func evmOp_gas() -> uint {
-    return (asm() uint { getgas }) / const::Charging_ArbGasPerAvmGas;
+    return (getGas()) / const::Charging_ArbGasPerAvmGas;
 }
 
 #[noinline, ] public impure func evmOp_callAndReturn(
@@ -999,7 +981,7 @@ public impure func evmOp_create(value: uint, offset: uint, length: uint) -> addr
     }
 
     evm_runtimePanic(30);
-    return panic;
+    return error;
 }
 
 public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: uint) -> address {
@@ -1011,7 +993,7 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
         let myAddr = account_getAddress(myAcct);
         let newAddrBuf = bytearray_new(85);
         newAddrBuf = bytearray_setByte(newAddrBuf, 0, 0xff);
-        newAddrBuf = bytearray_set256(newAddrBuf, 1, asm(12*8, myAddr) uint { shl });
+        newAddrBuf = bytearray_set256(newAddrBuf, 1, uint(myAddr) << (12*8));
         newAddrBuf = bytearray_set256(newAddrBuf, 1+20, salt);
         newAddrBuf = bytearray_set256(
             newAddrBuf,
@@ -1033,7 +1015,7 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
     }
 
     evm_runtimePanic(31);
-    return panic;
+    return error;
 }
 
 #[noinline, ] public impure func doCreationOpcode(value: uint, constructorCode: ByteArray, newAddress: address) -> address {
@@ -1046,7 +1028,7 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
     } else {
         // somehow there isn't an EVM callframe
         evm_runtimePanic(32);
-        panic;
+        error;
     }
 
     let (startPoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(constructorCode), false);
@@ -1124,6 +1106,6 @@ impure func evm_runtimePanic(reasonCode: uint) {
     // It should only be called if something has gone wrong in the trusted code.
     // If untrusted code has encountered an error, that will be handled elsewhere.
     evmCallStack_callHitError(1000+reasonCode);
-    panic;
+    error;
 }
 

@@ -48,6 +48,8 @@ var *name* : *type* ;
 
 `[public] [impure] func` *name* ( *argname1: type1, argname2: type2, ...* ) [-> *returntype] codeblock*
 
+`[public] [impure] func` *name* ( *argname1: type1, argname2: type2, ...* ) `noreturn` codeblock*
+
 > This declares a function and provides its code.
 >
 > The `public` modifier is optional.  It indicates that the function can be called by code outside this source code file. Non-public functions cannot be called directly by outside code.  (However, pointers to non-public functions can be passed to outside code, and this would allow the pointed-to function to be called by outside code.)
@@ -59,6 +61,10 @@ var *name* : *type* ;
 > If there is a `returntype`, the function will return a single value of the specified type. (We'll see below that the type can be a tuple, allowing multiple values to be packaged together into a single return value.)
 >
 > If there is a `returntype`, the compiler must be able to infer that execution cannot reach the end of *codeblock* (so that the function terminates via a `return` statement, or the function runs forever). If the compiler is unable to verify this, it will generate an error.
+>
+> If `returntype` is `every`, then the function cannot return, because no return value can exist. The compiler will verify that the function cannot return. If the compiler is unable to verify this, it will generate an error.
+>
+> Declaring a function as `noreturn` is equivalent to declaring that the function returns `every`.  
 
 ## Types
 
@@ -122,6 +128,10 @@ Mini has the following types:
 
 > a value of unknown type
 
+`every`
+
+> a type that has no values, so that no value of this type can ever exist
+
 ## Equality and assignability for types
 
 Two types are equal if they have the same structure. Type aliases, as defined by non-import declarations, do not create a new type but simply define a shorthand method for referring to the underlying type.  (For example, after the declaration "`type foo = uint`", foo and uint are the same type.)
@@ -143,6 +153,8 @@ Two map types are equal if their key types are equal and their value types are e
 Two option types are equal if their inner types are equal
 
 `any` equals itself.
+
+`every` equals itself.
 
 Each imported type equals itself.
 
@@ -216,9 +228,17 @@ Values of type `anytype` do not have any representation that is understood by th
 
 > Create a new local variable and initialize it with the value of *expression*.  The compiler infers that the new variable has the same type as *expression* .  The variable goes out of scope when execution leaves the current codeblock.  If the new variable has the same name as an already-existing variable, it will mask the existing variable definition for as long as the new variable is in scope.
 
-`let` ( *name1* , *name2*, ... ) = *expression* ;
+`let` ( *nameorbinding1* , *nameorbinding2*, ... ) = *expression* ;
 
-> Create multiple new variables based on unpacking a tuple. *expression* must be a tuple type, with the number of fields in the tuple equal to the number of names on the left-hand side.  The compiler creates a new local variable for each name on the left-hand side, and infers the type of each new variable based on the type of the corresponding field of the right-hand side tuple.
+> Where each nameorbinding may be:
+
+*identifier*
+
+> Or
+
+**identifier*
+
+> Creates or assigns to multiple variables based on unpacking a tuple. If the *nameorbinding* is an identifier it creates a new variable, if *nameorbinding* is **identifier* it assigns to an existing variable with that name.  *expression* must be a tuple type, with the number of fields in the tuple equal to the number of names on the left-hand side.  The compiler creates a new local variable for each name on the left-hand side, and infers the type of each new variable based on the type of the corresponding field of the right-hand side tuple.
 >
 > [Potential improvement: Allow left-hand side names to be replaced by `_`, allowing unneeded components to be discarded without creating a variable.]
 >
