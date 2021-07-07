@@ -461,23 +461,15 @@ pub fn compile_from_file(
     }
 }
 
-///Compiles a `Vec<CompiledProgram>` from a folder or generates a `CompileError` if a problem is
-///encountered during compilation.
-///
-///The `folder` argument gives the path to the folder, `library` optionally contains a library
-///prefix attached to the front of all paths, `main` contains the name of the main file in the
-///folder, `file_info_chart` contains a map from the `u64` hashes of file names to the `Strings`
-///they represent, useful for formatting errors, and `inline` determines whether inlining is used
-///when compiling this folder.
-pub fn compile_from_folder(
+///Compiles up to the end of typechecking, produces the list of TypeCheckedModules in this program
+/// as well as the type tree
+fn compile_to_typecheck(
     folder: &Path,
     library: Option<&str>,
     main: &str,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    inline: &Option<InliningHeuristic>,
     constants_path: Option<&Path>,
-    release_build: bool,
-) -> Result<Vec<CompiledProgram>, CompileError> {
+) -> Result<(Vec<TypeCheckedModule>, TypeTree), CompileError> {
     let (mut programs, import_map) =
         create_program_tree(folder, library, main, file_info_chart, constants_path)?;
     resolve_imports(&mut programs, &import_map)?;
@@ -495,7 +487,31 @@ pub fn compile_from_folder(
         out.sort_by(|module1, module2| module2.name.cmp(&module1.name));
         out
     });
-    let mut typechecked_modules = typecheck_programs(&type_tree, modules, file_info_chart)?;
+    Ok((
+        typecheck_programs(&type_tree, modules, file_info_chart)?,
+        type_tree,
+    ))
+}
+
+///Compiles a `Vec<CompiledProgram>` from a folder or generates a `CompileError` if a problem is
+///encountered during compilation.
+///
+///The `folder` argument gives the path to the folder, `library` optionally contains a library
+///prefix attached to the front of all paths, `main` contains the name of the main file in the
+///folder, `file_info_chart` contains a map from the `u64` hashes of file names to the `Strings`
+///they represent, useful for formatting errors, and `inline` determines whether inlining is used
+///when compiling this folder.
+pub fn compile_from_folder(
+    folder: &Path,
+    library: Option<&str>,
+    main: &str,
+    file_info_chart: &mut BTreeMap<u64, FileInfo>,
+    inline: &Option<InliningHeuristic>,
+    constants_path: Option<&Path>,
+    release_build: bool,
+) -> Result<Vec<CompiledProgram>, CompileError> {
+    let (mut typechecked_modules, type_tree) =
+        compile_to_typecheck(folder, library, main, file_info_chart, constants_path)?;
 
     for module in &mut typechecked_modules {
         println!("{}", module.show_ast());
