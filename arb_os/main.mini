@@ -2,6 +2,8 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+
+use accounts::AccountStore;
 use accounts::accountStore_init;
 use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;

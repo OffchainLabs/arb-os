@@ -61,9 +61,7 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
         match self {
             TypeCheckedNode::Statement(stat) => stat.child_nodes(),
             TypeCheckedNode::Expression(exp) => exp.child_nodes(),
-            TypeCheckedNode::StructField(field) => {
-                vec![TypeCheckedNode::Expression(&mut field.value)]
-            }
+            TypeCheckedNode::StructField(field) => field.child_nodes(),
             TypeCheckedNode::Type(tipe) => tipe.child_nodes(),
         }
     }
@@ -601,6 +599,14 @@ fn flowcheck_liveliness(
                 TypeCheckedExprKind::Loop(_body) => true,
                 _ => false,
             },
+            TypeCheckedNode::StructField(field) => {
+                process!(
+                    vec![TypeCheckedNode::Expression(&mut field.value)],
+                    problems,
+                    false
+                );
+                continue;
+            }
             _ => false,
         };
 
