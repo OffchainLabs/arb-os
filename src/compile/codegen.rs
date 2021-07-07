@@ -808,12 +808,41 @@ fn mavm_codegen_expr<'a>(
             code.push(Instruction::new(opcode, None, debug));
             Ok((label_gen, code, num_locals))
         }
-        TypeCheckedExprKind::Panic => {
+        TypeCheckedExprKind::Error => {
             code.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::Panic),
+                Opcode::AVMOpcode(AVMOpcode::Error),
                 debug,
             ));
             Ok((label_gen, code, num_locals))
+        }
+        TypeCheckedExprKind::GetGas => {
+            code.push(Instruction::from_opcode(
+                Opcode::AVMOpcode(AVMOpcode::PushGas),
+                debug,
+            ));
+            Ok((label_gen, code, num_locals))
+        }
+        TypeCheckedExprKind::SetGas(tce) => {
+            let (lg, c, exp_locals) = mavm_codegen_expr(
+                tce,
+                code,
+                num_locals,
+                locals,
+                label_gen,
+                string_table,
+                import_func_map,
+                global_var_map,
+                prepushed_vals,
+                scopes,
+                file_info_chart,
+                error_system,
+                release_build,
+            )?;
+            c.push(Instruction::from_opcode(
+                Opcode::AVMOpcode(AVMOpcode::SetGas),
+                debug,
+            ));
+            Ok((lg, c, max(num_locals, exp_locals)))
         }
         TypeCheckedExprKind::UnaryOp(op, tce, _) => {
             let (lg, c, exp_locals) = mavm_codegen_expr(
@@ -925,8 +954,8 @@ fn mavm_codegen_expr<'a>(
                 BinaryOp::GetBuffer8 => Opcode::AVMOpcode(AVMOpcode::GetBuffer8),
                 BinaryOp::GetBuffer64 => Opcode::AVMOpcode(AVMOpcode::GetBuffer64),
                 BinaryOp::GetBuffer256 => Opcode::AVMOpcode(AVMOpcode::GetBuffer256),
-                BinaryOp::Plus => Opcode::AVMOpcode(AVMOpcode::Plus),
-                BinaryOp::Minus => Opcode::AVMOpcode(AVMOpcode::Minus),
+                BinaryOp::Plus => Opcode::AVMOpcode(AVMOpcode::Add),
+                BinaryOp::Minus => Opcode::AVMOpcode(AVMOpcode::Sub),
                 BinaryOp::Times => Opcode::AVMOpcode(AVMOpcode::Mul),
                 BinaryOp::Div => Opcode::AVMOpcode(AVMOpcode::Div),
                 BinaryOp::Mod => Opcode::AVMOpcode(AVMOpcode::Mod),
@@ -949,7 +978,7 @@ fn mavm_codegen_expr<'a>(
                 BinaryOp::BitwiseXor => Opcode::AVMOpcode(AVMOpcode::BitwiseXor),
                 BinaryOp::_LogicalAnd => Opcode::LogicalAnd,
                 BinaryOp::LogicalOr => Opcode::LogicalOr,
-                BinaryOp::Hash => Opcode::AVMOpcode(AVMOpcode::Hash2),
+                BinaryOp::Hash => Opcode::AVMOpcode(AVMOpcode::EthHash2),
             };
             code.push(Instruction::from_opcode(opcode, debug));
             match op {
@@ -1467,7 +1496,7 @@ fn mavm_codegen_expr<'a>(
                     debug,
                 ));
                 code.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Panic),
+                    Opcode::AVMOpcode(AVMOpcode::Error),
                     debug,
                 ));
                 code.push(Instruction::from_opcode(Opcode::Label(cont_label), debug));
@@ -2233,7 +2262,7 @@ fn codegen_fixed_array_mod<'a>(
             debug_info,
         ));
         code.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Panic),
+            Opcode::AVMOpcode(AVMOpcode::Error),
             debug_info,
         ));
         code.push(Instruction::from_opcode(

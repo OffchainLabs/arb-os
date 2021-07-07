@@ -139,7 +139,7 @@ pub fn fix_tuple_size(
             }
             Opcode::SetGlobalVar(idx) => {
                 code_out.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Rget),
+                    Opcode::AVMOpcode(AVMOpcode::Rpush),
                     debug_info,
                 ));
                 global_tree.write_code(false, idx, &mut code_out, debug_info)?;
@@ -150,7 +150,7 @@ pub fn fix_tuple_size(
             }
             Opcode::GetGlobalVar(idx) => {
                 code_out.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Rget),
+                    Opcode::AVMOpcode(AVMOpcode::Rpush),
                     debug_info,
                 ));
                 global_tree.read_code(false, idx, &mut code_out, debug_info)?;

@@ -570,7 +570,7 @@ public impure func initEvmCallStackForConstructor(
             });
 
             startPoint();  // start executing the call; should never return
-            panic;
+            error;
         } else {
             // can't pay for gas error
             evmTracer_pushReturnRevert(startTxResult, bytearray_new(0), 0);
@@ -598,7 +598,7 @@ public impure func initEvmCallStackForConstructor(
             true,
         );
         evmCallStack_callHitError(4);  // should never return
-        panic;
+        error;
     }
 }
 
@@ -766,7 +766,7 @@ public impure func evmCallStack_doCall(
     }
 
     evmCallStack_callHitError(7);
-    return panic;
+    return error;
 }
 
 public impure func evmCallStack_returnFromCall(
@@ -844,7 +844,7 @@ public impure func evmCallStack_returnFromCall(
         restoreAuxStackAndCall(resumeInfo.codePoint, resumeInfo.auxStackContents, false);
 
         evmCallStack_callHitError(8);
-        panic  // shouldn't happen -- previous instruction jumped away
+        error  // shouldn't happen -- previous instruction jumped away
     } else {
         // top-level call completed; will need to return to external caller
 
@@ -887,7 +887,7 @@ public impure func evmCallStack_returnFromCall(
                             true,
                         );
                         evmCallStack_callHitError(5);  // should never return
-                        panic;
+                        error;
                     }
 
                     // Update the global account store
@@ -1059,7 +1059,7 @@ public impure func evmCallStack_returnFromCall(
             true
         );  // should never return
         evmCallStack_callHitError(9);
-        panic
+        error
     };
 }
 
@@ -1399,7 +1399,7 @@ public impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray {
         topFrame.memory
     } else {
         evmCallStack_callHitError(10);
-        panic
+        error
     };
 }
 
@@ -1599,7 +1599,7 @@ public impure func evmCallStack_callHitError(errInfo: any) {
         let _ = gasAccounting_endTxCharges(int(0), txFeeStats_zero());
 
         errorHandler();  // should never return
-        panic;
+        error;
     }
 }
 

@@ -45,8 +45,8 @@ impure func tests() -> uint {
     }
 
     let sum = asm (4, 0, 3) uint {
-        plus
-        plus
+        add
+        add
     };
     if (sum != 7) {
         return 5;

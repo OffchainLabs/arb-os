@@ -69,7 +69,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         codeSegment_init();
 
         if (initializePreinstalls(true) == None<()>) {
-            panic;   // don't try to run without preinstalls and precompiles
+            error;   // don't try to run without preinstalls and precompiles
         }
     } else {
         // this is a clean start, not an upgrade
@@ -91,7 +91,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         arbowner_init();
         txReceipts_init();
         if (initializePreinstalls(false) == None<()>) {
-            panic;   // don't try to run without preinstalls and precompiles
+            error;   // don't try to run without preinstalls and precompiles
         }
 
         // advance the Arbitrum block number, and emit a block receipt
