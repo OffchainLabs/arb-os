@@ -115,6 +115,11 @@ fn test_biguint() {
 }
 
 #[test]
+fn test_expanding_int_array() {
+    test_from_file(Path::new("stdlib/expandingIntArrayTest.mexe"));
+}
+
+#[test]
 fn test_rlp() {
     let mut ui = Uint256::one();
     for _i in 0..100 {
