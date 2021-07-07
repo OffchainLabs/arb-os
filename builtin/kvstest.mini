@@ -20,6 +20,7 @@ func tests() -> uint {
 	if (builtin_kvsGet(s, 17) != None<any>) {
 		return 1;
 	}
+    s = builtin_kvsDelete(s, 17);
 	if (builtin_kvsSize(s) != 0) {
 	    return 101;
 	}
@@ -83,6 +84,8 @@ func tests() -> uint {
     if (builtin_kvsHasKey(s, 17)) {
         return 6;
     }
+    s = builtin_kvsDelete(s, 17);
+    s = builtin_kvsDelete(s, 1000);
 	if (builtin_kvsSize(s) != 26) {
 	    return 106;
 	}
