@@ -229,7 +229,7 @@ public impure func evmCallStack_stackInfo() -> (uint, (address, address), (addre
     return xif let Some(topFrame) = globalCallStack {
         let sndRunningAs = address(0);
         let sndRunningCodeFrom = address(0);
-        if let Some(sndFrame) = unsafecast<option<EvmCallFrame>>(topFrame.parent) {
+        if let Some(sndFrame) = unsafecast<option<EvmCallFrame> >(topFrame.parent) {
             sndRunningAs = sndFrame.runningAs;
             sndRunningCodeFrom = sndFrame.runningCodeFrom;
         }

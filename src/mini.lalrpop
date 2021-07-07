@@ -189,6 +189,7 @@ Type: Type = {
 	<i: "impure"?> "func" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => Type::Func(i.is_some(), a, Box::new(r.unwrap_or(Type::Void))),
 	"any" => Type::Any,
 	"option<" <t1:Type> ">" => Type::Option(Box::new(t1)),
+	"union<" <t1:CommaedTypes> ">" => Type::Union(t1),
 	Ident => Type::Nominal(current_path.to_owned(), <>),
 };
 
@@ -244,8 +245,8 @@ BinaryOpMidfix3: BinaryOp = {
 
 Expr4: Expr = {
 	<lno: @L> <l:Expr4> "|" <r:Expr5> => Expr::new_binary(BinaryOp::BitwiseOr, l, r, file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> <l:Expr4> "SHL" <r:Expr5> => Expr::new_binary(BinaryOp::ShiftLeft, r, l, file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> <l:Expr4> "SHR" <r:Expr5> => Expr::new_binary(BinaryOp::ShiftRight, r, l, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> <l:Expr4> "<<" <r:Expr5> => Expr::new_binary(BinaryOp::ShiftLeft, r, l, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> <l:Expr4> ">>" <r:Expr5> => Expr::new_binary(BinaryOp::ShiftRight, r, l, file_info.location(BytePos::from(lno),filename)),
 	Expr5,
 };
 
@@ -332,7 +333,9 @@ Expr12: Expr = {
 		debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename)),
 	},
 	<lno: @L> "newmap" "<" <k:Type> "," <v:Type> ","? ">" => Expr { kind: ExprKind::NewMap(k, v), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "newunion" "<" <t: CommaedTypes> ">" "(" <e: Expr> ")" => Expr { kind: ExprKind::NewUnion(t, Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> "unsafecast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::UnsafeCast(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "unioncast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::UnionCast(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	Expr13,
 }
 

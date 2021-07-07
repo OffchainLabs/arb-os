@@ -238,7 +238,7 @@ public impure func retryBuffer_delete(rbuf: RetryBuffer, txId: uint, withRefund:
     return xif let Some(rtx) = retryBuffer_get(rbuf, txId) {
         // delete the tx
         rbuf = rbuf with {
-            byTxId: unsafecast<map<uint, RetryableTx>>(
+            byTxId: unsafecast<map<uint, RetryableTx> >(
                 builtin_kvsDelete(unsafecast<Kvs>(rbuf.byTxId), txId)
             )
         };
@@ -376,7 +376,7 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
                     immediateCalldata = bytearray_set256(
                         immediateCalldata,
                         0,
-                        asm(256-32, const::funcCode_ArbRetryableTx_redeem) uint { shl },
+                        const::funcCode_ArbRetryableTx_redeem << (256-32),
                     );
                     immediateCalldata = bytearray_set256(immediateCalldata, 4, txId);
 

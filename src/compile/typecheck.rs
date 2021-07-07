@@ -2302,6 +2302,37 @@ fn typecheck_expr(
                 Box::new(key_type.clone()),
                 Box::new(value_type.clone()),
             ))),
+            ExprKind::NewUnion(types, expr) => {
+                let tc_expr = typecheck_expr(
+                    expr,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    undefinable_ids,
+                    scopes,
+                )?;
+                let tc_type = tc_expr.get_type();
+                if types
+                    .iter()
+                    .any(|t| t.assignable(&tc_type, type_tree, HashSet::new()))
+                {
+                    Ok(TypeCheckedExprKind::Cast(
+                        Box::new(tc_expr),
+                        Type::Union(types.clone()),
+                    ))
+                } else {
+                    Err(CompileError::new_type_error(
+                        format!(
+                            "Type {} is not a member of type union: {}",
+                            tc_type.display(),
+                            Type::Union(types.clone()).display()
+                        ),
+                        loc.into_iter().collect(),
+                    ))
+                }
+            }
             ExprKind::StructInitializer(fieldvec) => {
                 let mut tc_fields = Vec::new();
                 let mut tc_fieldtypes = Vec::new();
@@ -2755,6 +2786,40 @@ fn typecheck_expr(
                 undefinable_ids,
                 scopes,
             )?)),
+            ExprKind::UnionCast(expr, tipe) => {
+                let tc_expr = typecheck_expr(
+                    expr,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    undefinable_ids,
+                    scopes,
+                )?;
+                if let Type::Union(types) = tc_expr.get_type().get_representation(type_tree)? {
+                    if types.iter().any(|t| t == tipe) {
+                        Ok(TypeCheckedExprKind::Cast(Box::new(tc_expr), tipe.clone()))
+                    } else {
+                        Err(CompileError::new_type_error(
+                            format!(
+                                "Type {} is not a member of {}",
+                                tipe.display(),
+                                tc_expr.get_type().display()
+                            ),
+                            debug_info.location.into_iter().collect(),
+                        ))
+                    }
+                } else {
+                    Err(CompileError::new_type_error(
+                        format!(
+                            "Tried to unioncast from non-union type \"{}\"",
+                            tc_expr.get_type().display()
+                        ),
+                        debug_info.location.into_iter().collect(),
+                    ))
+                }
+            }
         }?,
         debug_info,
     })
@@ -3533,8 +3598,6 @@ fn typecheck_binary_op_const(
         | BinaryOp::NotEqual
         | BinaryOp::BitwiseAnd
         | BinaryOp::BitwiseOr
-        | BinaryOp::ShiftLeft
-        | BinaryOp::ShiftRight
         | BinaryOp::BitwiseXor
         | BinaryOp::Hash => {
             if t1 == t2 {
@@ -3608,6 +3671,50 @@ fn typecheck_binary_op_const(
                         "invalid argument types to logical or: \"{}\" and \"{}\"",
                         t1.display(),
                         t2.display()
+                    ),
+                    loc.into_iter().collect(),
+                ))
+            }
+        }
+        BinaryOp::ShiftLeft | BinaryOp::ShiftRight => {
+            if t1 == Type::Uint {
+                Ok(TypeCheckedExprKind::Const(
+                    Value::Int(match t2 {
+                        Type::Uint | Type::Int | Type::Bytes32 => {
+                            let x = val1.to_usize().ok_or_else(|| {
+                                CompileError::new_type_error(
+                                    format!(
+                                        "Attempt to shift {} left by {}, causing overflow",
+                                        val2, val1
+                                    ),
+                                    loc.into_iter().collect(),
+                                )
+                            })?;
+                            if op == BinaryOp::ShiftLeft {
+                                val2.shift_left(x)
+                            } else {
+                                val2.shift_right(x)
+                            }
+                        }
+                        _ => {
+                            return Err(CompileError::new_type_error(
+                                format!(
+                                    "Attempt to shift a {} by a {}, must shift an integer type by a uint",
+                                    t2.display(),
+                                    t1.display()
+                                ),
+                                loc.into_iter().collect(),
+                            ))
+                        }
+                    }),
+                    t1,
+                ))
+            } else {
+                Err(CompileError::new_type_error(
+                    format!(
+                        "Attempt to shift a {} by a {}, must shift an integer type by a uint",
+                        t2.display(),
+                        t1.display()
                     ),
                     loc.into_iter().collect(),
                 ))
