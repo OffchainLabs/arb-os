@@ -1108,6 +1108,7 @@ fn builtin_func_decls() -> Vec<Import> {
 pub fn sort_top_level_decls(
     decls: &[TopLevelDecl],
     file_path: Vec<String>,
+    builtins: bool,
 ) -> (
     Vec<Import>,
     BTreeMap<StringId, Func>,
@@ -1115,10 +1116,14 @@ pub fn sort_top_level_decls(
     Vec<GlobalVarDecl>,
     HashMap<usize, Type>,
 ) {
-    let mut imports: Vec<Import> = builtin_func_decls()
-        .into_iter()
-        .filter(|imp| imp.path != file_path)
-        .collect();
+    let mut imports = if builtins {
+        builtin_func_decls()
+            .into_iter()
+            .filter(|imp| imp.path != file_path)
+            .collect()
+    } else {
+        vec![]
+    };
     let mut funcs = BTreeMap::new();
     let mut named_types = HashMap::new();
     let mut func_table = HashMap::new();
