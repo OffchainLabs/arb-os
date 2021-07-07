@@ -3307,22 +3307,6 @@ fn typecheck_binary_op(
                 loc,
             )),
         },
-        BinaryOp::_LogicalAnd | BinaryOp::LogicalOr => match (subtype1, subtype2) {
-            (Type::Bool, Type::Bool) => Ok(TypeCheckedExprKind::Binary(
-                op,
-                Box::new(tcs1),
-                Box::new(tcs2),
-                Type::Bool,
-            )),
-            (subtype1, subtype2) => Err(new_type_error(
-                format!(
-                    "invalid argument types to binary logical operator: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
-                ),
-                loc,
-            )),
-        },
         BinaryOp::Hash => match (subtype1, subtype2) {
             (Type::Bytes32, Type::Bytes32) => Ok(TypeCheckedExprKind::Binary(
                 op,
@@ -3583,40 +3567,6 @@ fn typecheck_binary_op_const(
                 Err(new_type_error(
                     format!(
                         "invalid argument types to binary op: \"{}\" and \"{}\"",
-                        t1.display(),
-                        t2.display()
-                    ),
-                    loc,
-                ))
-            }
-        }
-        BinaryOp::_LogicalAnd => {
-            if (t1 == Type::Bool) && (t2 == Type::Bool) {
-                Ok(TypeCheckedExprKind::Const(
-                    Value::Int(Uint256::from_bool(!val1.is_zero() && !val2.is_zero())),
-                    Type::Bool,
-                ))
-            } else {
-                Err(new_type_error(
-                    format!(
-                        "invalid argument types to logical and: \"{}\" and \"{}\"",
-                        t1.display(),
-                        t2.display()
-                    ),
-                    loc,
-                ))
-            }
-        }
-        BinaryOp::LogicalOr => {
-            if (t1 == Type::Bool) && (t2 == Type::Bool) {
-                Ok(TypeCheckedExprKind::Const(
-                    Value::Int(Uint256::from_bool(!val1.is_zero() || !val2.is_zero())),
-                    Type::Bool,
-                ))
-            } else {
-                Err(new_type_error(
-                    format!(
-                        "invalid argument types to logical or: \"{}\" and \"{}\"",
                         t1.display(),
                         t2.display()
                     ),
