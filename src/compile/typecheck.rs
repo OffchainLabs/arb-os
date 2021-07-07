@@ -831,16 +831,14 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
         }
     }
     fn is_pure(&mut self) -> bool {
-        if let TypeCheckedStatementKind::Noop() | TypeCheckedStatementKind::ReturnVoid() = self.kind
-        {
-            true
-        } else if let TypeCheckedStatementKind::AssignGlobal(_, _) = self.kind {
-            false
-        } else if let TypeCheckedStatementKind::Asm(vec, _) = &self.kind {
-            vec.iter().all(|insn| insn.is_pure())
-                && self.child_nodes().iter_mut().all(|node| node.is_pure())
-        } else {
-            self.child_nodes().iter_mut().all(|node| node.is_pure())
+        match &mut self.kind {
+            TypeCheckedStatementKind::Noop() | TypeCheckedStatementKind::ReturnVoid() => true,
+            TypeCheckedStatementKind::AssignGlobal(_, _) => false,
+            TypeCheckedStatementKind::Asm(insns, _) => {
+                insns.iter().all(|insn| insn.is_pure())
+                    && self.child_nodes().iter_mut().all(|node| node.is_pure())
+            }
+            _ => self.child_nodes().iter_mut().all(|node| node.is_pure()),
         }
     }
 }
