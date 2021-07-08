@@ -543,10 +543,10 @@ public impure func gasAccounting_pauseTxCharges() -> uint {
     // return how many units of the tx's initial maxGas are still unused
 
     return xif let Some(txState) = gasAccountingInfo.txState {
-        let gasRemaining = safeAdd(txState.gasInReserve, switchToChargingOS());
-        set txState.gasInReserve = gasRemaining;
+        let currentGasUnused = switchToChargingOS();
+        set txState.gasInReserve = safeAdd(txState.gasInReserve, currentGasUnused);
         set gasAccountingInfo.txState = Some(txState);
-        gasRemaining
+        currentGasUnused
     } else {
         // oops, someone tried to pause tx charges when there's no active tx
         // to be safe, report that the tx is completely out of gas
