@@ -1404,6 +1404,18 @@ public impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool {
     };
 }
 
+public impure func evmCallStack_currentFrameStorageDelta() -> int {
+    return xif let Some(topFrame) = globalCallStack {
+        xif let Some(parentFrame) = topFrame.parent {
+            topFrame.storageDelta - parentFrame.storageDelta
+        } else {
+            topFrame.storageDelta
+        }
+    } else {
+        int(0)
+    };
+}
+
 public impure func evmCallStack_queueMessage(msg: any) {
     if let Some(topFrame) = globalCallStack {
         set topFrame.sendQueue = queue_put(topFrame.sendQueue, msg);
