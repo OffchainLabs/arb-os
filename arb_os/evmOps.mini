@@ -679,7 +679,8 @@ public impure func evmOp_log4(
 }
 
 public impure func evmOp_gas() -> uint {
-    let gasLeft = (getGas() + (const::Charging_ArbGasPerAvmGas - 1)) / const::Charging_ArbGasPerAvmGas;
+    let arbGasPerAvmGas = chainParams_getOrDie(const::Atom_Param_AvmGasPerArbGas);
+    let gasLeft = (getGas() + (arbGasPerAvmGas - 1)) / arbGasPerAvmGas;
     let storageDelta = evmCallStack_currentFrameStorageDelta();
     let gasNeededForStorage = xif (storageDelta > int(0)) {
         uint(storageDelta) * gasAccounting_getStoragePriceInArbGas()
