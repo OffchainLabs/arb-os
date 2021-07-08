@@ -140,7 +140,7 @@ public impure func evmOps_init() {
 }
 
 #[noinline, ] public impure func dispatchForEvmOp(index: uint) {
-    asm(evmOpJumpTable[index],) {
+    asm(evmOpJumpTable[index]) {
         auxpop pop   // discard this function's call frame
         auxpop
         swap1
@@ -926,7 +926,7 @@ public impure func evmOp_revert(memOffset: uint, memNbytes: uint) {
 
 public impure func evmOp_revert_knownCodePc(codeAddr: address, evmPc: uint, memOffset: uint, memNbytes: uint) {
     let (txid, addrs, parentAddrs) = evmCallStack_stackInfo();
-    asm((10000, codeAddr, evmPc, txid, addrs, parentAddrs),) { debugprint };
+    asm((10000, codeAddr, evmPc, txid, addrs, parentAddrs)) { debugprint };
     evmOp_revert(memOffset, memNbytes);
 }
 
