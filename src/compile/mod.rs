@@ -408,7 +408,7 @@ impl TypeCheckedModule {
     fn show_ast(&mut self) -> String {
         let mut s = String::new();
         let _ = writeln!(s, "{}", self.name);
-        for func in &mut self.checked_funcs {
+        for func in self.checked_funcs.values_mut() {
             let _ = writeln!(s, "  {}", func.display_string());
             for statement in &mut func.code {
                 let _ = writeln!(
@@ -648,15 +648,6 @@ fn _print_node(node: &mut TypeCheckedNode, state: &String, mut_state: &mut usize
     true
 }
 
-///Compiles a `Vec<CompiledProgram>` from a folder or generates a `CompileError` if a problem is
-///encountered during compilation.
-///
-///The `folder` argument gives the path to the folder, `library` optionally contains a library
-///prefix attached to the front of all paths, `main` contains the name of the main file in the
-///folder, `file_info_chart` contains a map from the `u64` hashes of file names to the `FileInfo`
-///they represent, useful for formatting errors, and `inline` determines whether inlining is used
-///when compiling this folder.
-pub fn compile_from_folder(
 ///Compiles up to the end of typechecking, produces the list of TypeCheckedModules in this program
 /// as well as the type tree
 fn compile_to_typecheck(
@@ -665,10 +656,8 @@ fn compile_to_typecheck(
     main: &str,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     constants_path: Option<&Path>,
-    must_use_global_consts: bool,
     error_system: &mut ErrorSystem,
-    release_build: bool,
-) -> Result<Vec<CompiledProgram>, CompileError> {
+) -> Result<(Vec<TypeCheckedModule>, TypeTree), CompileError> {
     let (mut programs, import_map) = create_program_tree(
         folder,
         library,
@@ -679,11 +668,6 @@ fn compile_to_typecheck(
     )?;
 
     resolve_imports(&mut programs, &import_map, error_system)?;
-
-) -> Result<(Vec<TypeCheckedModule>, TypeTree), CompileError> {
-    let (mut programs, import_map) =
-        create_program_tree(folder, library, main, file_info_chart, constants_path)?;
-    resolve_imports(&mut programs, &import_map)?;
     //Conversion of programs from `HashMap` to `Vec` for typechecking
     let type_tree = create_type_tree(&programs);
     let mut modules = vec![programs
@@ -699,7 +683,7 @@ fn compile_to_typecheck(
         out
     });
     Ok((
-        typecheck_programs(&type_tree, modules, file_info_chart)?,
+        typecheck_programs(&type_tree, modules, file_info_chart, error_system)?,
         type_tree,
     ))
 }
@@ -719,16 +703,22 @@ pub fn compile_from_folder(
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     inline: &Option<InliningHeuristic>,
     constants_path: Option<&Path>,
+    must_use_global_consts: bool,
+    error_system: &mut ErrorSystem,
     release_build: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
-    let (mut typechecked_modules, type_tree) =
-        compile_to_typecheck(folder, library, main, file_info_chart, constants_path)?;
+    let (mut typechecked_modules, type_tree) = compile_to_typecheck(
+        folder,
+        library,
+        main,
+        file_info_chart,
+        constants_path,
+        error_system,
+    )?;
 
     for module in &mut typechecked_modules {
         println!("{}", module.show_ast());
     }
-    let mut typechecked_modules =
-        typecheck_programs(&type_tree, modules, file_info_chart, error_system)?;
 
     if must_use_global_consts {
         check_global_constants(&typechecked_modules, constants_path, error_system);

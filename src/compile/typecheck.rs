@@ -2411,6 +2411,7 @@ fn typecheck_expr(
                     func_table,
                     return_type,
                     type_tree,
+                    undefinable_ids,
                     scopes,
                 )?;
                 let tc_type = tc_expr.get_type();
@@ -2423,13 +2424,13 @@ fn typecheck_expr(
                         Type::Union(types.clone()),
                     ))
                 } else {
-                    Err(new_type_error(
+                    Err(CompileError::new_type_error(
                         format!(
                             "Type {} is not a member of type union: {}",
                             tc_type.display(),
                             Type::Union(types.clone()).display()
                         ),
-                        loc,
+                        loc.into_iter().collect(),
                     ))
                 }
             }
@@ -2894,28 +2895,29 @@ fn typecheck_expr(
                     func_table,
                     return_type,
                     type_tree,
+                    undefinable_ids,
                     scopes,
                 )?;
                 if let Type::Union(types) = tc_expr.get_type().get_representation(type_tree)? {
                     if types.iter().any(|t| t == tipe) {
                         Ok(TypeCheckedExprKind::Cast(Box::new(tc_expr), tipe.clone()))
                     } else {
-                        Err(new_type_error(
+                        Err(CompileError::new_type_error(
                             format!(
                                 "Type {} is not a member of {}",
                                 tipe.display(),
                                 tc_expr.get_type().display()
                             ),
-                            debug_info.location,
+                            debug_info.location.into_iter().collect(),
                         ))
                     }
                 } else {
-                    Err(new_type_error(
+                    Err(CompileError::new_type_error(
                         format!(
                             "Tried to unioncast from non-union type \"{}\"",
                             tc_expr.get_type().display()
                         ),
-                        debug_info.location,
+                        debug_info.location.into_iter().collect(),
                     ))
                 }
             }
@@ -3448,22 +3450,6 @@ fn typecheck_binary_op(
                 loc.into_iter().collect(),
             )),
         },
-        BinaryOp::_LogicalAnd | BinaryOp::LogicalOr => match (subtype1, subtype2) {
-            (Type::Bool, Type::Bool) => Ok(TypeCheckedExprKind::Binary(
-                op,
-                Box::new(tcs1),
-                Box::new(tcs2),
-                Type::Bool,
-            )),
-            (subtype1, subtype2) => Err(CompileError::new_type_error(
-                format!(
-                    "invalid argument types to binary logical operator: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
-                ),
-                loc.into_iter().collect(),
-            )),
-        },
         BinaryOp::Hash => match (subtype1, subtype2) {
             (Type::Bytes32, Type::Bytes32) => Ok(TypeCheckedExprKind::Binary(
                 op,
@@ -3736,40 +3722,6 @@ fn typecheck_binary_op_const(
                 Err(CompileError::new_type_error(
                     format!(
                         "invalid argument types to binary op: \"{}\" and \"{}\"",
-                        t1.display(),
-                        t2.display()
-                    ),
-                    loc.into_iter().collect(),
-                ))
-            }
-        }
-        BinaryOp::_LogicalAnd => {
-            if (t1 == Type::Bool) && (t2 == Type::Bool) {
-                Ok(TypeCheckedExprKind::Const(
-                    Value::Int(Uint256::from_bool(!val1.is_zero() && !val2.is_zero())),
-                    Type::Bool,
-                ))
-            } else {
-                Err(CompileError::new_type_error(
-                    format!(
-                        "invalid argument types to logical and: \"{}\" and \"{}\"",
-                        t1.display(),
-                        t2.display()
-                    ),
-                    loc.into_iter().collect(),
-                ))
-            }
-        }
-        BinaryOp::LogicalOr => {
-            if (t1 == Type::Bool) && (t2 == Type::Bool) {
-                Ok(TypeCheckedExprKind::Const(
-                    Value::Int(Uint256::from_bool(!val1.is_zero() || !val2.is_zero())),
-                    Type::Bool,
-                ))
-            } else {
-                Err(CompileError::new_type_error(
-                    format!(
-                        "invalid argument types to logical or: \"{}\" and \"{}\"",
                         t1.display(),
                         t2.display()
                     ),
