@@ -98,8 +98,6 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         emitGenesisBlockReceipt();
     }
 
-    // initialize any customizations here
-
     mainRunLoop();
 }
 

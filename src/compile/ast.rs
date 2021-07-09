@@ -213,6 +213,207 @@ impl Type {
         }
     }
 
+    pub fn covariant_castable(
+        &self,
+        rhs: &Self,
+        type_tree: &TypeTree,
+        mut seen: HashSet<(Type, Type)>,
+    ) -> bool {
+        if *rhs == Type::Every {
+            return true;
+        }
+        match self {
+            Type::Any => *rhs != Type::Void,
+            Type::Uint | Type::Int | Type::Bool | Type::Bytes32 | Type::EthAddress => match &rhs {
+                Type::Uint | Type::Int | Type::Bool | Type::Bytes32 | Type::EthAddress => true,
+                _ => false,
+            },
+            Type::Buffer | Type::Void | Type::Every => rhs == self,
+            Type::Tuple(tvec) => {
+                if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
+                    type_vectors_covariant_castable(tvec, &tvec2, type_tree, seen)
+                } else {
+                    false
+                }
+            }
+            Type::Array(t) => {
+                if let Ok(Type::Array(t2)) = rhs.get_representation(type_tree) {
+                    t.covariant_castable(&t2, type_tree, seen)
+                } else {
+                    false
+                }
+            }
+            Type::FixedArray(t, s) => {
+                if let Ok(Type::FixedArray(t2, s2)) = rhs.get_representation(type_tree) {
+                    (*s == s2) && t.covariant_castable(&t2, type_tree, seen)
+                } else {
+                    false
+                }
+            }
+            Type::Struct(fields) => {
+                if let Ok(Type::Struct(fields2)) = rhs.get_representation(type_tree) {
+                    field_vectors_covariant_castable(fields, &fields2, type_tree, seen)
+                } else {
+                    false
+                }
+            }
+            Type::Nominal(_, _) => {
+                if let (Ok(left), Ok(right)) = (
+                    self.get_representation(type_tree),
+                    rhs.get_representation(type_tree),
+                ) {
+                    if seen.insert((left.clone(), right.clone())) {
+                        left.covariant_castable(&right, type_tree, seen)
+                    } else {
+                        true
+                    }
+                } else {
+                    false
+                }
+            }
+            Type::Func(_, args, ret) => {
+                if let Type::Func(_, args2, ret2) = rhs {
+                    //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
+                    type_vectors_covariant_castable(args2, args, type_tree, seen.clone())
+                        && (ret.covariant_castable(ret2, type_tree, seen))
+                } else {
+                    false
+                }
+            }
+            Type::Map(key1, val1) => {
+                if let Type::Map(key2, val2) = rhs {
+                    if let Ok(val2) = val2.get_representation(type_tree) {
+                        key1.covariant_castable(key2, type_tree, seen.clone())
+                            && (val1.covariant_castable(&val2, type_tree, seen))
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
+            Type::Option(_) => {
+                if let Ok(Type::Option(_)) = rhs.get_representation(type_tree) {
+                    true
+                } else {
+                    false
+                }
+            }
+            Type::Union(inner) => {
+                if let Ok(Type::Union(inner2)) = rhs.get_representation(type_tree) {
+                    type_vectors_covariant_castable(&*inner2, inner, type_tree, seen.clone())
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
+    pub fn castable(
+        &self,
+        rhs: &Self,
+        type_tree: &TypeTree,
+        mut seen: HashSet<(Type, Type)>,
+    ) -> bool {
+        if *rhs == Type::Every {
+            return true;
+        }
+        match self {
+            Type::Any => *rhs != Type::Void,
+            Type::Uint | Type::Int | Type::Bytes32 => match &rhs {
+                Type::Uint | Type::Int | Type::Bytes32 => true,
+                _ => false,
+            },
+            Type::EthAddress => match &rhs {
+                Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress => true,
+                _ => false,
+            },
+            Type::Bool => match &rhs {
+                Type::Uint | Type::Int | Type::Bool | Type::Bytes32 | Type::EthAddress => true,
+                _ => false,
+            },
+            Type::Buffer | Type::Void | Type::Every => rhs == self,
+            Type::Tuple(tvec) => {
+                if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
+                    type_vectors_castable(tvec, &tvec2, type_tree, seen)
+                } else {
+                    false
+                }
+            }
+            Type::Array(t) => {
+                if let Ok(Type::Array(t2)) = rhs.get_representation(type_tree) {
+                    t.castable(&t2, type_tree, seen)
+                } else {
+                    false
+                }
+            }
+            Type::FixedArray(t, s) => {
+                if let Ok(Type::FixedArray(t2, s2)) = rhs.get_representation(type_tree) {
+                    (*s == s2) && t.castable(&t2, type_tree, seen)
+                } else {
+                    false
+                }
+            }
+            Type::Struct(fields) => {
+                if let Ok(Type::Struct(fields2)) = rhs.get_representation(type_tree) {
+                    field_vectors_castable(fields, &fields2, type_tree, seen)
+                } else {
+                    false
+                }
+            }
+            Type::Nominal(_, _) => {
+                if let (Ok(left), Ok(right)) = (
+                    self.get_representation(type_tree),
+                    rhs.get_representation(type_tree),
+                ) {
+                    if seen.insert((left.clone(), right.clone())) {
+                        left.castable(&right, type_tree, seen)
+                    } else {
+                        true
+                    }
+                } else {
+                    false
+                }
+            }
+            Type::Func(is_impure, args, ret) => {
+                if let Type::Func(is_impure2, args2, ret2) = rhs {
+                    //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
+                    (*is_impure || !is_impure2)
+                        && type_vectors_castable(args2, args, type_tree, seen.clone())
+                        && (ret.castable(ret2, type_tree, seen))
+                } else {
+                    false
+                }
+            }
+            Type::Map(key1, val1) => {
+                if let Type::Map(key2, val2) = rhs {
+                    if let Ok(val2) = val2.get_representation(type_tree) {
+                        key1.castable(key2, type_tree, seen.clone())
+                            && (val1.castable(&val2, type_tree, seen))
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
+            Type::Option(inner) => {
+                if let Ok(Type::Option(inner2)) = rhs.get_representation(type_tree) {
+                    inner.castable(&inner2, type_tree, seen)
+                } else {
+                    false
+                }
+            }
+            Type::Union(inner) => {
+                if let Ok(Type::Union(inner2)) = rhs.get_representation(type_tree) {
+                    type_vectors_castable(&*inner2, inner, type_tree, seen.clone())
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
     ///Returns true if rhs is a subtype of self, and false otherwise
     pub fn assignable(
         &self,
@@ -783,6 +984,32 @@ impl Type {
     }
 }
 
+pub fn type_vectors_covariant_castable(
+    tvec1: &[Type],
+    tvec2: &[Type],
+    type_tree: &TypeTree,
+    seen: HashSet<(Type, Type)>,
+) -> bool {
+    tvec1.len() == tvec2.len()
+        && tvec1
+            .iter()
+            .zip(tvec2)
+            .all(|(t1, t2)| t1.covariant_castable(t2, type_tree, seen.clone()))
+}
+
+pub fn type_vectors_castable(
+    tvec1: &[Type],
+    tvec2: &[Type],
+    type_tree: &TypeTree,
+    seen: HashSet<(Type, Type)>,
+) -> bool {
+    tvec1.len() == tvec2.len()
+        && tvec1
+            .iter()
+            .zip(tvec2)
+            .all(|(t1, t2)| t1.castable(t2, type_tree, seen.clone()))
+}
+
 ///Returns true if each type in tvec2 is a subtype of the type in tvec1 at the same index, and tvec1
 /// and tvec2 have the same length.
 pub fn type_vectors_assignable(
@@ -796,6 +1023,32 @@ pub fn type_vectors_assignable(
             .iter()
             .zip(tvec2)
             .all(|(t1, t2)| t1.assignable(t2, type_tree, seen.clone()))
+}
+
+fn field_vectors_covariant_castable(
+    tvec1: &[StructField],
+    tvec2: &[StructField],
+    type_tree: &TypeTree,
+    seen: HashSet<(Type, Type)>,
+) -> bool {
+    tvec1.len() == tvec2.len()
+        && tvec1.iter().zip(tvec2).all(|(t1, t2)| {
+            t1.tipe
+                .covariant_castable(&t2.tipe, type_tree, seen.clone())
+        })
+}
+
+fn field_vectors_castable(
+    tvec1: &[StructField],
+    tvec2: &[StructField],
+    type_tree: &TypeTree,
+    seen: HashSet<(Type, Type)>,
+) -> bool {
+    tvec1.len() == tvec2.len()
+        && tvec1
+            .iter()
+            .zip(tvec2)
+            .all(|(t1, t2)| t1.tipe.castable(&t2.tipe, type_tree, seen.clone()))
 }
 
 ///Identical to `type_vectors_assignable`
@@ -1247,6 +1500,9 @@ pub enum ExprKind {
     NewUnion(Vec<Type>, Box<Expr>),
     ArrayOrMapMod(Box<Expr>, Box<Expr>, Box<Expr>),
     StructMod(Box<Expr>, String, Box<Expr>),
+    WeakCast(Box<Expr>, Type),
+    Cast(Box<Expr>, Type),
+    CovariantCast(Box<Expr>, Type),
     UnsafeCast(Box<Expr>, Type),
     Asm(Type, Vec<Instruction>, Vec<Expr>),
     Error,

@@ -164,7 +164,7 @@ Unless specified as equal by the rules above, a pair of types is unequal.
 
 A value of type `V` is assignable to storage of type `S` if:
 
-* `S` is `anytype`, or
+* `S` is `any`, or
 * `V` equals `S`,
 * `V` and `S` are tuple types with the same number of fields, and each field of `V` is assignable to the corresponding field of `S`,
 * `V` and `S` are fixed-size arrays of the same size, and the field type of `V` is assignable to the field type of `S`,
@@ -177,6 +177,48 @@ A value of type `V` is assignable to storage of type `S` if:
 These rules guarantee that assignability is transitive. 
 
 The compiler uses often uses type inference to infer the types of variables from the types of values assigned to them.  If a programmer wants the compiler to infer a different type, they should use an explicit type-casting operation to convert the value to the desired type.
+
+## Castability
+
+A value of type `V` is castable to storage of type `S` if:
+
+* `S` is `any`, or
+* `V` equals `S`,
+* `V` is `bool` and `S` is one of `bool`, `address`, `bytes32`, `uint`, or `int`
+* `V` is `adress` and `S` is one of `address`, `bytes32`, `uint`, or `int`
+* `V` is one of `bytes32`, `uint`, or `int` and `S` is one of `bytes32`, `uint`, or `int`
+* `V` and `S` are tuple types with the same number of fields, and each field of `V` is castable to the corresponding field of `S`,
+* `V` and `S` are fixed-size arrays of the same size, and the field type of `V` is castable to the field type of `S`,
+* `V` and `S` are arrays, and the field type of `V` is castable to the field type of `S`,
+* `V` and `S` are structs, with the same number of fields, and each field of `V` is castable to the corresponding field of `S`,
+* `V` and `S` are function types, with the same number of arguments, and either `S` is impure or `V` is not impure, and each argument type of `V` is castable to the corresponding argument type of `S`, and either (a) both `S` and `V` return void, or (b) the return type of `S` is castable to the return type of `V`.  (Note that the return type is compared for castability "backwards". This is needed to make calls through function references type-safe.)
+* `V` and `S` are map types, and the key type of `V` is castable to the key type of `S`, and the value type of `V` is castable to the value type of `S`.
+* `V` and `S` are optional types, and the inner type of `V` is castable to the inner type of `S`
+
+## Covariant Cast
+
+A value of type `V` can be `covariantcast` to storage of type `S` if 
+there is a constructable type `T` such that `T`
+is castable to both `V` and `S`.
+
+A constructable type is a type for which it is possible to create a value.
+Non-constructable types include `void`, `every` and `(uint, every)`.
+
+In practical terms this means:
+
+A value of type `V` is `covariantcast`able to storage of type `S` if:
+
+* `V` is any, or
+* `S` is `any`,
+* `V` equals `S`,
+* both `V` and `S` are one of `bool`, `address`, `bytes32`, `uint`, or `int`
+* `V` and `S` are tuple types with the same number of fields, and each field of `V` is covariant castable to the corresponding field of `S`,
+* `V` and `S` are fixed-size arrays of the same size, and the field type of `V` is covariant castable to the field type of `S`,
+* `V` and `S` are arrays, and the field type of `V` is covariant castable to the field type of `S`,
+* `V` and `S` are structs, with the same number of fields, and each field of `V` is covariant castable to the corresponding field of `S`,
+* `V` and `S` are function types, with the same number of arguments, and each argument type of `V` is covariant castable to the corresponding argument type of `S`, and either (a) both `S` and `V` return void, or (b) the return type of `S` is covariant castable to the return type of `V`.
+* `V` and `S` are map types, and the key type of `V` is covariant castable to the key type of `S`, and the value types of `V` and `S` are covariant castable.
+* `V` and `S` are optional types
 
 ## Values
 
