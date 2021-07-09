@@ -144,7 +144,7 @@ public impure func evmOps_init() {
 }
 
 #[noinline, ] public impure func dispatchForEvmOp(index: uint) {
-    asm(evmOpJumpTable[index],) {
+    asm(evmOpJumpTable[index]) {
         auxpop pop   // discard this function's call frame
         auxpop
         swap1

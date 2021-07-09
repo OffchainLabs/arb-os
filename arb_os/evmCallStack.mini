@@ -313,7 +313,6 @@ public impure func initEvmCallStack(
 
                 emptyAvmStack();
                 asm(entryPoint,) { jump };
-                //NOTREACHED
             } else {
                 // caller didn't have enough funds
                 if let Some(res) = gasAccounting_endTxCharges(int(0), request.feeStats) {
@@ -722,7 +721,6 @@ public impure func evmCallStack_doCall(
         // jump to the called code's startCodePoint -- this should never return
         let _ = gasAccounting_resumeTxCharges(gas);
         asm(startCodePoint,) { jump };
-        //NOTREACHED
     } else {
         // no code at destination address, so just do an eth transfer
         let success = (balance == 0) ||
@@ -824,7 +822,7 @@ public impure func evmCallStack_returnFromCall(
         }
         emptyAvmStack();                             // throw away anything that callee left on the stack
         restoreAvmStack(resumeInfo.stackContents,);  // restore the caller's stack
-        asm(success,) { };                           // push return code onto the stack, where caller expects it to be
+        asm(success) { };                           // push return code onto the stack, where caller expects it to be
         let _ = gasAccounting_resumeTxCharges(leftoverGas + resumeInfo.savedGas);
         restoreAuxStackAndCall(resumeInfo.codePoint, resumeInfo.auxStackContents, false);
 
@@ -1260,14 +1258,14 @@ public impure func restoreAuxStackAndCall(
     // Discard our callframe, push a fake return address, and jump to funcToCall
     // funcToCall will think somebody called it normally, with the restored auxstack
     if (pushFakeReturnAddress) {
-        asm(funcToCall,) {
+        asm(funcToCall) {
             auxpop
             pop
             [0] swap1  // bogus return address, which funcToCall will save in its callframe but will never use
             jump
         };
     } else {
-        asm(funcToCall,) {
+        asm(funcToCall) {
             auxpop
             pop
             jump
