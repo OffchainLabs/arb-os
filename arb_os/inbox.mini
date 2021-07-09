@@ -111,7 +111,7 @@ public impure func inbox_get() -> IncomingRequest {
             globalInbox = getFromL1Inbox(globalInbox);
         }
 
-        let (updatedQ, rawMsg,) = incomingRequestQueue_getOrDie(globalInbox.queue);
+        let (updatedQ, rawMsg) = incomingRequestQueue_getOrDie(globalInbox.queue);
         set globalInbox.queue = updatedQ ;
         let ebMsg = unsafecast<IncomingRequest>(rawMsg);
 
@@ -176,7 +176,7 @@ impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, fromSide
         //      else, to get the node's private copy of the chain state to process some other message.
         // At the end of each block, ArbOS will process as many sideloaded messages as it is given, until a sideload
         //      returns (). Then ArbOS will go on to process the messages from the new L1 block.
-        let rawSideloadMsg = asm(inbox.arbBlockNum,) any { sideload };
+        let rawSideloadMsg = asm(inbox.arbBlockNum) any { sideload };
         if (rawSideloadMsg != ()) {
             // a sideloaded message was received, so enqueue it for processing
             let newMsg = incomingRequestFromRaw(unsafecast<IncomingRequestFromInbox>(rawSideloadMsg), true);

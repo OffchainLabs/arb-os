@@ -253,7 +253,7 @@ public impure func evmOp_calldatacopy(memAddr: uint, calldataOffset: uint, nbyte
             memAddr,
             nbytes
         );
-        if (evmCallStack_setTopFrameMemory(newMemory,)) {
+        if (evmCallStack_setTopFrameMemory(newMemory)) {
             return;
         }
     }
@@ -288,7 +288,7 @@ public impure func evmOp_codecopy(memAddr: uint, codeOffset: uint, nbytes: uint)
                 memAddr,
                 nbytes
             );
-            if (evmCallStack_setTopFrameMemory(updatedMemory,)) {
+            if (evmCallStack_setTopFrameMemory(updatedMemory)) {
                 return;
             }
         }
@@ -336,7 +336,7 @@ public impure func evmOp_extcodecopy(addrAsUint: uint, memAddr: uint, codeOffset
                 nbytes
             )
         };
-        if (evmCallStack_setTopFrameMemory(updatedMemory,)) {
+        if (evmCallStack_setTopFrameMemory(updatedMemory)) {
             return;
         }
     }
@@ -397,7 +397,7 @@ public impure func evmOp_returndatacopy(memAddr: uint, dataOffset: uint, nbytes:
             nbytes
         )
     };
-    if (evmCallStack_setTopFrameMemory(updatedMemory,)) {
+    if (evmCallStack_setTopFrameMemory(updatedMemory)) {
        return;
     }
 
@@ -947,7 +947,7 @@ public impure func evmOp_selfdestruct(ownerAsUint: uint) {
         }
         let owner = address(ownerAsUint);     // truncates if necessary
 
-        evmCallStack_selfDestructCurrentAccount(owner,);
+        evmCallStack_selfDestructCurrentAccount(owner);
         evmOp_return(0, 0);
     } else {
         evm_runtimePanic(33);

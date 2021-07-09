@@ -21,7 +21,7 @@ public impure func errorHandler_init() {
     let stub = asm() func() { errcodept };
     let jumpErrHandler = asm(0x34, errorHandler, stub) func() { pushinsnimm };
     let pushAndJump = asm(0x3b, 0, jumpErrHandler) func() { pushinsnimm };
-    asm(pushAndJump,) { errset };
+    asm(pushAndJump) { errset };
 }
 
 public impure func errorHandler() {

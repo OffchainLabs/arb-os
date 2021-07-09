@@ -116,7 +116,7 @@ public impure func accounts_notifyParamsChanged() {    // called if the chain pa
 //      that should never happen, but we check to be safe
 public impure func safeGetGlobalAccountStore() -> AccountStore {
     if ( ! evmCallStack_isEmpty()) {
-        asm(668,) { debugprint };
+        asm(668) { debugprint };
         error;
     }
     return globalAccountStore;
@@ -125,7 +125,7 @@ public impure func safeGetGlobalAccountStore() -> AccountStore {
 // see comment on safeGet... above
 public impure func safeSetGlobalAccountStore(acctStore: AccountStore) {
     if ( ! evmCallStack_isEmpty()) {
-        asm(669,) { debugprint };
+        asm(669) { debugprint };
         error;
     }
     globalAccountStore = acctStore;
@@ -265,7 +265,7 @@ public func account_getEvmJumpTable(account: Account) -> option<map<uint, impure
 public func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account) {
     let ret = account.nextSeqNum;
     set account.nextSeqNum = ret+1;
-    return (ret, account,);
+    return (ret, account);
 }
 
 public func account_incrSeqNum(account: Account) -> Account {
