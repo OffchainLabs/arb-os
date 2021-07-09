@@ -4,23 +4,14 @@
 // ported from https://github.com/thehubbleproject/RedditHubble/blob/master/contracts/libs/BLS.sol
 
 use std::bytearray::ByteArray;
-use std::random::RandomGenerator;
 
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
-use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_copy;
 
-use std::keccak::keccak256;
-
-use std::random::random_new;
-use std::random::random_next;
-use std::random::random_nextMod;
-
-use std::keccak::keccak256;
 use std::sha256::sha256_byteArray;
 
 
@@ -91,8 +82,8 @@ public func bls_hashAndVerifySignature(
 
     let i = 0;
     while (i < numMsgs) {
-        let hashedMessage = bls_hashToPoint(domain, messages[i])?;
-        hashedMessages = hashedMessages with { [i] = hashedMessage };
+        set hashedMessages[i] = bls_hashToPoint(domain, messages[i])?;
+        i = i + 1;
     }
 
     return bls_verifySignature(hashedMessages, keys, signature);
@@ -295,7 +286,7 @@ func hashToField(
 ) -> (uint, uint) {
     let msg = expandMsgTo96(domain, messages);
 
-    let u1 = asm(64, bytearray_get256(msg, 0)) uint { shr };
+    let u1 = bytearray_get256(msg, 0) >> 64;
     let u0 = bytearray_get256(msg, 16) & const::MASK24;
     let a0 = asm(
         asm(u1, const::T24, const::N) uint { mulmod },

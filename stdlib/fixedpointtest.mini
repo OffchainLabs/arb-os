@@ -2,7 +2,6 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-use std::fixedpoint::FixedPoint;
 use std::fixedpoint::fixedPoint_new;
 use std::fixedpoint::fixedPoint_fromUintMatch;
 use std::fixedpoint::fixedPoint_integerPart;
@@ -93,19 +92,23 @@ func tests() -> uint {
     if let Some(issue) = fixedPoint_sub(slope, inverse) {
         return 13;
     }
-    if let Some(issue) = fixedPoint_div(slope, inverse) {
-        return 13;
+    if let Some(quotient) = fixedPoint_div(slope, inverse) {
+        if (!fixedPoint_equal(quotient, fixedPoint_new(81, 25))) {
+            return 14;
+        }
+    } else {
+        return 14;
     }
 
     let frac = fixedPoint_fractionalPart(slope);
     let expected_frac = fixedPoint_new(4, 5);
     let improper_frac = fixedPoint_plusOne(frac);
-    
+
     if (fixedPoint_compare(frac, expected_frac) != int(0)) {
-        return 14;
+        return 15;
     }
     if (fixedPoint_compare(slope, improper_frac) != int(0)) {
-        return 14;
+        return 15;
     }
 
     return 0;
