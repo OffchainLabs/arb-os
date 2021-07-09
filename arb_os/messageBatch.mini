@@ -2,28 +2,18 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-use std::bytearray::MarshalledBytes;
-use std::bytearray::ByteArray;
 use std::bytestream::ByteStream;
 
-use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_getByte;
-use std::bytearray::bytearray_get256;
-use std::bytearray::bytearray_setByte;
-use std::bytearray::bytearray_extract;
 use std::bytestream::bytestream_new;
-use std::bytestream::bytestream_get64;
-use std::bytestream::bytestream_get256;
 use std::bytestream::bytestream_getN;
+use std::bytestream::bytestream_get256;
 use std::bytestream::bytestream_skipBytes;
-use std::bytearray::marshalledBytes_firstByte;
-use std::bytearray::marshalledBytes_hash;
 use std::bytestream::bytestream_bytesReadSoFar;
 use std::bytestream::bytestream_getCalldataUnits;
 
 use inbox::IncomingRequest;
 use inbox::GasEstimationParams;
-use gasAccounting::updateBatchSizeEstimate;
 
 use std::rlp::rlp_decodeUint;
 
@@ -121,9 +111,6 @@ public func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, Me
             }
         ))
     } else {
-        if (batch.numSoFar > 0) {
-            updateBatchSizeEstimate(batch.numSoFar, batch.template.sender);
-        }
         None<(IncomingRequest, MessageBatch)>
     };
 }
