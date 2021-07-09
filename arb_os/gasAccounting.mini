@@ -245,9 +245,25 @@ impure func setRetryablePrices(oldRetryablePrices: RetryablePrices) -> Retryable
         xif (feesEnabled()) {
             let gasPrice = getL1GasPriceEstimate();
             struct {
-                perTx: safeMul(gasPrice, chainParams_getOrDie(const::Atom_Param_RetryablePriceBase)),
-                perCalldataByte: safeMul(gasPrice, chainParams_getOrDie(const::Atom_Param_RetryablePricePerByteNumerator)) /
-                                            chainParams_getOrDie(const::Atom_Param_RetryablePricePerByteDenominator),
+                perTx: {
+                    let try = safeMul(gasPrice, chainParams_getOrDie(const::Atom_Param_RetryablePriceBase));
+                    let cap = 3 * oldRetryablePrices.perTx / 2;
+                    xif ((cap > 0) && (try > cap)) {
+                        cap
+                    } else {
+                        try
+                    }
+                },
+                perCalldataByte: {
+                    let try = safeMul(gasPrice, chainParams_getOrDie(const::Atom_Param_RetryablePricePerByteNumerator)) /
+                                                chainParams_getOrDie(const::Atom_Param_RetryablePricePerByteDenominator);
+                    let cap = 3 * oldRetryablePrices.perCalldataByte / 2;
+                    xif ((cap > 0) && (try > cap)) {
+                        cap
+                    } else {
+                        try
+                    }
+                },
                 nextUpdateTimestamp: safeAdd(
                     inbox_currentTimestamp(),
                     chainParams_getOrDie(const::Atom_Param_RetryableTxRepriceIntervalSeconds)
