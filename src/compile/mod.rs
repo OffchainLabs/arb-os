@@ -395,20 +395,8 @@ impl CompiledProgram {
     }
 }
 
-///Returns either a CompiledProgram generated from source code at path, otherwise returns a
-/// CompileError.
-///
-/// The file_id specified will be used as the file_id in locations originating from this source
-/// file, and if debug is set to true, then compiler internal debug information will be printed.
-pub fn compile_from_file(
-    path: &Path,
-    file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    inline: &Option<InliningHeuristic>,
-    constants_path: Option<&Path>,
-    release_build: bool,
-) -> Result<Vec<CompiledProgram>, CompileError> {
-    let library = path
-        .parent()
+fn normalize_libraries(path: &Path) -> Option<&str> {
+    path.parent()
         .map(|par| {
             par.file_name()
                 .map(|lib| {
@@ -423,7 +411,22 @@ pub fn compile_from_file(
                 })
                 .unwrap_or(None)
         })
-        .unwrap_or(None);
+        .unwrap_or(None)
+}
+
+///Returns either a CompiledProgram generated from source code at path, otherwise returns a
+/// CompileError.
+///
+/// The file_id specified will be used as the file_id in locations originating from this source
+/// file, and if debug is set to true, then compiler internal debug information will be printed.
+pub fn compile_from_file(
+    path: &Path,
+    file_info_chart: &mut BTreeMap<u64, FileInfo>,
+    inline: &Option<InliningHeuristic>,
+    constants_path: Option<&Path>,
+    release_build: bool,
+) -> Result<Vec<CompiledProgram>, CompileError> {
+    let library = normalize_libraries(path);
     if path.is_dir() {
         compile_from_folder(
             path,
