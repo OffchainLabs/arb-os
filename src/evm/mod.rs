@@ -171,6 +171,24 @@ pub fn _evm_tests() -> Result<(), ethabi::Error> {
     }
     assert_eq!(evm_logs.len(), 0);
 
+    // test log0 instruction
+    let (logs, sends) = test_contract.call_function(
+        Uint256::zero(),
+        "makeLog0",
+        &[],
+        &mut machine,
+        Uint256::zero(),
+        false,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    assert!(logs[0].succeeded());
+    let evm_logs = logs[0]._get_evm_logs();
+    assert_eq!(evm_logs.len(), 1);
+    let log_0_data = &evm_logs[0].data;
+    assert_eq!(log_0_data.len(), 32);
+    assert_eq!(Uint256::from_bytes(log_0_data), Uint256::from_u64(73));
+
     machine.write_coverage("evm_tests".to_string());
     Ok(())
 }

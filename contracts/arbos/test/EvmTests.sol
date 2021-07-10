@@ -46,6 +46,13 @@ contract EvmTests {
         }
     }
 
+    function makeLog0() public {
+        assembly {
+            mstore8(50000, 73)
+            log0(49969, 32)
+        }
+    }
+
     function getCode(address addr) internal returns(bytes memory o_code) {
         assembly {
         // retrieve the size of the code, this needs assembly
