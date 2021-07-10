@@ -1,5 +1,7 @@
 pragma solidity >=0.4.21 <0.7.0;
 
+import "./SelfDestructor.sol";
+
 
 contract EvmTests {
     function test(address otherAddr) public {
@@ -50,6 +52,14 @@ contract EvmTests {
         assembly {
             mstore8(50000, 73)
             log0(49969, 32)
+        }
+    }
+
+    function destructTest(address victim) public {
+        uint bal = address(this).balance;
+        SelfDestructor(victim).die(address(this));
+        if ((address(this).balance - bal) != 777) {
+            emit TestFail(7, address(this).balance-bal);
         }
     }
 
