@@ -163,6 +163,12 @@ pub fn _evm_tests() -> Result<(), ethabi::Error> {
     assert_eq!(sends.len(), 0);
     assert!(logs[0].succeeded());
     let evm_logs = logs[0]._get_evm_logs();
+    if evm_logs.len() != 0 {
+        let log_data = &evm_logs[0].data;
+        let val0 = Uint256::from_bytes(&log_data[0..32]);
+        let val1 = Uint256::from_bytes(&log_data[32..64]);
+        println!("Log codes: {} {}", val0, val1);
+    }
     assert_eq!(evm_logs.len(), 0);
 
     machine.write_coverage("evm_tests".to_string());
