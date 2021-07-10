@@ -3072,7 +3072,7 @@ impl _Erc2470 {
         code_filename: &str,
         args: &[ethabi::Token],
         salt: Uint256,
-    ) -> Result<AbiForContract, ethabi::Error> {
+    ) -> Result<Option<AbiForContract>, ethabi::Error> {
         let path = Path::new(code_filename);
         let mut file = File::open(path).map_err(|e| ethabi::Error::from(e.to_string()))?;
         let mut s = String::new();
@@ -3106,9 +3106,13 @@ impl _Erc2470 {
             };
 
             let addr = self._deploy(machine, augmented_code, salt)?;
-            let mut contract = AbiForContract::new_from_file(code_filename)?;
-            contract.bind_interface_to_address(addr);
-            Ok(contract)
+            if (addr == Uint256::zero()) {
+                Ok(None)
+            } else {
+                let mut contract = AbiForContract::new_from_file(code_filename)?;
+                contract.bind_interface_to_address(addr);
+                Ok(Some(contract))
+            }
         } else {
             Err(ethabi::Error::from("json file not an array"))
         }
@@ -3128,6 +3132,7 @@ fn test_erc2470() {
     let add_contract_filename = test_contract_path("Add");
     let add = _erc
         ._deploy_from_file(&mut machine, &add_contract_filename, &[], Uint256::zero())
+        .unwrap()
         .unwrap();
     assert_eq!(
         add.address,
@@ -3175,7 +3180,8 @@ fn test_create2_target_nonce_nonzero() {
     let add_contract_filename = test_contract_path("Add");
 
     // now a deploy of the add contract should fail, because the deploy address has nonzero nonce
-    assert!(_erc
+    let res = _erc
         ._deploy_from_file(&mut machine, &add_contract_filename, &[], Uint256::zero())
-        .is_err());
+        .unwrap();
+    assert!(res.is_none());
 }
