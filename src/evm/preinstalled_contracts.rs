@@ -3160,6 +3160,8 @@ fn test_erc2470() {
         Uint256::from_bytes(&receipts[0].get_return_data()),
         Uint256::from_u64(2)
     );
+
+    machine.write_coverage("test_erc2470".to_string());
 }
 
 #[test]
@@ -3184,4 +3186,6 @@ fn test_create2_target_nonce_nonzero() {
         ._deploy_from_file(&mut machine, &add_contract_filename, &[], Uint256::zero())
         .unwrap();
     assert!(res.is_none());
+
+    machine.write_coverage("test_create2_target_nonce_nonzero".to_string());
 }
