@@ -47,6 +47,7 @@ use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
+use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_set256;
 use std::bytestream::bytestream_new;
 
@@ -313,8 +314,7 @@ public impure func initEvmCallStack(
                 });
 
                 emptyAvmStack();
-                asm(entryPoint,) { jump };
-                //NOTREACHED
+                asm(entryPoint) { jump };
             } else {
                 // caller didn't have enough funds
                 if let Some(res) = gasAccounting_endTxCharges(int(0), request.feeStats) {
@@ -722,8 +722,7 @@ public impure func evmCallStack_doCall(
 
         // jump to the called code's startCodePoint -- this should never return
         let _ = gasAccounting_resumeTxCharges(gas);
-        asm(startCodePoint,) { jump };
-        //NOTREACHED
+        asm(startCodePoint) { jump };
     } else {
         // no code at destination address, so just do an eth transfer
         let success = (balance == 0) ||
@@ -835,9 +834,9 @@ public impure func evmCallStack_returnFromCall(
                 queueMessageForSend(msg);
             }
         }
-        emptyAvmStack();                             // throw away anything that callee left on the stack
-        restoreAvmStack(resumeInfo.stackContents,);  // restore the caller's stack
-        asm(success,) { };                           // push return code onto the stack, where caller expects it to be
+        emptyAvmStack();                            // throw away anything that callee left on the stack
+        restoreAvmStack(resumeInfo.stackContents);  // restore the caller's stack
+        asm(success) { };                           // push return code onto the stack, where caller expects it to be
         let _ = gasAccounting_resumeTxCharges(leftoverGas + resumeInfo.savedGas);
         restoreAuxStackAndCall(resumeInfo.codePoint, resumeInfo.auxStackContents, false);
 
@@ -848,6 +847,12 @@ public impure func evmCallStack_returnFromCall(
         // top-level call completed; will need to return to external caller
         // we call get/setGlobalAccountStore (without the safety checks) in here,
         //       because we want to write to the global store but we haven't yet cleared the last frame from the call stack
+
+        if (success && globalCurrentTxRequest.isConstructor && (bytearray_size(returnData) > 0) && (bytearray_getByte(returnData, 0) == 0xef)) {
+            // per EIP-3541, fail the transaction because the resulting account code starts with 0xef
+            success = false;
+            returnData = bytearray_new(0);
+        }
 
         if (success) {
             let (entryPoint, evmJumpTable) = xif (globalCurrentTxRequest.isConstructor) {
@@ -1184,7 +1189,7 @@ func restoreAvmStack(savedStack: Stack) {
     while( ! stack_isEmpty(savedStack) ) {
         if let Some(res) = stack_pop(savedStack) {
             let (*savedStack, top) = res;
-            asm (top,) { };  // push top onto the AVM stack
+            asm (top) { };  // push top onto the AVM stack
         }
     }
 }
@@ -1211,7 +1216,7 @@ public impure func snapshotAuxStack() -> Stack {
     while( ! stack_isEmpty(savedAuxStack)) {
         if let Some(res) = stack_pop(savedAuxStack) {
             let (*savedAuxStack, val) = res;
-            asm(val,) {
+            asm(val) {
                 auxpop
                 swap1
                 auxpush
@@ -1257,7 +1262,7 @@ public impure func restoreAuxStackAndCall(
         while( ! stack_isEmpty(savedAuxStack)) {
             if let Some(res) = stack_pop(savedAuxStack) {
                 let (*savedAuxStack, val) = res;
-                asm(val,) {
+                asm(val) {
                     auxpop
                     swap1
                     auxpush
@@ -1273,14 +1278,14 @@ public impure func restoreAuxStackAndCall(
     // Discard our callframe, push a fake return address, and jump to funcToCall
     // funcToCall will think somebody called it normally, with the restored auxstack
     if (pushFakeReturnAddress) {
-        asm(funcToCall,) {
+        asm(funcToCall) {
             auxpop
             pop
             [0] swap1  // bogus return address, which funcToCall will save in its callframe but will never use
             jump
         };
     } else {
-        asm(funcToCall,) {
+        asm(funcToCall) {
             auxpop
             pop
             jump
