@@ -153,7 +153,7 @@ The compiler uses often uses type inference to infer the types of variables from
 
 Two types are equal if each is assignable to the other.
 
-A type definition, whether imported or defined locally, does not create a new type but rather creates a new name for the same underlying type.
+A type definition `type A = B`, whether imported or defined locally, creates a new type `A` to which `B` is assignable.
 
 ## Castability
 
