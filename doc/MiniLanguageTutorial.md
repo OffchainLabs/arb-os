@@ -141,7 +141,7 @@ A value of type `V` is assignable to storage of type `S` if and only if any of t
 * `S` and `V` are tuples with the same number of fields, and each field of `V` is assignable to the corresponding field of `S`
 * `S` and `V` are arrays, and the member type of `V` is assignable to the member type of `S`
 * `S` and `V` are fixed-size arrays with the same size, and the member type of `V` is assignable to the member type of `S`
-* `S` and `V` are structs with the same number of fields, each having the same name, and each field of `V` is assignable to that of `S`
+* `S` and `V` are structs with the same number of fields, and each field of `V` has the same name as and is assignable to that of `S`
 * `S` and `V` are maps, and the key and value types of `V` are correspondingly assignable to that of `S`
 * `S` and `V` are void-returning functions with the same number of arguments, each of which in `S` being assignable to that of `V`, and either `V` is pure or `S` is impure
 * `S` and `V` are type-returning functions with the same number of arguments, each of which in `S` being assignable to that of `V`, and either `V` is pure or `S` is impure, and the return type of `V` is assignable to that of `S`
