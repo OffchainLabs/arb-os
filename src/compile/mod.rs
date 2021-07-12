@@ -166,9 +166,6 @@ impl CompileStruct {
             error_system.file_info_chart = file_info_chart.clone();
             error_system.clone()
         })?;
-        compiled_progs.iter().for_each(|prog| {
-            file_info_chart.extend(prog.file_info_chart.clone());
-        });
         let linked_prog = match link(&compiled_progs, self.test_mode, &mut error_system) {
             Ok(idk) => idk,
             Err(err) => {
