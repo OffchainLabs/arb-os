@@ -107,9 +107,7 @@ public func ripemd160hasher_push256(h: Ripemd160Hasher, val: uint) -> Ripemd160H
 
 public func ripemd160hasher_finish(h: Ripemd160Hasher) -> bytes32 {
     // write the first padding byte
-    h = ripemd160hasher_pushByte(h, 0x80) with {
-        totalSizeBytes: h.totalSizeBytes   // undo the +1 caused by ripemd160hasher_pushByte call
-    };
+    h = ripemd160hasher_pushByte(h, 0x80);
 
     // make sure there is space for the 64-bit total length
     if (h.offset > 56) {
@@ -117,6 +115,8 @@ public func ripemd160hasher_finish(h: Ripemd160Hasher) -> bytes32 {
             accumulator: asm(h.accumulator, h.buf[0], h.buf[1]) bytes32 { ripemd160f }
         } with {
             buf: unsafecast<[2]uint>((0,0))
+        } with {
+            offset: 0
         };
     }
 
@@ -124,7 +124,7 @@ public func ripemd160hasher_finish(h: Ripemd160Hasher) -> bytes32 {
     return asm(
         h.accumulator,
         h.buf[0],
-        h.buf[1] | flipEndian64(8*h.totalSizeBytes),  //TODO: check endianness
+        h.buf[1] | flipEndian64(8*(h.totalSizeBytes-1)),  // -1 to compensate for the 0x80 padding byte
     ) bytes32 { ripemd160f };
 }
 
