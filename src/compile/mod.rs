@@ -152,15 +152,26 @@ impl CompileStruct {
             Some(path) => Some(Path::new(path)),
             None => None,
         };
-        let compiled_progs = compile_from_file(
-            Path::new(&self.input),
-            &mut file_info_chart,
-            &self.inline,
-            constants_path,
-            self.must_use_global_consts,
-            &mut error_system,
-            self.release_build,
-        )
+        let compiled_progs = {
+            let path = Path::new(&self.input);
+            let library = normalize_libraries(path);
+            let (folder, main) = preprocess_path(path).map_err(|err| {
+                error_system.errors.push(err);
+                error_system.file_info_chart = file_info_chart.clone();
+                error_system.clone()
+            })?;
+            compile_from_folder(
+                folder,
+                library,
+                &main,
+                &mut file_info_chart,
+                &self.inline,
+                constants_path,
+                self.must_use_global_consts,
+                &mut error_system,
+                self.release_build,
+            )
+        }
         .map_err(|err| {
             error_system.errors.push(err);
             error_system.file_info_chart = file_info_chart.clone();
@@ -597,35 +608,6 @@ pub fn preprocess_path(path: &Path) -> Result<(&Path, String), CompileError> {
             vec![],
         ))
     }
-}
-
-///Returns either a CompiledProgram generated from source code at path, otherwise returns a
-/// CompileError.
-///
-/// The file_id specified will be used as the file_id in locations originating from this source
-/// file, and if debug is set to true, then compiler internal debug information will be printed.
-pub fn compile_from_file(
-    path: &Path,
-    file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    inline: &Option<InliningHeuristic>,
-    constants_path: Option<&Path>,
-    must_use_global_consts: bool,
-    error_system: &mut ErrorSystem,
-    release_build: bool,
-) -> Result<Vec<CompiledProgram>, CompileError> {
-    let library = normalize_libraries(path);
-    let (folder, main) = preprocess_path(path)?;
-    compile_from_folder(
-        folder,
-        library,
-        &main,
-        file_info_chart,
-        inline,
-        constants_path,
-        must_use_global_consts,
-        error_system,
-        release_build,
-    )
 }
 
 ///Prints the AST nodes with indentation representing their depth, currently not used.
