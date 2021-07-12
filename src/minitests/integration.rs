@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 fn compile_run_cycle(input: String) -> Machine {
     let mut compile = CompileStruct::default();
-    compile.input = vec![input];
+    compile.input = input;
     compile.test_mode = true;
     compile.consts_file = Some(format!("arb_os/constants.json"));
     let mexe = match compile.invoke() {
@@ -132,7 +132,7 @@ fn test_error_system() {
         correct_errors: &[&[usize]],
     ) {
         let mut compile = CompileStruct::default();
-        compile.input = vec![file_path.to_string()];
+        compile.input = file_path.to_string();
         compile.warnings_are_errors = true;
         compile.consts_file = Some("minitests/constants.json".to_string());
 

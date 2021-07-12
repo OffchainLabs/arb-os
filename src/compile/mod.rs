@@ -42,7 +42,7 @@ lalrpop_mod!(mini);
 ///Command line options for compile subcommand.
 #[derive(Clap, Debug, Default)]
 pub struct CompileStruct {
-    pub input: Vec<String>,
+    pub input: String,
     #[clap(short, long)]
     pub debug_mode: bool,
     #[clap(short, long)]
@@ -149,34 +149,31 @@ impl CompileStruct {
         let mut compiled_progs = Vec::new();
         let mut file_info_chart = BTreeMap::new();
 
-        for filename in &self.input {
-            let path = Path::new(filename);
-            let constants_path = match &self.consts_file {
-                Some(path) => Some(Path::new(path)),
-                None => None,
-            };
-            match compile_from_file(
-                path,
-                &mut file_info_chart,
-                &self.inline,
-                constants_path,
-                self.must_use_global_consts,
-                &mut error_system,
-                self.release_build,
-            ) {
-                Ok(idk) => idk,
-                Err(err) => {
-                    error_system.errors.push(err);
-                    error_system.file_info_chart = file_info_chart;
-                    return Err(error_system);
-                }
+        let constants_path = match &self.consts_file {
+            Some(path) => Some(Path::new(path)),
+            None => None,
+        };
+        match compile_from_file(
+            Path::new(&self.input),
+            &mut file_info_chart,
+            &self.inline,
+            constants_path,
+            self.must_use_global_consts,
+            &mut error_system,
+            self.release_build,
+        ) {
+            Ok(idk) => idk,
+            Err(err) => {
+                error_system.errors.push(err);
+                error_system.file_info_chart = file_info_chart;
+                return Err(error_system);
             }
-            .into_iter()
-            .for_each(|prog| {
-                file_info_chart.extend(prog.file_info_chart.clone());
-                compiled_progs.push(prog)
-            });
         }
+        .into_iter()
+        .for_each(|prog| {
+            file_info_chart.extend(prog.file_info_chart.clone());
+            compiled_progs.push(prog)
+        });
         let linked_prog = match link(&compiled_progs, self.test_mode, &mut error_system) {
             Ok(idk) => idk,
             Err(err) => {
