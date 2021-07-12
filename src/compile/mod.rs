@@ -568,6 +568,37 @@ fn normalize_libraries(path: &Path) -> Option<&str> {
         .unwrap_or(None)
 }
 
+pub fn preprocess_path(path: &Path) -> Result<(&Path, String), CompileError> {
+    if path.is_dir() {
+        Ok((path, "main".to_string()))
+    } else if let (Some(parent), Some(file_name)) = (path.parent(), path.file_stem()) {
+        Ok((
+            parent,
+            file_name
+                .to_str()
+                .ok_or_else(|| {
+                    CompileError::new(
+                        String::from("Compile error"),
+                        format!("File name {:?} must be UTF-8", file_name),
+                        vec![],
+                    )
+                })?
+                .to_string(),
+        ))
+    } else {
+        Err(CompileError::new(
+            String::from("Compile error"),
+            format!(
+                "Could not parse {}{}{} as valid path",
+                CompileError::RED,
+                path.display(),
+                CompileError::RESET,
+            ),
+            vec![],
+        ))
+    }
+}
+
 ///Returns either a CompiledProgram generated from source code at path, otherwise returns a
 /// CompileError.
 ///
@@ -583,48 +614,18 @@ pub fn compile_from_file(
     release_build: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let library = normalize_libraries(path);
-    if path.is_dir() {
-        compile_from_folder(
-            path,
-            library,
-            "main",
-            file_info_chart,
-            inline,
-            constants_path,
-            must_use_global_consts,
-            error_system,
-            release_build,
-        )
-    } else if let (Some(parent), Some(file_name)) = (path.parent(), path.file_stem()) {
-        compile_from_folder(
-            parent,
-            library,
-            file_name.to_str().ok_or_else(|| {
-                CompileError::new(
-                    String::from("Compile error"),
-                    format!("File name {:?} must be UTF-8", file_name),
-                    vec![],
-                )
-            })?,
-            file_info_chart,
-            inline,
-            constants_path,
-            must_use_global_consts,
-            error_system,
-            release_build,
-        )
-    } else {
-        Err(CompileError::new(
-            String::from("Compile error"),
-            format!(
-                "Could not parse {}{}{} as valid path",
-                CompileError::RED,
-                path.display(),
-                CompileError::RESET,
-            ),
-            vec![],
-        ))
-    }
+    let (folder, main) = preprocess_path(path)?;
+    compile_from_folder(
+        folder,
+        library,
+        &main,
+        file_info_chart,
+        inline,
+        constants_path,
+        must_use_global_consts,
+        error_system,
+        release_build,
+    )
 }
 
 ///Prints the AST nodes with indentation representing their depth, currently not used.
