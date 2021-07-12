@@ -61,7 +61,7 @@ func tests() -> uint {
     if (ripemd160hasher_finish(h) != bytes32(0x74e856c137772846e18c0c6d955666133f1d32dc)) {
         return 6;
     }
-    
+
     let h = ripemd160hasher_new();
     let i = 0x00;
     while (i < 55) {
@@ -71,12 +71,50 @@ func tests() -> uint {
     if (ripemd160hasher_finish(h) != bytes32(0x3c86963b3ff646a65ae42996e9664c747cc7e5e6)) {
         return 7;
     }
-    
+
     let h = ripemd160hasher_new();
     h = ripemd160hasher_push256(h, uint(0x0cdd6941697c828be460f241d6e71106a408c854e351c54f46b6500b106e2cdb));
     if (ripemd160hasher_finish(h) != bytes32(0xfe27e5ab7fdee1be58e9ee498709c337d4b54ba4)) {
         return 8;
     }
-    
+
+    let h = ripemd160hasher_new();
+    let i = 0x00;
+    while (i < 56) {
+        h = ripemd160hasher_pushByte(h, i);
+        i = i + 1;
+    }
+    if (ripemd160hasher_finish(h) != bytes32(0xebdd79cfd4fd9949ef8089673d2620427f487cfb)) {
+        return 9;
+    }
+
+    let h = ripemd160hasher_new();
+    let i = 0x00;
+    while (i < 256) {
+        h = ripemd160hasher_pushByte(h, i);
+        i = i + 1;
+    }
+    if (ripemd160hasher_finish(h) != bytes32(0x9c4fa072db2c871a5635e37f791e93ab45049676)) {
+        return 10;
+    }
+
+    let h = ripemd160hasher_new();
+    h = ripemd160hasher_push256(h, uint(0x0cdd6941697c828be460f241d6e71106a408c854e351c54f46b6500b106e2cdb));
+    h = ripemd160hasher_push256(h, uint(0x44a1387fb23aaa901d387b0f5fe9d4efc005b3be1da5b591d666d26912acf46d));
+    if (ripemd160hasher_finish(h) != bytes32(0x6134190eedf65ab0b4d97e4682d2b5033066256f)) {
+        return 11;
+    }
+
+    let h = ripemd160hasher_new();
+    let i = 0x00;
+    while (i < 24) {
+        h = ripemd160hasher_pushByte(h, i);
+        i = i + 1;
+    }
+    h = ripemd160hasher_push256(h, uint(0x0cdd6941697c828be460f241d6e71106a408c854e351c54f46b6500b106e2cdb));
+    if (ripemd160hasher_finish(h) != bytes32(0xc4fd260915fc7a6cd0ff64dbf01d85ace837f297)) {
+        return 12;
+    }
+
 	return 0;
 }
