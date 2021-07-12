@@ -48,7 +48,7 @@ pub trait AbstractSyntaxTree {
         }
     }
     fn is_pure(&mut self) -> bool;
-    fn display_string(&self) -> String;
+    fn display_string(&self, string_table: &StringTable) -> String;
 }
 
 ///Represents a mutable reference to any AST node.
@@ -77,33 +77,37 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
             TypeCheckedNode::Type(_) => true,
         }
     }
-    fn display_string(&self) -> String {
+    fn display_string(&self, string_table: &StringTable) -> String {
         match self {
-            TypeCheckedNode::Statement(stat) => stat.display_string(),
-            TypeCheckedNode::Expression(exp) => exp.display_string(),
-            TypeCheckedNode::StructField(field) => field.display_string(),
-            TypeCheckedNode::Type(tipe) => tipe.display_string(),
+            TypeCheckedNode::Statement(stat) => stat.display_string(string_table),
+            TypeCheckedNode::Expression(exp) => exp.display_string(string_table),
+            TypeCheckedNode::StructField(field) => field.display_string(string_table),
+            TypeCheckedNode::Type(tipe) => tipe.display_string(string_table),
         }
     }
 }
 
 fn disp(
     node: &mut TypeCheckedNode,
-    _state: &(),
+    state: &StringTable,
     mut_state: &mut (usize, Rc<RefCell<String>>),
 ) -> bool {
     for _ in 0..mut_state.0 {
         let _ = write!(*mut_state.1.borrow_mut(), "  ");
     }
-    let _ = writeln!(*mut_state.1.borrow_mut(), "{}", node.display_string());
+    let _ = writeln!(*mut_state.1.borrow_mut(), "{}", node.display_string(state));
     mut_state.0 += 1;
     true
 }
 
-pub fn display_indented(node: &mut TypeCheckedNode) -> String {
+pub fn display_indented(node: &mut TypeCheckedNode, string_table: &StringTable) -> String {
     let mut r = (3, Rc::new(RefCell::new(String::new())));
-    let _ = writeln!(*r.1.borrow_mut(), "    {}", node.display_string());
-    node.recursive_apply(disp, &(), &mut r);
+    let _ = writeln!(
+        *r.1.borrow_mut(),
+        "    {}",
+        node.display_string(string_table)
+    );
+    node.recursive_apply(disp, string_table, &mut r);
     r.1.take()
 }
 
@@ -162,7 +166,7 @@ impl AbstractSyntaxTree for TypeCheckedFunc {
     fn is_pure(&mut self) -> bool {
         self.code.iter_mut().all(|statement| statement.is_pure())
     }
-    fn display_string(&self) -> String {
+    fn display_string(&self, string_table: &StringTable) -> String {
         format!("function: {}", self.name)
     }
 }
@@ -876,21 +880,22 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
             self.child_nodes().iter_mut().all(|node| node.is_pure())
         }
     }
-    fn display_string(&self) -> String {
+    fn display_string(&self, string_table: &StringTable) -> String {
         format!(
             "{}",
-            match self.kind {
-                TypeCheckedStatementKind::ReturnVoid() => "return void",
-                TypeCheckedStatementKind::Return(_) => "return",
-                TypeCheckedStatementKind::Break(_, _) => "break",
-                TypeCheckedStatementKind::Expression(_) => "expression statement",
-                TypeCheckedStatementKind::Let(_, _) => "let",
-                TypeCheckedStatementKind::While(_, _) => "while",
-                TypeCheckedStatementKind::AssignLocal(_, _) => "=",
-                TypeCheckedStatementKind::AssignGlobal(_, _) => "global =",
-                TypeCheckedStatementKind::Asm(_, _) => "asm statement",
-                TypeCheckedStatementKind::DebugPrint(_) => "print",
-                TypeCheckedStatementKind::Assert(_) => "assert",
+            match &self.kind {
+                TypeCheckedStatementKind::ReturnVoid() => format!("return void"),
+                TypeCheckedStatementKind::Return(_) => format!("return"),
+                TypeCheckedStatementKind::Break(_, _) => format!("break"),
+                TypeCheckedStatementKind::Expression(_) => format!("expression statement"),
+                TypeCheckedStatementKind::Let(id, _) =>
+                    format!("let \"{}\"", id.display(string_table)),
+                TypeCheckedStatementKind::While(_, _) => format!("while"),
+                TypeCheckedStatementKind::AssignLocal(_, _) => format!("="),
+                TypeCheckedStatementKind::AssignGlobal(_, _) => format!("global ="),
+                TypeCheckedStatementKind::Asm(_, _) => format!("asm statement"),
+                TypeCheckedStatementKind::DebugPrint(_) => format!("print"),
+                TypeCheckedStatementKind::Assert(_) => format!("assert"),
             }
         )
     }
@@ -1078,7 +1083,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             self.child_nodes().iter_mut().all(|node| node.is_pure())
         }
     }
-    fn display_string(&self) -> String {
+    fn display_string(&self, string_table: &StringTable) -> String {
         match &self.kind {
             TypeCheckedExprKind::NewBuffer => format!("new buffer"),
             TypeCheckedExprKind::UnaryOp(op, _, _) => format!("{}", op.to_name()),
@@ -1180,8 +1185,8 @@ impl AbstractSyntaxTree for TypeCheckedFieldInitializer {
     fn is_pure(&mut self) -> bool {
         self.value.is_pure()
     }
-    fn display_string(&self) -> String {
-        self.value.display_string()
+    fn display_string(&self, string_table: &StringTable) -> String {
+        self.value.display_string(string_table)
     }
 }
 
@@ -3790,7 +3795,7 @@ impl AbstractSyntaxTree for TypeCheckedCodeBlock {
                 .map(|expr| expr.is_pure())
                 .unwrap_or(true)
     }
-    fn display_string(&self) -> String {
+    fn display_string(&self, string_table: &StringTable) -> String {
         format!("codeblock")
     }
 }

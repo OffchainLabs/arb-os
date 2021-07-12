@@ -11,7 +11,7 @@ use crate::compile::{path_display, CompileError};
 use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
 use crate::mavm::{Instruction, Value};
 use crate::pos::Location;
-use crate::stringtable::StringId;
+use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -136,7 +136,7 @@ impl AbstractSyntaxTree for Type {
     fn is_pure(&mut self) -> bool {
         true
     }
-    fn display_string(&self) -> String {
+    fn display_string(&self, _string_table: &StringTable) -> String {
         self.display()
     }
 }
@@ -1133,6 +1133,21 @@ impl<T> MatchPattern<T> {
                 .iter()
                 .flat_map(|pat| pat.collect_identifiers())
                 .collect(),
+        }
+    }
+    pub fn display(&self, string_table: &StringTable) -> String {
+        match &self.kind {
+            MatchPatternKind::Simple(id) => string_table.name_from_id(*id).clone(),
+            MatchPatternKind::Tuple(pats) => {
+                let mut s = String::from("(");
+                for pat in pats {
+                    s.push_str(&format!("{}, ", pat.display(string_table)))
+                }
+                s.pop();
+                s.pop();
+                s.push(')');
+                s
+            }
         }
     }
 }

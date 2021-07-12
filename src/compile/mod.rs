@@ -441,12 +441,15 @@ impl TypeCheckedModule {
         let mut s = String::new();
         let _ = writeln!(s, "{}", self.name);
         for func in self.checked_funcs.values_mut() {
-            let _ = writeln!(s, "  {}", func.display_string());
+            let _ = writeln!(s, "  {}", func.display_string(&self.string_table));
             for statement in &mut func.code {
                 let _ = writeln!(
                     s,
                     "{}",
-                    display_indented(&mut TypeCheckedNode::Statement(statement))
+                    display_indented(
+                        &mut TypeCheckedNode::Statement(statement),
+                        &self.string_table
+                    )
                 );
             }
         }
