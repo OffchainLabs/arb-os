@@ -109,7 +109,7 @@ struct Module {
 
 ///Represents the contents of a source file after type checking is done.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-struct TypeCheckedModule {
+pub struct TypeCheckedModule {
     /// Collection of functions defined locally within the source file that have been validated by
     /// typechecking
     checked_funcs: BTreeMap<StringId, TypeCheckedFunc>,
@@ -134,6 +134,38 @@ struct TypeCheckedModule {
 }
 
 impl CompileStruct {
+    pub fn invoke_compile(&self) -> Result<(Vec<TypeCheckedModule>, TypeTree), CompileError> {
+        let mut error_system = ErrorSystem {
+            errors: vec![],
+            warnings: vec![],
+            warnings_are_errors: self.warnings_are_errors,
+            warn_color: match self.warnings_are_errors {
+                true => CompileError::PINK,
+                false => CompileError::YELLOW,
+            },
+            file_info_chart: BTreeMap::new(),
+        };
+
+        let mut file_info_chart = BTreeMap::new();
+
+        let constants_path = match &self.consts_file {
+            Some(path) => Some(Path::new(path)),
+            None => None,
+        };
+        {
+            let path = Path::new(&self.input);
+            let library = normalize_libraries(path);
+            let (folder, main) = preprocess_path(path)?;
+            compile_to_typecheck(
+                folder,
+                library,
+                &main,
+                &mut file_info_chart,
+                constants_path,
+                &mut error_system,
+            )
+        }
+    }
     pub fn invoke(&self) -> Result<(LinkedProgram, ErrorSystem), ErrorSystem> {
         let mut error_system = ErrorSystem {
             errors: vec![],
@@ -405,7 +437,7 @@ impl TypeCheckedModule {
 
         error_system.warnings.extend(flow_warnings);
     }
-    fn show_ast(&mut self) -> String {
+    pub(crate) fn show_ast(&mut self) -> String {
         let mut s = String::new();
         let _ = writeln!(s, "{}", self.name);
         for func in self.checked_funcs.values_mut() {
@@ -687,10 +719,6 @@ pub fn compile_from_folder(
         constants_path,
         error_system,
     )?;
-
-    for module in &mut typechecked_modules {
-        println!("{}", module.show_ast());
-    }
 
     if must_use_global_consts {
         check_global_constants(&typechecked_modules, constants_path, error_system);
