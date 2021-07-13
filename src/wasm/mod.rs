@@ -2912,7 +2912,7 @@ fn process_wasm_inner(
             init.push(mk_label(end_label));
         }
         if f.field().contains("tuple2buffer") {
-            // inside frame: ptr, idx1, idx2, len; counter, offset
+            // inside frame: ptr, idx1, idx2, len; counter
             let start_label = label;
             let end_label = label + 1;
             label = label + 2;
@@ -2922,10 +2922,6 @@ fn process_wasm_inner(
             init.push(get_frame());
             init.push(push_value(int_from_usize(0)));
             init.push(set64_from_buffer(4));
-            init.push(set_frame());
-            init.push(get_frame());
-            init.push(push_value(int_from_usize(0)));
-            init.push(set64_from_buffer(5));
             init.push(set_frame());
 
             init.push(mk_label(start_label));
@@ -2939,12 +2935,17 @@ fn process_wasm_inner(
 
             init.push(debug_op("tuple2buffer loop".to_string()));
             // Read from tuple
+            init.push(simple_op(AVMOpcode::Rget));
+            init.push(immed_op(AVMOpcode::Tget, int_from_usize(5))); // tuple, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(1)); // idx, tuple
             init.push(simple_op(AVMOpcode::Tget)); // tuple2
             init.push(get_frame());
             init.push(get64_from_buffer(2)); // idx2, tuple2
             init.push(simple_op(AVMOpcode::Tget)); // buffer
+            init.push(get_frame());
+            init.push(get64_from_buffer(4)); // offset, buffer
+            init.push(simple_op(AVMOpcode::GetBuffer8)); // byte
             // Write to memory
             init.push(get_frame());
             init.push(get64_from_buffer(0)); // pointer
@@ -2952,15 +2953,6 @@ fn process_wasm_inner(
             generate_store(init, 0, memory_offset, 1);
 
             // increment counters
-            init.push(get_frame());
-            init.push(get64_from_buffer(5));
-            init.push(push_value(int_from_usize(1)));
-            init.push(simple_op(AVMOpcode::Plus));
-            init.push(get_frame());
-            init.push(simple_op(AVMOpcode::Swap1));
-            init.push(set64_from_buffer(5));
-            init.push(set_frame());
-
             init.push(get_frame());
             init.push(get64_from_buffer(4));
             init.push(push_value(int_from_usize(1)));
@@ -2985,11 +2977,13 @@ fn process_wasm_inner(
             init.push(mk_label(end_label));
         }
         if f.field().contains("tuplebytes") {
+            init.push(debug_op("tuplebytes".to_string()));
             get_memory(init); // buffer
             init.push(simple_op(AVMOpcode::Rget));
             init.push(immed_op(AVMOpcode::Tget, int_from_usize(5))); // tuple, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(1)); // idx, tuple, buffer
+            // init.push(simple_op(AVMOpcode::DebugPrint));
             init.push(simple_op(AVMOpcode::Tget)); // int, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(0)); // address, int, buffer
@@ -2997,9 +2991,11 @@ fn process_wasm_inner(
                 AVMOpcode::Plus,
                 Value::Int(Uint256::from_usize(memory_offset)),
             )); // address, int, buffer
-            init.push(simple_op(AVMOpcode::SetBuffer256)); //
+            init.push(simple_op(AVMOpcode::SetBuffer256)); // buffer
+            set_memory(init);
         }
         if f.field().contains("tuple2bytes") {
+            init.push(debug_op("tuple2bytes".to_string()));
             get_memory(init); // buffer
             init.push(simple_op(AVMOpcode::Rget));
             init.push(immed_op(AVMOpcode::Tget, int_from_usize(5))); // tuple, buffer
@@ -3015,7 +3011,8 @@ fn process_wasm_inner(
                 AVMOpcode::Plus,
                 Value::Int(Uint256::from_usize(memory_offset)),
             )); // address, int, buffer
-            init.push(simple_op(AVMOpcode::SetBuffer256)); //
+            init.push(simple_op(AVMOpcode::SetBuffer256)); // buffer
+            set_memory(init);
         }
         if f.field().contains("uintimmed") {
             get_memory(init); // buffer
@@ -3147,7 +3144,23 @@ pub fn load(buffer: &[u8], param: &[u8]) -> Vec<Instruction> {
     // a.push(push_value(int_from_usize(10000)));
     a.push(push_value(Value::new_buffer(param.to_vec())));
     a.push(push_value(tab));
-    a.push(push_value(int_from_u32(0)));
+    let v = Value::new_tuple(vec![
+        int_from_u32(123),
+        int_from_u32(1234),
+        int_from_u32(1253),
+        int_from_u32(1263),
+        int_from_u32(1273),
+        Value::new_tuple(vec![
+            int_from_u32(111),
+            int_from_u32(222),
+            int_from_u32(333),
+        ]),
+        Value::new_tuple(vec![
+            int_from_u32(10),
+            Value::new_buffer(vec![]),
+        ]),
+    ]);
+    a.push(push_value(v));
     for i in 4..res.len() {
         a.push(res[i].clone());
     }

@@ -1459,9 +1459,10 @@ impl Machine {
                         }
                     }*/
                 }
+                /*
                 if let Some(str) = &insn.debug_str {
                     println!("{}", str);
-                }
+                }*/
                 /*
                 if let Some(_str) = &insn.debug_str {
                     self.counter = self.counter + 1;
