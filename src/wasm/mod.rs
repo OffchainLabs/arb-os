@@ -210,7 +210,7 @@ fn set64_from_buffer(loc: usize) -> Instruction {
 }
 
 fn adjust_stack(res: &mut Vec<Instruction>, diff: usize, num: usize) {
-    res.push(debug_op(format!("adjust remove {} save {}", diff, num)));
+    // res.push(debug_op(format!("adjust remove {} save {}", diff, num)));
     if diff == 0 {
         return;
     }
@@ -877,10 +877,11 @@ fn handle_function(
         );
         */
         let cur_len = res.len();
+        /*
         res.push(debug_op(format!(
             "{:?} level {} func {} idx {}",
             *op, ptr, idx, idx_inf
-        )));
+        )));*/
         if unreachable {
             if *op == End {
                 if stack.len() == 0 {
@@ -1031,10 +1032,11 @@ fn handle_function(
             }
             BrIf(x) => {
                 let c = &stack[stack.len() - (*x as usize) - 1];
+                /*
                 res.push(debug_op(format!(
                     "Debug brif {:?} ptr {} next level: {} + {}",
                     c, ptr, c.level, c.rets
-                )));
+                )));*/
                 // println!("Debug brif {:?} ptr {} next level: {} + {}", c, ptr, c.level, c.rets);
                 let continue_label = label;
                 let end_label = label + 1;
@@ -2520,6 +2522,7 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
     init.push(simple_op(AVMOpcode::Noop));
     init.push(simple_op(AVMOpcode::Noop));
     init.push(simple_op(AVMOpcode::Noop));
+    init.push(simple_op(AVMOpcode::Noop));
 
     // Save register
     init.push(simple_op(AVMOpcode::Rget));
@@ -2544,6 +2547,7 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(4))); // gas left
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(0))); // memory
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(7))); // generated table
+    init.push(immed_op(AVMOpcode::Tset, int_from_usize(5))); // immed
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(1))); // call table
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(2))); // IO buffer
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(3))); // IO len
@@ -2704,6 +2708,7 @@ fn process_wasm_inner(
         init.push(set_frame());
     }
 
+    init.push(debug_op("Starting".to_string()));
     // Here we should have jump to the correct function
     if let Some(f) = find_function(&module, entry) {
         call_jump(init, f);
@@ -2906,6 +2911,112 @@ fn process_wasm_inner(
 
             init.push(mk_label(end_label));
         }
+        if f.field().contains("tuple2buffer") {
+            // inside frame: ptr, idx1, idx2, len; counter, offset
+            let start_label = label;
+            let end_label = label + 1;
+            label = label + 2;
+
+            init.push(debug_op("tuple2buffer".to_string()));
+            // init counter
+            init.push(get_frame());
+            init.push(push_value(int_from_usize(0)));
+            init.push(set64_from_buffer(4));
+            init.push(set_frame());
+            init.push(get_frame());
+            init.push(push_value(int_from_usize(0)));
+            init.push(set64_from_buffer(5));
+            init.push(set_frame());
+
+            init.push(mk_label(start_label));
+            // check if loop ends
+            init.push(get_frame());
+            init.push(get64_from_buffer(4));
+            init.push(get_frame());
+            init.push(get64_from_buffer(3));
+            init.push(simple_op(AVMOpcode::LessThan));
+            cjump(init, end_label);
+
+            init.push(debug_op("tuple2buffer loop".to_string()));
+            // Read from tuple
+            init.push(get_frame());
+            init.push(get64_from_buffer(1)); // idx, tuple
+            init.push(simple_op(AVMOpcode::Tget)); // tuple2
+            init.push(get_frame());
+            init.push(get64_from_buffer(2)); // idx2, tuple2
+            init.push(simple_op(AVMOpcode::Tget)); // buffer
+            // Write to memory
+            init.push(get_frame());
+            init.push(get64_from_buffer(0)); // pointer
+            init.push(simple_op(AVMOpcode::Swap1));
+            generate_store(init, 0, memory_offset, 1);
+
+            // increment counters
+            init.push(get_frame());
+            init.push(get64_from_buffer(5));
+            init.push(push_value(int_from_usize(1)));
+            init.push(simple_op(AVMOpcode::Plus));
+            init.push(get_frame());
+            init.push(simple_op(AVMOpcode::Swap1));
+            init.push(set64_from_buffer(5));
+            init.push(set_frame());
+
+            init.push(get_frame());
+            init.push(get64_from_buffer(4));
+            init.push(push_value(int_from_usize(1)));
+            init.push(simple_op(AVMOpcode::Plus));
+            init.push(get_frame());
+            init.push(simple_op(AVMOpcode::Swap1));
+            init.push(set64_from_buffer(4));
+            init.push(set_frame());
+
+            // also increment memory pointer
+            init.push(get_frame());
+            init.push(get64_from_buffer(0));
+            init.push(push_value(int_from_usize(1)));
+            init.push(simple_op(AVMOpcode::Plus));
+            init.push(get_frame());
+            init.push(simple_op(AVMOpcode::Swap1));
+            init.push(set64_from_buffer(0));
+            init.push(set_frame());
+
+            jump(init, start_label);
+
+            init.push(mk_label(end_label));
+        }
+        if f.field().contains("tuplebytes") {
+            get_memory(init); // buffer
+            init.push(simple_op(AVMOpcode::Rget));
+            init.push(immed_op(AVMOpcode::Tget, int_from_usize(5))); // tuple, buffer
+            init.push(get_frame());
+            init.push(get64_from_buffer(1)); // idx, tuple, buffer
+            init.push(simple_op(AVMOpcode::Tget)); // int, buffer
+            init.push(get_frame());
+            init.push(get64_from_buffer(0)); // address, int, buffer
+            init.push(immed_op(
+                AVMOpcode::Plus,
+                Value::Int(Uint256::from_usize(memory_offset)),
+            )); // address, int, buffer
+            init.push(simple_op(AVMOpcode::SetBuffer256)); //
+        }
+        if f.field().contains("tuple2bytes") {
+            get_memory(init); // buffer
+            init.push(simple_op(AVMOpcode::Rget));
+            init.push(immed_op(AVMOpcode::Tget, int_from_usize(5))); // tuple, buffer
+            init.push(get_frame());
+            init.push(get64_from_buffer(1)); // idx, tuple, buffer
+            init.push(simple_op(AVMOpcode::Tget)); // tuple2, buffer
+            init.push(get_frame());
+            init.push(get64_from_buffer(2)); // idx2, tuple2, buffer
+            init.push(simple_op(AVMOpcode::Tget)); // int, buffer
+            init.push(get_frame());
+            init.push(get64_from_buffer(0)); // address, int, buffer
+            init.push(immed_op(
+                AVMOpcode::Plus,
+                Value::Int(Uint256::from_usize(memory_offset)),
+            )); // address, int, buffer
+            init.push(simple_op(AVMOpcode::SetBuffer256)); //
+        }
         if f.field().contains("uintimmed") {
             get_memory(init); // buffer
             init.push(get_frame());
@@ -3036,7 +3147,25 @@ pub fn load(buffer: &[u8], param: &[u8]) -> Vec<Instruction> {
     // a.push(push_value(int_from_usize(10000)));
     a.push(push_value(Value::new_buffer(param.to_vec())));
     a.push(push_value(tab));
-    for i in 3..res.len() {
+    a.push(push_value(int_from_u32(0)));
+    for i in 4..res.len() {
+        a.push(res[i].clone());
+    }
+    a
+}
+
+pub fn load_immed(buffer: &[u8], param: &[u8], v: Value) -> Vec<Instruction> {
+    let init = process_wasm(buffer);
+
+    let (res, tab) = resolve_labels(init);
+    let res = clear_labels(res);
+    let mut a = vec![];
+    a.push(push_value(int_from_usize(param.len())));
+    // a.push(push_value(int_from_usize(10000)));
+    a.push(push_value(Value::new_buffer(param.to_vec())));
+    a.push(push_value(tab));
+    a.push(push_value(v));
+    for i in 4..res.len() {
         a.push(res[i].clone());
     }
     a
