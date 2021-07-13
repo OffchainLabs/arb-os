@@ -1402,7 +1402,8 @@ impl<T> MatchPattern<T> {
     }
     pub fn display(&self, string_table: &StringTable) -> String {
         match &self.kind {
-            MatchPatternKind::Simple(id) => string_table.name_from_id(*id).clone(),
+            MatchPatternKind::Bind(id) => string_table.name_from_id(*id).clone(),
+            MatchPatternKind::Assign(id) => format!("*{}", string_table.name_from_id(*id)),
             MatchPatternKind::Tuple(pats) => {
                 let mut s = String::from("(");
                 for pat in pats {
