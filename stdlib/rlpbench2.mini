@@ -35,7 +35,7 @@ use std::rlp::bytesNeededToRepresentUint;
 func main() {
 
     let buf = #include "/home/sami/rlp.wasm";
-    let ln = 16261;
+    let ln = 16370;
 	debug(123456564);
     let compiled = asm(ln, buf,) any { compilewasm };
 	debug(123);
@@ -51,8 +51,9 @@ func main() {
     let s = 0;
 
     let acc = 0;
-    while (acc < 1000000) {
+    while (acc < 100000) {
         acc = acc + 1;
+
         let ba = bytearray_new(0);
         let ba = bytearray_set256(ba, 32*0, seqNum);
         let ba = bytearray_set256(ba, 32*1, gasPrice);
@@ -65,8 +66,11 @@ func main() {
         let ba = bytearray_set256(ba, 32*8, s);
         let ba = bytearray_copy(data, 0, ba, 32*9, bytearray_size(data));
 
+        // let ba2 = bytearray_new(0);
+        // let ba = bytearray_copy(ba, 0, ba2, 0, bytearray_size(ba));
         let ba_buf = bytearray_buffer(ba);
-        // let res = asm(bytearray_size(ba),ba_buf,compiled) any { runwasm };
+        let sz = bytearray_size(ba);
+        let res = asm(sz,ba_buf,compiled) any { runwasm };
 
    }
 }

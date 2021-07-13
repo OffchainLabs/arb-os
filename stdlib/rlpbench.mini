@@ -43,7 +43,7 @@ func main() {
     let s = 0;
 
     let acc = 0;
-    while (acc < 100000) {
+    while (acc < 10000) {
         acc = acc + 1;
         let oldBuf = rlp_encodeMessageInfo(seqNum, gasPrice, gasLimit, address(to), value, data, v, r, s);
     }

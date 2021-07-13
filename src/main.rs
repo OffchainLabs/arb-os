@@ -6,8 +6,6 @@
 
 use crate::link::LinkedProgram;
 use crate::run::{Machine, MachineState};
-// use crate::run::Machine;
-// use crate::run::emulator::MachineState;
 use crate::compile::CompileStruct;
 use crate::pos::try_display_location;
 use crate::uint256::Uint256;
@@ -454,11 +452,10 @@ fn main() -> Result<(), CompileError> {
                 file_name_chart: BTreeMap::new(),
             };
             let mut machine = Machine::new(program, env);
-            /*
             for i in 0..100 {
                 machine.start_at_zero();
                 machine.run(Some(CodePt::new_internal(code_len - 1)));
-            }*/
+            }
             machine.start_at_zero();
             let used = if fname.debug {
                 machine.debug(Some(CodePt::new_internal(code_len - 1)))
@@ -528,9 +525,10 @@ fn main() -> Result<(), CompileError> {
             // wasm::run_jit(&buffer, &param);
             let a = wasm::JitWasm::new(&buffer);
             let buf = Buffer::from_bytes(param.to_vec());
+            /*
             for i in 0..1000000 {
                 a.run(buf.clone(), param.len());
-            }
+            }*/
             let (buf, extra, len, gas_left, insn, table) = a.run(buf, param.len());
             // println!("insn {:?} table {:?}", insn, table);
             // run_debug(insn, table);

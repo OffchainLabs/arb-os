@@ -2067,6 +2067,46 @@ impl fmt::Debug for JitWasm {
     }
 }
 
+fn get_tuple(v: Value, idx: usize) -> Value {
+    if let Value::Tuple(vs) = v {
+        vs[idx].clone()
+    } else {
+        int_from_u32(0)
+    }
+}
+
+fn value_bytes(v: Value) -> Vec<u8> {
+    if let Value::Int(i) = v {
+        i.to_bytes_be()
+    } else {
+        vec![0; 32]
+    }
+}
+
+fn buffer_bytes(v: Value, len: usize) -> Vec<u8> {
+    if let Value::Buffer(buf) = v {
+        let mut tmp = vec![];
+        for i in 0..len {
+            tmp.push(buf.read_byte(i as u128));
+        }
+        tmp
+    } else {
+        vec![]
+    }
+}
+
+fn get_tuple_bytes(v: Value, idx: usize) -> Vec<u8> {
+    value_bytes(get_tuple(v, idx))
+}
+
+fn get_tuple2_bytes(v: Value, idx: usize, idx2: usize) -> Vec<u8> {
+    get_tuple_bytes(get_tuple(v, idx), idx2)
+}
+
+fn get_tuple2_buffer(v: Value, idx: usize, idx2: usize, len: usize) -> Vec<u8> {
+    buffer_bytes(get_tuple(get_tuple(v, idx), idx2), len)
+}
+
 impl JitWasm {
     pub fn new(buffer: &[u8]) -> Self {
         use std::cell::RefCell;
@@ -2083,6 +2123,9 @@ impl JitWasm {
         let memory_cell2 = memory_cell.clone();
         let memory_cell3 = memory_cell.clone();
         let memory_cell4 = memory_cell.clone();
+        let memory_cell5 = memory_cell.clone();
+        let memory_cell6 = memory_cell.clone();
+        let memory_cell7 = memory_cell.clone();
 
         let extra_cell: Rc<RefCell<Vec<u8>>> = Rc::new(RefCell::new(vec![]));
         let extra_cell1 = extra_cell.clone();
@@ -2106,6 +2149,9 @@ impl JitWasm {
         let immed3 = immed_cell.clone();
         let immed4 = immed_cell.clone();
         let immed5 = immed_cell.clone();
+        let immed6 = immed_cell.clone();
+        let immed7 = immed_cell.clone();
+        let immed8 = immed_cell.clone();
 
         let special_immed_func = Func::wrap(&store, move |_offset: i32| {
             immed1.replace_with(|_| {
@@ -2158,6 +2204,48 @@ impl JitWasm {
                     int_from_usize(0),
                 ])
             });
+        });
+
+        let tuplebytes_func = Func::wrap(&store, move |ptr: i32, offset: i32| {
+            let v = &*immed6.borrow();
+            let tmp = get_tuple_bytes(v.clone(), offset as usize);
+            match &*memory_cell5.borrow() {
+                Some(memory) => {
+                    // println!("{:?}", tmp);
+                    memory
+                        .write(ptr as usize, &tmp)
+                        .expect("cannot write memory");
+                }
+                _ => println!("warning, no memory"),
+            }
+        });
+
+        let tuple2bytes_func = Func::wrap(&store, move |ptr: i32, offset: i32, offset2: i32| {
+            let v = &*immed7.borrow();
+            let tmp = get_tuple2_bytes(v.clone(), offset as usize, offset2 as usize);
+            match &*memory_cell6.borrow() {
+                Some(memory) => {
+                    // println!("{:?}", tmp);
+                    memory
+                        .write(ptr as usize, &tmp)
+                        .expect("cannot write memory");
+                }
+                _ => println!("warning, no memory"),
+            }
+        });
+
+        let tuple2buffer_func = Func::wrap(&store, move |ptr: i32, offset: i32, offset2: i32, len: i32| {
+            let v = &*immed8.borrow();
+            let tmp = get_tuple2_buffer(v.clone(), offset as usize, offset2 as usize, len as usize);
+            match &*memory_cell7.borrow() {
+                Some(memory) => {
+                    // println!("{:?}", tmp);
+                    memory
+                        .write(ptr as usize, &tmp)
+                        .expect("cannot write memory");
+                }
+                _ => println!("warning, no memory"),
+            }
         });
 
         let insn_cell: Rc<RefCell<Vec<Instruction>>> = Rc::new(RefCell::new(vec![]));
@@ -2311,6 +2399,12 @@ impl JitWasm {
                         imports.push(push_inst_func.clone().into())
                     } else if name.contains("cptable") {
                         imports.push(cptable_func.clone().into())
+                    } else if name.contains("tuplebytes") {
+                        imports.push(tuplebytes_func.clone().into())
+                    } else if name.contains("tuple2bytes") {
+                        imports.push(tuple2bytes_func.clone().into())
+                    } else if name.contains("tuple2buffer") {
+                        imports.push(tuple2buffer_func.clone().into())
                     } else {
                         imports.push(error_func.clone().into())
                     }
@@ -2335,6 +2429,27 @@ impl JitWasm {
             insn_cell,
             table_cell,
         };
+    }
+
+    pub fn run_immed(&self, buf: Buffer, len: usize, v: Value) -> (Buffer, Vec<u8>, usize, u64, Vec<Instruction>, Vec<(usize, usize)>) {
+        self.cell.replace_with(|_buf| buf);
+        self.len_cell.replace_with(|_len| len as i32);
+        self.immed_cell.replace_with(|_buf| v);
+        self.gas_cell.replace_with(|_gas| 1000000000);
+
+        let _res = match self.instance.get_typed_func::<(), (i32)>("test") {
+            Ok(f) => get_answer(f) as i64,
+            Err(_) => 0,
+        };
+
+        (
+            self.cell.borrow().clone(),
+            self.extra_cell.borrow().clone(),
+            self.len_cell.borrow().clone() as usize,
+            self.gas_cell.borrow().clone() as u64,
+            self.insn_cell.borrow().clone(),
+            self.table_cell.borrow().clone(),
+        )
     }
 
     pub fn run(&self, buf: Buffer, len: usize) -> (Buffer, Vec<u8>, usize, u64, Vec<Instruction>, Vec<(usize, usize)>) {
