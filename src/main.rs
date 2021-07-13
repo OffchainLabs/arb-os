@@ -42,6 +42,8 @@ struct RunStruct {
     input: String,
     #[clap(short, long)]
     debug: bool,
+    #[clap(short, long)]
+    coverage: Option<String>,
 }
 
 ///Command line options for EvmDebug subcommand.
@@ -118,6 +120,9 @@ enum Args {
     EvmDebug(EvmDebug),
     Profiler(Profiler),
     Replay(Replay),
+    PrintAST(CompileStruct),
+    WriteAST(CompileStruct),
+    CodeFromAST(CompileStruct),
     MakeTestLogs,
     MakeBenchmarks,
     MakeTemplates,
@@ -161,7 +166,7 @@ fn main() -> Result<(), CompileError> {
             let filename = run.input;
             let debug = run.debug;
             let path = Path::new(&filename);
-            match run_from_file(path, Vec::new(), debug) {
+            match run_from_file(path, Vec::new(), run.coverage, debug) {
                 Ok(logs) => {
                     println!("Logs: {:?}", logs);
                 }
@@ -198,6 +203,36 @@ fn main() -> Result<(), CompileError> {
                 panic!("Error reading from {}: {}", path, e);
             }
         }
+
+        Args::PrintAST(comp) => {
+            let (mut modules, _) = comp.invoke_compile()?;
+
+            for module in &mut modules {
+                println!("{}", module.show_ast());
+            }
+        }
+
+        Args::WriteAST(comp) => {
+            let (modules, _) = comp.invoke_compile()?;
+
+            let k = serde_json::to_string_pretty(&modules).map_err(|_| {
+                CompileError::new(
+                    String::from("Write AST error"),
+                    format!("Failed to make json"),
+                    vec![],
+                )
+            })?;
+            let mut output = get_output(comp.output.clone()).unwrap();
+            write!(output, "{}", k).map_err(|_| {
+                CompileError::new(
+                    String::from("Write AST error"),
+                    format!("Failed to write to file"),
+                    vec![],
+                )
+            })?;
+        }
+
+        Args::CodeFromAST(_) => unimplemented!(),
 
         Args::MakeTestLogs => {
             evm::make_logs_for_all_arbos_tests();

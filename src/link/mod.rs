@@ -64,7 +64,7 @@ pub struct LinkedProgram {
     pub code: Vec<Instruction<AVMOpcode>>,
     pub static_val: Value,
     pub globals: Vec<GlobalVarDecl>,
-    #[serde(default)]
+    // #[serde(default)]
     pub file_info_chart: BTreeMap<u64, FileInfo>,
     pub type_tree: SerializableTypeTree,
 }
@@ -185,7 +185,7 @@ impl ImportedFunc {
 ///
 /// This struct differs from `ExportedFuncPoint` because the label field points to a virtual label
 /// rather than an absolute address.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ExportedFunc {
     pub name: String,
     pub label: Label,

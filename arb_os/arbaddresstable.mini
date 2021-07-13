@@ -173,8 +173,7 @@ impure func arbAddressTable_decompress(_topFrame: EvmCallFrame, calldata: ByteAr
     }
     let stream = bytestream_new(bytearray_extract(calldata, 100+offset, bytesLen-offset));
     if let Some(res) = decompressAddress(stream) {
-        let (ustr, addr) = res;   //MIXEDLET
-        stream = ustr;
+        let (*stream, addr) = res;
         if (evmCallStack_setTopFrameMemory(
             bytearray_set256(
                 bytearray_set256(
@@ -202,17 +201,11 @@ impure func arbAddressTable_compress(_topFrame: EvmCallFrame, calldata: ByteArra
         evmOp_revert_knownCodePc(address(const::Address_ArbAddressTable), 100, 0, 0);
     }
     let addr = address(bytearray_get256(calldata, 4));
-    let compressedData = bytearray_new(0);
-    let compressedDataLen = 0;
-    if let Some(index) = addressTable_getByAddress(getGlobalAddressTable(), addr) {  //MIXEDLET with xif
-        let (ba, sz) = rlp_encodeUint(index, compressedData, 0);
-        compressedData = ba;
-        compressedDataLen = sz;
+    let (compressedData, compressedDataLen) = xif let Some(index) = addressTable_getByAddress(getGlobalAddressTable(), addr) {
+        rlp_encodeUint(index, bytearray_new(0), 0)
     } else {
-        let (ba, sz) = rlp_encodeAddress(addr, compressedData, 0);
-        compressedData = ba;
-        compressedDataLen = sz;
-    }
+        rlp_encodeAddress(addr, bytearray_new(0), 0)
+    };
     let mem = bytearray_set256(
         bytearray_set256(
             bytearray_set256(

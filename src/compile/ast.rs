@@ -11,7 +11,7 @@ use crate::compile::{path_display, CompileError};
 use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
 use crate::mavm::{Instruction, Value};
 use crate::pos::Location;
-use crate::stringtable::StringId;
+use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -136,6 +136,9 @@ impl AbstractSyntaxTree for Type {
     fn is_pure(&mut self) -> bool {
         true
     }
+    fn display_string(&self, _string_table: &StringTable) -> String {
+        self.display()
+    }
 }
 
 impl Type {
@@ -210,6 +213,207 @@ impl Type {
                 None
             }
             _ => None,
+        }
+    }
+
+    pub fn covariant_castable(
+        &self,
+        rhs: &Self,
+        type_tree: &TypeTree,
+        mut seen: HashSet<(Type, Type)>,
+    ) -> bool {
+        if *rhs == Type::Every {
+            return true;
+        }
+        match self {
+            Type::Any => *rhs != Type::Void,
+            Type::Uint | Type::Int | Type::Bool | Type::Bytes32 | Type::EthAddress => match &rhs {
+                Type::Uint | Type::Int | Type::Bool | Type::Bytes32 | Type::EthAddress => true,
+                _ => false,
+            },
+            Type::Buffer | Type::Void | Type::Every => rhs == self,
+            Type::Tuple(tvec) => {
+                if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
+                    type_vectors_covariant_castable(tvec, &tvec2, type_tree, seen)
+                } else {
+                    false
+                }
+            }
+            Type::Array(t) => {
+                if let Ok(Type::Array(t2)) = rhs.get_representation(type_tree) {
+                    t.covariant_castable(&t2, type_tree, seen)
+                } else {
+                    false
+                }
+            }
+            Type::FixedArray(t, s) => {
+                if let Ok(Type::FixedArray(t2, s2)) = rhs.get_representation(type_tree) {
+                    (*s == s2) && t.covariant_castable(&t2, type_tree, seen)
+                } else {
+                    false
+                }
+            }
+            Type::Struct(fields) => {
+                if let Ok(Type::Struct(fields2)) = rhs.get_representation(type_tree) {
+                    field_vectors_covariant_castable(fields, &fields2, type_tree, seen)
+                } else {
+                    false
+                }
+            }
+            Type::Nominal(_, _) => {
+                if let (Ok(left), Ok(right)) = (
+                    self.get_representation(type_tree),
+                    rhs.get_representation(type_tree),
+                ) {
+                    if seen.insert((left.clone(), right.clone())) {
+                        left.covariant_castable(&right, type_tree, seen)
+                    } else {
+                        true
+                    }
+                } else {
+                    false
+                }
+            }
+            Type::Func(_, args, ret) => {
+                if let Type::Func(_, args2, ret2) = rhs {
+                    //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
+                    type_vectors_covariant_castable(args2, args, type_tree, seen.clone())
+                        && (ret.covariant_castable(ret2, type_tree, seen))
+                } else {
+                    false
+                }
+            }
+            Type::Map(key1, val1) => {
+                if let Type::Map(key2, val2) = rhs {
+                    if let Ok(val2) = val2.get_representation(type_tree) {
+                        key1.covariant_castable(key2, type_tree, seen.clone())
+                            && (val1.covariant_castable(&val2, type_tree, seen))
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
+            Type::Option(_) => {
+                if let Ok(Type::Option(_)) = rhs.get_representation(type_tree) {
+                    true
+                } else {
+                    false
+                }
+            }
+            Type::Union(inner) => {
+                if let Ok(Type::Union(inner2)) = rhs.get_representation(type_tree) {
+                    type_vectors_covariant_castable(&*inner2, inner, type_tree, seen.clone())
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
+    pub fn castable(
+        &self,
+        rhs: &Self,
+        type_tree: &TypeTree,
+        mut seen: HashSet<(Type, Type)>,
+    ) -> bool {
+        if *rhs == Type::Every {
+            return true;
+        }
+        match self {
+            Type::Any => *rhs != Type::Void,
+            Type::Uint | Type::Int | Type::Bytes32 => match &rhs {
+                Type::Uint | Type::Int | Type::Bytes32 => true,
+                _ => false,
+            },
+            Type::EthAddress => match &rhs {
+                Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress => true,
+                _ => false,
+            },
+            Type::Bool => match &rhs {
+                Type::Uint | Type::Int | Type::Bool | Type::Bytes32 | Type::EthAddress => true,
+                _ => false,
+            },
+            Type::Buffer | Type::Void | Type::Every => rhs == self,
+            Type::Tuple(tvec) => {
+                if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
+                    type_vectors_castable(tvec, &tvec2, type_tree, seen)
+                } else {
+                    false
+                }
+            }
+            Type::Array(t) => {
+                if let Ok(Type::Array(t2)) = rhs.get_representation(type_tree) {
+                    t.castable(&t2, type_tree, seen)
+                } else {
+                    false
+                }
+            }
+            Type::FixedArray(t, s) => {
+                if let Ok(Type::FixedArray(t2, s2)) = rhs.get_representation(type_tree) {
+                    (*s == s2) && t.castable(&t2, type_tree, seen)
+                } else {
+                    false
+                }
+            }
+            Type::Struct(fields) => {
+                if let Ok(Type::Struct(fields2)) = rhs.get_representation(type_tree) {
+                    field_vectors_castable(fields, &fields2, type_tree, seen)
+                } else {
+                    false
+                }
+            }
+            Type::Nominal(_, _) => {
+                if let (Ok(left), Ok(right)) = (
+                    self.get_representation(type_tree),
+                    rhs.get_representation(type_tree),
+                ) {
+                    if seen.insert((left.clone(), right.clone())) {
+                        left.castable(&right, type_tree, seen)
+                    } else {
+                        true
+                    }
+                } else {
+                    false
+                }
+            }
+            Type::Func(is_impure, args, ret) => {
+                if let Type::Func(is_impure2, args2, ret2) = rhs {
+                    //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
+                    (*is_impure || !is_impure2)
+                        && type_vectors_castable(args2, args, type_tree, seen.clone())
+                        && (ret.castable(ret2, type_tree, seen))
+                } else {
+                    false
+                }
+            }
+            Type::Map(key1, val1) => {
+                if let Type::Map(key2, val2) = rhs {
+                    if let Ok(val2) = val2.get_representation(type_tree) {
+                        key1.castable(key2, type_tree, seen.clone())
+                            && (val1.castable(&val2, type_tree, seen))
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
+            Type::Option(inner) => {
+                if let Ok(Type::Option(inner2)) = rhs.get_representation(type_tree) {
+                    inner.castable(&inner2, type_tree, seen)
+                } else {
+                    false
+                }
+            }
+            Type::Union(inner) => {
+                if let Ok(Type::Union(inner2)) = rhs.get_representation(type_tree) {
+                    type_vectors_castable(&*inner2, inner, type_tree, seen.clone())
+                } else {
+                    false
+                }
+            }
         }
     }
 
@@ -783,6 +987,32 @@ impl Type {
     }
 }
 
+pub fn type_vectors_covariant_castable(
+    tvec1: &[Type],
+    tvec2: &[Type],
+    type_tree: &TypeTree,
+    seen: HashSet<(Type, Type)>,
+) -> bool {
+    tvec1.len() == tvec2.len()
+        && tvec1
+            .iter()
+            .zip(tvec2)
+            .all(|(t1, t2)| t1.covariant_castable(t2, type_tree, seen.clone()))
+}
+
+pub fn type_vectors_castable(
+    tvec1: &[Type],
+    tvec2: &[Type],
+    type_tree: &TypeTree,
+    seen: HashSet<(Type, Type)>,
+) -> bool {
+    tvec1.len() == tvec2.len()
+        && tvec1
+            .iter()
+            .zip(tvec2)
+            .all(|(t1, t2)| t1.castable(t2, type_tree, seen.clone()))
+}
+
 ///Returns true if each type in tvec2 is a subtype of the type in tvec1 at the same index, and tvec1
 /// and tvec2 have the same length.
 pub fn type_vectors_assignable(
@@ -796,6 +1026,32 @@ pub fn type_vectors_assignable(
             .iter()
             .zip(tvec2)
             .all(|(t1, t2)| t1.assignable(t2, type_tree, seen.clone()))
+}
+
+fn field_vectors_covariant_castable(
+    tvec1: &[StructField],
+    tvec2: &[StructField],
+    type_tree: &TypeTree,
+    seen: HashSet<(Type, Type)>,
+) -> bool {
+    tvec1.len() == tvec2.len()
+        && tvec1.iter().zip(tvec2).all(|(t1, t2)| {
+            t1.tipe
+                .covariant_castable(&t2.tipe, type_tree, seen.clone())
+        })
+}
+
+fn field_vectors_castable(
+    tvec1: &[StructField],
+    tvec2: &[StructField],
+    type_tree: &TypeTree,
+    seen: HashSet<(Type, Type)>,
+) -> bool {
+    tvec1.len() == tvec2.len()
+        && tvec1
+            .iter()
+            .zip(tvec2)
+            .all(|(t1, t2)| t1.tipe.castable(&t2.tipe, type_tree, seen.clone()))
 }
 
 ///Identical to `type_vectors_assignable`
@@ -1085,7 +1341,6 @@ pub struct Statement {
 ///A raw statement containing no debug information that has not yet been type checked.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum StatementKind {
-    Noop(),
     ReturnVoid(),
     Return(Expr),
     Break(Option<Expr>, Option<String>),
@@ -1101,36 +1356,64 @@ pub enum StatementKind {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MatchPattern<T = ()> {
     pub(crate) kind: MatchPatternKind<MatchPattern<T>>,
+    pub(crate) debug_info: DebugInfo,
     pub(crate) cached: T,
 }
 
 ///Either a single identifier or a tuple of identifiers, used in mini let bindings.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MatchPatternKind<T> {
-    Simple(StringId),
+    Bind(StringId),
+    Assign(StringId),
     Tuple(Vec<T>),
 }
 
 impl<T> MatchPattern<T> {
-    pub fn new_simple(id: StringId, cached: T) -> Self {
+    pub fn new_bind(id: StringId, debug_info: DebugInfo, cached: T) -> Self {
         Self {
-            kind: MatchPatternKind::Simple(id),
+            kind: MatchPatternKind::Bind(id),
+            debug_info,
             cached,
         }
     }
-    pub fn new_tuple(id: Vec<MatchPattern<T>>, cached: T) -> Self {
+    pub fn new_assign(id: StringId, debug_info: DebugInfo, cached: T) -> Self {
+        Self {
+            kind: MatchPatternKind::Assign(id),
+            debug_info,
+            cached,
+        }
+    }
+    pub fn new_tuple(id: Vec<MatchPattern<T>>, debug_info: DebugInfo, cached: T) -> Self {
         Self {
             kind: MatchPatternKind::Tuple(id),
+            debug_info,
             cached,
         }
     }
-    pub fn collect_identifiers(&self) -> Vec<StringId> {
+    pub fn collect_identifiers(&self) -> Vec<(StringId, bool, DebugInfo)> {
         match &self.kind {
-            MatchPatternKind::Simple(id) => vec![*id],
+            MatchPatternKind::Bind(id) => vec![(*id, false, self.debug_info)],
+            MatchPatternKind::Assign(id) => vec![(*id, true, self.debug_info)],
             MatchPatternKind::Tuple(pats) => pats
                 .iter()
                 .flat_map(|pat| pat.collect_identifiers())
                 .collect(),
+        }
+    }
+    pub fn display(&self, string_table: &StringTable) -> String {
+        match &self.kind {
+            MatchPatternKind::Bind(id) => string_table.name_from_id(*id).clone(),
+            MatchPatternKind::Assign(id) => format!("*{}", string_table.name_from_id(*id)),
+            MatchPatternKind::Tuple(pats) => {
+                let mut s = String::from("(");
+                for pat in pats {
+                    s.push_str(&format!("{}, ", pat.display(string_table)))
+                }
+                s.pop();
+                s.pop();
+                s.push(')');
+                s
+            }
         }
     }
 }
@@ -1235,6 +1518,9 @@ pub enum ExprKind {
     NewUnion(Vec<Type>, Box<Expr>),
     ArrayOrMapMod(Box<Expr>, Box<Expr>, Box<Expr>),
     StructMod(Box<Expr>, String, Box<Expr>),
+    WeakCast(Box<Expr>, Type),
+    Cast(Box<Expr>, Type),
+    CovariantCast(Box<Expr>, Type),
     UnsafeCast(Box<Expr>, Type),
     Asm(Type, Vec<Instruction>, Vec<Expr>),
     Error,
@@ -1288,6 +1574,25 @@ pub enum UnaryOp {
     ToAddress,
 }
 
+impl UnaryOp {
+    pub fn to_name(&self) -> String {
+        format!(
+            "{}",
+            match self {
+                UnaryOp::Minus => "unary minus",
+                UnaryOp::BitwiseNeg => "~",
+                UnaryOp::Not => "!",
+                UnaryOp::Hash => "hash 1 item",
+                UnaryOp::Len => "len",
+                UnaryOp::ToUint => "uint cast",
+                UnaryOp::ToInt => "int cast",
+                UnaryOp::ToBytes32 => "bytes32 cast",
+                UnaryOp::ToAddress => "address cast",
+            }
+        )
+    }
+}
+
 ///A mini binary operator.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum BinaryOp {
@@ -1313,12 +1618,46 @@ pub enum BinaryOp {
     BitwiseXor,
     ShiftLeft,
     ShiftRight,
-    _LogicalAnd,
-    LogicalOr,
     Hash,
     GetBuffer8,
     GetBuffer64,
     GetBuffer256,
+}
+
+impl BinaryOp {
+    pub fn to_name(&self) -> String {
+        format!(
+            "{}",
+            match self {
+                BinaryOp::Plus => "+",
+                BinaryOp::Minus => "-",
+                BinaryOp::Times => "*",
+                BinaryOp::Div => "/",
+                BinaryOp::Mod => "%",
+                BinaryOp::Sdiv => "signed /",
+                BinaryOp::Smod => "signed %",
+                BinaryOp::LessThan => "<",
+                BinaryOp::GreaterThan => ">",
+                BinaryOp::LessEq => "<=",
+                BinaryOp::GreaterEq => ">=",
+                BinaryOp::SLessThan => "< signed",
+                BinaryOp::SGreaterThan => "> signed",
+                BinaryOp::SLessEq => "<= signed",
+                BinaryOp::SGreaterEq => ">= signed",
+                BinaryOp::Equal => "==",
+                BinaryOp::NotEqual => "!=",
+                BinaryOp::BitwiseAnd => "&",
+                BinaryOp::BitwiseOr => "|",
+                BinaryOp::BitwiseXor => "^",
+                BinaryOp::ShiftLeft => "<<",
+                BinaryOp::ShiftRight => ">>",
+                BinaryOp::Hash => "hash 2 items",
+                BinaryOp::GetBuffer8 => "get buffer 8",
+                BinaryOp::GetBuffer64 => "get buffer 64",
+                BinaryOp::GetBuffer256 => "get buffer 256",
+            }
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -1326,6 +1665,19 @@ pub enum TrinaryOp {
     SetBuffer8,
     SetBuffer64,
     SetBuffer256,
+}
+
+impl TrinaryOp {
+    pub fn to_name(&self) -> String {
+        format!(
+            "{}",
+            match self {
+                TrinaryOp::SetBuffer8 => "set buffer 8",
+                TrinaryOp::SetBuffer64 => "set buffer 64",
+                TrinaryOp::SetBuffer256 => "set buffer 256",
+            }
+        )
+    }
 }
 
 ///Used in StructInitializer expressions to map expressions to fields of the struct.
