@@ -2211,7 +2211,7 @@ impl JitWasm {
             let tmp = get_tuple_bytes(v.clone(), offset as usize);
             match &*memory_cell5.borrow() {
                 Some(memory) => {
-                    // println!("{:?}", tmp);
+                    println!("tuple bytes {:?}", tmp);
                     memory
                         .write(ptr as usize, &tmp)
                         .expect("cannot write memory");
@@ -2225,7 +2225,7 @@ impl JitWasm {
             let tmp = get_tuple2_bytes(v.clone(), offset as usize, offset2 as usize);
             match &*memory_cell6.borrow() {
                 Some(memory) => {
-                    // println!("{:?}", tmp);
+                    println!("tuple2bytes {:?}", tmp);
                     memory
                         .write(ptr as usize, &tmp)
                         .expect("cannot write memory");
@@ -2239,7 +2239,7 @@ impl JitWasm {
             let tmp = get_tuple2_buffer(v.clone(), offset as usize, offset2 as usize, len as usize);
             match &*memory_cell7.borrow() {
                 Some(memory) => {
-                    // println!("{:?}", tmp);
+                    println!("tuple2 buffer {:?}", tmp);
                     memory
                         .write(ptr as usize, &tmp)
                         .expect("cannot write memory");

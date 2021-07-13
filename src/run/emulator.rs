@@ -2316,11 +2316,12 @@ impl Machine {
                         Ok(true)
                     }
                     AVMOpcode::RunWasm => {
+                        let v = self.stack.pop(&self.state)?;
                         let arg = self.stack.pop_usize(&self.state)?;
                         let buf = self.stack.pop_buffer(&self.state)?;
                         let (_, idx) = self.stack.pop_wasm_codepoint(&self.state)?;
                         // println!("Going to run JIT");
-                        let (nbuf, _, len, gas_left, _, _) = self.wasm_instances[idx].run(buf, arg);
+                        let (nbuf, _, len, gas_left, _, _) = self.wasm_instances[idx].run_immed(buf, arg, v);
 
                         let gas256 = Uint256::from_u64(gas_left);
                         // self.total_gas_usage = self.total_gas_usage.sub(&gas256).unwrap();
