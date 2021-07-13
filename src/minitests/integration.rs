@@ -7,15 +7,18 @@ use std::sync::Arc;
 
 fn compile_run_cycle(input: String) -> Machine {
     let mut compile = CompileStruct::default();
-    compile.input = input;
+    compile.input = input.clone();
     compile.test_mode = true;
     compile.consts_file = Some(format!("arb_os/constants.json"));
+
     let mexe = match compile.invoke() {
         Ok((mexe, _error_system)) => mexe,
         Err(_error_system) => panic!("failed to compile"),
     };
     let mut machine = Machine::new(mexe, RuntimeEnvironment::new(None));
-    run(&mut machine, vec![], false).unwrap();
+    machine.start_coverage();
+    run(&mut machine, vec![], false, None).unwrap();
+    machine.write_coverage(input.replace("/", "-").replace(".mini", ""));
     machine
 }
 
@@ -193,6 +196,7 @@ fn test_error_system() {
             &[76],
             &[87],
             &[89],
+            &[94],
             &[94],
             &[96],
             &[84, 86, 100],

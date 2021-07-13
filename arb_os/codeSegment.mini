@@ -64,8 +64,7 @@ impure func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
     let reachable = true;   // true if the next instruction is reachable
     return xloop {
         if let Some(res) = bytestream_getByte(bs) {
-            let (ubs, opcode) = res;  //MIXEDLET
-            bs = ubs;
+            let (*bs, opcode) = res;
             if (opcode == const::EvmOpcode_jumpdest) {
                 reachable = true;
             }
@@ -74,16 +73,14 @@ impure func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
                 // it's a pushN instruction; unmarshal the immediate value and push it
                 let bytesRemaining = opcode - (const::EvmOpcode_push1 - 1);
                 let imm = xif let Some(res) = bytestream_getPartialWord(bs, bytesRemaining) {
-                    let (ubs, v) = res;  //MIXEDLET
-                    bs = ubs;
+                    let (*bs, v) = res;
                     v
                 } else {
                     // code segment ended unexpectedly, so parse and push as many bytes as we can, per EVM spec
                     let val = 0;
                     while (bytesRemaining > 0) {
                         if let Some(res) = bytestream_getByte(bs) {
-                            let (ubs, v) = res;  //MIXEDLET
-                            bs = ubs;
+                            let (*bs, v) = res;
                             val = 256*val + v;
                         }
                         bytesRemaining = bytesRemaining-1;
@@ -184,8 +181,7 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
     return xloop {
         if let Some(res) = evmInstructionStack_pop(insns) {
             let invalidInstruction = false;
-            let (uinsns, insn) = res;  //MIXEDLET
-            insns = uinsns;
+            let (*insns, insn) = res;
             let opcode = insn.opcode;
             if (opcode < 0x80) {    // nested if/else structure is for efficiency, to avoid long if/elseif/else chain
                 if (opcode < 0x40) {
@@ -315,6 +311,8 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
                                 code = pushEvmInsnCall(const::EvmOp_chainId, code);
                             } elseif (opcode == 0x47) { // SELFBALANCE
                                 code = pushEvmInsnCall(const::EvmOp_selfbalance, code);
+                            } elseif (opcode == 0x48) { // BASEFEE
+                                code = pushEvmInsnCall(const::EvmOp_gasprice, code);
                             } elseif (opcode == 0x50) { // POP
                                 code = pushInstruction(const::AVM_pop, code);
                             } elseif (opcode == 0x51) { // MLOAD
