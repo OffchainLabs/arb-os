@@ -61,6 +61,8 @@ pub struct CompileStruct {
     pub must_use_global_consts: bool,
     #[clap(short, long)]
     pub release_build: bool,
+    #[clap(short, long)]
+    pub no_builtins: bool,
 }
 
 #[derive(Clap, Debug)]
@@ -202,13 +204,21 @@ impl CompileStruct {
                 self.must_use_global_consts,
                 &mut error_system,
                 self.release_build,
-            )
+                !self.no_builtins,
+            ) {
+                Ok(idk) => idk,
+                Err(err) => {
+                    error_system.errors.push(err);
+                    error_system.file_info_chart = file_info_chart;
+                    return Err(error_system);
+                }
+            }
+            .into_iter()
+            .for_each(|prog| {
+                file_info_chart.extend(prog.file_info_chart.clone());
+                compiled_progs.push(prog)
+            });
         }
-        .map_err(|err| {
-            error_system.errors.push(err);
-            error_system.file_info_chart = file_info_chart.clone();
-            error_system.clone()
-        })?;
         let linked_prog = match link(&compiled_progs, self.test_mode, &mut error_system) {
             Ok(idk) => idk,
             Err(err) => {
@@ -672,6 +682,7 @@ fn compile_to_typecheck(
         file_info_chart,
         constants_path,
         error_system,
+        builtins,
     )?;
 
     resolve_imports(&mut programs, &import_map, error_system)?;
@@ -713,6 +724,7 @@ pub fn compile_from_folder(
     must_use_global_consts: bool,
     error_system: &mut ErrorSystem,
     release_build: bool,
+    builtins: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let (mut typechecked_modules, type_tree) = compile_to_typecheck(
         folder,
@@ -780,6 +792,7 @@ fn create_program_tree(
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     constants_path: Option<&Path>,
     error_system: &mut ErrorSystem,
+    builtins: bool,
 ) -> Result<
     (
         HashMap<Vec<String>, Module>,
@@ -853,6 +866,7 @@ fn create_program_tree(
                 error_system,
             )?,
             path.clone(),
+            builtins,
         );
         paths.append(&mut imports.iter().map(|imp| imp.path.clone()).collect());
         import_map.insert(path.clone(), imports.clone());

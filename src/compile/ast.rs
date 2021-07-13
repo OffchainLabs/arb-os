@@ -762,7 +762,7 @@ impl Type {
                     include_pathname,
                     type_tree,
                 );
-                (format!("option<{}>", display), subtypes)
+                (format!("option<{}> ", display), subtypes)
             }
             Type::Union(types) => {
                 let mut s = String::from("union<");
@@ -1152,6 +1152,13 @@ impl<T> MatchPattern<T> {
     }
 }
 
+///An identifier or array index for left-hand-side substructure assignments
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SubData {
+    Dot(StringId),
+    ArrayOrMap(Expr),
+}
+
 ///Represents a constant mini value of type Option<T> for some type T.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum OptionConst {
@@ -1247,7 +1254,9 @@ pub enum ExprKind {
     StructMod(Box<Expr>, String, Box<Expr>),
     UnsafeCast(Box<Expr>, Type),
     Asm(Type, Vec<Instruction>, Vec<Expr>),
-    Panic,
+    Error,
+    GetGas,
+    SetGas(Box<Expr>),
     Try(Box<Expr>),
     If(Box<Expr>, CodeBlock, Option<CodeBlock>),
     IfLet(StringId, Box<Expr>, CodeBlock, Option<CodeBlock>),

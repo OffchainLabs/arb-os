@@ -35,9 +35,9 @@ use arbsys::arbsys_txcall;
 use arbowner::arbowner_txcall;
 use arbgasinfo::arbgasinfo_txcall;
 use arbosTest::arbosTest_txcall;
-use arbsys::arbAddressTable_txcall;
-use arbsys::arbBLS_txcall;
-use arbsys::arbFunctionTable_txcall;
+use arbaddresstable::arbAddressTable_txcall;
+use arbbls::arbBLS_txcall;
+use arbfunctiontable::arbFunctionTable_txcall;
 use arbaggregator::arbaggregator_txcall;
 use arbretryable::arbretryable_txcall;
 use arbstatistics::arbStatistics_txcall;
@@ -419,7 +419,7 @@ public impure func precompile_0x09() { // Blake2
             evmOp_revert_knownPc(0, 0, 0);
         }
 
-        let numRounds = asm(256-32, bytearray_get256(calldata, 0)) uint { shr };
+        let numRounds = (bytearray_get256(calldata, 0) >> (256-32));
         if (numRounds > 0xffff) {
             evmOp_revert_knownPc(1, 0, 0);
         }
