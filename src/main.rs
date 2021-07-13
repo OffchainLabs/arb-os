@@ -140,10 +140,9 @@ fn main() -> Result<(), CompileError> {
                 .build_global()
                 .expect("failed to initialize rayon thread pool");
 
-            let mut output = get_output(compile.output.clone()).unwrap();
-
             match compile.invoke() {
                 Ok((program, warning_system)) => {
+                    let mut output = get_output(compile.output.clone()).unwrap();
                     program.to_output(&mut output, compile.format.as_deref());
                     warning_system.print();
                 }
