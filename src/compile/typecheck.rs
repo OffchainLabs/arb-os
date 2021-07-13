@@ -891,7 +891,8 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
                 TypeCheckedStatementKind::Let(id, _) =>
                     format!("let \"{}\"", id.display(string_table)),
                 TypeCheckedStatementKind::While(_, _) => format!("while"),
-                TypeCheckedStatementKind::AssignLocal(id, _) => format!("\"{}\" =", string_table.name_from_id(*id)),
+                TypeCheckedStatementKind::AssignLocal(id, _) =>
+                    format!("\"{}\" =", string_table.name_from_id(*id)),
                 TypeCheckedStatementKind::AssignGlobal(_, _) => format!("global ="),
                 TypeCheckedStatementKind::Asm(_, _) => format!("asm statement"),
                 TypeCheckedStatementKind::DebugPrint(_) => format!("print"),
@@ -1137,7 +1138,9 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                 format!("fixed array mod at {}", index)
             }
             TypeCheckedExprKind::MapMod(_, _, _, _) => format!("map mod"),
-            TypeCheckedExprKind::StructMod(_, index, _, _) => format!("struct mod at index {}", index),
+            TypeCheckedExprKind::StructMod(_, index, _, _) => {
+                format!("struct mod at index {}", index)
+            }
             TypeCheckedExprKind::Cast(_, tipe) => format!("Cast to {}", tipe.display()),
             TypeCheckedExprKind::Asm(_, _, _) => format!("asm"),
             TypeCheckedExprKind::Error => format!("error"),

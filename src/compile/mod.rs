@@ -206,7 +206,8 @@ impl CompileStruct {
                 &mut error_system,
                 self.release_build,
                 !self.no_builtins,
-            ).map_err(|err| {
+            )
+            .map_err(|err| {
                 error_system.errors.push(err);
                 error_system.file_info_chart = file_info_chart.clone();
                 error_system.clone()
