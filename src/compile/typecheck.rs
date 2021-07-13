@@ -167,7 +167,7 @@ impl AbstractSyntaxTree for TypeCheckedFunc {
         self.code.iter_mut().all(|statement| statement.is_pure())
     }
     fn display_string(&self, string_table: &StringTable) -> String {
-        format!("function: {}", self.name)
+        format!("function: \"{}\"", string_table.name_from_id(self.name))
     }
 }
 
@@ -891,7 +891,7 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
                 TypeCheckedStatementKind::Let(id, _) =>
                     format!("let \"{}\"", id.display(string_table)),
                 TypeCheckedStatementKind::While(_, _) => format!("while"),
-                TypeCheckedStatementKind::AssignLocal(_, _) => format!("="),
+                TypeCheckedStatementKind::AssignLocal(id, _) => format!("\"{}\" =", string_table.name_from_id(*id)),
                 TypeCheckedStatementKind::AssignGlobal(_, _) => format!("global ="),
                 TypeCheckedStatementKind::Asm(_, _) => format!("asm statement"),
                 TypeCheckedStatementKind::DebugPrint(_) => format!("print"),
@@ -1091,17 +1091,25 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             TypeCheckedExprKind::Trinary(op, _, _, _, _) => format!("{}", op.to_name()),
             TypeCheckedExprKind::ShortcutOr(_, _) => format!("shortcut or"),
             TypeCheckedExprKind::ShortcutAnd(_, _) => format!("shortcut and"),
-            TypeCheckedExprKind::LocalVariableRef(id, _) => format!("variable ref at id {}", id),
+            TypeCheckedExprKind::LocalVariableRef(id, _) => {
+                format!("\"{}\"", string_table.name_from_id(*id))
+            }
             TypeCheckedExprKind::GlobalVariableRef(id, _) => {
-                format!("global variable ref at id {}", id)
+                format!("global \"{}\"", string_table.name_from_id(*id))
             }
             TypeCheckedExprKind::Variant(_) => format!("Some"),
-            TypeCheckedExprKind::FuncRef(i, _) => format!("func ref to {}", i),
+            TypeCheckedExprKind::FuncRef(id, _) => {
+                format!("func \"{}\"", string_table.name_from_id(*id))
+            }
             TypeCheckedExprKind::TupleRef(_, i, _) => {
                 format!("tuple ref field {}", i.add(&Uint256::one()))
             }
-            TypeCheckedExprKind::DotRef(_, i, j, _) => {
-                format!("dot ref to var {} field {}", i, j + 1)
+            TypeCheckedExprKind::DotRef(_, id, idx, _) => {
+                format!(
+                    "dot ref to field {} of \"{}\"",
+                    idx + 1,
+                    string_table.name_from_id(*id)
+                )
             }
             TypeCheckedExprKind::Const(a, _) => format!("{}", a),
             TypeCheckedExprKind::FunctionCall(_, _, _, _) => format!("Function call"),
@@ -1109,10 +1117,10 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             TypeCheckedExprKind::StructInitializer(_, _) => format!("struct initializer"),
             TypeCheckedExprKind::ArrayRef(_, _, _) => format!("array ref"),
             TypeCheckedExprKind::FixedArrayRef(_, _, len, _) => {
-                format!("fixed array ref size {}", len)
+                format!("fixed array ref at index {}", len)
             }
             TypeCheckedExprKind::MapRef(_, _, _) => format!("map ref"),
-            TypeCheckedExprKind::Tuple(_, _) => format!("tuple of"),
+            TypeCheckedExprKind::Tuple(_, _) => format!("tuple"),
             TypeCheckedExprKind::NewArray(_, _, _) => format!("new array"),
             TypeCheckedExprKind::NewFixedArray(len, _, _) => format!("new array length {}", len),
             TypeCheckedExprKind::NewMap(_) => format!("new map"),
@@ -1121,7 +1129,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                 format!("fixed array mod at {}", index)
             }
             TypeCheckedExprKind::MapMod(_, _, _, _) => format!("map mod"),
-            TypeCheckedExprKind::StructMod(_, index, _, _) => format!("struct mod at {}", index),
+            TypeCheckedExprKind::StructMod(_, index, _, _) => format!("struct mod at index {}", index),
             TypeCheckedExprKind::Cast(_, tipe) => format!("Cast to {}", tipe.display()),
             TypeCheckedExprKind::Asm(_, _, _) => format!("asm"),
             TypeCheckedExprKind::Panic => format!("panic"),
@@ -3795,7 +3803,7 @@ impl AbstractSyntaxTree for TypeCheckedCodeBlock {
                 .map(|expr| expr.is_pure())
                 .unwrap_or(true)
     }
-    fn display_string(&self, string_table: &StringTable) -> String {
+    fn display_string(&self, _string_table: &StringTable) -> String {
         format!("codeblock")
     }
 }
