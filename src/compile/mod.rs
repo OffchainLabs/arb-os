@@ -165,6 +165,7 @@ impl CompileStruct {
                 &mut file_info_chart,
                 constants_path,
                 &mut error_system,
+                !self.no_builtins,
             )
         }
     }
@@ -205,20 +206,12 @@ impl CompileStruct {
                 &mut error_system,
                 self.release_build,
                 !self.no_builtins,
-            ) {
-                Ok(idk) => idk,
-                Err(err) => {
-                    error_system.errors.push(err);
-                    error_system.file_info_chart = file_info_chart;
-                    return Err(error_system);
-                }
-            }
-            .into_iter()
-            .for_each(|prog| {
-                file_info_chart.extend(prog.file_info_chart.clone());
-                compiled_progs.push(prog)
-            });
-        }
+            ).map_err(|err| {
+                error_system.errors.push(err);
+                error_system.file_info_chart = file_info_chart.clone();
+                error_system.clone()
+            })?
+        };
         let linked_prog = match link(&compiled_progs, self.test_mode, &mut error_system) {
             Ok(idk) => idk,
             Err(err) => {
@@ -674,6 +667,7 @@ fn compile_to_typecheck(
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     constants_path: Option<&Path>,
     error_system: &mut ErrorSystem,
+    builtins: bool,
 ) -> Result<(Vec<TypeCheckedModule>, TypeTree), CompileError> {
     let (mut programs, import_map) = create_program_tree(
         folder,
@@ -733,6 +727,7 @@ pub fn compile_from_folder(
         file_info_chart,
         constants_path,
         error_system,
+        builtins,
     )?;
 
     if must_use_global_consts {

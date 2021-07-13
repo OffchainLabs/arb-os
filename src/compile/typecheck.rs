@@ -1140,7 +1140,9 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             TypeCheckedExprKind::StructMod(_, index, _, _) => format!("struct mod at index {}", index),
             TypeCheckedExprKind::Cast(_, tipe) => format!("Cast to {}", tipe.display()),
             TypeCheckedExprKind::Asm(_, _, _) => format!("asm"),
-            TypeCheckedExprKind::Panic => format!("panic"),
+            TypeCheckedExprKind::Error => format!("error"),
+            TypeCheckedExprKind::GetGas => format!("get gas"),
+            TypeCheckedExprKind::SetGas(_) => format!("set gas"),
             TypeCheckedExprKind::Try(_, _) => format!("?"),
             TypeCheckedExprKind::If(_, _, _, _) => format!("if"),
             TypeCheckedExprKind::IfLet(_, _, _, _, _) => format!("if let"),
@@ -3772,40 +3774,6 @@ fn typecheck_binary_op_const(
                 Err(CompileError::new_type_error(
                     format!(
                         "invalid argument types to binary op: \"{}\" and \"{}\"",
-                        t1.display(),
-                        t2.display()
-                    ),
-                    loc.into_iter().collect(),
-                ))
-            }
-        }
-        BinaryOp::_LogicalAnd => {
-            if (t1 == Type::Bool) && (t2 == Type::Bool) {
-                Ok(TypeCheckedExprKind::Const(
-                    Value::Int(Uint256::from_bool(!val1.is_zero() && !val2.is_zero())),
-                    Type::Bool,
-                ))
-            } else {
-                Err(CompileError::new_type_error(
-                    format!(
-                        "invalid argument types to logical and: \"{}\" and \"{}\"",
-                        t1.display(),
-                        t2.display()
-                    ),
-                    loc.into_iter().collect(),
-                ))
-            }
-        }
-        BinaryOp::LogicalOr => {
-            if (t1 == Type::Bool) && (t2 == Type::Bool) {
-                Ok(TypeCheckedExprKind::Const(
-                    Value::Int(Uint256::from_bool(!val1.is_zero() || !val2.is_zero())),
-                    Type::Bool,
-                ))
-            } else {
-                Err(CompileError::new_type_error(
-                    format!(
-                        "invalid argument types to logical or: \"{}\" and \"{}\"",
                         t1.display(),
                         t2.display()
                     ),
