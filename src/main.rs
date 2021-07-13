@@ -142,24 +142,18 @@ fn main() -> Result<(), CompileError> {
 
             let mut output = get_output(compile.output.clone()).unwrap();
 
-            let error_system = match compile.invoke() {
-                Ok((program, error_system)) => {
+            match compile.invoke() {
+                Ok((program, warning_system)) => {
                     program.to_output(&mut output, compile.format.as_deref());
-                    error_system
+                    warning_system.print();
                 }
-                Err(error_system) => error_system,
-            };
-
-            error_system.print();
-
-            match error_system.errors.len() == 0 {
-                true => {}
-                false => {
+                Err(error_system) => {
+                    error_system.print();
                     return Err(CompileError::new(
                         String::from("Compilation Failure"),
                         String::from("Errors were encountered during compilation"),
                         vec![],
-                    ))
+                    ));
                 }
             };
         }
