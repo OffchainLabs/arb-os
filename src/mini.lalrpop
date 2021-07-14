@@ -516,7 +516,7 @@ ConstVal: Uint256 = {
                             String::from("Parser warning"),
                             format!(
                                 "Constant {}{}{} was used despite being marked as intentionally unused",
-                                error_system.warn_color,
+                                error_system.config.warn_color,
                                 &c,
                                 CompileError::RESET,
                             ),

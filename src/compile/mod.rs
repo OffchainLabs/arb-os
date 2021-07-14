@@ -140,12 +140,14 @@ impl CompileStruct {
         let mut error_system = ErrorSystem {
             errors: vec![],
             warnings: vec![],
-            warnings_are_errors: self.warnings_are_errors,
-            warn_color: match self.warnings_are_errors {
-                true => CompileError::PINK,
-                false => CompileError::YELLOW,
+            config: ErrorConfig {
+                warnings_are_errors: self.warnings_are_errors,
+                warn_color: match self.warnings_are_errors {
+                    true => CompileError::PINK,
+                    false => CompileError::YELLOW,
+                },
+                file_info_chart: BTreeMap::new(),
             },
-            file_info_chart: BTreeMap::new(),
         };
 
         let mut file_info_chart = BTreeMap::new();
@@ -171,14 +173,16 @@ impl CompileStruct {
     }
     pub fn invoke(&self) -> Result<(LinkedProgram, ErrorSystem), ErrorSystem> {
         let mut error_system = ErrorSystem {
-            errors: vec![],
             warnings: vec![],
-            warnings_are_errors: self.warnings_are_errors,
-            warn_color: match self.warnings_are_errors {
-                true => CompileError::PINK,
-                false => CompileError::YELLOW,
+            errors: vec![],
+            config: ErrorConfig {
+                warnings_are_errors: self.warnings_are_errors,
+                warn_color: match self.warnings_are_errors {
+                    true => CompileError::PINK,
+                    false => CompileError::YELLOW,
+                },
+                file_info_chart: BTreeMap::new(),
             },
-            file_info_chart: BTreeMap::new(),
         };
 
         let mut file_info_chart = BTreeMap::new();
@@ -192,7 +196,7 @@ impl CompileStruct {
             let library = normalize_libraries(path);
             let (folder, main) = preprocess_path(path).map_err(|err| {
                 error_system.errors.push(err);
-                error_system.file_info_chart = file_info_chart.clone();
+                error_system.config.file_info_chart = file_info_chart.clone();
                 error_system.clone()
             })?;
             compile_from_folder(
@@ -209,7 +213,7 @@ impl CompileStruct {
             )
             .map_err(|err| {
                 error_system.errors.push(err);
-                error_system.file_info_chart = file_info_chart.clone();
+                error_system.config.file_info_chart = file_info_chart.clone();
                 error_system.clone()
             })?
         };
@@ -217,7 +221,7 @@ impl CompileStruct {
             Ok(idk) => idk,
             Err(err) => {
                 error_system.errors.push(err);
-                error_system.file_info_chart = file_info_chart;
+                error_system.config.file_info_chart = file_info_chart;
                 return Err(error_system);
             }
         };
@@ -238,14 +242,14 @@ impl CompileStruct {
             Ok(idk) => idk,
             Err(err) => {
                 error_system.errors.push(err);
-                error_system.file_info_chart = file_info_chart;
+                error_system.config.file_info_chart = file_info_chart;
                 return Err(error_system);
             }
         };
 
-        error_system.file_info_chart = file_info_chart;
+        error_system.config.file_info_chart = file_info_chart;
 
-        if error_system.warnings.len() > 0 && error_system.warnings_are_errors {
+        if error_system.warnings.len() > 0 && error_system.config.warnings_are_errors {
             error_system.errors.push(CompileError::new(
                 String::from("Compile Error"),
                 String::from("Found warning with -w on"),
@@ -380,7 +384,7 @@ impl TypeCheckedModule {
                     String::from("Compile warning"),
                     format!(
                         "use statement {}{}{} is a duplicate",
-                        error_system.warn_color,
+                        error_system.config.warn_color,
                         import.name,
                         CompileError::RESET,
                     ),
@@ -422,7 +426,7 @@ impl TypeCheckedModule {
                 String::from("Compile warning"),
                 format!(
                     "use statement {}{}{} is unnecessary",
-                    error_system.warn_color,
+                    error_system.config.warn_color,
                     import.name,
                     CompileError::RESET,
                 ),
@@ -1018,7 +1022,7 @@ fn typecheck_programs(
                             String::from("Compile warning"),
                             format!(
                                 "func {}{}{} {}",
-                                error_system.warn_color,
+                                error_system.config.warn_color,
                                 string_table.name_from_id(*id),
                                 CompileError::RESET,
                                 match declared_purity {
@@ -1074,7 +1078,7 @@ fn check_global_constants(
                 String::from("Compile warning"),
                 format!(
                     "global constant {}{}{} is never used",
-                    error_system.warn_color,
+                    error_system.config.warn_color,
                     constant,
                     CompileError::RESET,
                 ),
@@ -1177,7 +1181,7 @@ fn consume_program_callgraph(
                     String::from("Compile warning"),
                     format!(
                         "func {}{}{} is unreachable",
-                        error_system.warn_color,
+                        error_system.config.warn_color,
                         func_name,
                         CompileError::RESET,
                     ),
@@ -1336,7 +1340,7 @@ pub fn parse_from_source(
                 String::from("Compile warning"),
                 format!(
                     "Constant {}{}{} is never used",
-                    error_system.warn_color,
+                    error_system.config.warn_color,
                     constant,
                     CompileError::RESET,
                 ),
@@ -1489,6 +1493,20 @@ pub struct ErrorSystem {
     pub errors: Vec<CompileError>,
     ///All compilation warnings
     pub warnings: Vec<CompileError>,
+    ///Config for displaying errors,
+    pub config: ErrorConfig,
+}
+
+#[derive(Clone)]
+pub struct WarningSystem {
+    ///All compilation warnings
+    pub warnings: Vec<CompileError>,
+    ///Config for displaying errors,
+    pub config: ErrorConfig,
+}
+
+#[derive(Clone)]
+pub struct ErrorConfig {
     ///Whether these should halt compilation
     pub warnings_are_errors: bool,
     ///The color to use when highlighting parts of the body text
@@ -1497,13 +1515,35 @@ pub struct ErrorSystem {
     pub file_info_chart: BTreeMap<u64, FileInfo>,
 }
 
+impl From<WarningSystem> for ErrorSystem {
+    fn from(from: WarningSystem) -> Self {
+        let WarningSystem {
+            warnings,
+            config,
+        } = from;
+        Self {
+            errors: vec![],
+            warnings,
+            config,
+        }
+    }
+}
+
 impl ErrorSystem {
     pub fn print(&self) {
         for warning in &self.warnings {
-            warning.print(&self.file_info_chart, self.warnings_are_errors);
+            warning.print(&self.config.file_info_chart, self.config.warnings_are_errors);
         }
         for error in &self.errors {
-            error.print(&self.file_info_chart, self.warnings_are_errors);
+            error.print(&self.config.file_info_chart, self.config.warnings_are_errors);
+        }
+    }
+}
+
+impl WarningSystem {
+    pub fn _print(&self) {
+        for warning in &self.warnings {
+            warning.print(&self.config.file_info_chart, self.config.warnings_are_errors);
         }
     }
 }
