@@ -210,12 +210,7 @@ impl CompileStruct {
                 &mut error_system,
                 self.release_build,
                 !self.no_builtins,
-            )
-            .map_err(|err| {
-                error_system.errors.push(err);
-                error_system.config.file_info_chart = file_info_chart.clone();
-                error_system.clone()
-            })?
+            )?
         };
         let linked_prog = match link(&compiled_progs, self.test_mode, &mut error_system) {
             Ok(idk) => idk,
@@ -724,7 +719,7 @@ pub fn compile_from_folder(
     error_system: &mut ErrorSystem,
     release_build: bool,
     builtins: bool,
-) -> Result<Vec<CompiledProgram>, CompileError> {
+) -> Result<Vec<CompiledProgram>, ErrorSystem> {
     let (mut typechecked_modules, type_tree) = compile_to_typecheck(
         folder,
         library,
@@ -733,7 +728,11 @@ pub fn compile_from_folder(
         constants_path,
         error_system,
         builtins,
-    )?;
+    )
+    .map_err(|e| {
+        error_system.errors.push(e);
+        error_system.clone()
+    })?;
 
     if must_use_global_consts {
         check_global_constants(&typechecked_modules, constants_path, error_system);
@@ -765,7 +764,11 @@ pub fn compile_from_folder(
         type_tree,
         folder,
         release_build,
-    )?;
+    )
+    .map_err(|e| {
+        error_system.errors.push(e);
+        error_system.clone()
+    })?;
     Ok(progs)
 }
 
