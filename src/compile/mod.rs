@@ -369,7 +369,18 @@ impl TypeCheckedModule {
         call_graph
     }
     ///Reasons about control flow and construct usage within the typechecked AST
-    fn flowcheck(&mut self, error_system: &mut ErrorSystem) {
+    fn flowcheck(&mut self, warnings_are_errors: bool) -> WarningSystem {
+        let mut warning_system = WarningSystem {
+            warnings: vec![],
+            config: ErrorConfig {
+                warnings_are_errors,
+                warn_color: match warnings_are_errors {
+                    true => CompileError::PINK,
+                    false => CompileError::YELLOW,
+                },
+                file_info_chart: BTreeMap::new(),
+            },
+        };
         let mut flow_warnings = vec![];
 
         let mut imports: BTreeMap<StringId, Import> = BTreeMap::new();
@@ -382,7 +393,7 @@ impl TypeCheckedModule {
                     String::from("Compile warning"),
                     format!(
                         "use statement {}{}{} is a duplicate",
-                        error_system.config.warn_color,
+                        warning_system.config.warn_color,
                         import.name,
                         CompileError::RESET,
                     ),
@@ -415,7 +426,7 @@ impl TypeCheckedModule {
             flow_warnings.extend(func.flowcheck(
                 &mut imports, // will remove from imports everything used
                 &mut self.string_table,
-                &error_system.config,
+                &warning_system.config,
             ));
         }
 
@@ -424,7 +435,7 @@ impl TypeCheckedModule {
                 String::from("Compile warning"),
                 format!(
                     "use statement {}{}{} is unnecessary",
-                    error_system.config.warn_color,
+                    warning_system.config.warn_color,
                     import.name,
                     CompileError::RESET,
                 ),
@@ -441,7 +452,8 @@ impl TypeCheckedModule {
                 .cmp(&b.locations.last().unwrap().line.to_usize())
         });
 
-        error_system.warnings.extend(flow_warnings);
+        warning_system.warnings.extend(flow_warnings);
+        warning_system
     }
     pub(crate) fn show_ast(&mut self) -> String {
         let mut s = String::new();
@@ -740,7 +752,8 @@ pub fn compile_from_folder(
     // Control flow analysis stage
     let mut program_callgraph = HashMap::new();
     for module in &mut typechecked_modules {
-        module.flowcheck(error_system);
+        let warnings = module.flowcheck(error_system.config.warnings_are_errors);
+        error_system.warnings.extend(warnings.warnings);
         program_callgraph.insert(module.path.clone(), module.build_callgraph());
     }
     consume_program_callgraph(program_callgraph, &mut typechecked_modules, error_system);
