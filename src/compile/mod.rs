@@ -684,7 +684,7 @@ fn compile_to_typecheck(
     error_system: &mut ErrorSystem,
     builtins: bool,
 ) -> Result<(Vec<TypeCheckedModule>, TypeTree), ErrorSystem> {
-    let (mut programs, import_map) = error_system.clone().map_err(create_program_tree(
+    let (mut programs, import_map) = create_program_tree(
         folder,
         library,
         main,
@@ -692,9 +692,11 @@ fn compile_to_typecheck(
         constants_path,
         error_system,
         builtins,
-    ))?;
+    )?;
 
-    error_system.clone().map_err(resolve_imports(&mut programs, &import_map, error_system))?;
+    error_system
+        .clone()
+        .map_err(resolve_imports(&mut programs, &import_map, error_system))?;
     //Conversion of programs from `HashMap` to `Vec` for typechecking
     let type_tree = create_type_tree(&programs);
     let mut modules = vec![programs
@@ -710,7 +712,12 @@ fn compile_to_typecheck(
         out
     });
     Ok((
-        error_system.clone().map_err(typecheck_programs(&type_tree, modules, file_info_chart, error_system))?,
+        error_system.clone().map_err(typecheck_programs(
+            &type_tree,
+            modules,
+            file_info_chart,
+            error_system,
+        ))?,
         type_tree,
     ))
 }
@@ -813,7 +820,7 @@ fn create_program_tree(
         HashMap<Vec<String>, Module>,
         HashMap<Vec<String>, Vec<Import>>,
     ),
-    CompileError,
+    ErrorSystem,
 > {
     let mut paths = if let Some(lib) = library {
         vec![vec![lib.to_owned(), main.to_owned()]]
@@ -840,20 +847,24 @@ fn create_program_tree(
             path[0].clone()
         } + ".mini";
         let mut file = File::open(folder.join(name.clone())).map_err(|why| {
-            CompileError::new(
+            let mut new_system = error_system.clone();
+            new_system.push_err(CompileError::new(
                 String::from("Compile error"),
                 format!("Can not open {}/{}: {:?}", folder.display(), name, why),
                 vec![],
-            )
+            ));
+            new_system
         })?;
 
         let mut source = String::new();
         file.read_to_string(&mut source).map_err(|why| {
-            CompileError::new(
+            let mut new_system = error_system.clone();
+            new_system.push_err(CompileError::new(
                 String::from("Compile error"),
                 format!("Can not read {}/{}: {:?}", folder.display(), name, why),
                 vec![],
-            )
+            ));
+            new_system
         })?;
         let mut file_hasher = DefaultHasher::new();
         path.hash(&mut file_hasher);
@@ -871,7 +882,7 @@ fn create_program_tree(
         let mut string_table = StringTable::new();
         let mut used_constants = HashSet::new();
         let (imports, funcs, named_types, global_vars, hm) = typecheck::sort_top_level_decls(
-            &parse_from_source(
+            &error_system.clone().map_err(parse_from_source(
                 source,
                 file_id,
                 &path,
@@ -879,7 +890,7 @@ fn create_program_tree(
                 constants_path,
                 &mut used_constants,
                 error_system,
-            )?,
+            ))?,
             path.clone(),
             builtins,
         );
