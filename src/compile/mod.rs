@@ -417,7 +417,7 @@ impl TypeCheckedModule {
             flow_warnings.extend(func.flowcheck(
                 &mut imports, // will remove from imports everything used
                 &mut self.string_table,
-                error_system,
+                &error_system.config,
             ));
         }
 
@@ -1517,10 +1517,7 @@ pub struct ErrorConfig {
 
 impl From<WarningSystem> for ErrorSystem {
     fn from(from: WarningSystem) -> Self {
-        let WarningSystem {
-            warnings,
-            config,
-        } = from;
+        let WarningSystem { warnings, config } = from;
         Self {
             errors: vec![],
             warnings,
@@ -1532,10 +1529,16 @@ impl From<WarningSystem> for ErrorSystem {
 impl ErrorSystem {
     pub fn print(&self) {
         for warning in &self.warnings {
-            warning.print(&self.config.file_info_chart, self.config.warnings_are_errors);
+            warning.print(
+                &self.config.file_info_chart,
+                self.config.warnings_are_errors,
+            );
         }
         for error in &self.errors {
-            error.print(&self.config.file_info_chart, self.config.warnings_are_errors);
+            error.print(
+                &self.config.file_info_chart,
+                self.config.warnings_are_errors,
+            );
         }
     }
 }
@@ -1543,7 +1546,10 @@ impl ErrorSystem {
 impl WarningSystem {
     pub fn _print(&self) {
         for warning in &self.warnings {
-            warning.print(&self.config.file_info_chart, self.config.warnings_are_errors);
+            warning.print(
+                &self.config.file_info_chart,
+                self.config.warnings_are_errors,
+            );
         }
     }
 }

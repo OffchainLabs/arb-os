@@ -10,7 +10,7 @@ use super::ast::{
     TopLevelDecl, TrinaryOp, Type, TypeTree, UnaryOp,
 };
 use crate::compile::ast::FieldInitializer;
-use crate::compile::{CompileError, ErrorSystem, InliningHeuristic};
+use crate::compile::{CompileError, ErrorConfig, InliningHeuristic};
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::{Column, Location};
@@ -747,7 +747,7 @@ impl TypeCheckedFunc {
         &mut self,
         imports: &mut BTreeMap<usize, Import>,
         string_table: &mut StringTable,
-        error_system: &ErrorSystem,
+        error_system: &ErrorConfig,
     ) -> Vec<CompileError> {
         let mut flowcheck_warnings = vec![];
 
@@ -772,10 +772,10 @@ impl TypeCheckedFunc {
                         String::from("Compile warning"),
                         format!(
                             "func {}{}{}'s argument {}{}{} is declared but never used",
-                            error_system.config.warn_color,
+                            error_system.warn_color,
                             string_table.name_from_id(self.name.clone()),
                             CompileError::RESET,
-                            error_system.config.warn_color,
+                            error_system.warn_color,
                             string_table.name_from_id(arg.name.clone()),
                             CompileError::RESET,
                         ),
@@ -788,10 +788,10 @@ impl TypeCheckedFunc {
                         String::from("Compile warning"),
                         format!(
                             "func {}{}{}'s argument {}{}{} is assigned but never used",
-                            error_system.config.warn_color,
+                            error_system.warn_color,
                             string_table.name_from_id(self.name.clone()),
                             CompileError::RESET,
-                            error_system.config.warn_color,
+                            error_system.warn_color,
                             string_table.name_from_id(arg.name.clone()),
                             CompileError::RESET,
                         ),
@@ -808,7 +808,7 @@ impl TypeCheckedFunc {
                     String::from("Compile warning"),
                     format!(
                         "value {}{}{} is assigned but never used",
-                        error_system.config.warn_color,
+                        error_system.warn_color,
                         string_table.name_from_id(id.clone()),
                         CompileError::RESET,
                     ),

@@ -146,7 +146,7 @@ fn test_error_system() {
                 (
                     error_system.warnings,
                     error_system.errors,
-                    error_system.file_info_chart,
+                    error_system.config.file_info_chart,
                 )
             }
         };
