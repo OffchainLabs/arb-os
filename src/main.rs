@@ -205,7 +205,17 @@ fn main() -> Result<(), CompileError> {
         }
 
         Args::PrintAST(comp) => {
-            let (mut modules, _) = comp.invoke_compile()?;
+            let (mut modules, _) = match comp.invoke_compile() {
+                Ok(ret) => ret,
+                Err(error_system) => {
+                    error_system.print();
+                    return Err(CompileError::new(
+                        String::from("Compilation Failure"),
+                        String::from("Errors were encountered during compilation"),
+                        vec![],
+                    ));
+                }
+            };
 
             for module in &mut modules {
                 println!("{}", module.show_ast());
@@ -213,7 +223,17 @@ fn main() -> Result<(), CompileError> {
         }
 
         Args::WriteAST(comp) => {
-            let (modules, _) = comp.invoke_compile()?;
+            let (modules, _) = match comp.invoke_compile() {
+                Ok(ret) => ret,
+                Err(error_system) => {
+                    error_system.print();
+                    return Err(CompileError::new(
+                        String::from("Compilation Failure"),
+                        String::from("Errors were encountered during compilation"),
+                        vec![],
+                    ));
+                }
+            };
 
             let k = serde_json::to_string_pretty(&modules).map_err(|_| {
                 CompileError::new(

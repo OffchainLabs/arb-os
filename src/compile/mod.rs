@@ -136,7 +136,7 @@ pub struct TypeCheckedModule {
 }
 
 impl CompileStruct {
-    pub fn invoke_compile(&self) -> Result<(Vec<TypeCheckedModule>, TypeTree), CompileError> {
+    pub fn invoke_compile(&self) -> Result<(Vec<TypeCheckedModule>, TypeTree), ErrorSystem> {
         let mut error_system = ErrorSystem {
             errors: vec![],
             warnings: vec![],
@@ -159,7 +159,10 @@ impl CompileStruct {
         {
             let path = Path::new(&self.input);
             let library = normalize_libraries(path);
-            let (folder, main) = preprocess_path(path)?;
+            let (folder, main) = preprocess_path(path).map_err(|e| {
+                error_system.push_err(e);
+                error_system.clone()
+            })?;
             compile_to_typecheck(
                 folder,
                 library,
@@ -169,6 +172,10 @@ impl CompileStruct {
                 &mut error_system,
                 !self.no_builtins,
             )
+            .map_err(|e| {
+                error_system.push_err(e);
+                error_system.clone()
+            })
         }
     }
     pub fn invoke(&self) -> Result<(LinkedProgram, ErrorSystem), ErrorSystem> {
@@ -195,7 +202,7 @@ impl CompileStruct {
             let path = Path::new(&self.input);
             let library = normalize_libraries(path);
             let (folder, main) = preprocess_path(path).map_err(|err| {
-                error_system.errors.push(err);
+                error_system.push_err(err);
                 error_system.config.file_info_chart = file_info_chart.clone();
                 error_system.clone()
             })?;
@@ -215,7 +222,7 @@ impl CompileStruct {
         let linked_prog = match link(&compiled_progs, self.test_mode, &mut error_system) {
             Ok(idk) => idk,
             Err(err) => {
-                error_system.errors.push(err);
+                error_system.push_err(err);
                 error_system.config.file_info_chart = file_info_chart;
                 return Err(error_system);
             }
@@ -236,7 +243,7 @@ impl CompileStruct {
         ) {
             Ok(idk) => idk,
             Err(err) => {
-                error_system.errors.push(err);
+                error_system.push_err(err);
                 error_system.config.file_info_chart = file_info_chart;
                 return Err(error_system);
             }
@@ -245,7 +252,7 @@ impl CompileStruct {
         error_system.config.file_info_chart = file_info_chart;
 
         if error_system.warnings.len() > 0 && error_system.config.warnings_are_errors {
-            error_system.errors.push(CompileError::new(
+            error_system.push_err(CompileError::new(
                 String::from("Compile Error"),
                 String::from("Found warning with -w on"),
                 vec![],
@@ -730,7 +737,7 @@ pub fn compile_from_folder(
         builtins,
     )
     .map_err(|e| {
-        error_system.errors.push(e);
+        error_system.push_err(e);
         error_system.clone()
     })?;
 
@@ -766,7 +773,7 @@ pub fn compile_from_folder(
         release_build,
     )
     .map_err(|e| {
-        error_system.errors.push(e);
+        error_system.push_err(e);
         error_system.clone()
     })?;
     Ok(progs)
@@ -1543,6 +1550,9 @@ impl ErrorSystem {
                 self.config.warnings_are_errors,
             );
         }
+    }
+    pub fn push_err(&mut self, error: CompileError) {
+        self.errors.push(error);
     }
 }
 
