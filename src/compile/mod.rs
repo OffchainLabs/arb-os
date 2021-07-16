@@ -172,10 +172,6 @@ impl CompileStruct {
                 &mut error_system,
                 !self.no_builtins,
             )
-            .map_err(|e| {
-                error_system.push_err(e);
-                error_system.clone()
-            })
         }
     }
     pub fn invoke(&self) -> Result<(LinkedProgram, ErrorSystem), ErrorSystem> {
@@ -675,8 +671,8 @@ fn compile_to_typecheck(
     constants_path: Option<&Path>,
     error_system: &mut ErrorSystem,
     builtins: bool,
-) -> Result<(Vec<TypeCheckedModule>, TypeTree), CompileError> {
-    let (mut programs, import_map) = create_program_tree(
+) -> Result<(Vec<TypeCheckedModule>, TypeTree), ErrorSystem> {
+    let (mut programs, import_map) = error_system.clone().map_err(create_program_tree(
         folder,
         library,
         main,
@@ -684,9 +680,9 @@ fn compile_to_typecheck(
         constants_path,
         error_system,
         builtins,
-    )?;
+    ))?;
 
-    resolve_imports(&mut programs, &import_map, error_system)?;
+    error_system.clone().map_err(resolve_imports(&mut programs, &import_map, error_system))?;
     //Conversion of programs from `HashMap` to `Vec` for typechecking
     let type_tree = create_type_tree(&programs);
     let mut modules = vec![programs
@@ -702,7 +698,7 @@ fn compile_to_typecheck(
         out
     });
     Ok((
-        typecheck_programs(&type_tree, modules, file_info_chart, error_system)?,
+        error_system.clone().map_err(typecheck_programs(&type_tree, modules, file_info_chart, error_system))?,
         type_tree,
     ))
 }
@@ -735,11 +731,7 @@ pub fn compile_from_folder(
         constants_path,
         error_system,
         builtins,
-    )
-    .map_err(|e| {
-        error_system.push_err(e);
-        error_system.clone()
-    })?;
+    )?;
 
     if must_use_global_consts {
         check_global_constants(&typechecked_modules, constants_path, error_system);
@@ -1553,6 +1545,12 @@ impl ErrorSystem {
     }
     pub fn push_err(&mut self, error: CompileError) {
         self.errors.push(error);
+    }
+    pub fn map_err<T>(mut self, res: Result<T, CompileError>) -> Result<T, ErrorSystem> {
+        res.map_err(|e| {
+            self.push_err(e);
+            self.clone()
+        })
     }
 }
 
