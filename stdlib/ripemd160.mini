@@ -20,7 +20,7 @@ type Ripemd160Hasher = struct {
 public func ripemd160hasher_new() -> Ripemd160Hasher {
     return struct {
         accumulator: bytes32(0x67452301EFCDAB8998BADCFE10325476C3D2E1F0),
-        buf: unsafecast<[2]uint>((0,0)),
+        buf: newfixedarray(2, 0),
         offset: 0,
         totalSizeBytes: 0,
     };
@@ -35,7 +35,7 @@ public func ripemd160hasher_pushByte(h: Ripemd160Hasher, b: uint) -> Ripemd160Ha
         h with {
             accumulator: asm(h.accumulator, newBuffer[0], newBuffer[1]) bytes32 { ripemd160f }
         } with {
-            buf: unsafecast<[2]uint>((0,0))
+            buf: newfixedarray(2, 0)
         } with {
             offset: 0
         } with {
@@ -66,7 +66,7 @@ public func ripemd160hasher_push256(h: Ripemd160Hasher, val: uint) -> Ripemd160H
         h with {
             accumulator: asm(h.accumulator, h.buf[0], val) bytes32 { ripemd160f }
         } with {
-            buf: unsafecast<[2]uint>((0,0))
+            buf: newfixedarray(2, 0)
         } with {
             offset: 0
         } with {
@@ -93,10 +93,7 @@ public func ripemd160hasher_push256(h: Ripemd160Hasher, val: uint) -> Ripemd160H
                 h.buf[1] | (val >> (8*offset))
             ) bytes32 { ripemd160f }
         } with {
-            buf: unsafecast<[2]uint>((
-                val << (8*(32-offset)),
-                0
-            ))
+            buf: newfixedarray(2, 0) with { [0] = val << (8*(32-offset)) }
         } with {
             offset: offset
         } with {
@@ -114,7 +111,7 @@ public func ripemd160hasher_finish(h: Ripemd160Hasher) -> bytes32 {
         h = h with {
             accumulator: asm(h.accumulator, h.buf[0], h.buf[1]) bytes32 { ripemd160f }
         } with {
-            buf: unsafecast<[2]uint>((0,0))
+            buf: newfixedarray(2, 0)
         } with {
             offset: 0
         };
