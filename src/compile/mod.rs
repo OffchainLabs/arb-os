@@ -882,7 +882,7 @@ fn create_program_tree(
         let mut string_table = StringTable::new();
         let mut used_constants = HashSet::new();
         let (imports, funcs, named_types, global_vars, hm) = typecheck::sort_top_level_decls(
-            &error_system.clone().map_err(parse_from_source(
+            &parse_from_source(
                 source,
                 file_id,
                 &path,
@@ -890,7 +890,7 @@ fn create_program_tree(
                 constants_path,
                 &mut used_constants,
                 error_system,
-            ))?,
+            )?,
             path.clone(),
             builtins,
         );
@@ -1298,67 +1298,71 @@ pub fn parse_from_source(
     constants_path: Option<&Path>,
     used_constants: &mut HashSet<String>,
     error_system: &mut ErrorSystem,
-) -> Result<Vec<TopLevelDecl>, CompileError> {
+) -> Result<Vec<TopLevelDecl>, ErrorSystem> {
     let lines = Lines::new(source.bytes());
-    let mut constants = init_constant_table(constants_path)?;
+    let mut constants = error_system
+        .clone()
+        .map_err(init_constant_table(constants_path))?;
     let mut local_constants = HashMap::<String, Location>::new();
-    let parsed = DeclsParser::new()
-        .parse(
-            string_table,
-            &lines,
-            file_id,
-            file_path,
-            &mut constants,
-            &mut local_constants,
-            used_constants,
-            error_system,
-            &source,
-        )
-        .map_err(|e| match e {
-            ParseError::UnrecognizedToken {
-                token: (offset, _tok, end),
-                expected,
-            } => CompileError::new(
-                String::from("Compile error: unexpected token"),
-                format!(
-                    "{}, expected one of: {}",
-                    &source[offset..end],
-                    comma_list(&expected),
+    let parsed = error_system.clone().map_err(
+        DeclsParser::new()
+            .parse(
+                string_table,
+                &lines,
+                file_id,
+                file_path,
+                &mut constants,
+                &mut local_constants,
+                used_constants,
+                error_system,
+                &source,
+            )
+            .map_err(|e| match e {
+                ParseError::UnrecognizedToken {
+                    token: (offset, _tok, end),
+                    expected,
+                } => CompileError::new(
+                    String::from("Compile error: unexpected token"),
+                    format!(
+                        "{}, expected one of: {}",
+                        &source[offset..end],
+                        comma_list(&expected),
+                    ),
+                    vec![lines.location(BytePos::from(offset), file_id).unwrap()],
                 ),
-                vec![lines.location(BytePos::from(offset), file_id).unwrap()],
-            ),
-            ParseError::InvalidToken { location } => CompileError::new(
-                String::from("Compile error"),
-                format!("found invalid token"),
-                lines
-                    .location(location.into(), file_id)
-                    .into_iter()
-                    .collect(),
-            ),
-            ParseError::UnrecognizedEOF { location, expected } => CompileError::new(
-                String::from("Compile error: unexpected end of file"),
-                format!("expected one of: {}", comma_list(&expected)),
-                lines
-                    .location(location.into(), file_id)
-                    .into_iter()
-                    .collect(),
-            ),
-            ParseError::ExtraToken {
-                token: (offset, _tok, end),
-            } => CompileError::new(
-                String::from("Compile error: extra token"),
-                format!("{}", &source[offset..end],),
-                vec![lines.location(BytePos::from(offset), file_id).unwrap()],
-            ),
-            ParseError::User { error } => CompileError::new(
-                String::from("Internal error"),
-                format!(
-                    "This should be impossible under the new error system {}",
-                    error
+                ParseError::InvalidToken { location } => CompileError::new(
+                    String::from("Compile error"),
+                    format!("found invalid token"),
+                    lines
+                        .location(location.into(), file_id)
+                        .into_iter()
+                        .collect(),
                 ),
-                vec![],
-            ),
-        })?;
+                ParseError::UnrecognizedEOF { location, expected } => CompileError::new(
+                    String::from("Compile error: unexpected end of file"),
+                    format!("expected one of: {}", comma_list(&expected)),
+                    lines
+                        .location(location.into(), file_id)
+                        .into_iter()
+                        .collect(),
+                ),
+                ParseError::ExtraToken {
+                    token: (offset, _tok, end),
+                } => CompileError::new(
+                    String::from("Compile error: extra token"),
+                    format!("{}", &source[offset..end],),
+                    vec![lines.location(BytePos::from(offset), file_id).unwrap()],
+                ),
+                ParseError::User { error } => CompileError::new(
+                    String::from("Internal error"),
+                    format!(
+                        "This should be impossible under the new error system {}",
+                        error
+                    ),
+                    vec![],
+                ),
+            }),
+    )?;
 
     for (constant, loc) in local_constants {
         if !used_constants.contains(&constant) {
