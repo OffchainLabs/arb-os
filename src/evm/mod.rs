@@ -1166,7 +1166,7 @@ pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
 
 pub fn _evm_test_extcodesize_of_constructor(log_to: Option<&Path>) {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     match AbiForContract::new_from_file(&test_contract_path("ExtCodeSizeTest")) {
         Ok(mut contract) => {
