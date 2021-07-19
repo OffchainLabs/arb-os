@@ -346,18 +346,31 @@ impl fmt::Display for CodePt {
     }
 }
 
-use std::cell::RefCell;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Buffer {
+    root: Rc<BufferNode>,
+    size: u128,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Buffer {
-    root: Rc<RefCell<Vec<u8>>>,
-    size: u128,
+pub enum BufferNode {
+    Leaf(Vec<u8>),
+    Internal(BufferInternal),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BufferInternal {
+    height: usize,
+    capacity: u128,
+    left: Rc<BufferNode>,
+    right: Rc<BufferNode>,
+    // hash_val: Uint256,
 }
 
 impl Buffer {
     pub fn new_empty() -> Self {
         Buffer {
-            root: Rc::new(RefCell::new(vec![])),
+            root: Rc::new(BufferNode::new_empty()),
             size: 0,
         }
     }
@@ -380,46 +393,50 @@ impl Buffer {
     }
 
     fn avm_hash(&self) -> Uint256 {
-        Uint256::zero()
+        self.root.hash()
     }
 
     pub fn hex_encode(&self) -> String {
-        "".to_string()
+        self.root.hex_encode(self.size as usize)
     }
 
     pub fn read_byte(&self, offset: u128) -> u8 {
         if offset >= self.size {
             0u8
         } else {
-            self.root.borrow()[offset as usize]
+            self.root.read_byte(offset)
         }
     }
 
     pub fn set_byte(&self, offset: u128, val: u8) -> Self {
-        let mut root = self.root.borrow_mut();
-        let size = if offset >= self.size {
-            if offset > 20000 {
-                root.resize(3000000000, 0u8);
-                3000000000
-            } else if offset > 1000 {
-                root.resize(20001, 0u8);
-                20001
-            } else {
-                root.resize(1001, 0u8);
-                1001
-            }
-        } else {
-            self.size
-        };
-        root[offset as usize] = val;
         Buffer {
-            root: self.root.clone(),
-            size,
+            root: Rc::new(self.root.set_byte(offset, val)),
+            size: if offset >= self.size {
+                offset + 1
+            } else {
+                self.size
+            },
         }
     }
 }
 
-/*
+struct BufferVisitor;
+
+impl<'de> Visitor<'de> for BufferVisitor {
+    type Value = Buffer;
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("Expected hex string")
+    }
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(Buffer::from_bytes(hex::decode(v).map_err(|_| {
+            E::custom("Could not buffer as hex string".to_string())
+        })?))
+    }
+}
+
 impl Serialize for Buffer {
     fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error>
     where
@@ -439,7 +456,196 @@ impl<'de> Deserialize<'de> for Buffer {
     {
         deserializer.deserialize_str(BufferVisitor)
     }
-}*/
+}
+
+impl BufferNode {
+    pub fn new_empty() -> Self {
+        BufferNode::Leaf(vec![0u8; 32])
+    }
+
+    pub fn _leaf_from_bytes(v: &[u8]) -> Self {
+        assert!(v.len() <= 32);
+        let mut buf = vec![0u8; 32];
+        for i in 0..v.len() {
+            buf[i] = v[i]
+        }
+        BufferNode::Leaf(buf)
+    }
+
+    fn _minimal_internal_from_bytes(v: &[u8]) -> Self {
+        assert!(v.len() > 32);
+        let (height, size) = _levels_needed(v.len() as u128);
+        BufferNode::_internal_from_bytes(height, size, v)
+    }
+
+    fn _internal_from_bytes(height: usize, capacity: u128, v: &[u8]) -> Self {
+        if height == 1 {
+            BufferNode::_leaf_from_bytes(v)
+        } else if v.len() == 0 {
+            BufferNode::new_empty_internal(height, capacity)
+        } else if v.len() as u128 <= capacity / 2 {
+            let left = Rc::new(BufferNode::_internal_from_bytes(
+                height - 1,
+                capacity / 2,
+                v,
+            ));
+            let right = Rc::new(BufferNode::new_empty_internal(height - 1, capacity / 2));
+            BufferNode::Internal(BufferInternal {
+                height,
+                capacity,
+                left: left.clone(),
+                right: right.clone(),
+            })
+        } else {
+            let mid = (capacity / 2) as usize;
+            let left = Rc::new(BufferNode::_internal_from_bytes(
+                height - 1,
+                capacity / 2,
+                &v[0..mid],
+            ));
+            let right = Rc::new(BufferNode::_internal_from_bytes(
+                height - 1,
+                capacity / 2,
+                &v[mid..],
+            ));
+            BufferNode::Internal(BufferInternal {
+                height,
+                capacity,
+                left: left.clone(),
+                right: right.clone(),
+            })
+        }
+    }
+
+    fn new_empty_internal(height: usize, capacity: u128) -> Self {
+        let child = Rc::new(if height == 1 {
+            BufferNode::new_empty()
+        } else {
+            BufferNode::new_empty_internal(height - 1, capacity / 2)
+        });
+        BufferNode::Internal(BufferInternal {
+            height,
+            capacity,
+            left: child.clone(),
+            right: child.clone(),
+        })
+    }
+
+    fn hash(&self) -> Uint256 {
+        match self {
+            BufferNode::Leaf(b) => Uint256::from_bytes(&keccak256(&b[..])),
+            // BufferNode::Internal(x) => x.hash_val.clone(),
+            BufferNode::Internal(x) => Uint256::from_usize(0),
+        }
+    }
+
+    fn hex_encode(&self, size: usize) -> String {
+        match self {
+            BufferNode::Leaf(b) => hex::encode(b)[0..(2 * size)].to_string(),
+            BufferNode::Internal(node) => node.hex_encode(size),
+        }
+    }
+
+    fn read_byte(&self, offset: u128) -> u8 {
+        match self {
+            BufferNode::Leaf(b) => b[offset as usize],
+            BufferNode::Internal(node) => node.read_byte(offset),
+        }
+    }
+
+    fn set_byte(&self, offset: u128, val: u8) -> Self {
+        match self {
+            BufferNode::Leaf(b) => {
+                if (offset < 32) {
+                    let mut bb = b.clone();
+                    bb[offset as usize] = val;
+                    BufferNode::Leaf(bb)
+                } else {
+                    BufferNode::Internal(
+                        BufferInternal::grow_from_leaf(self.clone()).set_byte(offset, val),
+                    )
+                }
+            }
+            BufferNode::Internal(node) => BufferNode::Internal(node.set_byte(offset, val)),
+        }
+    }
+}
+
+impl BufferInternal {
+    fn new(height: usize, capacity: u128, left: BufferNode, right: BufferNode) -> Self {
+        BufferInternal {
+            height,
+            capacity,
+            left: Rc::new(left.clone()),
+            right: Rc::new(right.clone()),
+        }
+    }
+
+    fn grow(&self) -> Self {
+        BufferInternal::new(
+            self.height + 1,
+            self.capacity * 2,
+            BufferNode::Internal(self.clone()),
+            BufferNode::new_empty_internal(self.height, self.capacity),
+        )
+    }
+
+    fn grow_from_leaf(leaf: BufferNode) -> Self {
+        BufferInternal::new(2, 2 * 32, leaf, BufferNode::new_empty())
+    }
+
+    fn hex_encode(&self, size: usize) -> String {
+        let half_capacity = (self.capacity / 2) as usize;
+        if size == 0 {
+            "".to_string()
+        } else if size <= half_capacity {
+            self.left.hex_encode(size)
+        } else {
+            let mut left_str = self.left.hex_encode(half_capacity);
+            let right_str = self.right.hex_encode(size - half_capacity);
+            left_str.push_str(&right_str);
+            left_str
+        }
+    }
+
+    fn read_byte(&self, offset: u128) -> u8 {
+        if offset < self.capacity / 2 {
+            self.left.read_byte(offset)
+        } else {
+            self.right.read_byte(offset - self.capacity / 2)
+        }
+    }
+
+    fn set_byte(&self, offset: u128, val: u8) -> BufferInternal {
+        if offset < self.capacity / 2 {
+            BufferInternal::new(
+                self.height,
+                self.capacity,
+                self.left.set_byte(offset, val),
+                (*self.right).clone(),
+            )
+        } else if offset < self.capacity {
+            BufferInternal::new(
+                self.height,
+                self.capacity,
+                (*self.left).clone(),
+                self.right.set_byte(offset - self.capacity / 2, val),
+            )
+        } else {
+            self.grow().set_byte(offset, val)
+        }
+    }
+}
+
+fn _levels_needed(x: u128) -> (usize, u128) {
+    let mut height = 1;
+    let mut size = 32u128;
+    while (size < x) {
+        height = height + 1;
+        size = size * 2;
+    }
+    (height, size)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Value {

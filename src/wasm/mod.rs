@@ -1105,15 +1105,10 @@ fn handle_function(
                 let return_label = label;
                 label = label + 1;
                 // push new frame to aux stack
-                res.push(simple_op(AVMOpcode::NewBuffer));
-                res.push(push_value(Value::new_tuple(vec![
-                    // Value::new_buffer(vec![]),
-                    int_from_usize(0),
+                res.push(push_frame(Value::new_tuple(vec![
+                    Value::new_buffer(vec![]),
                     Value::Label(Label::Evm(return_label)),
                 ])));
-                res.push(push_value(int_from_usize(0)));
-                res.push(simple_op(AVMOpcode::Tset));
-                res.push(simple_op(AVMOpcode::AuxPush));
                 // Push args to frame
                 for i in 0..ftype.params().len() {
                     res.push(get_frame());

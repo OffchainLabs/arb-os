@@ -1127,12 +1127,13 @@ impl Machine {
                 Ok(still_runnable) => {
                     if !still_runnable {
                         /*
+                        let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
+                        return final_gas - orig_gas
+                        */
                         self.total_gas_usage = self
                             .total_gas_usage
                             .sub(&Uint256::from_u64(gas_this_instruction))
                             .unwrap();
-                        */
-                        println!("gas used {}", gas_used);
                         return gas_used - gas_this_instruction;
                     }
                 }
@@ -1463,6 +1464,20 @@ impl Machine {
                 if let Some(str) = &insn.debug_str {
                     println!("{}", str);
                 }*/
+                let gas_remaining_before = if let Some(gas) = self.next_op_gas() {
+                    let gas256 = Uint256::from_u64(gas);
+                    let gas_remaining_before = self.arb_gas_remaining.clone();
+                    if let Some(remaining) = self.arb_gas_remaining.sub(&gas256) {
+                        self.arb_gas_remaining = remaining;
+                        self.total_gas_usage = self.total_gas_usage.add(&gas256);
+                    } else {
+                        self.arb_gas_remaining = Uint256::max_uint();
+                        return Err(ExecutionError::new("Out of ArbGas", &self.state, None));
+                    }
+                    gas_remaining_before
+                } else {
+                    self.arb_gas_remaining.clone()
+                };
                 /*
                 if let Some(_str) = &insn.debug_str {
                     self.counter = self.counter + 1;
@@ -2002,7 +2017,7 @@ impl Machine {
                                 Ok(true)
                             }
                             None => {
-                                // self.arb_gas_remaining = gas_remaining_before;
+                                self.arb_gas_remaining = gas_remaining_before;
                                 Ok(false) // machine is blocked, waiting for message
                             }
                         }
@@ -2033,7 +2048,7 @@ impl Machine {
                             }
                             None => {
                                 // machine is blocked, waiting for nonempty inbox
-                                /// self.arb_gas_remaining = gas_remaining_before;
+                                self.arb_gas_remaining = gas_remaining_before;
                                 self.stack.push_uint(bn); // put stack back the way it was
                                 Ok(false)
                             }
