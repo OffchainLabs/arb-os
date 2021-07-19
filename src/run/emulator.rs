@@ -229,7 +229,7 @@ impl ValueStack {
 impl fmt::Display for ValueStack {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Stack[")?;
-        for i in self.contents[0..self.ptr].iter().rev() {
+        for i in self.contents.iter().rev() {
             if let Value::Tuple(_) = i {
                 writeln!(f, "Tuple;;")?;
             } else {
