@@ -17,6 +17,7 @@ use std::bytestream::bytestream_new;
 
 use std::keccak::keccak256;
 
+use std::rlp::rlp_init;
 use std::rlp::rlp_encodeUint;
 use std::rlp::rlp_encodeAddress;
 use std::rlp::rlp_encodeBytes;
@@ -24,6 +25,7 @@ use std::rlp::rlp_encodeList;
 use std::rlp::rlp_encodeMessageInfo;
 use std::rlp::rlp_encodeAndHashMessageInfoForSignature;
 use std::rlp::rlp_decodeMessageInfo;
+use std::rlp::rlp_encodeMessageInfo_old;
 
 use std::rlp::rlp_decodeUint;
 use std::rlp::rlp_decodeAddress;
@@ -44,6 +46,7 @@ type SignedTx = struct {
 }
 
 impure func main(kind: uint, value: any) {
+    rlp_init();
     if (kind == 0) {
         let ui = unsafecast<uint>(value);
         let ba = bytearray_new(0);
@@ -119,6 +122,11 @@ func testRlpHasher() {
     let v = uint(hash(value));
     let r = 0;
     let s = 0;
+    debug(value);
+    debug(v);
+    debug(gasLimit);
+
+    debug(data);
 
     let oldBuf = rlp_encodeMessageInfo(
         seqNum,
@@ -132,9 +140,30 @@ func testRlpHasher() {
         s
     );
 
-    if let Some(res) = rlp_decodeMessageInfo(bytestream_new(oldBuf)) {
+    let oldBuf2 = rlp_encodeMessageInfo_old(
+        seqNum,
+        gasPrice,
+        gasLimit,
+        to,
+        value,
+        data,
+        v,
+        r,
+        s
+    );
+
+    debug(oldBuf);
+    debug(oldBuf2);
+
+    if let Some(res) = rlp_decodeMessageInfo(bytestream_new(oldBuf2)) {
         let (_, tx) = res;
-        if (keccak256(oldBuf, 0, bytearray_size(oldBuf)) != rlp_encodeAndHashMessageInfoForSignature(tx, Some(tx.v))) {
+        debug(tx);
+    }
+
+    if let Some(res) = rlp_decodeMessageInfo(bytestream_new(oldBuf2)) {
+        let (_, tx) = res;
+        debug(tx);
+        if (keccak256(oldBuf2, 0, bytearray_size(oldBuf2)) != rlp_encodeAndHashMessageInfoForSignature(tx, Some(tx.v))) {
             asm(12,) { debugprint };
             panic;
         }
@@ -159,6 +188,7 @@ func testRlpHasher() {
     );
 
     if (keccak256(oldBuf, 0, bytearray_size(oldBuf)) != newWay) {
+        asm(14,) { debugprint };
         panic;
     }
 }

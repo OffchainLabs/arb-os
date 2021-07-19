@@ -36,6 +36,7 @@ use output::txReceipts_init;
 use pluggables::pluggables_init;
 use precompiles::precompiles_init;
 use rollupTracker::rollupTracker_init;
+use std::rlp::rlp_init;
 
 use std::bytearray::MarshalledBytes;
 use std::bytearray::ByteArray;
@@ -76,6 +77,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         // this is a clean start, not an upgrade
         errorHandler_init();
         arbStatistics_init();
+        rlp_init();
 
         pluggables_init();
         codeSegment_init();

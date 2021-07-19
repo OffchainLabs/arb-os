@@ -11,6 +11,9 @@ use core::array::builtin_arrayGetSafe;
 
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_buffer;
+use std::bytearray::bytearray_wrap;
+use std::bytearray::bytearray_slice;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_setByte;
@@ -290,6 +293,15 @@ public func rlp_encodeList(
     return Some((outBytes, totalWritten));
 }
 
+var wasm_prog : any;
+
+public impure func rlp_init() {
+    let buf = #include "/home/sami/rlp-nohash.wasm";
+    let ln = 17804;
+    let compiled = asm(ln, buf,) any { compilewasm };
+    wasm_prog = compiled;
+}
+
 public func rlp_encodeMessageInfo(
     seqNum: uint,
     gasPrice: uint,
@@ -301,8 +313,33 @@ public func rlp_encodeMessageInfo(
     r: uint,
     s: uint
 ) -> ByteArray {
-    let encodedPieces = unsafecast<[]ByteArray>(newarray<any>(9));  // workaround for issue #120
-    // after #120 is fixed, use this:  let encodedPieces = newarray<ByteArray>(9);
+
+    let tx = (seqNum, gasPrice, gasLimit, to, value, (v,r,s), (bytearray_size(data), bytearray_slice(data), bytearray_buffer(data)));
+
+    let empty = newbuffer();
+    let res = asm(tx,0,empty,wasm_prog) (uint, buffer) { runwasm };
+    debug(res);
+
+    // debug((seqNum, gasPrice, gasLimit, to, value, data, v, r, s));
+    debug(rlp_encodeMessageInfo_old(seqNum, gasPrice, gasLimit, to, value, data, v, r, s));
+    debug(res);
+
+    return bytearray_wrap(res.1, res.0);
+
+}
+
+public func rlp_encodeMessageInfo_old(
+    seqNum: uint,
+    gasPrice: uint,
+    gasLimit: uint,
+    to: address,
+    value: uint,
+    data: ByteArray,
+    v: uint,
+    r: uint,
+    s: uint
+) -> ByteArray {
+    let encodedPieces = newarray<ByteArray>(9);
 
     encodedPieces = encodedPieces with {
         [0] = rlp_encodeUint(seqNum, bytearray_new(0), 0).0
