@@ -1464,7 +1464,7 @@ impl AVMOpcode {
 
 #[test]
 fn test_consistent_opcode_numbers() {
-    for i in 0..256 {
+    for i in 0..255 {
         if let Some(op) = AVMOpcode::from_number(i) {
             assert_eq!(i as u8, op.to_number());
         }
