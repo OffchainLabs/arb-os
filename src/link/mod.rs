@@ -5,8 +5,8 @@
 //!Provides types and utilities for linking together compiled mini programs
 
 use crate::compile::{
-    comma_list, CompileError, CompiledProgram, DebugInfo, ErrorSystem, FileInfo, GlobalVarDecl,
-    SourceFileMap, Type, TypeTree,
+    comma_list, CompileError, CompiledProgram, DebugInfo, FileInfo, GlobalVarDecl, SourceFileMap,
+    Type, TypeTree, WarningSystem,
 };
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::{try_display_location, Location};
@@ -232,7 +232,6 @@ impl ExportedFunc {
 pub fn postlink_compile(
     program: CompiledProgram,
     mut file_info_chart: BTreeMap<u64, FileInfo>,
-    _error_system: &mut ErrorSystem,
     test_mode: bool,
     debug: bool,
 ) -> Result<LinkedProgram, CompileError> {
@@ -348,7 +347,7 @@ fn hardcode_jump_table_into_register(
 pub fn link(
     progs_in: &[CompiledProgram],
     test_mode: bool,
-    error_system: &mut ErrorSystem,
+    warning_system: &mut WarningSystem,
 ) -> Result<CompiledProgram, CompileError> {
     let progs = progs_in.to_vec();
     let type_tree = progs[0].type_tree.clone();
@@ -443,7 +442,7 @@ pub fn link(
         if let Some(label) = exports_map.get(&imp.name) {
             label_xlate_map.insert(Label::External(imp.slot_num), label);
         } else {
-            error_system.push_warning(CompileError::new_warning(
+            warning_system.push_warning(CompileError::new_warning(
                 String::from("Compile warning"),
                 format!("Failed to resolve import \"{}\"", imp.name),
                 vec![],

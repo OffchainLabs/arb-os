@@ -195,9 +195,11 @@ impl CompileStruct {
                 !self.no_builtins,
             )?
         };
-        let linked_prog = match link(&compiled_progs, self.test_mode, &mut error_system) {
+        let mut warning_system = WarningSystem::new_from_config(error_system.config.clone());
+        let linked_prog = match link(&compiled_progs, self.test_mode, &mut warning_system) {
             Ok(idk) => idk,
             Err(err) => {
+                error_system.extend_warnings(warning_system.warnings().to_vec());
                 error_system.push_error(err);
                 error_system.config.file_info_chart = file_info_chart;
                 return Err(error_system);
@@ -213,7 +215,6 @@ impl CompileStruct {
         let postlinked_prog = match postlink_compile(
             linked_prog,
             file_info_chart.clone(),
-            &mut error_system,
             self.test_mode,
             self.debug_mode,
         ) {
