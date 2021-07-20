@@ -746,18 +746,21 @@ pub fn compile_from_folder(
         module.propagate_attributes();
     }
 
+    let mut warning_system = WarningSystem::new_from_config(error_system.config.clone());
     let progs = codegen_programs(
         typechecked_modules,
         file_info_chart,
-        error_system,
+        &mut warning_system,
         type_tree,
         folder,
         release_build,
     )
     .map_err(|e| {
+        error_system.extend_warnings(warning_system.warnings().to_vec());
         error_system.push_error(e);
         error_system.clone()
     })?;
+    error_system.extend_warnings(warning_system.warnings().to_vec());
     Ok(progs)
 }
 
@@ -1191,7 +1194,7 @@ fn consume_program_callgraph(
 fn codegen_programs(
     typechecked_modules: Vec<TypeCheckedModule>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    error_system: &mut ErrorSystem,
+    error_system: &mut WarningSystem,
     type_tree: TypeTree,
     folder: &Path,
     release_build: bool,

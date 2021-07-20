@@ -12,7 +12,7 @@ use crate::compile::ast::{DebugInfo, MatchPatternKind};
 use crate::compile::typecheck::{
     TypeCheckedCodeBlock, TypeCheckedExprKind, TypeCheckedStatementKind,
 };
-use crate::compile::{CompileError, ErrorSystem, FileInfo};
+use crate::compile::{CompileError, FileInfo, WarningSystem};
 use crate::link::{ImportedFunc, TupleTree, TUPLE_SIZE};
 use crate::mavm::{AVMOpcode, Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::pos::Location;
@@ -46,7 +46,7 @@ pub fn mavm_codegen(
     imported_funcs: &[ImportedFunc],
     global_vars: &[GlobalVarDecl],
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    error_system: &mut ErrorSystem,
+    error_system: &mut WarningSystem,
     release_build: bool,
 ) -> Result<Vec<Instruction>, CodegenError> {
     let mut import_func_map = HashMap::new();
@@ -99,7 +99,7 @@ fn mavm_codegen_func(
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    error_system: &mut ErrorSystem,
+    error_system: &mut WarningSystem,
     release_build: bool,
 ) -> Result<(LabelGenerator, Vec<Instruction>), CodegenError> {
     if func.ret_type == Type::Void
@@ -179,7 +179,7 @@ fn mavm_codegen_code_block<'a>(
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    error_system: &mut ErrorSystem,
+    error_system: &mut WarningSystem,
     debug_info: DebugInfo,
     release_build: bool,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
@@ -260,7 +260,7 @@ fn mavm_codegen_statements(
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    error_system: &mut ErrorSystem,
+    error_system: &mut WarningSystem,
     release_build: bool,
 ) -> Result<(LabelGenerator, usize, HashMap<StringId, usize>), CodegenError> {
     let mut bindings = HashMap::new();
@@ -313,7 +313,7 @@ fn mavm_codegen_statement(
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    error_system: &mut ErrorSystem,
+    error_system: &mut WarningSystem,
     release_build: bool,
 ) -> Result<(LabelGenerator, usize, HashMap<StringId, usize>), CodegenError> {
     let debug = statement.debug_info;
@@ -821,7 +821,7 @@ fn mavm_codegen_expr<'a>(
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    error_system: &mut ErrorSystem,
+    error_system: &mut WarningSystem,
     release_build: bool,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
     let debug = expr.debug_info;
@@ -2220,7 +2220,7 @@ fn codegen_fixed_array_mod<'a>(
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    error_system: &mut ErrorSystem,
+    error_system: &mut WarningSystem,
     release_build: bool,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
     let (label_gen, code, val_locals) = mavm_codegen_expr(

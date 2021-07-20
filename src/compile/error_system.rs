@@ -107,6 +107,12 @@ impl WarningSystem {
             },
         }
     }
+    pub fn new_from_config(config: ErrorConfig) -> Self {
+        WarningSystem {
+            warnings: vec![],
+            config,
+        }
+    }
     pub fn _print(&self) {
         for warning in &self.warnings {
             warning.print(
@@ -114,6 +120,9 @@ impl WarningSystem {
                 self.config.warnings_are_errors,
             );
         }
+    }
+    pub fn push_warning(&mut self, error: CompileError) {
+        self.warnings.push(error);
     }
     pub fn extend_warnings(&mut self, system: Vec<CompileError>) {
         self.warnings.extend(system)
