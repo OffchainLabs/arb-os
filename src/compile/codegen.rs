@@ -440,7 +440,7 @@ fn mavm_codegen_statement(
                     debug,
                 ));
                 if expr.get_type() != Type::Tuple(vec![]) {
-                    error_system.warnings.push(CompileError::new_warning(
+                    error_system.push_warning(CompileError::new_warning(
                         String::from("Compile warning"),
                         format!(
                             "expression statement returns value of type {:?}, which is discarded",

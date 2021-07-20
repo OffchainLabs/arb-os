@@ -443,7 +443,7 @@ pub fn link(
         if let Some(label) = exports_map.get(&imp.name) {
             label_xlate_map.insert(Label::External(imp.slot_num), label);
         } else {
-            error_system.warnings.push(CompileError::new_warning(
+            error_system.push_warning(CompileError::new_warning(
                 String::from("Compile warning"),
                 format!("Failed to resolve import \"{}\"", imp.name),
                 vec![],

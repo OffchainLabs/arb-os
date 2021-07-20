@@ -227,7 +227,7 @@ impl CompileStruct {
 
         error_system.config.file_info_chart = file_info_chart;
 
-        if error_system.warnings.len() > 0 && error_system.config.warnings_are_errors {
+        if error_system.warnings().len() > 0 && error_system.config.warnings_are_errors {
             error_system.push_error(CompileError::new(
                 String::from("Compile Error"),
                 String::from("Found warning with -w on"),
@@ -350,17 +350,7 @@ impl TypeCheckedModule {
     }
     ///Reasons about control flow and construct usage within the typechecked AST
     fn flowcheck(&mut self, warnings_are_errors: bool) -> WarningSystem {
-        let mut warning_system = WarningSystem {
-            warnings: vec![],
-            config: ErrorConfig {
-                warnings_are_errors,
-                warn_color: match warnings_are_errors {
-                    true => CompileError::PINK,
-                    false => CompileError::YELLOW,
-                },
-                file_info_chart: BTreeMap::new(),
-            },
-        };
+        let mut warning_system = WarningSystem::new(warnings_are_errors);
         let mut flow_warnings = vec![];
 
         let mut imports: BTreeMap<StringId, Import> = BTreeMap::new();
@@ -432,7 +422,7 @@ impl TypeCheckedModule {
                 .cmp(&b.locations.last().unwrap().line.to_usize())
         });
 
-        warning_system.warnings.extend(flow_warnings);
+        warning_system.extend_warnings(flow_warnings);
         warning_system
     }
     pub(crate) fn show_ast(&mut self) -> String {
@@ -740,7 +730,7 @@ pub fn compile_from_folder(
     let mut program_callgraph = HashMap::new();
     for module in &mut typechecked_modules {
         let warnings = module.flowcheck(error_system.config.warnings_are_errors);
-        error_system.warnings.extend(warnings.warnings);
+        error_system.extend_warnings(warnings.warnings().to_vec());
         program_callgraph.insert(module.path.clone(), module.build_callgraph());
     }
     consume_program_callgraph(program_callgraph, &mut typechecked_modules, error_system);
@@ -943,7 +933,7 @@ fn resolve_imports(
                     &origin_program.string_table,
                 ));
             } else {
-                error_system.warnings.push(CompileError::new_warning(
+                error_system.push_warning(CompileError::new_warning(
                     String::from("Compile warning"),
                     format!(
                         "import \"{}::{}\" does not correspond to a type or function",
@@ -1059,9 +1049,7 @@ fn typecheck_programs(
         )
         .collect::<Result<(Vec<TypeCheckedModule>, Vec<Vec<CompileError>>), CompileError>>()?;
 
-    error_system
-        .warnings
-        .extend(module_warnings.into_iter().flatten());
+    error_system.extend_warnings(module_warnings.into_iter().flatten().collect::<Vec<_>>());
 
     Ok(typechecked_modules)
 }
@@ -1080,7 +1068,7 @@ fn check_global_constants(
 
     for (constant, _) in global_constants {
         if !constant.starts_with('_') {
-            error_system.warnings.push(CompileError::new_warning(
+            error_system.push_warning(CompileError::new_warning(
                 String::from("Compile warning"),
                 format!(
                     "global constant {}{}{} is never used",
@@ -1183,7 +1171,7 @@ fn consume_program_callgraph(
             let func_name = module.string_table.name_from_id(func);
 
             if !func_name.starts_with('_') {
-                error_system.warnings.push(CompileError::new_warning(
+                error_system.push_warning(CompileError::new_warning(
                     String::from("Compile warning"),
                     format!(
                         "func {}{}{} is unreachable",
@@ -1346,7 +1334,7 @@ pub fn parse_from_source(
 
     for (constant, loc) in local_constants {
         if !used_constants.contains(&constant) {
-            error_system.warnings.push(CompileError::new_warning(
+            error_system.push_warning(CompileError::new_warning(
                 String::from("Compile warning"),
                 format!(
                     "Constant {}{}{} is never used",

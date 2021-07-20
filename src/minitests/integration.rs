@@ -143,10 +143,9 @@ fn test_error_system() {
             Ok(_) => panic!("No compile error was emitted despite the -w flag."),
             Err(error_system) => {
                 error_system.print();
-                let errors = error_system._errors().clone().to_vec();
                 (
-                    error_system.warnings,
-                    errors,
+                    error_system.warnings().to_vec(),
+                    error_system._errors().to_vec(),
                     error_system.config.file_info_chart,
                 )
             }

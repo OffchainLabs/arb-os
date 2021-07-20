@@ -511,7 +511,7 @@ ConstVal: Uint256 = {
         match constants.get(&c) {
             Some(i) => {
                 if c.starts_with('_') {
-                    error_system.warnings.push(
+                    error_system.push_warning(
                         CompileError::new_warning(
                             String::from("Parser warning"),
                             format!(

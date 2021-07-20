@@ -7,7 +7,7 @@ pub struct ErrorSystem {
     ///All compilation errors
     errors: Vec<CompileError>,
     ///All compilation warnings
-    pub warnings: Vec<CompileError>,
+    warnings: Vec<CompileError>,
     ///Config for displaying errors,
     pub config: ErrorConfig,
 }
@@ -15,7 +15,7 @@ pub struct ErrorSystem {
 #[derive(Clone)]
 pub struct WarningSystem {
     ///All compilation warnings
-    pub warnings: Vec<CompileError>,
+    warnings: Vec<CompileError>,
     ///Config for displaying errors,
     pub config: ErrorConfig,
 }
@@ -47,7 +47,7 @@ impl ErrorSystem {
             errors: vec![],
             warnings: vec![],
             config: ErrorConfig {
-                warnings_are_errors: warnings_are_errors,
+                warnings_are_errors,
                 warn_color: match warnings_are_errors {
                     true => CompileError::PINK,
                     false => CompileError::YELLOW,
@@ -73,11 +73,20 @@ impl ErrorSystem {
     pub fn push_error(&mut self, error: CompileError) {
         self.errors.push(error);
     }
+    pub fn push_warning(&mut self, error: CompileError) {
+        self.warnings.push(error);
+    }
     pub fn map_error<T>(mut self, res: Result<T, CompileError>) -> Result<T, ErrorSystem> {
         res.map_err(|e| {
             self.push_error(e);
             self.clone()
         })
+    }
+    pub fn extend_warnings(&mut self, system: Vec<CompileError>) {
+        self.warnings.extend(system)
+    }
+    pub fn warnings(&self) -> &[CompileError] {
+        &self.warnings
     }
     pub fn _errors(&self) -> &[CompileError] {
         &self.errors
@@ -85,6 +94,19 @@ impl ErrorSystem {
 }
 
 impl WarningSystem {
+    pub fn new(warnings_are_errors: bool) -> Self {
+        WarningSystem {
+            warnings: vec![],
+            config: ErrorConfig {
+                warnings_are_errors,
+                warn_color: match warnings_are_errors {
+                    true => CompileError::PINK,
+                    false => CompileError::YELLOW,
+                },
+                file_info_chart: BTreeMap::new(),
+            },
+        }
+    }
     pub fn _print(&self) {
         for warning in &self.warnings {
             warning.print(
@@ -92,5 +114,11 @@ impl WarningSystem {
                 self.config.warnings_are_errors,
             );
         }
+    }
+    pub fn extend_warnings(&mut self, system: Vec<CompileError>) {
+        self.warnings.extend(system)
+    }
+    pub fn warnings(&self) -> &[CompileError] {
+        &self.warnings
     }
 }
