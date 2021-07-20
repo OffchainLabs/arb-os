@@ -723,18 +723,22 @@ pub fn compile_from_folder(
         builtins,
     )?;
 
+    let mut warning_system = WarningSystem::new_from_config(error_system.config.clone());
     if must_use_global_consts {
-        check_global_constants(&typechecked_modules, constants_path, error_system);
+        check_global_constants(&typechecked_modules, constants_path, &mut warning_system);
     }
-
     // Control flow analysis stage
     let mut program_callgraph = HashMap::new();
     for module in &mut typechecked_modules {
-        let warnings = module.flowcheck(error_system.config.warnings_are_errors);
-        error_system.extend_warnings(warnings.warnings().to_vec());
+        let warnings = module.flowcheck(warning_system.config.warnings_are_errors);
+        warning_system.extend_warnings(warnings.warnings().to_vec());
         program_callgraph.insert(module.path.clone(), module.build_callgraph());
     }
-    consume_program_callgraph(program_callgraph, &mut typechecked_modules, error_system);
+    consume_program_callgraph(
+        program_callgraph,
+        &mut typechecked_modules,
+        &mut warning_system,
+    );
 
     // Inlining stage
     if let Some(cool) = inline {
@@ -747,7 +751,6 @@ pub fn compile_from_folder(
         module.propagate_attributes();
     }
 
-    let mut warning_system = WarningSystem::new_from_config(error_system.config.clone());
     let progs = codegen_programs(
         typechecked_modules,
         file_info_chart,
@@ -1061,7 +1064,7 @@ fn typecheck_programs(
 fn check_global_constants(
     modules: &Vec<TypeCheckedModule>,
     constants_path: Option<&Path>,
-    error_system: &mut ErrorSystem,
+    error_system: &mut WarningSystem,
 ) {
     let mut global_constants = init_constant_table(constants_path).unwrap();
     for module in modules {
@@ -1136,7 +1139,7 @@ fn consume_program_callgraph(
         BTreeMap<StringId, (Vec<(StringId, Option<Import>)>, Location)>,
     >,
     modules: &mut Vec<TypeCheckedModule>,
-    error_system: &mut ErrorSystem,
+    warning_system: &mut WarningSystem,
 ) {
     let mut paths_to_modules = HashMap::<_, &TypeCheckedModule>::new();
     let main_module = &modules[0];
@@ -1175,11 +1178,11 @@ fn consume_program_callgraph(
             let func_name = module.string_table.name_from_id(func);
 
             if !func_name.starts_with('_') {
-                error_system.push_warning(CompileError::new_warning(
+                warning_system.push_warning(CompileError::new_warning(
                     String::from("Compile warning"),
                     format!(
                         "func {}{}{} is unreachable",
-                        error_system.config.warn_color,
+                        warning_system.config.warn_color,
                         func_name,
                         CompileError::RESET,
                     ),
@@ -1195,7 +1198,7 @@ fn consume_program_callgraph(
 fn codegen_programs(
     typechecked_modules: Vec<TypeCheckedModule>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    error_system: &mut WarningSystem,
+    warning_system: &mut WarningSystem,
     type_tree: TypeTree,
     folder: &Path,
     release_build: bool,
@@ -1220,7 +1223,7 @@ fn codegen_programs(
             &imported_funcs,
             &global_vars,
             file_info_chart,
-            error_system,
+            warning_system,
             release_build,
         )
         .map_err(|e| {
