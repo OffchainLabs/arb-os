@@ -139,18 +139,7 @@ pub struct TypeCheckedModule {
 
 impl CompileStruct {
     pub fn invoke_compile(&self) -> Result<(Vec<TypeCheckedModule>, TypeTree), ErrorSystem> {
-        let mut error_system = ErrorSystem {
-            errors: vec![],
-            warnings: vec![],
-            config: ErrorConfig {
-                warnings_are_errors: self.warnings_are_errors,
-                warn_color: match self.warnings_are_errors {
-                    true => CompileError::PINK,
-                    false => CompileError::YELLOW,
-                },
-                file_info_chart: BTreeMap::new(),
-            },
-        };
+        let mut error_system = ErrorSystem::new(self.warnings_are_errors);
 
         let mut file_info_chart = BTreeMap::new();
 
@@ -162,7 +151,7 @@ impl CompileStruct {
             let path = Path::new(&self.input);
             let library = normalize_libraries(path);
             let (folder, main) = preprocess_path(path).map_err(|e| {
-                error_system.push_err(e);
+                error_system.push_error(e);
                 error_system.clone()
             })?;
             compile_to_typecheck(
@@ -177,18 +166,7 @@ impl CompileStruct {
         }
     }
     pub fn invoke(&self) -> Result<(LinkedProgram, ErrorSystem), ErrorSystem> {
-        let mut error_system = ErrorSystem {
-            warnings: vec![],
-            errors: vec![],
-            config: ErrorConfig {
-                warnings_are_errors: self.warnings_are_errors,
-                warn_color: match self.warnings_are_errors {
-                    true => CompileError::PINK,
-                    false => CompileError::YELLOW,
-                },
-                file_info_chart: BTreeMap::new(),
-            },
-        };
+        let mut error_system = ErrorSystem::new(self.warnings_are_errors);
 
         let mut file_info_chart = BTreeMap::new();
 
@@ -200,7 +178,7 @@ impl CompileStruct {
             let path = Path::new(&self.input);
             let library = normalize_libraries(path);
             let (folder, main) = preprocess_path(path).map_err(|err| {
-                error_system.push_err(err);
+                error_system.push_error(err);
                 error_system.config.file_info_chart = file_info_chart.clone();
                 error_system.clone()
             })?;
@@ -220,7 +198,7 @@ impl CompileStruct {
         let linked_prog = match link(&compiled_progs, self.test_mode, &mut error_system) {
             Ok(idk) => idk,
             Err(err) => {
-                error_system.push_err(err);
+                error_system.push_error(err);
                 error_system.config.file_info_chart = file_info_chart;
                 return Err(error_system);
             }
@@ -241,7 +219,7 @@ impl CompileStruct {
         ) {
             Ok(idk) => idk,
             Err(err) => {
-                error_system.push_err(err);
+                error_system.push_error(err);
                 error_system.config.file_info_chart = file_info_chart;
                 return Err(error_system);
             }
@@ -250,7 +228,7 @@ impl CompileStruct {
         error_system.config.file_info_chart = file_info_chart;
 
         if error_system.warnings.len() > 0 && error_system.config.warnings_are_errors {
-            error_system.push_err(CompileError::new(
+            error_system.push_error(CompileError::new(
                 String::from("Compile Error"),
                 String::from("Found warning with -w on"),
                 vec![],
@@ -698,7 +676,7 @@ fn compile_to_typecheck(
 
     error_system
         .clone()
-        .map_err(resolve_imports(&mut programs, &import_map, error_system))?;
+        .map_error(resolve_imports(&mut programs, &import_map, error_system))?;
     //Conversion of programs from `HashMap` to `Vec` for typechecking
     let type_tree = create_type_tree(&programs);
     let mut modules = vec![programs
@@ -714,7 +692,7 @@ fn compile_to_typecheck(
         out
     });
     Ok((
-        error_system.clone().map_err(typecheck_programs(
+        error_system.clone().map_error(typecheck_programs(
             &type_tree,
             modules,
             file_info_chart,
@@ -787,7 +765,7 @@ pub fn compile_from_folder(
         release_build,
     )
     .map_err(|e| {
-        error_system.push_err(e);
+        error_system.push_error(e);
         error_system.clone()
     })?;
     Ok(progs)
@@ -850,7 +828,7 @@ fn create_program_tree(
         } + ".mini";
         let mut file = File::open(folder.join(name.clone())).map_err(|why| {
             let mut new_system = error_system.clone();
-            new_system.push_err(CompileError::new(
+            new_system.push_error(CompileError::new(
                 String::from("Compile error"),
                 format!("Can not open {}/{}: {:?}", folder.display(), name, why),
                 vec![],
@@ -861,7 +839,7 @@ fn create_program_tree(
         let mut source = String::new();
         file.read_to_string(&mut source).map_err(|why| {
             let mut new_system = error_system.clone();
-            new_system.push_err(CompileError::new(
+            new_system.push_error(CompileError::new(
                 String::from("Compile error"),
                 format!("Can not read {}/{}: {:?}", folder.display(), name, why),
                 vec![],
@@ -1304,9 +1282,9 @@ pub fn parse_from_source(
     let lines = Lines::new(source.bytes());
     let mut constants = error_system
         .clone()
-        .map_err(init_constant_table(constants_path))?;
+        .map_error(init_constant_table(constants_path))?;
     let mut local_constants = HashMap::<String, Location>::new();
-    let parsed = error_system.clone().map_err(
+    let parsed = error_system.clone().map_error(
         DeclsParser::new()
             .parse(
                 string_table,

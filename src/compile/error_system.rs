@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 ///A collection of all compiler warnings encountered and the mechanism to handle them.
 pub struct ErrorSystem {
     ///All compilation errors
-    pub errors: Vec<CompileError>,
+    errors: Vec<CompileError>,
     ///All compilation warnings
     pub warnings: Vec<CompileError>,
     ///Config for displaying errors,
@@ -42,6 +42,20 @@ impl From<WarningSystem> for ErrorSystem {
 }
 
 impl ErrorSystem {
+    pub fn new(warnings_are_errors: bool) -> Self {
+        ErrorSystem {
+            errors: vec![],
+            warnings: vec![],
+            config: ErrorConfig {
+                warnings_are_errors: warnings_are_errors,
+                warn_color: match warnings_are_errors {
+                    true => CompileError::PINK,
+                    false => CompileError::YELLOW,
+                },
+                file_info_chart: BTreeMap::new(),
+            },
+        }
+    }
     pub fn print(&self) {
         for warning in &self.warnings {
             warning.print(
@@ -56,14 +70,17 @@ impl ErrorSystem {
             );
         }
     }
-    pub fn push_err(&mut self, error: CompileError) {
+    pub fn push_error(&mut self, error: CompileError) {
         self.errors.push(error);
     }
-    pub fn map_err<T>(mut self, res: Result<T, CompileError>) -> Result<T, ErrorSystem> {
+    pub fn map_error<T>(mut self, res: Result<T, CompileError>) -> Result<T, ErrorSystem> {
         res.map_err(|e| {
-            self.push_err(e);
+            self.push_error(e);
             self.clone()
         })
+    }
+    pub fn _errors(&self) -> &[CompileError] {
+        &self.errors
     }
 }
 

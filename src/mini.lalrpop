@@ -52,7 +52,7 @@ HeadDecl: TopLevelDecl = {
     <lno: @L> "const" <n: IdentString> "=" <u: UnsignedInteger> ";" => { 
         
         if let Some(_) = constants.get(&n) {
-            error_system.push_err(
+            error_system.push_error(
                 CompileError::new(
                     String::from("Parser error"),
                     format!(
@@ -133,7 +133,7 @@ Attributes: Attributes = {
                 "inline" => attribs.inline = InliningMode::Always,
                 "noinline" => attribs.inline = InliningMode::Never,
                 "print" => attribs.codegen_print = true,
-                unrecognized => error_system.push_err(
+                unrecognized => error_system.push_error(
                     CompileError::new(
                         String::from("Lexer error"),
                         format!(
@@ -528,7 +528,7 @@ ConstVal: Uint256 = {
                 Ok(i.clone())
             }
             None => {
-                error_system.push_err(
+                error_system.push_error(
                     CompileError::new(
                         String::from("Parser error"),
                         format!(
