@@ -339,7 +339,7 @@ public impure func evmOp_extcodehash(addrAsUint: uint) -> bytes32 {
             return bytes32(0);
         }
         return xif (evmCallFrame_constructorIsOnStackForAddress(topFrame, addr)) {
-            bytes32(const::HashOfEmptyCode)  
+            bytes32(const::HashOfEmptyCode)
         } else {
             xif let Some(code) = account_getCode(acct) {
                 keccak256(code, 0, bytearray_size(code))
