@@ -4,7 +4,7 @@
 
 use crate::evm::abi::FunctionTable;
 use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys};
-use crate::evm::preinstalled_contracts::{ArbosTest, _ArbInfo};
+use crate::evm::live_code::{ArbosTest, _ArbInfo};
 use crate::run::{load_from_file, load_from_file_and_env, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use ethers_signers::Signer;
@@ -22,7 +22,9 @@ mod benchmarks;
 #[cfg(test)]
 mod bls;
 mod evmtest;
-pub mod preinstalled_contracts;
+mod live_code;
+#[cfg(test)]
+mod preinstalled_contracts;
 
 #[derive(Clone)]
 pub struct CallInfo<'a> {
