@@ -312,17 +312,17 @@ public impure func evmOp_extcodecopy(addrAsUint: uint, memAddr: uint, codeOffset
     let addr = address(addrAsUint);     // truncates if necessary
     if let Some(topFrame) = evmCallStack_topFrame() {
         let memory = evmCallFrame_getMemory(topFrame);
-        let (codeArr, codeSize) = xif (evmCallFrame_constructorIsOnStackForAddress(topFrame, addr)) {
-            (bytearray_new(0), 0)
+        let codeArr = xif (evmCallFrame_constructorIsOnStackForAddress(topFrame, addr)) {
+            bytearray_new(0)
         } else {
             xif let Some(code) = account_getCode(evmCallFrame_getAccount(topFrame, addr)) {
-                (code, codeOffset)
+                code
             } else {
                 // code doesn't exist
-                (bytearray_new(0), 0)
+                bytearray_new(0)
             }
         };
-        memory = bytearray_copy(codeArr, codeSize, memory, memAddr, nbytes);  // will zero-fill anything beyond end of codeArr
+        memory = bytearray_copy(codeArr, codeOffset, memory, memAddr, nbytes);  // will zero-fill anything beyond end of codeArr
         if (evmCallStack_setTopFrameMemory(memory)) {
             return;
         }
@@ -339,12 +339,12 @@ public impure func evmOp_extcodehash(addrAsUint: uint) -> bytes32 {
             return bytes32(0);
         }
         return xif (evmCallFrame_constructorIsOnStackForAddress(topFrame, addr)) {
-            bytes32(0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470)  // hash of empty code
+            bytes32(const::HashOfEmptyCode)  
         } else {
             xif let Some(code) = account_getCode(acct) {
                 keccak256(code, 0, bytearray_size(code))
             } else {
-                bytes32(0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470)  // hash of empty code
+                bytes32(const::HashOfEmptyCode)
             }
         };
     }
