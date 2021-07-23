@@ -4,7 +4,7 @@
 
 use crate::evm::abi::FunctionTable;
 use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys};
-use crate::evm::live_code::{ArbosTest, _ArbInfo};
+use crate::evm::live_code::ArbosTest;
 use crate::run::{load_from_file, load_from_file_and_env, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use ethers_signers::Signer;
@@ -457,11 +457,6 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
 
     machine.write_coverage("test_arbsys_direct".to_string());
     Ok(())
-}
-
-#[test]
-fn test_pay_eoa_from_contract() {
-    crate::evm::_evm_pay_eoa_from_contract(None, false);
 }
 
 pub fn evm_test_function_table_access(
@@ -1164,69 +1159,6 @@ pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
     }
 
     machine.write_coverage("test_direct_deploy_add".to_string());
-}
-
-pub fn _evm_pay_eoa_from_contract(log_to: Option<&Path>, debug: bool) {
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero(true);
-
-    let add_contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
-        Ok(mut contract) => {
-            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, debug);
-            if let Ok(contract_addr) = result {
-                assert_ne!(contract_addr, Uint256::zero());
-                contract
-            } else {
-                panic!("deploy failed");
-            }
-        }
-        Err(e) => {
-            panic!("error loading contract: {:?}", e);
-        }
-    };
-
-    let payer = Uint256::from_u64(5386492);
-    let recipient = Uint256::from_u64(5771838591);
-    machine.runtime_env.insert_eth_deposit_message(
-        payer.clone(),
-        payer.clone(),
-        Uint256::_from_eth(1000),
-    );
-    let _gas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    }; // handle this eth deposit message
-
-    let arbinfo = _ArbInfo::_new(debug);
-    let balance_before = arbinfo._get_balance(&mut machine, &recipient).unwrap();
-    assert!(balance_before.is_zero());
-
-    let (receipts, _) = add_contract
-        .call_function(
-            payer,
-            "payTo",
-            &[ethabi::Token::Address(recipient.to_h160())],
-            &mut machine,
-            Uint256::one(),
-            debug,
-        )
-        .unwrap();
-    assert_eq!(receipts.len(), 1);
-    assert!(receipts[0].succeeded());
-
-    let balance_after = arbinfo._get_balance(&mut machine, &recipient).unwrap();
-    assert_eq!(balance_after, Uint256::one());
-
-    if let Some(path) = log_to {
-        machine
-            .runtime_env
-            .recorder
-            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
-            .unwrap();
-    }
-
-    machine.write_coverage("test_pay_eoa_from_contract".to_string());
 }
 
 pub fn _evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {

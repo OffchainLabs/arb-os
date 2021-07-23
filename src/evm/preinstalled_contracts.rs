@@ -1295,8 +1295,8 @@ pub fn evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), eth
         machine.run(None)
     };
 
-    let arbinfo = _ArbInfo::_new(false);
-    let balance = arbinfo._get_balance(&mut machine, &my_addr)?;
+    let arbinfo = ArbInfo::new(false);
+    let balance = arbinfo.get_balance(&mut machine, &my_addr)?;
     assert_eq!(balance, Uint256::from_u64(20000));
 
     let tx_id = machine.runtime_env.insert_tx_message(
@@ -1320,7 +1320,7 @@ pub fn evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), eth
     assert_eq!(receipts[last_rcpt].get_request_id(), tx_id);
     assert!(receipts[last_rcpt].succeeded());
 
-    let new_balance = arbinfo._get_balance(&mut machine, &my_addr)?;
+    let new_balance = arbinfo.get_balance(&mut machine, &my_addr)?;
     assert_eq!(new_balance, Uint256::from_u64(20000));
 
     if let Some(path) = log_to {
@@ -2826,4 +2826,121 @@ fn test_eip_3541() {
         .is_zero());
 
     machine.write_coverage("test_eip_3541".to_string());
+}
+
+#[test]
+fn test_pay_eoa_from_contract() {
+    evm_pay_eoa_from_contract(None, false);
+}
+
+pub fn evm_pay_eoa_from_contract(log_to: Option<&Path>, debug: bool) {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+
+    let add_contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
+        Ok(mut contract) => {
+            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, debug);
+            if let Ok(contract_addr) = result {
+                assert_ne!(contract_addr, Uint256::zero());
+                contract
+            } else {
+                panic!("deploy failed");
+            }
+        }
+        Err(e) => {
+            panic!("error loading contract: {:?}", e);
+        }
+    };
+
+    let payer = Uint256::from_u64(5386492);
+    let recipient = Uint256::from_u64(5771838591);
+    machine.runtime_env.insert_eth_deposit_message(
+        payer.clone(),
+        payer.clone(),
+        Uint256::_from_eth(1000),
+    );
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    }; // handle this eth deposit message
+
+    let arbinfo = ArbInfo::new(debug);
+    let balance_before = arbinfo.get_balance(&mut machine, &recipient).unwrap();
+    assert!(balance_before.is_zero());
+
+    let (receipts, _) = add_contract
+        .call_function(
+            payer,
+            "payTo",
+            &[ethabi::Token::Address(recipient.to_h160())],
+            &mut machine,
+            Uint256::one(),
+            debug,
+        )
+        .unwrap();
+    assert_eq!(receipts.len(), 1);
+    assert!(receipts[0].succeeded());
+
+    let balance_after = arbinfo.get_balance(&mut machine, &recipient).unwrap();
+    assert_eq!(balance_after, Uint256::one());
+
+    if let Some(path) = log_to {
+        machine
+            .runtime_env
+            .recorder
+            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
+            .unwrap();
+    }
+
+    machine.write_coverage("test_pay_eoa_from_contract".to_string());
+}
+
+pub struct ArbInfo {
+    pub contract_abi: AbiForContract,
+    debug: bool,
+}
+
+impl ArbInfo {
+    pub fn new(debug: bool) -> Self {
+        let mut contract_abi =
+            AbiForContract::new_from_file(&builtin_contract_path("ArbInfo")).unwrap();
+        contract_abi.bind_interface_to_address(Uint256::from_u64(101));
+        ArbInfo {
+            contract_abi,
+            debug,
+        }
+    }
+
+    pub fn get_balance(
+        &self,
+        machine: &mut Machine,
+        addr: &Uint256,
+    ) -> Result<Uint256, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::from_u64(1112),
+            "getBalance",
+            &[ethabi::Token::Address(addr.to_h160())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            let return_vals = ethabi::decode(
+                &[ethabi::ParamType::Uint(256)],
+                &receipts[0].get_return_data(),
+            )?;
+            match return_vals[0] {
+                ethabi::Token::Uint(ui) => Ok(Uint256::from_u256(&ui)),
+                _ => panic!(),
+            }
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
 }
