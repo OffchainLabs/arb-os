@@ -44,8 +44,8 @@ interface ArbAddressTable {
     function decompress(bytes calldata buf, uint offset) external pure returns(address, uint);
 
     /**
-    * @notice compress an address and return the result
-    * @param addr address to comppress 
+    * @notice Compress an address and return the result, possibly modifying the compression/decompression state
+    * @param addr address to compress
     * @return compressed address bytes
     */
     function compress(address addr) external returns(bytes memory);
