@@ -2482,7 +2482,7 @@ fn test_eventual_congestion_reject() {
 
     let arbtest = ArbosTest::new(false);
     for _ in 0..1200 {
-        let res_code = match arbtest._burn_arb_gas(
+        let res_code = match arbtest.burn_arb_gas(
             &mut machine,
             my_address.clone(),
             Uint256::from_u64(2_000_000),
@@ -2533,7 +2533,7 @@ fn test_congestion_price_adjustment() {
     let arbtest = ArbosTest::new(false);
     let mut seen_any_congestion = false;
     for _ in 0..1200 {
-        let res_code = match arbtest._burn_arb_gas(
+        let res_code = match arbtest.burn_arb_gas(
             &mut machine,
             my_address.clone(),
             Uint256::from_u64(2_000_000),
@@ -2778,7 +2778,7 @@ fn test_create2_target_nonce_nonzero() {
 
     let target_addr = Uint256::from_string_hex("7154b030bfa6f3b6937e57800eec2463e2c5687a").unwrap();
     assert!(arbtest
-        ._set_nonce(&mut machine, target_addr, Uint256::one())
+        .set_nonce(&mut machine, target_addr, Uint256::one())
         .is_ok());
 
     let _erc = Erc2470::new(&mut machine, &ao);
@@ -2958,7 +2958,7 @@ pub fn basic_evm_add_test(log_to: Option<&Path>, debug: bool) -> Result<(), etha
     let arbos_test = ArbosTest::new(debug);
 
     let code = hex::decode("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0160005500").unwrap();
-    let result = arbos_test._install_account_and_call(
+    let result = arbos_test.install_account_and_call(
         &mut machine,
         Uint256::from_u64(89629813089426890),
         Uint256::zero(),
