@@ -68,49 +68,6 @@ impl<'a> ArbOwner<'a> {
         }
     }
 
-    pub fn get_chain_parameter(
-        &self,
-        machine: &mut Machine,
-        param_name: &str,
-        force_owner: bool, // force the message to come from address zero, which is an owner
-    ) -> Result<Uint256, ethabi::Error> {
-        let param_id = param_id_from_name(param_name);
-        let (receipts, _sends) = self.contract_abi._call_function_from_contract(
-            if force_owner {
-                Uint256::zero()
-            } else {
-                Uint256::from_u64(980509782534089) // any old address
-            },
-            "getChainParameter",
-            &[ethabi::Token::Uint(param_id.to_u256())],
-            machine,
-            Uint256::zero(),
-            false,
-        )?;
-        let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
-        let num_sends_before = machine.runtime_env.get_all_sends().len();
-        let _arbgas_used = if self.debug {
-            machine.debug(None)
-        } else {
-            machine.run(None)
-        };
-        let logs = machine.runtime_env.get_all_receipt_logs();
-        let sends = machine.runtime_env.get_all_sends();
-
-        if (logs.len() != num_logs_before + 2) || (sends.len() != num_sends_before) {
-            return Err(ethabi::Error::from("wrong number of receipts or sends"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
-        } else {
-            Err(ethabi::Error::from(format!(
-                "tx failed: {}",
-                receipts[0]._get_return_code_text()
-            )))
-        }
-    }
-
     pub fn set_gas_accounting_params(
         &self,
         machine: &mut Machine,
@@ -247,35 +204,6 @@ impl<'a> ArbOwner<'a> {
         self.set_chain_parameter(machine, "SecondsPerSend", seconds_per_send, true)
     }
 
-    pub fn change_sequencer(
-        &self,
-        machine: &mut Machine,
-        sequencer_addr: Uint256,
-        delay_seconds: Uint256,
-    ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
-            "changeSequencer",
-            &[
-                ethabi::Token::Address(sequencer_addr.to_h160()),
-                ethabi::Token::Uint(delay_seconds.to_u256()),
-            ],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(())
-        } else {
-            Err(ethabi::Error::from("reverted"))
-        }
-    }
-
     pub fn start_code_upload(
         &self,
         machine: &mut Machine,
@@ -370,35 +298,6 @@ impl<'a> ArbOwner<'a> {
         assert_eq!(receipts.len(), 1);
 
         Ok(receipts[0].succeeded())
-    }
-
-    pub fn finish_code_upload_as_pluggable(
-        &self,
-        machine: &mut Machine,
-        id: Uint256,
-        keep_state: bool,
-    ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
-            "finishCodeUploadAsPluggable",
-            &[
-                ethabi::Token::Uint(id.to_u256()),
-                ethabi::Token::Bool(keep_state),
-            ],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(())
-        } else {
-            Err(ethabi::Error::from("reverted"))
-        }
     }
 
     pub fn deploy_contract(
@@ -707,7 +606,8 @@ fn param_id_from_name(name: &str) -> Uint256 {
 
 pub struct ArbGasInfo<'a> {
     pub contract_abi: AbiForContract,
-    wallet: &'a Wallet,
+    //TODO: Check why this isnt used
+    _wallet: &'a Wallet,
     my_address: Uint256,
     debug: bool,
 }
@@ -719,7 +619,7 @@ impl<'a> ArbGasInfo<'a> {
         contract_abi.bind_interface_to_address(Uint256::from_u64(108));
         ArbGasInfo {
             contract_abi,
-            wallet: wallet,
+            _wallet: wallet,
             my_address: Uint256::from_bytes(wallet.address().as_bytes()),
             debug,
         }
@@ -1226,25 +1126,6 @@ impl ArbReplayableTx {
         }
     }
 
-    pub fn get_lifetime(&self, machine: &mut Machine) -> Result<Uint256, ethabi::Error> {
-        let (receipts, sends) = self.contract_abi.call_function(
-            Uint256::zero(), // send from address zero
-            "getLifetime",
-            &[],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if (receipts.len() != 1) || (sends.len() != 0) {
-            Err(ethabi::Error::from("wrong number of receipts or sends"))
-        } else if receipts[0].succeeded() {
-            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
-        } else {
-            Err(ethabi::Error::from("reverted"))
-        }
-    }
-
     pub fn get_keepalive_price(
         &self,
         machine: &mut Machine,
@@ -1561,7 +1442,7 @@ fn try_upgrade(
 
 #[test]
 pub fn test_gas_charging_underfunded() {
-    match evm_run_with_gas_charging(None, Uint256::_from_gwei(20), false, false) {
+    match evm_run_with_gas_charging(None, Uint256::_from_gwei(20), false) {
         Ok(result) => assert_eq!(result, false),
         Err(e) => panic!("error {}", e),
     }
@@ -1569,7 +1450,7 @@ pub fn test_gas_charging_underfunded() {
 
 #[test]
 pub fn test_gas_charging_fully_funded() {
-    match evm_run_with_gas_charging(None, Uint256::_from_eth(1000), false, false) {
+    match evm_run_with_gas_charging(None, Uint256::_from_eth(1000), false) {
         Ok(result) => assert_eq!(result, true),
         Err(e) => panic!("error {}", e),
     }
@@ -1579,7 +1460,6 @@ pub fn evm_run_with_gas_charging(
     log_to: Option<&Path>,
     funding: Uint256,
     debug: bool,
-    profile: bool,
 ) -> Result<bool, ethabi::Error> {
     // returns Ok(true) if success, Ok(false) if insufficient gas money, Err otherwise
     use std::convert::TryFrom;
@@ -1994,6 +1874,12 @@ fn test_arbgas_oracle() {
     let gasprice = arbgasinfo.get_l1_gas_price_estimate(&mut machine).unwrap();
     assert_eq!(gpest, gasprice);
     machine.write_coverage("test_arbgas_oracle".to_string());
+}
+
+//TODO: Check if we should fix or delete this
+#[test]
+fn test_rate_control() {
+    evm_test_rate_control(None, false).unwrap();
 }
 
 pub fn evm_test_rate_control(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
@@ -2732,7 +2618,8 @@ fn test_set_gas_price_estimate() {
 }
 
 struct Erc2470 {
-    addr: Uint256,
+    //TODO: Figure out why this isnt used
+    _addr: Uint256,
     contract_abi: AbiForContract,
 }
 
@@ -2750,7 +2637,7 @@ impl Erc2470 {
             AbiForContract::new_from_file(&test_contract_path("SingletonFactory")).unwrap();
         contract_abi.bind_interface_to_address(deployed_addr.clone());
         Erc2470 {
-            addr: deployed_addr,
+            _addr: deployed_addr,
             contract_abi,
         }
     }
