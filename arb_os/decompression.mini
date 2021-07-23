@@ -292,11 +292,13 @@ public impure func decompressAndVerifyEcdsaSignedTx(
     );
 }
 
-public impure func decompressAndVerifyBLSSignedTxBatch(
+public impure func _decompressAndVerifyBLSSignedTxBatch(
     ba: ByteArray,
     originalRequest: IncomingRequest,
     queueToFill: Queue,
 ) -> option<Queue> {
+    error;   // disable this because it's not used
+
     let stream = bytestream_skipBytes(bytestream_new(ba), 1)?;
 
     let (stream, numMsgs) = rlp_decodeUint(stream)?;

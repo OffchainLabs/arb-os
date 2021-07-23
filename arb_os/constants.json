@@ -152,7 +152,6 @@
     "L1MessageType_setChainParameters": 4,
     "L1MessageType_submitRetryableTx": 9,
     "L2MessageType_batch": 3,
-    "L2MessageType_blsBatch": 8,
     "L2MessageType_heartbeat": 6,
     "L2MessageType_nonmutatingCall": 2,
     "L2MessageType_signedCompressedTx": 7,

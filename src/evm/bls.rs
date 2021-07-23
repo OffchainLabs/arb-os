@@ -3,13 +3,9 @@
  */
 
 use crate::compile::miniconstants::init_constant_table;
-use crate::evm::abi::AbiForContract;
-use crate::evm::{test_contract_path, ArbBLS};
-use crate::run::{load_from_file, load_from_file_and_env, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
-use ethers_signers::Signer;
 use num_bigint::BigUint;
 use num_bigint::RandBigInt;
 use num_bigint::ToBigUint;
@@ -18,6 +14,7 @@ use parity_bn::{AffineG1, AffineG2, Fq, Fr, Group, G1, G2};
 use std::cmp::Ordering;
 use std::path::Path;
 
+/*
 #[test]
 fn test_bls_registry() {
     _evm_test_bls_registry(None, false);
@@ -69,6 +66,7 @@ pub fn _evm_test_bls_registry(log_to: Option<&Path>, debug: bool) {
             .unwrap();
     }
 }
+*/
 
 fn _to_32_bytes_be(bi: &BigUint) -> Vec<u8> {
     let bytes = bi.to_bytes_be();
@@ -461,6 +459,7 @@ impl _BLSAggregateSignature {
     }
 }
 
+/*
 #[test]
 pub fn test_bls_signed_batch() {
     _evm_test_bls_signed_batch(None, false).unwrap();
@@ -572,3 +571,4 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
 
     Ok(())
 }
+ */

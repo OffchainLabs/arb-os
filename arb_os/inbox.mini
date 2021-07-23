@@ -59,7 +59,6 @@ use std::bytestream::bytestream_getRemainingBytes;
 use std::keccak::keccak256;
 
 use decompression::decompressAndVerifyEcdsaSignedTx;
-use decompression::decompressAndVerifyBLSSignedTxBatch;
 
 
 type Inbox = struct {
@@ -344,16 +343,18 @@ public impure func mainRunLoop() {
                 globalInputQueue = globalInputQueue with {
                     batchQ: incomingRequestQueueStack_push(globalInputQueue.batchQ, queue)
                 };
-            } elseif (    (msg.kind == const::L1MessageType_L2 || msg.kind == const::L1MessageType_L2ForGasEstimation)
-                       && (bytearray_getByte(msg.msgData, 0) == const::L2MessageType_blsBatch) ) {
-               if let Some(updatedQ) = decompressAndVerifyBLSSignedTxBatch(
-                    msg.msgData,
-                    msg,
-                    unsafecast<Queue>(globalInputQueue.txQ)
-                ) {
-                    globalInputQueue = globalInputQueue with { txQ: unsafecast<TxRequestQueue>(updatedQ) };
-                }
-                // else BLS batch was bad, so ignore it
+
+              // BLS batches are disabled because they're not currently used
+//            } elseif (    (msg.kind == const::L1MessageType_L2 || msg.kind == const::L1MessageType_L2ForGasEstimation)
+//                       && (bytearray_getByte(msg.msgData, 0) == const::L2MessageType_blsBatch) ) {
+//               if let Some(updatedQ) = decompressAndVerifyBLSSignedTxBatch(
+//                    msg.msgData,
+//                    msg,
+//                    unsafecast<Queue>(globalInputQueue.txQ)
+//                ) {
+//                    globalInputQueue = globalInputQueue with { txQ: unsafecast<TxRequestQueue>(updatedQ) };
+//                }
+//                // else BLS batch was bad, so ignore it
             } else {
                 handleUnpackedMessage(msg);
             }

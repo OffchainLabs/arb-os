@@ -3,7 +3,7 @@
  */
 
 use crate::evm::abi::FunctionTable;
-use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys};
+use crate::evm::abi::{ArbAddressTable, ArbFunctionTable, ArbSys};
 use crate::evm::preinstalled_contracts::{ArbosTest, _ArbInfo};
 use crate::run::{load_from_file, load_from_file_and_env, RuntimeEnvironment};
 use crate::uint256::Uint256;
@@ -272,7 +272,7 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     let arbsys = ArbSys::new(&wallet, debug);
     let arb_address_table = ArbAddressTable::new(&wallet, debug);
     AbiForContract::new_from_file(&builtin_contract_path("ArbSys")).unwrap();
-    let arb_bls = ArbBLS::new(&wallet, debug);
+    //let arb_bls = ArbBLS::new(&wallet, debug);
 
     let version = arbsys._arbos_version(&mut machine)?;
     assert_eq!(
@@ -340,6 +340,7 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     assert_eq!(an_addr.clone(), an_addr_decompressed);
     assert_eq!(offset, Uint256::from_usize(an_addr_compressed.len()));
 
+    /*
     let x0 = Uint256::from_u64(17);
     let x1 = Uint256::from_u64(35);
     let y0 = Uint256::from_u64(71);
@@ -350,6 +351,7 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     assert_eq!(x1, ox1);
     assert_eq!(y0, oy0);
     assert_eq!(y1, oy1);
+     */
 
     if let Some(path) = log_to {
         machine

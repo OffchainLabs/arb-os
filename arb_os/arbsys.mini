@@ -138,6 +138,8 @@ public impure func arbAddressTable_txcall() {
 }
 
 public impure func arbBLS_txcall() {
+    evmOp_revert_knownCodePc(address(const::Address_ArbBLS), 0, 0, 0);   // disable BLS functionality because we're not currently using it
+
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) < 4) {
