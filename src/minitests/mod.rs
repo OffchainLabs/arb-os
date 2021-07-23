@@ -308,11 +308,6 @@ fn test_l2_to_l1_call() {
 }
 
 #[test]
-fn test_evm_add_code() {
-    crate::evm::_basic_evm_add_test(None, false).unwrap();
-}
-
-#[test]
 pub fn test_crosscontract_call_with_constructors() {
     match crate::evm::evm_xcontract_call_with_constructors(None, false, false) {
         Ok(result) => assert_eq!(result, true),

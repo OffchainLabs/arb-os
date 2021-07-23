@@ -1,5 +1,6 @@
 use super::*;
 use crate::compile::miniconstants::init_constant_table;
+use crate::evm::live_code::ArbosTest;
 use crate::run::{load_from_file, Machine, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
@@ -2943,4 +2944,42 @@ impl ArbInfo {
             Err(ethabi::Error::from("reverted"))
         }
     }
+}
+
+#[test]
+fn test_evm_add_code() {
+    basic_evm_add_test(None, false).unwrap();
+}
+
+pub fn basic_evm_add_test(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+
+    let arbos_test = ArbosTest::new(debug);
+
+    let code = hex::decode("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0160005500").unwrap();
+    let result = arbos_test._install_account_and_call(
+        &mut machine,
+        Uint256::from_u64(89629813089426890),
+        Uint256::zero(),
+        Uint256::one(),
+        code,
+        vec![],
+        vec![],
+    )?;
+    let mut right_answer = vec![0u8; 32];
+    right_answer.extend(vec![255u8; 31]);
+    right_answer.extend(vec![254u8]);
+    assert_eq!(result, right_answer);
+
+    if let Some(path) = log_to {
+        machine
+            .runtime_env
+            .recorder
+            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
+            .unwrap();
+    }
+
+    machine.write_coverage("test_evm_add_code".to_string());
+    Ok(())
 }
