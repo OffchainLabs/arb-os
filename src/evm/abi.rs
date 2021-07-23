@@ -803,6 +803,7 @@ impl<'a> ArbAddressTable<'a> {
     }
 }
 
+/*
 pub struct ArbBLS<'a> {
     pub contract_abi: AbiForContract,
     _wallet: &'a Wallet,
@@ -904,6 +905,7 @@ impl<'a> ArbBLS<'a> {
         }
     }
 }
+*/
 
 pub struct ArbFunctionTable<'a> {
     pub contract_abi: AbiForContract,

@@ -3,7 +3,7 @@
  */
 
 use crate::evm::abi::FunctionTable;
-use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys};
+use crate::evm::abi::{ArbAddressTable, ArbFunctionTable, ArbSys};
 use crate::evm::preinstalled_contracts::{ArbosTest, _ArbInfo};
 use crate::run::{load_from_file, load_from_file_and_env, RuntimeEnvironment};
 use crate::uint256::Uint256;
@@ -215,7 +215,6 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     let arbsys = ArbSys::new(&wallet, debug);
     let arb_address_table = ArbAddressTable::new(&wallet, debug);
     AbiForContract::new_from_file(&builtin_contract_path("ArbSys")).unwrap();
-    let arb_bls = ArbBLS::new(&wallet, debug);
 
     let version = arbsys._arbos_version(&mut machine)?;
     assert_eq!(
@@ -282,17 +281,6 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
         arb_address_table.decompress(&mut machine, &an_addr_compressed, Uint256::zero())?;
     assert_eq!(an_addr.clone(), an_addr_decompressed);
     assert_eq!(offset, Uint256::from_usize(an_addr_compressed.len()));
-
-    let x0 = Uint256::from_u64(17);
-    let x1 = Uint256::from_u64(35);
-    let y0 = Uint256::from_u64(71);
-    let y1 = Uint256::from_u64(143);
-    arb_bls.register(&mut machine, x0.clone(), x1.clone(), y0.clone(), y1.clone())?;
-    let (ox0, ox1, oy0, oy1) = arb_bls.get_public_key(&mut machine, my_addr.clone())?;
-    assert_eq!(x0, ox0);
-    assert_eq!(x1, ox1);
-    assert_eq!(y0, oy0);
-    assert_eq!(y1, oy1);
 
     if let Some(path) = log_to {
         machine
@@ -1372,6 +1360,34 @@ pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
     match AbiForContract::new_from_file(&test_contract_path("Add")) {
         Ok(mut contract) => {
             let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, debug);
+            if let Ok(contract_addr) = result {
+                assert_ne!(contract_addr, Uint256::zero());
+            } else {
+                panic!("deploy failed");
+            }
+        }
+        Err(e) => {
+            panic!("error loading contract: {:?}", e);
+        }
+    }
+
+    if let Some(path) = log_to {
+        machine
+            .runtime_env
+            .recorder
+            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
+            .unwrap();
+    }
+}
+
+#[cfg(test)]
+pub fn evm_test_extcodesize_of_constructor(log_to: Option<&Path>) {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+
+    match AbiForContract::new_from_file(&test_contract_path("ExtCodeSizeTest")) {
+        Ok(mut contract) => {
+            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, false);
             if let Ok(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
             } else {
