@@ -688,9 +688,9 @@ public impure func evmCallStack_doCall(
                 newCallerAddr = topFrame.caller;  // delegatecall inherits the caller of its parent
             }
         }
-        if (   (runningAsAddr != calleeAddr)
-            && (uint(runningAsAddr) >= const::MinArbitrumPrecompile)
-            && (uint(runningAsAddr) <= const::MaxArbitrumPrecompile)
+        if (   (calleeAddr != runningAsAddr)
+            && (uint(calleeAddr) >= const::MinArbitrumPrecompile)
+            && (uint(calleeAddr) <= const::MaxArbitrumPrecompile)
         ) {
             return Some(false);
         }
