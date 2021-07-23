@@ -688,6 +688,12 @@ public impure func evmCallStack_doCall(
                 newCallerAddr = topFrame.caller;  // delegatecall inherits the caller of its parent
             }
         }
+        if (   (runningAsAddr != calleeAddr)
+            && (uint(runningAsAddr) >= const::MinArbitrumPrecompile)
+            && (uint(runningAsAddr) <= const::MaxArbitrumPrecompile)
+        ) {
+            return Some(false);
+        }
         let updatedAcctStore = topFrame.accountStore;
         if (balance > 0) {
             if let Some(uas) = ethTransferOrGrant(
