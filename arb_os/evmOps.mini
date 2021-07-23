@@ -29,6 +29,7 @@ use evmCallStack::snapshotAuxStack;
 use evmCallStack::evmCallStack_changeNumAccounts;
 use evmCallStack::evmCallStack_getAccountStoreInCurrentContext;
 use evmCallStack::evmCallStack_setAccountStoreInCurrentContext;
+use evmCallStack::evmCallStack_inStaticCall;
 
 use evmCallStack::evmCallFrame_runningAsAccount;
 use evmCallStack::evmCallFrame_runningCodeFromAccount;
@@ -934,6 +935,12 @@ public impure func evmOp_revert_knownPc(evmPc: uint, memOffset: uint, memNbytes:
         codeAddr = account_getAddress(acct);
     }
     evmOp_revert_knownCodePc(codeAddr, evmPc, memOffset, memNbytes);
+}
+
+public impure func evmOp_revertIfStatic() {
+    if (evmCallStack_inStaticCall()) {
+        evmOp_revert_knownPc(0xffffffffb, 0, 0);
+    }
 }
 
 public impure func evmOp_return(memOffset: uint, memNbytes: uint) {

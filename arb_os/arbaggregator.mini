@@ -22,6 +22,7 @@ use evmCallStack::evmCallStack_setAccountInCurrentContext;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
+use evmOps::evmOp_revertIfStatic;
 
 use gasAccounting::gasAccounting_getTxBaseFeeL1Gas;
 use gasAccounting::gasAccounting_setTxBaseFeeL1Gas;
@@ -88,6 +89,7 @@ impure func arbaggregator_getPreferredAggregator(_topFrame: EvmCallFrame, callda
 }
 
 impure func arbaggregator_setPreferredAggregator(topFrame: EvmCallFrame, calldata: ByteArray) { // (address)
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(20, 0, 0);
     }
@@ -121,6 +123,7 @@ impure func arbaggregator_getDefaultAggregator(_topFrame: EvmCallFrame, calldata
 }
 
 impure func arbaggregator_setDefaultAggregator(topFrame: EvmCallFrame, calldata: ByteArray) { // (address)
+    evmOp_revertIfStatic();
     let caller = evmCallFrame_getCaller(topFrame);
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(40, 0, 0);
@@ -148,6 +151,7 @@ impure func arbaggregator_getFeeCollector(_topFrame: EvmCallFrame, calldata: Byt
 }
 
 impure func arbaggregator_setFeeCollector(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, address)
+    evmOp_revertIfStatic();
     let caller = evmCallFrame_getCaller(topFrame);
     if (bytearray_size(calldata) != 68) {
         evmOp_revert_knownPc(60, 0, 0);
@@ -180,6 +184,7 @@ impure func arbaggregator_getTxBaseFee(_topFrame: EvmCallFrame, calldata: ByteAr
 }
 
 impure func arbaggregator_setTxBaseFee(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, uint)
+    evmOp_revertIfStatic();
     let caller = evmCallFrame_getCaller(topFrame);
     if (bytearray_size(calldata) != 68) {
         evmOp_revert_knownPc(80, 0, 0);

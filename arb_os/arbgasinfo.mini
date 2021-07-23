@@ -16,6 +16,7 @@ use evmCallStack::evmCallFrame_getCaller;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
+use evmOps::evmOp_revertIfStatic;
 
 use gasAccounting::gasAccounting_getPricesInWei;
 use gasAccounting::gasAccounting_getPricesInArbGas;
@@ -153,6 +154,7 @@ impure func arbgasinfo_getL1GasPriceEstimate(_topFrame: EvmCallFrame, calldata: 
 
 // function setL1GasPriceEstimate(uint priceInWei) external;
 impure func arbgasinfo_setL1GasPriceEstimate(topFrame: EvmCallFrame, calldata: ByteArray) {
+    evmOp_revertIfStatic();
     let caller = evmCallFrame_getCaller(topFrame);
     let oracle = xif let Some(addrAsUint) = chainParams_get(const::Atom_Param_GasPriceOracle) {
         address(addrAsUint)

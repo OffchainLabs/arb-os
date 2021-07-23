@@ -74,17 +74,19 @@
     "_AVM_xget": 83,
     "_AVM_xor": 24,
     "_AVM_xset": 84,
+    "MinArbitrumPrecompile": 100,
+    "Address_ArbSys": 100,
     "Address_ArbAddressTable": 102,
-    "Address_ArbAggregator": 109,
     "Address_ArbBLS": 103,
     "Address_ArbFunctionTable": 104,
-    "Address_ArbGasInfo": 108,
+    "Address_ArbosTest": 105,
     "Address_ArbOwner": 107,
+    "Address_ArbGasInfo": 108,
+    "Address_ArbAggregator": 109,
     "Address_ArbRetryableTx": 110,
     "Address_ArbStatistics": 111,
-    "Address_ArbSys": 100,
-    "Address_ArbosTest": 105,
     "Address_ReservedForEthBridge": 200,
+    "MaxArbitrumPrecompile": 200,
     "Charging_ArbGasPerAvmGas": 100,
     "Charging_DefaultArbGasDivisor": 100,
     "Charging_MinArbGasForContractTx": 50,
@@ -186,7 +188,8 @@
   },
   "hex": {
     "BLSSignatureDomainBase": "73a92f91d473214defd5ffa91d036007eb2e6487fffaa551835e988fb24aaa2b",
-    "HashOfEmptyCode": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+    "HashOfEmptyCode": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+    "MaxArraySize": "10000000000000000"
   },
   "contract_folder": "contracts/artifacts/arbos/builtin",
   "contract": [

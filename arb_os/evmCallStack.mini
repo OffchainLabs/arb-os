@@ -228,6 +228,14 @@ public impure func evmCallStack_inRetryable() -> bool {
     return (globalCallStack != None<EvmCallFrame>) && (globalCurrentRetryableRequest != None<IncomingRequestAndLogs>);
 }
 
+public impure func evmCallStack_inStaticCall() -> bool {
+    return xif let Some(topFrame) = globalCallStack {
+        topFrame.static
+    } else {
+        false
+    };
+}
+
 public impure func evmCallStack_stackInfo() -> (uint, (address, address), (address, address)) {
     return xif let Some(topFrame) = globalCallStack {
         let sndRunningAs = address(0);
@@ -623,6 +631,12 @@ public impure func evmCallStack_doCall(
     callvalueEscrowKey: option<uint>, // escrow key that supplies the callvalue (otherwise caller supplies it)
     overrideStartPoint: option<AvmCodePoint>,
 ) -> option<bool> {   // returns Some(success) if succeed/fail, or None on error
+    if (   (kind != const::EVMCallType_call)
+        && (kind != const::EVMCallType_staticcall)
+        && (uint(calleeAddr) >= const::MinArbitrumPrecompile)
+        && (uint(calleeAddr) <= const::MaxArbitrumPrecompile) ) {
+        return Some(false);
+    }
     let topFrame = globalCallStack?;
     let callee = accountStore_get(topFrame.accountStore, calleeAddr);
     let maybeStartPoint = xif let Some(osp) = overrideStartPoint {
@@ -670,7 +684,7 @@ public impure func evmCallStack_doCall(
         let newCallerAddr = topFrame.runningAs;
         if ( (kind == const::EVMCallType_callcode) || (kind == const::EVMCallType_delegatecall) ) {
             runningAsAddr = callerAddr;  // callcode and delegatecall run as the caller, with callee's code
-            if (kind == 2) {
+            if (kind == const::EVMCallType_delegatecall) {
                 newCallerAddr = topFrame.caller;  // delegatecall inherits the caller of its parent
             }
         }
