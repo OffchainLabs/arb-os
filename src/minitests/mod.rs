@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::{test_contract_path, AbiForContract, test_contract_path2};
+use crate::evm::{test_contract_path, test_contract_path2, AbiForContract};
 use crate::mavm::Value;
 use crate::run::{_bytestack_from_bytes, load_from_file, run, run_from_file, Machine};
 use crate::uint256::Uint256;
@@ -526,26 +526,22 @@ fn test_gasleft_with_delegatecall() {
     let mut delegator_contract =
         AbiForContract::new_from_file(&test_contract_path("Delegator")).unwrap();
     if delegator_contract
-        .deploy(
-            &[],
-            &mut machine,
-            Uint256::zero(),
-            None,
-            false,
-        )
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
         .is_err()
     {
         panic!("failed to deploy Delegator contract");
     }
 
-    let (receipts, _) = delegator_contract.call_function(
-        my_addr,
-        "testDelegate",
-        &[ethabi::Token::Address(greeter_contract.address.to_h160())],
-        &mut machine,
-        Uint256::zero(),
-        false,
-    ).unwrap();
+    let (receipts, _) = delegator_contract
+        .call_function(
+            my_addr,
+            "testDelegate",
+            &[ethabi::Token::Address(greeter_contract.address.to_h160())],
+            &mut machine,
+            Uint256::zero(),
+            false,
+        )
+        .unwrap();
 
     assert_eq!(receipts.len(), 1);
     let logs = receipts[0]._get_evm_logs();
