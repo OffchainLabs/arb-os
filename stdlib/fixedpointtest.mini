@@ -20,47 +20,47 @@ use std::fixedpoint::fixedPoint_plusOne;
 use std::fixedpoint::fixedPoint_fractionalPart;
 
 impure func main() {
-	asm(tests(),) { log };
+	asm(tests().1) { log };
 }
 
-func tests() -> uint {
+func tests() -> (uint, buffer) {
     let s9292 = fixedPoint_new(179292, 9292);
     let s1000 = fixedPoint_new(17820, 1000);
 
     if (fixedPoint_integerPart(s9292) != 179292/9292) {
-        return 1;
+        return "error 1";
     }
 
     if let Some(_) = fixedPoint_add(s9292, s1000) {
-        return 2;
+        return "error 2";
     }
 
     if let Some(sum) = fixedPoint_add(s1000, s1000) {
         if (!fixedPoint_equal(sum, fixedPoint_new(17820*2, 1000))) {
-            return 3;
+            return "error 3";
         }
     } else {
-        return 4;
+        return "error 4";
     }
 
     if let Some(_) = fixedPoint_mul(s9292, s1000) {
-        return 5;
+        return "error 5";
     }
 
     if let Some(prod) = fixedPoint_mul(s1000, s1000) {
         if (!fixedPoint_equal(prod, fixedPoint_new(17820*17820/1000, 1000))) {
-            return 6;
+            return "error 6";
         }
     } else {
-        return 7;
+        return "error 7";
     }
 
     if let Some(prod) = fixedPoint_mul(s9292, fixedPoint_fromUintMatch(970000, s9292)) {
         if (!fixedPoint_equal(prod, fixedPoint_new(179292*970000, 9292))) {
-            return 8;
+            return "error 8";
         }
     } else {
-        return 9;
+        return "error 9";
     }
 
     let zero  = fixedPoint_zero();
@@ -68,36 +68,36 @@ func tests() -> uint {
 
     if let Some(diff) = fixedPoint_sub(zero, zero2) {
         if (fixedPoint_getNum(diff) != 0) {
-            return 11;
+            return "error 11";
         }
         if (fixedPoint_getDenom(diff) != fixedPoint_getDenom(zero)) {
-            return 11;
+            return "error 11";
         }
         if (!fixedPoint_isZero(diff)) {
-            return 11;
+            return "error 11";
         }
     } else {
-        return 10;
+        return "error 10";
     }
 
     let slope   = fixedPoint_new(9, 5);
     let inverse = fixedPoint_new(5, 9);
 
     if (fixedPoint_compare(inverse, slope) != -int(1)) {
-        return 12;
+        return "error 12";
     }
     if (fixedPoint_compare(slope, inverse) != int(1)) {
-        return 12;
+        return "error 12";
     }
-    if let Some(issue) = fixedPoint_sub(slope, inverse) {
-        return 13;
+    if let Some(_issue) = fixedPoint_sub(slope, inverse) {
+        return "error 13";
     }
     if let Some(quotient) = fixedPoint_div(slope, inverse) {
         if (!fixedPoint_equal(quotient, fixedPoint_new(81, 25))) {
-            return 14;
+            return "error 14";
         }
     } else {
-        return 14;
+        return "error 14";
     }
 
     let frac = fixedPoint_fractionalPart(slope);
@@ -105,11 +105,11 @@ func tests() -> uint {
     let improper_frac = fixedPoint_plusOne(frac);
 
     if (fixedPoint_compare(frac, expected_frac) != int(0)) {
-        return 15;
+        return "error 15";
     }
     if (fixedPoint_compare(slope, improper_frac) != int(0)) {
-        return 15;
+        return "error 15";
     }
 
-    return 0;
+    return "";
 }

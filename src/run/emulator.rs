@@ -6,6 +6,7 @@
 
 use super::RuntimeEnvironment;
 use crate::compile::{CompileError, DebugInfo, FileInfo};
+use crate::console::Color;
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Value};
 use crate::pos::{try_display_location, Location};
@@ -2068,7 +2069,7 @@ impl Machine {
                     }
                     AVMOpcode::DebugPrint => {
                         let r1 = self.stack.pop(&self.state)?;
-                        println!("debugprint: {}", r1);
+                        println!("debugprint: {}", Color::lavender(&r1));
                         println!(
                             "{}\n{}",
                             try_display_location(

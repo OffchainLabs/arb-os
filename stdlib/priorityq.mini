@@ -3,8 +3,7 @@
 //
 
 use core::array::array;
-use core::array::array_resize;
-
+use core::array::builtin_arrayResize;
 
 type PqItem = struct {
     priority: uint,
@@ -106,8 +105,8 @@ func pq_pushUp(pq: PriorityQ, index: uint) -> PriorityQ {
 public func priorityq_insert(pq: PriorityQ, item: any, priority: uint) -> PriorityQ {
     if (pq.size == pq.capacity) {
         let newCapacity = 8*pq.capacity;
-        pq = pq with { capacity: newCapacity }
-                with { contents: unsafecast<[]PqItem>(array_resize(unsafecast<array>(pq.contents), newCapacity, null)) };
+        set pq.capacity = newCapacity;
+        set pq.contents = resize(pq.contents, newCapacity, null);
     }
     let index = pq.size;
     let newpq = pq with { size: index+1 }

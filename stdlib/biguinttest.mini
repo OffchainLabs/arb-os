@@ -23,7 +23,7 @@ use std::random::random_new;
 
 impure func main() {
     asm(2*1000*1000*1000,) { setgas };
-	asm(tests(),) { log };
+	asm(tests()) { log };
 }
 
 func tests() -> uint {

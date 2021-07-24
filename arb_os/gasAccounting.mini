@@ -6,7 +6,6 @@ use accounts::AccountStore;
 use std::bytearray::ByteArray;
 
 use core::kvs::Kvs;
-use core::kvs::builtin_kvsForall;
 
 use accounts::safeGetGlobalAccountStore;
 use accounts::safeSetGlobalAccountStore;

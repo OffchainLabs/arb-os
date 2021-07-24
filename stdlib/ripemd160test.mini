@@ -11,17 +11,17 @@ use std::ripemd160::ripemd160hasher_pushByte;
 use std::ripemd160::ripemd160hasher_push256;
 
 impure func main() {
-	asm(tests(),) { log };
+	asm(tests().1) { log };
 }
 
-func tests() -> uint {
+func tests() -> (uint, buffer) {
     let x = asm(
         0x67452301EFCDAB8998BADCFE10325476C3D2E1F0,
         0,
         0
     ) bytes32 { ripemd160f };
     if (x != bytes32(0xc59b7e1835958b24ccddd6d0304e7c981f1045cb)) {
-        return 1;
+        return "error 1";
     }
 
     let x = asm(
@@ -30,21 +30,21 @@ func tests() -> uint {
         0
     ) bytes32 { ripemd160f };
     if (x != bytes32(0x9c1185a5c5e9fc54612808977ee8f548b2258d31)) {
-        return 2;
+        return "error 2";
     }
 
     if (ripemd160_byteArray(bytearray_new(0)) != bytes32(0x9c1185a5c5e9fc54612808977ee8f548b2258d31)) {
-        return 3;
+        return "error 3";
     }
 
     if (ripemd160hasher_finish(ripemd160hasher_new()) != bytes32(0x9c1185a5c5e9fc54612808977ee8f548b2258d31)) {
-        return 4;
+        return "error 4";
     }
 
     let h = ripemd160hasher_new();
     h = ripemd160hasher_pushByte(h, 0x61);
     if (ripemd160hasher_finish(h) != bytes32(0x0bdc9d2d256b3ee9daae347be6f4dc835a467ffe)) {
-        return 5;
+        return "error 5";
     }
 
     let h = ripemd160hasher_new();
@@ -59,7 +59,7 @@ func tests() -> uint {
         i = i+1;
     }
     if (ripemd160hasher_finish(h) != bytes32(0x74e856c137772846e18c0c6d955666133f1d32dc)) {
-        return 6;
+        return "error 6";
     }
     
     let h = ripemd160hasher_new();
@@ -69,14 +69,14 @@ func tests() -> uint {
         i = i + 1;
     }
     if (ripemd160hasher_finish(h) != bytes32(0x3c86963b3ff646a65ae42996e9664c747cc7e5e6)) {
-        return 7;
+        return "error 7";
     }
     
     let h = ripemd160hasher_new();
     h = ripemd160hasher_push256(h, uint(0x0cdd6941697c828be460f241d6e71106a408c854e351c54f46b6500b106e2cdb));
     if (ripemd160hasher_finish(h) != bytes32(0xfe27e5ab7fdee1be58e9ee498709c337d4b54ba4)) {
-        return 8;
+        return "error 8";
     }
     
-	return 0;
+	return "";
 }

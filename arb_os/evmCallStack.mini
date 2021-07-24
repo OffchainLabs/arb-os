@@ -607,7 +607,7 @@ public impure func evmCallStack_doCall(
 ) -> option<bool> {   // returns Some(success) if succeed/fail, or None on error
     let topFrame = globalCallStack?;
     let callee = accountStore_get(topFrame.accountStore, calleeAddr);
-    let maybeStartPoint = xif let Some(osp) = overrideStartPoint {
+    let maybeStartPoint = xif let Some(_osp) = overrideStartPoint {
         overrideStartPoint
     } else {
         account_getStartCodePoint(callee)

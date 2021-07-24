@@ -6,11 +6,11 @@
 
 use crate::compile::{
     comma_list, CompileError, CompiledProgram, DebugInfo, ErrorSystem, FileInfo, GlobalVarDecl,
-    SourceFileMap, Type, TypeTree,
+    ModulePath, SourceFileMap, Type, TypeTree,
 };
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
-use crate::pos::{try_display_location, Location};
-use crate::stringtable::{StringId, StringTable};
+use crate::pos::try_display_location;
+use crate::stringtable::{Ident, StringId, StringTable};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::{DefaultHasher, HashMap};
 use std::collections::BTreeMap;
@@ -122,36 +122,16 @@ impl LinkedProgram {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Import {
     ///Module path, relative to logical program root.
-    pub path: Vec<String>,
+    pub path: ModulePath,
     ///Name of `Type` or function to be imported.
     pub name: String,
     ///`StringId` of the use-statement from parsing according to the containing module's `StringTable`
-    pub id: Option<StringId>,
-    ///Location of the use-statement in code
-    pub location: Option<Location>,
+    pub ident: Ident,
 }
 
 impl Import {
-    pub fn new(
-        path: Vec<String>,
-        name: String,
-        id: Option<StringId>,
-        location: Option<Location>,
-    ) -> Self {
-        Import {
-            path,
-            name,
-            id,
-            location,
-        }
-    }
-    pub fn new_builtin(virtual_file: &str, name: &str) -> Self {
-        Import {
-            path: vec!["core".to_string(), virtual_file.to_string()],
-            name: name.to_string(),
-            id: None,
-            location: None,
-        }
+    pub fn new(path: Vec<String>, name: String, ident: Ident) -> Self {
+        Import { path, name, ident }
     }
 }
 

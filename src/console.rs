@@ -11,7 +11,10 @@ impl Color {
     pub const BLUE: &'static str = "\x1b[34;1m";
     pub const YELLOW: &'static str = "\x1b[33;1m";
     pub const PINK: &'static str = "\x1b[38;5;161;1m";
+    pub const GREY: &'static str = "\x1b[90m";
     pub const RESET: &'static str = "\x1b[0;0m";
+
+    pub const LAVENDER: &'static str = "\x1b[38;5;183;1m";
 
     pub fn color<S: fmt::Display>(color: &str, text: S) -> String {
         format!("{}{}{}", color, text, Color::RESET)
@@ -35,5 +38,15 @@ impl Color {
     /// Colors text pink. Typically used for warnings promoted to errors.
     pub fn _pink<S: fmt::Display>(text: S) -> String {
         Color::color(Color::PINK, text)
+    }
+
+    /// Colors text grey.
+    pub fn _grey<S: fmt::Display>(text: S) -> String {
+        Color::color(Color::GREY, text)
+    }
+
+    /// Colors text lavender.
+    pub fn lavender<S: fmt::Display>(text: S) -> String {
+        Color::color(Color::LAVENDER, text)
     }
 }

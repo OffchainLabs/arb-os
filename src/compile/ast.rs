@@ -7,10 +7,10 @@
 use crate::compile::typecheck::{
     AbstractSyntaxTree, InliningMode, PropertiesList, TypeCheckedNode,
 };
-use crate::compile::{path_display, CompileError};
+use crate::compile::{path_display, CompileError, Lines};
 use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
 use crate::mavm::{Instruction, Value};
-use crate::pos::Location;
+use crate::pos::{BytePos, Location};
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
@@ -45,6 +45,13 @@ impl DebugInfo {
         DebugInfo {
             location,
             attributes,
+        }
+    }
+
+    pub fn here(lines: &Lines, lno: usize, file: u64) -> Self {
+        DebugInfo {
+            location: lines.location(BytePos::from(lno), file),
+            attributes: Attributes::default(),
         }
     }
 }
@@ -784,6 +791,10 @@ impl Type {
             .0
     }
 
+    pub fn print(&self, type_tree: &TypeTree) -> String {
+        self.display_indented(0, "::", None, false, type_tree).0
+    }
+
     pub fn display_separator(
         &self,
         separator: &str,
@@ -1508,37 +1519,66 @@ pub enum ExprKind {
     Error,
     GetGas,
     SetGas(Box<Expr>),
+    MapDelete(Box<Expr>, Box<Expr>),
+    MapApply(Box<Expr>, Box<Expr>, Box<Expr>),
+    ArrayResize(Box<Expr>, Box<Expr>, Box<Expr>),
     Try(Box<Expr>),
     If(Box<Expr>, CodeBlock, Option<CodeBlock>),
     IfLet(StringId, Box<Expr>, CodeBlock, Option<CodeBlock>),
     Loop(Vec<Statement>),
     UnionCast(Box<Expr>, Type),
     NewBuffer,
+    Quote(Vec<u8>),
 }
 
 impl Expr {
     ///Returns an expression that applies unary operator op to e.
-    pub fn new_unary(op: UnaryOp, e: Expr, loc: Option<Location>) -> Self {
-        Self {
-            kind: ExprKind::UnaryOp(op, Box::new(e)),
-            debug_info: DebugInfo::from(loc),
-        }
+    pub fn new_unary(op: UnaryOp, e: Expr, lines: &Lines, lno: usize, file: u64) -> Self {
+        Self::lno(ExprKind::UnaryOp(op, Box::new(e)), lines, lno, file)
     }
 
     ///Returns an expression that applies binary operator op to e1 and e2.
-    pub fn new_binary(op: BinaryOp, e1: Expr, e2: Expr, loc: Option<Location>) -> Self {
-        Self {
-            kind: ExprKind::Binary(op, Box::new(e1), Box::new(e2)),
-            debug_info: DebugInfo::from(loc),
-        }
+    pub fn new_binary(
+        op: BinaryOp,
+        e1: Expr,
+        e2: Expr,
+        lines: &Lines,
+        lno: usize,
+        file: u64,
+    ) -> Self {
+        Self::lno(
+            ExprKind::Binary(op, Box::new(e1), Box::new(e2)),
+            lines,
+            lno,
+            file,
+        )
     }
 
     ///Returns an expression that applies trinary operator op to e1, e2, and e3.
-    pub fn new_trinary(op: TrinaryOp, e1: Expr, e2: Expr, e3: Expr, loc: Option<Location>) -> Self {
-        Self {
-            kind: ExprKind::Trinary(op, Box::new(e1), Box::new(e2), Box::new(e3)),
-            debug_info: DebugInfo::from(loc),
-        }
+    pub fn new_trinary(
+        op: TrinaryOp,
+        e1: Expr,
+        e2: Expr,
+        e3: Expr,
+        lines: &Lines,
+        lno: usize,
+        file: u64,
+    ) -> Self {
+        Self::lno(
+            ExprKind::Trinary(op, Box::new(e1), Box::new(e2), Box::new(e3)),
+            lines,
+            lno,
+            file,
+        )
+    }
+
+    ///
+    pub fn lno(kind: ExprKind, lines: &Lines, lno: usize, file: u64) -> Self {
+        Self::new(kind, DebugInfo::here(lines, lno, file))
+    }
+
+    pub fn new(kind: ExprKind, debug_info: DebugInfo) -> Self {
+        Self { kind, debug_info }
     }
 }
 

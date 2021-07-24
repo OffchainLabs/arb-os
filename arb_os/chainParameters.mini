@@ -5,7 +5,6 @@
 use accounts::accounts_notifyParamsChanged;
 
 use core::kvs::Kvs;
-use core::kvs::builtin_kvsForall;
 
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
@@ -124,13 +123,7 @@ public impure func chainParams_getSecondsPerSend() -> uint {
 }
 
 public impure func chainParams_serializeAllParams() -> ByteArray {
-    return unsafecast<ByteArray>(
-        builtin_kvsForall(
-            unsafecast<Kvs>(globalChainParameters),
-            unsafecast<func(any, any, any) -> any>(sapClosure),
-            bytearray_new(0),
-        )
-    );
+    return apply(globalChainParameters, sapClosure, bytearray_new(0));
 }
 
 func sapClosure(key: uint, value: uint, ba: ByteArray) -> ByteArray {

@@ -2,7 +2,8 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::mavm::Value;
+use crate::console::Color;
+use crate::mavm::{Buffer, Value};
 use crate::run::{_bytestack_from_bytes, load_from_file, run, run_from_file, Machine};
 use crate::uint256::Uint256;
 use num_bigint::{BigUint, RandBigInt};
@@ -21,20 +22,21 @@ fn test_from_file_with_args_and_return(
 ) {
     let res = run_from_file(path, args, coverage_filename, false);
     match res {
-        Ok(res) => {
-            assert_eq!(res[0], ret);
-        }
+        Ok(res) => match &res[0] {
+            Value::Buffer(_) if res[0] != ret => panic!("{}", Color::red(&res[0])),
+            _ => assert_eq!(res[0], ret),
+        },
         Err(e) => {
             panic!("{:?}", e);
         }
     }
 }
 
-fn test_from_file(path: &Path) {
+fn test_from_file(path: &Path, ret: Value) {
     test_from_file_with_args_and_return(
         path,
         vec![],
-        Value::Int(Uint256::zero()),
+        ret,
         Some({
             let mut file = path.to_str().unwrap().to_string();
             let length = file.len();
@@ -46,77 +48,122 @@ fn test_from_file(path: &Path) {
 
 #[test]
 fn test_arraytest() {
-    test_from_file(Path::new("builtin/arraytest.mexe"));
+    test_from_file(
+        Path::new("builtin/arraytest.mexe"),
+        Value::Buffer(Buffer::new_empty()),
+    );
 }
 
 #[test]
 fn test_kvstest() {
-    test_from_file(Path::new("builtin/kvstest.mexe"));
+    test_from_file(
+        Path::new("builtin/kvstest.mexe"),
+        Value::Buffer(Buffer::new_empty()),
+    );
 }
 
 #[test]
 fn test_storage_map() {
-    test_from_file(Path::new("stdlib/storageMapTest.mexe"));
+    test_from_file(
+        Path::new("stdlib/storageMapTest.mexe"),
+        Value::Buffer(Buffer::new_empty()),
+    );
 }
 
 #[test]
 fn test_queuetest() {
-    test_from_file(Path::new("stdlib/queuetest.mexe"));
+    test_from_file(
+        Path::new("stdlib/queuetest.mexe"),
+        Value::Buffer(Buffer::new_empty()),
+    );
 }
 
 #[test]
 fn test_globaltest() {
-    test_from_file(Path::new("builtin/globaltest.mexe"));
+    test_from_file(
+        Path::new("builtin/globaltest.mexe"),
+        Value::Buffer(Buffer::new_empty()),
+    );
 }
 
 #[test]
 fn test_pqtest() {
-    test_from_file(Path::new("stdlib/priorityqtest.mexe"));
+    test_from_file(
+        Path::new("stdlib/priorityqtest.mexe"),
+        Value::Buffer(Buffer::new_empty()),
+    );
 }
 
 #[test]
 fn test_bytearray() {
-    test_from_file(Path::new("stdlib/bytearraytest.mexe"));
+    test_from_file(
+        Path::new("stdlib/bytearraytest.mexe"),
+        Value::Int(Uint256::from_usize(0)),
+    );
 }
 
 #[test]
 fn test_map() {
-    test_from_file(Path::new("builtin/maptest.mexe"));
+    test_from_file(
+        Path::new("builtin/maptest.mexe"),
+        Value::Buffer(Buffer::new_empty()),
+    );
 }
 
 #[test]
 fn test_keccak() {
-    test_from_file(Path::new("stdlib/keccaktest.mexe"));
+    test_from_file(
+        Path::new("stdlib/keccaktest.mexe"),
+        Value::Int(Uint256::from_usize(0)),
+    );
 }
 
 #[test]
 fn test_bls() {
-    test_from_file(Path::new("stdlib/blstest.mexe"));
+    test_from_file(
+        Path::new("stdlib/blstest.mexe"),
+        Value::Buffer(Buffer::new_empty()),
+    );
 }
 
 #[test]
 fn test_sha256() {
-    test_from_file(Path::new("stdlib/sha256test.mexe"));
+    test_from_file(
+        Path::new("stdlib/sha256test.mexe"),
+        Value::Int(Uint256::from_usize(0)),
+    );
 }
 
 #[test]
 fn test_fixedpoint() {
-    test_from_file(Path::new("stdlib/fixedpointtest.mexe"));
+    test_from_file(
+        Path::new("stdlib/fixedpointtest.mexe"),
+        Value::Buffer(Buffer::new_empty()),
+    );
 }
 
 #[test]
 fn test_ripemd160() {
-    test_from_file(Path::new("stdlib/ripemd160test.mexe"));
+    test_from_file(
+        Path::new("stdlib/ripemd160test.mexe"),
+        Value::Buffer(Buffer::new_empty()),
+    );
 }
 
 #[test]
 fn test_biguint() {
-    test_from_file(Path::new("stdlib/biguinttest.mexe"));
+    test_from_file(
+        Path::new("stdlib/biguinttest.mexe"),
+        Value::Int(Uint256::from_usize(0)),
+    );
 }
 
 #[test]
 fn test_expanding_int_array() {
-    test_from_file(Path::new("stdlib/expandingIntArrayTest.mexe"));
+    test_from_file(
+        Path::new("stdlib/expandingIntArrayTest.mexe"),
+        Value::Int(Uint256::from_usize(0)),
+    );
 }
 
 #[test]
@@ -221,7 +268,10 @@ fn test_rlp_list3(
 
 #[test]
 fn test_codeload() {
-    test_from_file(Path::new("minitests/codeloadtest.mexe"));
+    test_from_file(
+        Path::new("minitests/codeloadtest.mexe"),
+        Value::Int(Uint256::from_usize(0)),
+    );
 }
 
 #[test]

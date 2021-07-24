@@ -8,23 +8,23 @@ use std::queue::queue_put;
 use std::queue::queue_get;
 
 impure func main() {
-    if let Some(res) = tests() {
-	    asm(res,) { log };
-	} else {
-	    asm(1000,) { log };
-	}
+    if let Some(result) = tests() {
+	    asm(result.1) { log };
+    } else {
+        asm(1) { log };
+    }
 }
 
-func tests() -> option<uint> {
+func tests() -> option<(uint, buffer)> {
 	let q = queue_new();
 	if ( ! queue_isEmpty(q)) {
-		return Some(1);
+		return Some("error 1");
 	}
 
 	q = queue_new();
 	q = queue_put(q, 42);
 	if (queue_isEmpty(q)) {
-		return Some(2);
+		return Some("error 2");
 	} 
 
 	q = queue_new();
@@ -32,7 +32,7 @@ func tests() -> option<uint> {
 	q = queue_put(q, 97);
 	let pair = queue_get(q)?;
 	if (pair.1 != 42) {
-		return Some(3);
+		return Some("error 3");
 	}
 
 	q = queue_new();
@@ -47,8 +47,8 @@ func tests() -> option<uint> {
 		i = i+1;
 	}
 	if ((queue_get(q)?).1 != 21) {
-		return Some(4);
+		return Some("error 4");
 	}
 
-	return Some(0);
+	return Some("");
 }

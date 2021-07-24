@@ -12,6 +12,52 @@ use evmCallStack::IncomingRequestAndLogs;
 use output::PerBlockReceiptData;
 use output::OutputStatistics;
 
+use std::queue::Queue;
+use std::queue::QueueStack;
+use std::queue::QueueStackCell;
+use std::stack::Stack;
+use std::merkletree::MerkleTreeBuilder;
+use tracing::EvmTracer;
+use evmlogs::EvmLogs;
+use inbox::Inbox;
+use inbox::TxRequestQueue;
+use inbox::IncomingRequestQueue;
+
+
+// used to force upgrades to work
+type GlobalOutbox = struct {
+    batch: MerkleTreeBuilder,
+    batchNumber: uint,
+    numInBatch: uint,
+    evmTracer: EvmTracer,
+}
+type GlobalInputQueue = struct {
+    txQ: TxRequestQueue,
+    batchQ: IncomingRequestQueueStack,
+}
+
+/*public func set_globalAccountStore_onUpgrade(input: any) -> any { return input; }
+
+public func set_globalAccountStore_onUpgrade(input: any) -> any { return input; }
+
+public func set_logsQueuedForEndOfBlock_onUpgrade(input: any) -> Queue {
+    return unsafecast<Queue>(input);
+}
+public func set_globalOutbox_onUpgrade(input: any) -> GlobalOutbox {
+    return unsafecast<GlobalOutbox>(input);
+}
+public func set_globalInbox_onUpgrade(input: any) -> Inbox {
+    return unsafecast<Inbox>(input);
+}
+public func set_globalInputQueue_onUpgrade(input: any) -> GlobalInputQueue {
+    return unsafecast<GlobalInputQueue>(input);
+}*/
+
+public func set_globalAccountStore_onUpgrade     (input: any) -> every { return unsafecast<every>(input); }
+public func set_logsQueuedForEndOfBlock_onUpgrade(input: any) -> every { return unsafecast<every>(input); }
+public func set_globalOutbox_onUpgrade           (input: any) -> every { return unsafecast<every>(input); }
+public func set_globalInbox_onUpgrade            (input: any) -> every { return unsafecast<every>(input); }
+public func set_globalInputQueue_onUpgrade       (input: any) -> every { return unsafecast<every>(input); }
 
 public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> map<uint, uint> {
     return oldGlobals.globalChainParameters

@@ -57,7 +57,6 @@ use std::queue::queue_put;
 use std::queue::queue_get;
 
 use core::kvs::Kvs;
-use core::kvs::builtin_kvsDelete;
 
 
 // Each RetryableTx is identified by a txId, which is a unique identifier for the transaction it will eventually
@@ -254,10 +253,9 @@ public impure func retryBuffer_delete(rbuf: RetryBuffer, txId: uint, withRefund:
     // don't call retryBuffer_trimTwo here, because this is called by retryBuffer_trimOne, and we don't want to recurse
 
     return xif let Some(rtx) = retryBuffer_get(rbuf, txId) {
-        // delete the tx
-        set rbuf.byTxId = unsafecast<map<uint, RetryableTx> >(
-            builtin_kvsDelete(unsafecast<Kvs>(rbuf.byTxId), txId)
-        );
+        
+        set rbuf.byTxId = delete(rbuf.byTxId, txId);    // delete the tx
+        
         // tx might still be in retryBuffer.fifo, but that doesn't violate the invariant
 
         if (withRefund) {

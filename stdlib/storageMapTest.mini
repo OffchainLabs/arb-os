@@ -15,25 +15,25 @@ use std::stack::stack_pop;
 
 
 impure func main() {
-	asm(tests(),) { log };
+	asm(tests().1) { log };
 }
 
-func tests() -> uint {
+func tests() -> (uint, buffer) {
 	let s = storageMap_new();
 	if (storageMap_get(s, 17) != 0) {
-		return 1;
+		return "error 1";
 	}
 	if (storageMap_size(s) != 0) {
-	    return 101;
+	    return "error 101";
 	}
 
 	s = storageMap_new();
 	s = storageMap_set(s, 42, 42);
 	if (storageMap_get(s, 42) != 42) {
-		return 2;
+		return "error 2";
 	}
 	if (storageMap_size(s) != 1) {
-	    return 102;
+	    return "error 102";
 	}
 
 	s = storageMap_new();
@@ -41,10 +41,10 @@ func tests() -> uint {
 	s = storageMap_set(s, 55, 56);
 	s = storageMap_set(s, 42, 99);
 	if (storageMap_get(s, 42) != 99) {
-		return 3;
+		return "error 3";
 	}
 	if (storageMap_size(s) != 2) {
-	    return 103;
+	    return "error 103";
 	}
 
 	s = storageMap_new();
@@ -52,10 +52,10 @@ func tests() -> uint {
 	s = storageMap_set(s, 55, 56);
 	s = storageMap_set(s, 42, 99);
 	if (storageMap_get(s, 55) != 56) {
-		return 4;
+		return "error 4";
 	}
 	if (storageMap_size(s) != 2) {
-	    return 104;
+	    return "error 104";
 	}
 
 	s = storageMap_new();
@@ -65,10 +65,10 @@ func tests() -> uint {
 		i = i+1;
 	}
 	if (storageMap_get(s, 17) != 1017) {
-		return 5;
+		return "error 5";
 	}
 	if (storageMap_size(s) != 41) {
-	    return 105;
+	    return "error 105";
 	}
 
 	s = storageMap_new();
@@ -79,10 +79,10 @@ func tests() -> uint {
 	}
 	s = storageMap_delete(s, 17);
 	if (storageMap_get(s, 17) != 0) {
-		return 6;
+		return "error 6";
 	}
 	if (storageMap_size(s) != 26) {
-	    return 106;
+	    return "error 106";
 	}
 
 	s = storageMap_new();
@@ -90,10 +90,10 @@ func tests() -> uint {
 	s = storageMap_set(s, 55, 56);
 	s = storageMap_set(s, 42, 99);
 	if (storageMap_get(s, 42) != 99) {
-		return 7;
+		return "error 7";
 	}
 	if (storageMap_size(s) != 2) {
-	    return 107;
+	    return "error 107";
 	}
 
 	s = storageMap_new();
@@ -101,10 +101,10 @@ func tests() -> uint {
 	s = storageMap_set(s, 55, 56);
 	s = storageMap_set(s, 42, 99);
 	if (storageMap_get(s, 3) != 0) {
-		return 8;
+		return "error 8";
 	}
 	if (storageMap_size(s) != 2) {
-	    return 108;
+	    return "error 108";
 	}
 
 	s = storageMap_new();
@@ -113,10 +113,10 @@ func tests() -> uint {
 	s = storageMap_set(s, 42, 99);
 	let rawResult = storageMap_forall(s, sumForKvsIterator, 0);
 	if (unsafecast<uint>(rawResult) != 155) {
-		return 9;
+		return "error 9";
 	}
 	if (storageMap_size(s) != 2) {
-	    return 109;
+	    return "error 109";
 	}
 
     // regression test for bug #73
@@ -127,10 +127,10 @@ func tests() -> uint {
     s = storageMap_set(s, 55, 100);
     s = storageMap_delete(s, 55);
     if (storageMap_get(s, 55) != 0) {
-        return 10;
+        return "error 10";
     }
 	if (storageMap_size(s) != 0) {
-	    return 110;
+	    return "error 110";
 	}
 
     // test size counting, including reductions for zero
@@ -141,30 +141,30 @@ func tests() -> uint {
         i = i+1;
     }
     if (storageMap_size(s) != 1007) {
-        return 11;
+        return "error 11";
     }
     s = storageMap_set(s, 55, 0);
     if (storageMap_size(s) != 1006) {
-        return 111;
+        return "error 111";
     }
     s = storageMap_set(s, 3000, 0);
     if (storageMap_size(s) != 1006) {
-        return 211;
+        return "error 211";
     }
     s = storageMap_delete(s, 55);
     if (storageMap_size(s) != 1006) {
-        return 311;
+        return "error 311";
     }
     s = storageMap_delete(s, 77);
     if (storageMap_size(s) != 1005) {
-        return 411;
+        return "error 411";
     }
 
 	return storageMapDiffTest();
 }
 
 func isSome(x: option<any>) -> bool {
-	return xif let Some(unused) = x {
+	return xif let Some(_) = x {
 		true
 	} else {
 		false
@@ -183,7 +183,7 @@ func sumForKvsIterator(_key: uint, value: uint, state: any) -> any {
 	return value + unsafecast<uint>(state);
 }
 
-func storageMapDiffTest() -> uint {
+func storageMapDiffTest() -> (uint, buffer) {
     let m0 = storageMap_new();
     m0 = storageMap_set(m0, 13, 5);
     m0 = storageMap_set(m0, 14, 6);
@@ -192,27 +192,27 @@ func storageMapDiffTest() -> uint {
     m1 = storageMap_set(m1, 13, 6);
 
     if (stack_size(storageMap_diff(m0, m1)) != 2) {
-        return 50;
+        return "error 50";
     }
 
     m1 = storageMap_set(m1, 14, 6);
     let diff = storageMap_diff(m0, m1);
     if (stack_size(diff) != 1) {
-        return 60;
+        return "error 60";
     }
     if let Some(res) = stack_pop(diff) {
         if (res.1 != (13, 5, 6)) {
-            return 61;
+            return "error 61";
         }
     } else {
-        return 62;
+        return "error 62";
     }
 
     m1 = storageMap_set(m1, 99, 99);
     diff = storageMap_diff(m0, m1);
     if (stack_size(diff) != 2) {
-        return 70;
+        return "error 70";
     }
 
-    return 0;
+    return "";
 }

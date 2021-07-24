@@ -21,8 +21,6 @@ use std::storageMap::storageMap_set;
 
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsSize;
-use core::kvs::builtin_kvsForall;
-use core::kvs::builtin_kvsDelete;
 
 use chainParameters::chainParams_getDefaultAggregator;
 use chainParameters::chainParams_getOrDie;
@@ -677,15 +675,14 @@ public func accountStore_forall(acctStore: AccountStore, closure: func(Account, 
         innerClosure: closure,
         innerState: startState,
     };
-    wrappedState = unsafecast<asfa_wrappedState>(builtin_kvsForall(
-        unsafecast<Kvs>(acctStore.accounts),
-        unsafecast<func(any, any, any) -> any>(asfaClosure),
-        wrappedState,
-    ));
+    
+    wrappedState = apply(acctStore.accounts, asfaClosure, wrappedState);
+    //wrappedState = unsafecast<asfa_wrappedState>(apply(acctStore.accounts, asfaClosure, wrappedState));
+    
     return wrappedState.innerState;
 }
 
-func asfaClosure(_: any, acct: Account, wrappedState: asfa_wrappedState) -> asfa_wrappedState {
+func asfaClosure(_: address, acct: Account, wrappedState: asfa_wrappedState) -> asfa_wrappedState {
     return wrappedState with {
         innerState: wrappedState.innerClosure(acct, wrappedState.innerState)
     };
@@ -752,9 +749,7 @@ public func accountStore_createCodeRef(
 public func accountStore_dropCodeRef(acctStore: AccountStore, codeHash: bytes32) -> AccountStore {
     if let Some(codeRef) = acctStore.codeRefTable[codeHash] {
         if (codeRef.refCount == 1) {
-            set acctStore.codeRefTable = unsafecast<map<bytes32, CodeRef> >(
-                builtin_kvsDelete(unsafecast<Kvs>(acctStore.codeRefTable), uint(codeHash))
-            );
+            set acctStore.codeRefTable = delete(acctStore.codeRefTable, codeHash);
         } else {
             set acctStore.codeRefTable[codeHash] = codeRef with { refCount: codeRef.refCount - 1 };
         }

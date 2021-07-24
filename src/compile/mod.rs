@@ -82,6 +82,9 @@ impl FromStr for InliningHeuristic {
     }
 }
 
+///Represents the path to a module.
+pub type ModulePath = Vec<String>;
+
 ///Represents the contents of a source file after parsing.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct Module {
@@ -103,7 +106,7 @@ struct Module {
     ///Map from `StringId`s to the types of the functions they represent.
     func_table: HashMap<StringId, Type>,
     ///The path to the module
-    path: Vec<String>,
+    path: ModulePath,
     ///The name of the module, this may be removed later.
     name: String,
 }
@@ -129,7 +132,7 @@ struct TypeCheckedModule {
     ///The list of imports declared via `use` statements.
     imports: Vec<Import>,
     ///The path to the module
-    path: Vec<String>,
+    path: ModulePath,
     ///The name of the module, this may be removed later.
     name: String,
 }
@@ -234,7 +237,7 @@ impl Module {
         imports: Vec<Import>,
         string_table: StringTable,
         func_table: HashMap<usize, Type>,
-        path: Vec<String>,
+        path: ModulePath,
         name: String,
     ) -> Self {
         Self {
@@ -262,7 +265,7 @@ impl TypeCheckedModule {
         constants: HashSet<String>,
         global_vars: Vec<GlobalVarDecl>,
         imports: Vec<Import>,
-        path: Vec<String>,
+        path: ModulePath,
         name: String,
     ) -> Self {
         Self {
@@ -278,6 +281,7 @@ impl TypeCheckedModule {
             name,
         }
     }
+
     ///Inlines functions in the AST by replacing function calls with `CodeBlock` expressions where
     /// appropriate
     fn inline(&mut self, heuristic: &InliningHeuristic) {
@@ -292,6 +296,7 @@ impl TypeCheckedModule {
         }
         self.checked_funcs = new_funcs;
     }
+
     ///Propagates inherited attributes down top-level decls.
     fn propagate_attributes(&mut self) {
         for (_id, func) in &mut self.checked_funcs {
@@ -299,6 +304,7 @@ impl TypeCheckedModule {
             TypeCheckedNode::propagate_attributes(func.child_nodes(), &attributes);
         }
     }
+
     ///Creates callgraph that associates module functions to those that they call
     fn build_callgraph(
         &mut self,
@@ -307,9 +313,7 @@ impl TypeCheckedModule {
 
         let mut import_ids = HashMap::<StringId, Import>::new();
         for import in &self.imports {
-            if let Some(id) = import.id {
-                import_ids.insert(id, import.clone());
-            }
+            import_ids.insert(import.ident.id, import.clone());
         }
 
         for (_, func) in &mut self.checked_funcs {
@@ -349,11 +353,7 @@ impl TypeCheckedModule {
                         "use statement {} is a duplicate",
                         Color::color(error_system.warn_color, &import.name)
                     ),
-                    prior
-                        .location
-                        .into_iter()
-                        .chain(import.location.into_iter())
-                        .collect(),
+                    vec![prior.ident.loc, import.ident.loc],
                 ));
             }
 
@@ -389,7 +389,7 @@ impl TypeCheckedModule {
                     "use statement {} is unnecessary",
                     Color::color(error_system.warn_color, import.name)
                 ),
-                import.location.into_iter().collect(),
+                vec![import.ident.loc],
             ));
         }
 
@@ -713,8 +713,8 @@ pub fn compile_from_folder(
     Ok(progs)
 }
 
-///Converts the `Vec<String>` used to identify a path into a single formatted string
-fn path_display(path: &Vec<String>) -> String {
+///Converts the `ModulePath` used to identify a path into a single formatted string
+fn path_display(path: &ModulePath) -> String {
     let mut s = "".to_string();
     if let Some(first) = path.get(0) {
         s.push_str(first);
@@ -739,8 +739,8 @@ fn create_program_tree(
     builtins: bool,
 ) -> Result<
     (
-        HashMap<Vec<String>, Module>,
-        HashMap<Vec<String>, Vec<Import>>,
+        HashMap<ModulePath, Module>,
+        HashMap<ModulePath, Vec<Import>>,
     ),
     CompileError,
 > {
@@ -797,9 +797,12 @@ fn create_program_tree(
             },
         );
 
-        let mut string_table = StringTable::new();
         let mut used_constants = HashSet::new();
-        let (imports, funcs, named_types, global_vars, hm) = typecheck::sort_top_level_decls(
+        let (mut string_table, mut imports) = match builtins {
+            true => StringTable::builtins_table(&path),
+            false => (StringTable::new(), vec![]),
+        };
+        let (funcs, named_types, global_vars, hm) = typecheck::sort_top_level_decls(
             &parse_from_source(
                 source,
                 file_id,
@@ -809,8 +812,7 @@ fn create_program_tree(
                 &mut used_constants,
                 error_system,
             )?,
-            path.clone(),
-            builtins,
+            &mut imports,
         );
         paths.append(&mut imports.iter().map(|imp| imp.path.clone()).collect());
         import_map.insert(path.clone(), imports.clone());
@@ -834,8 +836,8 @@ fn create_program_tree(
 }
 
 fn resolve_imports(
-    programs: &mut HashMap<Vec<String>, Module>,
-    import_map: &HashMap<Vec<String>, Vec<Import>>,
+    programs: &mut HashMap<ModulePath, Module>,
+    import_map: &HashMap<ModulePath, Vec<Import>>,
     error_system: &mut ErrorSystem,
 ) -> Result<(), CompileError> {
     for (name, imports) in import_map {
@@ -843,7 +845,21 @@ fn resolve_imports(
             let import_path = import.path.clone();
             let (named_type, imp_func) = if let Some(program) = programs.get_mut(&import_path) {
                 //Looks up info from target program
-                let index = program.string_table.get(import.name.clone());
+                //let index = program.string_table.get(import.name.clone());
+                //let index = program.string_table.get_if_exists(&import.name).expect("Import not present");
+                let index = match program.string_table.get_if_exists(&import.name) {
+                    Some(id) => id,
+                    None => {
+                        return Err(CompileError::new(
+                            "Import error".to_string(),
+                            format!(
+                                "Tried to import nonexistent symbol {}",
+                                Color::red(&import.name)
+                            ),
+                            vec![import.ident.loc],
+                        ))
+                    } //None => panic!("Import {:?} not present in {:?} {}", import.name, name, import.ident.id),
+                };
                 let named_type = program.named_types.get(&index).cloned();
                 let imp_func = program.func_table.get(&index).cloned();
                 (named_type, imp_func)
@@ -851,11 +867,11 @@ fn resolve_imports(
                 return Err(CompileError::new(
                     String::from("Compile error: Internal error"),
                     format!(
-                        "Can not find target file for import \"{}::{}\"",
+                        "Can not find target file for import {}::{}",
                         import.path.get(0).cloned().unwrap_or_else(String::new),
-                        import.name
+                        Color::red(&import.name)
                     ),
-                    import.location.into_iter().collect(),
+                    vec![import.ident.loc],
                 ));
             };
             //Modifies origin program to include import
@@ -863,14 +879,15 @@ fn resolve_imports(
                 CompileError::new(
                     String::from("Compile error: Internal error"),
                     format!(
-                        "Can not find originating file for import \"{}::{}\"",
+                        "Can not find originating file for import {}::{}",
                         import.path.get(0).cloned().unwrap_or_else(String::new),
-                        import.name
+                        Color::red(&import.name)
                     ),
-                    import.location.into_iter().collect(),
+                    vec![import.ident.loc],
                 )
             })?;
-            let index = origin_program.string_table.get(import.name.clone());
+            //let index = origin_program.string_table.get_if_exists(&import.name).unwrap();
+            let index = origin_program.string_table.draw(import.name.clone());
             if let Some(named_type) = named_type {
                 origin_program.named_types.insert(index, named_type.clone());
             } else if let Some(imp_func) = imp_func {
@@ -884,11 +901,11 @@ fn resolve_imports(
                 error_system.warnings.push(CompileError::new_warning(
                     String::from("Compile warning"),
                     format!(
-                        "import \"{}::{}\" does not correspond to a type or function",
+                        "import {}::{} does not correspond to a type or function",
                         import.path.get(0).cloned().unwrap_or_else(String::new),
-                        import.name
+                        Color::color(error_system.warn_color, &import.name),
                     ),
-                    import.location.into_iter().collect(),
+                    vec![import.ident.loc],
                 ));
             }
         }
@@ -897,7 +914,7 @@ fn resolve_imports(
 }
 
 ///Constructor for `TypeTree`
-fn create_type_tree(program_tree: &HashMap<Vec<String>, Module>) -> TypeTree {
+fn create_type_tree(program_tree: &HashMap<ModulePath, Module>) -> TypeTree {
     program_tree
         .iter()
         .map(|(path, program)| {
@@ -1037,10 +1054,10 @@ fn callgraph_descend(
     func: StringId,
     module: &TypeCheckedModule,
     program_callgraph: &mut HashMap<
-        Vec<String>,
+        ModulePath,
         BTreeMap<StringId, (Vec<(StringId, Option<Import>)>, Location)>,
     >,
-    paths_to_modules: &HashMap<Vec<String>, &TypeCheckedModule>,
+    paths_to_modules: &HashMap<ModulePath, &TypeCheckedModule>,
 ) {
     if module.path[0] == "core" || module.path[0] == "std" {
         return;
@@ -1077,7 +1094,7 @@ fn callgraph_descend(
 ///Walks the callgraph, pruning and/or warning on any unused functions
 fn consume_program_callgraph(
     mut program_callgraph: HashMap<
-        Vec<String>,
+        ModulePath,
         BTreeMap<StringId, (Vec<(StringId, Option<Import>)>, Location)>,
     >,
     modules: &mut Vec<TypeCheckedModule>,
@@ -1498,7 +1515,7 @@ pub struct FileInfo {
     #[serde(skip)]
     pub path: String,
     #[serde(skip)]
-    pub contents: Vec<String>,
+    pub contents: ModulePath,
 }
 
 impl Debug for FileInfo {
