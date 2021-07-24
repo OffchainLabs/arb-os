@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::{test_contract_path, test_contract_path2, AbiForContract};
+use crate::evm::{test_contract_path, _test_contract_path2, AbiForContract};
 use crate::mavm::Value;
 use crate::run::{_bytestack_from_bytes, load_from_file, run, run_from_file, Machine};
 use crate::uint256::Uint256;
@@ -515,7 +515,7 @@ fn test_gasleft_with_delegatecall() {
     let my_addr = Uint256::from_u64(1025);
 
     let mut greeter_contract =
-        AbiForContract::new_from_file(&test_contract_path2("Delegator", "Greeter")).unwrap();
+        AbiForContract::new_from_file(&_test_contract_path2("Delegator", "Greeter")).unwrap();
     if greeter_contract
         .deploy(&[], &mut machine, Uint256::zero(), None, false)
         .is_err()

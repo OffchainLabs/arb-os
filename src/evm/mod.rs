@@ -39,7 +39,7 @@ pub fn test_contract_path(contract_name: &str) -> String {
     )
 }
 
-pub fn test_contract_path2(parent_name: &str, contract_name: &str) -> String {
+pub fn _test_contract_path2(parent_name: &str, contract_name: &str) -> String {
     format!(
         "contracts/artifacts/arbos/test/{}.sol/{}.json",
         parent_name, contract_name
