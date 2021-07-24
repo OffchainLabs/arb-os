@@ -46,13 +46,6 @@ pub fn _test_contract_path2(parent_name: &str, contract_name: &str) -> String {
     )
 }
 
-pub fn _test_contract_path2(parent_name: &str, contract_name: &str) -> String {
-    format!(
-        "contracts/artifacts/arbos/test/{}.sol/{}.json",
-        parent_name, contract_name
-    )
-}
-
 pub fn evm_xcontract_call_with_constructors(
     log_to: Option<&Path>,
     debug: bool,
