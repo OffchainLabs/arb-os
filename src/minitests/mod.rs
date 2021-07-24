@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::{test_contract_path, _test_contract_path2, AbiForContract};
+use crate::evm::{test_contract_path, AbiForContract, _test_contract_path2};
 use crate::mavm::Value;
 use crate::run::{_bytestack_from_bytes, load_from_file, run, run_from_file, Machine};
 use crate::uint256::Uint256;
