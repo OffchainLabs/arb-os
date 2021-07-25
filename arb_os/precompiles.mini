@@ -206,7 +206,7 @@ public impure func precompiles_init(acctStore: AccountStore, isUpgrade: bool) ->
     return Some(acctStore);
 }
 
-public impure func makeTrampoline(txcallFunc: impure func()) -> impure func() {
+public func makeTrampoline(txcallFunc: impure func()) -> impure func() {
     // make a small code snippet that function-calls to txcallFunc (with a dummy return address)
     return asm(
         const::AVM_nop,

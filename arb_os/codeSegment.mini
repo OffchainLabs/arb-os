@@ -571,7 +571,7 @@ impure func pushEvmInsnDenomCheck(
     );
 }
 
-impure func prependPops(numPops: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
+func prependPops(numPops: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
     while (numPops > 0) {
         restOfCode = pushInstruction(const::AVM_pop, restOfCode);
         numPops = numPops-1;
@@ -633,7 +633,7 @@ impure func pushSwapn(
     };
 }
 
-impure func pushEvmInsnCall(evmOpNum: uint, code: AvmCodePoint) -> AvmCodePoint {
+func pushEvmInsnCall(evmOpNum: uint, code: AvmCodePoint) -> AvmCodePoint {
     // Some EVM instructions compile to a procedure call to some Mini code.
     // Generate the appropriate procedure call.
     // Note that the EVM code will already have put the args to the call on the stack,
