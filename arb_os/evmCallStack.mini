@@ -777,6 +777,7 @@ public impure func evmCallStack_doCall(
 
         // jump to the called code's startCodePoint -- this should never return
         let _ = gasAccounting_resumeTxCharges(gas);
+        emptyAvmStack();
         asm(startCodePoint,) { jump };
     } else {
         // no code at that address, so just do eth transfer
