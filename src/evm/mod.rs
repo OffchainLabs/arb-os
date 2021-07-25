@@ -1652,9 +1652,11 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
+    println!("A");
     let my_addr = Uint256::from_usize(1025);
     let contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
         Ok(mut contract) => {
+            println!("B");
             let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, debug);
             if let Ok(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
@@ -1667,6 +1669,7 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
             panic!("error loading contract: {:?}", e);
         }
     };
+    println!("C");
 
     let result = contract.call_function(
         my_addr,
@@ -1680,6 +1683,7 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
         Uint256::zero(),
         debug,
     );
+    println!("D");
     match result {
         Ok((logs, sends)) => {
             assert_eq!(logs.len(), 1);
