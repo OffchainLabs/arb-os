@@ -599,7 +599,9 @@ public impure func initEvmCallStackForConstructor(
                 parent: None<EvmCallFrame>
             });
 
-            startPoint();  // start executing the call; should never return
+            emptyAvmStack();
+            asm(startPoint,) { jump };
+            // startPoint();  // start executing the call; should never return
             panic;
         } else {
             // can't pay for gas error
@@ -775,6 +777,7 @@ public impure func evmCallStack_doCall(
 
         // jump to the called code's startCodePoint -- this should never return
         let _ = gasAccounting_resumeTxCharges(gas);
+        emptyAvmStack();
         asm(startCodePoint,) { jump };
     } else {
         // no code at that address, so just do eth transfer
