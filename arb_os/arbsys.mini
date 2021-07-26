@@ -21,6 +21,7 @@ use evmCallStack::evmCallStack_callHitError;
 use evmCallStack::evmCallStack_addEvmLogToCurrent;
 use evmCallStack::evmCallStack_addStorageCharge;
 use evmCallStack::evmCallStack_inRetryable;
+use evmCallStack::evmCallStack_addToCurrentStorageDelta;
 
 use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallFrame_getCallvalue;
@@ -708,6 +709,11 @@ impure func arbFunctionTable_upload(topFrame: EvmCallFrame, calldata: ByteArray)
     let tableData = bytearray_extract(calldata, 4+2*32, nbytes);
 
     let account = evmCallFrame_getAccount(topFrame, callerAddr);
+    let sizeBefore = xif let Some(sz) = functionTableSize(callerAddr) {
+        sz
+    } else {
+        0
+    };
     if let Some(funcTable) = parseAggregatorFunctionTable(
         tableData,
     ) {
@@ -720,9 +726,20 @@ impure func arbFunctionTable_upload(topFrame: EvmCallFrame, calldata: ByteArray)
     }
 
     if (evmCallStack_setAccount(callerAddr, account)) {
+        let sizeAfter = xif let Some(sz) = functionTableSize(callerAddr) {
+            sz
+        } else {
+            0
+        };
+        if (sizeAfter > sizeBefore) {
+            // charge 3 storage allocates for each entry added to the table
+            if (evmCallStack_addToCurrentStorageDelta(int(3*(sizeAfter-sizeBefore))) == None<()>) {
+                evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 192, 0, 0);
+            }
+        }
         evmOp_return(0, 0);
     } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 192, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 193, 0, 0);
     }
 }
 

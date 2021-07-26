@@ -1602,6 +1602,15 @@ public impure func evmCallStack_setTopFrameStorageCell(offset: uint, value: uint
     return Some(());
 }
 
+public impure func evmCallStack_addToCurrentStorageDelta(delta: int) -> option<()> {
+    let topFrame = globalCallStack?;
+    topFrame = topFrame with {
+        storageDelta: topFrame.storageDelta + delta
+    };
+    globalCallStack = Some(topFrame);
+    return Some(());
+}
+
 public impure func evmCallStack_addEvmLogToCurrent(item: any) -> option<()> {
     let topFrame = globalCallStack?;
     item = asm(0, item, topFrame.runningAs) any { tset };
