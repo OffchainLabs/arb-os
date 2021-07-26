@@ -289,7 +289,7 @@ fn test_arbsys_direct() {
 
 #[test]
 fn test_rate_control() {
-    //FIXME crate::evm::_evm_test_rate_control(None, false).unwrap();
+    let _ = crate::evm::preinstalled_contracts::evm_test_rate_control(None, false);
 }
 
 #[test]

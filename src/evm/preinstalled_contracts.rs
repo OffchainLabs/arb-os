@@ -1879,12 +1879,6 @@ fn test_arbgas_oracle() {
     machine.write_coverage("test_arbgas_oracle".to_string());
 }
 
-//TODO: Check if we should fix or delete this
-#[test]
-fn test_rate_control() {
-    evm_test_rate_control(None, false).unwrap();
-}
-
 pub fn evm_test_rate_control(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero(true);
