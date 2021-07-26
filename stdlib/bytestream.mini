@@ -10,6 +10,8 @@ use std::bytearray::bytearray_slice;
 use std::bytearray::bytearray_wrap_slice;
 use std::bytearray::buffer_getCalldataUnits;
 
+use std::safeMath::safeAdd;
+
 
 type ByteStream = struct {
     buf: buffer,
@@ -48,7 +50,7 @@ public func bytestream_bytesRemaining(bs: ByteStream) -> uint {
 }
 
 public func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream> {
-    let newOffset = bs.currentOffset + nbytes;
+    let newOffset = safeAdd(bs.currentOffset, nbytes);
     return xif (newOffset <= bs.capacity) {
         Some(bs with { currentOffset: newOffset })
     } else {
@@ -106,7 +108,7 @@ public func bytestream_getPartialWord(bs: ByteStream, nbytes: uint) -> option<(B
     // nbytes must be <= 32
     return xif (nbytes > 32) {
         None<(ByteStream, uint)>
-    } elseif (bs.currentOffset+nbytes > bs.capacity) {
+    } elseif (safeAdd(bs.currentOffset, nbytes) > bs.capacity) {
         None<(ByteStream, uint)>
     } else {
         Some((
@@ -117,7 +119,7 @@ public func bytestream_getPartialWord(bs: ByteStream, nbytes: uint) -> option<(B
 }
 
 public func bytestream_getN(bs: ByteStream, nbytes: uint) -> option<(ByteStream, ByteArray)> {
-    if (bs.currentOffset + nbytes > bs.capacity) {
+    if (safeAdd(bs.currentOffset, nbytes) > bs.capacity) {
         return None;
     }
 
