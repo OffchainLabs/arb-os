@@ -9,6 +9,8 @@ use num_bigint::{BigUint, RandBigInt};
 use rlp::RlpStream;
 use std::convert::TryInto;
 use std::path::Path;
+use crate::evm::{AbiForContract, test_contract_path, preinstalled_contracts::_ArbInfo};
+use crate::evm::preinstalled_contracts::_ArbOwner;
 
 mod integration;
 
@@ -464,4 +466,73 @@ fn small_upgrade_auto_remap() {
         *machine.stack_top().unwrap(),
         Value::Int(Uint256::from_u64(42))
     );
+}
+
+#[test]
+pub fn evm_test_memory_charges() {
+    let small_memory_balance = balance_after_memory_usage(1000);
+    let large_memory_balance = balance_after_memory_usage(1500);
+    assert!(large_memory_balance < small_memory_balance);
+}
+
+#[cfg(test)]
+fn balance_after_memory_usage(usage: u64) -> Uint256 {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_u64(9935);
+
+    let contract = match AbiForContract::new_from_file(&test_contract_path("MemoryUsage")) {
+        Ok(mut contract) => {
+            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, false);
+            if let Ok(contract_addr) = result {
+                assert_ne!(contract_addr, Uint256::zero());
+                contract
+            } else {
+                panic!("deploy failed");
+            }
+        }
+        Err(e) => {
+            panic!("error loading contract: {:?}", e);
+        }
+    };
+
+    machine.runtime_env.insert_eth_deposit_message(
+        contract.address.clone(),
+        contract.address.clone(),
+        Uint256::_from_eth(100),
+    );
+    machine.runtime_env.insert_eth_deposit_message(
+        my_addr.clone(),
+        my_addr.clone(),
+        Uint256::_from_eth(100),
+    );
+    let _ = machine.run(None);
+
+    let arbowner = _ArbOwner::_new(&wallet, false);
+    arbowner._set_fees_enabled(
+        &mut machine,
+        true,
+        true,
+    ).unwrap();
+
+    let (receipts, _) = contract.call_function(
+        my_addr.clone(),
+        "test",
+        &[ethabi::Token::Uint(Uint256::from_u64(usage).to_u256())],
+        &mut machine,
+        Uint256::zero(),
+        false,
+    ).unwrap();
+    assert_eq!(receipts.len(), 1);
+    assert!(receipts[0].succeeded());
+
+    arbowner._set_fees_enabled(
+        &mut machine,
+        false,
+        true,
+    ).unwrap();
+
+    let arbinfo = _ArbInfo::_new(false);
+    arbinfo._get_balance(&mut machine, &my_addr).unwrap()
 }
