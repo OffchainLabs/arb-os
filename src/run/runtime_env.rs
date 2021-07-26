@@ -13,13 +13,12 @@ use ethers_signers::{Signer, Wallet};
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::io::Read;
-use std::rc::Rc;
+use std::sync::Arc;
 use std::{collections::HashMap, fs::File, io, path::Path};
 
 #[derive(Debug, Clone)]
 pub struct RuntimeEnvironment {
     pub chain_id: u64,
-    pub chain_address: Uint256,
     pub l1_inbox: Vec<Value>,
     pub current_block_num: Uint256,
     pub current_timestamp: Uint256,
@@ -36,56 +35,42 @@ pub struct RuntimeEnvironment {
 }
 
 impl RuntimeEnvironment {
-    pub fn new(
-        chain_address: Uint256,
-        charging_policy: Option<(Uint256, Uint256, Uint256)>,
-    ) -> Self {
+    pub fn new(charging_policy: Option<(Uint256, Uint256, Uint256)>) -> Self {
         RuntimeEnvironment::new_with_blocknum_timestamp(
-            chain_address,
             Uint256::from_u64(100_000),
             Uint256::from_u64(10_000_000),
             charging_policy,
             None,
+        )
+    }
+
+    pub fn _new_options() -> Self {
+        RuntimeEnvironment::new_with_blocknum_timestamp(
+            Uint256::from_u64(100_000),
+            Uint256::from_u64(10_000_000),
+            None,
             None,
         )
     }
 
-    pub fn _new_options(
-        chain_address: Uint256,
-        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
-    ) -> Self {
+    pub fn _new_with_owner(owner: Option<Uint256>) -> Self {
         RuntimeEnvironment::new_with_blocknum_timestamp(
-            chain_address,
             Uint256::from_u64(100_000),
             Uint256::from_u64(10_000_000),
-            None,
-            sequencer_info,
-            None,
-        )
-    }
-
-    pub fn _new_with_owner(chain_address: Uint256, owner: Option<Uint256>) -> Self {
-        RuntimeEnvironment::new_with_blocknum_timestamp(
-            chain_address,
-            Uint256::from_u64(100_000),
-            Uint256::from_u64(10_000_000),
-            None,
             None,
             owner,
         )
     }
 
     pub fn new_with_blocknum_timestamp(
-        chain_address: Uint256,
         blocknum: Uint256,
         timestamp: Uint256,
         charging_policy: Option<(Uint256, Uint256, Uint256)>,
-        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
         owner: Option<Uint256>,
     ) -> Self {
+        let chain_id = 42161;
         let mut ret = RuntimeEnvironment {
-            chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
-            chain_address,
+            chain_id,
             l1_inbox: vec![],
             current_block_num: blocknum,
             current_timestamp: timestamp,
@@ -98,11 +83,7 @@ impl RuntimeEnvironment {
             compressor: TxCompressor::new(),
             charging_policy: charging_policy.clone(),
             num_wallets: 0,
-            chain_init_message: RuntimeEnvironment::get_params_bytes(
-                charging_policy,
-                sequencer_info,
-                owner,
-            ),
+            chain_init_message: RuntimeEnvironment::get_params_bytes(owner, chain_id),
         };
 
         ret.send_chain_init_message();
@@ -112,40 +93,22 @@ impl RuntimeEnvironment {
     pub fn send_chain_init_message(&mut self) {
         self.insert_l1_message(
             4,
-            self.chain_address.clone(),
+            Uint256::zero(),
             &self.chain_init_message.clone(),
+            None,
+            None,
         );
     }
 
-    fn get_params_bytes(
-        charging_policy: Option<(Uint256, Uint256, Uint256)>,
-        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
-        owner: Option<Uint256>,
-    ) -> Vec<u8> {
+    fn get_params_bytes(owner: Option<Uint256>, chain_id: u64) -> Vec<u8> {
         let mut buf = Vec::new();
-        buf.extend(Uint256::from_u64(3 * 60 * 60).to_bytes_be()); // grace period in blocks
-        buf.extend(Uint256::from_u64(100_000_000 / 1000).to_bytes_be()); // arbgas speed limit per tick
-        buf.extend(Uint256::from_u64(10_000_000_000).to_bytes_be()); // max execution steps
-        buf.extend(Uint256::from_u64(1000).to_bytes_be()); // base stake amount in wei
-        buf.extend(Uint256::zero().to_bytes_be()); // staking token address (zero means ETH)
-        buf.extend(owner.clone().unwrap_or(Uint256::zero()).to_bytes_be()); // owner address
-
-        if let Some((base_gas_price, storage_charge, pay_fees_to)) = charging_policy.clone() {
-            buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 2u8]); // option ID = 2
-            buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 96u8]); // option payload size = 96 bytes
-            buf.extend(base_gas_price.to_bytes_be());
-            buf.extend(storage_charge.to_bytes_be());
-            buf.extend(pay_fees_to.to_bytes_be());
-        }
-
-        buf.extend(owner.unwrap_or(Uint256::zero()).to_bytes_be()); // owner address
-
-        if let Some((seq_addr, delay_blocks, delay_time)) = sequencer_info {
-            buf.extend(&[0u8; 8]);
-            buf.extend(&96u64.to_be_bytes());
-            buf.extend(seq_addr.to_bytes_be());
-            buf.extend(delay_blocks.to_bytes_be());
-            buf.extend(delay_time.to_bytes_be());
+        let params_to_set = vec![
+            ("ChainOwner", owner.clone().unwrap_or(Uint256::zero())),
+            ("ChainID", Uint256::from_u64(chain_id)),
+        ];
+        for (name, val) in params_to_set {
+            buf.extend(&keccak256(name.as_bytes()));
+            buf.extend(val.to_bytes_be());
         }
 
         buf
@@ -180,11 +143,18 @@ impl RuntimeEnvironment {
         self.l1_inbox = contents;
     }
 
-    pub fn insert_l1_message(&mut self, msg_type: u8, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
+    pub fn insert_l1_message(
+        &mut self,
+        msg_type: u8,
+        sender_addr: Uint256,
+        msg: &[u8],
+        block_num: Option<Uint256>,
+        timestamp: Option<Uint256>,
+    ) -> Uint256 {
         let l1_msg = Value::new_tuple(vec![
             Value::Int(Uint256::from_usize(msg_type as usize)),
-            Value::Int(self.current_block_num.clone()),
-            Value::Int(self.current_timestamp.clone()),
+            Value::Int(block_num.unwrap_or(self.current_block_num.clone())),
+            Value::Int(timestamp.unwrap_or(self.current_timestamp.clone())),
             Value::Int(sender_addr),
             Value::Int(self.next_inbox_seq_num.clone()),
             Value::Int(self.get_gas_price()),
@@ -225,7 +195,7 @@ impl RuntimeEnvironment {
         msg.extend(Uint256::from_usize(calldata.len()).to_bytes_be());
         msg.extend(calldata);
 
-        let submit_req_id = self.insert_l1_message(9u8, sender, &msg);
+        let submit_req_id = self.insert_l1_message(9u8, sender, &msg, None, None);
         let mut buf = submit_req_id.to_bytes_be();
         let mut buf2 = buf.clone();
         buf.extend(&[0u8; 32]);
@@ -242,7 +212,7 @@ impl RuntimeEnvironment {
     }
 
     pub fn get_gas_price(&self) -> Uint256 {
-        Uint256::_from_gwei(200)
+        Uint256::_from_gwei(2)
     }
 
     pub fn insert_l2_message(
@@ -255,6 +225,8 @@ impl RuntimeEnvironment {
             if is_buddy_deploy { 5 } else { 3 },
             sender_addr.clone(),
             msg,
+            None,
+            None,
         );
         if !is_buddy_deploy && (msg[0] == 0) {
             Uint256::avm_hash2(
@@ -273,7 +245,7 @@ impl RuntimeEnvironment {
         if (msg[0] != 0u8) && (msg[0] != 1u8) {
             panic!();
         }
-        let default_id = self.insert_l1_message(7, sender_addr.clone(), msg);
+        let default_id = self.insert_l1_message(7, sender_addr.clone(), msg, None, None);
         if msg[0] == 0 {
             Uint256::avm_hash2(
                 &sender_addr,
@@ -291,7 +263,7 @@ impl RuntimeEnvironment {
         &mut self,
         sender_addr: Uint256,
         max_gas: Uint256,
-        gas_price_bid: Uint256,
+        gas_price_bid: Option<Uint256>,
         to_addr: Uint256,
         value: Uint256,
         data: &[u8],
@@ -300,7 +272,7 @@ impl RuntimeEnvironment {
         let mut buf = vec![0u8];
         let seq_num = self.get_and_incr_seq_num(&sender_addr.clone());
         buf.extend(max_gas.to_bytes_be());
-        buf.extend(gas_price_bid.to_bytes_be());
+        buf.extend(gas_price_bid.unwrap_or(self.get_gas_price()).to_bytes_be());
         buf.extend(seq_num.to_bytes_be());
         buf.extend(to_addr.to_bytes_be());
         buf.extend(value.to_bytes_be());
@@ -317,7 +289,7 @@ impl RuntimeEnvironment {
         &mut self,
         sender_addr: Uint256,
         max_gas: Uint256,
-        gas_price_bid: Uint256,
+        gas_price_bid: Option<Uint256>,
         to_addr: Uint256,
         value: Uint256,
         data: &[u8],
@@ -325,7 +297,7 @@ impl RuntimeEnvironment {
     ) -> Uint256 {
         let mut buf = vec![1u8];
         buf.extend(max_gas.to_bytes_be());
-        buf.extend(gas_price_bid.to_bytes_be());
+        buf.extend(gas_price_bid.unwrap_or(self.get_gas_price()).to_bytes_be());
         buf.extend(to_addr.to_bytes_be());
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
@@ -368,7 +340,7 @@ impl RuntimeEnvironment {
 
     pub fn make_compressed_and_signed_l2_message(
         &mut self,
-        gas_price: Uint256,
+        gas_price: Option<Uint256>,
         gas_limit: Uint256,
         to_addr: Uint256,
         value: Uint256,
@@ -378,6 +350,7 @@ impl RuntimeEnvironment {
         let sender = Uint256::from_bytes(wallet.address().as_bytes());
         let mut result = vec![7u8, 0xffu8];
         let seq_num = self.get_and_incr_seq_num(&sender);
+        let gas_price = gas_price.unwrap_or(self.get_gas_price());
         result.extend(seq_num.rlp_encode());
         result.extend(gas_price.rlp_encode());
         result.extend(gas_limit.rlp_encode());
@@ -405,7 +378,7 @@ impl RuntimeEnvironment {
     pub fn _make_compressed_tx_for_bls(
         &mut self,
         sender: &Uint256,
-        gas_price: Uint256,
+        gas_price: Option<Uint256>,
         gas_limit: Uint256,
         to_addr: Uint256,
         value: Uint256,
@@ -413,6 +386,7 @@ impl RuntimeEnvironment {
     ) -> (Vec<u8>, Vec<u8>) {
         // returns (compressed tx to send, hash to sign)
         let mut result = self.compressor.compress_address(sender.clone());
+        let gas_price = gas_price.unwrap_or(self.get_gas_price());
 
         let mut buf = vec![0xffu8];
         let seq_num = self.get_and_incr_seq_num(&sender);
@@ -465,7 +439,7 @@ impl RuntimeEnvironment {
         &mut self,
         batch: &mut Vec<u8>,
         max_gas: Uint256,
-        gas_price_bid: Uint256,
+        gas_price_bid: Option<Uint256>,
         to_addr: Uint256,
         value: Uint256,
         calldata: Vec<u8>,
@@ -515,7 +489,7 @@ impl RuntimeEnvironment {
         self.insert_tx_message_from_contract(
             sender_addr,
             Uint256::from_u64(100_000_000),
-            Uint256::zero(),
+            None,
             payee,
             amount,
             &[],
@@ -606,7 +580,7 @@ impl RuntimeEnvironment {
 
 impl Default for RuntimeEnvironment {
     fn default() -> Self {
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None)
+        RuntimeEnvironment::new(None)
     }
 }
 
@@ -923,7 +897,13 @@ impl ArbosReceipt {
             6 => "message format error",
             7 => "cannot deploy at address",
             8 => "exceeded tx gas limit",
-            9 => "below minimum ArbGas for contract tx",
+            9 => "insufficient gas for base fee",
+            10 => "below minimum ArbGas for contract tx",
+            11 => "gas price too low",
+            12 => "no gas for auto-redeem",
+            13 => "sender not permitted",
+            14 => "sequence number too low",
+            15 => "sequence number too high",
             _ => "unknown error",
         }
         .to_string()
@@ -972,8 +952,8 @@ pub struct _ArbosBlockSummaryLog {
     pub block_num: Uint256,
     pub timestamp: Uint256,
     pub gas_limit: Uint256,
-    stats_this_block: Rc<Vec<Value>>,
-    stats_all_time: Rc<Vec<Value>>,
+    stats_this_block: Arc<Vec<Value>>,
+    stats_all_time: Arc<Vec<Value>>,
     gas_summary: _BlockGasAccountingSummary,
 }
 
@@ -1485,25 +1465,6 @@ pub fn replay_from_testlog_file(
             Ok(success)
         }
         Err(e) => panic!("json parsing failed: {}", e),
-    }
-}
-
-#[test]
-fn logfile_replay_tests() {
-    for entry in std::fs::read_dir(Path::new("./replayTests")).unwrap() {
-        let path = entry.unwrap().path();
-        let name = path.file_name().unwrap();
-        assert_eq!(
-            replay_from_testlog_file(
-                &("./replayTests/".to_owned() + name.to_str().unwrap()),
-                false,
-                false,
-                ProfilerMode::Never,
-                None,
-            )
-            .unwrap(),
-            true
-        );
     }
 }
 

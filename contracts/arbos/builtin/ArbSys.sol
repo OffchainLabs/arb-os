@@ -10,6 +10,8 @@ interface ArbSys {
      */
     function arbOSVersion() external pure returns (uint);
 
+    function arbChainID() external view returns(uint);
+
     /**
     * @notice Get Arbitrum block number (distinct from L1 block number; Arbitrum genesis block has block number 0)
     * @return block number as int
@@ -32,8 +34,6 @@ interface ArbSys {
     */
     function sendTxToL1(address destination, bytes calldata calldataForL1) external payable returns(uint);
 
-
-
     /** 
     * @notice get the number of transactions issued by the given external account or the account sequence number of the given contract
     * @param account target account
@@ -55,8 +55,6 @@ interface ArbSys {
     * @return true if the caller of this was called directly from L1
     */
     function isTopLevelCall() external view returns (bool);
-
-    event EthWithdrawal(address indexed destAddr, uint amount);
 
     event L2ToL1Transaction(address caller, address indexed destination, uint indexed uniqueId,
                             uint indexed batchNumber, uint indexInBatch,

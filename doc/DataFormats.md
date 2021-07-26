@@ -48,21 +48,11 @@ This message type is initiated by a client, via a transaction to the EthBridge. 
 
 Details of L2 message subtypes and formats are listed in a separate section below.
 
-##### Message type 4: chain initialization message
+##### Message type 4: set parameters message
 
 This message type is initiated by the EthBridge, as part of the creation of a new L2 chain, in order to convey parameters of the chain to ArbOS. It must only be sent as the first message in the inbox of a new chain.  
 
-Type-specific data:
-
-* challenge period, in seconds (uint)
-* ArbGas speed limit, in ArbGas per second (uint)
-* maximum number of execution steps allowed in an assertion (uint)
-* minimum stake requirement, in Wei (uint)
-* address of the staking token, or zero if staking in ETH (address encoded as uint)
-* address of the chain's owner (address encoded as uint)
-* option data
-
-Option data consists of a sequence of zero or more chunks.  ArbOS will ignore a chunk if it does not know how to handle that chunk's option ID.
+Type-specific data consists 
 
 Each chunk is:
 
@@ -77,7 +67,9 @@ At present. the following options are supported:
 * Option 2: set charging parameters: 
   * speed limit per second (uint); 
   * L1 gas per L2 tx (uint); 
-  * L1 gas per L2 calldata byte; 
+  * ArbGas per L2 tx (uint);
+  * L1 gas per L2 calldata unit (uint) [a non-zero calldata byte is 16 units; a zero calldata byte is 4 units]; 
+  * ArbGas per L2 calldata unit (uint);
   * L1 gas per storage unit allocated (uint); 
   * ratio of L1 gas price to base ArbGas price; 
   * network fee recipient (address encoded as uint); 
@@ -91,13 +83,13 @@ All other options are ignored at present.
 
 [This is no longer supported.]
 
-##### Message type 6: reserved
+##### Message type 6: end of Arbitrum block
 
-This message type is reserved for internal use by ArbOS. It should never appear in the inbox.
+A message of this type directs ArbOS to end the current Arbitrum block and start a new one. All integer or address fields (other than the message type) should be zero, and the buffer should be empty.
 
 **Message type 7: L2 transaction funded by L1**
 
-This message type encodes an L2 transaction that is funded by calldata provided at L1. The type-specific data must be the same as an L2 message of subtype 0 or 1.
+This message type encodes an L2 transaction that is funded by value provided at L1. The type-specific data must be the same as an L2 message of subtype 0 or 1.
 
 **Message type 8: Rollup protocol event**
 
@@ -143,12 +135,14 @@ The type-specific data consists of:
 
 * 3 (byte)
 * aggregator address (address encoded as uint)
+* limit on computation ArbGas (uint)
 * an L2 message of subtype 7
 
-This executes the enclosed L2 message, with two deviations from the normal semantics.
+This executes the enclosed L2 message, with the following deviations from the normal semantics.
 
 * The aggregator address specified in the message is considered to be the aggregator that submitted this message.
 * The transaction signature on the L2 message is ignored, and the enclosed transaction is treated as if it carried a valid signature by the sender of this L1 message.
+* The ArbGas used for computation will be limited by the supplied limit. (The supplied limit will be ignored if it is larger than the ordinary limit that applies to all transactions.)
 
 ## L2 messages
 
@@ -190,7 +184,7 @@ An L2 message consists of:
 
 The L2 messages in a batch will be separated, and treated as if each had arrived separately, in the order in which they appear in the batch.
 
-The enclosed L2 message may have any valid subtype are allowed.
+The enclosed L2 message may have any valid subtype.
 
 **Subtype 4: signed tx from user** has subtype-specific data that is identical to the standard Ethereum encoded transaction format. The subtype-specific data consists of an RLP-encoded list containing:
 
@@ -281,11 +275,19 @@ Possible return codes are:
 	1: tx reverted
 	2: tx dropped due to L2 congestion
 	3: insufficient funds to pay for ArbGas
-	4: insufficient balance
-	5: bad sequence number
+	4: insufficient balance for callvalue
+	5: [no longer used (previously: bad sequence number, superseded by 14 and 15)]
 	6: message format error
     7: cannot deploy at requested address
-	255: unknown error
+    8: exceeded tx gas limit
+    9: insufficient gas to cover L1 charges
+  10: below minimum gas for a tx
+  11: gas price too low
+  12: no gas to auto-redeem retryable ticket
+  13: sender not permitted
+  14: sequence number too low
+  15: sequence number too high
+255: unknown error
 
 EVM logs are formatted as an EVM value, as a linked list in reverse order, such as this: (*log3*, (*log2*, (*log1*, (*log0*, () ) ) ) ). In this example there are four EVM log items, with the first one being *log0* and the last being *log3*.  Each EVM log is structured as an AVM tuple *(address, (dataSize, dataBuffer), topic0, topic1, ...)*, with as many topics as are present in that particular EVM log item.
 
@@ -307,6 +309,8 @@ For an unsigned transaction that is an L2 message of subtype 0, the requestID is
 For other transactions, the requestID is computed from incoming message contents as follows.  An incoming message is assigned a requestID of hash(chainID, inboxSeqNum), where inboxSeqNum is the value N such that this is the Nth message that has ever arrived in the chain's inbox.  If the incoming message includes a batch, the K'th item in the batch is assigned a requestID of hash(requestID of batch, K).  If batches are nested, this rule is applied recursively.
 
 It is infeasible to find two distinct requests that have the same requestID.  This is true because requestIDs are the output of a collision-free hash function, and it is not possible to create two distinct requests that will have the same input to the hash function.  Signed transaction IDs cannot collide with the other types, because the other types' hash preimages both start with a zero byte (because sender address and chainID are zero-filled in the most-significant byte of a big-endian value) and the RLP encoding of a list cannot start with a zero byte.  The other two types cannot have the same hash preimage because subtype-0 messages use a hash output as their second word, which with overwhelming probability will be too large to be feasible as the sequence number or batch index that occupies the same position in the default request ID scheme.
+
+When an incoming message is included through the delayed inbox, the inbox sequence number gets adjusted so it doesn't overlap with the sequencer's inbox. For these messages, you can calculate the request ID by masking the high order bit, as follows: inboxSeqNum | (1 << 255).
 
 ### Block summary
 
@@ -364,5 +368,4 @@ Currently only one type is supported: an L2-to-L1 call, which has send type 3.  
 * timestamp (uint)
 * callvalue (uint)
 * calldata (sequence of bytes)
-
 

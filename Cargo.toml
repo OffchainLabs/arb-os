@@ -40,6 +40,7 @@ wasmtime = "0.25.0"
 rustc-hex = "2.1.0"
 toml = "0.5.8"
 json = "0.12.4"
+rayon = "1.5.1"
 
 [features]
 sparse_buffers = []

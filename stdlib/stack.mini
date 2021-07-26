@@ -16,7 +16,7 @@ public func stack_new() -> Stack {
 }
 
 public func stack_push(stack: Stack, value: any) -> Stack {
-    if let Some(cell) = unsafecast<option<StackCell>>(stack) {
+    if let Some(cell) = unsafecast<option<StackCell> >(stack) {
         if (cell.num < 8) {
             return Some(
                 cell with {
@@ -48,6 +48,18 @@ public func stack_pop(stack: Stack) -> option<(Stack, any)> {
             Some(cell with { num: cell.num - 1 }),
             cell.top[cell.num-1]
         ))
+    };
+}
+
+public func stack_size(stack: Stack) -> uint {
+    let size = 0;
+    return xloop {
+        if let Some(res) = stack_pop(stack) {
+            stack = res.0;
+            size = size+1;
+        } else {
+            return size;
+        }
     };
 }
 

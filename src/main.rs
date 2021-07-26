@@ -4,11 +4,13 @@
 
 #![allow(unused_parens)]
 
-use crate::link::LinkedProgram;
+use std::collections::BTreeMap;
 use crate::run::Machine;
-use crate::compile::CompileStruct;
-use crate::pos::try_display_location;
 use crate::uint256::Uint256;
+use crate::compile::miniconstants::make_parameters_list;
+use crate::compile::CompileStruct;
+use crate::link::LinkedProgram;
+use crate::link::SerializableTypeTree;
 use crate::upload::CodeUploader;
 use clap::Clap;
 use compile::CompileError;
@@ -19,7 +21,6 @@ use run::{
     profile_gen_from_file, replay_from_testlog_file, run_from_file, ProfilerMode,
     RuntimeEnvironment,
 };
-use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
 use std::io::Read;
@@ -141,6 +142,12 @@ struct SerializeUpgrade {
     input: String,
 }
 
+#[derive(Clap, Debug)]
+struct MakeParametersList {
+    #[clap(short, long)]
+    pub consts_file: Option<String>,
+}
+
 ///Main enum for command line arguments.
 #[derive(Clap, Debug)]
 enum Args {
@@ -159,6 +166,7 @@ enum Args {
     WasmRun(WasmRun),
     GenUpgradeCode(GenUpgrade),
     SerializeUpgrade(SerializeUpgrade),
+    MakeParametersList(MakeParametersList),
 }
 
 fn run_test(
@@ -186,13 +194,15 @@ fn run_test(
     }
     let code_len = code.len();
     // println!("Code length {}", code_len);
-    let env = RuntimeEnvironment::new(Uint256::from_usize(11110000), None);
+    let env = RuntimeEnvironment::new(None);
     let program = LinkedProgram {
         code: code,
         static_val: Value::new_tuple(vec![]),
         arbos_version: 10,
         globals: vec![],
-        file_name_chart: BTreeMap::new(),
+        file_info_chart: BTreeMap::new(),
+        type_tree: SerializableTypeTree::empty(),
+        // file_name_chart: BTreeMap::new(),
     };
     let mut machine = Machine::new(program, env);
     machine.start_at_zero();
@@ -256,7 +266,7 @@ fn run_debug(code_0: Vec<Instruction>, table: Vec<(usize, usize)>) {
     }
     let code_len = code.len();
     println!("Code length {}", code_len);
-    let env = RuntimeEnvironment::new(Uint256::from_usize(11110000), None);
+    let env = RuntimeEnvironment::new(None);
     let program = LinkedProgram {
         code: code,
         static_val: Value::new_tuple(vec![]),
@@ -264,7 +274,9 @@ fn run_debug(code_0: Vec<Instruction>, table: Vec<(usize, usize)>) {
         // exported_funcs: vec![],
         // imported_funcs: vec![],
         globals: vec![],
-        file_name_chart: BTreeMap::new(),
+        file_info_chart: BTreeMap::new(),
+        type_tree: SerializableTypeTree::empty(),
+        // file_name_chart: BTreeMap::new(),
     };
     let mut machine = Machine::new(program, env);
     /*
@@ -443,7 +455,7 @@ fn main() -> Result<(), CompileError> {
             }
             let code_len = code.len();
             println!("Code length {}", code_len);
-            let env = RuntimeEnvironment::new(Uint256::from_usize(11110000), None);
+            let env = RuntimeEnvironment::new(None);
             let program = LinkedProgram {
                 code: code,
                 static_val: Value::new_tuple(vec![]),
@@ -451,7 +463,8 @@ fn main() -> Result<(), CompileError> {
                 // exported_funcs: vec![],
                 // imported_funcs: vec![],
                 globals: vec![],
-                file_name_chart: BTreeMap::new(),
+                type_tree: SerializableTypeTree::empty(),
+                file_info_chart: BTreeMap::new(),
             };
             let mut machine = Machine::new(program, env);
             /*
@@ -562,14 +575,35 @@ fn main() -> Result<(), CompileError> {
             println!("Wrote extra.bin");
             */
         }
-        Args::Compile(compile) => match do_compile(compile) {
-            Ok(_) => {}
-            Err((err, file_name_chart)) => println!(
-                "{}\n{}",
-                err,
-                try_display_location(err.location, &file_name_chart, true)
-            ),
-        },
+        Args::Compile(compile) => {
+            rayon::ThreadPoolBuilder::new()
+                .stack_size(8192 * 1024)
+                .build_global()
+                .expect("failed to initialize rayon thread pool");
+
+            let mut output = get_output(compile.output.clone()).unwrap();
+
+            let error_system = match compile.invoke() {
+                Ok((program, error_system)) => {
+                    program.to_output(&mut output, compile.format.as_deref());
+                    error_system
+                }
+                Err(error_system) => error_system,
+            };
+
+            error_system.print();
+
+            match error_system.errors.len() == 0 {
+                true => {}
+                false => {
+                    return Err(CompileError::new(
+                        String::from("Compilation Failure"),
+                        String::from("Errors were encountered during compilation"),
+                        vec![],
+                    ))
+                }
+            };
+        }
 
         Args::Run(run) => {
             let filename = run.input;
@@ -620,11 +654,12 @@ fn main() -> Result<(), CompileError> {
         Args::MakeBenchmarks => {
             evm::make_benchmarks().map_err(|e| {
                 CompileError::new(
+                    String::from("Benchmark error"),
                     match e {
                         ethabi::Error::Other(desc) => desc,
                         other => format!("{}", other),
                     },
-                    None,
+                    vec![],
                 )
             })?;
         }
@@ -638,24 +673,24 @@ fn main() -> Result<(), CompileError> {
             let path = Path::new(&reformat.input);
             let mut file = File::open(path).map_err(|_| {
                 CompileError::new(
-                    format!(
-                        "Could not open file: \"{}\"",
-                        path.to_str().unwrap_or("non-utf8")
-                    ),
-                    None,
+                    String::from("Reformat error: Could not open file"),
+                    format!("\"{}\"", path.to_str().unwrap_or("non-utf8")),
+                    vec![],
                 )
             })?;
             let mut s = String::new();
             file.read_to_string(&mut s).map_err(|_| {
                 CompileError::new(
+                    String::from("Reformat error"),
                     format!("Failed to read input file \"{}\" to string", reformat.input),
-                    None,
+                    vec![],
                 )
             })?;
             let result: LinkedProgram = serde_json::from_str(&s).map_err(|_| {
                 CompileError::new(
+                    String::from("Reformat error"),
                     format!("Could not parse input file \"{}\" as json", reformat.input),
-                    None,
+                    vec![],
                 )
             })?;
 
@@ -705,6 +740,11 @@ fn main() -> Result<(), CompileError> {
             let result = gen_upgrade_code(upgrade);
             if let Err(e) = result {
                 println!("Encountered an error: {}", e);
+                return Err(CompileError::new(
+                    String::from("Gen upgrade error"),
+                    e.reason,
+                    vec![],
+                ));
             } else {
                 println!("Successfully generated code");
             }
@@ -712,6 +752,19 @@ fn main() -> Result<(), CompileError> {
         Args::SerializeUpgrade(up) => {
             let the_json = CodeUploader::_new_from_file(Path::new(&up.input))._to_json();
             print!("{}", the_json.unwrap());
+            print_time = false;
+        }
+        Args::MakeParametersList(clist) => {
+            let constants_map =
+                make_parameters_list(clist.consts_file.as_ref().map(|s| Path::new(s))).unwrap();
+            match serde_json::to_string(&constants_map) {
+                Ok(s) => {
+                    println!("{}", s);
+                }
+                Err(e) => {
+                    panic!("{}", e);
+                }
+            }
             print_time = false;
         }
     }
@@ -724,14 +777,6 @@ fn main() -> Result<(), CompileError> {
         );
     }
 
-    Ok(())
-}
-
-fn do_compile(compile: CompileStruct) -> Result<(), (CompileError, BTreeMap<u64, String>)> {
-    let mut output = get_output(compile.output.clone()).unwrap();
-    compile
-        .invoke()?
-        .to_output(&mut *output, compile.format.as_deref());
     Ok(())
 }
 

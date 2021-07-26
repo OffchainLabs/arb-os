@@ -12,7 +12,6 @@ use std::bytearray::bytearray_copy;
 
 use std::bytestream::bytestream_new;
 
-use std::storageMap::storageMap_new;
 use std::storageMap::storageMap_serialize;
 use std::storageMap::storageMap_deserialize;
 
@@ -39,20 +38,19 @@ use evmCallStack::evmCallFrame_getAccount;
 
 public impure func arbosTest_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
-        if (topFrame.caller != address(0)) {
-            evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 0, 0, 0);
-        }
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) < 4) {
             evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 1, 0, 0);
         }
         let funcCode = getFuncCode(calldata);
-        if (funcCode == 0xFBE6E022) {
+        if (funcCode == const::funcCode_ArbosTest_installAccount) {
             arbosTest_installAccount(topFrame, calldata);
-        } elseif (funcCode == 0xd56aa31f) {
+        } elseif (funcCode == const::funcCode_ArbosTest_getMarshalledStorage) {
             arbosTest_getMarshalledStorage(topFrame, calldata);
-        } elseif (funcCode == 0x7b510fe8) {
+        } elseif (funcCode == const::funcCode_ArbosTest_getAccountInfo) {
             arbosTest_getAccountInfo(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbosTest_burnArbGas) {
+            arbosTest_burnArbGas(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 2, 0, 0);
@@ -64,7 +62,7 @@ public impure func arbosTest_txcall() {
 }
 
 func getFuncCode(ba: ByteArray) -> uint {
-    return asm(224, bytearray_get256(ba, 0)) uint { shr };
+    return bytearray_get256(ba, 0) >> 224;
 }
 
 impure func arbosTest_installAccount(topFrame: EvmCallFrame, calldata: ByteArray) { // (bool, uint, uint, bytes, bytes)
@@ -96,7 +94,7 @@ impure func arbosTest_installAccount(topFrame: EvmCallFrame, calldata: ByteArray
         let marshalledStorage = bytearray_extract(calldata, storageOffset+32, storageSize);
 
         if let Some(initStorage) = storageMap_deserialize(marshalledStorage) {
-            let (startCodePoint, evmJumpTable, pcTable) = translateEvmCodeSegment(bytestream_new(code), false);
+            let (startCodePoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(code), false);
             acct = account_setContractInfo(
                 acct,
                 code,
@@ -137,8 +135,8 @@ impure func arbosTest_getMarshalledStorage(topFrame: EvmCallFrame, calldata: Byt
             msSize
         );
         mem = bytearray_copy(marshalledStorage, 0, mem, 64, msSize);
-        if (evmCallStack_setTopFrameMemory(marshalledStorage)) {
-            evmOp_return(0, msSize);
+        if (evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_return(0, 64+msSize);
         } else {
             evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 22, 0, 0);
         }
@@ -174,4 +172,18 @@ impure func arbosTest_getAccountInfo(topFrame: EvmCallFrame, calldata: ByteArray
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 22, 0, 0);
     }
+}
+
+impure func arbosTest_burnArbGas(_topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> bytes
+    // Burn a specified amount of ArbGas
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 30, 0, 0);
+    }
+    let gasToBurn = bytearray_get256(calldata, 4) * const::Charging_DefaultArbGasDivisor;
+    let gasLeft = getGas();
+    if (gasToBurn >= gasLeft) {
+        gasToBurn = gasLeft - 1;
+    }
+    setGas(gasLeft - gasToBurn);
+    evmOp_return(0, 0);
 }

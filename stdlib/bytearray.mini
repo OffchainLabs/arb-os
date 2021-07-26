@@ -2,8 +2,6 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-use std::random::RandomGenerator;  // dummy use, to work around compiler issue (error on const if not preceded by use)
-
 const MaxByteArraySize = 0x10000000000000000;
 
 
@@ -24,7 +22,7 @@ type ByteArray = struct {
 //        reads beyond the end will return zero,
 //        size will expand to fit all writes (but max size is 2**64 bytes),
 //        and the capacity arg is a hint about how big it will get
-public func bytearray_new(ignored: uint) -> ByteArray {
+public func bytearray_new(_ignored: uint) -> ByteArray {
     return struct {
         size: 0,
         sliceOffset: 0,
@@ -56,6 +54,10 @@ public func bytearray_toSizeAndBuffer(ba: ByteArray) -> (uint, buffer) {
     return (size, buf);
 }
 
+public func bytearray_getCalldataUnits(ba: ByteArray) -> uint {
+    return buffer_getCalldataUnits(ba.contents, ba.sliceOffset, ba.size);
+}
+
 type MarshalledBytes = struct {
     nbytes: uint,
     contents: MarshalledBytesCell,
@@ -76,7 +78,7 @@ public func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint {
         contents = contents.rest;
         nbytes = nbytes-32;
     }
-    return asm(256-8, contents.first) uint { shr };
+    return contents.first >> (256-8);
 }
 
 public func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32 {
@@ -105,7 +107,6 @@ public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> option<ByteArr
 
     // We'll also build 8-tuples of 32-byte words, and insert each tuple into the ExpIntArr with a single call.
     let eia = newbuffer();
-    let block = unsafecast<[8]any>((0,0,0,0,0,0,0,0));
 
     while (nwords > 0) {
         nwords = nwords-1;
@@ -170,10 +171,10 @@ public func bytearray_get64(ba: ByteArray, offset: uint) -> uint {
         let bytesToRead = ba.size-offset;
         offset = offset + ba.sliceOffset;
         if (offset + bytesToRead >= 8) {
-            let mask = asm(8*bytesToRead, 1) uint { shl } - 1;
-            return asm(8*(8-bytesToRead), mask & getbuffer64(ba.contents, offset+bytesToRead-8)) uint { shl };
+            let mask = (1 << (8*bytesToRead)) - 1;
+            return (mask & getbuffer64(ba.contents, offset+bytesToRead-8)) << (8*(8-bytesToRead));
         } else {
-            return getbuffer64(ba.contents, offset);
+            return (getbuffer64(ba.contents, offset) >> (64-8*bytesToRead)) << (64-8*bytesToRead);
         }
     }
     offset = offset + ba.sliceOffset;
@@ -190,10 +191,10 @@ public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
         let bytesToRead = ba.size-offset;
         offset = offset + ba.sliceOffset;
         if (offset + bytesToRead >= 32) {
-            let mask = asm(8*bytesToRead, 1) uint { shl } - 1;
-            return asm(8*(32-bytesToRead), mask & getbuffer256(ba.contents, offset+bytesToRead-32)) uint { shl };
+            let mask = (1 << (8*bytesToRead)) - 1;
+            return (mask & getbuffer256(ba.contents, offset+bytesToRead-32)) << (8*(32-bytesToRead));
         } else {
-            return getbuffer256(ba.contents, offset);
+            return (getbuffer256(ba.contents, offset) >> (256-8*bytesToRead)) << (256-8*bytesToRead);
         }
     }
     offset = offset + ba.sliceOffset;
@@ -217,6 +218,16 @@ public func bytearray_wrap(cont: buffer, size: uint) -> ByteArray {
     };
 }
 
+func zero_fill_region(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray {
+    return xif(nbytes < ba.size) {
+        // copy zeroes into the buffer
+        bytearray_copy(bytearray_new(0), 0, ba, offset, 32*((nbytes+31)/32))
+    } else {
+        // copy into a clean buffer
+        bytearray_copy(ba, 0, bytearray_new(0), 0, ba.size)
+    };
+}
+
 // bytearray_setbyte writes one byte to a ByteArray, returns the resulting ByteArray
 public func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
     if (offset >= const::MaxByteArraySize) {
@@ -228,6 +239,9 @@ public func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteA
             ba = ba with { size: offset+1 };
         }
     } else {
+        if (offset > ba.size) {
+            ba = zero_fill_region(ba, ba.size, offset-ba.size);
+        }
         if (offset+1 > ba.size) {
             ba = ba with { size: offset+1 };
         }
@@ -247,6 +261,10 @@ public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> ByteArr
             ba = ba with { size: offset+8 };
         }
     } else {
+        if (offset > ba.size) {
+            ba = zero_fill_region(ba, ba.size, offset-ba.size);
+        }
+
         if (offset+8 > ba.size) {
             ba = ba with { size: offset+8 };
         }
@@ -267,6 +285,9 @@ public func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteAr
             ba = ba with { size: offset+32 };
         }
     } else {
+        if (offset > ba.size) {
+            ba = zero_fill_region(ba, ba.size, offset-ba.size);
+        }
         if (offset+32 > ba.size) {
             ba = ba with { size: offset+32 };
         }
@@ -285,6 +306,9 @@ public func bytearray_copy(
     toOffset: uint,
     nbytes: uint,
 ) -> ByteArray {
+    if (fromOffset + nbytes > from.size) {
+        from = zero_fill_region(from, from.size, fromOffset+nbytes-from.size);
+    }
     if ((fromOffset >= const::MaxByteArraySize)
         || (toOffset >= const::MaxByteArraySize)
         || (nbytes > const::MaxByteArraySize)
@@ -293,9 +317,10 @@ public func bytearray_copy(
         return to;  // ignore out-of-bounds parameters
     }
 
-    // TODO: optimize this to exploit alignment and speed up the endgame
     if (to.size + to.sliceOffset + nbytes > const::MaxByteArraySize) {
         to = bytearray_copy(to, 0, bytearray_new(0), 0, to.size);
+    } elseif (toOffset > to.size) {
+        to = zero_fill_region(to, to.size, toOffset-to.size);
     }
     if (to.size < toOffset + nbytes) {
         to = to with { size: toOffset + nbytes };
@@ -311,12 +336,22 @@ public func bytearray_copy(
         toOffset = 32+toOffset;
         nbytes = nbytes-32;
     }
-    while (nbytes > 0) {
-        let val = getbuffer8(fromContents, fromOffset);
-        toContents = setbuffer8(toContents, toOffset, val);
-        fromOffset = 1+fromOffset;
-        toOffset = 1+toOffset;
-        nbytes = nbytes-1;
+    if (toOffset < (const::MaxByteArraySize-32)) {
+        let val = getbuffer256(fromContents, fromOffset);
+        let mask = (~0) - ((~0) >> (8*nbytes));
+        toContents = setbuffer256(
+            toContents,
+            toOffset,
+            (mask & val) | ((~mask) & getbuffer256(toContents, toOffset))
+        );
+    } else {
+        while (nbytes > 0) {
+            let val = getbuffer8(fromContents, fromOffset);
+            toContents = setbuffer8(toContents, toOffset, val);
+            fromOffset = 1+fromOffset;
+            toOffset = 1+toOffset;
+            nbytes = nbytes-1;
+        }
     }
     return to with { contents: toContents };
 }
@@ -339,5 +374,41 @@ public func bytearray_wrap_slice(cont: buffer, offset: uint, size: uint) -> Byte
         sliceOffset: offset,
         contents: cont,
     };
+}
+
+public func buffer_getCalldataUnits(buf: buffer, offset: uint, nbytes: uint) -> uint {
+    let nonzeroes = 0;
+    let i = 0;
+    while (i+32 <= nbytes) {
+        let x = getbuffer256(buf, offset+i);
+
+        // now we want to count the non-zero bytes in x
+        // first, make the low-order bit of each byte be 1 iff the byte was nonzero, and 0 if the byte was zero
+        x = x | (x >> 1);
+        x = x | (x >> 2);
+        x = x | (x >> 4);
+
+        // now mask off the other bits, so each byte is 1 iff it was originally nonzero, 0 otherwise
+        x = x & 0x0101010101010101010101010101010101010101010101010101010101010101;
+
+        // now add tree-wise, so the low-order byte of x gets the sum of the current bytes
+        x = x + (x >> 8);
+        x = x + (x >> 16);
+        x = x + (x >> 32);
+        x = x + (x >> 64);
+        x = x + (x >> 128);
+
+        // finally discard all but the low-order byte, and add it into the cumulative count of non-zeroes
+        nonzeroes = nonzeroes + (0xff & x);
+
+        i = i+32;
+    }
+    while (i < nbytes) {
+        if (getbuffer8(buf, offset+i) != 0) {
+            nonzeroes = nonzeroes + 1;
+        }
+        i = i+1;
+    }
+    return 4*nbytes + 12*nonzeroes;
 }
 

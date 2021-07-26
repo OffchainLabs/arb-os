@@ -245,6 +245,11 @@ fn test_payment_in_constructor() {
 }
 
 #[test]
+fn test_block_num_consistency() {
+    let _ = crate::evm::_evm_block_num_consistency_test(false).unwrap();
+}
+
+#[test]
 fn test_arbsys() {
     let _log = crate::evm::evm_test_arbsys(None, false);
 }
@@ -343,7 +348,7 @@ fn test_call_to_precompile5(
     let txid = machine.runtime_env.insert_tx_message(
         sender_addr.clone(),
         Uint256::from_u64(1_000_000_000),
-        Uint256::zero(),
+        None,
         Uint256::from_u64(5),
         Uint256::zero(),
         &calldata,

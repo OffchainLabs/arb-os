@@ -1,101 +1,104 @@
 //
-// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
 //
 
 
 use accounts::AccountStore;
 use accounts::accountStore_init;
-use accounts::getGlobalAccountStore;
-use accounts::setGlobalAccountStore;
+use accounts::safeGetGlobalAccountStore;
+use accounts::safeSetGlobalAccountStore;
 use accounts::accountStore_createAccountFromEvmCode;
-use arbstatistics::arbStatistics_init;
 use accounts::accountStore_upgradeContractFromEvmCode;
+
 use arbstatistics::arbStatistics_init;
-use arbsys::arbosVersion;
+use arbowner::arbowner_init;
+
 use blockhash::blockhash_init;
+
 use chainParameters::chainParams_init;
-use chainParameters::chainParams_haveDoneInit;
+
 use codeSegment::codeSegment_init;
 use codeSegment::translateEvmCodeSegment;
+
 use contractTemplates::getArbInfoCode;
 use contractTemplates::getArbInfoAddress;
 use contractTemplates::getArbInfoStorage;
+
 use decompression::decompression_init;
+
 use errorHandler::errorHandler_init;
+
 use evmCallStack::evmCallStack_init;
+
 use evmOps::evmOps_init;
-use evmOps::evmOp_return;
-use evmlogs::EvmLogs;
-use gasAccounting::GasUsage;
+use evmOps::dispatchForEvmOp;
+
 use gasAccounting::gasAccounting_init;
+
 use inbox::inbox_init;
-use inbox::inbox_get;
-use messages::TxRequestData;
+use inbox::mainRunLoop;
+use inbox::emitGenesisBlockReceipt;
+
 use output::output_init;
 use output::txReceipts_init;
-use pluggables::pluggables_init;
+
 use precompiles::precompiles_init;
 use rollupTracker::rollupTracker_init;
 use std::rlp::rlp_init;
 
-use std::bytearray::MarshalledBytes;
-use std::bytearray::ByteArray;
-use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_unmarshalBytes;
-use std::bytestream::ByteStream;
 use std::bytestream::bytestream_new;
-use std::storageMap::StorageMap;
-
-use decompression::decompression_init;
-use gasAccounting::getNextRequestFromCongestionAuction;
-use gasAccounting::txFeeStats_zero;
-use messages::handleL2Request; // return None if message format error; Some(()) if other error; if no error, never return
-use output::emitTxReceipt;
-use arbsys::arbsys_txcall;
-use inbox::IncomingRequest;
-use evmCallStack::evmCallStack_makeEmpty;
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 use bridge_arbos_versions::remapGlobalsForUpgrade;
 
+// The compiler will always put __fixedLocationGlobal in slot 0 of the AVM Register,
+//     so we can rely on it not moving across upgrades.
+var __fixedLocationGlobal: impure func(uint);    // points to EVM op dispatch function
 
 impure func main(oldGlobals: GlobalsBeforeUpgrade) {
     if (unsafecast<any>(oldGlobals) != ()) {
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
 
-        let (newGlobals, oldArbosVersion) = remapGlobalsForUpgrade(oldGlobals);
+        let (newGlobals, _oldArbosVersion) = remapGlobalsForUpgrade(oldGlobals);
 
         asm(newGlobals,) { rset };
 
         // now re-do the initializations that set up pointers into the ArbOS code
         errorHandler_init();
         evmOps_init();
+        __fixedLocationGlobal = dispatchForEvmOp;
+        codeSegment_init();
+
         if (initializePreinstalls(true) == None<()>) {
-            panic;   // don't try to run without preinstalls and precompiles
+            error;   // don't try to run without preinstalls and precompiles
         }
     } else {
         // this is a clean start, not an upgrade
         errorHandler_init();
+        chainParams_init();
         arbStatistics_init();
         rlp_init();
 
-        pluggables_init();
         codeSegment_init();
-        chainParams_init();
         output_init();
         decompression_init();
         inbox_init();
         gasAccounting_init();
         evmCallStack_init();
         evmOps_init();
+        __fixedLocationGlobal = dispatchForEvmOp;
         blockhash_init();
         inbox_init();
         accountStore_init();
+        arbowner_init();
         txReceipts_init();
-        rollupTracker_init();
         if (initializePreinstalls(false) == None<()>) {
-            panic;   // don't try to run without preinstalls and precompiles
+            error;   // don't try to run without preinstalls and precompiles
         }
+
+        // advance the Arbitrum block number, and emit a block receipt
+        emitGenesisBlockReceipt();
     }
 
     // initialize any customizations here
@@ -103,40 +106,8 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
     mainRunLoop();
 }
 
-public impure func mainRunLoop() {
-    loop {
-        let (resultCode, request) = getNextRequestFromCongestionAuction();
-        if (resultCode == const::TxResultCode_success) {
-            if (handleL2Request(
-                bytestream_new(request.incomingRequest.msgData),
-                request
-            ) == None<()>) {
-                // reject for message format error
-                emitTxReceipt(
-                    request.incomingRequest,
-                    const::TxResultCode_formatError,
-                    None<ByteArray>,
-                    None<EvmLogs>,
-                    None<GasUsage>,
-                    request.feeStats,
-                );
-            }
-        } else {
-            // reject for error
-            emitTxReceipt(
-                request.incomingRequest,
-                resultCode,
-                None<ByteArray>,
-                None<EvmLogs>,
-                None<GasUsage>,
-                request.feeStats,
-            );
-        }
-    }
-}
-
 impure func initializePreinstalls(isUpgrade: bool) -> option<()> {
-    let acctStore = getGlobalAccountStore();
+    let acctStore = safeGetGlobalAccountStore();
 
     let code = bytearray_unmarshalBytes(getArbInfoCode())?;
     let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
@@ -165,7 +136,7 @@ impure func initializePreinstalls(isUpgrade: bool) -> option<()> {
     // set up precompiled contracts
     acctStore = precompiles_init(acctStore, isUpgrade)?;
 
-    setGlobalAccountStore(acctStore);
+    safeSetGlobalAccountStore(acctStore);
 
     return Some(());
 }

@@ -19,6 +19,7 @@ use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_copy;
+use std::bytearray::bytearray_fromSizeAndBuffer;
 
 use std::bytestream::bytestream_getByte;
 use std::bytestream::bytestream_get256;
@@ -27,7 +28,6 @@ use std::bytestream::bytestream_skipBytes;
 use std::keccak::keccak256;
 use std::keccak::hasher_new;
 use std::keccak::hasher_pushByte;
-use std::keccak::hasher_pushN_le;
 use std::keccak::hasher_pushN_be;
 use std::keccak::hasher_finish;
 
@@ -74,10 +74,28 @@ public func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray
         offset = offset + 1;
         while (length > 0) {
             length = length-1;
-            ba = bytearray_setByte(ba, offset, (asm(8*length, val) uint { shr }) & 0xff);
+            ba = bytearray_setByte(ba, offset, (val >> (8*length)) & 0xff);
             offset = offset+1;
         }
         (ba, origLen+1)
+    };
+}
+
+public func rlp_encodeUintFresh(val: uint) -> ByteArray {
+    return xif (val == 0) {
+        bytearray_fromSizeAndBuffer(1, setbuffer8(newbuffer(), 0, 0x80))
+    } elseif (val <= 0x7f) {
+        bytearray_fromSizeAndBuffer(1, setbuffer8(newbuffer(), 0, val))
+    } else {
+        let length = bytesNeededToRepresentUint(val);
+        bytearray_fromSizeAndBuffer(
+            1+length,
+            setbuffer256(
+                setbuffer8(newbuffer(), 0, 0x80+length),
+                1,
+                val << (256-8*length)
+            ),
+        )
     };
 }
 
@@ -91,7 +109,7 @@ func rlp_hashUint(hasher: Hasher, val: uint) -> Hasher {
         hasher = hasher_pushByte(hasher, 0x80+length);
         while (length > 0) {
             length = length-1;
-            hasher = hasher_pushByte(hasher, (asm(8*length, val) uint { shr }) & 0xff);
+            hasher = hasher_pushByte(hasher, (val >> (8*length)) & 0xff);
         }
         hasher
     };
@@ -101,7 +119,7 @@ func rlp_hashAddress(hasher: Hasher, addr: address) -> Hasher {
     if (addr == address(0)) {
         return rlp_hashUint(hasher, 0);
     }
-    let addrBa = bytearray_set256(bytearray_new(0), 0, asm(256-160, uint(addr)) uint { shl });
+    let addrBa = bytearray_set256(bytearray_new(0), 0, uint(addr) << (256-160));
     return rlp_hashBytes(hasher, addrBa, 0, 20);
 }
 
@@ -117,7 +135,7 @@ public func rlp_encodeAddress(addr: address, ba: ByteArray, offset: uint) -> (By
     if (addr == address(0)) {
         return rlp_encodeUint(0, ba, offset);
     }
-    let addrBa = bytearray_set256(bytearray_new(0), 0, asm(256-160, uint(addr)) uint { shl });
+    let addrBa = bytearray_set256(bytearray_new(0), 0, uint(addr) << (256-160));
     return rlp_encodeBytes(addrBa, 0, 20, ba, offset);
 }
 
@@ -172,7 +190,7 @@ public func rlp_encodeBytes(
     let i = sizeOfSize;
     while (i > 0) {
         i = i-1;
-        outBytes = bytearray_setByte(outBytes, outOffset, asm(8*i, nbytes) uint { shr } & 0xff);
+        outBytes = bytearray_setByte(outBytes, outOffset, (nbytes >> (8*i)) & 0xff);
         outOffset = outOffset + 1;
     }
     return (
@@ -211,7 +229,7 @@ func rlp_hashBytes(hasher: Hasher, ba: ByteArray, offset: uint, nbytes: uint) ->
         let i = sizeOfSize;
         while (i > 0) {
             i = i-1;
-            hasher = hasher_pushByte(hasher, asm(8*i, nbytes) uint { shr } & 0xff);
+            hasher = hasher_pushByte(hasher, (nbytes >> (8*i)) & 0xff);
         }
         while (nbytes > 32) {
             hasher = hasher_pushN_be(hasher, bytearray_get256(ba, offset), 32);
@@ -274,7 +292,7 @@ public func rlp_encodeList(
         let i = sizeOfSize;
         while (i > 0) {
             i = i-1;
-            let b = asm(8*i, totalSize) uint { shr } & 0xff;
+            let b = (totalSize >> (8*i)) & 0xff;
             outBytes = bytearray_setByte(outBytes, outOffset, b);
             outOffset = outOffset+1;
         }
@@ -342,30 +360,30 @@ public func rlp_encodeMessageInfo_old(
     let encodedPieces = newarray<ByteArray>(9);
 
     encodedPieces = encodedPieces with {
-        [0] = rlp_encodeUint(seqNum, bytearray_new(0), 0).0
+        [0] = rlp_encodeUintFresh(seqNum)
     } with {
-        [1] = rlp_encodeUint(gasPrice, bytearray_new(0), 0).0
+        [1] = rlp_encodeUintFresh(gasPrice)
     } with {
-        [2] = rlp_encodeUint(gasLimit, bytearray_new(0), 0).0
+        [2] = rlp_encodeUintFresh(gasLimit)
     } with {
         [3] = rlp_encodeAddress(to, bytearray_new(0), 0).0
     } with {
-        [4] = rlp_encodeUint(value, bytearray_new(0), 0).0
+        [4] = rlp_encodeUintFresh(value)
     } with {
         [5] = rlp_encodeBytes(data, 0, bytearray_size(data), bytearray_new(0), 0).0
     } with {
-        [6] = rlp_encodeUint(v, bytearray_new(0), 0).0
+        [6] = rlp_encodeUintFresh(v)
     } with {
-        [7] = rlp_encodeUint(r, bytearray_new(0), 0).0
+        [7] = rlp_encodeUintFresh(r)
     } with {
-        [8] = rlp_encodeUint(s, bytearray_new(0), 0).0
+        [8] = rlp_encodeUintFresh(s)
     };
 
     return xif let Some(res) = rlp_encodeList(encodedPieces, 0, 9, bytearray_new(0), 0) {
         res.0
     } else {
         // This can't happen, because we know encodedPieces is big enough that accesses will be in-bounds
-        panic
+        error
     };
 }
 
@@ -394,7 +412,7 @@ public func rlp_encodeAndHashMessageInfoForSignature(tx: SignedTx, eip155chainId
         let i = sizeOfSize;
         while (i > 0) {
             i = i-1;
-            let b = asm(8*i, contentsSize) uint { shr } & 0xff;
+            let b = (contentsSize >> (8*i)) & 0xff;
             hasher = hasher_pushByte(hasher, b);
         }
     }
@@ -457,7 +475,6 @@ func copyFromStreamToArray(
     offset: uint,
     nbytes: uint
 ) -> option<(ByteStream, ByteArray)> {
-    let offset = 0;
     while (nbytes >= 32) {
         let (uis, word) = bytestream_get256(inStream)?;
         inStream = uis;
@@ -531,18 +548,25 @@ public func rlp_decodeAddress(bs: ByteStream) -> option<(ByteStream, address)> {
 
 public func bytesNeededToRepresentUint(val: uint) -> uint {
     let ret = 0;
-    let bytes = 16;
-    while (bytes > 0) {
-        let threshold = asm(8*bytes, 1) uint { shl };
-        if (val >= threshold) {
-            ret = ret + bytes;
-            val = val / threshold;
-        }
-        bytes = bytes / 2;
+    if (val >= 0x100000000000000000000000000000000) {
+        ret = ret + 16;
+        val = val / 0x100000000000000000000000000000000;
     }
-    return xif (val == 0) {
-        ret
-    } else {
-        ret+1
-    };
+    if (val >= 0x10000000000000000) {
+        ret = ret + 8;
+        val = val / 0x10000000000000000;
+    }
+    if (val >= 0x100000000) {
+        ret = ret + 4;
+        val = val / 0x100000000;
+    }
+    if (val >= 0x10000) {
+        ret = ret + 2;
+        val = val / 0x10000;
+    }
+    if (val >= 0x100) {
+        ret = ret + 1;
+        val = val / 0x100;
+    }
+    return xif (val == 0) { ret } else { ret+1 };
 }

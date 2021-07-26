@@ -12,8 +12,6 @@ use evmCallStack::evmCallFrame_getCaller;
 use evmCallStack::evmCallFrame_getCallvalue;
 use evmCallStack::evmCallFrame_getMemory;
 use evmCallStack::evmCallStack_callHitError;
-use evmCallStack::evmCallStack_getAccountInCurrentContext;
-use evmCallStack::evmCallStack_setAccountInCurrentContext;
 use evmCallStack::getRetryBufferInCurrentContext;
 use evmCallStack::setRetryBufferInCurrentContext;
 
@@ -44,7 +42,7 @@ public impure func arbretryable_txcall() {
         if (bytearray_size(calldata) < 4) {
             evmOp_revert_knownPc(0, 0, 0);
         }
-        let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
+        let funcCode = (bytearray_get256(calldata, 0) >> 224);
         if (funcCode == const::funcCode_ArbRetryableTx_redeem) {
             arbRetryable_redeem(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbRetryableTx_getLifetime) {
@@ -99,7 +97,7 @@ impure func arbRetryable_redeem(topFrame: EvmCallFrame, calldata: ByteArray) {  
     }
 }
 
-impure func arbRetryable_getTimeout(topFrame: EvmCallFrame, calldata: ByteArray) {  // (txId) -> uint
+impure func arbRetryable_getTimeout(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (txId) -> uint
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(20, 0, 0);
     }
@@ -117,7 +115,7 @@ impure func arbRetryable_getTimeout(topFrame: EvmCallFrame, calldata: ByteArray)
     }
 }
 
-impure func arbRetryable_getLifetime(topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> uint
+impure func arbRetryable_getLifetime(_topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> uint
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(30, 0, 0);
     }
@@ -130,7 +128,7 @@ impure func arbRetryable_getLifetime(topFrame: EvmCallFrame, calldata: ByteArray
     }
 }
 
-impure func arbRetryable_getKeepalivePrice(topFrame: EvmCallFrame, calldata: ByteArray) {  // (txId) -> (uint, uint)
+impure func arbRetryable_getKeepalivePrice(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (txId) -> (uint, uint)
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(40, 0, 0);
     }
@@ -182,7 +180,7 @@ impure func arbRetryable_keepalive(topFrame: EvmCallFrame, calldata: ByteArray) 
     }
 }
 
-impure func arbRetryable_getBeneficiary(topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint) -> address
+impure func arbRetryable_getBeneficiary(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint) -> address
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(60, 0, 0);
     }
@@ -224,7 +222,7 @@ impure func arbRetryable_cancel(topFrame: EvmCallFrame, calldata: ByteArray) {  
     }
 }
 
-impure func arbRetryable_getSubmissionPrice(topFrame: EvmCallFrame, calldata: ByteArray) { // (uint) -> (uint, uint)
+impure func arbRetryable_getSubmissionPrice(_topFrame: EvmCallFrame, calldata: ByteArray) { // (uint) -> (uint, uint)
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(80, 0, 0);
     }
@@ -243,7 +241,7 @@ impure func arbRetryable_getSubmissionPrice(topFrame: EvmCallFrame, calldata: By
     }
 }
 
-impure func arbRetryable_emitTicketCreated(topFrame: EvmCallFrame, txId: uint) {
+impure func _arbRetryable_emitTicketCreated(_topFrame: EvmCallFrame, txId: uint) {
     evmOp_log2(0, 0, const::eventTopic_ArbRetryableTx_TicketCreated, txId);
 }
 
@@ -261,10 +259,10 @@ impure func arbRetryable_emitLifetimeExtended(topFrame: EvmCallFrame, txId: uint
     };
 }
 
-impure func arbRetryable_emitRedeemed(topFrame: EvmCallFrame, txId: uint) {
+impure func arbRetryable_emitRedeemed(_topFrame: EvmCallFrame, txId: uint) {
     evmOp_log2(0, 0, const::eventTopic_ArbRetryableTx_Redeemed, txId);
 }
 
-impure func arbRetryable_emitCanceled(topFrame: EvmCallFrame, txId: uint) {
+impure func arbRetryable_emitCanceled(_topFrame: EvmCallFrame, txId: uint) {
     evmOp_log2(0, 0, const::eventTopic_ArbRetryableTx_Canceled, txId);
 }

@@ -3,7 +3,9 @@ use crate::compile::miniconstants::init_constant_table;
 use crate::run::{load_from_file, Machine, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
+use ethers_core::utils::keccak256;
 use ethers_signers::{Signer, Wallet};
+use std::option::Option::None;
 use std::path::Path;
 
 pub struct _ArbInfo {
@@ -75,16 +77,25 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
-    pub fn _give_ownership(
+    pub fn _set_chain_parameter(
         &self,
         machine: &mut Machine,
-        new_owner: Uint256,
-        old_owner: Option<Uint256>,
+        param_name: &str,
+        value: Uint256,
+        force_owner: bool, // force the message to come from address zero, which is an owner
     ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            old_owner.unwrap_or(self.my_address.clone()),
-            "giveOwnership",
-            &[ethabi::Token::Address(new_owner.to_h160())],
+        let param_id = _param_id_from_name(param_name);
+        let (receipts, _sends) = self.contract_abi._call_function_from_contract(
+            if force_owner {
+                Uint256::zero()
+            } else {
+                Uint256::from_u64(42894528) // any old address
+            },
+            "setChainParameter",
+            &[
+                ethabi::Token::Uint(param_id.to_u256()),
+                ethabi::Token::Uint(value.to_u256()),
+            ],
             machine,
             Uint256::zero(),
             self.debug,
@@ -102,6 +113,70 @@ impl<'a> _ArbOwner<'a> {
                 receipts[0]._get_return_code_text()
             )))
         }
+    }
+
+    pub fn _get_chain_parameter(
+        &self,
+        machine: &mut Machine,
+        param_name: &str,
+        force_owner: bool, // force the message to come from address zero, which is an owner
+    ) -> Result<Uint256, ethabi::Error> {
+        let param_id = _param_id_from_name(param_name);
+        let (receipts, _sends) = self.contract_abi._call_function_from_contract(
+            if force_owner {
+                Uint256::zero()
+            } else {
+                Uint256::from_u64(980509782534089) // any old address
+            },
+            "getChainParameter",
+            &[ethabi::Token::Uint(param_id.to_u256())],
+            machine,
+            Uint256::zero(),
+            false,
+        )?;
+        let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
+        let num_sends_before = machine.runtime_env.get_all_sends().len();
+        let _arbgas_used = if self.debug {
+            machine.debug(None)
+        } else {
+            machine.run(None)
+        };
+        let logs = machine.runtime_env.get_all_receipt_logs();
+        let sends = machine.runtime_env.get_all_sends();
+
+        if (logs.len() != num_logs_before + 2) || (sends.len() != num_sends_before) {
+            return Err(ethabi::Error::from("wrong number of receipts or sends"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
+        } else {
+            Err(ethabi::Error::from(format!(
+                "tx failed: {}",
+                receipts[0]._get_return_code_text()
+            )))
+        }
+    }
+
+    pub fn _set_gas_accounting_params(
+        &self,
+        machine: &mut Machine,
+        speed_limit: Uint256,
+        gas_pool_max: Uint256,
+        tx_gas_limit: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        self._set_chain_parameter(machine, "SpeedLimitPerSecond", speed_limit, true)?;
+        self._set_chain_parameter(machine, "GasPoolMax", gas_pool_max, true)?;
+        self._set_chain_parameter(machine, "TxGasLimit", tx_gas_limit, true)
+    }
+
+    pub fn _give_ownership(
+        &self,
+        machine: &mut Machine,
+        new_owner: Uint256,
+        force_owner: bool,
+    ) -> Result<(), ethabi::Error> {
+        self._set_chain_parameter(machine, "ChainOwner", new_owner, force_owner)
     }
 
     pub fn _add_to_reserve_funds(
@@ -135,31 +210,16 @@ impl<'a> _ArbOwner<'a> {
         enabled: bool,
         force_owner: bool, // force the message to come from address zero, which is an owner
     ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            if force_owner {
-                Uint256::zero()
-            } else {
-                self.my_address.clone()
-            },
-            "setFeesEnabled",
-            &[ethabi::Token::Bool(enabled)],
+        self._set_chain_parameter(
             machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(())
-        } else {
-            Err(ethabi::Error::from(format!(
-                "tx failed: {}",
-                receipts[0]._get_return_code_text()
-            )))
-        }
+            "FeesEnabled",
+            if enabled {
+                Uint256::one()
+            } else {
+                Uint256::zero()
+            },
+            force_owner,
+        )
     }
 
     pub fn _get_fee_recipients(
@@ -231,55 +291,7 @@ impl<'a> _ArbOwner<'a> {
         machine: &mut Machine,
         seconds_per_send: Uint256,
     ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
-            "setSecondsPerSend",
-            &[ethabi::Token::Uint(seconds_per_send.to_u256())],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(())
-        } else {
-            Err(ethabi::Error::from("reverted"))
-        }
-    }
-
-    pub fn _set_gas_accounting_params(
-        &self,
-        machine: &mut Machine,
-        speed_limit: Uint256,
-        gas_pool_max: Uint256,
-        tx_gas_limit: Uint256,
-    ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
-            "setGasAccountingParams",
-            &[
-                ethabi::Token::Uint(speed_limit.to_u256()),
-                ethabi::Token::Uint(gas_pool_max.to_u256()),
-                ethabi::Token::Uint(tx_gas_limit.to_u256()),
-            ],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(())
-        } else {
-            Err(ethabi::Error::from("reverted"))
-        }
+        self._set_chain_parameter(machine, "SecondsPerSend", seconds_per_send, true)
     }
 
     pub fn _change_sequencer(
@@ -311,11 +323,23 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
-    pub fn _start_code_upload(&self, machine: &mut Machine) -> Result<(), ethabi::Error> {
+    pub fn _start_code_upload(
+        &self,
+        machine: &mut Machine,
+        last_upgrade_hash: Option<Uint256>,
+        with_check: bool,
+    ) -> Result<(), ethabi::Error> {
+        let arg = &[ethabi::Token::FixedBytes(
+            last_upgrade_hash.unwrap_or(Uint256::zero()).to_bytes_be(),
+        )];
         let (receipts, _sends) = self.contract_abi.call_function_compressed(
             self.my_address.clone(),
-            "startCodeUpload",
-            &[],
+            if with_check {
+                "startCodeUploadWithCheck"
+            } else {
+                "startCodeUpload"
+            },
+            if with_check { arg } else { &[] },
             machine,
             Uint256::zero(),
             self.wallet,
@@ -375,17 +399,24 @@ impl<'a> _ArbOwner<'a> {
     pub fn _finish_code_upload_as_arbos_upgrade(
         &self,
         machine: &mut Machine,
-        expected_code_hash: Uint256,
-    ) -> Result<(), ethabi::Error> {
-        let _res = self.contract_abi.call_function(
+        new_code_hash: Uint256,
+        previous_upgrade_code_hash: Uint256,
+    ) -> Result<bool, ethabi::Error> {
+        let (receipts, _) = self.contract_abi.call_function(
             self.my_address.clone(),
             "finishCodeUploadAsArbosUpgrade",
-            &[ethabi::Token::FixedBytes(expected_code_hash.to_bytes_be())],
+            &[
+                ethabi::Token::FixedBytes(new_code_hash.to_bytes_be()),
+                ethabi::Token::FixedBytes(previous_upgrade_code_hash.to_bytes_be()),
+            ],
             machine,
             Uint256::zero(),
             self.debug,
         )?;
-        Ok(())
+
+        assert_eq!(receipts.len(), 1);
+
+        Ok(receipts[0].succeeded())
     }
 
     pub fn _finish_code_upload_as_pluggable(
@@ -447,6 +478,278 @@ impl<'a> _ArbOwner<'a> {
             Err(ethabi::Error::from("reverted"))
         }
     }
+
+    pub fn _set_fair_gas_price_sender(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+        set_to: bool,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "setFairGasPriceSender",
+            &[
+                ethabi::Token::Address(addr.to_h160()),
+                ethabi::Token::Bool(set_to),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _is_fair_gas_price_sender(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+    ) -> Result<bool, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "isFairGasPriceSender",
+            &[ethabi::Token::Address(addr.to_h160())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(!Uint256::from_bytes(&receipts[0].get_return_data()).is_zero())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _get_all_fair_gas_price_senders(
+        &self,
+        machine: &mut Machine,
+    ) -> Result<Vec<Uint256>, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "getAllFairGasPriceSenders",
+            &[],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            let ret_data = receipts[0].get_return_data();
+            let mut ret = vec![];
+            let mut offset = 64;
+            while (offset < ret_data.len()) {
+                ret.push(Uint256::from_bytes(&ret_data[offset..offset + 32]));
+                offset += 32;
+            }
+            Ok(ret)
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _allow_all_senders(&self, machine: &mut Machine) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "allowAllSenders",
+            &[],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _allow_only_owner_to_send(&self, machine: &mut Machine) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "allowOnlyOwnerToSend",
+            &[],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _is_allowed_sender(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+    ) -> Result<bool, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "isAllowedSender",
+            &[ethabi::Token::Address(addr.to_h160())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(!Uint256::from_bytes(&receipts[0].get_return_data()).is_zero())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _add_allowed_sender(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+    ) -> Result<bool, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "addAllowedSender",
+            &[ethabi::Token::Address(addr.to_h160())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()) != Uint256::zero())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _remove_allowed_sender(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+    ) -> Result<bool, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "removeAllowedSender",
+            &[ethabi::Token::Address(addr.to_h160())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()) != Uint256::zero())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _get_all_allowed_senders(
+        &self,
+        machine: &mut Machine,
+    ) -> Result<Vec<Uint256>, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "getAllAllowedSenders",
+            &[],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            let decoded =
+                ethabi::decode(&[ethabi::ParamType::Bytes], &*receipts[0].get_return_data())?;
+
+            match &decoded[0] {
+                ethabi::Token::Bytes(ret_data) => {
+                    let mut ret = vec![];
+                    let mut offset = 0;
+                    while (offset < ret_data.len()) {
+                        ret.push(Uint256::from_bytes(&ret_data[offset..offset + 32]));
+                        offset += 32;
+                    }
+                    Ok(ret)
+                }
+                _ => Err(ethabi::Error::from("invalid returndata encoding")),
+            }
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _set_l1_gas_price_estimate(
+        &self,
+        machine: &mut Machine,
+        price_in_gwei: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "setL1GasPriceEstimate",
+            &[ethabi::Token::Uint(price_in_gwei.to_u256())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from(format!(
+                "tx failed: {}",
+                receipts[0]._get_return_code_text()
+            )))
+        }
+    }
+}
+
+fn _param_id_from_name(name: &str) -> Uint256 {
+    Uint256::from_bytes(&keccak256(name.as_bytes()))
 }
 
 pub struct _ArbGasInfo<'a> {
@@ -469,14 +772,15 @@ impl<'a> _ArbGasInfo<'a> {
         }
     }
 
-    pub fn _get_prices_in_wei(
+    pub fn _get_prices_in_wei_with_aggregator(
         &self,
         machine: &mut Machine,
+        aggregator: Uint256,
     ) -> Result<(Uint256, Uint256, Uint256, Uint256, Uint256, Uint256), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
             self.my_address.clone(),
-            "getPricesInWei",
-            &[],
+            "getPricesInWeiWithAggregator",
+            &[ethabi::Token::Address(aggregator.to_h160())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -532,14 +836,15 @@ impl<'a> _ArbGasInfo<'a> {
         }
     }
 
-    pub fn _get_prices_in_arbgas(
+    pub fn _get_prices_in_arbgas_with_aggregator(
         &self,
         machine: &mut Machine,
+        aggregator: Uint256,
     ) -> Result<(Uint256, Uint256, Uint256), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
             self.my_address.clone(),
-            "getPricesInArbGas",
-            &[],
+            "getPricesInArbGasWithAggregator",
+            &[ethabi::Token::Address(aggregator.to_h160())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -614,6 +919,62 @@ impl<'a> _ArbGasInfo<'a> {
                 }
                 _ => panic!(),
             }
+        } else {
+            Err(ethabi::Error::from(format!(
+                "tx failed: {}",
+                receipts[0]._get_return_code_text()
+            )))
+        }
+    }
+
+    pub fn _get_l1_gas_price_estimate(
+        &self,
+        machine: &mut Machine,
+    ) -> Result<Uint256, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "getL1GasPriceEstimate",
+            &[],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
+        } else {
+            Err(ethabi::Error::from(format!(
+                "tx failed: {}",
+                receipts[0]._get_return_code_text()
+            )))
+        }
+    }
+
+    pub fn _set_l1_gas_price_estimate(
+        &self,
+        machine: &mut Machine,
+        price_wei: Uint256,
+        caller: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            caller,
+            "setL1GasPriceEstimate",
+            &[ethabi::Token::Uint(price_wei.to_u256())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
         } else {
             Err(ethabi::Error::from(format!(
                 "tx failed: {}",
@@ -787,6 +1148,56 @@ impl _ArbAggregator {
             &[
                 ethabi::Token::Address(agg_addr.to_h160()),
                 ethabi::Token::Address(new_collector.to_h160()),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _get_tx_base_fee(
+        &self,
+        machine: &mut Machine,
+        agg_addr: Uint256,
+    ) -> Result<Uint256, ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "getTxBaseFee",
+            &[ethabi::Token::Address(agg_addr.to_h160())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _set_tx_base_fee(
+        &self,
+        machine: &mut Machine,
+        agg_addr: Uint256,
+        fee: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "setTxBaseFee",
+            &[
+                ethabi::Token::Address(agg_addr.to_h160()),
+                ethabi::Token::Uint(fee.to_u256()),
             ],
             machine,
             Uint256::zero(),
@@ -1057,7 +1468,7 @@ pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), et
     let tx_id = machine.runtime_env.insert_tx_message(
         my_addr.clone(),
         Uint256::from_u64(1000000000),
-        Uint256::zero(),
+        None,
         my_addr.clone(),
         Uint256::from_u64(10000),
         &vec![],
@@ -1101,6 +1512,24 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
+    machine.runtime_env.insert_eth_deposit_message(
+        Uint256::zero(),
+        Uint256::zero(),
+        Uint256::_from_eth(100000),
+    );
+    machine.runtime_env.insert_eth_deposit_message(
+        my_addr.clone(),
+        my_addr.clone(),
+        Uint256::_from_eth(100000),
+    );
+    let deployer_addr = Uint256::from_u64(1025);
+    machine.runtime_env.insert_eth_deposit_message(
+        deployer_addr.clone(),
+        deployer_addr.clone(),
+        Uint256::_from_eth(100000),
+    );
+    let _ = machine.run(None);
+
     let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
     if add_contract
         .deploy(&[], &mut machine, Uint256::zero(), None, false)
@@ -1114,28 +1543,14 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys_orig_binding._arbos_version(&mut machine)?,
-        Uint256::from_u64(10)
+        Uint256::from_u64(35),
     );
 
-    arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
+    arbowner._give_ownership(&mut machine, my_addr, true)?;
 
-    let uploader = CodeUploader::_new_from_file(Path::new("arb_os/arbos-upgrade.mexe"));
-    arbowner._start_code_upload(&mut machine)?;
-
-    let mut accum = vec![];
-    for buf in uploader.instructions {
-        accum.extend(buf);
-        if (accum.len() > 3000) {
-            arbowner._continue_code_upload(&mut machine, accum)?;
-            accum = vec![];
-        }
-    }
-    if (accum.len() > 0) {
-        arbowner._continue_code_upload(&mut machine, accum)?;
-    }
-
-    let expected_code_hash = arbowner._get_uploaded_code_hash(&mut machine)?;
-    arbowner._finish_code_upload_as_arbos_upgrade(&mut machine, expected_code_hash)?;
+    let mexe_path = Path::new("arb_os/arbos-upgrade.mexe");
+    let _previous_upgrade_hash =
+        _try_upgrade(&arbowner, &mut machine, &mexe_path, None, false)?.unwrap();
 
     let wallet2 = machine.runtime_env.new_wallet();
     let arbsys = ArbSys::new(&wallet2, false);
@@ -1151,6 +1566,42 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     assert_eq!(arbos_version, arbos_version_orig);
 
     Ok(())
+}
+
+fn _try_upgrade(
+    arbowner: &_ArbOwner,
+    machine: &mut Machine,
+    mexe_path: &Path,
+    previous_upgrade_hash: Option<Uint256>,
+    with_check: bool,
+) -> Result<Option<Uint256>, ethabi::Error> {
+    let uploader = CodeUploader::_new_from_file(mexe_path);
+    arbowner._start_code_upload(machine, None, with_check)?;
+
+    let mut accum = vec![];
+    for buf in uploader.instructions {
+        accum.extend(buf);
+        if (accum.len() > 3000) {
+            arbowner._continue_code_upload(machine, accum)?;
+            accum = vec![];
+        }
+    }
+    if (accum.len() > 0) {
+        arbowner._continue_code_upload(machine, accum)?;
+    }
+
+    let expected_code_hash = arbowner._get_uploaded_code_hash(machine)?;
+    Ok(
+        if arbowner._finish_code_upload_as_arbos_upgrade(
+            machine,
+            expected_code_hash.clone(),
+            previous_upgrade_hash.unwrap_or(Uint256::zero()),
+        )? {
+            Some(expected_code_hash)
+        } else {
+            None
+        },
+    )
 }
 
 #[test]
@@ -1297,15 +1748,19 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
 
     let arbowner = _ArbOwner::_new(&wallet, debug);
 
-    arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
+    arbowner._give_ownership(&mut machine, my_addr, true)?;
 
-    arbowner._start_code_upload(&mut machine)?;
+    arbowner._start_code_upload(&mut machine, None, true)?;
 
     let mcode = vec![0x90u8, 1u8, 0u8, 42u8]; // debugprint(42)
     arbowner._continue_code_upload(&mut machine, mcode)?;
 
     let expected_code_hash = arbowner._get_uploaded_code_hash(&mut machine)?;
-    arbowner._finish_code_upload_as_arbos_upgrade(&mut machine, expected_code_hash)?;
+    assert!(arbowner._finish_code_upload_as_arbos_upgrade(
+        &mut machine,
+        expected_code_hash,
+        Uint256::zero(),
+    )?);
 
     arbowner._set_seconds_per_send(&mut machine, Uint256::from_u64(10))?;
 
@@ -1325,6 +1780,60 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
     }
 
     Ok(())
+}
+
+#[test]
+fn test_arb_fair_gas_price_list() {
+    _evm_test_arb_fair_gas_price_list();
+}
+
+fn _evm_test_arb_fair_gas_price_list() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+
+    let wallet = machine.runtime_env.new_wallet();
+    let _my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let arbowner = _ArbOwner::_new(&wallet, false);
+
+    let addr1 = Uint256::from_u64(13853);
+    let addr2 = Uint256::from_u64(813915);
+    let addr3 = Uint256::from_u64(88);
+
+    assert_eq!(
+        arbowner
+            ._get_all_fair_gas_price_senders(&mut machine)
+            .unwrap()
+            .len(),
+        0
+    );
+    assert!(!arbowner
+        ._is_fair_gas_price_sender(&mut machine, addr2.clone())
+        .unwrap());
+    arbowner
+        ._set_fair_gas_price_sender(&mut machine, addr1.clone(), true)
+        .unwrap();
+    assert!(arbowner
+        ._is_fair_gas_price_sender(&mut machine, addr1.clone())
+        .unwrap());
+    assert!(!arbowner
+        ._is_fair_gas_price_sender(&mut machine, addr2.clone())
+        .unwrap());
+    arbowner
+        ._set_fair_gas_price_sender(&mut machine, addr3.clone(), true)
+        .unwrap();
+    assert!(arbowner
+        ._is_fair_gas_price_sender(&mut machine, addr3.clone())
+        .unwrap());
+
+    let lis = arbowner
+        ._get_all_fair_gas_price_senders(&mut machine)
+        .unwrap();
+    assert_eq!(lis.len(), 2);
+    assert!(
+        ((lis[0] == addr1.clone()) && (lis[1] == addr3.clone()))
+            || ((lis[0] == addr3.clone()) && (lis[1] == addr1.clone()))
+    );
 }
 
 #[test]
@@ -1414,6 +1923,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
 
     let arbowner = _ArbOwner::_new(&wallet, debug);
     let arbgasinfo = _ArbGasInfo::_new(&wallet, debug);
+    let arbaggregator = _ArbAggregator::_new(debug);
 
     machine.runtime_env.insert_eth_deposit_message(
         my_addr.clone(),
@@ -1427,7 +1937,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
     };
 
     let (l2tx, l1calldata, storage, basegas, conggas, totalgas) =
-        arbgasinfo._get_prices_in_wei(&mut machine)?;
+        arbgasinfo._get_prices_in_wei_with_aggregator(&mut machine, Uint256::zero())?;
     assert!(l2tx.is_zero());
     assert!(l1calldata.is_zero());
     assert!(storage.is_zero());
@@ -1441,26 +1951,27 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         ._advance_time(Uint256::one(), None, true);
 
     let (l2tx, l1calldata, storage, basegas, conggas, totalgas) =
-        arbgasinfo._get_prices_in_wei(&mut machine)?;
+        arbgasinfo._get_prices_in_wei_with_aggregator(&mut machine, Uint256::zero())?;
     println!(
         "L2 tx {}, L1 calldata {}, L2 storage {}, base gas {}, congestion gas {}, total gas {}",
         l2tx, l1calldata, storage, basegas, conggas, totalgas
     );
-    assert_eq!(l2tx, Uint256::from_u64(642483725000000));
-    assert_eq!(l1calldata, Uint256::from_u64(2778308000000));
-    assert_eq!(storage, Uint256::from_u64(301990000000000));
-    assert_eq!(basegas, Uint256::from_u64(15099500));
+    assert_eq!(l2tx, Uint256::from_u64(690000000000000));
+    assert_eq!(l1calldata, Uint256::from_u64(172500000000));
+    assert_eq!(storage, Uint256::from_u64(300000000000000));
+    assert_eq!(basegas, Uint256::from_u64(1500000000));
     assert!(conggas.is_zero());
     assert_eq!(basegas.add(&conggas), totalgas);
 
-    let (l2tx, l1calldata, storage) = arbgasinfo._get_prices_in_arbgas(&mut machine)?;
+    let (l2tx, l1calldata, storage) =
+        arbgasinfo._get_prices_in_arbgas_with_aggregator(&mut machine, Uint256::zero())?;
     println!(
         "L2 tx / ag {}, L1 calldata / ag {}, L2 storage / ag {}",
         l2tx, l1calldata, storage
     );
-    assert_eq!(l2tx, Uint256::from_u64(42550000));
-    assert_eq!(l1calldata, Uint256::from_u64(184000));
-    assert_eq!(storage, Uint256::from_u64(20000000));
+    assert_eq!(l2tx, Uint256::from_u64(460000));
+    assert_eq!(l1calldata, Uint256::from_u64(115));
+    assert_eq!(storage, Uint256::from_u64(200000));
 
     let (speed_limit, gas_pool_max, tx_gas_limit) =
         arbgasinfo._get_gas_accounting_params(&mut machine)?;
@@ -1468,9 +1979,25 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         "speed limit {}, pool max {}, tx gas limit {}",
         speed_limit, gas_pool_max, tx_gas_limit
     );
-    assert_eq!(speed_limit, Uint256::from_u64(100_000_000));
-    assert_eq!(gas_pool_max, Uint256::from_u64(6_000_000_000));
-    assert_eq!(tx_gas_limit, Uint256::from_u64(1_000_000_000));
+    assert_eq!(speed_limit, Uint256::from_u64(400_000));
+    assert_eq!(gas_pool_max, Uint256::from_u64(288_000_000));
+    assert_eq!(tx_gas_limit, Uint256::from_u64(8_000_000));
+
+    let agg_addr = Uint256::from_u64(777);
+    let fee = arbaggregator
+        ._get_tx_base_fee(&mut machine, agg_addr.clone())
+        .unwrap();
+    assert_eq!(fee, Uint256::from_u64(4000));
+
+    let new_fee = Uint256::from_u64(8913);
+    arbaggregator
+        ._set_tx_base_fee(&mut machine, agg_addr.clone(), new_fee.clone())
+        .unwrap();
+
+    let fee = arbaggregator
+        ._get_tx_base_fee(&mut machine, agg_addr.clone())
+        .unwrap();
+    assert_eq!(fee, new_fee);
 
     if let Some(path) = log_to {
         machine
@@ -1483,6 +2010,30 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
     Ok(())
 }
 
+#[test]
+fn test_arbgas_oracle() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let arbowner = _ArbOwner::_new(&wallet, false);
+    let arbgasinfo = _ArbGasInfo::_new(&wallet, false);
+
+    arbowner
+        ._set_chain_parameter(&mut machine, "GasPriceOracle", my_addr.clone(), true)
+        .unwrap();
+
+    let gpest = Uint256::_from_gwei(73);
+    arbgasinfo
+        ._set_l1_gas_price_estimate(&mut machine, gpest.clone(), my_addr.clone())
+        .unwrap();
+
+    let gasprice = arbgasinfo._get_l1_gas_price_estimate(&mut machine).unwrap();
+    assert_eq!(gpest, gasprice);
+}
+
 pub fn _evm_test_rate_control(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
@@ -1491,7 +2042,7 @@ pub fn _evm_test_rate_control(log_to: Option<&Path>, debug: bool) -> Result<(), 
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
     let arbowner = _ArbOwner::_new(&wallet, debug);
 
-    arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
+    arbowner._give_ownership(&mut machine, my_addr, true)?;
 
     let const_table = init_constant_table(Some(Path::new("arb_os/constants.json"))).unwrap();
 
@@ -1533,7 +2084,7 @@ pub fn _do_rollup_tracker_ops() {
     let owner = Uint256::from_bytes(wallet.address().as_bytes());
     let arbowner = _ArbOwner::_new(&wallet, false);
     arbowner
-        ._give_ownership(&mut machine, owner.clone(), Some(Uint256::zero()))
+        ._give_ownership(&mut machine, owner.clone(), true)
         .unwrap();
 
     let my_addr = Uint256::from_u64(11025);
@@ -1641,19 +2192,19 @@ pub fn _insert_create_node(
     buf.extend(height_l1.to_bytes_be());
     buf.extend(height_l1.add(deadline_l1_delta).to_bytes_be());
     buf.extend(asserter.to_bytes_be());
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None, None);
 }
 
 pub fn _insert_confirm_node(rt_env: &mut RuntimeEnvironment, height_l2: &Uint256) {
     let mut buf = vec![1u8];
     buf.extend(height_l2.to_bytes_be());
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None, None);
 }
 
 pub fn _insert_reject_node(rt_env: &mut RuntimeEnvironment, height_l2: &Uint256) {
     let mut buf = vec![2u8];
     buf.extend(height_l2.to_bytes_be());
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None, None);
 }
 
 pub fn _insert_new_stake(
@@ -1670,18 +2221,18 @@ pub fn _insert_new_stake(
             .unwrap_or(rt_env.current_block_num.clone())
             .to_bytes_be(),
     );
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None, None);
 }
 
 pub fn _insert_claim_node(rt_env: &mut RuntimeEnvironment, height_l2: &Uint256, claimer: &Uint256) {
     let mut buf = vec![4u8];
     buf.extend(height_l2.to_bytes_be());
     buf.extend(claimer.to_bytes_be());
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf, None, None);
 }
 
 pub fn _insert_rollup_debug(rt_env: &mut RuntimeEnvironment) {
-    rt_env.insert_l1_message(8u8, Uint256::zero(), &[255u8]);
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &[255u8], None, None);
 }
 
 #[test]
@@ -1830,6 +2381,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
         &mut machine,
         Uint256::zero(),
         Uint256::zero(),
+        Uint256::zero(),
         None,
         Some(beneficiary.clone()),
         None,
@@ -1871,6 +2423,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
             ethabi::Token::Uint(Uint256::one().to_u256()),
         ],
         &mut machine,
+        Uint256::zero(),
         Uint256::zero(),
         Uint256::zero(),
         None,
@@ -1926,11 +2479,12 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
         ],
         &mut machine,
         Uint256::zero(),
+        Uint256::_from_eth(100),
         Uint256::zero(),
         None,
         Some(beneficiary.clone()),
         Some(Uint256::from_u64(1_000_000)),
-        Some(Uint256::zero()),
+        Some(Uint256::_from_gwei(5)),
     )?;
     assert!(txid != Uint256::zero());
     assert!(maybe_redeemid.is_some());
@@ -1944,7 +2498,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
 
     let receipts = machine.runtime_env.get_all_receipt_logs();
     let last_receipt = receipts[receipts.len() - 1].clone();
-    assert!(last_receipt.succeeded());
+    assert_eq!(last_receipt.get_return_code(), Uint256::zero());
     assert_eq!(last_receipt.get_request_id(), redeemid);
 
     let second_to_last = receipts[receipts.len() - 2].clone();
@@ -1976,11 +2530,429 @@ fn _test_arb_stats() -> Result<(), ethabi::Error> {
     let (arb_blocknum, num_accounts, storage, _arbgas, txs, contracts) =
         arbstats._get_stats(&mut machine)?;
 
-    assert_eq!(arb_blocknum, Uint256::from_u64(0));
+    assert_eq!(arb_blocknum, Uint256::from_u64(1));
     assert_eq!(num_accounts, Uint256::from_u64(22));
     assert_eq!(storage, Uint256::from_u64(0));
     // assert_eq!(_arbgas, Uint256::from_u64(1_490_972));  // disable this because it will vary over versions
     assert_eq!(txs, Uint256::from_u64(0));
-    assert_eq!(contracts, Uint256::from_u64(19));
+    assert_eq!(contracts, Uint256::from_u64(20));
     Ok(())
+}
+
+#[test]
+fn test_allowed_senders() {
+    _evm_test_allowed_senders();
+}
+
+fn _evm_test_allowed_senders() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+    let wallet = machine.runtime_env.new_wallet();
+
+    let arbowner = _ArbOwner::_new(&wallet, false);
+
+    let addr1 = Uint256::from_u64(123489121);
+    let addr2 = Uint256::from_u64(1348098777777);
+
+    assert!(arbowner
+        ._is_allowed_sender(&mut machine, addr1.clone())
+        .unwrap());
+
+    assert!(arbowner._allow_only_owner_to_send(&mut machine).is_ok());
+    assert!(!arbowner
+        ._is_allowed_sender(&mut machine, addr1.clone())
+        .unwrap());
+    assert!(arbowner
+        ._is_allowed_sender(&mut machine, Uint256::zero())
+        .unwrap());
+
+    assert!(arbowner._allow_all_senders(&mut machine).is_ok());
+    assert!(arbowner
+        ._is_allowed_sender(&mut machine, addr1.clone())
+        .unwrap());
+
+    assert!(arbowner._allow_only_owner_to_send(&mut machine).is_ok());
+    assert!(arbowner
+        ._add_allowed_sender(&mut machine, addr1.clone())
+        .is_ok());
+    assert!(arbowner
+        ._is_allowed_sender(&mut machine, addr1.clone())
+        .unwrap());
+    assert!(!arbowner
+        ._is_allowed_sender(&mut machine, addr2.clone())
+        .unwrap());
+
+    assert!(arbowner
+        ._add_allowed_sender(&mut machine, addr2.clone())
+        .is_ok());
+    let serialized = arbowner._get_all_allowed_senders(&mut machine).unwrap();
+    assert_eq!(serialized.len(), 2);
+    assert!(
+        ((serialized[0] == addr1.clone()) && (serialized[1] == addr2.clone()))
+            || ((serialized[0] == addr2.clone()) && (serialized[1] == addr1.clone()))
+    );
+
+    assert!(arbowner
+        ._remove_allowed_sender(&mut machine, addr1.clone())
+        .is_ok());
+    assert!(!arbowner
+        ._is_allowed_sender(&mut machine, addr1.clone())
+        .unwrap());
+    assert!(arbowner
+        ._is_allowed_sender(&mut machine, addr2.clone())
+        .unwrap());
+}
+
+pub struct ArbosTest {
+    pub contract_abi: AbiForContract,
+    debug: bool,
+}
+
+impl ArbosTest {
+    pub fn new(debug: bool) -> Self {
+        let mut contract_abi =
+            AbiForContract::new_from_file(&builtin_contract_path("ArbosTest")).unwrap();
+        contract_abi.bind_interface_to_address(Uint256::from_u64(105));
+        ArbosTest {
+            contract_abi,
+            debug,
+        }
+    }
+
+    pub fn _install_account_and_call(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+        balance: Uint256,
+        nonce: Uint256,
+        code: Vec<u8>,
+        storage: Vec<u8>,
+        calldata: Vec<u8>,
+    ) -> Result<Vec<u8>, ethabi::Error> {
+        self.install_account(
+            machine,
+            addr.clone(),
+            balance.clone(),
+            nonce.clone(),
+            Some(code),
+            Some(storage),
+        )?;
+        let _ = machine.runtime_env.get_and_incr_seq_num(&Uint256::zero());
+        let _ = machine.runtime_env.get_and_incr_seq_num(&Uint256::zero());
+        self.call(machine, Uint256::zero(), addr.clone(), calldata, balance)?;
+        self._get_marshalled_storage(machine, addr)
+    }
+
+    pub fn install_account(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+        balance: Uint256,
+        nonce: Uint256,
+        code: Option<Vec<u8>>,
+        storage: Option<Vec<u8>>,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "installAccount",
+            &[
+                ethabi::Token::Address(addr.to_h160()),
+                ethabi::Token::Bool((code == None) && (storage == None)),
+                ethabi::Token::Uint(balance.to_u256()),
+                ethabi::Token::Uint(nonce.to_u256()),
+                ethabi::Token::Bytes(code.unwrap_or(vec![])),
+                ethabi::Token::Bytes(storage.unwrap_or(vec![])),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn call(
+        &self,
+        machine: &mut Machine,
+        caller_addr: Uint256,
+        callee_addr: Uint256,
+        calldata: Vec<u8>,
+        callvalue: Uint256,
+    ) -> Result<Vec<u8>, ethabi::Error> {
+        machine.runtime_env.insert_eth_deposit_message(
+            Uint256::zero(),
+            caller_addr.clone(),
+            callvalue.clone(),
+        );
+        let _tx_id = machine.runtime_env.insert_tx_message(
+            caller_addr,
+            Uint256::from_usize(1_000_000_000),
+            None,
+            callee_addr,
+            callvalue,
+            &calldata,
+            false,
+        );
+        let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
+        let num_sends_before = machine.runtime_env.get_all_sends().len();
+        let _arbgas_used = if self.debug {
+            machine.debug(None)
+        } else {
+            machine.run(None)
+        };
+        let logs = machine.runtime_env.get_all_receipt_logs();
+        let sends = machine.runtime_env.get_all_sends();
+
+        if (logs.len() != num_logs_before + 2) || (sends.len() != num_sends_before) {
+            return Err(ethabi::Error::from("wrong number of receipts or sends"));
+        }
+        if !logs[num_logs_before + 1].succeeded() {
+            println!(
+                "arbosTest.run revert code {}",
+                logs[num_logs_before + 1].get_return_code()
+            );
+            return Err(ethabi::Error::from("reverted"));
+        }
+
+        Ok(logs[num_logs_before + 1].get_return_data())
+    }
+
+    pub fn get_account_info(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+    ) -> Result<(Uint256, Uint256, Vec<u8>), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "getAccountInfo",
+            &[ethabi::Token::Address(addr.to_h160())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            let return_data = receipts[0].get_return_data();
+            Ok((
+                Uint256::from_bytes(&return_data[0..32]),
+                Uint256::from_bytes(&return_data[32..64]),
+                return_data[64..].to_vec(),
+            ))
+        } else {
+            println!(
+                "arbosTest.run revert code {}",
+                receipts[0].get_return_code()
+            );
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _get_marshalled_storage(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+    ) -> Result<Vec<u8>, ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "getMarshalledStorage",
+            &[ethabi::Token::Address(addr.to_h160())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            return Ok(receipts[0].get_return_data()[64..].to_vec());
+        } else {
+            println!(
+                "arbosTest.run revert code {}",
+                receipts[0].get_return_code()
+            );
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _burn_arb_gas(
+        &self,
+        machine: &mut Machine,
+        sender_addr: Uint256,
+        amount: Uint256,
+    ) -> Result<u64, ethabi::Error> {
+        let (receipts, _) = self.contract_abi.call_function(
+            sender_addr, // send from address zero
+            "burnArbGas",
+            &[ethabi::Token::Uint(amount.to_u256())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+        assert_eq!(receipts.len(), 1);
+        Ok(receipts[0].get_return_code().to_u64().unwrap())
+    }
+}
+
+#[test]
+fn test_eventual_congestion_reject() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+    let wallet = machine.runtime_env.new_wallet();
+    let my_address = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let arbowner = _ArbOwner::_new(&wallet, false);
+    let _ = arbowner
+        ._set_fees_enabled(&mut machine, true, true)
+        .unwrap();
+    machine.runtime_env.insert_eth_deposit_message(
+        my_address.clone(),
+        my_address.clone(),
+        Uint256::_from_eth(1000),
+    );
+    let _ = machine.run(None);
+    machine
+        .runtime_env
+        ._advance_time(Uint256::one(), None, true);
+
+    let arbtest = ArbosTest::new(false);
+    for _ in 0..1200 {
+        let res_code = match arbtest._burn_arb_gas(
+            &mut machine,
+            my_address.clone(),
+            Uint256::from_u64(2_000_000),
+        ) {
+            Ok(rc) => rc,
+            Err(_) => panic!(),
+        };
+        if res_code == 2 {
+            return;
+        } // we hit congestion, as expected
+        assert_eq!(res_code, 0); // we should report success, if haven't hit congestion yet
+    }
+    assert!(false);
+}
+
+#[test]
+fn test_congestion_price_adjustment() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+    let wallet = machine.runtime_env.new_wallet();
+    let my_address = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let arbowner = _ArbOwner::_new(&wallet, false);
+    let arbgasinfo = _ArbGasInfo::_new(&wallet, false);
+    let _ = arbowner
+        ._set_fees_enabled(&mut machine, true, true)
+        .unwrap();
+    machine.runtime_env.insert_eth_deposit_message(
+        my_address.clone(),
+        my_address.clone(),
+        Uint256::_from_eth(1000),
+    );
+    let _ = machine.run(None);
+    machine
+        .runtime_env
+        ._advance_time(Uint256::one(), None, true);
+
+    let _randomish_address = Uint256::from_u64(1583913081);
+    assert_eq!(
+        arbgasinfo
+            //._get_prices_in_wei(&mut machine, randomish_address.clone())  preserve this for later integration
+            ._get_prices_in_wei_with_aggregator(&mut machine, my_address.clone())
+            .unwrap()
+            .4,
+        Uint256::zero()
+    );
+
+    let arbtest = ArbosTest::new(false);
+    let mut seen_any_congestion = false;
+    for _ in 0..1200 {
+        let res_code = match arbtest._burn_arb_gas(
+            &mut machine,
+            my_address.clone(),
+            Uint256::from_u64(2_000_000),
+        ) {
+            Ok(rc) => rc,
+            Err(_) => panic!(),
+        };
+        assert!((!seen_any_congestion && (res_code == 0)) || (res_code == 2)); // success or congestion
+        if (res_code == 2) {
+            seen_any_congestion = true;
+        }
+    }
+    assert!(seen_any_congestion);
+
+    // the chain should be congested now
+    machine
+        .runtime_env
+        ._advance_time(Uint256::one(), None, false);
+    let _ = machine.run(None);
+
+    let prices = arbgasinfo
+        //._get_prices_in_wei(&mut machine, randomish_address.clone())  preserve this for later integration
+        ._get_prices_in_wei_with_aggregator(&mut machine, my_address.clone())
+        .unwrap();
+    assert!(prices.4 > Uint256::zero());
+
+    machine
+        .runtime_env
+        ._advance_time(Uint256::from_u64(48), Some(Uint256::from_u64(720)), false);
+    let prices2 = arbgasinfo
+        //._get_prices_in_wei(&mut machine, randomish_address.clone())  preserve this for later integration
+        ._get_prices_in_wei_with_aggregator(&mut machine, my_address.clone())
+        .unwrap();
+    assert_eq!(prices2.4, Uint256::zero());
+}
+
+#[test]
+fn test_set_gas_price_estimate() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+    let wallet = machine.runtime_env.new_wallet();
+    let my_address = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let arbowner = _ArbOwner::_new(&wallet, false);
+    let arbgasinfo = _ArbGasInfo::_new(&wallet, false);
+
+    machine.runtime_env.insert_eth_deposit_message(
+        my_address.clone(),
+        my_address.clone(),
+        Uint256::_from_eth(1000),
+    );
+    let _ = machine.run(None);
+
+    arbowner
+        ._set_fees_enabled(&mut machine, true, true)
+        .unwrap();
+
+    let new_gas_price = Uint256::from_u64(37);
+    let new_storage_price = new_gas_price.mul(&Uint256::from_u64(2_000_000_000_000));
+
+    let storage_price = arbgasinfo
+        ._get_prices_in_wei_with_aggregator(&mut machine, my_address.clone())
+        .unwrap()
+        .2;
+    assert!(storage_price != new_storage_price);
+
+    arbowner
+        ._set_l1_gas_price_estimate(&mut machine, new_gas_price)
+        .unwrap();
+
+    machine
+        .runtime_env
+        ._advance_time(Uint256::one(), None, false);
+
+    let storage_price = arbgasinfo
+        ._get_prices_in_wei_with_aggregator(&mut machine, my_address.clone())
+        .unwrap()
+        .2;
+    assert_eq!(storage_price, new_storage_price);
 }

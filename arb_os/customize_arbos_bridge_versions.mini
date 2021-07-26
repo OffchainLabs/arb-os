@@ -4,58 +4,15 @@
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 
-use accounts::AccountStore;
-use accounts::Account;
-use accounts::AccountContractInfo;
-use accounts::AggregatorInfo;
-use accounts::CodeRef;
-use decompression::AggregatorDecompressionState;
-use retrybuffer::RetryBuffer;
-use std::bls::BLSKey;
-
-use core::kvs::Kvs;
-use core::kvs::builtin_kvsForall;
+use evmCallStack::EvmCallFrame;
 
 
-type OldAccountStore = struct {
-    accounts: map<address, OldAccount>,
-    retryBuffer: RetryBuffer,
-    numContracts: uint,
+public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> map<uint, uint> {
+    return oldGlobals.globalChainParameters
+        with { [const::Atom_Param_GasPriceOracle] = const::Default_Param_GasPriceOracle }
+    ;
 }
 
-type OldAccount = struct {
-    addr: address,
-    blsKey: option<BLSKey>,
-    nextSeqNum: uint,
-    ethBalance: uint,
-    contractInfo: option<AccountContractInfo>,
-    aggregatorInfo: option<OldAggregatorInfo>,
-    aggregatorToPay: option<address>,
-}
-
-type OldAggregatorInfo = struct {
-    decompressionState: option<AggregatorDecompressionState>,
-}
-
-
-public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> any {
-    let oldAcctStore = unsafecast<OldAccountStore>(input_globals.globalAccountStore);
-
-    let acctStore = unsafecast<AccountStore>(());  // force compiler to typecheck the following assignment
-    acctStore = struct {
-        accounts: unsafecast<map<address, Account>>(
-            builtin_kvsForall(
-                unsafecast<Kvs>(oldAcctStore.accounts),
-                unsafecast<func(any, any, any) -> any>(acctClosure),
-                newmap<address, Account>,
-            )
-        ),
-        retryBuffer: oldAcctStore.retryBuffer,
-        numContracts: oldAcctStore.numContracts,
-        codeRefTable: newmap<bytes32, CodeRef>,
-    };
-    return acctStore;
-}
 
 public func set_wasm_prog_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> any {
     // return null;
@@ -65,23 +22,6 @@ public func set_wasm_prog_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> any 
     return compiled;
 }
 
-public func acctClosure(addr: address, acct: OldAccount, state: map<address, Account>) -> map<address, Account> {
-    let updatedAcct = unsafecast<Account>(());   // force compiler to typecheck the following assignment
-    updatedAcct = struct {
-        addr: acct.addr,
-        blsKey: acct.blsKey,
-        nextSeqNum: acct.nextSeqNum,
-        ethBalance: acct.ethBalance,
-        contractInfo: acct.contractInfo,
-        aggregatorInfo: xif let Some(oai) = acct.aggregatorInfo {
-            Some(struct{
-                decompressionState: oai.decompressionState,
-                feeCollector: acct.addr,
-            })
-        } else {
-            None<AggregatorInfo>
-        },
-        aggregatorToPay: acct.aggregatorToPay,
-    };
-    return state with { [acct.addr] = updatedAcct };
+public func set_globalCallStack_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
+    return None<EvmCallFrame>;
 }

@@ -8,77 +8,21 @@ use std::bytestream::ByteStream;
 
 use evmCallStack::evmCallStack_callHitError;
 
-use std::bytestream::bytestream_new;
-use std::bytestream::bytestream_atEof;
-use std::bytestream::bytestream_bytesReadSoFar;
-use std::bytestream::bytestream_bytesRemaining;
-use std::bytestream::bytestream_truncate;
 use std::bytestream::bytestream_getByte;
-use std::bytestream::bytestream_get64;
-use std::bytestream::bytestream_skipBytes;
+use std::bytestream::bytestream_getPartialWord;
 use std::stack::stack_new;
 use std::stack::stack_push;
 use std::stack::stack_pop;
 
-use std::rlp::rlp_decodeUint;
-
-use chainParameters::chainParams_chainId;
-use gasAccounting::getGasLimitPerTx;
-
-use evmOps::evmOps_trampoline;
-
-use evmOps::evmOp_address;
-use evmOps::evmOp_balance;
-use evmOps::evmOp_selfbalance;
-use evmOps::evmOp_call;
-use evmOps::evmOp_callcode;
-use evmOps::evmOp_calldatacopy;
-use evmOps::evmOp_calldataload;
-use evmOps::evmOp_calldatasize;
-use evmOps::evmOp_caller;
-use evmOps::evmOp_callvalue;
-use evmOps::evmOp_codecopy;
-use evmOps::evmOp_codesize;
-use evmOps::evmOp_delegatecall;
-use evmOps::evmOp_extcodesize;
-use evmOps::evmOp_extcodecopy;
-use evmOps::evmOp_extcodehash;
-use evmOps::evmOp_getjumpaddr;
-use evmOps::evmOp_log0;
-use evmOps::evmOp_log1;
-use evmOps::evmOp_log2;
-use evmOps::evmOp_log3;
-use evmOps::evmOp_log4;
-use evmOps::evmOp_msize;
-use evmOps::evmOp_mload;
-use evmOps::evmOp_mstore;
-use evmOps::evmOp_mstore8;
-use evmOps::evmOp_number;
-use evmOps::evmOp_origin;
 use evmOps::evmOp_return;
-use evmOps::evmOp_returndatasize;
-use evmOps::evmOp_returndatacopy;
-use evmOps::evmOp_revert_knownPc;
-use evmOps::evmOp_selfdestruct;
-use evmOps::evmOp_sha3;
-use evmOps::evmOp_sload;
-use evmOps::evmOp_sstore;
-use evmOps::evmOp_staticcall;
-use evmOps::evmOp_stop;
-use evmOps::evmOp_timestamp;
-use evmOps::evmOp_create;
-use evmOps::evmOp_create2;
+
+use precompiles::makeTrampoline;
 
 use std::avmcodebuilder::AvmCodePoint;
 use std::avmcodebuilder::pushInstruction;
 use std::avmcodebuilder::pushInstructionImm;
 use std::avmcodebuilder::pushValue;
 
-
-public impure func pcTableForCode(code: ByteArray) -> Stack {
-    let (code, _, pcTable) = translateEvmCodeSegment(bytestream_new(code), true);
-    return stack_push(pcTable, (0, code));
-}
 
 type EvmInstruction = struct {
     opcode: uint,
@@ -101,7 +45,10 @@ func evmInstructionStack_pop(s: EvmInstructionStack) -> option<(EvmInstructionSt
     return Some((us, unsafecast<EvmInstruction>(item)));
 }
 
-var unreachableMask: uint;
+var codeSegGlobals: struct {
+    unreachableMask: uint,
+    dummyAcceptContractCode: AvmCodePoint,
+};
 
 impure func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
     let stack = evmInstructionStack_new();
@@ -116,15 +63,22 @@ impure func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
             if ((opcode >= 0x60) && (opcode <= 0x7f)) {
                 // it's a pushN instruction; unmarshal the immediate value and push it
                 let bytesRemaining = opcode - 0x5f;
-                let imm = 0;
-                while (bytesRemaining > 0) {
-                    if let Some(res) = bytestream_getByte(bs) {
-                        let (ubs, val) = res;
-                        bs = ubs;
-                        imm = 256*imm + val;
+                let imm = xif let Some(res) = bytestream_getPartialWord(bs, bytesRemaining) {
+                    let (ubs, v) = res;
+                    bs = ubs;
+                    v
+                } else {
+                    let val = 0;
+                    while (bytesRemaining > 0) {
+                        if let Some(res) = bytestream_getByte(bs) {
+                            let (ubs, v) = res;
+                            bs = ubs;
+                            val = 256*val + v;
+                        }
+                        bytesRemaining = bytesRemaining-1;
                     }
-                    bytesRemaining = bytesRemaining-1;
-                }
+                    val
+                };
                 if (reachable) {
                     stack = evmInstructionStack_push(
                         stack,
@@ -149,7 +103,7 @@ impure func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
                 }
                 evmPc = evmPc + 1;
             }
-            if ((unreachableMask & asm(opcode, 1) uint { shl }) != 0) { reachable = false;    }
+            if ((codeSegGlobals.unreachableMask & (1 << opcode)) != 0) { reachable = false;    }
         } else {
             return stack;
         }
@@ -161,11 +115,23 @@ public impure func codeSegment_init() {
     let opcode = 0;
     while (opcode < 256) {
         if (unreachableAfterOpcode(opcode)) {
-            mask = mask | asm(opcode, 1) uint { shl };
+            mask = mask | (1 << opcode);
         }
         opcode = opcode + 1;
     }
-    unreachableMask = mask;
+
+    codeSegGlobals = struct {
+        unreachableMask: mask,
+        dummyAcceptContractCode: makeTrampoline(dummyAcceptFunction),
+    };
+}
+
+impure func dummyAcceptFunction() {
+    evmOp_return(0, 0);
+}
+
+public impure func getDummyAcceptContractCode() -> AvmCodePoint {
+    return codeSegGlobals.dummyAcceptContractCode;
 }
 
 func unreachableAfterOpcode(opcode: uint) -> bool {
@@ -184,7 +150,7 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
         || (opcode == 0xff); // SELFDESTRUCT
 }
 
-impure func generateCodeForEvmSegment(
+#[noinline, ] impure func generateCodeForEvmSegment(
     insns: EvmInstructionStack,
     makePcTable: bool,
 ) -> (AvmCodePoint, map<uint, AvmCodePoint>, Stack) {
@@ -387,7 +353,7 @@ impure func generateCodeForEvmSegment(
                             } elseif (opcode == 0x59) { // MSIZE
                                 code = pushEvmInsnCall(const::EvmOp_msize, code);
                             } elseif (opcode == 0x5a) { // GAS
-                                code = pushInstruction(const::AVM_pushgas, code);
+                                code = pushEvmInsnCall(const::EvmOp_gas, code);
                             } elseif (opcode == 0x5b) { // JUMPDEST
                                 evmJumpTable = evmJumpTable with { [insn.pc] = code };
                             } else {
@@ -505,7 +471,7 @@ impure func generateCodeForEvmSegment(
             }
 
             // uncomment the following line, to get a debugprint before every EVM instruction
-            // code = pushInstructionImm(const::AVM_debugprint, (20000, insn.pc, insn.opcode), code);
+            // code = pushInstructionImm(const::AVM_debugprint, (30000, insn.pc, insn.opcode), code);
         } else {
             return (code, evmJumpTable, pcTable);
         }
@@ -619,23 +585,18 @@ impure func pushEvmInsnCall(evmOpNum: uint, code: AvmCodePoint) -> AvmCodePoint 
         evmOpNum,
         pushValue(
             code,
-            pushInstructionImm(
-                const::AVM_jump,
-                evmOps_trampoline,
-                code,
+            pushInstruction(
+                const::AVM_rpush,
+                pushInstructionImm(
+                    const::AVM_tget,
+                    0,
+                    pushInstruction(
+                        const::AVM_jump,
+                        code,
+                    ),
+                ),
             ),
         ),
     );
 }
 
-func isKnownOpcode(opcode: uint) -> bool {  // return true iff opcode is a known EVM opcode
-    return ( (opcode >= 0x00) && (opcode <= 0x0b) )
-        || ( (opcode >= 0x10) && (opcode <= 0x1d) )
-        || (opcode == 0x20)
-        || ( (opcode >= 0x30) && (opcode <= 0x45) )
-        || ( (opcode >= 0x50) && (opcode <= 0x5b) )
-        || ( (opcode >= 0x60) && (opcode <= 0xa4) )
-        || ( (opcode >= 0xf0) && (opcode <= 0xf5) )
-        || (opcode == 0xfa)
-        || ( (opcode == 0xfd) && (opcode <= 0xff) );
-}

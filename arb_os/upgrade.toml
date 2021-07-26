@@ -1,1 +1,1 @@
-data = ["globalAccountStore", "wasm_prog"]
+data = ["globalChainParameters"]
