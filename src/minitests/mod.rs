@@ -263,11 +263,6 @@ fn evm_tests() {
 }
 
 #[test]
-fn test_call_from_contract() {
-    let _log = crate::evm::_evm_test_contract_call(None, false);
-}
-
-#[test]
 fn test_direct_deploy_and_compressed_call_add() {
     let _log = crate::evm::evm_direct_deploy_and_compressed_call_add(None, false);
 }
@@ -316,14 +311,6 @@ pub fn test_crosscontract_call_with_constructors() {
 }
 
 #[test]
-pub fn test_tx_with_deposit() {
-    match crate::evm::_evm_tx_with_deposit(None, false, false) {
-        Ok(result) => assert_eq!(result, true),
-        Err(e) => panic!("error {}", e),
-    }
-}
-
-#[test]
 pub fn test_create_opcode() {
     match crate::evm::evm_test_create(None, false, false) {
         Ok(result) => assert_eq!(result, true),
@@ -339,8 +326,11 @@ pub fn test_crosscontract_call_using_batch() {
     }
 }
 
+#[test]
 pub fn _test_crosscontract_call_using_compressed_batch() {
-    match crate::evm::_evm_xcontract_call_using_compressed_batch(None, false, false) {
+    match crate::evm::preinstalled_contracts::evm_xcontract_call_using_compressed_batch(
+        None, false, false,
+    ) {
         Ok(result) => assert_eq!(result, true),
         Err(e) => panic!("error {}", e),
     }

@@ -504,7 +504,7 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
             Uint256::from_u64(100000000),
             add_contract.address.clone(),
             Uint256::zero(),
-            &add_contract._generate_calldata_for_function(
+            &add_contract.generate_calldata_for_function(
                 "add",
                 &[
                     ethabi::Token::Uint(Uint256::one().to_u256()),
@@ -518,7 +518,7 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
         Uint256::from_u64(100000000),
         add_contract.address.clone(),
         Uint256::zero(),
-        &add_contract._generate_calldata_for_function(
+        &add_contract.generate_calldata_for_function(
             "add",
             &[
                 ethabi::Token::Uint(Uint256::from_u64(27).to_u256()),
