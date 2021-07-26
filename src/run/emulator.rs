@@ -32,21 +32,6 @@ pub struct ValueStack {
     contents: im::Vector<Value>,
 }
 
-fn get_from_table_aux(v: &Value, num: usize, depth: usize) -> Value {
-    if depth == 0 {
-        v.clone()
-    } else if let Value::Tuple(vec) = v {
-        let n = num & 0x7;
-        get_from_table_aux(&vec[n], num / 8, depth - 1)
-    } else {
-        panic!("stub")
-    }
-}
-
-fn get_from_table(v: &Value, num: usize) -> Value {
-    get_from_table_aux(v, num, 5)
-}
-
 impl ValueStack {
     pub fn new() -> Self {
         ValueStack {
@@ -825,9 +810,10 @@ impl Machine {
         stop_pc
     }
 
+    /*
     pub fn set_pc(&mut self, pc: CodePt) {
         self.state = MachineState::Running(pc);
-    }
+    }*/
 
     ///Calls the function at address func_addr and runs until the program counter advances by the
     /// result of `runtime_segment_size`, or an error is encountered.
@@ -962,7 +948,7 @@ impl Machine {
                     }
                     println!("Next Opcode: {}", code.opcode);
                     if let Some(imm) = code.immediate {
-                        // println!("Immediate: {}", imm);
+                        println!("Immediate: {}", imm);
                     }
                     if let Some(str) = code.debug_str {
                         println!("*************************** Debug: {}", str);
@@ -1066,10 +1052,10 @@ impl Machine {
             if let Some(spc) = stop_pc {
                 if let MachineState::Running(pc) = self.state {
                     if pc == spc {
-                        // let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
+                        let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
                         // gas_used
-                        // return final_gas - orig_gas
-                        return gas_used;
+                        return final_gas - orig_gas;
+                        // return gas_used;
                     }
                 }
             }

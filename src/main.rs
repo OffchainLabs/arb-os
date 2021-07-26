@@ -5,7 +5,7 @@
 #![allow(unused_parens)]
 
 use crate::link::LinkedProgram;
-use crate::run::{Machine, MachineState};
+use crate::run::Machine;
 use crate::compile::CompileStruct;
 use crate::pos::try_display_location;
 use crate::uint256::Uint256;
@@ -22,7 +22,7 @@ use run::{
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
-use std::io::{Read, Write};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -123,6 +123,8 @@ struct WasmRun {
     param: Option<String>,
     #[clap(short, long)]
     param_file: Option<String>,
+    #[clap(short, long)]
+    debug: bool,
 }
 
 #[derive(Clap, Debug)]
@@ -230,7 +232,7 @@ fn parse_list(lst: &json::JsonValue) -> Vec<u64> {
     args
 }
 
-fn getFile(fname: &String) -> Vec<u8> {
+fn get_file(fname: &String) -> Vec<u8> {
     let mut file = File::open(&fname).unwrap();
     let mut buffer = Vec::<u8>::new();
     file.read_to_end(&mut buffer).unwrap();
@@ -274,7 +276,7 @@ fn run_debug(code_0: Vec<Instruction>, table: Vec<(usize, usize)>) {
     for (i, loc) in table.iter() {
         table_aux[*i] = code_0.len() - *loc;
     };
-    let buf = getFile(&"/home/sami/arb-os/wasm-tests/test-buffer.wasm".to_string());
+    let buf = get_file(&"/home/sami/arb-os/wasm-tests/test-buffer.wasm".to_string());
     machine.start_at_zero();
     machine.stack.push_usize(buf.len()); // io len
     machine.stack.push(Value::new_buffer(buf)); // io buffer
@@ -532,7 +534,9 @@ fn main() -> Result<(), CompileError> {
             }*/
             let (buf, extra, len, gas_left, insn, table) = a.run(buf, param.len());
             // println!("insn {:?} table {:?}", insn, table);
-            // run_debug(insn, table);
+            if fname.debug {
+                run_debug(insn, table);
+            }
             let mut res = vec![];
             for i in 0..len {
                 res.push(buf.read_byte(i as u128))

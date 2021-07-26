@@ -865,7 +865,7 @@ fn handle_function(
 
     let mut unreachable = false;
 
-    for (idx_inf, op) in func.code().elements().iter().enumerate() {
+    for (_idx_inf, op) in func.code().elements().iter().enumerate() {
         /*
         println!(
             "handling ptr {} frames {}; {:?} ... label {} len {}",
@@ -1866,25 +1866,6 @@ pub fn make_table_internal(tab: &[usize]) -> Value {
     table_to_tuple(tab, 0, 0, LEVEL - 1, tab.len())
 }
 
-fn simple_table_aux(level: usize) -> Value {
-    if level == 0 {
-        let mut v = vec![];
-        for i in 0..8 {
-            v.push(int_from_usize(0))
-        }
-        return Value::new_tuple(v);
-    }
-    let mut v = vec![];
-    for i in 0..8 {
-        v.push(simple_table_aux(level - 1));
-    }
-    return Value::new_tuple(v);
-}
-
-pub fn simple_table() -> Value {
-    simple_table_aux(LEVEL - 1)
-}
-
 fn value_replace_labels(v: Value, label_map: &HashMap<Label, Value>) -> Result<Value, Label> {
     match v {
         Value::HashOnly(_, _) => Ok(v),
@@ -2498,11 +2479,11 @@ fn empty_tuple() -> Value {
 fn empty_table(res: &mut Vec<Instruction>, n: usize) {
     res.push(push_value(empty_tuple()));
     for i in 1..n {
-        for i in 0..8 {
+        for _i in 0..8 {
             res.push(simple_op(AVMOpcode::Dup0));
         }
         res.push(push_value(empty_tuple()));
-        for i in 0..8 {
+        for _i in 0..8 {
             res.push(immed_op(AVMOpcode::Tset, int_from_usize(i)));
         }
         res.push(simple_op(AVMOpcode::Swap1));
@@ -3162,6 +3143,7 @@ pub fn load(buffer: &[u8], param: &[u8]) -> Vec<Instruction> {
     a
 }
 
+/*
 pub fn load_immed(buffer: &[u8], param: &[u8], v: Value) -> Vec<Instruction> {
     let init = process_wasm(buffer);
 
@@ -3178,6 +3160,7 @@ pub fn load_immed(buffer: &[u8], param: &[u8], v: Value) -> Vec<Instruction> {
     }
     a
 }
+*/
 
 pub fn make_test(
     buffer: &[u8],
