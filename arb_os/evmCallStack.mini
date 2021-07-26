@@ -1564,6 +1564,7 @@ public impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray {
 }
 
 public impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool {
+    evmCallStack_touchMemoryOffset(bytearray_size(mem)-1);
     return xif let Some(topFrame) = globalCallStack {
         globalCallStack = Some(topFrame with { memory: mem });
         true
