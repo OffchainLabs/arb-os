@@ -2942,11 +2942,6 @@ impl ArbInfo {
     }
 }
 
-#[test]
-fn test_evm_add_code() {
-    basic_evm_add_test(None, false).unwrap();
-}
-
 pub fn basic_evm_add_test(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero(true);
@@ -2978,11 +2973,6 @@ pub fn basic_evm_add_test(log_to: Option<&Path>, debug: bool) -> Result<(), etha
 
     machine.write_coverage("test_evm_add_code".to_string());
     Ok(())
-}
-
-#[test]
-fn test_call_from_contract() {
-    let _log = evm_test_contract_call(None, false);
 }
 
 pub fn evm_test_contract_call(log_to: Option<&Path>, debug: bool) {
@@ -3049,14 +3039,6 @@ pub fn evm_test_contract_call(log_to: Option<&Path>, debug: bool) {
     }
 
     machine.write_coverage("test_call_from_contract".to_string());
-}
-
-#[test]
-pub fn test_tx_with_deposit() {
-    match evm_tx_with_deposit(None, false, false) {
-        Ok(result) => assert_eq!(result, true),
-        Err(e) => panic!("error {}", e),
-    }
 }
 
 pub fn evm_tx_with_deposit(

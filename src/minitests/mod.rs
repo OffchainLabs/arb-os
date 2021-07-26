@@ -263,6 +263,11 @@ fn evm_tests() {
 }
 
 #[test]
+fn test_call_from_contract() {
+    let _log = crate::evm::preinstalled_contracts::evm_test_contract_call(None, false);
+}
+
+#[test]
 fn test_direct_deploy_and_compressed_call_add() {
     let _log = crate::evm::evm_direct_deploy_and_compressed_call_add(None, false);
 }
@@ -300,6 +305,19 @@ fn test_function_table_access() {
 #[test]
 fn test_l2_to_l1_call() {
     crate::evm::preinstalled_contracts::evm_test_callback(None, false).unwrap();
+}
+
+#[test]
+fn test_evm_add_code() {
+    crate::evm::preinstalled_contracts::basic_evm_add_test(None, false).unwrap();
+}
+
+#[test]
+pub fn test_tx_with_deposit() {
+    match crate::evm::preinstalled_contracts::evm_tx_with_deposit(None, false, false) {
+        Ok(result) => assert_eq!(result, true),
+        Err(e) => panic!("error {}", e),
+    }
 }
 
 #[test]
