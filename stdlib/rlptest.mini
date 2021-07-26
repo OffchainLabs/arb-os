@@ -183,7 +183,7 @@ func testRlpHasher() {
 
     if (keccak256(oldBuf, 0, bytearray_size(oldBuf)) != newWay) {
         asm(14,) { debugprint };
-        panic;
+        error;
     }
 }
 

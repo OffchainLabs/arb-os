@@ -43,7 +43,6 @@ use output::output_init;
 use output::txReceipts_init;
 
 use precompiles::precompiles_init;
-use rollupTracker::rollupTracker_init;
 use std::rlp::rlp_init;
 
 use std::bytearray::bytearray_unmarshalBytes;
