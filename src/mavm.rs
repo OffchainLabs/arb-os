@@ -716,7 +716,15 @@ impl Value {
                 if buf.size == 0 {
                     u._push_byte(2u8);
                 } else {
-                    panic!();
+                    // println!("Hmm {}", buf.size);
+                    u._push_byte(3u8);
+                    /*
+                    u._push_byte((buf.size & 0xff) as u8);
+                    u._push_byte(((buf.size >> 8) & 0xff) as u8);
+                    // panic!();
+                    for i in 0..buf.size {
+                        u._push_byte(buf.read_byte(i))
+                    }*/
                 }
             }
             _ => {

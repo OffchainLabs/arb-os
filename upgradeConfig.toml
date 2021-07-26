@@ -1,2 +1,2 @@
-data = ["globalAccountStore"]
+data = ["globalAccountStore", "wasm_prog"]
 

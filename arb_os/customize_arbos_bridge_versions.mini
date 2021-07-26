@@ -57,6 +57,14 @@ public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade
     return acctStore;
 }
 
+public func set_wasm_prog_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> any {
+    // return null;
+    let buf = #include "/home/sami/rlp-nohash.wasm";
+    let ln = 17804;
+    let compiled = asm(ln, buf,) any { compilewasm };
+    return compiled;
+}
+
 public func acctClosure(addr: address, acct: OldAccount, state: map<address, Account>) -> map<address, Account> {
     let updatedAcct = unsafecast<Account>(());   // force compiler to typecheck the following assignment
     updatedAcct = struct {
