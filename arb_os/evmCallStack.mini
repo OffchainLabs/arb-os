@@ -1197,7 +1197,7 @@ func storageReclaimedForSDQ(topFrame: EvmCallFrame) -> uint {
             let (uq, rawItem) = res;
             q = uq;
             let victim = unsafecast<address>(rawItem);
-            if let Some(sz) = account_getStorageSize(accountStore_get(topFrame.accountStore, victim)) {
+            if let Some(sz) = account_getStorageSize(evmCallFrame_getAccount(topFrame, victim)) {
                 ret = ret + sz;
             }
         } else {
