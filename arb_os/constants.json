@@ -98,6 +98,7 @@
     "Charging_DefaultArbGasPerStorage": 0,
     "Charging_GasPoolDepthSeconds": 720,
     "Charging_MinArbGasForContractTx": 50,
+    "Charging_MemoryChargeDenominator": 100000,
     "Charging_RetryableTxRepriceIntervalSeconds": 86400,
     "Charging_TxGasLimitSeconds": 20,
     "DefaultSecondsPerSend": 1800,

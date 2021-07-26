@@ -82,6 +82,7 @@ use gasAccounting::gasAccounting_getGasChargeAmountInArbGas;
 use gasAccounting::txFeeStats_zero;
 use gasAccounting::getAddressForReserveFundsDeposit;
 use gasAccounting::deferredPayments_apply;
+use gasAccounting::gasAccounting_addToGasPool;
 
 use codeSegment::translateEvmCodeSegment;
 
@@ -1420,6 +1421,27 @@ public func evmCallFrame_constructorIsOnStackForAddress(frame: EvmCallFrame, add
             return false;
         }
     };
+}
+
+public impure func evmCallStack_touchMemoryOffset(offset: uint) {
+    if let Some(topFrame) = globalCallStack {
+        let prev = topFrame.maxMemoryOffsetTouched;
+        if (offset > prev) {
+            let delta =   (offset*offset / const::Charging_MemoryChargeDenominator)
+                        - (prev*prev / const::Charging_MemoryChargeDenominator);
+            globalCallStack = Some(topFrame with { maxMemoryOffsetTouched: offset });
+
+            // deduct the gas difference from current gas remaining, but add it back to the gas pool because it's not computation
+            let gas = asm() uint { getgas } / const::Charging_ArbGasPerAvmGas;
+            if (delta < gas) {
+                gasAccounting_addToGasPool(delta);
+                asm(const::Charging_ArbGasPerAvmGas * (gas - delta),) { setgas };
+            } else {
+                gasAccounting_addToGasPool(gas);
+                asm(1,) { setgas };      // ensure we'll run out of gas immediately
+            }
+        }
+    }
 }
 
 public impure func evmCallStack_runningAsAccount() -> option<Account> {

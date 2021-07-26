@@ -348,6 +348,14 @@ public impure func gasAccounting_getPricesInArbGas() -> (uint, uint, uint) {  //
     );
 }
 
+public impure func gasAccounting_addToGasPool(delta: uint) {
+    gasAccountingInfo = gasAccountingInfo with {
+        congestionState: gasAccountingInfo.congestionState with {
+            gasPool: gasAccountingInfo.congestionState.gasPool + int(delta)
+        }
+    };
+}
+
 public impure func gasAccounting_setFeesEnabled(enabled: bool) {
     gasAccountingInfo = gasAccountingInfo with {
         feeConfig: gasAccountingInfo.feeConfig with { enabled: enabled }
