@@ -2,6 +2,8 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
+use crate::evm::preinstalled_contracts::_ArbOwner;
+use crate::evm::{preinstalled_contracts::_ArbInfo, test_contract_path, AbiForContract};
 use crate::mavm::Value;
 use crate::run::{_bytestack_from_bytes, load_from_file, run, run_from_file, Machine};
 use crate::uint256::Uint256;
@@ -9,8 +11,6 @@ use num_bigint::{BigUint, RandBigInt};
 use rlp::RlpStream;
 use std::convert::TryInto;
 use std::path::Path;
-use crate::evm::{AbiForContract, test_contract_path, preinstalled_contracts::_ArbInfo};
-use crate::evm::preinstalled_contracts::_ArbOwner;
 
 mod integration;
 
@@ -510,28 +510,26 @@ fn balance_after_memory_usage(usage: u64) -> Uint256 {
     let _ = machine.run(None);
 
     let arbowner = _ArbOwner::_new(&wallet, false);
-    arbowner._set_fees_enabled(
-        &mut machine,
-        true,
-        true,
-    ).unwrap();
+    arbowner
+        ._set_fees_enabled(&mut machine, true, true)
+        .unwrap();
 
-    let (receipts, _) = contract.call_function(
-        my_addr.clone(),
-        "test",
-        &[ethabi::Token::Uint(Uint256::from_u64(usage).to_u256())],
-        &mut machine,
-        Uint256::zero(),
-        false,
-    ).unwrap();
+    let (receipts, _) = contract
+        .call_function(
+            my_addr.clone(),
+            "test",
+            &[ethabi::Token::Uint(Uint256::from_u64(usage).to_u256())],
+            &mut machine,
+            Uint256::zero(),
+            false,
+        )
+        .unwrap();
     assert_eq!(receipts.len(), 1);
     assert!(receipts[0].succeeded());
 
-    arbowner._set_fees_enabled(
-        &mut machine,
-        false,
-        true,
-    ).unwrap();
+    arbowner
+        ._set_fees_enabled(&mut machine, false, true)
+        .unwrap();
 
     let arbinfo = _ArbInfo::_new(false);
     arbinfo._get_balance(&mut machine, &my_addr).unwrap()
