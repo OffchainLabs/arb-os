@@ -1043,16 +1043,17 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
 
 #[noinline, ] public impure func doCreationOpcode(value: uint, constructorCode: ByteArray, newAddress: address) -> address {
     // make sure there isn't already an account at the given address
-    if let Some(acct) = evmCallStack_getAccount(newAddress) {
+    let originalAcct = xif let Some(acct) = evmCallStack_getAccount(newAddress) {
         if (account_hasContract(acct)) {
             // there is already a contract at that address; return failure
             return address(0);
         }
+        acct
     } else {
         // somehow there isn't an EVM callframe
         evm_runtimePanic(32);
-        panic;
-    }
+        panic
+    };
 
     let (startPoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(constructorCode), false);
 
@@ -1060,7 +1061,7 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
     if (evmCallStack_setAccount(
             newAddress,
             account_setContractInfo(
-                pristineAccount(newAddress),
+                originalAcct,
                 constructorCode,
                 evmJumpTable,
                 getDummyAcceptContractCode(),
