@@ -4,5 +4,9 @@
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 
-void _dummy() {
+use evmCallStack::EvmCallFrame;
+
+
+public func set_globalCallStack_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
+    return None<EvmCallFrame>;
 }

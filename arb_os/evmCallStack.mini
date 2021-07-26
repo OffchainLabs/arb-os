@@ -125,6 +125,7 @@ type EvmCallFrame = struct {
     callvalue: uint,                    // Eth value given to this call by its caller
     returnInfo: option<ReturnInfo>,     // result of last subcall made by this call (if any)
     memory: ByteArray,                  // EVM memory of this call
+    maxMemoryOffsetTouched: uint,       // maximum memory offset read/written by this call (in bytes)
     storageDelta: int,                  // change in total EVM storage usage, including child calls
     revertOnStorageWrite: bool,         // if true, revert if the EVM code tries to write to storage
     evmLogs: EvmLogs,                   // EVM logs, including those created by this call and its subcalls
@@ -346,6 +347,7 @@ public impure func initEvmCallStack(
                     callvalue: request.value,
                     returnInfo: None<ReturnInfo>,
                     memory: bytearray_new(0),
+                    maxMemoryOffsetTouched: 0,
                     storageDelta: int(0),
                     revertOnStorageWrite: false,
                     evmLogs: evmlogs_empty(),
@@ -551,6 +553,7 @@ public impure func initEvmCallStackForConstructor(
                 callvalue: request.value,
                 returnInfo: None<ReturnInfo>,
                 memory: bytearray_new(0),
+                maxMemoryOffsetTouched: 0,
                 storageDelta: int(0),
                 revertOnStorageWrite: false,
                 evmLogs: evmlogs_empty(),
@@ -589,6 +592,7 @@ public impure func initEvmCallStackForConstructor(
                 callvalue: request.value,
                 returnInfo: None<ReturnInfo>,
                 memory: bytearray_new(0),
+                maxMemoryOffsetTouched: 0,
                 storageDelta: int(0),
                 revertOnStorageWrite: false,
                 evmLogs: evmlogs_empty(),
@@ -743,6 +747,7 @@ public impure func evmCallStack_doCall(
             callvalue: balance,
             returnInfo: None<ReturnInfo>,
             memory: bytearray_new(0),
+            maxMemoryOffsetTouched: 0,
             storageDelta: topFrame.storageDelta,
             revertOnStorageWrite: // disallow storage write if gas provided < EVM gas cost of storage write
                                   //       if balance == 0, disallow if gas < EVM gas cost of storage write
