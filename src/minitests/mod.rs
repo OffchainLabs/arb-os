@@ -236,12 +236,12 @@ fn test_sha256_precompile() {
 
 #[test]
 fn test_ecpairing_precompile() {
-    crate::evm::_evm_ecpairing_precompile(None, false);
+    crate::evm::preinstalled_contracts::evm_ecpairing_precompile(None, false);
 }
 
 #[test]
 fn test_ripemd160_precompile() {
-    crate::evm::_evm_eval_ripemd160(None, false);
+    crate::evm::preinstalled_contracts::evm_eval_ripemd160(None, false);
 }
 
 /*  Disabled this test because the format it uses is no longer supported. Aggregator testing
@@ -259,7 +259,7 @@ fn test_direct_deploy_and_call_add() {
 
 #[test]
 fn evm_tests() {
-    assert!(crate::evm::_evm_tests().is_ok());
+    assert!(crate::evm::preinstalled_contracts::evm_tests().is_ok());
 }
 
 #[test]
@@ -269,12 +269,12 @@ fn test_direct_deploy_and_compressed_call_add() {
 
 #[test]
 fn test_payment_in_constructor() {
-    crate::evm::_evm_test_payment_in_constructor(None, false);
+    crate::evm::preinstalled_contracts::evm_test_payment_in_constructor(None, false);
 }
 
 #[test]
 fn test_block_num_consistency() {
-    let _ = crate::evm::_evm_block_num_consistency_test(false).unwrap();
+    let _ = crate::evm::preinstalled_contracts::evm_block_num_consistency_test(false).unwrap();
 }
 
 #[test]
@@ -299,7 +299,7 @@ fn test_function_table_access() {
 
 #[test]
 fn test_l2_to_l1_call() {
-    crate::evm::_evm_test_callback(None, false).unwrap();
+    crate::evm::preinstalled_contracts::evm_test_callback(None, false).unwrap();
 }
 
 #[test]
@@ -343,7 +343,7 @@ fn test_payment_to_empty_address() {
 
 #[test]
 fn test_underfunded_nested_call() {
-    assert!(crate::evm::_underfunded_nested_call_test(None, false).is_ok());
+    assert!(crate::evm::preinstalled_contracts::underfunded_nested_call_test(None, false).is_ok());
 }
 
 fn test_call_to_precompile5(
