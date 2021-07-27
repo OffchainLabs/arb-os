@@ -24,6 +24,13 @@ extern {
     type Error = String;
 }
 
+match {
+    r"\s*" => { },                                                                 // Skip whitespace
+    r"/\*(([^*/]|\n)|(\*+([^*/]|\n)|/([^*/]|\n)*|/\*([^*/]|\n)*))*\**\*/" => { },  // Skip multi-line comments
+    r"//[^\n\r]*[\n\r]*" => { },                                                   // Skip single-line comments
+    _
+}
+
 pub Decls: Vec<TopLevelDecl> = {
 	<a: ("#![" <Attributes> "]")?><mut i:ImportDecl*> <mut n:NonImportDecl+> => {
         i.append(&mut n);
