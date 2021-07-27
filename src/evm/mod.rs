@@ -131,6 +131,95 @@ pub fn evm_xcontract_call_with_constructors(
     Ok(true)
 }
 
+pub fn _evm_tests() -> Result<(), ethabi::Error> {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+
+    let mut test_contract = AbiForContract::new_from_file(&test_contract_path("EvmTests"))?;
+    if test_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .is_err()
+    {
+        panic!("failed to deploy EvmTests contract");
+    }
+
+    let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
+    if add_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .is_err()
+    {
+        panic!("failed to deploy Add contract");
+    }
+
+    let (logs, sends) = test_contract.call_function(
+        Uint256::zero(),
+        "test",
+        &[ethabi::Token::Address(add_contract.address.to_h160())],
+        &mut machine,
+        Uint256::zero(),
+        false,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    assert!(logs[0].succeeded());
+    let evm_logs = logs[0]._get_evm_logs();
+    if evm_logs.len() != 0 {
+        let log_data = &evm_logs[0].data;
+        let val0 = Uint256::from_bytes(&log_data[0..32]);
+        let val1 = Uint256::from_bytes(&log_data[32..64]);
+        println!("Log codes: {} {}", val0, val1);
+    }
+    assert_eq!(evm_logs.len(), 0);
+
+    // test log0 instruction
+    let (logs, sends) = test_contract.call_function(
+        Uint256::zero(),
+        "makeLog0",
+        &[],
+        &mut machine,
+        Uint256::zero(),
+        false,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    assert!(logs[0].succeeded());
+    let evm_logs = logs[0]._get_evm_logs();
+    assert_eq!(evm_logs.len(), 1);
+    let log_0_data = &evm_logs[0].data;
+    assert_eq!(log_0_data.len(), 32);
+    assert_eq!(Uint256::from_bytes(log_0_data), Uint256::from_u64(73));
+
+    // test selfdestruct instruction
+    let mut sd_contract = AbiForContract::new_from_file(&test_contract_path("SelfDestructor"))?;
+    if sd_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .is_err()
+    {
+        panic!("failed to deploy SelfDestructor contract");
+    }
+    machine.runtime_env.insert_eth_deposit_message(
+        Uint256::zero(),
+        sd_contract.address.clone(),
+        Uint256::from_u64(777),
+    );
+    let _ = machine.run(None);
+
+    let (logs, sends) = test_contract.call_function(
+        Uint256::zero(),
+        "destructTest",
+        &[ethabi::Token::Address(sd_contract.address.to_h160())],
+        &mut machine,
+        Uint256::zero(),
+        false,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    assert!(logs[0].succeeded());
+
+    machine.write_coverage("evm_tests".to_string());
+    Ok(())
+}
+
 pub fn _evm_tx_with_deposit(
     log_to: Option<&Path>,
     debug: bool,

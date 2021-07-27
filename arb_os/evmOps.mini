@@ -30,6 +30,7 @@ use evmCallStack::snapshotAuxStack;
 use evmCallStack::evmCallStack_changeNumAccounts;
 use evmCallStack::evmCallStack_getAccountStoreInCurrentContext;
 use evmCallStack::evmCallStack_setAccountStoreInCurrentContext;
+use evmCallStack::evmCallStack_currentFrameStorageDelta;
 
 use evmCallStack::evmCallFrame_runningAsAccount;
 use evmCallStack::evmCallFrame_runningCodeFromAccount;
@@ -48,6 +49,7 @@ use accounts::account_getCode;
 use accounts::account_getStorageCell;
 use accounts::account_getAllStorage;
 use accounts::account_getEvmJumpTable;
+use accounts::account_getNextSeqNum;
 use accounts::account_fetchAndIncrSeqNum;
 use accounts::account_setContractInfo;
 use accounts::account_isEmpty;
@@ -63,12 +65,14 @@ use inbox::inbox_currentEthBlockNumber;
 
 use gasAccounting::getArbGasPrice;
 use gasAccounting::getCurrentBlockGasLimit;
+use gasAccounting::gasAccounting_getStoragePriceInArbGas;
 
 use tracing::evmTracer_pushCreate;
 use tracing::evmTracer_pushCreate2;
 
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
@@ -440,6 +444,7 @@ public impure func evmOp_mstore(memAddr: uint, value: uint) {
 }
 
 public impure func evmOp_mstore8(memAddr: uint, value:uint) {
+    debug((memAddr, value));
     if let Some(topFrame) = evmCallStack_topFrame() {
         let memory = bytearray_setByte(
             evmCallFrame_getMemory(topFrame),
@@ -677,7 +682,23 @@ public impure func evmOp_log4(
 }
 
 public impure func evmOp_gas() -> uint {
-    return (getGas() + (const::Charging_ArbGasPerAvmGas - 1)) / const::Charging_ArbGasPerAvmGas;
+    let avmGasPerArbGas = chainParams_getOrDie(const::Atom_Param_AvmGasPerArbGas);
+    let gasLeft = (getGas() + (avmGasPerArbGas - 1)) / avmGasPerArbGas;
+    let storageDelta = evmCallStack_currentFrameStorageDelta();
+    let gasNeededForStorage = xif (storageDelta > int(0)) {
+        uint(storageDelta) * gasAccounting_getStoragePriceInArbGas()
+    } else {
+        0
+    };
+    return xif (gasLeft > gasNeededForStorage) {
+        gasLeft - gasNeededForStorage
+    } else {
+        // no gas remaining, once we account for storage, so make the tx run out of gas now
+        setGas(1);
+        evmOp_revert(0, 0);
+        //NOTREACHED
+        0
+    };
 }
 
 #[noinline, ] public impure func evmOp_callAndReturn(
@@ -1012,8 +1033,8 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
 #[noinline, ] public impure func doCreationOpcode(value: uint, constructorCode: ByteArray, newAddress: address) -> address {
     // make sure there isn't already an account at the given address
     if let Some(acct) = evmCallStack_getAccount(newAddress) {
-        if (account_hasContract(acct)) {
-            // there is already a contract at that address; return failure
+        if (account_hasContract(acct) || (account_getNextSeqNum(acct) != 0)) {
+            // there is already a contract at that address, or its nonce is nonzero; return failure
             return address(0);
         }
     } else {
@@ -1052,30 +1073,32 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
 
         if (constructorSucceeded) {
             if let Some(contractCode) = evmCallStack_getTopFrameReturnData() {
-                let astore = evmCallStack_getAccountStoreInCurrentContext();
-                if let Some(res) = accountStore_createOrAddCodeRef(astore, contractCode) {
-                    let (uastore, startPoint2, evmJumpTable2, _) = res;
-                    evmCallStack_setAccountStoreInCurrentContext(uastore);
-                    if let Some(oldAcct) = evmCallStack_getAccount(newAddress) {
-                        let storage = xif let Some(st) = account_getAllStorage(oldAcct) {
-                            st
-                        } else {
-                            storageMap_new()
-                        };
-                        if (evmCallStack_setAccount(
-                                newAddress,
-                                account_setContractInfo(
-                                    oldAcct,
-                                    contractCode,
-                                    evmJumpTable2,
-                                    startPoint2,
-                                    storage,
-                                    true,
+                if ((bytearray_size(contractCode) == 0) || (bytearray_getByte(contractCode, 0) != 0xef)) { // required by EIP-3541
+                    let astore = evmCallStack_getAccountStoreInCurrentContext();
+                    if let Some(res) = accountStore_createOrAddCodeRef(astore, contractCode) {
+                        let (uastore, startPoint2, evmJumpTable2, _) = res;
+                        evmCallStack_setAccountStoreInCurrentContext(uastore);
+                        if let Some(oldAcct) = evmCallStack_getAccount(newAddress) {
+                            let storage = xif let Some(st) = account_getAllStorage(oldAcct) {
+                                st
+                            } else {
+                                storageMap_new()
+                            };
+                            if (evmCallStack_setAccount(
+                                    newAddress,
+                                    account_setContractInfo(
+                                        oldAcct,
+                                        contractCode,
+                                        evmJumpTable2,
+                                        startPoint2,
+                                        storage,
+                                        true,
+                                    )
                                 )
-                            )
-                        ) {
-                            evmCallStack_changeNumAccounts(int(1));
-                            return newAddress;
+                            ) {
+                                evmCallStack_changeNumAccounts(int(1));
+                                return newAddress;
+                            }
                         }
                     }
                 }
