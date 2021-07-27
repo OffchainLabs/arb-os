@@ -20,7 +20,7 @@ mod benchmarks;
 #[cfg(test)]
 mod bls;
 mod evmtest;
-mod preinstalled_contracts;
+pub(crate) mod preinstalled_contracts;
 
 #[derive(Clone)]
 pub struct CallInfo<'a> {
