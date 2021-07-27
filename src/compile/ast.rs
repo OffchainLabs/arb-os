@@ -48,6 +48,7 @@ impl DebugInfo {
         }
     }
 
+    /// builds a `DebugInfo` in-place at the parsing site
     pub fn here(lines: &Lines, lno: usize, file: u64) -> Self {
         DebugInfo {
             location: lines.location(BytePos::from(lno), file),
@@ -1572,7 +1573,7 @@ impl Expr {
         )
     }
 
-    ///
+    /// Creates an expression whose DebugInfo is populated in-place at the parsing site
     pub fn lno(kind: ExprKind, lines: &Lines, lno: usize, file: u64) -> Self {
         Self::new(kind, DebugInfo::here(lines, lno, file))
     }
