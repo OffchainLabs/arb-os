@@ -67,6 +67,8 @@ use std::queue::queue_isEmpty;
 use std::queue::queue_get;
 use std::queue::queue_put;
 
+use std::safeMath::safeMul;
+
 use std::stack::stack_new;
 use std::stack::stack_isEmpty;
 use std::stack::stack_push;
@@ -1427,8 +1429,8 @@ public impure func evmCallStack_touchMemoryOffset(offset: uint) {
     if let Some(topFrame) = globalCallStack {
         let prev = topFrame.maxMemoryOffsetTouched;
         if (offset > prev) {
-            let delta =   (offset*offset / const::Charging_MemoryChargeDenominator)
-                        - (prev*prev / const::Charging_MemoryChargeDenominator);
+            let delta =   (safeMul(offset, offset) / const::Charging_MemoryChargeDenominator)
+                        - (safeMul(prev, prev) / const::Charging_MemoryChargeDenominator);
             globalCallStack = Some(topFrame with { maxMemoryOffsetTouched: offset });
 
             // deduct the gas difference from current gas remaining, but add it back to the gas pool because it's not computation
@@ -1564,7 +1566,7 @@ public impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray {
 }
 
 public impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool {
-    evmCallStack_touchMemoryOffset(bytearray_size(mem)-1);
+    evmCallStack_touchMemoryOffset(bytearray_size(mem));
     return xif let Some(topFrame) = globalCallStack {
         globalCallStack = Some(topFrame with { memory: mem });
         true

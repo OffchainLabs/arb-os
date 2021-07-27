@@ -91,6 +91,8 @@ use std::bytearray::bytearray_copy;
 use std::bytearray::bytearray_toSizeAndBuffer;
 use std::bytestream::bytestream_new;
 
+use std::safeMath::safeAdd;
+
 use std::stack::stack_pop;
 use std::stack::stack_isEmpty;
 use std::stack::stack_discardDeepestItems;
@@ -182,7 +184,7 @@ public impure func evmOp_stop() {
 
 public impure func evmOp_sha3(baseMemAddr: uint, nbytes: uint) -> bytes32 {
     if(nbytes > 0) {
-        evmCallStack_touchMemoryOffset(baseMemAddr + nbytes);
+        evmCallStack_touchMemoryOffset(safeAdd(baseMemAddr, nbytes));
     }
     return keccak256(evmCallStack_getTopFrameMemoryOrDie(), baseMemAddr, nbytes);
 }
@@ -266,7 +268,7 @@ public impure func evmOp_calldatasize() -> uint {
 
 public impure func evmOp_calldatacopy(memAddr: uint, calldataOffset: uint, nbytes: uint) {
     if(nbytes > 0) {
-        evmCallStack_touchMemoryOffset(memAddr + nbytes);
+        evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
     }
     if let Some(topFrame) = evmCallStack_topFrame() {
         let newMemory = bytearray_copy(
@@ -297,7 +299,7 @@ public impure func evmOp_codesize() -> uint {
 
 public impure func evmOp_codecopy(memAddr: uint, codeOffset: uint, nbytes: uint) {
     if(nbytes > 0) {
-        evmCallStack_touchMemoryOffset(memAddr + nbytes);
+        evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
     }
     if let Some(topFrame) = evmCallStack_topFrame() {
         let memory = evmCallFrame_getMemory(topFrame);
@@ -339,7 +341,7 @@ public impure func evmOp_extcodesize(addrAsUint: uint) -> uint {
 
 public impure func evmOp_extcodecopy(addrAsUint: uint, memAddr: uint, codeOffset: uint, nbytes: uint) {
     if(nbytes > 0) {
-        evmCallStack_touchMemoryOffset(memAddr + nbytes);
+        evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
     }
     let addr = address(addrAsUint);     // truncates if necessary
     if let Some(topFrame) = evmCallStack_topFrame() {
@@ -402,7 +404,7 @@ public impure func evmOp_returndatasize() -> uint {
 
 public impure func evmOp_returndatacopy(memAddr: uint, dataOffset: uint, nbytes: uint) {
     if(nbytes > 0) {
-        evmCallStack_touchMemoryOffset(memAddr + nbytes);
+        evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
     }
     let memory = evmCallStack_getTopFrameMemoryOrDie();
     if let Some(returnData) = evmCallStack_getTopFrameReturnData() {
@@ -444,7 +446,7 @@ public impure func evmOp_number() -> uint {
 }
 
 public impure func evmOp_mload(memAddr: uint) -> uint {
-    evmCallStack_touchMemoryOffset(memAddr+31);
+    evmCallStack_touchMemoryOffset(safeAdd(memAddr, 31));
     if let Some(topFrame) = evmCallStack_topFrame() {
         return bytearray_get256(
             evmCallFrame_getMemory(topFrame),
@@ -457,7 +459,7 @@ public impure func evmOp_mload(memAddr: uint) -> uint {
 }
 
 public impure func evmOp_mstore(memAddr: uint, value: uint) {
-    evmCallStack_touchMemoryOffset(memAddr+31);
+    evmCallStack_touchMemoryOffset(safeAdd(memAddr, 31));
     if let Some(topFrame) = evmCallStack_topFrame() {
         let memory = bytearray_set256(
             evmCallFrame_getMemory(topFrame),
@@ -561,7 +563,7 @@ public impure func evmOp_log0(
     nbytes: uint
 ) {
     if(nbytes > 0) {
-        evmCallStack_touchMemoryOffset(memAddr + nbytes);
+        evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
     }
     if let Some(topFrame) = evmCallStack_topFrame() {
         if (topFrame.static) {
@@ -592,7 +594,7 @@ public impure func evmOp_log1(
     topic0: uint
 ) {
     if(nbytes > 0) {
-        evmCallStack_touchMemoryOffset(memAddr + nbytes);
+        evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
     }
     if let Some(topFrame) = evmCallStack_topFrame() {
         if (topFrame.static) {
@@ -625,7 +627,7 @@ public impure func evmOp_log2(
     topic1: uint,
 ) {
     if(nbytes > 0) {
-        evmCallStack_touchMemoryOffset(memAddr + nbytes);
+        evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
     }
     if let Some(topFrame) = evmCallStack_topFrame() {
         if (topFrame.static) {
@@ -660,7 +662,7 @@ public impure func evmOp_log3(
     topic2: uint,
 ) {
     if(nbytes > 0) {
-        evmCallStack_touchMemoryOffset(memAddr + nbytes);
+        evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
     }
     if let Some(topFrame) = evmCallStack_topFrame() {
         if (topFrame.static) {
@@ -697,7 +699,7 @@ public impure func evmOp_log4(
     topic3: uint,
 ) {
     if(nbytes > 0) {
-        evmCallStack_touchMemoryOffset(memAddr + nbytes);
+        evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
     }
     if let Some(topFrame) = evmCallStack_topFrame() {
         if (topFrame.static) {
@@ -794,10 +796,10 @@ public impure func evmOp_gas() -> uint {
     retLength: uint
 ) -> bool {
     if(argsLength > 0) {
-        evmCallStack_touchMemoryOffset(argsOffset+argsLength);
+        evmCallStack_touchMemoryOffset(safeAdd(argsOffset, argsLength));
     }
     if(retLength > 0) {
-        evmCallStack_touchMemoryOffset(retOffset+retLength);
+        evmCallStack_touchMemoryOffset(safeAdd(retOffset, retLength));
     }
 
     if (balance > 0) {
@@ -859,10 +861,10 @@ public impure func evmOp_gas() -> uint {
     retLength: uint
 ) -> bool {
     if(argsLength > 0) {
-        evmCallStack_touchMemoryOffset(argsOffset+argsLength);
+        evmCallStack_touchMemoryOffset(safeAdd(argsOffset, argsLength));
     }
     if(retLength > 0) {
-        evmCallStack_touchMemoryOffset(retOffset+retLength);
+        evmCallStack_touchMemoryOffset(safeAdd(retOffset, retLength));
     }
 
     let callee = address(calleeAsUint);     // truncates if necessary
@@ -908,10 +910,10 @@ public impure func evmOp_gas() -> uint {
     retLength: uint
 ) -> bool {
     if(argsLength > 0) {
-        evmCallStack_touchMemoryOffset(argsOffset+argsLength);
+        evmCallStack_touchMemoryOffset(safeAdd(argsOffset, argsLength));
     }
     if(retLength > 0) {
-        evmCallStack_touchMemoryOffset(retOffset+retLength);
+        evmCallStack_touchMemoryOffset(safeAdd(retOffset, retLength));
     }
 
     let callee = address(calleeAsUint);     // truncates if necessary
@@ -957,10 +959,10 @@ public impure func evmOp_gas() -> uint {
     retLength: uint
 ) -> bool {
     if(argsLength > 0) {
-        evmCallStack_touchMemoryOffset(argsOffset+argsLength);
+        evmCallStack_touchMemoryOffset(safeAdd(argsOffset, argsLength));
     }
     if(retLength > 0) {
-        evmCallStack_touchMemoryOffset(retOffset+retLength);
+        evmCallStack_touchMemoryOffset(safeAdd(retOffset, retLength));
     }
 
     let callee = address(calleeAsUint);     // truncates if necessary
@@ -999,7 +1001,7 @@ public impure func evmOp_gas() -> uint {
 
 public impure func evmOp_revert(memOffset: uint, memNbytes: uint) {
     if(memNbytes > 0) {
-        evmCallStack_touchMemoryOffset(memOffset + memNbytes);
+        evmCallStack_touchMemoryOffset(safeAdd(memOffset, memNbytes));
     }
     let _ = evmCallStack_returnFromCall(false, memOffset, memNbytes, None<impure func()>);
 
@@ -1028,7 +1030,7 @@ public impure func evmOp_revertIfStatic() {
 
 public impure func evmOp_return(memOffset: uint, memNbytes: uint) {
     if(memNbytes > 0) {
-        evmCallStack_touchMemoryOffset(memOffset + memNbytes);
+        evmCallStack_touchMemoryOffset(safeAdd(memOffset, memNbytes));
     }
     let _ = evmCallStack_returnFromCall(true, memOffset, memNbytes, None<impure func()>);
 
@@ -1051,7 +1053,7 @@ public impure func evmOp_selfdestruct(ownerAsUint: uint) {
 
 public impure func evmOp_create(value: uint, offset: uint, length: uint) -> address {
     if (length > 0) {
-        evmCallStack_touchMemoryOffset(offset + length);
+        evmCallStack_touchMemoryOffset(safeAdd(offset, length));
     }
     if let Some(topFrame) = evmCallStack_topFrame() {
         if (topFrame.static) {
@@ -1080,7 +1082,7 @@ public impure func evmOp_create(value: uint, offset: uint, length: uint) -> addr
 
 public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: uint) -> address {
     if (length > 0) {
-        evmCallStack_touchMemoryOffset(offset + length);
+        evmCallStack_touchMemoryOffset(safeAdd(offset, length));
     }
     if let Some(topFrame) = evmCallStack_topFrame() {
         if (topFrame.static) {
