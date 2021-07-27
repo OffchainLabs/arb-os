@@ -1272,14 +1272,7 @@ pub fn parse_from_source(
                 format!("{}", &source[offset..end],),
                 vec![lines.location(BytePos::from(offset), file_id).unwrap()],
             ),
-            ParseError::User { error } => CompileError::new(
-                String::from("Internal error"),
-                format!(
-                    "This should be impossible under the new error system {}",
-                    error
-                ),
-                vec![],
-            ),
+            ParseError::User { error } => error,
         })?;
 
     for (constant, loc) in local_constants {

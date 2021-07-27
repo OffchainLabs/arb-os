@@ -19,7 +19,7 @@ use std::collections::{HashMap, HashSet};
 grammar(stringtable: &mut StringTable, file_info: &Lines, filename: u64, current_path: &[String], constants: &mut HashMap<String, Uint256>, local_constants: &mut HashMap<String, Location>, used_constants: &mut HashSet<String>, error_system: &mut ErrorSystem);
 
 extern {
-    type Error = String;
+    type Error = CompileError;
 }
 
 match {
@@ -125,7 +125,7 @@ Statement: Statement = {
 }
 
 Attributes: Attributes = {
-    <lno: @L> <names: (<IdentString> ",")*> <last: IdentString?> =>? {
+    <lno: @L> <names: (<IdentString> ",")*> <last: IdentString?> => {
         let mut attribs = Attributes::default();
         for name in names.into_iter().chain(last.into_iter()) {
             match name.as_ref() {
@@ -146,7 +146,9 @@ Attributes: Attributes = {
                     )
                 ),
             }
-        }; Ok(attribs) },
+        }; 
+        attribs
+    },
 }
 
 StatementKind: StatementKind = {
