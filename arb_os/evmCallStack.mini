@@ -67,6 +67,8 @@ use std::queue::queue_isEmpty;
 use std::queue::queue_get;
 use std::queue::queue_put;
 
+use std::safeMath::safeMul;
+
 use std::stack::stack_new;
 use std::stack::stack_isEmpty;
 use std::stack::stack_push;
@@ -82,6 +84,7 @@ use gasAccounting::gasAccounting_getGasChargeAmountInArbGas;
 use gasAccounting::txFeeStats_zero;
 use gasAccounting::getAddressForReserveFundsDeposit;
 use gasAccounting::deferredPayments_apply;
+use gasAccounting::gasAccounting_addToGasPool;
 
 use codeSegment::translateEvmCodeSegment;
 
@@ -125,6 +128,7 @@ type EvmCallFrame = struct {
     callvalue: uint,                    // Eth value given to this call by its caller
     returnInfo: option<ReturnInfo>,     // result of last subcall made by this call (if any)
     memory: ByteArray,                  // EVM memory of this call
+    maxMemoryOffsetTouched: uint,       // maximum memory offset read/written by this call (in bytes)
     storageDelta: int,                  // change in total EVM storage usage, including child calls
     revertOnStorageWrite: bool,         // if true, revert if the EVM code tries to write to storage
     evmLogs: EvmLogs,                   // EVM logs, including those created by this call and its subcalls
@@ -346,6 +350,7 @@ public impure func initEvmCallStack(
                     callvalue: request.value,
                     returnInfo: None<ReturnInfo>,
                     memory: bytearray_new(0),
+                    maxMemoryOffsetTouched: 0,
                     storageDelta: int(0),
                     revertOnStorageWrite: false,
                     evmLogs: evmlogs_empty(),
@@ -551,6 +556,7 @@ public impure func initEvmCallStackForConstructor(
                 callvalue: request.value,
                 returnInfo: None<ReturnInfo>,
                 memory: bytearray_new(0),
+                maxMemoryOffsetTouched: 0,
                 storageDelta: int(0),
                 revertOnStorageWrite: false,
                 evmLogs: evmlogs_empty(),
@@ -589,6 +595,7 @@ public impure func initEvmCallStackForConstructor(
                 callvalue: request.value,
                 returnInfo: None<ReturnInfo>,
                 memory: bytearray_new(0),
+                maxMemoryOffsetTouched: 0,
                 storageDelta: int(0),
                 revertOnStorageWrite: false,
                 evmLogs: evmlogs_empty(),
@@ -743,6 +750,7 @@ public impure func evmCallStack_doCall(
             callvalue: balance,
             returnInfo: None<ReturnInfo>,
             memory: bytearray_new(0),
+            maxMemoryOffsetTouched: 0,
             storageDelta: topFrame.storageDelta,
             revertOnStorageWrite: // disallow storage write if gas provided < EVM gas cost of storage write
                                   //       if balance == 0, disallow if gas < EVM gas cost of storage write
@@ -1417,6 +1425,27 @@ public func evmCallFrame_constructorIsOnStackForAddress(frame: EvmCallFrame, add
     };
 }
 
+public impure func evmCallStack_touchMemoryOffset(offset: uint) {
+    if let Some(topFrame) = globalCallStack {
+        let prev = topFrame.maxMemoryOffsetTouched;
+        if (offset > prev) {
+            let delta =   (safeMul(offset, offset) / const::Charging_MemoryChargeDenominator)
+                        - (safeMul(prev, prev) / const::Charging_MemoryChargeDenominator);
+            globalCallStack = Some(topFrame with { maxMemoryOffsetTouched: offset });
+
+            // deduct the gas difference from current gas remaining, but add it back to the gas pool because it's not computation
+            let gas = asm() uint { getgas } / const::Charging_ArbGasPerAvmGas;
+            if (delta < gas) {
+                gasAccounting_addToGasPool(delta);
+                asm(const::Charging_ArbGasPerAvmGas * (gas - delta),) { setgas };
+            } else {
+                gasAccounting_addToGasPool(gas);
+                asm(1,) { setgas };      // ensure we'll run out of gas immediately
+            }
+        }
+    }
+}
+
 public impure func evmCallStack_runningAsAccount() -> option<Account> {
     return Some((globalCallStack?).runningAsAccount);
 }
@@ -1537,6 +1566,7 @@ public impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray {
 }
 
 public impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool {
+    evmCallStack_touchMemoryOffset(bytearray_size(mem));
     return xif let Some(topFrame) = globalCallStack {
         globalCallStack = Some(topFrame with { memory: mem });
         true
