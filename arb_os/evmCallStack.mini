@@ -869,7 +869,7 @@ public impure func evmCallStack_returnFromCall(
                 (errorHandler, newmap<uint, func()>)   // these won't be used
             };
             let (completed, gasUsage, feeStats, deferredPayments) = gasAccounting_endTxCharges(
-                topFrame.storageDelta - int(storageReclaimedForSDQ(topFrame)),  // won't underflow because signed subtraction
+                topFrame.storageDelta,
                 globalCurrentTxRequest.feeStats
             )?;
 
@@ -1147,23 +1147,6 @@ func ethTransferOrGrant(
         accountStore_payFromEscrow(acctStore, escrowKey, recipient, amount)
     } else {
         accountStore_transferEthBalance(acctStore, payer, recipient, amount)
-    };
-}
-
-func storageReclaimedForSDQ(topFrame: EvmCallFrame) -> uint {
-    // compute the amount of storage that will be reclaimed by destroying a set of accounts
-    let q = topFrame.selfDestructQueue;
-    let ret = 0;
-    return xloop {
-        if let Some(res) = queue_get(q) {
-            let (*q, rawItem) = res;
-            let victim = unsafecast<address>(rawItem);
-            if let Some(sz) = account_getStorageSize(accountStore_get(topFrame.accountStore, victim)) {
-                ret = ret + sz;
-            }
-        } else {
-            return ret;
-        }
     };
 }
 
@@ -1464,7 +1447,10 @@ public impure func evmCallStack_setTopFrameStorageCell(offset: uint, value: uint
         value
     )?;
     set topFrame.runningAsAccount = runningAsAccount;
-    set topFrame.storageDelta = topFrame.storageDelta + int(account_getStorageSize(runningAsAccount)?) - int(storageSizeBefore);
+    let storageSizeAfter = account_getStorageSize(runningAsAccount)?;
+    if (storageSizeAfter > storageSizeBefore) {
+        set topFrame.storageDelta = topFrame.storageDelta + int(storageSizeAfter - storageSizeBefore);
+    }
     globalCallStack = Some(topFrame);
     return Some(());
 }
