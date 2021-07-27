@@ -837,7 +837,7 @@ fn mavm_codegen_expr<'a>(
             code.push(create!(
                 Noop,
                 Value::new_tuple(vec![
-                    Value::Int(Uint256::from_usize(2 * bytes.len())),
+                    Value::Int(Uint256::from_usize(bytes.len())),
                     Value::Buffer(Buffer::from_bytes(bytes.clone())),
                 ])
             ));
