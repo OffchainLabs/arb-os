@@ -8,14 +8,9 @@ use crate::pos::Location;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-//
-// kvs map delete builtin (map and key and deletes the key from map, value if exists)
-// kvs map for-all        (
-// array resize           (takes array and new size + value and fills in the rest)
-
 pub type StringId = usize;
 
-///Maps `String`s to `usize` IDs.
+/// Maps `String`s to `usize` IDs.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StringTable {
     table: HashMap<String, StringId>,
@@ -29,7 +24,7 @@ impl StringTable {
         StringTable { table, by_id }
     }
 
-    ///Returns the `StringID` associated with `name` if it exists, if not creates a new entry and
+    /// Returns the `StringID` associated with `name` if it exists, if not creates a new entry and
     /// returns the newly created ID.
     pub fn draw(&mut self, name: String) -> StringId {
         match self.table.get(&name) {
@@ -43,18 +38,18 @@ impl StringTable {
         }
     }
 
-    ///If an ID exists, returns it, if not returns `None`.
-    pub fn get_if_exists(&self, name: &str) -> Option<StringId> {
+    /// If an ID exists, returns it, if not returns `None`.
+    pub fn get(&self, name: &str) -> Option<StringId> {
         self.table.get(name).cloned()
     }
 
-    ///Takes a `usize` ID and returns the associated `String`
+    /// Takes a `usize` ID and returns the associated `String`
     pub fn name_from_id(&self, name: StringId) -> &String {
-        // Getting rid of this
-
+        // TODO: Getting rid of this
         &self.by_id[name as usize]
     }
 
+    /// Creates a prepopulated `StringTable` and import set that includes the compiler builtin functions.
     pub fn builtins_table(path: &ModulePath) -> (Self, Vec<Import>) {
         let mut string_table = Self::new();
         let mut imports = vec![];
@@ -88,7 +83,7 @@ impl StringTable {
     }
 }
 
-///
+/// Represents an identifier parsed at a given location.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq)]
 pub struct Ident {
     pub id: StringId,

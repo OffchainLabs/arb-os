@@ -77,11 +77,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                         code_out.pop();
                         code_out.pop();
                         if imm.clone().is_some() {
-                            code_out.push(Instruction::new(
-                                Opcode::AVMOpcode(AVMOpcode::Noop),
-                                imm.clone(),
-                                loc2,
-                            ));
+                            code_out.push(create!(Noop, @imm.clone(), loc2));
                         }
                     } else if let Instruction {
                         opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
@@ -91,11 +87,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                     {
                         code_out.pop();
                         code_out.pop();
-                        code_out.push(Instruction::from_opcode_imm(
-                            Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                            val.clone(),
-                            loc1,
-                        ));
+                        code_out.push(create!(AuxPush, val.clone(), loc1));
                     } else {
                         done = true;
                     }
@@ -115,11 +107,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                     {
                         code_out.pop();
                         code_out.pop();
-                        code_out.push(Instruction::new(
-                            Opcode::AVMOpcode(AVMOpcode::Swap1),
-                            insn1.immediate,
-                            loc1,
-                        ));
+                        code_out.push(create!(Swap1, @insn1.immediate, loc1));
                     } else {
                         done = true;
                     }
@@ -139,11 +127,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                         code_out.pop();
                         code_out.pop();
                         if let Some(val) = imm.clone() {
-                            code_out.push(Instruction::from_opcode_imm(
-                                Opcode::AVMOpcode(AVMOpcode::Noop),
-                                val,
-                                loc2,
-                            ));
+                            code_out.push(create!(Noop, val, loc2));
                         }
                     } else {
                         let insn2 = code_out[code_out.len() - 2].clone();
@@ -155,11 +139,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                         {
                             code_out.pop();
                             code_out.pop();
-                            code_out.push(Instruction::from_opcode_imm(
-                                Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                                val.clone(),
-                                loc1,
-                            ));
+                            code_out.push(create!(AuxPop, val.clone(), loc1));
                         } else {
                             done = true;
                         }
@@ -180,11 +160,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                             code_out.pop();
                             code_out.pop();
                             if let Some(val) = imm {
-                                code_out.push(Instruction::new(
-                                    Opcode::AVMOpcode(AVMOpcode::Noop),
-                                    Some(val),
-                                    loc2,
-                                ));
+                                code_out.push(create!(Noop, val, loc2));
                             }
                         }
                         _ => {
@@ -206,11 +182,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                     {
                         code_out.pop();
                         code_out.pop();
-                        code_out.push(Instruction::from_opcode_imm(
-                            Opcode::AVMOpcode(avm_opcode),
-                            val.clone(),
-                            loc1,
-                        ));
+                        code_out.push(create!(@AVMOpcode, (avm_opcode), val.clone(), loc1));
                     } else {
                         done = true;
                     }

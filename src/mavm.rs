@@ -110,6 +110,36 @@ impl From<Instruction<AVMOpcode>> for Instruction {
     }
 }
 
+/// The default instruction generating macro sometimes overridden by other functions for simplicity.
+/// This macro is exported globally.
+macro_rules! create {
+    ($opcode:ident, $debug_info:expr $(,)?) => {
+        Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), $debug_info)
+    };
+    ($opcode:ident, $value:expr, $debug_info:expr $(,)?) => {
+        Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::$opcode), $value, $debug_info)
+    };
+    ($opcode:ident, @$value:expr, $debug_info:expr $(,)?) => {
+        Instruction {
+            opcode: Opcode::AVMOpcode(AVMOpcode::$opcode),
+            immediate: $value,
+            debug_info: $debug_info,
+        }
+    };
+    (@$opcode:ident, (), $debug_info:expr $(,)?) => {
+        Instruction::from_opcode(Opcode::$opcode, $debug_info)
+    };
+    (@$opcode:ident, (), $value:expr, $debug_info:expr $(,)?) => {
+        Instruction::from_opcode_imm(Opcode::$opcode, $value, $debug_info)
+    };
+    (@$opcode:ident, ($($build:tt)+), $debug_info:expr $(,)?) => {
+        Instruction::from_opcode(Opcode::$opcode($($build)*), $debug_info)
+    };
+    (@$opcode:ident, ($($build:tt)+), $value:expr, $debug_info:expr $(,)?) => {
+        Instruction::from_opcode_imm(Opcode::$opcode($($build)*), $value, $debug_info)
+    };
+}
+
 impl<T> Instruction<T> {
     pub fn new(opcode: T, immediate: Option<Value>, debug_info: DebugInfo) -> Self {
         Instruction {

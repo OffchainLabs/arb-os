@@ -18,30 +18,30 @@ var global10: MyType;
 
 
 impure func main() {
-    asm(tests(),) { log };
+    asm(tests().1) { log };
 }
 
-impure func tests() -> uint {
+impure func tests() -> (uint, buffer) {
     global0 = 3;
     if (global0 != 3) {
-        return 1;
+        return "error 1";
     }
         
     global9 = 4;
     if (global9 != 4) {
-        return 2;
+        return "error 2";
     }
 
     global0 = 5;
     global9 = 4;
     if (global0 != 5) {
-        return 3;
+        return "error 3";
     }
 
     global9 = 6;
     global0 = 3;
     if (global9 != 6) {
-        return 4;
+        return "error 4";
     }
 
     let sum = asm (4, 0, 3) uint {
@@ -49,56 +49,56 @@ impure func tests() -> uint {
         add
     };
     if (sum != 7) {
-        return 5;
+        return "error 5";
     }
 
     global10 = 3;
     if (global10 != 3) {
-        return 6;
+        return "error 6";
     }
 
     let farr = newfixedarray(25, 0);
     farr = farr with { [0] = 33 };
     if (farr[0] != 33) {
-        return 7;
+        return "error 7";
     }
  
     let farr2 = newfixedarray(42, 0);
     farr2 = farr2 with { [21] = 44 };
     farr2 = farr2 with { [0] = 33 };
     if (farr2[21] != 44) {
-        return 8;
+        return "error 8";
     }
 
     if (asm(16, 0) uint { byte } != 0) {
-        return 10;
+        return "error 10";
     }
     if (asm(30, 65534) uint { byte } != 255) {
-        return 11;
+        return "error 11";
     }
 
     if (asm(31, 0xfe985018496551) uint { byte } != 0x51) {
-        return 12;
+        return "error 12";
     }
 
     if (asm(29, 0xfe985018496551) uint { byte } != 0x49) {
-        return 13;
+        return "error 13";
     }
 
     if (asm(0, ~0) uint { byte } != 0xff) {
-        return 14;
+        return "error 14";
     }
 
     if ((0xbe << 12) != 0xbe000) {
-        return 15;
+        return "error 15";
     }
 
     if (((32*581249+17) >> 5) != 581249) {
-        return 16;
+        return "error 16";
     }
 
     if (((~0) >> 244) != 0xfff) {
-        return 17;
+        return "error 17";
     }
 
     let testInt = int(0);
@@ -106,38 +106,38 @@ impure func tests() -> uint {
     let shiftedTestInt = testInt << int(159);
     let shiftedBack = asm(159, shiftedTestInt) int { sar };
     if (shiftedBack != testInt) {
-        return 18;
+        return "error 18";
     }
 
     if (asm(5, 32*581249+17) uint { sar } != 581249) {
-        return 19;
+        return "error 19";
     }
 
     if (asm(1, 0xffff) uint { signextend } != ~0) {
-        return 20;
+        return "error 20";
     }
 
     if (asm(2, 0xffff) uint { signextend } != 0xffff) {
-        return 21;
+        return "error 21";
     }
 
     if (asm(1, 0x63ff) uint { signextend } != 0x63ff) {
-        return 22;
+        return "error 22";
     }
 
     let a = -int(1);
     let b = int(0);
     if (b < a) {
-        return 23;
+        return "error 23";
     }
     if (a >= b) {
-        return 24;
+        return "error 24";
     }
 
     return struct9test();
 }
 
-func struct9test() -> uint {
+func struct9test() -> (uint, buffer) {
     let _theStruct = struct {
         field0: 0,
         field1: 1,
@@ -150,5 +150,5 @@ func struct9test() -> uint {
         field8: 8,
     };
 
-    return 0;
+    return "";
 }

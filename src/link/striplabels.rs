@@ -112,46 +112,32 @@ pub fn fix_nonforward_labels(
 
     for insn in code_in {
         let insn_in = insn.clone();
-        match insn_in.immediate {
+        match &insn_in.immediate {
             Some(val) => match val {
                 Value::Label(label) => {
-                    if imm_labels_seen.contains(&label) || imported_func_set.contains(&label) {
-                        let idx = match jump_table_index.get(&label) {
+                    if imm_labels_seen.contains(label) || imported_func_set.contains(&label) {
+                        let idx = match jump_table_index.get(label) {
                             Some(index) => *index,
                             None => {
                                 let index = jump_table.len();
                                 jump_table_index.insert(label.clone(), index);
-                                jump_table.push(label);
+                                jump_table.push(label.clone());
                                 index
                             }
                         };
-                        code_out.push(Instruction::from_opcode(
-                            Opcode::GetGlobalVar(jump_table_index_in_globals),
-                            insn_in.debug_info,
-                        ));
-                        code_out.push(Instruction::from_opcode(
-                            Opcode::PushExternal(idx),
-                            insn_in.debug_info,
-                        ));
+                        code_out.push(create!(@GetGlobalVar, (jump_table_index_in_globals), insn_in.debug_info));
+                        code_out.push(create!(@PushExternal, (idx), insn_in.debug_info));
                         code_out.push(Instruction::from_opcode(insn_in.opcode, insn_in.debug_info));
                     } else {
-                        code_out.push(Instruction::from_opcode_imm(
-                            insn_in.opcode,
-                            val,
-                            insn_in.debug_info,
-                        ));
+                        code_out.push(insn_in.clone());
                     }
                 }
                 _ => {
-                    code_out.push(Instruction::from_opcode_imm(
-                        insn_in.opcode,
-                        val,
-                        insn_in.debug_info,
-                    ));
+                    code_out.push(insn_in.clone());
                 }
             },
             None => {
-                code_out.push(Instruction::from_opcode(insn_in.opcode, insn_in.debug_info));
+                code_out.push(insn_in.clone());
             }
         }
         if let Opcode::Label(label) = insn_in.opcode {
@@ -164,17 +150,11 @@ pub fn fix_nonforward_labels(
         match insn.opcode {
             Opcode::PushExternal(idx) => {
                 if let Some(val) = &insn.immediate {
-                    code_xformed.push(Instruction::from_opcode_imm(
-                        Opcode::AVMOpcode(AVMOpcode::Noop),
-                        val.clone(),
-                        insn.debug_info,
-                    ));
+                    code_xformed.push(create!(Noop, val.clone(), insn.debug_info));
                 }
-                code_xformed.push(Instruction::from_opcode_imm(
-                    Opcode::TupleGet(jump_table.len()),
-                    Value::Int(Uint256::from_usize(idx)),
-                    insn.debug_info,
-                ));
+                code_xformed.push(create!(
+                    @TupleGet, (jump_table.len()), Value::Int(Uint256::from_usize(idx)), insn.debug_info)
+                );
             }
             _ => {
                 code_xformed.push(insn.clone());

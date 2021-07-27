@@ -1,3 +1,7 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
 use crate::compile::{AbstractSyntaxTree, StructField, Type, TypeCheckedNode, TypeTree};
 use crate::link::LinkedProgram;
 use crate::GenUpgrade;
@@ -304,6 +308,8 @@ fn get_globals_and_version_from_file(
             }
             tipe.recursive_apply(replace_nominal, &type_tree, &mut state);
 
+            // TODO: remove this after solving the upgrade loop problem.
+            dbg!(path, &global.name, &tipe);
             fields.push(StructField::new(global.name, tipe))
         }
     }

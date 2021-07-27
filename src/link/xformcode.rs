@@ -27,23 +27,16 @@ pub fn fix_tuple_size(
         match insn.opcode {
             Opcode::MakeFrame(nargs, ntotal, return_address) => {
                 if return_address {
-                    code_out.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                        debug_info,
-                    )); // move return address to aux stack
+                    code_out.push(create!(AuxPush, debug_info)); // move return address to aux stack
                 }
                 locals_tree = TupleTree::new(ntotal, true);
                 if let Some(imm) = &insn.immediate {
-                    code_out.push(Instruction::from_opcode_imm(
-                        Opcode::AVMOpcode(AVMOpcode::Noop),
-                        imm.clone(),
-                        debug_info,
-                    ));
+                    code_out.push(create!(Noop, imm.clone(), debug_info));
                 }
-                code_out.push(Instruction::from_opcode_imm(
-                    Opcode::AVMOpcode(AVMOpcode::AuxPush),
+                code_out.push(create!(
+                    AuxPush,
                     TupleTree::make_empty(&locals_tree),
-                    debug_info,
+                    debug_info
                 ));
                 for lnum in 0..nargs {
                     locals_tree.write_code(true, lnum, &mut code_out, debug_info)?;
@@ -140,99 +133,50 @@ pub fn fix_tuple_size(
                 }
             }
             Opcode::SetGlobalVar(idx) => {
-                code_out.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Rpush),
-                    debug_info,
-                ));
+                code_out.push(create!(Rpush, debug_info));
                 global_tree.write_code(false, idx, &mut code_out, debug_info)?;
-                code_out.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Rset),
-                    debug_info,
-                ));
+                code_out.push(create!(Rset, debug_info));
             }
             Opcode::GetGlobalVar(idx) => {
-                code_out.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Rpush),
-                    debug_info,
-                ));
+                code_out.push(create!(Rpush, debug_info));
                 global_tree.read_code(false, idx, &mut code_out, debug_info)?;
             }
             Opcode::Return => {
-                code_out.push(Instruction::new(
-                    Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                    match &insn.immediate {
-                        Some(v) => Some(v.clone()),
-                        None => None,
-                    },
-                    debug_info,
-                ));
-                code_out.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Pop),
-                    debug_info,
-                ));
-                code_out.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                    debug_info,
-                ));
-                code_out.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Jump),
-                    debug_info,
-                ));
+                code_out.push(match &insn.immediate {
+                    Some(v) => create!(AuxPop, v.clone(), debug_info),
+                    None => create!(AuxPop, debug_info),
+                });
+                code_out.push(create!(Pop, debug_info));
+                code_out.push(create!(AuxPop, debug_info));
+                code_out.push(create!(Jump, debug_info));
             }
             Opcode::UncheckedFixedArrayGet(sz) => {
                 let tup_size_val = Value::Int(Uint256::from_usize(TUPLE_SIZE));
                 let mut remaining_size = sz;
                 while remaining_size > TUPLE_SIZE {
                     //TODO: can probably make this more efficient
+
                     // stack: idx arr
-                    code_out.push(Instruction::from_opcode_imm(
-                        Opcode::AVMOpcode(AVMOpcode::Dup1),
-                        tup_size_val.clone(),
-                        debug_info,
-                    ));
-                    code_out.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::Mod),
-                        debug_info,
-                    ));
-                    code_out.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::Swap1),
-                        debug_info,
-                    ));
+                    code_out.push(create!(Dup1, tup_size_val.clone(), debug_info));
+                    code_out.push(create!(Mod, debug_info));
+                    code_out.push(create!(Swap1, debug_info));
+
                     // stack: idx slot arr
-                    code_out.push(Instruction::from_opcode_imm(
-                        Opcode::AVMOpcode(AVMOpcode::Swap1),
-                        tup_size_val.clone(),
-                        debug_info,
-                    ));
-                    code_out.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::Div),
-                        debug_info,
-                    ));
+                    code_out.push(create!(Swap1, tup_size_val.clone(), debug_info));
+                    code_out.push(create!(Div, debug_info));
+
                     // stack: subindex slot arr
-                    code_out.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::Swap2),
-                        debug_info,
-                    ));
-                    code_out.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::Swap1),
-                        debug_info,
-                    ));
+                    code_out.push(create!(Swap2, debug_info));
+                    code_out.push(create!(Swap1, debug_info));
+
                     // stack: slot arr subindex
-                    code_out.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::Tget),
-                        debug_info,
-                    ));
-                    code_out.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::Swap1),
-                        debug_info,
-                    ));
+                    code_out.push(create!(Tget, debug_info));
+                    code_out.push(create!(Swap1, debug_info));
+
                     // stack: subindex subarr
                     remaining_size = (remaining_size + (TUPLE_SIZE - 1)) / TUPLE_SIZE;
                 }
-                code_out.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Tget),
-                    debug_info,
-                ));
+                code_out.push(create!(Tget, debug_info));
             }
             _ => {
                 code_out.push(insn.clone());
@@ -365,18 +309,9 @@ impl TupleTree {
         match self {
             TupleTree::Single => {
                 if is_local {
-                    code.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                        debug_info,
-                    ));
-                    code.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::Dup0),
-                        debug_info,
-                    ));
-                    code.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                        debug_info,
-                    ));
+                    code.push(create!(AuxPop, debug_info));
+                    code.push(create!(Dup0, debug_info));
+                    code.push(create!(AuxPush, debug_info));
                 }
                 Ok(())
             }
@@ -384,15 +319,14 @@ impl TupleTree {
                 let mut index = index;
                 for (slot, subtree) in v.iter().enumerate() {
                     if index < subtree.tsize() {
-                        code.push(Instruction::from_opcode_imm(
-                            if is_local {
-                                Opcode::AVMOpcode(AVMOpcode::Xget)
-                            } else {
-                                Opcode::AVMOpcode(AVMOpcode::Tget)
-                            },
-                            Value::Int(Uint256::from_usize(slot)),
-                            debug_info,
-                        ));
+                        code.push(match is_local {
+                            true => {
+                                create!(Xget, Value::Int(Uint256::from_usize(slot)), debug_info)
+                            }
+                            false => {
+                                create!(Tget, Value::Int(Uint256::from_usize(slot)), debug_info)
+                            }
+                        });
                         return subtree.read_code(false, index, code, debug_info);
                     } else {
                         index -= subtree.tsize();
@@ -425,55 +359,45 @@ impl TupleTree {
                 if index < subtree.tsize() {
                     match *subtree {
                         TupleTree::Single => {
-                            code.push(Instruction::from_opcode_imm(
-                                if is_local {
-                                    Opcode::AVMOpcode(AVMOpcode::Xset)
-                                } else {
-                                    Opcode::AVMOpcode(AVMOpcode::Tset)
-                                },
-                                Value::Int(Uint256::from_usize(slot)),
-                                debug_info,
-                            ));
+                            code.push(match is_local {
+                                true => {
+                                    create!(Xset, Value::Int(Uint256::from_usize(slot)), debug_info)
+                                }
+                                false => {
+                                    create!(Tset, Value::Int(Uint256::from_usize(slot)), debug_info)
+                                }
+                            });
                             return Ok(());
                         }
                         TupleTree::Tree(_, _) => {
                             if is_local {
-                                code.push(Instruction::from_opcode_imm(
-                                    Opcode::AVMOpcode(AVMOpcode::Xget),
+                                code.push(create!(
+                                    Xget,
                                     Value::Int(Uint256::from_usize(slot)),
-                                    debug_info,
+                                    debug_info
                                 ));
                             } else {
-                                code.push(Instruction::from_opcode(
-                                    Opcode::AVMOpcode(AVMOpcode::Swap1),
-                                    debug_info,
-                                ));
-                                code.push(Instruction::from_opcode(
-                                    Opcode::AVMOpcode(AVMOpcode::Dup1),
-                                    debug_info,
-                                ));
-                                code.push(Instruction::from_opcode_imm(
-                                    Opcode::AVMOpcode(AVMOpcode::Tget),
+                                code.push(create!(Swap1, debug_info));
+                                code.push(create!(Dup1, debug_info));
+                                code.push(create!(
+                                    Tget,
                                     Value::Int(Uint256::from_usize(slot)),
-                                    debug_info,
+                                    debug_info
                                 ));
                             }
                             subtree.write_code(false, index, code, debug_info)?;
                             if is_local {
-                                code.push(Instruction::from_opcode_imm(
-                                    Opcode::AVMOpcode(AVMOpcode::Xset),
+                                code.push(create!(
+                                    Xset,
                                     Value::Int(Uint256::from_usize(slot)),
-                                    debug_info,
+                                    debug_info
                                 ));
                             } else {
-                                code.push(Instruction::from_opcode(
-                                    Opcode::AVMOpcode(AVMOpcode::Swap1),
-                                    debug_info,
-                                ));
-                                code.push(Instruction::from_opcode_imm(
-                                    Opcode::AVMOpcode(AVMOpcode::Tset),
+                                code.push(create!(Swap1, debug_info));
+                                code.push(create!(
+                                    Tset,
                                     Value::Int(Uint256::from_usize(slot)),
-                                    debug_info,
+                                    debug_info
                                 ));
                             }
                             return Ok(());
@@ -489,10 +413,7 @@ impl TupleTree {
                 debug_info.location.into_iter().collect(),
             ));
         } else {
-            code.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::Pop),
-                debug_info,
-            ));
+            code.push(create!(Pop, debug_info));
             Ok(())
         }
     }

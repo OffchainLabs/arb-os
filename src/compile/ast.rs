@@ -716,8 +716,8 @@ impl Type {
                                 | Type::Every => String::new(),
                                 _ => format!(
                                     "\nleft: {}\nright {}\nFirst mismatch: ",
-                                    left.display(),
-                                    right.display()
+                                    left.print(type_tree),
+                                    right.print(type_tree)
                                 ),
                             },
                         }

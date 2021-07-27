@@ -344,7 +344,7 @@ impl TypeCheckedModule {
         let mut imports: BTreeMap<StringId, Import> = BTreeMap::new();
 
         for import in self.imports.iter() {
-            let id = self.string_table.get_if_exists(&import.name).unwrap();
+            let id = self.string_table.get(&import.name).unwrap();
 
             if let Some(prior) = imports.get(&id) {
                 flow_warnings.push(CompileError::new_warning(
@@ -845,9 +845,7 @@ fn resolve_imports(
             let import_path = import.path.clone();
             let (named_type, imp_func) = if let Some(program) = programs.get_mut(&import_path) {
                 //Looks up info from target program
-                //let index = program.string_table.get(import.name.clone());
-                //let index = program.string_table.get_if_exists(&import.name).expect("Import not present");
-                let index = match program.string_table.get_if_exists(&import.name) {
+                let index = match program.string_table.get(&import.name) {
                     Some(id) => id,
                     None => {
                         return Err(CompileError::new(
@@ -858,7 +856,7 @@ fn resolve_imports(
                             ),
                             vec![import.ident.loc],
                         ))
-                    } //None => panic!("Import {:?} not present in {:?} {}", import.name, name, import.ident.id),
+                    }
                 };
                 let named_type = program.named_types.get(&index).cloned();
                 let imp_func = program.func_table.get(&index).cloned();
@@ -874,6 +872,7 @@ fn resolve_imports(
                     vec![import.ident.loc],
                 ));
             };
+
             //Modifies origin program to include import
             let origin_program = programs.get_mut(name).ok_or_else(|| {
                 CompileError::new(
@@ -886,7 +885,7 @@ fn resolve_imports(
                     vec![import.ident.loc],
                 )
             })?;
-            //let index = origin_program.string_table.get_if_exists(&import.name).unwrap();
+
             let index = origin_program.string_table.draw(import.name.clone());
             if let Some(named_type) = named_type {
                 origin_program.named_types.insert(index, named_type.clone());
@@ -1076,10 +1075,7 @@ fn callgraph_descend(
             Some(import) => {
                 // outbound function crosses module boundry, so we jump there
                 let other_module = paths_to_modules.get(&import.path).unwrap();
-                let other_func = other_module
-                    .string_table
-                    .get_if_exists(&import.name)
-                    .unwrap();
+                let other_func = other_module.string_table.get(&import.name).unwrap();
                 callgraph_descend(
                     other_func,
                     other_module,

@@ -233,7 +233,7 @@ public func builtin_arrayOpConsecutiveSafe(
 	return Some((arr2, ret1, ret2));
 }
 
-public func array_resize(a: array, newSize: uint, baseVal: any) -> array {
+public func builtin_arrayResize(a: array, newSize: uint, baseVal: any) -> array {
     // Resize an array.
     // If the new size is larger, copy over all of the old contents, and fill the added elements with baseVal.
     // If the new size is smaller, copy over all of the old contents that will fit.

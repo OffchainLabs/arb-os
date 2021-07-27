@@ -2,6 +2,8 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
+#![allow(dead_code)]
+
 use std::fmt;
 
 pub struct Color;
@@ -31,17 +33,17 @@ impl Color {
     }
 
     /// Colors text yellow. Typically used for compile warnings.
-    pub fn _yellow<S: fmt::Display>(text: S) -> String {
+    pub fn yellow<S: fmt::Display>(text: S) -> String {
         Color::color(Color::YELLOW, text)
     }
 
     /// Colors text pink. Typically used for warnings promoted to errors.
-    pub fn _pink<S: fmt::Display>(text: S) -> String {
+    pub fn pink<S: fmt::Display>(text: S) -> String {
         Color::color(Color::PINK, text)
     }
 
     /// Colors text grey.
-    pub fn _grey<S: fmt::Display>(text: S) -> String {
+    pub fn grey<S: fmt::Display>(text: S) -> String {
         Color::color(Color::GREY, text)
     }
 

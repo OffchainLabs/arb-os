@@ -36,23 +36,6 @@ type GlobalInputQueue = struct {
     batchQ: IncomingRequestQueueStack,
 }
 
-/*public func set_globalAccountStore_onUpgrade(input: any) -> any { return input; }
-
-public func set_globalAccountStore_onUpgrade(input: any) -> any { return input; }
-
-public func set_logsQueuedForEndOfBlock_onUpgrade(input: any) -> Queue {
-    return unsafecast<Queue>(input);
-}
-public func set_globalOutbox_onUpgrade(input: any) -> GlobalOutbox {
-    return unsafecast<GlobalOutbox>(input);
-}
-public func set_globalInbox_onUpgrade(input: any) -> Inbox {
-    return unsafecast<Inbox>(input);
-}
-public func set_globalInputQueue_onUpgrade(input: any) -> GlobalInputQueue {
-    return unsafecast<GlobalInputQueue>(input);
-}*/
-
 public func set_globalAccountStore_onUpgrade     (input: any) -> every { return unsafecast<every>(input); }
 public func set_logsQueuedForEndOfBlock_onUpgrade(input: any) -> every { return unsafecast<every>(input); }
 public func set_globalOutbox_onUpgrade           (input: any) -> every { return unsafecast<every>(input); }

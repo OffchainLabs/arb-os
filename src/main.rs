@@ -22,13 +22,15 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+#[macro_use]
+mod mavm;
 mod compile;
 mod console;
 mod contracttemplates;
 mod evm;
 mod gen_code;
 mod link;
-mod mavm;
+
 #[cfg(test)]
 mod minitests;
 pub mod pos;
