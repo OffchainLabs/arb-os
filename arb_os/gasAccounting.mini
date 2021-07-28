@@ -1063,6 +1063,7 @@ impure func tryToPayForL1Gas(
     } else {
         // this should never happen, because we reduced totalDue to fit within payer's funds
         // so just do something safe
+        debug(660);
         (
             totalDue == 0,
             feeStats,
