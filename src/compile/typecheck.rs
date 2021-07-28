@@ -852,6 +852,7 @@ pub struct TypeCheckedExpr {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TypeCheckedExprKind {
     NewBuffer,
+    Quote(Vec<u8>),
     UnaryOp(UnaryOp, Box<TypeCheckedExpr>, Type),
     Binary(BinaryOp, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
     Trinary(
@@ -933,6 +934,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             | TypeCheckedExprKind::FuncRef(_, _)
             | TypeCheckedExprKind::Const(_, _)
             | TypeCheckedExprKind::NewBuffer
+            | TypeCheckedExprKind::Quote(_)
             | TypeCheckedExprKind::NewMap(_)
             | TypeCheckedExprKind::Panic => vec![],
             TypeCheckedExprKind::UnaryOp(_, exp, _)
@@ -1028,6 +1030,7 @@ impl TypeCheckedExpr {
     pub fn get_type(&self) -> Type {
         match &self.kind {
             TypeCheckedExprKind::NewBuffer => Type::Buffer,
+            TypeCheckedExprKind::Quote(_) => Type::Tuple(vec![Type::Uint, Type::Buffer]),
             TypeCheckedExprKind::Panic => Type::Every,
             TypeCheckedExprKind::UnaryOp(_, _, t) => t.clone(),
             TypeCheckedExprKind::Binary(_, _, _, t) => t.clone(),
@@ -1834,6 +1837,7 @@ fn typecheck_expr(
     Ok(TypeCheckedExpr {
         kind: match &expr.kind {
             ExprKind::NewBuffer => Ok(TypeCheckedExprKind::NewBuffer),
+            ExprKind::Quote(buf) => Ok(TypeCheckedExprKind::Quote(buf.clone())),
             ExprKind::Panic => Ok(TypeCheckedExprKind::Panic),
             ExprKind::UnaryOp(op, subexpr) => {
                 let tc_sub = typecheck_expr(

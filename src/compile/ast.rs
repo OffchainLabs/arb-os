@@ -11,7 +11,7 @@ use crate::compile::typecheck::{
 use crate::compile::{path_display, CompileError};
 use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
 use crate::mavm::{Instruction, Value};
-use crate::pos::Location;
+use crate::pos::{BytePos, Location};
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
@@ -46,6 +46,14 @@ impl DebugInfo {
         DebugInfo {
             location,
             attributes,
+        }
+    }
+
+    /// builds a `DebugInfo` in-place at the parsing site
+    pub fn here(lines: &Lines, lno: usize, file: u64) -> Self {
+        DebugInfo {
+            location: lines.location(BytePos::from(lno), file),
+            attributes: Attributes::default(),
         }
     }
 }
@@ -1183,6 +1191,7 @@ pub enum ExprKind {
     IfLet(StringId, Box<Expr>, CodeBlock, Option<CodeBlock>),
     Loop(Vec<Statement>),
     NewBuffer,
+    Quote(Vec<u8>),
 }
 
 impl Expr {
@@ -1208,6 +1217,15 @@ impl Expr {
             kind: ExprKind::Trinary(op, Box::new(e1), Box::new(e2), Box::new(e3)),
             debug_info: DebugInfo::from(loc),
         }
+    }
+
+    /// Creates an expression whose DebugInfo is populated in-place at the parsing site
+    pub fn lno(kind: ExprKind, lines: &Lines, lno: usize, file: u64) -> Self {
+        Self::new(kind, DebugInfo::here(lines, lno, file))
+    }
+
+    pub fn new(kind: ExprKind, debug_info: DebugInfo) -> Self {
+        Self { kind, debug_info }
     }
 }
 

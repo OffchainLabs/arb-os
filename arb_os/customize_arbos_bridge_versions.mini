@@ -44,13 +44,6 @@ use messages::TxRequestData;
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsForall;
 
-public func set_globalCallStack_onUpgrade(_input_globals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
-    return None<EvmCallFrame>;
-}
-
-func _dummy() -> uint {
-    return 0;
-}
 
 public func set_globalAccountStore_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> AccountStore {
     let oldGAS = oldGlobals.globalAccountStore;
@@ -155,3 +148,7 @@ public func set_globalOutbox_onUpgrade(
     };
 }
 
+
+public func set_globalCallStack_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
+    return None<EvmCallFrame>;
+}

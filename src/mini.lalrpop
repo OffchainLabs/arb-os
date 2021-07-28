@@ -14,12 +14,23 @@ use crate::pos::{BytePos, Location};
 use crate::mavm::{Value, Instruction, Opcode};
 use crate::uint256::Uint256;
 use std::collections::{HashMap, HashSet};
+use crate::console::Color;
+use std::collections::HashMap;
+use lalrpop_util::ParseError;
+use regex::Regex;
 
 
 grammar(stringtable: &mut StringTable, file_info: &Lines, filename: u64, current_path: &[String], constants: &mut HashMap<String, Uint256>, local_constants: &mut HashMap<String, Location>, used_constants: &mut HashSet<String>, error_system: &mut ErrorSystem);
 
 extern {
     type Error = String;
+}
+
+match {
+    r"\s*" => { },                                                                 // Skip whitespace
+    r"/\*(([^*/]|\n)|(\*+([^*/]|\n)|/([^*/]|\n)*|/\*([^*/]|\n)*))*\**\*/" => { },  // Skip multi-line comments
+    r"//[^\n\r]*[\n\r]*" => { },                                                   // Skip single-line comments
+    _
 }
 
 pub Decls: Vec<TopLevelDecl> = {
@@ -344,6 +355,7 @@ Expr13: Expr = {
 	<lno: @L> "(" <c: CommaedExprs?> ")" => Expr { kind: ExprKind::Tuple(c.unwrap_or(vec![])), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> "panic" => Expr { kind: ExprKind::Panic, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> <i: Ident> => Expr { kind: ExprKind::VariableRef(i), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+    <lno: @L> <q: QuoteString> => Expr::lno(ExprKind::Quote(q), file_info, lno, filename),
 }
 
 Const: Constant = {
@@ -392,6 +404,33 @@ IdentStr: &'input str = {
 
 IdentString: String = {
 	r"[a-zA-Z_][a-zA-Z_01-9]*" => <>.to_string(),
+};
+
+QuoteString: Vec<u8> = {
+    <lno: @L> <q: r#"s?"[a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~-]*""#> =>? {
+        let re = Regex::new(r#"s?"(0x)?[a-fA-F0-9]+""#).unwrap();
+        if re.is_match(q) {
+            // NOTICE: In a future PR, this creates a warning and doesn't stop compilation.
+            // We are early enough in the sequence of PRs that the error_system doesn't cover the parser.
+            return Err(ParseError::User {
+                error: format!(
+                    "BETTER IN FUTURE PR: String {} looks like hex but will be treated as a string",
+                    Color::red(&q),
+                ),
+            });
+        }
+        let re = Regex::new(r#"s?"([a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~-]*)""#).unwrap();
+        let string = re.captures(q).unwrap().get(1).map_or(String::new(), |m| m.as_str().to_string());
+        Ok(string.as_bytes().to_vec())
+    },
+    <lno: @L> <q: r#"h"(0x)?[a-fA-F0-9]*""#> => {
+        let re = Regex::new(r#"h"(0x)?([a-fA-F0-9]*)""#).unwrap();
+        let mut string = re.captures(q).unwrap().get(2).map_or(String::new(), |m| m.as_str().to_string());
+        if string.len() % 2 == 1 {
+            string = "0".to_owned() + &string;
+        }
+        hex::decode(string).unwrap()
+    },
 };
 
 UnsignedInteger: Uint256 = {

@@ -25,6 +25,7 @@ use codeSegment::translateEvmCodeSegment;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownCodePc;
+use evmOps::evmOp_revertIfStatic;
 
 use evmCallStack::EvmCallFrame;
 use evmCallStack::evmCallStack_callHitError;
@@ -66,6 +67,8 @@ func getFuncCode(ba: ByteArray) -> uint {
 }
 
 impure func arbosTest_installAccount(topFrame: EvmCallFrame, calldata: ByteArray) { // (bool, uint, uint, bytes, bytes)
+    evmOp_revertIfStatic();
+
     // Verify that this has been called by address zero.
     // This ensures that this method can only be called (1) in testing, or (2) by the EthBridge.
     if (evmCallFrame_getCaller(topFrame) != address(0)) {
