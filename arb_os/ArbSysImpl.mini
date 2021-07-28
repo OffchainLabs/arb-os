@@ -86,6 +86,7 @@ use decompression::parseAggregatorFunctionTable;
 
 use codeSegment::pcTableForCode;
 
+use ArbOwnerImpl::requireCalledByOwner;
 
 public impure func arbAddressTable_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
@@ -171,8 +172,8 @@ public func arbosVersion(_topFrame: EvmCallFrame) -> uint {
     return const::ArbosVersionNumber;
 }
 
-public impure func ArbSys_arbOSVersion(_topFrame: EvmCallFrame) -> uint {
-    return arbosVersion();
+public func ArbSys_arbOSVersion(topFrame: EvmCallFrame) -> uint {
+    return arbosVersion(topFrame);
 }
 
 public impure func ArbSys_arbChainID(_topFrame: EvmCallFrame) -> uint {
@@ -198,6 +199,8 @@ public impure func ArbSys_withdrawEth(topFrame: EvmCallFrame, destAddr: address)
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 33, 0, 0);
     }
+    
+    return 0; // should never happen
 }
 
 public impure func ArbSys_sendTxToL1(topFrame: EvmCallFrame, destAddr: address, innerCalldata: ByteArray) -> uint {
@@ -214,6 +217,8 @@ public impure func ArbSys_sendTxToL1(topFrame: EvmCallFrame, destAddr: address, 
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 223, 0, 0);
     }
+    
+    return 0; // should never happen
 }
 
 impure func sendTxToL1(caller: address, destination: address, callvalue: uint, calldata: ByteArray) -> uint {
@@ -324,7 +329,7 @@ impure func sendTxToL1(caller: address, destination: address, callvalue: uint, c
     return uniqueId;
 }
 
-public impure func ArbSys_getTransactionCount(topFrame: EvmCallFrame, addr: address) -> uint {
+public func ArbSys_getTransactionCount(topFrame: EvmCallFrame, addr: address) -> uint {
     return account_getNextSeqNum(evmCallFrame_getAccount(topFrame, addr));
 }
 

@@ -1,4 +1,11 @@
+//
 // This is machine-generated code. Don't modify it unless you know what you're doing.
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use evmCallStack::EvmCallFrame;
+use std::bytearray::ByteArray;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
@@ -10,14 +17,15 @@ use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_copy;
+use std::bytearray::bytearray_extract;
 
-use ArbAddressTableImpl::ArbAddressTable_size;
 use ArbAddressTableImpl::ArbAddressTable_addressExists;
-use ArbAddressTableImpl::ArbAddressTable_decompress;
-use ArbAddressTableImpl::ArbAddressTable_lookupIndex;
-use ArbAddressTableImpl::ArbAddressTable_lookup;
 use ArbAddressTableImpl::ArbAddressTable_compress;
+use ArbAddressTableImpl::ArbAddressTable_decompress;
+use ArbAddressTableImpl::ArbAddressTable_lookup;
+use ArbAddressTableImpl::ArbAddressTable_lookupIndex;
 use ArbAddressTableImpl::ArbAddressTable_register;
+use ArbAddressTableImpl::ArbAddressTable_size;
 
 public impure func ArbAddressTable__dispatch() {
     if let Some(topFrame) = evmCallStack_topFrame() {
@@ -26,41 +34,25 @@ public impure func ArbAddressTable__dispatch() {
             evmOp_revert_knownPc(0, 0, 0);
         }
         let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
-        if (funcCode == 0x949d225d) {
-            ArbAddressTable_size_wrapper(topFrame, calldata);
-        } elseif  (funcCode == 0xa5025222) {
+        if (funcCode == 0xa5025222) {
             ArbAddressTable_addressExists_wrapper(topFrame, calldata);
-        } elseif  (funcCode == 0x31862ada) {
-            ArbAddressTable_decompress_wrapper(topFrame, calldata);
-        } elseif  (funcCode == 0x8a186788) {
-            ArbAddressTable_lookupIndex_wrapper(topFrame, calldata);
-        } elseif  (funcCode == 0xd4b6b5da) {
-            ArbAddressTable_lookup_wrapper(topFrame, calldata);
         } elseif  (funcCode == 0xf6a455a2) {
             ArbAddressTable_compress_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x31862ada) {
+            ArbAddressTable_decompress_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0xd4b6b5da) {
+            ArbAddressTable_lookup_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x8a186788) {
+            ArbAddressTable_lookupIndex_wrapper(topFrame, calldata);
         } elseif  (funcCode == 0x4420e486) {
             ArbAddressTable_register_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x949d225d) {
+            ArbAddressTable_size_wrapper(topFrame, calldata);
         } else {
             evmOp_revert_knownPc(1, 0, 0);
         }
     } else {
         evmOp_revert_knownPc(2, 0, 0);
-    }
-}
-
-impure func ArbAddressTable_size_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 4) {
-        evmOp_revert_knownPc(3, 0, 0);
-    }
-    let ret = ArbAddressTable_size();
-    let mem = bytearray_new(0);
-    let __offset = 0;
-    mem = bytearray_set256(mem, __offset, ret.0);
-    __offset = __offset + 32;
-    if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, __offset);
-    } else {
-        evmOp_revert(5, 0, 0);
     }
 }
 
@@ -73,59 +65,6 @@ impure func ArbAddressTable_addressExists_wrapper(topFrame: EvmCallFrame, callda
     let mem = bytearray_new(0);
     let __offset = 0;
     mem = bytearray_set256(mem, __offset, xif (ret.0) { 1 } else { 0 });
-    __offset = __offset + 32;
-    if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, __offset);
-    } else {
-        evmOp_revert(5, 0, 0);
-    }
-}
-
-impure func ArbAddressTable_decompress_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
-    let buf_offset = bytearray_get256(calldata, 4);
-    let buf_nbytes = bytearray_get256(calldata, 4+buf_offset);
-    let buf = bytearray_extract(calldata, 36+buf_offset, buf_nbytes);
-    let offset = bytearray_get256(calldata, 36);
-    let ret = ArbAddressTable_decompress(buf, offset);
-    let mem = bytearray_new(0);
-    let __offset = 0;
-    mem = bytearray_set256(mem, __offset, uint(ret.0));
-    __offset = __offset + 32;
-    mem = bytearray_set256(mem, __offset, ret.1);
-    __offset = __offset + 32;
-    if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, __offset);
-    } else {
-        evmOp_revert(5, 0, 0);
-    }
-}
-
-impure func ArbAddressTable_lookupIndex_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownPc(3, 0, 0);
-    }
-    let index = bytearray_get256(calldata, 4);
-    let ret = ArbAddressTable_lookupIndex(index);
-    let mem = bytearray_new(0);
-    let __offset = 0;
-    mem = bytearray_set256(mem, __offset, uint(ret.0));
-    __offset = __offset + 32;
-    if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, __offset);
-    } else {
-        evmOp_revert(5, 0, 0);
-    }
-}
-
-impure func ArbAddressTable_lookup_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownPc(3, 0, 0);
-    }
-    let addr = address(bytearray_get256(calldata, 4));
-    let ret = ArbAddressTable_lookup(addr);
-    let mem = bytearray_new(0);
-    let __offset = 0;
-    mem = bytearray_set256(mem, __offset, ret.0);
     __offset = __offset + 32;
     if (evmCallStack_setTopFrameMemory(mem)) {
         evmOp_return(0, __offset);
@@ -157,12 +96,81 @@ impure func ArbAddressTable_compress_wrapper(topFrame: EvmCallFrame, calldata: B
     }
 }
 
+impure func ArbAddressTable_decompress_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    let buf_offset = bytearray_get256(calldata, 4);
+    let buf_nbytes = bytearray_get256(calldata, 4+buf_offset);
+    let buf = bytearray_extract(calldata, 36+buf_offset, buf_nbytes);
+    let offset = bytearray_get256(calldata, 36);
+    let ret = ArbAddressTable_decompress(buf, offset);
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, uint(ret.0));
+    __offset = __offset + 32;
+    mem = bytearray_set256(mem, __offset, ret.1);
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
+impure func ArbAddressTable_lookup_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let ret = ArbAddressTable_lookup(addr);
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, ret.0);
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
+impure func ArbAddressTable_lookupIndex_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let index = bytearray_get256(calldata, 4);
+    let ret = ArbAddressTable_lookupIndex(index);
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, uint(ret.0));
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
 impure func ArbAddressTable_register_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(3, 0, 0);
     }
     let addr = address(bytearray_get256(calldata, 4));
     let ret = ArbAddressTable_register(addr);
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, ret.0);
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
+impure func ArbAddressTable_size_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let ret = ArbAddressTable_size();
     let mem = bytearray_new(0);
     let __offset = 0;
     mem = bytearray_set256(mem, __offset, ret.0);

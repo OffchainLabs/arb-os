@@ -16,12 +16,12 @@ pub use benchmarks::make_benchmarks;
 pub use evmtest::run_evm_tests;
 
 mod abi;
+pub mod abigen;
 mod benchmarks;
 #[cfg(test)]
 mod bls;
 mod evmtest;
 mod preinstalled_contracts;
-pub mod abigen;
 
 #[derive(Clone)]
 pub struct CallInfo<'a> {

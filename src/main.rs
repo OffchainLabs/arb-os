@@ -5,7 +5,7 @@
 #![allow(unused_parens)]
 
 use crate::compile::CompileStruct;
-use crate::evm::abigen::{write_mini_wrapper_to_file, abigen_from_directory_structure};
+use crate::evm::abigen::{abigen_from_directory_structure, write_mini_wrapper_to_file};
 use crate::link::LinkedProgram;
 use crate::upload::CodeUploader;
 use clap::Clap;
@@ -300,10 +300,12 @@ fn main() -> Result<(), CompileError> {
             print_time = false;
         }
         Args::Abigen(abigen) => {
-            if let Err(e) = if abigen.directories { abigen_from_directory_structure } else { write_mini_wrapper_to_file } (
-                &Path::new(&*abigen.contract),
-                &Path::new(&*abigen.output),
-            ) {
+            if let Err(e) = if abigen.directories {
+                abigen_from_directory_structure
+            } else {
+                write_mini_wrapper_to_file
+            }(&Path::new(&*abigen.contract), &Path::new(&*abigen.output))
+            {
                 println!("Encountered an error: {}", e);
                 return Err(CompileError::new(
                     String::from("Abigen error"),

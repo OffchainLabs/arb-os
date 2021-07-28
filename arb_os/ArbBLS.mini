@@ -1,4 +1,11 @@
+//
 // This is machine-generated code. Don't modify it unless you know what you're doing.
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use evmCallStack::EvmCallFrame;
+use std::bytearray::ByteArray;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
@@ -10,9 +17,10 @@ use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_copy;
+use std::bytearray::bytearray_extract;
 
-use ArbBLSImpl::ArbBLS_register;
 use ArbBLSImpl::ArbBLS_getPublicKey;
+use ArbBLSImpl::ArbBLS_register;
 
 public impure func ArbBLS__dispatch() {
     if let Some(topFrame) = evmCallStack_topFrame() {
@@ -21,28 +29,16 @@ public impure func ArbBLS__dispatch() {
             evmOp_revert_knownPc(0, 0, 0);
         }
         let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
-        if (funcCode == 0x375a7c7f) {
-            ArbBLS_register_wrapper(topFrame, calldata);
-        } elseif  (funcCode == 0x857cdbb8) {
+        if (funcCode == 0x857cdbb8) {
             ArbBLS_getPublicKey_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x375a7c7f) {
+            ArbBLS_register_wrapper(topFrame, calldata);
         } else {
             evmOp_revert_knownPc(1, 0, 0);
         }
     } else {
         evmOp_revert_knownPc(2, 0, 0);
     }
-}
-
-impure func ArbBLS_register_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 132) {
-        evmOp_revert_knownPc(3, 0, 0);
-    }
-    let x0 = bytearray_get256(calldata, 4);
-    let x1 = bytearray_get256(calldata, 36);
-    let y0 = bytearray_get256(calldata, 68);
-    let y1 = bytearray_get256(calldata, 100);
-    ArbBLS_register(topFrame, x0, x1, y0, y1);
-    evmOp_return(0, 0);
 }
 
 impure func ArbBLS_getPublicKey_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
@@ -66,5 +62,17 @@ impure func ArbBLS_getPublicKey_wrapper(topFrame: EvmCallFrame, calldata: ByteAr
     } else {
         evmOp_revert(5, 0, 0);
     }
+}
+
+impure func ArbBLS_register_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 132) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let x0 = bytearray_get256(calldata, 4);
+    let x1 = bytearray_get256(calldata, 36);
+    let y0 = bytearray_get256(calldata, 68);
+    let y1 = bytearray_get256(calldata, 100);
+    ArbBLS_register(topFrame, x0, x1, y0, y1);
+    evmOp_return(0, 0);
 }
 

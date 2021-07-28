@@ -1,4 +1,11 @@
+//
 // This is machine-generated code. Don't modify it unless you know what you're doing.
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use evmCallStack::EvmCallFrame;
+use std::bytearray::ByteArray;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
@@ -10,10 +17,11 @@ use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_copy;
+use std::bytearray::bytearray_extract;
 
-use ArbGasInfoImpl::ArbGasInfo_getPricesInWei;
 use ArbGasInfoImpl::ArbGasInfo_getGasAccountingParams;
 use ArbGasInfoImpl::ArbGasInfo_getPricesInArbGas;
+use ArbGasInfoImpl::ArbGasInfo_getPricesInWei;
 
 public impure func ArbGasInfo__dispatch() {
     if let Some(topFrame) = evmCallStack_topFrame() {
@@ -22,43 +30,17 @@ public impure func ArbGasInfo__dispatch() {
             evmOp_revert_knownPc(0, 0, 0);
         }
         let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
-        if (funcCode == 0x41b247a8) {
-            ArbGasInfo_getPricesInWei_wrapper(topFrame, calldata);
-        } elseif  (funcCode == 0x612af178) {
+        if (funcCode == 0x612af178) {
             ArbGasInfo_getGasAccountingParams_wrapper(topFrame, calldata);
         } elseif  (funcCode == 0x02199f34) {
             ArbGasInfo_getPricesInArbGas_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x41b247a8) {
+            ArbGasInfo_getPricesInWei_wrapper(topFrame, calldata);
         } else {
             evmOp_revert_knownPc(1, 0, 0);
         }
     } else {
         evmOp_revert_knownPc(2, 0, 0);
-    }
-}
-
-impure func ArbGasInfo_getPricesInWei_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 4) {
-        evmOp_revert_knownPc(3, 0, 0);
-    }
-    let ret = ArbGasInfo_getPricesInWei();
-    let mem = bytearray_new(0);
-    let __offset = 0;
-    mem = bytearray_set256(mem, __offset, ret.0);
-    __offset = __offset + 32;
-    mem = bytearray_set256(mem, __offset, ret.1);
-    __offset = __offset + 32;
-    mem = bytearray_set256(mem, __offset, ret.2);
-    __offset = __offset + 32;
-    mem = bytearray_set256(mem, __offset, ret.3);
-    __offset = __offset + 32;
-    mem = bytearray_set256(mem, __offset, ret.4);
-    __offset = __offset + 32;
-    mem = bytearray_set256(mem, __offset, ret.5);
-    __offset = __offset + 32;
-    if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, __offset);
-    } else {
-        evmOp_revert(5, 0, 0);
     }
 }
 
@@ -94,6 +76,32 @@ impure func ArbGasInfo_getPricesInArbGas_wrapper(topFrame: EvmCallFrame, calldat
     mem = bytearray_set256(mem, __offset, ret.1);
     __offset = __offset + 32;
     mem = bytearray_set256(mem, __offset, ret.2);
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
+    }
+}
+
+impure func ArbGasInfo_getPricesInWei_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let ret = ArbGasInfo_getPricesInWei();
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, ret.0);
+    __offset = __offset + 32;
+    mem = bytearray_set256(mem, __offset, ret.1);
+    __offset = __offset + 32;
+    mem = bytearray_set256(mem, __offset, ret.2);
+    __offset = __offset + 32;
+    mem = bytearray_set256(mem, __offset, ret.3);
+    __offset = __offset + 32;
+    mem = bytearray_set256(mem, __offset, ret.4);
+    __offset = __offset + 32;
+    mem = bytearray_set256(mem, __offset, ret.5);
     __offset = __offset + 32;
     if (evmCallStack_setTopFrameMemory(mem)) {
         evmOp_return(0, __offset);

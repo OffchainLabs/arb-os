@@ -5,7 +5,7 @@
 use crate::evm::AbiForContract;
 use ethabi::ParamType;
 use ethers_core::utils::keccak256;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io;
 use std::io::{ErrorKind, Write};
@@ -19,7 +19,13 @@ pub fn abigen_from_directory_structure(dirpath: &Path, out_dir: &Path) -> Result
             for subentry in fs::read_dir(path)? {
                 let subentry = subentry?;
                 let subpath = subentry.path();
-                if !subpath.clone().into_os_string().to_str().unwrap().ends_with(".dbg.json") {
+                if !subpath
+                    .clone()
+                    .into_os_string()
+                    .to_str()
+                    .unwrap()
+                    .ends_with(".dbg.json")
+                {
                     write_mini_wrapper_to_file(
                         &subpath,
                         &out_dir.join(format!(
@@ -35,7 +41,11 @@ pub fn abigen_from_directory_structure(dirpath: &Path, out_dir: &Path) -> Result
 }
 
 pub fn write_mini_wrapper_to_file(contract_path: &Path, out_path: &Path) -> Result<(), io::Error> {
-    println!("{} --> {}", contract_path.to_str().unwrap(), out_path.to_str().unwrap());
+    println!(
+        "{} --> {}",
+        contract_path.to_str().unwrap(),
+        out_path.to_str().unwrap()
+    );
     generate_mini_wrapper(contract_path, &mut File::create(out_path)?)
 }
 
@@ -49,7 +59,7 @@ pub fn generate_mini_wrapper(
         let cname = afc.name.clone();
         (afc.contract, cname[1..(cname.len() - 1)].to_string())
     };
-    let functions = contract.functions;
+    let functions: BTreeMap<_, _> = contract.functions.into_iter().collect();
 
     let mut header_out: Vec<u8> = Vec::new();
     let mut dispatch_func_out: Vec<u8> = Vec::new();
@@ -58,10 +68,20 @@ pub fn generate_mini_wrapper(
     // write start of header
     writeln!(
         header_out,
-        "// This is machine-generated code. Don't modify it unless you know what you're doing."
+        "//\n// This is machine-generated code. Don't modify it unless you know what you're doing."
+    )?;
+    writeln!(
+        header_out,
+        "//\n// Copyright 2020, Offchain Labs, Inc. All rights reserved.\n//"
     )?;
     writeln!(header_out, "")?;
-    for import_name in &[
+
+    for import_type in &["evmCallStack::EvmCallFrame", "std::bytearray::ByteArray"] {
+        writeln!(header_out, "use {};", import_type)?;
+    }
+    writeln!(header_out, "")?;
+
+    for import_func in &[
         "evmOps::evmOp_return",
         "evmOps::evmOp_revert_knownPc",
         "evmCallStack::evmCallStack_topFrame",
@@ -72,39 +92,32 @@ pub fn generate_mini_wrapper(
         "std::bytearray::bytearray_get256",
         "std::bytearray::bytearray_set256",
         "std::bytearray::bytearray_copy",
+        "std::bytearray::bytearray_extract",
     ] {
-        writeln!(header_out, "use {};", import_name)?;
+        writeln!(header_out, "use {};", import_func)?;
     }
     writeln!(header_out, "")?;
 
+    macro_rules! wln {
+        ($($line:tt)+) => {
+            writeln!(dispatch_func_out, $($line)+)?
+        };
+    }
+    macro_rules! w {
+        ($($line:tt)+) => {
+            write!(out, "{}", $($line)+)?
+        };
+    }
+
     // write start of dispatcher
     let dispatch_func_name = contract_name.clone() + "__dispatch";
-    writeln!(
-        dispatch_func_out,
-        "public impure func {}() {{",
-        dispatch_func_name
-    )?;
-    writeln!(
-        dispatch_func_out,
-        "    if let Some(topFrame) = evmCallStack_topFrame() {{"
-    )?;
-    writeln!(
-        dispatch_func_out,
-        "        let calldata = evmCallFrame_getCalldata(topFrame);"
-    )?;
-    writeln!(
-        dispatch_func_out,
-        "        if (bytearray_size(calldata) < 4) {{"
-    )?;
-    writeln!(
-        dispatch_func_out,
-        "            evmOp_revert_knownPc(0, 0, 0);"
-    )?;
-    writeln!(dispatch_func_out, "        }}")?;
-    writeln!(
-        dispatch_func_out,
-        "        let funcCode = asm(224, bytearray_get256(calldata, 0)) uint {{ shr }};"
-    )?;
+    wln!("public impure func {}() {{", dispatch_func_name);
+    wln!("    if let Some(topFrame) = evmCallStack_topFrame() {{");
+    wln!("        let calldata = evmCallFrame_getCalldata(topFrame);");
+    wln!("        if (bytearray_size(calldata) < 4) {{");
+    wln!("            evmOp_revert_knownPc(0, 0, 0);");
+    wln!("        }}");
+    wln!("        let funcCode = asm(224, bytearray_get256(calldata, 0)) uint {{ shr }};");
 
     write_dispatch_if_statement(
         &mut header_out,
@@ -115,30 +128,18 @@ pub fn generate_mini_wrapper(
     )?;
 
     // write end of dispatcher
-    writeln!(dispatch_func_out, "    }} else {{")?;
-    writeln!(dispatch_func_out, "        evmOp_revert_knownPc(2, 0, 0);")?;
-    writeln!(dispatch_func_out, "    }}")?;
-    writeln!(dispatch_func_out, "}}")?;
-    writeln!(dispatch_func_out, "")?;
+    wln!("    }} else {{");
+    wln!("        evmOp_revert_knownPc(2, 0, 0);");
+    wln!("    }}");
+    wln!("}}");
+    wln!("");
 
-    write!(
-        out,
-        "{}",
-        std::str::from_utf8(&*header_out)
-            .map_err(|_| io::Error::new(ErrorKind::Other, "UTF8 error"))?
-    )?;
-    write!(
-        out,
-        "{}",
-        std::str::from_utf8(&*dispatch_func_out)
-            .map_err(|_| io::Error::new(ErrorKind::Other, "UTF8 error"))?
-    )?;
-    write!(
-        out,
-        "{}",
-        std::str::from_utf8(&*wrappers_out)
-            .map_err(|_| io::Error::new(ErrorKind::Other, "UTF8 error"))?
-    )?;
+    w!(std::str::from_utf8(&*header_out)
+        .map_err(|_| io::Error::new(ErrorKind::Other, "UTF8 error"))?);
+    w!(std::str::from_utf8(&*dispatch_func_out)
+        .map_err(|_| io::Error::new(ErrorKind::Other, "UTF8 error"))?);
+    w!(std::str::from_utf8(&*wrappers_out)
+        .map_err(|_| io::Error::new(ErrorKind::Other, "UTF8 error"))?);
 
     Ok(())
 }
@@ -148,7 +149,7 @@ fn write_dispatch_if_statement(
     dispatch_func_out: &mut dyn io::Write,
     wrappers_out: &mut dyn io::Write,
     contract_name: String,
-    functions: HashMap<String, Vec<ethabi::Function>>,
+    functions: BTreeMap<String, Vec<ethabi::Function>>,
 ) -> Result<(), io::Error> {
     let mut first_one = true;
     for (_, func_list) in functions {

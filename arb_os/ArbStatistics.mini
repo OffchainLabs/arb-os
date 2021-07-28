@@ -1,4 +1,11 @@
+//
 // This is machine-generated code. Don't modify it unless you know what you're doing.
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use evmCallStack::EvmCallFrame;
+use std::bytearray::ByteArray;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
@@ -10,6 +17,7 @@ use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_copy;
+use std::bytearray::bytearray_extract;
 
 use ArbStatisticsImpl::ArbStatistics_getStats;
 

@@ -1,4 +1,11 @@
+//
 // This is machine-generated code. Don't modify it unless you know what you're doing.
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use evmCallStack::EvmCallFrame;
+use std::bytearray::ByteArray;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
@@ -10,9 +17,10 @@ use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_copy;
+use std::bytearray::bytearray_extract;
 
-use ArbInfoImpl::ArbInfo_getCode;
 use ArbInfoImpl::ArbInfo_getBalance;
+use ArbInfoImpl::ArbInfo_getCode;
 
 public impure func ArbInfo__dispatch() {
     if let Some(topFrame) = evmCallStack_topFrame() {
@@ -21,15 +29,32 @@ public impure func ArbInfo__dispatch() {
             evmOp_revert_knownPc(0, 0, 0);
         }
         let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
-        if (funcCode == 0x7e105ce2) {
-            ArbInfo_getCode_wrapper(topFrame, calldata);
-        } elseif  (funcCode == 0xf8b2cb4f) {
+        if (funcCode == 0xf8b2cb4f) {
             ArbInfo_getBalance_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x7e105ce2) {
+            ArbInfo_getCode_wrapper(topFrame, calldata);
         } else {
             evmOp_revert_knownPc(1, 0, 0);
         }
     } else {
         evmOp_revert_knownPc(2, 0, 0);
+    }
+}
+
+impure func ArbInfo_getBalance_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let account = address(bytearray_get256(calldata, 4));
+    let ret = ArbInfo_getBalance(account);
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, ret.0);
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
     }
 }
 
@@ -49,23 +74,6 @@ impure func ArbInfo_getCode_wrapper(topFrame: EvmCallFrame, calldata: ByteArray)
     mem = bytearray_set256(mem, __offset, ret_0_size);
     mem = bytearray_copy(ret.0, 0, mem, 32+__offset, ret_0_size_rounded);
     __offset = __offset + 32 + ret_0_size_rounded;
-    if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, __offset);
-    } else {
-        evmOp_revert(5, 0, 0);
-    }
-}
-
-impure func ArbInfo_getBalance_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownPc(3, 0, 0);
-    }
-    let account = address(bytearray_get256(calldata, 4));
-    let ret = ArbInfo_getBalance(account);
-    let mem = bytearray_new(0);
-    let __offset = 0;
-    mem = bytearray_set256(mem, __offset, ret.0);
-    __offset = __offset + 32;
     if (evmCallStack_setTopFrameMemory(mem)) {
         evmOp_return(0, __offset);
     } else {

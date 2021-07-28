@@ -1,4 +1,11 @@
+//
 // This is machine-generated code. Don't modify it unless you know what you're doing.
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use evmCallStack::EvmCallFrame;
+use std::bytearray::ByteArray;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
@@ -10,10 +17,11 @@ use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_copy;
+use std::bytearray::bytearray_extract;
 
+use ArbFunctionTableImpl::ArbFunctionTable_get;
 use ArbFunctionTableImpl::ArbFunctionTable_size;
 use ArbFunctionTableImpl::ArbFunctionTable_upload;
-use ArbFunctionTableImpl::ArbFunctionTable_get;
 
 public impure func ArbFunctionTable__dispatch() {
     if let Some(topFrame) = evmCallStack_topFrame() {
@@ -22,17 +30,39 @@ public impure func ArbFunctionTable__dispatch() {
             evmOp_revert_knownPc(0, 0, 0);
         }
         let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
-        if (funcCode == 0x88987068) {
+        if (funcCode == 0xb464631b) {
+            ArbFunctionTable_get_wrapper(topFrame, calldata);
+        } elseif  (funcCode == 0x88987068) {
             ArbFunctionTable_size_wrapper(topFrame, calldata);
         } elseif  (funcCode == 0xce2ae159) {
             ArbFunctionTable_upload_wrapper(topFrame, calldata);
-        } elseif  (funcCode == 0xb464631b) {
-            ArbFunctionTable_get_wrapper(topFrame, calldata);
         } else {
             evmOp_revert_knownPc(1, 0, 0);
         }
     } else {
         evmOp_revert_knownPc(2, 0, 0);
+    }
+}
+
+impure func ArbFunctionTable_get_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownPc(3, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let index = bytearray_get256(calldata, 36);
+    let ret = ArbFunctionTable_get(addr, index);
+    let mem = bytearray_new(0);
+    let __offset = 0;
+    mem = bytearray_set256(mem, __offset, ret.0);
+    __offset = __offset + 32;
+    mem = bytearray_set256(mem, __offset, xif (ret.1) { 1 } else { 0 });
+    __offset = __offset + 32;
+    mem = bytearray_set256(mem, __offset, ret.2);
+    __offset = __offset + 32;
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, __offset);
+    } else {
+        evmOp_revert(5, 0, 0);
     }
 }
 
@@ -59,27 +89,5 @@ impure func ArbFunctionTable_upload_wrapper(topFrame: EvmCallFrame, calldata: By
     let buf = bytearray_extract(calldata, 36+buf_offset, buf_nbytes);
     ArbFunctionTable_upload(topFrame, buf);
     evmOp_return(0, 0);
-}
-
-impure func ArbFunctionTable_get_wrapper(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 68) {
-        evmOp_revert_knownPc(3, 0, 0);
-    }
-    let addr = address(bytearray_get256(calldata, 4));
-    let index = bytearray_get256(calldata, 36);
-    let ret = ArbFunctionTable_get(addr, index);
-    let mem = bytearray_new(0);
-    let __offset = 0;
-    mem = bytearray_set256(mem, __offset, ret.0);
-    __offset = __offset + 32;
-    mem = bytearray_set256(mem, __offset, xif (ret.1) { 1 } else { 0 });
-    __offset = __offset + 32;
-    mem = bytearray_set256(mem, __offset, ret.2);
-    __offset = __offset + 32;
-    if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, __offset);
-    } else {
-        evmOp_revert(5, 0, 0);
-    }
 }
 
