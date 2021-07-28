@@ -8,7 +8,7 @@ use crate::compile::ast::TypeMismatch::FuncArgLength;
 use crate::compile::typecheck::{
     AbstractSyntaxTree, InliningMode, PropertiesList, TypeCheckedNode,
 };
-use crate::compile::{path_display, CompileError};
+use crate::compile::{path_display, CompileError, Lines};
 use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
 use crate::mavm::{Instruction, Value};
 use crate::pos::{BytePos, Location};

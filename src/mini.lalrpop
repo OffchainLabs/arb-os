@@ -15,7 +15,6 @@ use crate::mavm::{Value, Instruction, Opcode};
 use crate::uint256::Uint256;
 use std::collections::{HashMap, HashSet};
 use crate::console::Color;
-use std::collections::HashMap;
 use lalrpop_util::ParseError;
 use regex::Regex;
 
