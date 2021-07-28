@@ -320,6 +320,9 @@ public func bytearray_copy(
     toOffset: uint,
     nbytes: uint,
 ) -> ByteArray {
+    if (nbytes == 0) {
+        return to;
+    }
     if (fromOffset + nbytes > from.size) {
         from = zero_fill_region(from, from.size, fromOffset+nbytes-from.size);
     }
@@ -374,7 +377,7 @@ public func bytearray_extract(from: ByteArray, offset: uint, nbytes: uint) -> By
     if (offset >= const::MaxByteArraySize) {
         return bytearray_new(0);
     }
-    if ((nbytes > const::MaxByteArraySize) || (offset+nbytes > const::MaxByteArraySize)) {
+    if ((nbytes == 0) || (nbytes > const::MaxByteArraySize) || (offset+nbytes > const::MaxByteArraySize)) {
         return bytearray_new(0);
     }
     

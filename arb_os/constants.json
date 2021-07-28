@@ -1,5 +1,5 @@
 {
-  "arbos_version": 34,
+  "arbos_version": 35,
   "integer": {
     "AVMSendType_batch": 0,
     "AVM_add": 1,
@@ -97,6 +97,7 @@
     "Charging_MinArbGasForContractTx": 50,
     "Charging_MinBaseTxFeeL1Gas": 500,
     "Charging_MaxBaseTxFeeL1Gas": 50000,
+    "Charging_MemoryChargeDenominator": 100000,
     "Charging_RetryableTxRepriceIntervalSeconds": 86400,
     "Charging_TxGasLimitSeconds": 20,
     "DefaultSecondsPerSend": 1800,
@@ -180,6 +181,8 @@
     "LogType_send": 2,
     "LogType_sendMerkleTree": 3,
     "LogType_txReceipt": 0,
+    "MinArbitrumPrecompile": 100,
+    "MaxArbitrumPrecompile": 200,
     "NetFee_defaultRateDenominator": 100,
     "NetFee_defaultRateNumerator": 15,
     "NumEvmOps": 48,
@@ -228,6 +231,8 @@
     "Charging_DefaultCongestionFeeRecipient": "0",
     "Charging_DefaultNetworkFeeRecipient": "0",
     "EVMLogTopicForL2ToL1Send": "5baaa87db386365b5c161be377bc3d8e317e8d98d71a3ca7ed7d555340c8f767",
+    "HashOfEmptyCode": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+    "MaxArraySize": "10000000000000000",
     "SpecialAccount_gasAccountingReserve": "af6cbc19f66dec07f790912226744d744f04b37b666b9343317df33a5114fb96"
   },
   "contract_folder": "contracts/artifacts/arbos/builtin",
