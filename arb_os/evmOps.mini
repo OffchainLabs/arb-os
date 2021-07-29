@@ -81,8 +81,6 @@ use std::bytestream::bytestream_new;
 
 use std::safeMath::safeAdd;
 
-use std::stack::stack_pop;
-use std::stack::stack_isEmpty;
 use std::stack::stack_discardDeepestItems;
 
 use codeSegment::translateEvmCodeSegment;
