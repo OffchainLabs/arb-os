@@ -166,7 +166,6 @@
     "L1MessageType_rollupProtocolEvent": 8,
     "L1MessageType_submitRetryableTx": 9,
     "L2MessageType_batch": 3,
-    "L2MessageType_blsBatch": 8,
     "L2MessageType_heartbeat": 6,
     "L2MessageType_nonmutatingCall": 2,
     "L2MessageType_signedCompressedTx": 7,
@@ -215,10 +214,8 @@
     "BLSSignatureDomainBase": "73a92f91d473214defd5ffa91d036007eb2e6487fffaa551835e988fb24aaa2b",
     "Charging_DefaultCongestionFeeRecipient": "0",
     "Charging_DefaultNetworkFeeRecipient": "0",
-    "EVMLogTopicForL2ToL1Send": "5baaa87db386365b5c161be377bc3d8e317e8d98d71a3ca7ed7d555340c8f767",
     "HashOfEmptyCode": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
-    "MaxArraySize": "10000000000000000",
-    "SpecialAccount_gasAccountingReserve": "af6cbc19f66dec07f790912226744d744f04b37b666b9343317df33a5114fb96"
+    "MaxArraySize": "10000000000000000"
   },
   "contract_folder": "contracts/artifacts/arbos/builtin",
   "contract": [

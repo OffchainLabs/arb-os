@@ -28,7 +28,6 @@ use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
 use evmOps::evmOp_revert_knownCodePc;
 use evmOps::evmOp_revertIfStatic;
-use evmOps::evmOp_returndatasize;
 use evmOps::doCreationOpcode;
 
 use pluggables::ModuleFunction;

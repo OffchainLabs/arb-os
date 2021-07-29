@@ -53,7 +53,6 @@ use std::bytestream::bytestream_getRemainingBytes;
 use std::keccak::keccak256;
 
 use decompression::decompressAndVerifyEcdsaSignedTx;
-use decompression::decompressAndVerifyBLSSignedTxBatch;
 
 
 type Inbox = struct {

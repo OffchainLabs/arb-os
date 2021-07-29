@@ -1374,10 +1374,6 @@ public impure func evmCallStack_touchMemoryOffset(offset: uint) {
     }
 }
 
-public impure func evmCallStack_runningAsAccount() -> option<Account> {
-    return Some((globalCallStack?).runningAsAccount);
-}
-
 public impure func evmCallStack_runningCodeFromAccount() -> option<Account> {
     return Some(evmCallFrame_runningCodeFromAccount(globalCallStack?));
 }
