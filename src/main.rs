@@ -9,14 +9,12 @@ use crate::link::LinkedProgram;
 use crate::upload::CodeUploader;
 use clap::Clap;
 use compile::CompileError;
-use compile::FileInfo;
 use contracttemplates::generate_contract_template_file_or_die;
 use gen_code::gen_upgrade_code;
 use run::{
     profile_gen_from_file, replay_from_testlog_file, run_from_file, ProfilerMode,
     RuntimeEnvironment,
 };
-use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
 use std::io::Read;
@@ -129,10 +127,35 @@ fn main() -> Result<(), CompileError> {
     let matches = Args::parse();
 
     match matches {
-        Args::Compile(compile) => match do_compile(compile) {
-            Ok(_) => {}
-            Err((err, file_info_chart)) => eprintln!("{}", err.pretty_fmt(&file_info_chart)),
-        },
+        Args::Compile(compile) => {
+            rayon::ThreadPoolBuilder::new()
+                .stack_size(8192 * 1024)
+                .build_global()
+                .expect("failed to initialize rayon thread pool");
+
+            let mut output = get_output(compile.output.clone()).unwrap();
+
+            let error_system = match compile.invoke() {
+                Ok((program, error_system)) => {
+                    program.to_output(&mut output, compile.format.as_deref());
+                    error_system
+                }
+                Err(error_system) => error_system,
+            };
+
+            error_system.print();
+
+            match error_system.errors.len() == 0 {
+                true => {}
+                false => {
+                    return Err(CompileError::new(
+                        String::from("Compilation Failure"),
+                        String::from("Errors were encountered during compilation"),
+                        vec![],
+                    ))
+                }
+            };
+        }
 
         Args::Run(run) => {
             let filename = run.input;
@@ -189,7 +212,6 @@ fn main() -> Result<(), CompileError> {
                         other => format!("{}", other),
                     },
                     vec![],
-                    false,
                 )
             })?;
         }
@@ -206,7 +228,6 @@ fn main() -> Result<(), CompileError> {
                     String::from("Reformat error: Could not open file"),
                     format!("\"{}\"", path.to_str().unwrap_or("non-utf8")),
                     vec![],
-                    false,
                 )
             })?;
             let mut s = String::new();
@@ -215,7 +236,6 @@ fn main() -> Result<(), CompileError> {
                     String::from("Reformat error"),
                     format!("Failed to read input file \"{}\" to string", reformat.input),
                     vec![],
-                    false,
                 )
             })?;
             let result: LinkedProgram = serde_json::from_str(&s).map_err(|_| {
@@ -223,7 +243,6 @@ fn main() -> Result<(), CompileError> {
                     String::from("Reformat error"),
                     format!("Could not parse input file \"{}\" as json", reformat.input),
                     vec![],
-                    false,
                 )
             })?;
 
@@ -277,7 +296,6 @@ fn main() -> Result<(), CompileError> {
                     String::from("Gen upgrade error"),
                     e.reason,
                     vec![],
-                    false,
                 ));
             } else {
                 println!("Successfully generated code");
@@ -298,14 +316,6 @@ fn main() -> Result<(), CompileError> {
         );
     }
 
-    Ok(())
-}
-
-fn do_compile(compile: CompileStruct) -> Result<(), (CompileError, BTreeMap<u64, FileInfo>)> {
-    let mut output = get_output(compile.output.clone()).unwrap();
-    compile
-        .invoke()?
-        .to_output(&mut *output, compile.format.as_deref());
     Ok(())
 }
 
