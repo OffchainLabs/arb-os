@@ -14,7 +14,7 @@ use crate::compile::typecheck::{
 };
 use crate::compile::{CompileError, ErrorSystem, FileInfo};
 use crate::link::{ImportedFunc, TupleTree, TUPLE_SIZE};
-use crate::mavm::{AVMOpcode, Instruction, Label, LabelGenerator, Opcode, Value};
+use crate::mavm::{AVMOpcode, Buffer, Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
@@ -802,10 +802,30 @@ fn mavm_codegen_expr<'a>(
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
     let debug = expr.debug_info;
     let loc = expr.debug_info.location;
+
+    macro_rules! create {
+        ($opcode:ident) => {
+            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), debug)
+        };
+        ($opcode:ident, $immediate:expr) => {
+            Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::$opcode), $immediate, debug)
+        };
+    }
+
     match &expr.kind {
         TypeCheckedExprKind::NewBuffer => {
             let opcode = Opcode::AVMOpcode(AVMOpcode::NewBuffer);
             code.push(Instruction::new(opcode, None, debug));
+            Ok((label_gen, code, num_locals))
+        }
+        TypeCheckedExprKind::Quote(bytes) => {
+            code.push(create!(
+                Noop,
+                Value::new_tuple(vec![
+                    Value::Int(Uint256::from_usize(bytes.len())),
+                    Value::Buffer(Buffer::from_bytes(bytes.clone())),
+                ])
+            ));
             Ok((label_gen, code, num_locals))
         }
         TypeCheckedExprKind::Panic => {

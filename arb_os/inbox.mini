@@ -411,15 +411,16 @@ public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
                         return txRequest;
                     }
                     // else signature was invalid, ignore msg and execute loop again to get another
-                } elseif (firstByte == const::L2MessageType_blsBatch) {
-                    if let Some(updatedQ) = decompressAndVerifyBLSSignedTxBatch(
-                        msg.msgData,
-                        msg,
-                        unsafecast<Queue>(globalInputQueue.txQ)
-                    ) {
-                        globalInputQueue = globalInputQueue with { txQ: unsafecast<TxRequestQueue>(updatedQ) };
-                    }
-                    // else BLS batch was bad, so ignore it
+//                } elseif (firstByte == const::L2MessageType_blsBatch) {
+//                    BLS batch message type disabled because it's not used
+//                    if let Some(updatedQ) = decompressAndVerifyBLSSignedTxBatch(
+//                        msg.msgData,
+//                        msg,
+//                        unsafecast<Queue>(globalInputQueue.txQ)
+//                    ) {
+//                        globalInputQueue = globalInputQueue with { txQ: unsafecast<TxRequestQueue>(updatedQ) };
+//                    }
+//                    // else BLS batch was bad, so ignore it
                 } else {
                     // subtype must be unsigned EOA, unsigned contract, or nonmutating
                     if let Some(txRequest) = translateUnsignedTx(msg) {

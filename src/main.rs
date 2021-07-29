@@ -22,6 +22,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 mod compile;
+mod console;
 mod contracttemplates;
 mod evm;
 mod gen_code;

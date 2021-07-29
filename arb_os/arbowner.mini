@@ -27,6 +27,8 @@ use evmCallStack::evmCallStack_transferEthFromCurrent;
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
 use evmOps::evmOp_revert_knownCodePc;
+use evmOps::evmOp_revertIfStatic;
+use evmOps::evmOp_returndatasize;
 use evmOps::doCreationOpcode;
 
 use pluggables::ModuleFunction;
@@ -150,6 +152,7 @@ public impure func arbowner_txcall() {
 }
 
 impure func arbowner_giveOwnership(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (address)
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 10, 0, 0);
     }
@@ -158,6 +161,7 @@ impure func arbowner_giveOwnership(_topFrame: EvmCallFrame, calldata: ByteArray)
 }
 
 impure func arbowner_addToReserveFunds(topFrame: EvmCallFrame, calldata: ByteArray) { // () payable
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 50, 0, 0);
     }
@@ -171,6 +175,7 @@ impure func arbowner_addToReserveFunds(topFrame: EvmCallFrame, calldata: ByteArr
 }
 
 impure func arbowner_setFeesEnabled(_topFrame: EvmCallFrame, calldata: ByteArray) { // (bool)
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 200, 0, 0);
     }
@@ -197,6 +202,7 @@ impure func arbowner_getFeeRecipients(_topFrame: EvmCallFrame, calldata: ByteArr
 }
 
 impure func arbowner_setFeeRecipients(_topFrame: EvmCallFrame, calldata: ByteArray) { // (address, address)
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 68) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 110, 0, 0);
     }
@@ -207,6 +213,7 @@ impure func arbowner_setFeeRecipients(_topFrame: EvmCallFrame, calldata: ByteArr
 }
 
 impure func arbowner_setFairGasPriceSender(_topFrame: EvmCallFrame, calldata: ByteArray) { // (address)
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 68) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 210, 0, 0);
     }
@@ -215,6 +222,7 @@ impure func arbowner_setFairGasPriceSender(_topFrame: EvmCallFrame, calldata: By
 }
 
 impure func arbowner_setSecondsPerSend(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint)
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 120, 0, 0);
     }
@@ -226,6 +234,7 @@ impure func arbowner_setSecondsPerSend(_topFrame: EvmCallFrame, calldata: ByteAr
 }
 
 impure func arbowner_startCodeUpload(_topFrame: EvmCallFrame, calldata: ByteArray) { // ()
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 20, 0, 0);
     }
@@ -234,6 +243,7 @@ impure func arbowner_startCodeUpload(_topFrame: EvmCallFrame, calldata: ByteArra
 }
 
 impure func arbowner_continueCodeUpload(_topFrame: EvmCallFrame, calldata: ByteArray) { // (bytes)
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) < 68) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 30, 0, 0);
     }
@@ -269,6 +279,7 @@ impure func arbowner_getUploadedCodeHash(_topFrame: EvmCallFrame, calldata: Byte
 
 // function finishCodeUploadAsArbosUpgrade(bytes32 newCodeHash, bytes32 oldCodeHash) external;
 impure func arbowner_finishCodeUploadAsArbosUpgrade(_topFrame: EvmCallFrame, calldata: ByteArray) { // ()
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 68) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 40, 0, 0);
     }
@@ -297,6 +308,7 @@ impure func arbowner_finishCodeUploadAsArbosUpgrade(_topFrame: EvmCallFrame, cal
 }
 
 impure func arbowner_finishCodeUploadAsPluggable(_topFrame: EvmCallFrame, calldata: ByteArray) { // ()
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 68) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 50, 0, 0);
     }
@@ -314,6 +326,7 @@ impure func arbowner_finishCodeUploadAsPluggable(_topFrame: EvmCallFrame, callda
 }
 
 impure func arbowner_bindAddressToPluggable(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, uint)
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 68) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 60, 0, 0);
     }
@@ -331,6 +344,7 @@ impure func arbowner_bindAddressToPluggable(topFrame: EvmCallFrame, calldata: By
 }
 
 impure func arbowner_setGasAccountingParams(_topFrame: EvmCallFrame, calldata: ByteArray) { // (uint, uint, uint)
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != (4+3*32)) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 130, 0, 0);
     }
@@ -370,6 +384,7 @@ func totalEthClosure(acct: Account, state: uint) -> uint {
 
 // function deployContract(bytes calldata constructorData, address deemedSender, uint deemedNonce) external payable returns(address);
 impure func arbowner_deployContract(topFrame: EvmCallFrame, calldata: ByteArray) {
+    evmOp_revertIfStatic();
     let calldataSize = bytearray_size(calldata);
     if (calldataSize < 4+4*32) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 160, 0, 0);
@@ -446,6 +461,7 @@ impure func arbowner_getAllFairGasPriceSenders(_topFrame: EvmCallFrame, calldata
 
 // function allowAllSenders() external;
 impure func arbowner_allowAllSenders(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(190, 0, 0);
     }
@@ -455,6 +471,7 @@ impure func arbowner_allowAllSenders(_topFrame: EvmCallFrame, calldata: ByteArra
 
 // function allowOnlyOwnerToSend() external;
 impure func arbowner_allowOnlyOwnerToSend(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(200, 0, 0);
     }
@@ -481,6 +498,7 @@ impure func arbowner_isAllowedSender(_topFrame: EvmCallFrame, calldata: ByteArra
 
 // function addAllowedSender(address addr) external;
 impure func arbowner_addAllowedSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(220, 0, 0);
     }
@@ -490,6 +508,7 @@ impure func arbowner_addAllowedSender(_topFrame: EvmCallFrame, calldata: ByteArr
 
 // function removeAllowedSender(address addr) external;
 impure func arbowner_removeAllowedSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(230, 0, 0);
     }
@@ -527,6 +546,7 @@ impure func arbowner_getAllAllowedSenders(_topFrame: EvmCallFrame, calldata: Byt
 
 // function setL1GasPriceEstimate(uint priceInGwei) external;
 impure func arbowner_setL1GasPriceEstimate(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(250, 0, 0);
     }
