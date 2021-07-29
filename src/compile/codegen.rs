@@ -149,7 +149,7 @@ fn mavm_codegen_func(
         release_build,
     )?;
 
-    if let Type::Func(_, _, ret) = func.tipe {
+    if let Type::Func(.., ret) = func.tipe {
         // put makeframe Instruction at beginning of function, to build the frame (replacing placeholder)
         code[make_frame_slot] = Instruction::from_opcode(
             Opcode::MakeFrame(num_args, max_num_locals, &*ret != &Type::Every),
@@ -665,6 +665,7 @@ fn mavm_codegen_statement(
 
             let call_type = Type::Func(
                 false,
+                false,
                 vec![Type::Tuple(vec![Type::Bool, Type::Any])],
                 Box::new(Type::Void),
             );
@@ -680,7 +681,7 @@ fn mavm_codegen_statement(
                     }),
                     vec![expr.clone()],
                     call_type,
-                    PropertiesList { pure: true },
+                    PropertiesList::new(false, false),
                 ),
                 debug_info: DebugInfo::from(loc),
             };
@@ -1438,6 +1439,7 @@ fn mavm_codegen_expr<'a>(
         TypeCheckedExprKind::ArrayRef(expr1, expr2, t) => {
             let call_type = Type::Func(
                 false,
+                false,
                 vec![Type::Array(Box::new(Type::Any)), Type::Uint],
                 Box::new(t.clone()),
             );
@@ -1452,7 +1454,7 @@ fn mavm_codegen_expr<'a>(
                     }),
                     vec![*expr1.clone(), *expr2.clone()],
                     call_type,
-                    PropertiesList { pure: true },
+                    PropertiesList::new(false, false),
                 ),
                 debug_info: DebugInfo::from(loc),
             };
@@ -1542,6 +1544,7 @@ fn mavm_codegen_expr<'a>(
         TypeCheckedExprKind::MapRef(map_expr, key_expr, _) => {
             let call_type = Type::Func(
                 false,
+                false,
                 vec![Type::Any, Type::Any],
                 Box::new(Type::Option(Box::new(Type::Any))),
             );
@@ -1556,7 +1559,7 @@ fn mavm_codegen_expr<'a>(
                     }),
                     vec![*map_expr.clone(), *key_expr.clone()],
                     call_type,
-                    PropertiesList { pure: true },
+                    PropertiesList::new(false, false),
                 ),
                 debug_info: DebugInfo::from(loc),
             };
@@ -1579,6 +1582,7 @@ fn mavm_codegen_expr<'a>(
         TypeCheckedExprKind::NewArray(sz_expr, base_type, array_type) => {
             let call_type = Type::Func(
                 false,
+                false,
                 vec![Type::Uint, Type::Any],
                 Box::new(array_type.clone()),
             );
@@ -1600,7 +1604,7 @@ fn mavm_codegen_expr<'a>(
                         },
                     ],
                     call_type,
-                    PropertiesList { pure: true },
+                    PropertiesList::new(false, false),
                 ),
                 debug_info: DebugInfo::from(loc),
             };
@@ -1697,7 +1701,7 @@ fn mavm_codegen_expr<'a>(
             Ok((label_gen, code, max(num_locals, expr_locals)))
         }
         TypeCheckedExprKind::NewMap(_) => {
-            let call_type = Type::Func(false, vec![], Box::new(Type::Any));
+            let call_type = Type::Func(false, false, vec![], Box::new(Type::Any));
             let the_expr = TypeCheckedExpr {
                 kind: TypeCheckedExprKind::FunctionCall(
                     Box::new(TypeCheckedExpr {
@@ -1709,7 +1713,7 @@ fn mavm_codegen_expr<'a>(
                     }),
                     vec![],
                     call_type,
-                    PropertiesList { pure: true },
+                    PropertiesList::new(false, false),
                 ),
                 debug_info: DebugInfo::from(loc),
             };
@@ -1732,6 +1736,7 @@ fn mavm_codegen_expr<'a>(
         TypeCheckedExprKind::ArrayMod(arr, index, val, _) => {
             let call_type = Type::Func(
                 false,
+                false,
                 vec![arr.get_type(), index.get_type(), val.get_type()],
                 Box::new(arr.get_type()),
             );
@@ -1746,7 +1751,7 @@ fn mavm_codegen_expr<'a>(
                     }),
                     vec![*arr.clone(), *index.clone(), *val.clone()],
                     call_type,
-                    PropertiesList { pure: true },
+                    PropertiesList::new(false, false),
                 ),
                 debug_info: DebugInfo::from(loc),
             };
@@ -1788,6 +1793,7 @@ fn mavm_codegen_expr<'a>(
         TypeCheckedExprKind::MapMod(map_expr, key_expr, val_expr, _) => {
             let call_type = Type::Func(
                 false,
+                false,
                 vec![
                     map_expr.get_type(),
                     key_expr.get_type(),
@@ -1806,7 +1812,7 @@ fn mavm_codegen_expr<'a>(
                     }),
                     vec![*map_expr.clone(), *key_expr.clone(), *val_expr.clone()],
                     call_type,
-                    PropertiesList { pure: true },
+                    PropertiesList::new(false, false),
                 ),
                 debug_info: DebugInfo::from(loc),
             };

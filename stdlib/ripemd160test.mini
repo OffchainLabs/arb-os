@@ -10,7 +10,7 @@ use std::ripemd160::ripemd160_byteArray;
 use std::ripemd160::ripemd160hasher_pushByte;
 use std::ripemd160::ripemd160hasher_push256;
 
-impure func main() {
+view write func main() {
 	asm(tests(),) { log };
 }
 

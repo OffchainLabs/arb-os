@@ -7,7 +7,7 @@ var newGlobal2: uint;
 var newGlobal3: (uint, uint);
 
 
-impure func main(oldGlobals: GlobalsBeforeUpgrade) -> uint {
+view write func main(oldGlobals: GlobalsBeforeUpgrade) -> uint {
     asm(remapGlobalsForUpgrade(oldGlobals).0,) { rset };
 
     if (newGlobal1 != Some(-3s)) {

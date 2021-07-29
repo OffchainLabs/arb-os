@@ -21,7 +21,7 @@ type opClosure = struct {
 }
 
 
-impure func main() {
+view write func main() {
 	asm(tests(),) { log };
 }
 

@@ -4,6 +4,7 @@
 
 //! Contains utilities for compiling mini source code.
 
+use crate::console::Color;
 use crate::link::{link, postlink_compile, ExportedFunc, Import, ImportedFunc, LinkedProgram};
 use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
@@ -932,7 +933,7 @@ fn typecheck_programs(
     _file_info_chart: &mut BTreeMap<u64, FileInfo>,
     error_system: &mut ErrorSystem,
 ) -> Result<Vec<TypeCheckedModule>, CompileError> {
-    let (typechecked_modules, module_warnings) = modules
+    let (typechecked_modules, module_issues) = modules
         .into_par_iter()
         .map(
             |Module {
@@ -947,7 +948,7 @@ fn typecheck_programs(
                  path,
                  name,
              }| {
-                let mut typecheck_warnings = vec![];
+                let mut typecheck_issues = vec![];
                 let mut checked_funcs = BTreeMap::new();
                 let (exported_funcs, global_vars, string_table) =
                     typecheck::typecheck_top_level_decls(
@@ -962,23 +963,58 @@ fn typecheck_programs(
                     )?;
 
                 checked_funcs.iter_mut().for_each(|(id, func)| {
-                    let detected_purity = func.is_pure();
-                    let declared_purity = func.properties.pure;
+                    let detected_view = func.is_view(type_tree);
+                    let detected_write = func.is_write(type_tree);
 
-                    if detected_purity != declared_purity {
-                        typecheck_warnings.push(CompileError::new_warning(
-                            String::from("Compile warning"),
+                    if detected_view && !func.properties.view {
+                        typecheck_issues.push(CompileError::new_type_error(
                             format!(
-                                "func {}{}{} {}",
-                                error_system.warn_color,
-                                string_table.name_from_id(*id),
-                                CompileError::RESET,
-                                match declared_purity {
-                                    true => "is impure but not marked impure",
-                                    false => "is declared impure but does not contain impure code",
-                                },
+                                "Func {} is {} but was not declared so",
+                                Color::red(string_table.name_from_id(*id)),
+                                Color::red("view"),
                             ),
-                            func.debug_info.location.into_iter().collect(),
+                            func.debug_info.locs(),
+                        ));
+                    }
+
+                    if detected_write && !func.properties.write {
+                        typecheck_issues.push(CompileError::new_type_error(
+                            format!(
+                                "Func {} is {} but was not declared so",
+                                Color::red(string_table.name_from_id(*id)),
+                                Color::red("write"),
+                            ),
+                            func.debug_info.locs(),
+                        ));
+                    }
+
+                    if !detected_view && func.properties.view {
+                        typecheck_issues.push(CompileError::new_warning(
+                            String::from("Typecheck warning"),
+                            format!(
+                                "Func {} is marked {} but isn't",
+                                Color::color(
+                                    error_system.warn_color,
+                                    string_table.name_from_id(*id)
+                                ),
+                                Color::color(error_system.warn_color, "view"),
+                            ),
+                            func.debug_info.locs(),
+                        ));
+                    }
+
+                    if !detected_write && func.properties.write {
+                        typecheck_issues.push(CompileError::new_warning(
+                            String::from("Typecheck warning"),
+                            format!(
+                                "Func {} is marked {} but isn't",
+                                Color::color(
+                                    error_system.warn_color,
+                                    string_table.name_from_id(*id)
+                                ),
+                                Color::color(error_system.warn_color, "write"),
+                            ),
+                            func.debug_info.locs(),
                         ));
                     }
                 });
@@ -995,15 +1031,18 @@ fn typecheck_programs(
                         path,
                         name,
                     ),
-                    typecheck_warnings,
+                    typecheck_issues,
                 ))
             },
         )
         .collect::<Result<(Vec<TypeCheckedModule>, Vec<Vec<CompileError>>), CompileError>>()?;
 
-    error_system
-        .warnings
-        .extend(module_warnings.into_iter().flatten());
+    for issue in module_issues.into_iter().flatten() {
+        match issue.is_warning {
+            true => error_system.warnings.push(issue),
+            false => error_system.errors.push(issue),
+        }
+    }
 
     Ok(typechecked_modules)
 }

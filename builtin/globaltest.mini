@@ -17,11 +17,11 @@ type MyType = uint
 var global10: MyType;
 
 
-impure func main() {
+view write func main() {
     asm(tests(),) { log };
 }
 
-impure func tests() -> uint {
+view write func tests() -> uint {
     global0 = 3;
     if (global0 != 3) {
         return 1;

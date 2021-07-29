@@ -91,8 +91,16 @@ TypeDecl: TypeDecl = {
 }
 
 FuncDecl: Func = {
-	<lno: @L> <attribs: ("#[" <Attributes> "]")?> <p: "public"?> <imp: "impure"?> "func" <i:Ident> "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> =>
-	        Func::new(i, imp.is_some(), fa, t.unwrap_or(Type::Void), cb, p.is_some(), DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default())),
+	<attribs: ("#[" <Attributes> "]")?> <qualifiers: (<Qualifier>)*> "func" <lno: @L> <i:Ident> "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> => {
+        let public = qualifiers.contains(&"public");
+        let view = qualifiers.contains(&"view");
+        let write = qualifiers.contains(&"write");
+        
+	    Func::new(
+            i, view, write, fa, t.unwrap_or(Type::Void), cb, public,
+            DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default())
+        )
+    }
 }
 
 Return: Type = {
@@ -270,12 +278,16 @@ Type: Type = {
 		s.to_usize().unwrap(),
 	),
 	"map" "<" <t1:Type> "," <t2:Type> ","? ">" => Type::Map(Box::new(t1), Box::new(t2)),
-	<i: "impure"?> "func" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => Type::Func(i.is_some(), a, Box::new(r.unwrap_or(Type::Void))),
 	"any" => Type::Any,
 	"option<" <t1:Type> ">" => Type::Option(Box::new(t1)),
 	"every" => Type::Every,
 	"union<" <t1:CommaedTypes> ">" => Type::Union(t1),
-	Ident => Type::Nominal(current_path.to_owned(), <>),
+    <q: Qualifier*> "func" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => {
+        let view = q.contains(&"view");
+        let write = q.contains(&"write");
+        Type::Func(view, write, a, Box::new(r.unwrap_or(Type::Void)))
+    },
+    Ident => Type::Nominal(current_path.to_owned(), <>),
 };
 
 CommaedTypesInParens: Vec<Type> = {
@@ -491,6 +503,12 @@ AsmVal: Value = {
 	<UnsignedInteger> => Value::Int(<>),
 	"(" <mut l: (<AsmVal> ",")*> <v: AsmVal> ","? ")" => Value::new_tuple({l.push(v);l}),
 }
+
+Qualifier: &'input str = {
+    "view" => <>,
+    "write" => <>,
+    "public" => <>,
+};
 
 IdentStr: &'input str = {
 	r"[a-zA-Z_][a-zA-Z_01-9]*" => <>,

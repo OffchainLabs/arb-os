@@ -1,4 +1,9 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
 use crate::compile::{AbstractSyntaxTree, StructField, Type, TypeCheckedNode, TypeTree};
+use crate::console::Color;
 use crate::link::LinkedProgram;
 use crate::GenUpgrade;
 use serde::{Deserialize, Serialize};
@@ -142,11 +147,11 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
     writeln!(code, "").unwrap();
     writeln!(
         code,
-        "public {}func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> (GlobalsAfterUpgrade, uint) {{",
+        "public {} func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> (GlobalsAfterUpgrade, uint) {{",
         if map.data.contains("_jump_table") {
             ""
         } else {
-            "impure "
+            "view write"
         }
     )
     .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
@@ -277,10 +282,11 @@ fn get_globals_and_version_from_file(
             path.to_str().unwrap_or("")
         ))
     })?;
-    let globals: LinkedProgram = serde_json::from_str(&s).map_err(|_| {
+    let globals: LinkedProgram = serde_json::from_str(&s).map_err(|error| {
         GenCodeError::new(format!(
-            "Failed to deserialize file \"{}\"",
-            path.to_str().unwrap_or("")
+            "Failed to deserialize file \"{}\"\n{}",
+            Color::red(path.to_str().unwrap_or("")),
+            error
         ))
     })?;
 

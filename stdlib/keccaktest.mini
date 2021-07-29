@@ -20,7 +20,7 @@ use std::keccak::hasher_pushN_be;
 use std::keccak::hasher_finish;
 
 
-impure func main() {
+view write func main() {
     if let Some(x) = tests() {
 	    asm(x,) { log };
 	} else {

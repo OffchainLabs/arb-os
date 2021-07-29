@@ -50,8 +50,8 @@ type AccountStore = struct {
 type CodeRef = struct {
     refCount: uint,
     code: ByteArray,                         // EVM code
-    evmJumpTable: map<uint, impure func()>,  // maps each valid EVM jump destination to the corresponding AVM codepoint
-    startCodePoint: impure func(),           // entry point for the translated AVM code
+    evmJumpTable: map<uint, view write func()>,  // maps each valid EVM jump destination to the corresponding AVM codepoint
+    startCodePoint: view write func(),           // entry point for the translated AVM code
 }
 
 type EscrowStore = struct {
@@ -71,8 +71,8 @@ type Account = struct {
 
 type AccountContractInfo = struct {
     code: ByteArray,                         // deployed EVM code for the contract
-    evmJumpTable: map<uint, impure func()>,  // maps each valid EVM jump destination to the corresponding AVM codepoint
-    startCodePoint: impure func(),           // entry point for the translated AVM code
+    evmJumpTable: map<uint, view write func()>,  // maps each valid EVM jump destination to the corresponding AVM codepoint
+    startCodePoint: view write func(),           // entry point for the translated AVM code
     storage: StorageMap,
 }
 
@@ -90,7 +90,7 @@ type AggregatorInfo = struct {
 var globalAccountStore: AccountStore;   // needs to be initialized before use
 
 
-public impure func accountStore_init() {
+public view write func accountStore_init() {
     globalAccountStore = struct {
         accounts: newmap<address, Account>,
         retryBuffer: retryBuffer_new(),
@@ -107,14 +107,14 @@ public func escrowStore_new() -> EscrowStore {
     };
 }
 
-public impure func accounts_notifyParamsChanged() {    // called if the chain parameters have changed
+public view write func accounts_notifyParamsChanged() {    // called if the chain parameters have changed
     set globalAccountStore.retryBuffer = retryBuffer_setDefaultLifetime(globalAccountStore.retryBuffer);
 }
 
 // safeGetGlobalAccountStore gets a copy of the global account store, if we are not in a user tx
 // if we're in a user tx, this will error, which will revert the tx
 //      that should never happen, but we check to be safe
-public impure func safeGetGlobalAccountStore() -> AccountStore {
+public view func safeGetGlobalAccountStore() -> AccountStore {
     if ( ! evmCallStack_isEmpty()) {
         asm(668) { debugprint };
         error;
@@ -123,7 +123,7 @@ public impure func safeGetGlobalAccountStore() -> AccountStore {
 }
 
 // see comment on safeGet... above
-public impure func safeSetGlobalAccountStore(acctStore: AccountStore) {
+public view write func safeSetGlobalAccountStore(acctStore: AccountStore) {
     if ( ! evmCallStack_isEmpty()) {
         asm(669) { debugprint };
         error;
@@ -131,11 +131,11 @@ public impure func safeSetGlobalAccountStore(acctStore: AccountStore) {
     globalAccountStore = acctStore;
 }
 
-public impure func getGlobalAccountStore() -> AccountStore {
+public view func getGlobalAccountStore() -> AccountStore {
     return globalAccountStore;
 }
 
-public impure func setGlobalAccountStore(acctStore: AccountStore) {
+public write func setGlobalAccountStore(acctStore: AccountStore) {
     globalAccountStore = acctStore;
 }
 
@@ -238,7 +238,7 @@ public func account_getAggregatorToPayAsOption(account: Account) -> option<addre
     return account.aggregatorToPay;
 }
 
-public impure func account_getAggregatorToPay(account: Account) -> address {
+public view func account_getAggregatorToPay(account: Account) -> address {
     return xif let Some(atp) = account.aggregatorToPay {
         atp
     } else {
@@ -250,7 +250,7 @@ public func account_setAggregatorToPay(account: Account, atp: option<address>) -
     return account with { aggregatorToPay: atp };
 }
 
-public func account_getStartCodePoint(account: Account) -> option<impure func()> {
+public func account_getStartCodePoint(account: Account) -> option<view write func()> {
     return Some((account.contractInfo?).startCodePoint);
 }
 
@@ -258,7 +258,7 @@ public func account_getBalance(account: Account) -> uint {
     return account.ethBalance;
 }
 
-public func account_getEvmJumpTable(account: Account) -> option<map<uint, impure func()> > {
+public func account_getEvmJumpTable(account: Account) -> option<map<uint, view write func()> > {
     return Some((account.contractInfo?).evmJumpTable);
 }
 
@@ -287,7 +287,7 @@ public func account_getAggregatorDecompressionState(account: Account) -> option<
     return (account.aggregatorInfo?).decompressionState;
 }
 
-public impure func account_setAggregatorDecompressionState(
+public view func account_setAggregatorDecompressionState(
     account: Account,
     maybeState: option<AggregatorDecompressionState>,
 ) -> Account {
@@ -320,7 +320,7 @@ public func account_getFeeCollector(account: Account) -> address {
     };
 }
 
-public impure func account_setFeeCollector(account: Account, newCollector: address) -> Account {
+public view func account_setFeeCollector(account: Account, newCollector: address) -> Account {
     return account with {
         aggregatorInfo: Some(
             xif let Some(aggInfo) = account.aggregatorInfo {
@@ -356,12 +356,12 @@ public func account_setBaseTxFeeL1Gas(account: Account, fee: uint) -> Account {
     };
 }
 
-public impure func accountStore_createAccountFromEvmCode(
+public view write func accountStore_createAccountFromEvmCode(
     store: AccountStore,
     newAddr: address,
     code: ByteArray,
-    evmJumpTable: map<uint, impure func()>,
-    initCodePt: impure func(),
+    evmJumpTable: map<uint, view write func()>,
+    initCodePt: view write func(),
     storageMap: StorageMap,
 ) -> option<AccountStore> {
     // Create a new account for a compiled EVM contract.
@@ -388,8 +388,8 @@ public func accountStore_upgradeContractFromEvmCode(
     store: AccountStore,
     addr: address,
     code: ByteArray,
-    evmJumpTable: map<uint, impure func()>,
-    initCodePt: impure func(),
+    evmJumpTable: map<uint, view write func()>,
+    initCodePt: view write func(),
 ) -> AccountStore {
     let oldAcct = accountStore_get(store, addr);
     let contractAdded = false;
@@ -415,7 +415,7 @@ public func accountStore_upgradeContractFromEvmCode(
 public func accountStore_createBuiltinContract(
     acctStore: AccountStore,
     addr: address,
-    entryPoint: impure func(),
+    entryPoint: view write func(),
     isArbitrumStyle: bool,
     isUpgrade: bool,
 ) -> option<AccountStore> {
@@ -433,7 +433,7 @@ public func accountStore_createBuiltinContract(
     return xif (account_isEmpty(oldAcct) || !isUpgrade) {
         set oldAcct.contractInfo = Some(struct {
             code: fakeCode,
-            evmJumpTable: newmap<uint, impure func()>,
+            evmJumpTable: newmap<uint, view write func()>,
             startCodePoint: entryPoint,
             storage: xif (isUpgrade && (oldAcct.contractInfo != None<AccountContractInfo>)) {
                (oldAcct.contractInfo?).storage
@@ -458,7 +458,7 @@ public func accountStore_createBuiltinContract(
             acctStore,
             addr,
             fakeCode,
-            newmap<uint, impure func()>,
+            newmap<uint, view write func()>,
             entryPoint,
         ))
     } else {
@@ -636,8 +636,8 @@ public func account_getStorageSize(account: Account) -> option<uint> {
 public func account_setContractInfo(
     acct: Account,
     code: ByteArray,
-    evmJumpTable: map<uint, impure func()>,
-    startCodePoint: impure func(),
+    evmJumpTable: map<uint, view write func()>,
+    startCodePoint: view write func(),
     storage: StorageMap,
     forceNonce: bool
 ) -> Account {
@@ -699,13 +699,13 @@ func asfaClosure(_: any, acct: Account, wrappedState: asfa_wrappedState) -> asfa
 // If a CodeRef exists for code, increment its reference count.
 // If one doesn't exist, create and initialize one.
 // Return the attributes of the resulting CodeRef
-public impure func accountStore_createOrAddCodeRef(
+public view write func accountStore_createOrAddCodeRef(
     acctStore: AccountStore,
     code: ByteArray
 ) -> option<(
     AccountStore,
-    impure func(),
-    map<uint, impure func()>,
+    view write func(),
+    map<uint, view write func()>,
     bool,
 )> {
     let codeHash = keccak256(code, 0, bytearray_size(code));
@@ -720,8 +720,8 @@ public impure func accountStore_createOrAddCodeRef(
         let (startCodePoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(code), false);
         Some((
             accountStore_createCodeRef(acctStore, code, evmJumpTable, startCodePoint),
-            unsafecast<impure func()>(startCodePoint),
-            unsafecast<map<uint, impure func()> >(evmJumpTable),
+            unsafecast<view write func()>(startCodePoint),
+            unsafecast<map<uint, view write func()> >(evmJumpTable),
             true,
         ))
     };
@@ -739,8 +739,8 @@ public func accountStore_addCodeRef(acctStore: AccountStore, codeHash: bytes32) 
 public func accountStore_createCodeRef(
     acctStore: AccountStore,
     code: ByteArray,
-    evmJumpTable: map<uint, impure func()>,
-    startCodePoint: impure func(),
+    evmJumpTable: map<uint, view write func()>,
+    startCodePoint: view write func(),
 ) -> AccountStore {
     let codeHash = keccak256(code, 0, bytearray_size(code));
     set acctStore.codeRefTable[codeHash] = struct {

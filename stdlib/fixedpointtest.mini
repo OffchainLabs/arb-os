@@ -19,7 +19,7 @@ use std::fixedpoint::fixedPoint_mulByUint;
 use std::fixedpoint::fixedPoint_plusOne;
 use std::fixedpoint::fixedPoint_fractionalPart;
 
-impure func main() {
+view write func main() {
 	asm(tests(),) { log };
 }
 

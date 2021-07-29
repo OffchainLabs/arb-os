@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::compile::DebugInfo;
+use crate::compile::{DebugInfo, TypeTree};
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
@@ -163,8 +163,11 @@ impl Instruction<AVMOpcode> {
 }
 
 impl Instruction {
-    pub fn is_pure(&self) -> bool {
-        self.opcode.is_pure()
+    pub fn is_view(&self, type_tree: &TypeTree) -> bool {
+        self.opcode.is_view(type_tree)
+    }
+    pub fn is_write(&self, type_tree: &TypeTree) -> bool {
+        self.opcode.is_write(type_tree)
     }
     pub fn get_label(&self) -> Option<&Label> {
         match &self.opcode {
@@ -977,27 +980,42 @@ pub enum AVMOpcode {
 }
 
 impl Opcode {
-    pub fn is_pure(&self) -> bool {
+    pub fn is_view(&self, _: &TypeTree) -> bool {
+        match self {
+            Opcode::AVMOpcode(AVMOpcode::Inbox)
+            | Opcode::AVMOpcode(AVMOpcode::InboxPeek)
+            | Opcode::AVMOpcode(AVMOpcode::Send)        // 2 sends can't be reordered even though no state is read
+            | Opcode::AVMOpcode(AVMOpcode::Rpush)
+            | Opcode::AVMOpcode(AVMOpcode::PushInsn)
+            | Opcode::AVMOpcode(AVMOpcode::PushInsnImm)
+            | Opcode::AVMOpcode(AVMOpcode::ErrCodePoint)
+            | Opcode::AVMOpcode(AVMOpcode::ErrPush)
+            | Opcode::AVMOpcode(AVMOpcode::PushGas)
+            | Opcode::AVMOpcode(AVMOpcode::Sideload)    // this is special-cased, so we can't reorder these
+            | Opcode::AVMOpcode(AVMOpcode::Jump)
+            | Opcode::AVMOpcode(AVMOpcode::Cjump)
+            | Opcode::AVMOpcode(AVMOpcode::AuxPop)
+            | Opcode::AVMOpcode(AVMOpcode::AuxPush) => true,
+            _ => false,
+        }
+    }
+    pub fn is_write(&self, _: &TypeTree) -> bool {
         match self {
             Opcode::AVMOpcode(AVMOpcode::Log)
             | Opcode::AVMOpcode(AVMOpcode::Inbox)
             | Opcode::AVMOpcode(AVMOpcode::InboxPeek)
             | Opcode::AVMOpcode(AVMOpcode::Send)
             | Opcode::AVMOpcode(AVMOpcode::Rset)
-            | Opcode::AVMOpcode(AVMOpcode::Rpush)
             | Opcode::AVMOpcode(AVMOpcode::PushInsn)
             | Opcode::AVMOpcode(AVMOpcode::PushInsnImm)
-            | Opcode::AVMOpcode(AVMOpcode::ErrCodePoint)
             | Opcode::AVMOpcode(AVMOpcode::ErrSet)
-            | Opcode::AVMOpcode(AVMOpcode::ErrPush)
             | Opcode::AVMOpcode(AVMOpcode::SetGas)
-            | Opcode::AVMOpcode(AVMOpcode::PushGas)
+            | Opcode::AVMOpcode(AVMOpcode::Sideload)    // this is special-cased, so we can't reorder these
             | Opcode::AVMOpcode(AVMOpcode::Jump)
             | Opcode::AVMOpcode(AVMOpcode::Cjump)
             | Opcode::AVMOpcode(AVMOpcode::AuxPop)
-            | Opcode::AVMOpcode(AVMOpcode::AuxPush)
-            | Opcode::AVMOpcode(AVMOpcode::Sideload) => false,
-            _ => true,
+            | Opcode::AVMOpcode(AVMOpcode::AuxPush) => true,
+            _ => false,
         }
     }
 }
