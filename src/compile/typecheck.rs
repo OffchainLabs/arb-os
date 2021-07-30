@@ -157,8 +157,8 @@ fn strip_returns(to_strip: &mut TypeCheckedNode, _state: &(), _mut_state: &mut (
                             kind: TypeCheckedExprKind::Asm(
                                 Type::Bool,
                                 vec![
-                                    create!(Dup0, inner.debug_info),
-                                    create!(Tget, Value::Int(Uint256::zero()), inner.debug_info),
+                                    opcode!(Dup0, inner.debug_info),
+                                    opcode!(Tget, Value::Int(Uint256::zero()), inner.debug_info),
                                 ],
                                 vec![(**inner).clone()],
                             ),
@@ -169,7 +169,7 @@ fn strip_returns(to_strip: &mut TypeCheckedNode, _state: &(), _mut_state: &mut (
                             Some(b!(TypeCheckedExpr {
                                 kind: TypeCheckedExprKind::Asm(
                                     tipe.clone(),
-                                    vec![create!(
+                                    vec![opcode!(
                                         Tget,
                                         Value::Int(Uint256::one()),
                                         inner.debug_info

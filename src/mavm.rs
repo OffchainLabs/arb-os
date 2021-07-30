@@ -112,7 +112,7 @@ impl From<Instruction<AVMOpcode>> for Instruction {
 
 /// The default instruction generating macro sometimes overridden by other functions for simplicity.
 /// This macro is exported globally.
-macro_rules! create {
+macro_rules! opcode {
     ($opcode:ident, $debug_info:expr $(,)?) => {
         Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), $debug_info)
     };

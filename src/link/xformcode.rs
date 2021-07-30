@@ -27,13 +27,13 @@ pub fn fix_tuple_size(
         match insn.opcode {
             Opcode::MakeFrame(nargs, ntotal, return_address) => {
                 if return_address {
-                    code_out.push(create!(AuxPush, debug_info)); // move return address to aux stack
+                    code_out.push(opcode!(AuxPush, debug_info)); // move return address to aux stack
                 }
                 locals_tree = TupleTree::new(ntotal, true);
                 if let Some(imm) = &insn.immediate {
-                    code_out.push(create!(Noop, imm.clone(), debug_info));
+                    code_out.push(opcode!(Noop, imm.clone(), debug_info));
                 }
-                code_out.push(create!(
+                code_out.push(opcode!(
                     AuxPush,
                     TupleTree::make_empty(&locals_tree),
                     debug_info
@@ -133,22 +133,22 @@ pub fn fix_tuple_size(
                 }
             }
             Opcode::SetGlobalVar(idx) => {
-                code_out.push(create!(Rpush, debug_info));
+                code_out.push(opcode!(Rpush, debug_info));
                 global_tree.write_code(false, idx, &mut code_out, debug_info)?;
-                code_out.push(create!(Rset, debug_info));
+                code_out.push(opcode!(Rset, debug_info));
             }
             Opcode::GetGlobalVar(idx) => {
-                code_out.push(create!(Rpush, debug_info));
+                code_out.push(opcode!(Rpush, debug_info));
                 global_tree.read_code(false, idx, &mut code_out, debug_info)?;
             }
             Opcode::Return => {
                 code_out.push(match &insn.immediate {
-                    Some(v) => create!(AuxPop, v.clone(), debug_info),
-                    None => create!(AuxPop, debug_info),
+                    Some(v) => opcode!(AuxPop, v.clone(), debug_info),
+                    None => opcode!(AuxPop, debug_info),
                 });
-                code_out.push(create!(Pop, debug_info));
-                code_out.push(create!(AuxPop, debug_info));
-                code_out.push(create!(Jump, debug_info));
+                code_out.push(opcode!(Pop, debug_info));
+                code_out.push(opcode!(AuxPop, debug_info));
+                code_out.push(opcode!(Jump, debug_info));
             }
             Opcode::UncheckedFixedArrayGet(sz) => {
                 let tup_size_val = Value::Int(Uint256::from_usize(TUPLE_SIZE));
@@ -157,26 +157,26 @@ pub fn fix_tuple_size(
                     //TODO: can probably make this more efficient
 
                     // stack: idx arr
-                    code_out.push(create!(Dup1, tup_size_val.clone(), debug_info));
-                    code_out.push(create!(Mod, debug_info));
-                    code_out.push(create!(Swap1, debug_info));
+                    code_out.push(opcode!(Dup1, tup_size_val.clone(), debug_info));
+                    code_out.push(opcode!(Mod, debug_info));
+                    code_out.push(opcode!(Swap1, debug_info));
 
                     // stack: idx slot arr
-                    code_out.push(create!(Swap1, tup_size_val.clone(), debug_info));
-                    code_out.push(create!(Div, debug_info));
+                    code_out.push(opcode!(Swap1, tup_size_val.clone(), debug_info));
+                    code_out.push(opcode!(Div, debug_info));
 
                     // stack: subindex slot arr
-                    code_out.push(create!(Swap2, debug_info));
-                    code_out.push(create!(Swap1, debug_info));
+                    code_out.push(opcode!(Swap2, debug_info));
+                    code_out.push(opcode!(Swap1, debug_info));
 
                     // stack: slot arr subindex
-                    code_out.push(create!(Tget, debug_info));
-                    code_out.push(create!(Swap1, debug_info));
+                    code_out.push(opcode!(Tget, debug_info));
+                    code_out.push(opcode!(Swap1, debug_info));
 
                     // stack: subindex subarr
                     remaining_size = (remaining_size + (TUPLE_SIZE - 1)) / TUPLE_SIZE;
                 }
-                code_out.push(create!(Tget, debug_info));
+                code_out.push(opcode!(Tget, debug_info));
             }
             _ => {
                 code_out.push(insn.clone());
@@ -309,9 +309,9 @@ impl TupleTree {
         match self {
             TupleTree::Single => {
                 if is_local {
-                    code.push(create!(AuxPop, debug_info));
-                    code.push(create!(Dup0, debug_info));
-                    code.push(create!(AuxPush, debug_info));
+                    code.push(opcode!(AuxPop, debug_info));
+                    code.push(opcode!(Dup0, debug_info));
+                    code.push(opcode!(AuxPush, debug_info));
                 }
                 Ok(())
             }
@@ -321,10 +321,10 @@ impl TupleTree {
                     if index < subtree.tsize() {
                         code.push(match is_local {
                             true => {
-                                create!(Xget, Value::Int(Uint256::from_usize(slot)), debug_info)
+                                opcode!(Xget, Value::Int(Uint256::from_usize(slot)), debug_info)
                             }
                             false => {
-                                create!(Tget, Value::Int(Uint256::from_usize(slot)), debug_info)
+                                opcode!(Tget, Value::Int(Uint256::from_usize(slot)), debug_info)
                             }
                         });
                         return subtree.read_code(false, index, code, debug_info);
@@ -361,25 +361,25 @@ impl TupleTree {
                         TupleTree::Single => {
                             code.push(match is_local {
                                 true => {
-                                    create!(Xset, Value::Int(Uint256::from_usize(slot)), debug_info)
+                                    opcode!(Xset, Value::Int(Uint256::from_usize(slot)), debug_info)
                                 }
                                 false => {
-                                    create!(Tset, Value::Int(Uint256::from_usize(slot)), debug_info)
+                                    opcode!(Tset, Value::Int(Uint256::from_usize(slot)), debug_info)
                                 }
                             });
                             return Ok(());
                         }
                         TupleTree::Tree(_, _) => {
                             if is_local {
-                                code.push(create!(
+                                code.push(opcode!(
                                     Xget,
                                     Value::Int(Uint256::from_usize(slot)),
                                     debug_info
                                 ));
                             } else {
-                                code.push(create!(Swap1, debug_info));
-                                code.push(create!(Dup1, debug_info));
-                                code.push(create!(
+                                code.push(opcode!(Swap1, debug_info));
+                                code.push(opcode!(Dup1, debug_info));
+                                code.push(opcode!(
                                     Tget,
                                     Value::Int(Uint256::from_usize(slot)),
                                     debug_info
@@ -387,14 +387,14 @@ impl TupleTree {
                             }
                             subtree.write_code(false, index, code, debug_info)?;
                             if is_local {
-                                code.push(create!(
+                                code.push(opcode!(
                                     Xset,
                                     Value::Int(Uint256::from_usize(slot)),
                                     debug_info
                                 ));
                             } else {
-                                code.push(create!(Swap1, debug_info));
-                                code.push(create!(
+                                code.push(opcode!(Swap1, debug_info));
+                                code.push(opcode!(
                                     Tset,
                                     Value::Int(Uint256::from_usize(slot)),
                                     debug_info
@@ -413,7 +413,7 @@ impl TupleTree {
                 debug_info.location.into_iter().collect(),
             ));
         } else {
-            code.push(create!(Pop, debug_info));
+            code.push(opcode!(Pop, debug_info));
             Ok(())
         }
     }

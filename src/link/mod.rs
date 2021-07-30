@@ -378,19 +378,19 @@ pub fn link(
     // Initialize globals or allow jump table retrieval
     let mut linked_code = if test_mode {
         vec![
-            create!(Noop, Value::none(), DebugInfo::default()),
-            create!(
+            opcode!(Noop, Value::none(), DebugInfo::default()),
+            opcode!(
                 Noop,
                 make_uninitialized_tuple(global_num_limit.len()),
                 DebugInfo::default()
             ),
-            create!(Rset, DebugInfo::default()),
+            opcode!(Rset, DebugInfo::default()),
         ]
     } else {
         vec![
-            create!(Rpush, DebugInfo::default()),
-            create!(Noop, Value::none(), DebugInfo::default()),
-            create!(
+            opcode!(Rpush, DebugInfo::default()),
+            opcode!(Noop, Value::none(), DebugInfo::default()),
+            opcode!(
                 Rset,
                 make_uninitialized_tuple(global_num_limit.len()),
                 DebugInfo::default()
