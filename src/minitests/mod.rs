@@ -46,52 +46,39 @@ fn test_from_file(path: &Path, ret: Value) {
     );
 }
 
+/// Runs a .mexe file, seeing if any string-encoded error messages are reported
+fn test_for_issue_string(path: &Path) {
+    test_from_file(path, Value::Buffer(Buffer::new_empty()))
+}
+
 #[test]
 fn test_arraytest() {
-    test_from_file(
-        Path::new("builtin/arraytest.mexe"),
-        Value::Buffer(Buffer::new_empty()),
-    );
+    test_for_issue_string(Path::new("builtin/arraytest.mexe"));
 }
 
 #[test]
 fn test_kvstest() {
-    test_from_file(
-        Path::new("builtin/kvstest.mexe"),
-        Value::Buffer(Buffer::new_empty()),
-    );
+    test_for_issue_string(Path::new("builtin/kvstest.mexe"));
 }
 
 #[test]
 fn test_storage_map() {
-    test_from_file(
-        Path::new("stdlib/storageMapTest.mexe"),
-        Value::Buffer(Buffer::new_empty()),
-    );
+    test_for_issue_string(Path::new("stdlib/storageMapTest.mexe"));
 }
 
 #[test]
 fn test_queuetest() {
-    test_from_file(
-        Path::new("stdlib/queuetest.mexe"),
-        Value::Buffer(Buffer::new_empty()),
-    );
+    test_for_issue_string(Path::new("stdlib/queuetest.mexe"));
 }
 
 #[test]
 fn test_globaltest() {
-    test_from_file(
-        Path::new("builtin/globaltest.mexe"),
-        Value::Buffer(Buffer::new_empty()),
-    );
+    test_for_issue_string(Path::new("builtin/globaltest.mexe"));
 }
 
 #[test]
 fn test_pqtest() {
-    test_from_file(
-        Path::new("stdlib/priorityqtest.mexe"),
-        Value::Buffer(Buffer::new_empty()),
-    );
+    test_for_issue_string(Path::new("stdlib/priorityqtest.mexe"));
 }
 
 #[test]
@@ -104,10 +91,7 @@ fn test_bytearray() {
 
 #[test]
 fn test_map() {
-    test_from_file(
-        Path::new("builtin/maptest.mexe"),
-        Value::Buffer(Buffer::new_empty()),
-    );
+    test_for_issue_string(Path::new("builtin/maptest.mexe"));
 }
 
 #[test]
@@ -120,10 +104,7 @@ fn test_keccak() {
 
 #[test]
 fn test_bls() {
-    test_from_file(
-        Path::new("stdlib/blstest.mexe"),
-        Value::Buffer(Buffer::new_empty()),
-    );
+    test_for_issue_string(Path::new("stdlib/blstest.mexe"));
 }
 
 #[test]
@@ -136,18 +117,12 @@ fn test_sha256() {
 
 #[test]
 fn test_fixedpoint() {
-    test_from_file(
-        Path::new("stdlib/fixedpointtest.mexe"),
-        Value::Buffer(Buffer::new_empty()),
-    );
+    test_for_issue_string(Path::new("stdlib/fixedpointtest.mexe"));
 }
 
 #[test]
 fn test_ripemd160() {
-    test_from_file(
-        Path::new("stdlib/ripemd160test.mexe"),
-        Value::Buffer(Buffer::new_empty()),
-    );
+    test_for_issue_string(Path::new("stdlib/ripemd160test.mexe"));
 }
 
 #[test]
