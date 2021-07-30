@@ -2,7 +2,7 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-view write func main() {
+write func main() {
 	asm(tests(),) { log };
 }
 

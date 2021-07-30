@@ -33,7 +33,7 @@ public view write func pushValue(val: any, restOfCode: AvmCodePoint) -> AvmCodeP
     return asm(const::AVM_nop, val, restOfCode) AvmCodePoint { pushinsnimm };
 }
 
-public view write func avmCodeBuilder_new(requireSafe: bool) -> AvmCodeBuilder {
+public view func avmCodeBuilder_new(requireSafe: bool) -> AvmCodeBuilder {
     let code = asm() AvmCodePoint { errcodept };
     return struct {
         requireSafe: requireSafe,

@@ -151,7 +151,7 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
         if map.data.contains("_jump_table") {
             ""
         } else {
-            "view write"
+            "view"
         }
     )
     .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;

@@ -11,7 +11,7 @@ use std::expandingIntArray::expandingIntArray_op;
 use std::bytearray::opClosure;
 
 
-view write func main() {
+write func main() {
     asm(tests(),) { log };
 }
 

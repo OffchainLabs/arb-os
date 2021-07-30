@@ -36,7 +36,7 @@ type SignedTx = struct {
     s: uint
 }
 
-view write func main(kind: uint, value: any) {
+write func main(kind: uint, value: any) {
     if (kind == 0) {
         let ui = unsafecast<uint>(value);
         let ba = bytearray_new(0);

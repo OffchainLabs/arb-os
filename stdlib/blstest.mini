@@ -9,7 +9,7 @@ use std::bls::bls_hashToPoint;
 use std::bls::bls_verifySingleSig;
 
 
-view write func main() {
+write func main() {
 	asm(tests(),) { log };
 }
 

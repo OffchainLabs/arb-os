@@ -1124,4 +1124,3 @@ view write func evm_runtimePanic(reasonCode: uint) {
     evmCallStack_callHitError(1000+reasonCode);
     error;
 }
-

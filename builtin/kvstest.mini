@@ -11,7 +11,7 @@ use core::kvs::builtin_kvsDelete;
 use core::kvs::builtin_kvsForall;
 use core::kvs::builtin_kvsSize;
 
-view write func main() {
+write func main() {
 	asm(tests(),) { log };
 }
 
