@@ -165,32 +165,32 @@ type opClosure = struct {
 	val: any,
 }
 
-public func builtin_arrayOp(a: array, index: uint, closure: opClosure) -> (array, any) {
+public func builtin_arrayOp(a: array, index: uint, applicator: opClosure) -> (array, any) {
     // Do a read-modify-write operation on a slot of the array.
-    // closure defines the operation that will be done on the contents.
-    // (newSlotContents, returnValue) = closure.f(closure.val, oldSlotContents)
+    // applicator defines the operation that will be done on the contents.
+    // (newSlotContents, returnValue) = applicator.f(applicator.val, oldSlotContents)
     // This function returns (updatedArray, returnValue).
 	if (index >= a.size) {
 		error;
 	}
-	let sub = arrayOp2(a.contents, a.topstep, index, closure);
+	let sub = arrayOp2(a.contents, a.topstep, index, applicator);
 	return (
 		a with { contents: sub.bloc },
 		sub.val,
 	);
 }
 
-public func builtin_arrayOpSafe(a: array, index: uint, closure: opClosure) -> option<(array, any)> {
+public func builtin_arrayOpSafe(a: array, index: uint, applicator: opClosure) -> option<(array, any)> {
 	if (index >= a.size) {
 		return None;
 	}
-	let (aOut, valOut) = builtin_arrayOp(a, index, closure);
+	let (aOut, valOut) = builtin_arrayOp(a, index, applicator);
 	return Some((aOut, valOut));
 }
 
-func arrayOp2(b: block, chunk: uint, index: uint, closure: opClosure) -> arraySwapSubResult {
+func arrayOp2(b: block, chunk: uint, index: uint, applicator: opClosure) -> arraySwapSubResult {
 	return xif (1 == chunk) {
-		let (newSlotContents, returnValue) = closure.f(closure.val, b[index]);
+		let (newSlotContents, returnValue) = applicator.f(applicator.val, b[index]);
 		struct {
 			bloc: b with { [index] = newSlotContents },
 			val: returnValue,
@@ -201,7 +201,7 @@ func arrayOp2(b: block, chunk: uint, index: uint, closure: opClosure) -> arraySw
 			unsafecast<block>(b[subIndex]),
 			chunk/8,
 			index%chunk,
-			closure
+			applicator
 		);
 		sub with { bloc: b with {[subIndex] = sub.bloc} }
 	};

@@ -1263,7 +1263,9 @@ pub fn parse_from_source(
     let lines = Lines::new(source.bytes());
     let mut constants = init_constant_table(constants_path)?;
     let mut local_constants = HashMap::<String, Location>::new();
-    let parsed = DeclsParser::new()
+    let mut closures = vec![];
+
+    let mut parsed = DeclsParser::new()
         .parse(
             string_table,
             &lines,
@@ -1272,6 +1274,7 @@ pub fn parse_from_source(
             &mut constants,
             &mut local_constants,
             used_constants,
+            &mut closures,
             error_system,
             &source,
         )
@@ -1327,6 +1330,10 @@ pub fn parse_from_source(
                 vec![loc],
             ));
         }
+    }
+
+    for closure in closures {
+        parsed.push(TopLevelDecl::FuncDecl(closure));
     }
 
     Ok(parsed)

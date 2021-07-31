@@ -4,14 +4,12 @@
 
 //!Contains types and utilities for constructing the mini AST
 
-use crate::compile::typecheck::{
-    AbstractSyntaxTree, InliningMode, PropertiesList, TypeCheckedNode,
-};
-use crate::compile::{path_display, CompileError};
+use crate::compile::typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNode};
+use crate::compile::{path_display, CompileError, Lines};
 use crate::console::Color;
 use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
 use crate::mavm::{Instruction, Value};
-use crate::pos::Location;
+use crate::pos::{BytePos, Location};
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
@@ -46,6 +44,14 @@ impl DebugInfo {
         DebugInfo {
             location,
             attributes,
+        }
+    }
+
+    /// builds a `DebugInfo` in-place at the parsing site
+    pub fn here(lines: &Lines, lno: usize, file: u64) -> Self {
+        DebugInfo {
+            location: lines.location(BytePos::from(lno), file),
+            attributes: Attributes::default(),
         }
     }
 
@@ -100,7 +106,7 @@ pub enum Type {
     FixedArray(Box<Type>, usize),
     Struct(Vec<StructField>),
     Nominal(Vec<String>, StringId),
-    Func(bool, bool, Vec<Type>, Box<Type>),
+    Func(FuncProperties, Vec<Type>, Box<Type>),
     Map(Box<Type>, Box<Type>),
     Any,
     Every,
@@ -131,10 +137,19 @@ impl AbstractSyntaxTree for Type {
                 .iter_mut()
                 .map(|field| TypeCheckedNode::Type(&mut field.tipe))
                 .collect(),
-            Type::Func(_, _, args, ret) => vec![TypeCheckedNode::Type(ret)]
+            Type::Func(_, args, ret) => {
+                let mut nodes = vec![TypeCheckedNode::Type(ret)];
+                nodes.extend(args.iter_mut().map(|t| TypeCheckedNode::Type(t)));
+                nodes
+            }
+            /*}vec![TypeCheckedNode::Type(ret)]
                 .into_iter()
                 .chain(args.iter_mut().map(|t| TypeCheckedNode::Type(t)))
                 .collect(),
+            Type::Closure(_, _, args, ret) => vec![TypeCheckedNode::Type(ret)]
+                .into_iter()
+                .chain(args.iter_mut().map(|t| TypeCheckedNode::Type(t)))
+                .collect(),*/
             Type::Map(key, value) => vec![TypeCheckedNode::Type(key), TypeCheckedNode::Type(value)],
         }
     }
@@ -185,7 +200,7 @@ impl Type {
                 }
                 tipes
             }
-            Type::Func(_, _, args, ret) => {
+            Type::Func(_, args, ret) => {
                 let mut tipes = ret.find_nominals();
                 for arg in args {
                     tipes.extend(arg.find_nominals());
@@ -283,8 +298,8 @@ impl Type {
                     false
                 }
             }
-            Type::Func(_, _, args, ret) => {
-                if let Type::Func(_, _, args2, ret2) = rhs {
+            Type::Func(_, args, ret) => {
+                if let Type::Func(_, args2, ret2) = rhs {
                     //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
                     type_vectors_covariant_castable(args2, args, type_tree, seen.clone())
                         && (ret.covariant_castable(ret2, type_tree, seen))
@@ -387,11 +402,14 @@ impl Type {
                     false
                 }
             }
-            Type::Func(view, write, args, ret) => {
-                if let Type::Func(view2, write2, args2, ret2) = rhs {
+            Type::Func(prop, args, ret) => {
+                if let Type::Func(prop2, args2, ret2) = rhs {
                     //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
-                    (*view || !view2)
-                        && (*write || !write2)
+                    let (view1, write1) = prop.purity();
+                    let (view2, write2) = prop2.purity();
+
+                    (view1 || !view2)
+                        && (write1 || !write2)
                         && type_vectors_castable(args2, args, type_tree, seen.clone())
                         && (ret.castable(ret2, type_tree, seen))
                 } else {
@@ -489,11 +507,14 @@ impl Type {
                     false
                 }
             }
-            Type::Func(view, write, args, ret) => {
-                if let Type::Func(view2, write2, args2, ret2) = rhs {
+            Type::Func(prop, args, ret) => {
+                if let Type::Func(prop2, args2, ret2) = rhs {
                     //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
-                    (*view || !view2)
-                        && (*write || !write2)
+                    let (view1, write1) = prop.purity();
+                    let (view2, write2) = prop2.purity();
+
+                    (view1 || !view2)
+                        && (write1 || !write2)
                         && arg_vectors_assignable(args2, args, type_tree, seen.clone())
                         && (ret.assignable(ret2, type_tree, seen))
                 } else {
@@ -622,8 +643,11 @@ impl Type {
                     }
                 }
             }
-            Type::Func(view, write, args, ret) => {
-                if let Type::Func(view2, write2, args2, ret2) = rhs {
+            Type::Func(prop, args, ret) => {
+                if let Type::Func(prop2, args2, ret2) = rhs {
+                    let (view1, write1) = prop.purity();
+                    let (view2, write2) = prop2.purity();
+
                     for (index, (left, right)) in args.iter().zip(args2.iter()).enumerate() {
                         if let Some(inner) = left.first_mismatch(right, type_tree, seen.clone()) {
                             return Some(TypeMismatch::FuncArg(index, Box::new(inner)));
@@ -635,10 +659,10 @@ impl Type {
                     if let Some(inner) = ret.first_mismatch(ret2, type_tree, seen) {
                         return Some(TypeMismatch::FuncReturn(Box::new(inner)));
                     }
-                    if !view && *view2 {
+                    if !view1 && view2 {
                         return Some(TypeMismatch::View);
                     }
-                    if !write && *write2 {
+                    if !write1 && write2 {
                         return Some(TypeMismatch::Write);
                     }
                     None
@@ -788,9 +812,7 @@ impl Type {
                 }
                 (value_from_field_list(vals), is_safe)
             }
-            Type::Map(_, _) | Type::Func(_, _, _, _) | Type::Nominal(_, _) => {
-                (Value::none(), false)
-            }
+            Type::Map(_, _) | Type::Func(_, _, _) | Type::Nominal(_, _) => (Value::none(), false),
             Type::Any => (Value::none(), true),
             Type::Every => (Value::none(), false),
             Type::Option(_) => (Value::new_tuple(vec![Value::Int(Uint256::zero())]), true),
@@ -922,12 +944,12 @@ impl Type {
                 ));
                 (out, type_set)
             }
-            Type::Func(view, write, args, ret) => {
+            Type::Func(prop, args, ret) => {
                 let mut out = String::new();
-                if *view {
+                if prop.view {
                     out.push_str("view ");
                 }
-                if *write {
+                if prop.write {
                     out.push_str("write ");
                 }
                 out.push_str("func(");
@@ -1142,8 +1164,8 @@ impl PartialEq for Type {
             (Type::FixedArray(a1, s1), Type::FixedArray(a2, s2)) => (s1 == s2) && (*a1 == *a2),
             (Type::Struct(f1), Type::Struct(f2)) => struct_field_vectors_equal(&f1, &f2),
             (Type::Map(k1, v1), Type::Map(k2, v2)) => (*k1 == *k2) && (*v1 == *v2),
-            (Type::Func(v1, w1, a1, r1), Type::Func(v2, w2, a2, r2)) => {
-                (v1 == v2) && (w1 == w2) && type_vectors_equal(&a1, &a2) && (*r1 == *r2)
+            (Type::Func(p1, a1, r1), Type::Func(p2, a2, r2)) => {
+                (p1 == p2) && type_vectors_equal(&a1, &a2) && (*r1 == *r2)
             }
             (Type::Nominal(p1, id1), Type::Nominal(p2, id2)) => (p1, id1) == (p2, id2),
             (Type::Option(x), Type::Option(y)) => *x == *y,
@@ -1325,18 +1347,19 @@ pub struct Func<T = Statement> {
     pub tipe: Type,
     pub kind: FuncDeclKind,
     pub debug_info: DebugInfo,
-    pub properties: PropertiesList,
+    pub properties: FuncProperties,
 }
 
 impl Func {
     pub fn new(
         name: StringId,
+        exported: bool,
         view: bool,
         write: bool,
+        closure: bool,
         args: Vec<FuncArg>,
-        ret_type: Type,
+        ret_type: Option<Type>,
         code: Vec<Statement>,
-        exported: bool,
         debug_info: DebugInfo,
     ) -> Self {
         let mut arg_types = Vec::new();
@@ -1344,20 +1367,45 @@ impl Func {
         for arg in args.iter() {
             arg_types.push(arg.tipe.clone());
         }
+        let prop = FuncProperties::new(view, write, closure);
+        let ret_type = ret_type.unwrap_or(Type::Void);
         Func {
             name,
             args: args_vec,
             ret_type: ret_type.clone(),
             code,
-            tipe: Type::Func(view, write, arg_types, Box::new(ret_type)),
+            tipe: Type::Func(prop, arg_types, Box::new(ret_type)),
             kind: if exported {
                 FuncDeclKind::Public
             } else {
                 FuncDeclKind::Private
             },
             debug_info,
-            properties: PropertiesList::new(view, write),
+            properties: prop,
         }
+    }
+}
+
+///Keeps track of compiler enforced properties, currently only tracks purity, may be extended to
+/// keep track of potential to throw or other properties.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Hash)]
+pub struct FuncProperties {
+    pub view: bool,
+    pub write: bool,
+    pub closure: bool,
+}
+
+impl FuncProperties {
+    pub fn new(view: bool, write: bool, closure: bool) -> Self {
+        FuncProperties {
+            view,
+            write,
+            closure,
+        }
+    }
+
+    pub fn purity(&self) -> (bool, bool) {
+        (self.view, self.write)
     }
 }
 
@@ -1547,6 +1595,7 @@ pub enum ExprKind {
     Loop(Vec<Statement>),
     UnionCast(Box<Expr>, Type),
     NewBuffer,
+    Quote(Vec<u8>),
 }
 
 impl Expr {
@@ -1572,6 +1621,15 @@ impl Expr {
             kind: ExprKind::Trinary(op, Box::new(e1), Box::new(e2), Box::new(e3)),
             debug_info: DebugInfo::from(loc),
         }
+    }
+
+    /// Creates an expression whose DebugInfo is populated in-place at the parsing site
+    pub fn lno(kind: ExprKind, lines: &Lines, lno: usize, file: u64) -> Self {
+        Self::new(kind, DebugInfo::here(lines, lno, file))
+    }
+
+    pub fn new(kind: ExprKind, debug_info: DebugInfo) -> Self {
+        Self { kind, debug_info }
     }
 }
 

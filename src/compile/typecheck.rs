@@ -9,7 +9,7 @@ use super::ast::{
     GlobalVarDecl, MatchPattern, MatchPatternKind, Statement, StatementKind, StructField,
     TopLevelDecl, TrinaryOp, Type, TypeTree, UnaryOp,
 };
-use crate::compile::ast::FieldInitializer;
+use crate::compile::ast::{FieldInitializer, FuncProperties};
 use crate::compile::{CompileError, ErrorSystem, InliningHeuristic};
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
@@ -119,20 +119,6 @@ impl<'a> TypeCheckedNode<'a> {
                 _ => {}
             }
         }
-    }
-}
-
-///Keeps track of compiler enforced properties, currently only tracks purity, may be extended to
-/// keep track of potential to throw or other properties.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
-pub struct PropertiesList {
-    pub view: bool,
-    pub write: bool,
-}
-
-impl PropertiesList {
-    pub fn new(view: bool, write: bool) -> Self {
-        PropertiesList { view, write }
     }
 }
 
@@ -917,6 +903,7 @@ pub struct TypeCheckedExpr {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TypeCheckedExprKind {
     NewBuffer,
+    Quote(Vec<u8>),
     UnaryOp(UnaryOp, Box<TypeCheckedExpr>, Type),
     Binary(BinaryOp, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
     Trinary(
@@ -939,7 +926,7 @@ pub enum TypeCheckedExprKind {
         Box<TypeCheckedExpr>,
         Vec<TypeCheckedExpr>,
         Type,
-        PropertiesList,
+        FuncProperties,
     ),
     CodeBlock(TypeCheckedCodeBlock),
     StructInitializer(Vec<TypeCheckedFieldInitializer>, Type),
@@ -1000,6 +987,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             | TypeCheckedExprKind::FuncRef(_, _)
             | TypeCheckedExprKind::Const(_, _)
             | TypeCheckedExprKind::NewBuffer
+            | TypeCheckedExprKind::Quote(..)
             | TypeCheckedExprKind::NewMap(_)
             | TypeCheckedExprKind::GetGas
             | TypeCheckedExprKind::Error => vec![],
@@ -1083,11 +1071,12 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                     .get_representation(type_tree)
                     .expect("Type tree inconsistency");
 
-                let view = match func_type {
-                    Type::Func(view, ..) => view,
+                let prop = match func_type {
+                    Type::Func(prop, ..) => prop,
                     _ => panic!("Internal error: func call has non function type {:?}", func),
                 };
-                view || func.is_view(type_tree)
+                prop.view
+                    || func.is_view(type_tree)
                     || args.iter_mut().any(|expr| expr.is_view(type_tree))
             }
             TypeCheckedExprKind::Asm(_, insns, args) => {
@@ -1109,11 +1098,11 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                     .get_representation(type_tree)
                     .expect("Type tree inconsistency");
 
-                let write = match func_type {
-                    Type::Func(_, write, ..) => write,
+                let prop = match func_type {
+                    Type::Func(prop, ..) => prop,
                     _ => panic!("Internal error: func call has non function type {:?}", func),
                 };
-                write
+                prop.write
                     || func.is_write(type_tree)
                     || args.iter_mut().any(|expr| expr.is_write(type_tree))
             }
@@ -1135,6 +1124,7 @@ impl TypeCheckedExpr {
     pub fn get_type(&self) -> Type {
         match &self.kind {
             TypeCheckedExprKind::NewBuffer => Type::Buffer,
+            TypeCheckedExprKind::Quote(_) => Type::Tuple(vec![Type::Uint, Type::Buffer]),
             TypeCheckedExprKind::Error => Type::Every,
             TypeCheckedExprKind::GetGas => Type::Uint,
             TypeCheckedExprKind::SetGas(_t) => Type::Void,
@@ -1962,6 +1952,7 @@ fn typecheck_expr(
     Ok(TypeCheckedExpr {
         kind: match &expr.kind {
             ExprKind::NewBuffer => Ok(TypeCheckedExprKind::NewBuffer),
+            ExprKind::Quote(buf) => Ok(TypeCheckedExprKind::Quote(buf.clone())),
             ExprKind::Error => Ok(TypeCheckedExprKind::Error),
             ExprKind::UnaryOp(op, subexpr) => {
                 let tc_sub = typecheck_expr(
@@ -2234,7 +2225,7 @@ fn typecheck_expr(
                     scopes,
                 )?;
                 match tc_fexpr.get_type().get_representation(type_tree)? {
-                    Type::Func(view, write, arg_types, ret_type) => {
+                    Type::Func(prop, arg_types, ret_type) => {
                         if args.len() == arg_types.len() {
                             let mut tc_args = Vec::new();
                             for i in 0..args.len() {
@@ -2270,7 +2261,7 @@ fn typecheck_expr(
                                 Box::new(tc_fexpr),
                                 tc_args,
                                 *ret_type,
-                                PropertiesList::new(view, write),
+                                prop,
                             ))
                         } else {
                             Err(CompileError::new_type_error(

@@ -3,9 +3,7 @@
 //
 
 
-use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVarDecl, Type, CodeBlock,
-StructField, FuncArg, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant,
-OptionConst, FieldInitializer, new_func_arg, new_type_decl};
+use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVarDecl, Type, CodeBlock, StructField, FuncArg, FuncProperties, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant, OptionConst, FieldInitializer, new_func_arg, new_type_decl};
 use crate::compile::{InliningMode, ErrorSystem, CompileError};
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
@@ -13,10 +11,21 @@ use crate::link::Import;
 use crate::pos::{BytePos, Location};
 use crate::mavm::{Value, Instruction, Opcode};
 use crate::uint256::Uint256;
+use crate::console::Color;
 use std::collections::{HashMap, HashSet};
+use regex::Regex;
 
-
-grammar(stringtable: &mut StringTable, file_info: &Lines, filename: u64, current_path: &[String], constants: &mut HashMap<String, Uint256>, local_constants: &mut HashMap<String, Location>, used_constants: &mut HashSet<String>, error_system: &mut ErrorSystem);
+grammar(
+    stringtable: &mut StringTable,
+    file_info: &Lines,
+    filename: u64,
+    current_path: &[String],
+    constants: &mut HashMap<String, Uint256>,
+    local_constants: &mut HashMap<String, Location>,
+    used_constants: &mut HashSet<String>,
+    closures: &mut Vec<Func>,
+    error_system: &mut ErrorSystem,
+);
 
 extern {
     type Error = CompileError;
@@ -88,6 +97,7 @@ BodyDecl: TopLevelDecl = {
 
 TypeDecl: TypeDecl = {
 	"type" <Ident> "=" <Type> => new_type_decl(<>),
+    "type" <Ident> "=" <Type> ";" => new_type_decl(<>),
 }
 
 FuncDecl: Func = {
@@ -95,11 +105,9 @@ FuncDecl: Func = {
         let public = qualifiers.contains(&"public");
         let view = qualifiers.contains(&"view");
         let write = qualifiers.contains(&"write");
+        let debug = DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default());
         
-	    Func::new(
-            i, view, write, fa, t.unwrap_or(Type::Void), cb, public,
-            DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default())
-        )
+	    Func::new(i, public, view, write, false, fa, t, cb, debug)
     }
 }
 
@@ -285,7 +293,12 @@ Type: Type = {
     <q: Qualifier*> "func" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => {
         let view = q.contains(&"view");
         let write = q.contains(&"write");
-        Type::Func(view, write, a, Box::new(r.unwrap_or(Type::Void)))
+        Type::Func(FuncProperties::new(view, write, false), a, Box::new(r.unwrap_or(Type::Void)))
+    },
+    <q: Qualifier*> "closure" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => {
+        let view = q.contains(&"view");
+        let write = q.contains(&"write");
+        Type::Func(FuncProperties::new(view, write, true), a, Box::new(r.unwrap_or(Type::Void)))
     },
     Ident => Type::Nominal(current_path.to_owned(), <>),
 };
@@ -448,6 +461,17 @@ Expr12: Expr = {
 	<lno: @L> "covariantcast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::CovariantCast(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> "weakcast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::WeakCast(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> "unioncast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::UnionCast(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+    
+    <qualifiers: (<Qualifier>)*> "closure" <lno: @L> <i:Ident> "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> => {
+        let view = qualifiers.contains(&"view");
+        let write = qualifiers.contains(&"write");
+        let debug = DebugInfo::here(file_info, lno, filename);
+        
+        // add the closure, but produce a ref to its closure pointer
+	    closures.push(Func::new(i, false, view, write, true, fa, t, cb, debug));
+        
+        Expr::new(ExprKind::VariableRef(i), debug)
+    },
 	Expr13,
 }
 
@@ -462,6 +486,7 @@ Expr13: Expr = {
         <lno: @L> "getGas" "(" ")" => Expr { kind: ExprKind::GetGas, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
         <lno: @L> "setGas" "(" <e:Expr> ")" => Expr { kind: ExprKind::SetGas(Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> <i: Ident> => Expr { kind: ExprKind::VariableRef(i), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+    <lno: @L> <q: QuoteString> => Expr::lno(ExprKind::Quote(q), file_info, lno, filename),
 }
 
 Const: Constant = {
@@ -516,6 +541,35 @@ IdentStr: &'input str = {
 
 IdentString: String = {
 	r"[a-zA-Z_][a-zA-Z_01-9]*" => <>.to_string(),
+};
+
+QuoteString: Vec<u8> = {
+    <lno: @L> <q: r#"s?"[a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~-]*""#> => {
+        let re = Regex::new(r#"s?"(0x)?[a-fA-F0-9]+""#).unwrap();
+        if re.is_match(q) {
+            error_system.warnings.push(
+                CompileError::new_warning(
+                    String::from("Parser warning"),
+                    format!(
+                        "String {} looks like hex but will be treated as a string",
+                        Color::color(error_system.warn_color, &q),
+                    ),
+                    file_info.location(BytePos::from(lno) + BytePos::from(1), filename).into_iter().collect()
+                )
+            );
+        }
+        let re = Regex::new(r#"s?"([a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~-]*)""#).unwrap();
+        let string = re.captures(q).unwrap().get(1).map_or(String::new(), |m| m.as_str().to_string());
+        string.as_bytes().to_vec()
+    },
+    <lno: @L> <q: r#"h"(0x)?[a-fA-F0-9]*""#> => {
+        let re = Regex::new(r#"h"(0x)?([a-fA-F0-9]*)""#).unwrap();
+        let mut string = re.captures(q).unwrap().get(2).map_or(String::new(), |m| m.as_str().to_string());
+        if string.len() % 2 == 1 {
+            string = "0".to_owned() + &string;
+        }
+        hex::decode(string).unwrap()
+    },
 };
 
 UnsignedInteger: Uint256 = {

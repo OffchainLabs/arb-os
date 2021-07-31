@@ -183,21 +183,21 @@ public func storageMap_delete(s: StorageMap, key: uint) -> StorageMap {
 //       so callers are advised not to rely on the ordering
 public func storageMap_forall(
     s: StorageMap,
-    closure: func(uint, uint, any) -> any,
+    applicator: func(uint, uint, any) -> any,
     state: any
 ) -> any {
-    return storageMap_forall_tree(s.tree, closure, state);
+    return storageMap_forall_tree(s.tree, applicator, state);
 }
 
 public func storageMap_forall_tree(
     t: StorageMapNode,
-    closure: func(uint, uint, any) -> any,
+    applicator: func(uint, uint, any) -> any,
     state: any
 ) -> any {
     return xif (t == unsafecast<StorageMapNode>(0)) {
         state
     } elseif (asm(t,) uint { length } == 2) {
-        closure(
+        applicator(
             unsafecast<StorageMapCell>(t).key,
             unsafecast<StorageMapCell>(t).value,
             state
@@ -205,7 +205,7 @@ public func storageMap_forall_tree(
    } else {
         let i = 0;
         while (i < 8) {
-            state = storageMap_forall_tree(unsafecast<StorageMapNode>(t[i]), closure, state);
+            state = storageMap_forall_tree(unsafecast<StorageMapNode>(t[i]), applicator, state);
             i = i+1;
         }
         state

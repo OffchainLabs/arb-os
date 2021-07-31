@@ -196,22 +196,22 @@ public func builtin_kvsDelete(s: Kvs, key: uint) -> Kvs {
 //       so callers are advised not to rely on the ordering
 public func builtin_kvsForall(
     s: Kvs,
-    closure: func(any, any, any) -> any,
+    applicator: func(any, any, any) -> any,
     state: any
 ) -> any {
-    return kvs_forall_tree(s.tree, closure, state);
+    return kvs_forall_tree(s.tree, applicator, state);
 }
 
 func kvs_forall_tree(
     t: KvsNode,
-    closure: func(any, any, any) -> any,
+    applicator: func(any, any, any) -> any,
     state: any
 ) -> any {
     return xif (t == unsafecast<KvsNode>(0)) {
         state
     } elseif (asm(t,) uint { length } == 2) {
         xif let Some(val) = unsafecast<KvsCell>(t).value {
-            closure(
+            applicator(
                 unsafecast<KvsCell>(t).key,
                 val,
                 state
@@ -223,7 +223,7 @@ func kvs_forall_tree(
    } else {
         let i = 0;
         while (i < 8) {
-            state = kvs_forall_tree(unsafecast<KvsNode>(t[i]), closure, state);
+            state = kvs_forall_tree(unsafecast<KvsNode>(t[i]), applicator, state);
             i = i+1;
         }
         state

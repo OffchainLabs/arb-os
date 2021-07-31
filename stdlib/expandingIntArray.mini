@@ -123,13 +123,13 @@ public func expandingIntArray_setN(
 public func expandingIntArray_op(
     arr: ExpandingIntArray,
     index: uint,
-    closure: opClosure
+    applicator: opClosure
 ) -> (ExpandingIntArray, any) {
     while (index >= arr.size) {
         arr = expandingIntArray_grow(arr);
     }
 
-    let (tree, retVal) = ear_op2(arr.contents, arr.chunk, index, closure);
+    let (tree, retVal) = ear_op2(arr.contents, arr.chunk, index, applicator);
     return (
         arr with { contents: tree },
         retVal,
@@ -140,10 +140,10 @@ func ear_op2(
     tree: [8]any,
     chunk: uint,
     index: uint,
-    closure: opClosure
+    applicator: opClosure
 ) -> ([8]any, any) {
     return xif (chunk == 1) {
-        let (newSlotContents, retVal) = closure.f(closure.val, unsafecast<uint>(tree[index]));
+        let (newSlotContents, retVal) = applicator.f(applicator.val, unsafecast<uint>(tree[index]));
         (
             tree with { [index] = newSlotContents },
             retVal,
@@ -154,7 +154,7 @@ func ear_op2(
             unsafecast<[8]any>(tree[slot]),
             chunk/8,
             index%chunk,
-            closure
+            applicator
         );
         (
             tree with { [slot] = newSlotContents },
