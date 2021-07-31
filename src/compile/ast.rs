@@ -1596,6 +1596,7 @@ pub enum ExprKind {
     UnionCast(Box<Expr>, Type),
     NewBuffer,
     Quote(Vec<u8>),
+    Closure(Func),
 }
 
 impl Expr {

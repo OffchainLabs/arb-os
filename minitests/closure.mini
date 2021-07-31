@@ -1,0 +1,41 @@
+
+type Produce = closure(uint, uint) -> (uint, buffer);
+
+func main() -> (uint, buffer) {
+    
+    let lambda = make_lambda();
+    
+    if (lambda(48, 96) != "Closures are so cool!") {
+        return "Uh oh, closures don't work when passed around";
+    }
+    return "";
+}
+
+func make_lambda() -> Produce {
+    
+    let a = 32;
+    let b = (64, 128, "Closures are so cool!");
+    
+    let lambda = closure(arg1: uint, arg2: uint) -> (uint, buffer) {
+        
+        let sum = arg1 + a;
+        let mul = arg2 * b.0 + b.1;
+        
+        if (sum != arg1 + 32) {
+            return "a wasn't captured correctly";
+        }
+        if (mul != arg2 * 64 + 128) {
+            return "b wasn't captured correctly";
+        }
+        
+        let (_, _, message) = b;
+        
+        return message;
+    };
+    
+    if (lambda(1024, 512) != "Closures are so cool!") {
+        return error;
+    }
+    
+    return lambda;
+}

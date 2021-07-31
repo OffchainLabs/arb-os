@@ -16,15 +16,15 @@ use std::collections::{HashMap, HashSet, BTreeMap};
 use regex::Regex;
 
 grammar(
-    stringtable: &mut StringTable,
-    file_info: &Lines,
-    filename: u64,
-    current_path: &[String],
-    constants: &mut HashMap<String, Uint256>,
-    local_constants: &mut HashMap<String, Location>,
-    used_constants: &mut HashSet<String>,
-    closures: &mut BTreeMap<StringId, Func>,
-    error_system: &mut ErrorSystem,
+    stringtable: &mut StringTable,                      // map of ids to strings
+    file_info: &Lines,                                  // the lines of source code
+    filename: u64,                                      // filename hash
+    current_path: &[String],                            // path to what's being parsed
+    constants: &mut HashMap<String, Uint256>,           // all constants (local *and* global)
+    local_constants: &mut HashMap<String, Location>,    // constants created
+    used_constants: &mut HashSet<String>,               // constants used
+    closures: &mut BTreeMap<StringId, Func>,            // closures found
+    error_system: &mut ErrorSystem,                     // mechanism for delaying errors
 );
 
 extern {
@@ -468,11 +468,11 @@ Expr12: Expr = {
         let debug = DebugInfo::here(file_info, lno, filename);
         
         let id = stringtable.get(format!("closure{}", closures.len()));
+        let closure = Func::new(id, false, view, write, true, fa, t, cb, debug);
         
-        // add the closure, but produce a ref to its closure pointer
-	    closures.insert(id, Func::new(id, false, view, write, true, fa, t, cb, debug));
+	    closures.insert(id, closure.clone());
         
-        Expr::new(ExprKind::VariableRef(id), debug)
+        Expr::new(ExprKind::Closure(closure), debug)
     },
 	Expr13,
 }

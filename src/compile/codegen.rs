@@ -798,7 +798,7 @@ fn mavm_codegen_tuple_pattern(
     }
 }
 
-///Generates code for the expression expr.
+/// Generates code for the expression expr.
 ///
 /// code represents the previously generated code, num_locals is the maximum number of locals used
 /// at any previous point in the callframe, locals is the table of local variable names to slot
