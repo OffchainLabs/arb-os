@@ -1403,6 +1403,10 @@ impl FuncProperties {
             closure,
         }
     }
+    
+    pub fn pure() -> Self {
+        Self::new(false, false, false)
+    }
 
     pub fn purity(&self) -> (bool, bool) {
         (self.view, self.write)

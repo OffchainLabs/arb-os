@@ -1121,6 +1121,47 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
 }
 
 impl TypeCheckedExpr {
+    
+    /// Creates a `TypeCheckedExpr` from its component fields
+    pub fn new(kind: TypeCheckedExprKind, debug_info: DebugInfo) -> Self {
+        Self { kind, debug_info }
+    }
+
+    /// Creates a type-aware builtin function call based on its sub expressions
+    pub fn builtin(
+        name: &str,
+        args: Vec<&TypeCheckedExpr>,
+        ret: &Type,
+        string_table: &StringTable,
+        debug_info: DebugInfo,
+    ) -> Self {
+        let mut arg_types = vec![];
+
+        for arg in args.iter() {
+            arg_types.push(arg.get_type());
+        }
+
+        let call_type = Type::Func(FuncProperties::pure(), arg_types, Box::new(ret.clone()));
+
+        TypeCheckedExpr::new(
+            TypeCheckedExprKind::FunctionCall(
+                Box::new(TypeCheckedExpr::new(
+                    TypeCheckedExprKind::FuncRef(
+                        string_table
+                            .get_if_exists(name)
+                            .expect(&format!("builtin {} does not exist", Color::red(name))),
+                        call_type.clone(),
+                    ),
+                    debug_info,
+                )),
+                args.into_iter().cloned().collect(),
+                call_type,
+                FuncProperties::pure(),
+            ),
+            debug_info,
+        )
+    }
+    
     /// Extracts the type returned from the expression.
     pub fn get_type(&self) -> Type {
         match &self.kind {
