@@ -86,25 +86,27 @@ impl FromStr for InliningHeuristic {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct Module {
     //TODO: Remove this field
-    ///The list of imported functions imported through the old import/export system
+    /// The list of imported functions imported through the old import/export system
     imported_funcs: Vec<ImportedFunc>,
-    ///List of functions defined locally within the source file
-    funcs: BTreeMap<StringId, Func>,
-    ///Map from `StringId`s in this file to the `Type`s they represent.
+    /// List of functions defined locally within the source file
+    funcs: Vec<Func>,
+    /// List of closures defined locally within the source file
+    closures: BTreeMap<StringId, Func>,
+    /// Map from `StringId`s in this file to the `Type`s they represent.
     named_types: HashMap<StringId, Type>,
-    ///List of constants used in this file.
+    /// List of constants used in this file.
     constants: HashSet<String>,
-    ///List of global variables defined within this file.
+    /// List of global variables defined within this file.
     global_vars: Vec<GlobalVarDecl>,
-    ///List of imported constructs within this file.
+    /// List of imported constructs within this file.
     imports: Vec<Import>,
-    ///Map from `StringId`s to the names they derived from.
+    /// Map from `StringId`s to the names they derived from.
     string_table: StringTable,
-    ///Map from `StringId`s to the types of the functions they represent.
+    /// Map from `StringId`s to the types of the functions they represent.
     func_table: HashMap<StringId, Type>,
-    ///The path to the module
+    /// The path to the module
     path: Vec<String>,
-    ///The name of the module, this may be removed later.
+    /// The name of the module, this may be removed later.
     name: String,
 }
 
@@ -227,7 +229,8 @@ impl CompileStruct {
 impl Module {
     fn new(
         imported_funcs: Vec<ImportedFunc>,
-        funcs: BTreeMap<StringId, Func>,
+        funcs: Vec<Func>,
+        closures: BTreeMap<usize, Func>,
         named_types: HashMap<usize, Type>,
         constants: HashSet<String>,
         global_vars: Vec<GlobalVarDecl>,
@@ -240,6 +243,7 @@ impl Module {
         Self {
             imported_funcs,
             funcs,
+            closures,
             named_types,
             constants,
             global_vars,
@@ -804,19 +808,20 @@ fn create_program_tree(
 
         let mut string_table = StringTable::new();
         let mut used_constants = HashSet::new();
-        let (imports, funcs, named_types, global_vars, hm) = typecheck::sort_top_level_decls(
-            &parse_from_source(
-                source,
-                file_id,
-                &path,
-                &mut string_table,
-                constants_path,
-                &mut used_constants,
-                error_system,
-            )?,
-            path.clone(),
-            builtins,
-        );
+        let (imports, funcs, closures, named_types, global_vars, func_table) =
+            typecheck::sort_top_level_decls(
+                parse_from_source(
+                    source,
+                    file_id,
+                    &path,
+                    &mut string_table,
+                    constants_path,
+                    &mut used_constants,
+                    error_system,
+                )?,
+                path.clone(),
+                builtins,
+            );
         paths.append(&mut imports.iter().map(|imp| imp.path.clone()).collect());
         import_map.insert(path.clone(), imports.clone());
         programs.insert(
@@ -824,12 +829,13 @@ fn create_program_tree(
             Module::new(
                 vec![],
                 funcs,
+                closures,
                 named_types,
                 used_constants,
                 global_vars,
                 imports,
                 string_table,
-                hm,
+                func_table,
                 path,
                 name,
             ),
@@ -939,26 +945,26 @@ fn typecheck_programs(
             |Module {
                  imported_funcs,
                  funcs,
+                 closures,
                  named_types,
                  constants,
                  global_vars,
                  imports,
                  string_table,
-                 func_table: hm,
+                 func_table,
                  path,
                  name,
              }| {
                 let mut typecheck_issues = vec![];
-                let mut checked_funcs = BTreeMap::new();
-                let (exported_funcs, global_vars, string_table) =
+                let (mut checked_funcs, exported_funcs, global_vars, string_table) =
                     typecheck::typecheck_top_level_decls(
                         funcs,
+                        closures,
                         &named_types,
                         global_vars,
                         &imports,
                         string_table,
-                        hm,
-                        &mut checked_funcs,
+                        func_table,
                         type_tree,
                     )?;
 
@@ -1249,7 +1255,7 @@ pub fn comma_list(input: &[String]) -> String {
 }
 
 ///Converts source string `source` into a series of `TopLevelDecl`s, uses identifiers from
-/// `string_table` and records new ones in it as well.  The `file_id` argument is used to construct
+/// `string_table` and records new ones in it as well. The `file_id` argument is used to construct
 /// file information for the location fields.
 pub fn parse_from_source(
     source: String,
@@ -1259,13 +1265,13 @@ pub fn parse_from_source(
     constants_path: Option<&Path>,
     used_constants: &mut HashSet<String>,
     error_system: &mut ErrorSystem,
-) -> Result<Vec<TopLevelDecl>, CompileError> {
+) -> Result<(Vec<TopLevelDecl>, BTreeMap<StringId, Func>), CompileError> {
     let lines = Lines::new(source.bytes());
     let mut constants = init_constant_table(constants_path)?;
     let mut local_constants = HashMap::<String, Location>::new();
-    let mut closures = vec![];
+    let mut closures = BTreeMap::new();
 
-    let mut parsed = DeclsParser::new()
+    let parsed = DeclsParser::new()
         .parse(
             string_table,
             &lines,
@@ -1332,11 +1338,7 @@ pub fn parse_from_source(
         }
     }
 
-    for closure in closures {
-        parsed.push(TopLevelDecl::FuncDecl(closure));
-    }
-
-    Ok(parsed)
+    Ok((parsed, closures))
 }
 
 ///Represents any error encountered during compilation.

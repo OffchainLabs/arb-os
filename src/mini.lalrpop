@@ -12,7 +12,7 @@ use crate::pos::{BytePos, Location};
 use crate::mavm::{Value, Instruction, Opcode};
 use crate::uint256::Uint256;
 use crate::console::Color;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, BTreeMap};
 use regex::Regex;
 
 grammar(
@@ -23,7 +23,7 @@ grammar(
     constants: &mut HashMap<String, Uint256>,
     local_constants: &mut HashMap<String, Location>,
     used_constants: &mut HashSet<String>,
-    closures: &mut Vec<Func>,
+    closures: &mut BTreeMap<StringId, Func>,
     error_system: &mut ErrorSystem,
 );
 
@@ -462,15 +462,17 @@ Expr12: Expr = {
 	<lno: @L> "weakcast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::WeakCast(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> "unioncast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::UnionCast(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
     
-    <qualifiers: (<Qualifier>)*> "closure" <lno: @L> <i:Ident> "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> => {
+    <qualifiers: (<Qualifier>)*> <lno: @L> "closure" "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> => {
         let view = qualifiers.contains(&"view");
         let write = qualifiers.contains(&"write");
         let debug = DebugInfo::here(file_info, lno, filename);
         
-        // add the closure, but produce a ref to its closure pointer
-	    closures.push(Func::new(i, false, view, write, true, fa, t, cb, debug));
+        let id = stringtable.get(format!("closure{}", closures.len()));
         
-        Expr::new(ExprKind::VariableRef(i), debug)
+        // add the closure, but produce a ref to its closure pointer
+	    closures.insert(id, Func::new(id, false, view, write, true, fa, t, cb, debug));
+        
+        Expr::new(ExprKind::VariableRef(id), debug)
     },
 	Expr13,
 }

@@ -11,6 +11,7 @@ use super::ast::{
 };
 use crate::compile::ast::{FieldInitializer, FuncProperties};
 use crate::compile::{CompileError, ErrorSystem, InliningHeuristic};
+use crate::console::Color;
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::{Column, Location};
@@ -1120,7 +1121,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
 }
 
 impl TypeCheckedExpr {
-    ///Extracts the type returned from the expression.
+    /// Extracts the type returned from the expression.
     pub fn get_type(&self) -> Type {
         match &self.kind {
             TypeCheckedExprKind::NewBuffer => Type::Buffer,
@@ -1179,7 +1180,7 @@ impl AbstractSyntaxTree for TypeCheckedFieldInitializer {
     }
 }
 
-///Returns a vector of `ImportFuncDecl`s corresponding to the builtins as defined by string_table,
+/// Returns a vector of `ImportFuncDecl`s corresponding to the builtins as defined by string_table,
 /// if they are not defined in string_table, they are inserted.
 fn builtin_func_decls() -> Vec<Import> {
     vec![
@@ -1192,18 +1193,21 @@ fn builtin_func_decls() -> Vec<Import> {
     ]
 }
 
-///Sorts the `TopLevelDecl`s into collections based on their type
+/// Sorts the `TopLevelDecl`s into collections based on their type
 pub fn sort_top_level_decls(
-    decls: &[TopLevelDecl],
+    parsed: (Vec<TopLevelDecl>, BTreeMap<StringId, Func>),
     file_path: Vec<String>,
     builtins: bool,
 ) -> (
     Vec<Import>,
+    Vec<Func>,
     BTreeMap<StringId, Func>,
     HashMap<usize, Type>,
     Vec<GlobalVarDecl>,
     HashMap<usize, Type>,
 ) {
+    let (decls, closures) = parsed;
+
     let mut imports = if builtins {
         builtin_func_decls()
             .into_iter()
@@ -1212,44 +1216,65 @@ pub fn sort_top_level_decls(
     } else {
         vec![]
     };
-    let mut funcs = BTreeMap::new();
+
+    let mut funcs = vec![];
     let mut named_types = HashMap::new();
     let mut func_table = HashMap::new();
-    let mut global_vars = Vec::new();
+    let mut global_vars = vec![];
 
-    for decl in decls.iter() {
+    for decl in decls {
         match decl {
             TopLevelDecl::UseDecl(ud) => {
-                imports.push(ud.clone());
+                imports.push(ud);
             }
             TopLevelDecl::FuncDecl(fd) => {
-                funcs.insert(fd.name, fd.clone());
                 func_table.insert(fd.name, fd.tipe.clone());
+                funcs.push(fd);
             }
             TopLevelDecl::TypeDecl(td) => {
-                named_types.insert(td.name, td.tipe.clone());
+                named_types.insert(td.name, td.tipe);
             }
             TopLevelDecl::VarDecl(vd) => {
-                global_vars.push(vd.clone());
+                global_vars.push(vd);
             }
             TopLevelDecl::ConstDecl => {}
         }
     }
-    (imports, funcs, named_types, global_vars, func_table)
+
+    for (id, closure) in &closures {
+        func_table.insert(*id, closure.tipe.clone());
+    }
+
+    (
+        imports,
+        funcs,
+        closures,
+        named_types,
+        global_vars,
+        func_table,
+    )
 }
 
 ///Performs typechecking various top level declarations, including `ImportedFunc`s, `FuncDecl`s,
 /// named `Type`s, and global variables.
 pub fn typecheck_top_level_decls(
-    funcs: BTreeMap<StringId, Func>,
+    funcs: Vec<Func>,
+    closures: BTreeMap<StringId, Func>,
     named_types: &HashMap<usize, Type>,
     mut global_vars: Vec<GlobalVarDecl>,
     imports: &Vec<Import>,
     string_table: StringTable,
-    func_map: HashMap<usize, Type>,
-    checked_funcs: &mut BTreeMap<StringId, TypeCheckedFunc>,
+    func_table: HashMap<usize, Type>,
     type_tree: &TypeTree,
-) -> Result<(Vec<ExportedFunc>, Vec<GlobalVarDecl>, StringTable), CompileError> {
+) -> Result<
+    (
+        BTreeMap<StringId, TypeCheckedFunc>,
+        Vec<ExportedFunc>,
+        Vec<GlobalVarDecl>,
+        StringTable,
+    ),
+    CompileError,
+> {
     if let Some(var) = global_vars
         .iter()
         .position(|var| &var.name == "__fixedLocationGlobal")
@@ -1270,48 +1295,57 @@ pub fn typecheck_top_level_decls(
         resolved_global_vars_map.insert(name, (tipe, slot_num));
     }
 
-    let func_table: HashMap<_, _> = func_map.clone().into_iter().collect();
-
     let mut undefinable_ids = HashMap::new(); // ids no one is allowed to define
     for import in imports {
         undefinable_ids.insert(
             string_table.get_if_exists(&import.name).unwrap(),
-            import.location.clone(),
+            import.location,
         );
     }
+    for (id, tipe) in &func_table {
+        if let Some(closure) = closures.get(id) {
+            undefinable_ids.insert(*id, closure.debug_info.location);
+        }
+    }
 
-    for (id, func) in funcs.iter() {
-        let f = typecheck_function(
+    let mut checked_funcs = BTreeMap::new();
+    let mut checked_closures = BTreeMap::new();
+
+    for func in &funcs {
+        let checked_func = typecheck_function(
             &func,
             &type_table,
             &resolved_global_vars_map,
             &func_table,
             type_tree,
             &string_table,
+            &mut checked_closures,
             &mut undefinable_ids,
         )?;
         match func.kind {
             FuncDeclKind::Public => {
                 exported_funcs.push(ExportedFunc::new(
-                    f.name,
-                    Label::Func(f.name),
-                    f.tipe.clone(),
+                    checked_func.name,
+                    Label::Func(checked_func.name),
+                    checked_func.tipe.clone(),
                     &string_table,
                 ));
-                checked_funcs.insert(*id, f);
+                checked_funcs.insert(func.name, checked_func);
             }
             FuncDeclKind::Private => {
-                checked_funcs.insert(*id, f);
+                checked_funcs.insert(func.name, checked_func);
             }
         }
     }
+
+    checked_funcs.extend(checked_closures);
 
     let mut res_global_vars = Vec::new();
     for global_var in global_vars {
         res_global_vars.push(global_var);
     }
 
-    Ok((exported_funcs, res_global_vars, string_table))
+    Ok((checked_funcs, exported_funcs, res_global_vars, string_table))
 }
 
 ///If successful, produces a `TypeCheckedFunc` from `FuncDecl` reference fd, according to global
@@ -1325,6 +1359,7 @@ pub fn typecheck_function(
     func_table: &TypeTable,
     type_tree: &TypeTree,
     string_table: &StringTable,
+    closures: &BTreeMap<StringId, TypeCheckedFunc>,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
 ) -> Result<TypeCheckedFunc, CompileError> {
     let mut hm = HashMap::new();
@@ -2107,16 +2142,16 @@ fn typecheck_expr(
                     scopes,
                 )?)))
             }
-            ExprKind::VariableRef(name) => match func_table.get(name) {
-                Some(t) => Ok(TypeCheckedExprKind::FuncRef(*name, (*t).clone())),
-                None => match type_table.get(name) {
-                    Some(t) => Ok(TypeCheckedExprKind::LocalVariableRef(*name, (*t).clone())),
-                    None => match global_vars.get(name) {
+            ExprKind::VariableRef(id) => match func_table.get(id) {
+                Some(t) => Ok(TypeCheckedExprKind::FuncRef(*id, (*t).clone())),
+                None => match type_table.get(id) {
+                    Some(t) => Ok(TypeCheckedExprKind::LocalVariableRef(*id, (*t).clone())),
+                    None => match global_vars.get(id) {
                         Some((t, idx)) => {
                             Ok(TypeCheckedExprKind::GlobalVariableRef(*idx, t.clone()))
                         }
                         None => Err(CompileError::new_type_error(
-                            "reference to unrecognized identifier".to_string(),
+                            format!("reference to unrecognized identifier {}", Color::red(id)),
                             loc.into_iter().collect(),
                         )),
                     },

@@ -220,10 +220,6 @@ public func retryBuffer_getBeneficiary(rbuf: RetryBuffer, txId: uint) -> option<
     return Some( (retryBuffer_get(rbuf, txId)?).beneficiary );
 }
 
-public func retryBuffer_getLifetime(rbuf: RetryBuffer) -> uint {
-    return rbuf.txLifetimeSeconds;
-}
-
 // Return the keepalive price for txId.
 // If txId exists, this returns Some((price, guaranteeTime)) where the price is guaranteed not to change until at least guaranteeTime.
 // If txId does not exist, this returns None.
