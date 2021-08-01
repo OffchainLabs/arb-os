@@ -349,10 +349,8 @@ impl TypeCheckedModule {
                 flow_warnings.push(CompileError::new_warning(
                     String::from("Compile warning"),
                     format!(
-                        "use statement {}{}{} is a duplicate",
-                        error_system.warn_color,
-                        import.name,
-                        CompileError::RESET,
+                        "use statement {} is a duplicate",
+                        Color::color(error_system.warn_color, &import.name)
                     ),
                     prior
                         .location
@@ -391,10 +389,8 @@ impl TypeCheckedModule {
             flow_warnings.push(CompileError::new_warning(
                 String::from("Compile warning"),
                 format!(
-                    "use statement {}{}{} is unnecessary",
-                    error_system.warn_color,
-                    import.name,
-                    CompileError::RESET,
+                    "use statement {} is unnecessary",
+                    Color::color(error_system.warn_color, import.name)
                 ),
                 import.location.into_iter().collect(),
             ));

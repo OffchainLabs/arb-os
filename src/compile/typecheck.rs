@@ -656,6 +656,14 @@ fn flowcheck_liveliness(
                     continue;
                 }
                 TypeCheckedExprKind::Loop(_body) => true,
+                TypeCheckedExprKind::ClosureLoad(_, _, _, captures, _) => {
+                    // In the future we'll walk into the closure in case a captured value is overwritten,
+                    // but because child_nodes() requires a *mutable* reference we can't do that cheaply.
+                    // Hence, we'll just claim that every captured value is used.
+
+                    killed.extend(captures.iter().clone());
+                    false
+                }
                 _ => false,
             },
             TypeCheckedNode::StructField(field) => {
