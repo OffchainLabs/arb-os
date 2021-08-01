@@ -12,7 +12,7 @@ use crate::pos::{BytePos, Location};
 use crate::mavm::{Value, Instruction, Opcode};
 use crate::uint256::Uint256;
 use crate::console::Color;
-use std::collections::{HashMap, HashSet, BTreeMap};
+use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
 use regex::Regex;
 
 grammar(
@@ -107,7 +107,7 @@ FuncDecl: Func = {
         let write = qualifiers.contains(&"write");
         let debug = DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default());
         
-	    Func::new(i, public, view, write, false, fa, t, cb, debug)
+	    Func::new(i, public, view, write, false, fa, t, cb, BTreeSet::new(), 0, debug)
     }
 }
 
@@ -468,7 +468,7 @@ Expr12: Expr = {
         let debug = DebugInfo::here(file_info, lno, filename);
         
         let id = stringtable.get(format!("closure #{}", closures.len() + 1));
-        let closure = Func::new(id, false, view, write, true, fa, t, cb, debug);
+        let closure = Func::new(id, false, view, write, true, fa, t, cb, BTreeSet::new(), 0, debug);
         
 	    closures.insert(id, closure.clone());
         

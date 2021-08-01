@@ -124,6 +124,30 @@ impl<'a> TypeCheckedNode<'a> {
 }
 
 pub type TypeCheckedFunc = Func<TypeCheckedStatement>;
+/*#[derive(Clone, Debug)]
+pub struct TypeCheckedFunc {
+    pub func: Func<TypeCheckedStatement>,
+    pub captures: BTreeSet<StringId>,
+    pub frame_size: usize,
+}
+
+impl TypeCheckedFunc {
+    pub fn new(
+        func: Func<TypeCheckedStatement>,
+        captures: BTreeSet<StringId>,
+        frame_size: usize,
+    ) -> Self {
+        Self {
+            func,
+            captures,
+            frame_size,
+        }
+    }
+
+    pub fn func(func: Func<TypeCheckedStatement>) -> Self {
+        TypeCheckedFunc::new(func, BTreeSet::new(), 0)
+    }
+}*/
 
 impl AbstractSyntaxTree for TypeCheckedFunc {
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
@@ -824,7 +848,6 @@ pub struct TypeCheckedStatement {
 /// A mini statement that has been type checked.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TypeCheckedStatementKind {
-    Noop(),
     ReturnVoid(),
     Return(TypeCheckedExpr),
     Break(Option<TypeCheckedExpr>, String),
@@ -841,7 +864,7 @@ pub enum TypeCheckedStatementKind {
 impl AbstractSyntaxTree for TypeCheckedStatement {
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
         match &mut self.kind {
-            TypeCheckedStatementKind::Noop() | TypeCheckedStatementKind::ReturnVoid() => vec![],
+            TypeCheckedStatementKind::ReturnVoid() => vec![],
             TypeCheckedStatementKind::Return(exp)
             | TypeCheckedStatementKind::Expression(exp)
             | TypeCheckedStatementKind::Let(_, exp)
@@ -1315,7 +1338,6 @@ pub fn typecheck_top_level_decls(
     (
         BTreeMap<StringId, TypeCheckedFunc>,
         Vec<ExportedFunc>,
-        BTreeMap<StringId, BTreeSet<StringId>>,
         Vec<GlobalVarDecl>,
         StringTable,
     ),
@@ -1384,25 +1406,14 @@ pub fn typecheck_top_level_decls(
         }
     }
 
-    let mut capture_table = BTreeMap::new();
-
-    for (id, (closure, captures)) in checked_closures {
-        checked_funcs.insert(id, closure);
-        capture_table.insert(id, captures);
-    }
+    checked_funcs.extend(checked_closures);
 
     let mut res_global_vars = Vec::new();
     for global_var in global_vars {
         res_global_vars.push(global_var);
     }
 
-    Ok((
-        checked_funcs,
-        exported_funcs,
-        capture_table,
-        res_global_vars,
-        string_table,
-    ))
+    Ok((checked_funcs, exported_funcs, res_global_vars, string_table))
 }
 
 /// If successful, produces a `TypeCheckedFunc` from `FuncDecl` reference fd, according to global
@@ -1416,7 +1427,7 @@ pub fn typecheck_function(
     func_table: &TypeTable,
     type_tree: &TypeTree,
     string_table: &StringTable,
-    closures: &mut BTreeMap<StringId, (TypeCheckedFunc, BTreeSet<StringId>)>,
+    closures: &mut BTreeMap<StringId, TypeCheckedFunc>,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
 ) -> Result<TypeCheckedFunc, CompileError> {
     let mut hm = HashMap::new();
@@ -1518,8 +1529,10 @@ pub fn typecheck_function(
         code: tc_stats,
         tipe: fd.tipe.clone(),
         kind: fd.kind,
-        debug_info: DebugInfo::from(fd.debug_info),
+        captures: BTreeSet::new(),
+        frame_size: 0,
         properties: fd.properties,
+        debug_info: DebugInfo::from(fd.debug_info),
     })
 }
 
@@ -1543,7 +1556,7 @@ fn typecheck_statement_sequence(
     type_tree: &TypeTree,
     string_table: &StringTable,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
-    closures: &mut BTreeMap<StringId, (TypeCheckedFunc, BTreeSet<StringId>)>,
+    closures: &mut BTreeMap<StringId, TypeCheckedFunc>,
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<Vec<TypeCheckedStatement>, CompileError> {
     typecheck_statement_sequence_with_bindings(
@@ -1573,7 +1586,7 @@ fn typecheck_statement_sequence_with_bindings<'a>(
     type_tree: &TypeTree,
     string_table: &StringTable,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
-    closures: &mut BTreeMap<StringId, (TypeCheckedFunc, BTreeSet<StringId>)>,
+    closures: &mut BTreeMap<StringId, TypeCheckedFunc>,
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<Vec<TypeCheckedStatement>, CompileError> {
     let mut inner_type_table = type_table.clone();
@@ -1617,13 +1630,12 @@ fn typecheck_statement<'a>(
     type_tree: &TypeTree,
     string_table: &StringTable,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
-    closures: &mut BTreeMap<StringId, (TypeCheckedFunc, BTreeSet<StringId>)>,
+    closures: &mut BTreeMap<StringId, TypeCheckedFunc>,
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<(TypeCheckedStatement, Vec<(StringId, Type)>), CompileError> {
     let kind = &statement.kind;
     let debug_info = statement.debug_info;
     let (stat, binds) = match kind {
-        StatementKind::Noop() => Ok((TypeCheckedStatementKind::Noop(), vec![])),
         StatementKind::ReturnVoid() => {
             if Type::Void.assignable(return_type, type_tree, HashSet::new()) {
                 Ok((TypeCheckedStatementKind::ReturnVoid(), vec![]))
@@ -2066,7 +2078,7 @@ fn typecheck_expr(
     type_tree: &TypeTree,
     string_table: &StringTable,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
-    closures: &mut BTreeMap<StringId, (TypeCheckedFunc, BTreeSet<StringId>)>,
+    closures: &mut BTreeMap<StringId, TypeCheckedFunc>,
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<TypeCheckedExpr, CompileError> {
     let debug_info = expr.debug_info;
@@ -2515,22 +2527,24 @@ fn typecheck_expr(
                     println!("captured {}", string_table.name_from_id(*id));
                 }
 
-                closures.insert(id, (closure, captures.clone())); // need to add captures
-
-                // We need to reserve space for the local variables when loading.
-                // In the future we'll use a smarter assignment strategy, but for now
+                // We don't yet have an AST-walker that efficiently assigns slot numbers.
+                // The plan is to soon do this: instead of determining slot assignments for
+                // locals, args, and captures at codegen, we'll analyze the AST to efficiently pick
+                // a position for each identifier. Then, ClosureLoad(), MakeFrame(), and non-closure
+                // functions in general will both cost less gas and pay down technical debt.
                 //
-                //let local_space = capture_table.len() - arg_count - captures;
-                let local_space = 32;
+                // So, for the very short term, we'll just have closures be expensive and dangerous
+                // by giving them a large amount of fixed space.
+                let frame_size = 32;
+
+                closure.frame_size = frame_size;
+                closure.captures = captures.clone();
+                closures.insert(id, closure);
 
                 // We only get one opportunity to load in the captured values,
                 // so we do that at declaration.
                 Ok(TypeCheckedExprKind::ClosureLoad(
-                    id,
-                    arg_count,
-                    local_space,
-                    captures,
-                    tipe,
+                    id, arg_count, frame_size, captures, tipe,
                 ))
             }
             ExprKind::ArrayOrMapRef(array, index) => {
@@ -4311,7 +4325,7 @@ fn typecheck_codeblock(
     type_tree: &TypeTree,
     string_table: &StringTable,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
-    closures: &mut BTreeMap<StringId, (TypeCheckedFunc, BTreeSet<StringId>)>,
+    closures: &mut BTreeMap<StringId, TypeCheckedFunc>,
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<TypeCheckedCodeBlock, CompileError> {
     let mut output = Vec::new();

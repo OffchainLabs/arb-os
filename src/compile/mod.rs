@@ -18,7 +18,7 @@ use miniconstants::init_constant_table;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
 use std::hash::{Hash, Hasher};
@@ -83,7 +83,7 @@ impl FromStr for InliningHeuristic {
 }
 
 ///Represents the contents of a source file after parsing.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct Module {
     //TODO: Remove this field
     /// The list of imported functions imported through the old import/export system
@@ -122,8 +122,6 @@ struct TypeCheckedModule {
     imported_funcs: Vec<ImportedFunc>,
     /// The list of exported functions exported through the old import/export system
     exported_funcs: Vec<ExportedFunc>,
-    /// Map of closures to the captures they make
-    capture_table: BTreeMap<StringId, BTreeSet<StringId>>,
     /// Map from `StringId`s in this file to the `Type`s they represent.
     named_types: HashMap<StringId, Type>,
     /// List of constants used in this file.
@@ -264,7 +262,6 @@ impl TypeCheckedModule {
         string_table: StringTable,
         imported_funcs: Vec<ImportedFunc>,
         exported_funcs: Vec<ExportedFunc>,
-        capture_table: BTreeMap<StringId, BTreeSet<StringId>>,
         named_types: HashMap<usize, Type>,
         constants: HashSet<String>,
         global_vars: Vec<GlobalVarDecl>,
@@ -277,7 +274,6 @@ impl TypeCheckedModule {
             string_table,
             imported_funcs,
             exported_funcs,
-            capture_table,
             constants,
             named_types,
             global_vars,
@@ -960,7 +956,7 @@ fn typecheck_programs(
                  name,
              }| {
                 let mut typecheck_issues = vec![];
-                let (mut checked_funcs, exported_funcs, capture_table, global_vars, string_table) =
+                let (mut checked_funcs, exported_funcs, global_vars, string_table) =
                     typecheck::typecheck_top_level_decls(
                         funcs,
                         closures,
@@ -1030,7 +1026,6 @@ fn typecheck_programs(
                         string_table,
                         imported_funcs,
                         exported_funcs,
-                        capture_table,
                         named_types,
                         constants,
                         global_vars,
@@ -1202,7 +1197,6 @@ fn codegen_programs(
         string_table,
         imported_funcs,
         exported_funcs,
-        capture_table,
         named_types: _,
         constants: _,
         global_vars,
@@ -1215,7 +1209,6 @@ fn codegen_programs(
             checked_funcs,
             &string_table,
             &imported_funcs,
-            &capture_table,
             &global_vars,
             file_info_chart,
             error_system,

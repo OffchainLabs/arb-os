@@ -13,7 +13,7 @@ use crate::pos::{BytePos, Location};
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -1332,7 +1332,7 @@ pub enum FuncDeclKind {
 
 /// Represents a top level function declaration.  The view, write, args, and ret_type fields are
 /// assumed to be derived from tipe, and this must be upheld by the user of this type.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Func<T = Statement> {
     pub name: StringId,
     pub args: Vec<FuncArg>,
@@ -1340,8 +1340,10 @@ pub struct Func<T = Statement> {
     pub code: Vec<T>,
     pub tipe: Type,
     pub kind: FuncDeclKind,
-    pub debug_info: DebugInfo,
+    pub captures: BTreeSet<StringId>,
+    pub frame_size: usize,
     pub properties: FuncProperties,
+    pub debug_info: DebugInfo,
 }
 
 impl Func {
@@ -1354,6 +1356,8 @@ impl Func {
         args: Vec<FuncArg>,
         ret_type: Option<Type>,
         code: Vec<Statement>,
+        captures: BTreeSet<StringId>,
+        frame_size: usize,
         debug_info: DebugInfo,
     ) -> Self {
         let mut arg_types = Vec::new();
@@ -1374,8 +1378,10 @@ impl Func {
             } else {
                 FuncDeclKind::Private
             },
-            debug_info,
+            captures,
+            frame_size,
             properties: prop,
+            debug_info,
         }
     }
 }
@@ -1408,16 +1414,15 @@ impl FuncProperties {
 }
 
 /// A statement in the mini language with associated `DebugInfo` that has not yet been type checked.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Statement {
     pub kind: StatementKind,
     pub debug_info: DebugInfo,
 }
 
 /// A raw statement containing no debug information that has not yet been type checked.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StatementKind {
-    Noop(),
     ReturnVoid(),
     Return(Expr),
     Break(Option<Expr>, Option<String>),
@@ -1480,7 +1485,7 @@ impl<T> MatchPattern<T> {
 }
 
 /// An identifier or array index for left-hand-side substructure assignments
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SubData {
     Dot(StringId),
     ArrayOrMap(Expr),
@@ -1549,14 +1554,14 @@ impl Constant {
 }
 
 /// A mini expression that has not yet been type checked with an associated `DebugInfo`.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Expr {
     pub kind: ExprKind,
     pub debug_info: DebugInfo,
 }
 
 /// A mini expression that has not yet been type checked, contains no debug information.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExprKind {
     UnaryOp(UnaryOp, Box<Expr>),
     Binary(BinaryOp, Box<Expr>, Box<Expr>),
@@ -1699,7 +1704,7 @@ impl<T> FieldInitializer<T> {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CodeBlock {
     pub body: Vec<Statement>,
     pub ret_expr: Option<Box<Expr>>,

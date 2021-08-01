@@ -19,7 +19,7 @@ use crate::mavm::{AVMOpcode, Buffer, Instruction, Label, LabelGenerator, Opcode,
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::{cmp::max, collections::HashMap};
 
 ///Represents any encountered during codegen
@@ -45,7 +45,6 @@ pub fn mavm_codegen(
     funcs: BTreeMap<StringId, TypeCheckedFunc>,
     string_table: &StringTable,
     imported_funcs: &[ImportedFunc],
-    capture_table: &BTreeMap<StringId, BTreeSet<StringId>>,
     global_vars: &[GlobalVarDecl],
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     error_system: &mut ErrorSystem,
@@ -70,7 +69,6 @@ pub fn mavm_codegen(
             label_gen,
             string_table,
             &import_func_map,
-            capture_table,
             &global_var_map,
             file_info_chart,
             error_system,
@@ -100,7 +98,6 @@ fn mavm_codegen_func(
     label_gen: LabelGenerator,
     string_table: &StringTable,
     import_func_map: &HashMap<StringId, Label>,
-    capture_table: &BTreeMap<StringId, BTreeSet<StringId>>,
     global_var_map: &HashMap<StringId, usize>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     error_system: &mut ErrorSystem,
@@ -138,15 +135,12 @@ fn mavm_codegen_func(
         let next_slot = locals.len();
         locals.insert(arg.name, next_slot);
     }
-
-    if let Some(captures) = capture_table.get(&func.name) {
-        for capture in captures {
-            let next_slot = locals.len();
-            locals.insert(*capture, next_slot);
-        }
+    for capture in &func.captures {
+        let next_slot = locals.len();
+        locals.insert(*capture, next_slot);
     }
 
-    let (label_gen, space_for_locals, _slot_map) = mavm_codegen_statements(
+    let (label_gen, mut space_for_locals, _slot_map) = mavm_codegen_statements(
         func.code,
         &mut code,
         num_args,
@@ -165,8 +159,15 @@ fn mavm_codegen_func(
     match func.tipe {
         Type::Func(prop, _, ret) => {
             // put makeframe Instruction at beginning of function, to build the frame (replacing placeholder)
+
+            let prebuilt = !func.captures.is_empty(); // whether caller will pass in the frame
+
+            if !func.captures.is_empty() {
+                space_for_locals = func.frame_size;
+            }
+
             code[make_frame_slot] = Instruction::from_opcode(
-                Opcode::MakeFrame(num_args, space_for_locals, false, &*ret != &Type::Every),
+                Opcode::MakeFrame(num_args, space_for_locals, prebuilt, &*ret != &Type::Every),
                 debug_info,
             );
         }
@@ -336,7 +337,6 @@ fn mavm_codegen_statement(
     let debug = statement.debug_info;
     let loc = statement.debug_info.location;
     match &statement.kind {
-        TypeCheckedStatementKind::Noop() => Ok((label_gen, 0, HashMap::new())),
         TypeCheckedStatementKind::ReturnVoid() => {
             code.push(Instruction::from_opcode(Opcode::Return, debug));
             Ok((label_gen, 0, HashMap::new()))

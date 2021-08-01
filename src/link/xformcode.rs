@@ -44,10 +44,15 @@ pub fn fix_tuple_size(
                     code_out.push(opcode!(AuxPush)); // move return address to aux stack
                 }
                 locals_tree = TupleTree::new(space, true);
-                if let Some(imm) = &insn.immediate {
+                if let Some(_) = &insn.immediate {
                     panic!("{} somehow has an immediate", insn.opcode);
                 }
-                code_out.push(opcode!(AuxPush, TupleTree::make_empty(&locals_tree)));
+
+                match prebuilt {
+                    false => code_out.push(opcode!(AuxPush, TupleTree::make_empty(&locals_tree))),
+                    true => code_out.push(opcode!(AuxPush)),
+                }
+
                 for lnum in 0..nargs {
                     locals_tree.write_code(true, lnum, &mut code_out, debug_info)?;
                 }
