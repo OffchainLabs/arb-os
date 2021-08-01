@@ -1121,7 +1121,6 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
 }
 
 impl TypeCheckedExpr {
-    
     /// Creates a `TypeCheckedExpr` from its component fields
     pub fn new(kind: TypeCheckedExprKind, debug_info: DebugInfo) -> Self {
         Self { kind, debug_info }
@@ -1161,7 +1160,7 @@ impl TypeCheckedExpr {
             debug_info,
         )
     }
-    
+
     /// Extracts the type returned from the expression.
     pub fn get_type(&self) -> Type {
         match &self.kind {
@@ -2244,7 +2243,10 @@ fn typecheck_expr(
                             Ok(TypeCheckedExprKind::GlobalVariableRef(*idx, t.clone()))
                         }
                         None => Err(CompileError::new_type_error(
-                            format!("reference to unrecognized identifier {}", Color::red(id)),
+                            format!(
+                                "reference to unrecognized identifier {}",
+                                Color::red(string_table.name_from_id(*id))
+                            ),
                             loc.into_iter().collect(),
                         )),
                     },
@@ -2435,7 +2437,7 @@ fn typecheck_expr(
                 // The type table as of this moment includes exactly these variables.
                 let capture_table = type_table;
 
-                let closure = typecheck_function(
+                let mut closure = typecheck_function(
                     func,
                     &capture_table,
                     global_vars,
@@ -2445,6 +2447,55 @@ fn typecheck_expr(
                     closures,
                     undefinable_ids,
                 )?;
+
+                fn find_captures(
+                    mut nodes: Vec<TypeCheckedNode>, // nodes of the same scope
+                    mut local: HashSet<StringId>,    // those that have been defined locally
+                ) -> HashSet<StringId> {
+                    let mut captures = HashSet::new(); // non-local variables we use
+
+                    for node in &mut nodes {
+                        match node {
+                            TypeCheckedNode::Statement(stat) => match &mut stat.kind {
+                                TypeCheckedStatementKind::AssignLocal(id, ref mut expr) => {
+                                    let right = vec![TypeCheckedNode::Expression(expr)];
+                                    captures.extend(find_captures(right, local.clone()));
+                                    local.insert(*id);
+                                    continue;
+                                }
+                                TypeCheckedStatementKind::Let(pat, ref mut expr) => {
+                                    let right = vec![TypeCheckedNode::Expression(expr)];
+                                    captures.extend(find_captures(right, local.clone()));
+                                    local
+                                        .extend(pat.collect_identifiers().into_iter().map(|x| x.0));
+                                    continue;
+                                }
+                                _ => {}
+                            },
+                            TypeCheckedNode::Expression(expr) => match &mut expr.kind {
+                                TypeCheckedExprKind::LocalVariableRef(id, _tipe) => {
+                                    if !local.contains(&id) {
+                                        captures.insert(*id);
+                                    }
+                                }
+                                _ => {}
+                            },
+                            TypeCheckedNode::StructField(_) => {}
+                            TypeCheckedNode::Type(_) => continue,
+                        }
+
+                        captures.extend(find_captures(node.child_nodes(), local.clone()));
+                    }
+
+                    captures
+                }
+
+                let args: HashSet<StringId> = closure.args.iter().map(|arg| arg.name).collect();
+                let captures = find_captures(closure.child_nodes(), args);
+
+                for id in captures {
+                    println!("captured {}", string_table.name_from_id(id));
+                }
 
                 closures.insert(id, closure);
 

@@ -847,7 +847,11 @@ impl fmt::Display for Value {
         match self {
             Value::Int(i) => i.fmt(f),
             Value::Buffer(buf) => {
-                write!(f, "Buffer({})", buf.hex_encode())
+                write!(
+                    f,
+                    "\"{}\"",
+                    String::from_utf8_lossy(&hex::decode(buf.hex_encode()).unwrap())
+                )
             }
             Value::CodePoint(pc) => write!(f, "CodePoint({})", pc),
             Value::Label(label) => write!(f, "Label({})", label),

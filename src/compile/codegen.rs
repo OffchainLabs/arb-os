@@ -13,12 +13,12 @@ use crate::compile::typecheck::{
     TypeCheckedCodeBlock, TypeCheckedExprKind, TypeCheckedStatementKind,
 };
 use crate::compile::{CompileError, ErrorSystem, FileInfo};
+use crate::console::Color;
 use crate::link::{ImportedFunc, TupleTree, TUPLE_SIZE};
 use crate::mavm::{AVMOpcode, Buffer, Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
-use crate::console::Color;
 use std::collections::{BTreeMap, HashSet};
 use std::{cmp::max, collections::HashMap};
 
@@ -665,7 +665,7 @@ fn mavm_codegen_statement(
             }
 
             let call_type = Type::Func(
-                FuncProperties::new(false, false, false),
+                FuncProperties::pure(),
                 vec![Type::Tuple(vec![Type::Bool, Type::Any])],
                 Box::new(Type::Void),
             );
@@ -681,7 +681,7 @@ fn mavm_codegen_statement(
                     }),
                     vec![expr.clone()],
                     call_type,
-                    FuncProperties::new(false, false, false),
+                    FuncProperties::pure(),
                 ),
                 debug_info: DebugInfo::from(loc),
             };
@@ -799,7 +799,7 @@ fn mavm_codegen_tuple_pattern(
     }
 }
 
-///Generates code for the expression expr.
+/// Generates code for the expression expr.
 ///
 /// code represents the previously generated code, num_locals is the maximum number of locals used
 /// at any previous point in the callframe, locals is the table of local variable names to slot
@@ -1057,7 +1057,7 @@ fn mavm_codegen_expr<'a>(
                         "type-checking bug: tuple lookup in non-tuple type {}",
                         Color::red(tce_type.display())
                     ),
-                    loc
+                    loc,
                 ));
             };
             let (lg, c, exp_locals) = expr!(tce, code, label_gen, 0)?;
@@ -1094,7 +1094,7 @@ fn mavm_codegen_expr<'a>(
                 label_gen = lg;
                 code = c;
             }
-            //this is the thing that pushes the address to the stack
+            // this is the thing that pushes the address to the stack
             if &Type::Every != func_type {
                 code.push(opcode!(Noop, Value::Label(ret_label)));
             }
@@ -1206,7 +1206,7 @@ fn mavm_codegen_expr<'a>(
         }
         TypeCheckedExprKind::NewArray(sz_expr, base_type, array_type) => {
             let call_type = Type::Func(
-                FuncProperties::new(false, false, false),
+                FuncProperties::pure(),
                 vec![Type::Uint, Type::Any],
                 Box::new(array_type.clone()),
             );
@@ -1228,7 +1228,7 @@ fn mavm_codegen_expr<'a>(
                         },
                     ],
                     call_type,
-                    FuncProperties::new(false, false, false)
+                    FuncProperties::pure(),
                 ),
                 debug_info: DebugInfo::from(loc),
             };
