@@ -467,7 +467,7 @@ Expr12: Expr = {
         let write = qualifiers.contains(&"write");
         let debug = DebugInfo::here(file_info, lno, filename);
         
-        let id = stringtable.get(format!("closure{}", closures.len()));
+        let id = stringtable.get(format!("closure #{}", closures.len() + 1));
         let closure = Func::new(id, false, view, write, true, fa, t, cb, debug);
         
 	    closures.insert(id, closure.clone());

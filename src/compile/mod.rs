@@ -18,7 +18,7 @@ use miniconstants::init_constant_table;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
 use std::hash::{Hash, Hasher};
@@ -116,23 +116,25 @@ struct TypeCheckedModule {
     /// Collection of functions defined locally within the source file that have been validated by
     /// typechecking
     checked_funcs: BTreeMap<StringId, TypeCheckedFunc>,
-    ///Map from `StringId`s to the names they derived from.
+    /// Map from `StringId`s to the names they derived from.
     string_table: StringTable,
-    ///The list of imported functions imported through the old import/export system
+    /// The list of imported functions imported through the old import/export system
     imported_funcs: Vec<ImportedFunc>,
-    ///The list of exported functions exported through the old import/export system
+    /// The list of exported functions exported through the old import/export system
     exported_funcs: Vec<ExportedFunc>,
-    ///Map from `StringId`s in this file to the `Type`s they represent.
+    /// Map of closures to the captures they make
+    capture_table: BTreeMap<StringId, BTreeSet<StringId>>,
+    /// Map from `StringId`s in this file to the `Type`s they represent.
     named_types: HashMap<StringId, Type>,
-    ///List of constants used in this file.
+    /// List of constants used in this file.
     constants: HashSet<String>,
-    ///List of global variables defined in this module.
+    /// List of global variables defined in this module.
     global_vars: Vec<GlobalVarDecl>,
-    ///The list of imports declared via `use` statements.
+    /// The list of imports declared via `use` statements.
     imports: Vec<Import>,
-    ///The path to the module
+    /// The path to the module
     path: Vec<String>,
-    ///The name of the module, this may be removed later.
+    /// The name of the module, this may be removed later.
     name: String,
 }
 
@@ -262,6 +264,7 @@ impl TypeCheckedModule {
         string_table: StringTable,
         imported_funcs: Vec<ImportedFunc>,
         exported_funcs: Vec<ExportedFunc>,
+        capture_table: BTreeMap<StringId, BTreeSet<StringId>>,
         named_types: HashMap<usize, Type>,
         constants: HashSet<String>,
         global_vars: Vec<GlobalVarDecl>,
@@ -274,6 +277,7 @@ impl TypeCheckedModule {
             string_table,
             imported_funcs,
             exported_funcs,
+            capture_table,
             constants,
             named_types,
             global_vars,
@@ -956,7 +960,7 @@ fn typecheck_programs(
                  name,
              }| {
                 let mut typecheck_issues = vec![];
-                let (mut checked_funcs, exported_funcs, global_vars, string_table) =
+                let (mut checked_funcs, exported_funcs, capture_table, global_vars, string_table) =
                     typecheck::typecheck_top_level_decls(
                         funcs,
                         closures,
@@ -972,12 +976,14 @@ fn typecheck_programs(
                     let detected_view = func.is_view(type_tree);
                     let detected_write = func.is_write(type_tree);
 
+                    let name = string_table.name_from_id(*id);
+
                     if detected_view && !func.properties.view {
                         typecheck_issues.push(CompileError::new_type_error(
                             format!(
                                 "Func {} is {} but was not declared so",
-                                Color::red(string_table.name_from_id(*id)),
-                                Color::red("view"),
+                                Color::red(name),
+                                Color::red("view")
                             ),
                             func.debug_info.locs(),
                         ));
@@ -987,8 +993,8 @@ fn typecheck_programs(
                         typecheck_issues.push(CompileError::new_type_error(
                             format!(
                                 "Func {} is {} but was not declared so",
-                                Color::red(string_table.name_from_id(*id)),
-                                Color::red("write"),
+                                Color::red(name),
+                                Color::red("write")
                             ),
                             func.debug_info.locs(),
                         ));
@@ -999,11 +1005,8 @@ fn typecheck_programs(
                             String::from("Typecheck warning"),
                             format!(
                                 "Func {} is marked {} but isn't",
-                                Color::color(
-                                    error_system.warn_color,
-                                    string_table.name_from_id(*id)
-                                ),
-                                Color::color(error_system.warn_color, "view"),
+                                Color::color(error_system.warn_color, name),
+                                Color::color(error_system.warn_color, "view")
                             ),
                             func.debug_info.locs(),
                         ));
@@ -1014,11 +1017,8 @@ fn typecheck_programs(
                             String::from("Typecheck warning"),
                             format!(
                                 "Func {} is marked {} but isn't",
-                                Color::color(
-                                    error_system.warn_color,
-                                    string_table.name_from_id(*id)
-                                ),
-                                Color::color(error_system.warn_color, "write"),
+                                Color::color(error_system.warn_color, name),
+                                Color::color(error_system.warn_color, "write")
                             ),
                             func.debug_info.locs(),
                         ));
@@ -1030,6 +1030,7 @@ fn typecheck_programs(
                         string_table,
                         imported_funcs,
                         exported_funcs,
+                        capture_table,
                         named_types,
                         constants,
                         global_vars,
@@ -1201,6 +1202,7 @@ fn codegen_programs(
         string_table,
         imported_funcs,
         exported_funcs,
+        capture_table,
         named_types: _,
         constants: _,
         global_vars,
@@ -1213,6 +1215,7 @@ fn codegen_programs(
             checked_funcs,
             &string_table,
             &imported_funcs,
+            &capture_table,
             &global_vars,
             file_info_chart,
             error_system,

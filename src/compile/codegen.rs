@@ -19,7 +19,7 @@ use crate::mavm::{AVMOpcode, Buffer, Instruction, Label, LabelGenerator, Opcode,
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::{cmp::max, collections::HashMap};
 
 ///Represents any encountered during codegen
@@ -45,6 +45,7 @@ pub fn mavm_codegen(
     funcs: BTreeMap<StringId, TypeCheckedFunc>,
     string_table: &StringTable,
     imported_funcs: &[ImportedFunc],
+    capture_table: &BTreeMap<StringId, BTreeSet<StringId>>,
     global_vars: &[GlobalVarDecl],
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     error_system: &mut ErrorSystem,
@@ -69,6 +70,7 @@ pub fn mavm_codegen(
             label_gen,
             string_table,
             &import_func_map,
+            capture_table,
             &global_var_map,
             file_info_chart,
             error_system,
@@ -84,9 +86,9 @@ pub fn mavm_codegen(
     Ok(code)
 }
 
-///This generates code for individual mini functions.
+/// This generates code for individual mini functions.
 ///
-///In this function, func represents the function to be codegened, label_gen should point to the
+/// In this function, func represents the function to be codegened, label_gen should point to the
 /// next available label ID, string_table is used to get builtins, imported_func_map is a list of
 /// functions imported from other modules, and global_var_map lists the globals available in the
 /// module.
@@ -98,6 +100,7 @@ fn mavm_codegen_func(
     label_gen: LabelGenerator,
     string_table: &StringTable,
     import_func_map: &HashMap<StringId, Label>,
+    capture_table: &BTreeMap<StringId, BTreeSet<StringId>>,
     global_var_map: &HashMap<StringId, usize>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     error_system: &mut ErrorSystem,
@@ -131,10 +134,19 @@ fn mavm_codegen_func(
         debug_info,
     )); // placeholder; will replace this later
 
-    for (index, arg) in func.args.iter().enumerate() {
-        locals.insert(arg.name, index);
+    for arg in func.args {
+        let next_slot = locals.len();
+        locals.insert(arg.name, next_slot);
     }
-    let (label_gen, max_num_locals, _slot_map) = mavm_codegen_statements(
+
+    if let Some(captures) = capture_table.get(&func.name) {
+        for capture in captures {
+            let next_slot = locals.len();
+            locals.insert(*capture, next_slot);
+        }
+    }
+
+    let (label_gen, space_for_locals, _slot_map) = mavm_codegen_statements(
         func.code,
         &mut code,
         num_args,
@@ -150,21 +162,25 @@ fn mavm_codegen_func(
         release_build,
     )?;
 
-    if let Type::Func(.., ret) = func.tipe {
-        // put makeframe Instruction at beginning of function, to build the frame (replacing placeholder)
-        code[make_frame_slot] = Instruction::from_opcode(
-            Opcode::MakeFrame(num_args, max_num_locals, &*ret != &Type::Every),
-            debug_info,
-        );
-    } else {
-        return Err(new_codegen_error(
-            format!(
-                "type checking bug: function with non function type \"{}\"",
-                func.tipe.display()
-            ),
-            debug_info.location,
-        ));
+    match func.tipe {
+        Type::Func(prop, _, ret) => {
+            // put makeframe Instruction at beginning of function, to build the frame (replacing placeholder)
+            code[make_frame_slot] = Instruction::from_opcode(
+                Opcode::MakeFrame(num_args, space_for_locals, false, &*ret != &Type::Every),
+                debug_info,
+            );
+        }
+        wrong => {
+            return Err(new_codegen_error(
+                format!(
+                    "type checking bug: func with non-func type {}",
+                    Color::red(wrong.display())
+                ),
+                debug_info.location,
+            ))
+        }
     }
+
     Ok((label_gen, code))
 }
 
@@ -1035,6 +1051,70 @@ fn mavm_codegen_expr<'a>(
                 ))
             }
         },
+        TypeCheckedExprKind::ClosureLoad(id, arg_count, local_space, captures, _) => {
+            // The closure ABI is based around the idea that a closure pointer is essentially an updatable
+            // function frame passed around and copied for each of its invocations. This means space is reserved
+            // for the args, which are dynamically written to at the time of a call. We'll call these "blanks",
+            // since as the closure is passed around, the values are not yet known. This yeilds the format:
+            //
+            //            ( codepoint, ( blank_arg1, blank_arg2, ..., blank_argN ) )
+            //
+            // Closures may also have local variables. Space for these is reserved after the args. These are
+            // read and written to during the execution of the closure's code.
+            //
+            //            ( codepoint, ( <blank_args>, local1, local2, ... localN ) )
+            //
+            // Closures may also have captures. These are placed at the end of the tuple and are written to
+            // exactly once at the time of creation. They are effectively read-only, and by being at the end
+            // remove any type distinction between closures of different captures.
+            //
+            //            ( codepoint, ( <blank_args>, <locals>, capture1, capture2, ..., captureN ) )
+            //
+            // For efficiency, when a closure has no captures, we actually express it like a func pointer
+            // and then use code at runtime that checks the type
+            //
+            //              codepoint
+            //
+            // In this manner, a function pointer is equivalent to a closure with 0 captures, which is
+            // why they are said to be the same type. Lastly, in the rare case a single item is present
+            // in the tuple, we de-tuplify
+            //
+            //            ( codepoint, ( item ) )   === becomes ===>   ( codepoint, item )
+            //
+
+            let label = Value::Label(Label::Func(*id));
+
+            if captures.is_empty() {
+                code.push(opcode!(Noop, label)); // Equivalent to a function call
+            } else {
+                for capture in captures {
+                    match locals.get(capture) {
+                        Some(slot) => code.push(Instruction::from_opcode_imm(
+                            Opcode::GetLocal,
+                            Value::Int(Uint256::from_usize(*slot)),
+                            debug,
+                        )),
+                        None => {
+                            return Err(new_codegen_error("capture doesn't exist".to_string(), loc))
+                        }
+                    }
+                }
+
+                //code.push(Instruction::
+
+                /*let tree = TupleTree::new(arg_count + local_space + captures.len(), true);
+
+                for arg in 0..*arg_count {
+                    tree
+                }*/
+
+                //let container = Value::Tuple(Value::new_tuple(vec![label, ]));
+
+                code.push(opcode!(Noop, label));
+            }
+
+            Ok((label_gen, code, num_locals))
+        }
         TypeCheckedExprKind::GlobalVariableRef(idx, _) => {
             code.push(Instruction::from_opcode(Opcode::GetGlobalVar(*idx), debug));
             Ok((label_gen, code, num_locals))

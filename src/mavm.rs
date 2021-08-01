@@ -878,7 +878,7 @@ impl fmt::Display for Value {
 pub enum Opcode {
     GetLocal,
     SetLocal,
-    MakeFrame(usize, usize, bool),
+    MakeFrame(usize, usize, bool, bool),
     Label(Label),
     PushExternal(usize), // push codeptr of external function -- index in imported_funcs
     TupleGet(usize),     // arg is size of anysize_tuple
@@ -1400,7 +1400,9 @@ fn test_consistent_opcode_numbers() {
 impl fmt::Display for Opcode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Opcode::MakeFrame(s1, s2, ret) => write!(f, "MakeFrame({}, {}, {})", s1, s2, ret),
+            Opcode::MakeFrame(s1, s2, pre, ret) => {
+                write!(f, "MakeFrame({}, {}, {}, {})", s1, s2, pre, ret)
+            }
             Opcode::Label(label) => label.fmt(f),
             _ => write!(f, "{}", self.to_name()),
         }

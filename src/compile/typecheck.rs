@@ -382,6 +382,7 @@ fn flowcheck_imports(mut nodes: Vec<TypeCheckedNode>, imports: &mut BTreeMap<usi
             let nominals = match &expr.kind {
                 TypeCheckedExprKind::Cast(_, tipe)
                 | TypeCheckedExprKind::Const(_, tipe)
+                | TypeCheckedExprKind::ClosureLoad(.., tipe)
                 | TypeCheckedExprKind::NewArray(_, _, tipe) => tipe.find_nominals(),
                 _ => vec![],
             };
@@ -799,7 +800,8 @@ impl TypeCheckedFunc {
         for node in &mut nodes {
             match node {
                 TypeCheckedNode::Expression(expr) => match &expr.kind {
-                    TypeCheckedExprKind::FuncRef(id, _) => calls.insert(*id),
+                    TypeCheckedExprKind::FuncRef(id, _)
+                    | TypeCheckedExprKind::ClosureLoad(id, ..) => calls.insert(*id),
                     _ => false,
                 },
                 _ => false,
@@ -934,6 +936,7 @@ pub enum TypeCheckedExprKind {
     ArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
     FixedArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, usize, Type),
     MapRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
+    ClosureLoad(StringId, usize, usize, BTreeSet<StringId>, Type),
     Tuple(Vec<TypeCheckedExpr>, Type),
     NewArray(Box<TypeCheckedExpr>, Type, Type),
     NewFixedArray(usize, Option<Box<TypeCheckedExpr>>, Type),
@@ -983,13 +986,14 @@ pub enum TypeCheckedExprKind {
 impl AbstractSyntaxTree for TypeCheckedExpr {
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
         match &mut self.kind {
-            TypeCheckedExprKind::LocalVariableRef(_, _)
-            | TypeCheckedExprKind::GlobalVariableRef(_, _)
-            | TypeCheckedExprKind::FuncRef(_, _)
-            | TypeCheckedExprKind::Const(_, _)
+            TypeCheckedExprKind::LocalVariableRef(..)
+            | TypeCheckedExprKind::GlobalVariableRef(..)
+            | TypeCheckedExprKind::FuncRef(..)
+            | TypeCheckedExprKind::ClosureLoad(..)
+            | TypeCheckedExprKind::Const(..)
             | TypeCheckedExprKind::NewBuffer
             | TypeCheckedExprKind::Quote(..)
-            | TypeCheckedExprKind::NewMap(_)
+            | TypeCheckedExprKind::NewMap(..)
             | TypeCheckedExprKind::GetGas
             | TypeCheckedExprKind::Error => vec![],
             TypeCheckedExprKind::UnaryOp(_, exp, _)
@@ -1175,33 +1179,34 @@ impl TypeCheckedExpr {
             TypeCheckedExprKind::ShortcutOr(_, _) | TypeCheckedExprKind::ShortcutAnd(_, _) => {
                 Type::Bool
             }
-            TypeCheckedExprKind::LocalVariableRef(_, t) => t.clone(),
-            TypeCheckedExprKind::GlobalVariableRef(_, t) => t.clone(),
-            TypeCheckedExprKind::FuncRef(_, t) => t.clone(),
-            TypeCheckedExprKind::TupleRef(_, _, t) => t.clone(),
+            TypeCheckedExprKind::LocalVariableRef(.., t) => t.clone(),
+            TypeCheckedExprKind::GlobalVariableRef(.., t) => t.clone(),
+            TypeCheckedExprKind::FuncRef(.., t) => t.clone(),
+            TypeCheckedExprKind::TupleRef(.., t) => t.clone(),
             TypeCheckedExprKind::Variant(t) => Type::Option(Box::new(t.get_type())),
-            TypeCheckedExprKind::DotRef(_, _, _, t) => t.clone(),
-            TypeCheckedExprKind::Const(_, t) => t.clone(),
-            TypeCheckedExprKind::FunctionCall(_, _, t, _) => t.clone(),
+            TypeCheckedExprKind::DotRef(.., t) => t.clone(),
+            TypeCheckedExprKind::Const(.., t) => t.clone(),
+            TypeCheckedExprKind::FunctionCall(.., t, _) => t.clone(),
             TypeCheckedExprKind::CodeBlock(block) => block.get_type(),
-            TypeCheckedExprKind::StructInitializer(_, t) => t.clone(),
-            TypeCheckedExprKind::ArrayRef(_, _, t) => t.clone(),
-            TypeCheckedExprKind::FixedArrayRef(_, _, _, t) => t.clone(),
-            TypeCheckedExprKind::MapRef(_, _, t) => t.clone(),
-            TypeCheckedExprKind::Tuple(_, t) => t.clone(),
-            TypeCheckedExprKind::NewArray(_, _, t) => t.clone(),
-            TypeCheckedExprKind::NewFixedArray(_, _, t) => t.clone(),
+            TypeCheckedExprKind::StructInitializer(.., t) => t.clone(),
+            TypeCheckedExprKind::ArrayRef(.., t) => t.clone(),
+            TypeCheckedExprKind::FixedArrayRef(.., t) => t.clone(),
+            TypeCheckedExprKind::MapRef(.., t) => t.clone(),
+            TypeCheckedExprKind::ClosureLoad(.., t) => t.clone(),
+            TypeCheckedExprKind::Tuple(.., t) => t.clone(),
+            TypeCheckedExprKind::NewArray(.., t) => t.clone(),
+            TypeCheckedExprKind::NewFixedArray(.., t) => t.clone(),
             TypeCheckedExprKind::NewMap(t) => t.clone(),
-            TypeCheckedExprKind::ArrayMod(_, _, _, t) => t.clone(),
-            TypeCheckedExprKind::FixedArrayMod(_, _, _, _, t) => t.clone(),
-            TypeCheckedExprKind::MapMod(_, _, _, t) => t.clone(),
-            TypeCheckedExprKind::StructMod(_, _, _, t) => t.clone(),
-            TypeCheckedExprKind::Cast(_, t) => t.clone(),
-            TypeCheckedExprKind::Asm(t, _, _) => t.clone(),
-            TypeCheckedExprKind::Try(_, t) => t.clone(),
-            TypeCheckedExprKind::If(_, _, _, t) => t.clone(),
-            TypeCheckedExprKind::IfLet(_, _, _, _, t) => t.clone(),
-            TypeCheckedExprKind::Loop(_) => Type::Every,
+            TypeCheckedExprKind::ArrayMod(.., t) => t.clone(),
+            TypeCheckedExprKind::FixedArrayMod(.., t) => t.clone(),
+            TypeCheckedExprKind::MapMod(.., t) => t.clone(),
+            TypeCheckedExprKind::StructMod(.., t) => t.clone(),
+            TypeCheckedExprKind::Cast(.., t) => t.clone(),
+            TypeCheckedExprKind::Asm(t, ..) => t.clone(),
+            TypeCheckedExprKind::Try(.., t) => t.clone(),
+            TypeCheckedExprKind::If(.., t) => t.clone(),
+            TypeCheckedExprKind::IfLet(.., t) => t.clone(),
+            TypeCheckedExprKind::Loop(..) => Type::Every,
         }
     }
 }
@@ -1310,6 +1315,7 @@ pub fn typecheck_top_level_decls(
     (
         BTreeMap<StringId, TypeCheckedFunc>,
         Vec<ExportedFunc>,
+        BTreeMap<StringId, BTreeSet<StringId>>,
         Vec<GlobalVarDecl>,
         StringTable,
     ),
@@ -1378,14 +1384,25 @@ pub fn typecheck_top_level_decls(
         }
     }
 
-    checked_funcs.extend(checked_closures);
+    let mut capture_table = BTreeMap::new();
+
+    for (id, (closure, captures)) in checked_closures {
+        checked_funcs.insert(id, closure);
+        capture_table.insert(id, captures);
+    }
 
     let mut res_global_vars = Vec::new();
     for global_var in global_vars {
         res_global_vars.push(global_var);
     }
 
-    Ok((checked_funcs, exported_funcs, res_global_vars, string_table))
+    Ok((
+        checked_funcs,
+        exported_funcs,
+        capture_table,
+        res_global_vars,
+        string_table,
+    ))
 }
 
 /// If successful, produces a `TypeCheckedFunc` from `FuncDecl` reference fd, according to global
@@ -1399,7 +1416,7 @@ pub fn typecheck_function(
     func_table: &TypeTable,
     type_tree: &TypeTree,
     string_table: &StringTable,
-    closures: &mut BTreeMap<StringId, TypeCheckedFunc>,
+    closures: &mut BTreeMap<StringId, (TypeCheckedFunc, BTreeSet<StringId>)>,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
 ) -> Result<TypeCheckedFunc, CompileError> {
     let mut hm = HashMap::new();
@@ -1526,7 +1543,7 @@ fn typecheck_statement_sequence(
     type_tree: &TypeTree,
     string_table: &StringTable,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
-    closures: &mut BTreeMap<StringId, TypeCheckedFunc>,
+    closures: &mut BTreeMap<StringId, (TypeCheckedFunc, BTreeSet<StringId>)>,
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<Vec<TypeCheckedStatement>, CompileError> {
     typecheck_statement_sequence_with_bindings(
@@ -1556,7 +1573,7 @@ fn typecheck_statement_sequence_with_bindings<'a>(
     type_tree: &TypeTree,
     string_table: &StringTable,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
-    closures: &mut BTreeMap<StringId, TypeCheckedFunc>,
+    closures: &mut BTreeMap<StringId, (TypeCheckedFunc, BTreeSet<StringId>)>,
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<Vec<TypeCheckedStatement>, CompileError> {
     let mut inner_type_table = type_table.clone();
@@ -1600,7 +1617,7 @@ fn typecheck_statement<'a>(
     type_tree: &TypeTree,
     string_table: &StringTable,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
-    closures: &mut BTreeMap<StringId, TypeCheckedFunc>,
+    closures: &mut BTreeMap<StringId, (TypeCheckedFunc, BTreeSet<StringId>)>,
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<(TypeCheckedStatement, Vec<(StringId, Type)>), CompileError> {
     let kind = &statement.kind;
@@ -2049,7 +2066,7 @@ fn typecheck_expr(
     type_tree: &TypeTree,
     string_table: &StringTable,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
-    closures: &mut BTreeMap<StringId, TypeCheckedFunc>,
+    closures: &mut BTreeMap<StringId, (TypeCheckedFunc, BTreeSet<StringId>)>,
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<TypeCheckedExpr, CompileError> {
     let debug_info = expr.debug_info;
@@ -2451,8 +2468,8 @@ fn typecheck_expr(
                 fn find_captures(
                     mut nodes: Vec<TypeCheckedNode>, // nodes of the same scope
                     mut local: HashSet<StringId>,    // those that have been defined locally
-                ) -> HashSet<StringId> {
-                    let mut captures = HashSet::new(); // non-local variables we use
+                ) -> BTreeSet<StringId> {
+                    let mut captures = BTreeSet::new(); // non-local variables we use
 
                     for node in &mut nodes {
                         match node {
@@ -2491,17 +2508,30 @@ fn typecheck_expr(
                 }
 
                 let args: HashSet<StringId> = closure.args.iter().map(|arg| arg.name).collect();
+                let arg_count = args.len();
                 let captures = find_captures(closure.child_nodes(), args);
 
-                for id in captures {
-                    println!("captured {}", string_table.name_from_id(id));
+                for id in &captures {
+                    println!("captured {}", string_table.name_from_id(*id));
                 }
 
-                closures.insert(id, closure);
+                closures.insert(id, (closure, captures.clone())); // need to add captures
 
-                // Now that we've ensured the closure's been separated off for codegen,
-                // we'll replace this node in the AST with a reference to it.
-                Ok(TypeCheckedExprKind::FuncRef(id, tipe))
+                // We need to reserve space for the local variables when loading.
+                // In the future we'll use a smarter assignment strategy, but for now
+                //
+                //let local_space = capture_table.len() - arg_count - captures;
+                let local_space = 32;
+
+                // We only get one opportunity to load in the captured values,
+                // so we do that at declaration.
+                Ok(TypeCheckedExprKind::ClosureLoad(
+                    id,
+                    arg_count,
+                    local_space,
+                    captures,
+                    tipe,
+                ))
             }
             ExprKind::ArrayOrMapRef(array, index) => {
                 let tc_arr = typecheck_expr(
@@ -4281,7 +4311,7 @@ fn typecheck_codeblock(
     type_tree: &TypeTree,
     string_table: &StringTable,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
-    closures: &mut BTreeMap<StringId, TypeCheckedFunc>,
+    closures: &mut BTreeMap<StringId, (TypeCheckedFunc, BTreeSet<StringId>)>,
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<TypeCheckedCodeBlock, CompileError> {
     let mut output = Vec::new();
