@@ -12,7 +12,7 @@ ACBUILDDIR = $(ARTIFACTDIR)/builtin
 ARBOS = $(ARBOSDIR)/arbos.mexe
 
 TEMPLATES = $(ARBOSDIR)/contractTemplates.mini
-TESTFILES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/biguinttest.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe $(STDDIR)/sha256test.mexe $(STDDIR)/ripemd160test.mexe $(STDDIR)/fixedpointtest.mexe $(STDDIR)/blstest.mexe $(STDDIR)/expandingIntArrayTest.mexe minitests/codeloadtest.mexe minitests/simple-closures.mexe
+TESTFILES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/biguinttest.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe $(STDDIR)/sha256test.mexe $(STDDIR)/ripemd160test.mexe $(STDDIR)/fixedpointtest.mexe $(STDDIR)/blstest.mexe $(STDDIR)/expandingIntArrayTest.mexe minitests/codeloadtest.mexe minitests/simple-closure.mexe minitests/closure.mexe
 TESTCONTRACTSPURE = $(TCBUILDDIR)/Add.sol/Add.json $(TCBUILDDIR)/Fibonacci.sol/Fibonacci.json $(TCBUILDDIR)/PaymentChannel.sol/PaymentChannel.json $(TCBUILDDIR)/Underfunded.sol/Underfunded.json $(TCBUILDDIR)/ReverterFactory.sol/ReverterFactory.json $(TCBUILDDIR)/Callback.sol/Callback.json
 TESTCONTRACTS = $(ACBUILDDIR)/ArbSys.sol/ArbSys.json $(TESTCONTRACTSPURE)
 UPGRADEFILES = $(UPGRADETESTDIR)/regcopy_old.mexe $(UPGRADETESTDIR)/regcopy_new.mexe $(UPGRADETESTDIR)/upgrade1_old.mexe $(UPGRADETESTDIR)/upgrade1_new.mexe $(UPGRADETESTDIR)/upgrade2_new.mexe
@@ -69,8 +69,11 @@ $(STDDIR)/bufferopcodetest.mexe: compiler $(BUILTINMAOS) $(STDDIR)/bufferopcodet
 minitests/codeloadtest.mexe: compiler minitests/codeloadtest.mini
 	$(CARGORUN) compile minitests/codeloadtest.mini -o minitests/codeloadtest.mexe $(COMPILEFLAGS) -t
 
-minitests/simple-closures.mexe: compiler minitests/simple-closures.mini
-	$(CARGORUN) compile minitests/simple-closures.mini -o minitests/simple-closures.mexe $(COMPILEFLAGS) -t
+minitests/simple-closure.mexe: compiler minitests/simple-closure.mini
+	$(CARGORUN) compile minitests/simple-closure.mini -o minitests/simple-closure.mexe $(COMPILEFLAGS) -t
+
+minitests/closure.mexe: compiler minitests/closure.mini
+	$(CARGORUN) compile minitests/closure.mini -o minitests/closure.mexe $(COMPILEFLAGS) -t
 
 $(STDDIR)/keccaktest.mexe: compiler $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mini $(STDDIR)/bytearray.mini $(STDDIR)/expandingIntArray.mini
 	$(CARGORUN) compile $(STDDIR)/keccaktest.mini -o $(STDDIR)/keccaktest.mexe $(COMPILEFLAGS) -t

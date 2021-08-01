@@ -8,6 +8,7 @@ use crate::compile::{
     comma_list, CompileError, CompiledProgram, DebugInfo, ErrorSystem, FileInfo, GlobalVarDecl,
     SourceFileMap, Type, TypeTree,
 };
+use crate::console::Color;
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::{try_display_location, Location};
 use crate::stringtable::{StringId, StringTable};
@@ -240,13 +241,21 @@ pub fn postlink_compile(
         if debug {
             println!("========== {} ==========", phase);
             for (idx, insn) in code.iter().enumerate() {
-                println!("{:04}:  {}", idx, insn);
+                println!(
+                    "{}  {}",
+                    Color::grey(format!("{:04}", idx)),
+                    insn.pretty_print(Color::PINK)
+                );
             }
         } else if did_print {
             println!("========== {} ==========", phase);
             for (idx, insn) in code.iter().enumerate() {
                 if insn.debug_info.attributes.codegen_print {
-                    println!("{:04}:  {}", idx, insn);
+                    println!(
+                        "{}  {}",
+                        Color::grey(format!("{:04}", idx)),
+                        insn.pretty_print(Color::PINK)
+                    );
                 }
             }
         }
@@ -257,12 +266,20 @@ pub fn postlink_compile(
     if debug {
         println!("========== after initial linking ===========");
         for (idx, insn) in program.code.iter().enumerate() {
-            println!("{:04}:  {}", idx, insn);
+            println!(
+                "{}  {}",
+                Color::grey(format!("{:04}", idx)),
+                insn.pretty_print(Color::PINK)
+            );
         }
     } else {
         for (idx, insn) in program.code.iter().enumerate() {
             if insn.debug_info.attributes.codegen_print {
-                println!("{:04}:  {}", idx, insn);
+                println!(
+                    "{}  {}",
+                    Color::grey(format!("{:04}", idx)),
+                    insn.pretty_print(Color::PINK)
+                );
                 did_print = true;
             }
         }
@@ -272,13 +289,13 @@ pub fn postlink_compile(
         &program.imported_funcs,
         program.globals.len() - 1,
     );
-    consider_debug_printing(&code_2, did_print, "after fix_backward_labels");
+    //consider_debug_printing(&code_2, did_print, "after fix_backward_labels");
 
     let code_3 = xformcode::fix_tuple_size(&code_2, program.globals.len())?;
-    consider_debug_printing(&code_3, did_print, "after fix_tuple_size");
+    //consider_debug_printing(&code_3, did_print, "after fix_tuple_size");
 
     let code_4 = optimize::peephole(&code_3);
-    consider_debug_printing(&code_4, did_print, "after peephole optimization");
+    //consider_debug_printing(&code_4, did_print, "after peephole optimization");
 
     let (mut code_5, jump_table_final) =
         striplabels::strip_labels(code_4, &jump_table, &program.imported_funcs)?;
@@ -304,7 +321,7 @@ pub fn postlink_compile(
         println!("============ after strip_labels =============");
         println!("static: {}", jump_table_value);
         for (idx, insn) in code_final.iter().enumerate() {
-            println!("{:04}:  {}", idx, insn);
+            println!("{:04}  {}", idx, insn);
         }
         println!("============ after full compile/link =============");
     }

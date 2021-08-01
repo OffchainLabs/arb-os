@@ -118,7 +118,10 @@ fn mavm_codegen_func(
     let mut code = vec![];
     let debug_info = func.debug_info;
     code.push(Instruction::from_opcode(
-        Opcode::Label(Label::Func(func.name)),
+        match func.properties.closure {
+            true => Opcode::Label(Label::Closure(func.name)),
+            false => Opcode::Label(Label::Func(func.name)),
+        },
         debug_info,
     ));
 
@@ -1082,7 +1085,7 @@ fn mavm_codegen_expr<'a>(
             //            ( codepoint, ( item ) )   === becomes ===>   ( codepoint, item )
             //
 
-            let label = Value::Label(Label::Func(*id));
+            let label = Value::Label(Label::Closure(*id));
 
             if captures.is_empty() {
                 code.push(opcode!(Noop, label)); // Equivalent to a function call
