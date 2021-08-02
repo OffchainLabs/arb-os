@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::preinstalled_contracts::_ArbOwner;
+use crate::evm::preinstalled_contracts::{_ArbOwner, _ArbAggregator};
 use crate::evm::{preinstalled_contracts::_ArbInfo, test_contract_path, AbiForContract};
 use crate::mavm::Value;
 use crate::run::{_bytestack_from_bytes, load_from_file, run, run_from_file, Machine};
@@ -11,6 +11,8 @@ use num_bigint::{BigUint, RandBigInt};
 use rlp::RlpStream;
 use std::convert::TryInto;
 use std::path::Path;
+use std::option::Option::None;
+use ethers_signers::Signer;
 
 mod integration;
 
@@ -480,7 +482,7 @@ fn balance_after_memory_usage(usage: u64) -> Uint256 {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
     let wallet = machine.runtime_env.new_wallet();
-    let my_addr = Uint256::from_u64(9935);
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
     let contract = match AbiForContract::new_from_file(&test_contract_path("MemoryUsage")) {
         Ok(mut contract) => {
@@ -533,4 +535,103 @@ fn balance_after_memory_usage(usage: u64) -> Uint256 {
 
     let arbinfo = _ArbInfo::_new(false);
     arbinfo._get_balance(&mut machine, &my_addr).unwrap()
+}
+
+#[test]
+fn test_gas_estimation_non_preferred_aggregator() {
+    test_gas_estimation(false);
+}
+
+#[test]
+fn test_gas_estimation_preferred_aggregator() {
+    test_gas_estimation(true);
+}
+
+#[cfg(test)]
+fn test_gas_estimation(use_preferred_aggregator: bool) {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero();
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let aggregator = Uint256::from_u64(341348);
+
+    machine.runtime_env.insert_eth_deposit_message(Uint256::zero(), my_addr.clone(), Uint256::_from_eth(10000));
+    machine.runtime_env.insert_eth_deposit_message(Uint256::zero(), aggregator.clone(), Uint256::_from_eth(10000));
+    let _ = machine.run(None);
+
+    let contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
+        Ok(mut contract) => {
+            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, false);
+            if let Ok(contract_addr) = result {
+                assert_ne!(contract_addr, Uint256::zero());
+                contract
+            } else {
+                panic!("deploy failed");
+            }
+        }
+        Err(e) => {
+            panic!("error loading contract: {:?}", e);
+        }
+    };
+
+    if use_preferred_aggregator {
+        let arbaggregator = _ArbAggregator::_new(false);
+        arbaggregator._set_default_aggregator(&mut machine, aggregator.clone(), None).unwrap();
+    }
+
+    let arbowner = _ArbOwner::_new(&wallet, false);
+    arbowner
+        ._set_fees_enabled(&mut machine, true, true)
+        .unwrap();
+
+    machine.runtime_env._advance_time(Uint256::one(), None, true);
+    let _ = machine.run(None);
+
+    let (gas_estimate, estimate_fee_stats) = contract
+        .estimate_gas_for_function_call(
+            "add",
+            &[
+                ethabi::Token::Uint(Uint256::from_u64(1).to_u256()),
+                ethabi::Token::Uint(Uint256::from_u64(1).to_u256()),
+            ],
+            &mut machine,
+            Uint256::zero(),
+            aggregator.clone(),
+            &wallet,
+            false,
+        )
+        .unwrap();
+
+    for i in 0..4 {
+        assert_eq!(estimate_fee_stats[0][i].mul(&estimate_fee_stats[1][i]), estimate_fee_stats[2][i]);
+    }
+
+    let mut batch = machine.runtime_env.new_batch();
+    let _txid = contract._add_function_call_to_compressed_batch(
+        &mut batch,
+        "add",
+        &[
+            ethabi::Token::Uint(Uint256::from_u64(1).to_u256()),
+            ethabi::Token::Uint(Uint256::from_u64(1).to_u256()),
+        ],
+        &mut machine,
+        Uint256::zero(),
+        &wallet,
+        Some(gas_estimate.add(&Uint256::from_u64(5000))),
+    ).unwrap();
+
+    let num_receipts_before = machine.runtime_env.get_all_receipt_logs().len();
+
+    machine.runtime_env.insert_batch_message(aggregator, &*batch);
+    let _ = machine.run(None);
+
+    let receipts = machine.runtime_env.get_all_receipt_logs();
+    assert_eq!(receipts.len(), num_receipts_before+1);
+    let receipt = receipts[num_receipts_before].clone();
+    assert!(receipt.succeeded());
+    let fee_stats = receipt._get_fee_stats();
+    for i in 0..4 {
+        assert_eq!(fee_stats[0][i].mul(&fee_stats[1][i]), fee_stats[2][i]);
+    }
 }
