@@ -26,8 +26,9 @@ fn test_from_file_with_args_and_return(
             Value::Buffer(_) if res[0] != ret => panic!("{}", Color::red(&res[0])),
             _ => assert_eq!(res[0], ret),
         },
-        Err(e) => {
-            panic!("{:?}", e);
+        Err((error, trace)) => {
+            println!("{}", error);
+            panic!("{:?}", trace);
         }
     }
 }

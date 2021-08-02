@@ -1054,7 +1054,7 @@ fn mavm_codegen_expr<'a>(
                 ))
             }
         },
-        TypeCheckedExprKind::ClosureLoad(id, arg_count, local_space, captures, _) => {
+        TypeCheckedExprKind::ClosureLoad(id, nargs, local_space, captures, _) => {
             // The closure ABI is based around the idea that a closure pointer is essentially an updatable
             // function frame passed around and copied for each of its invocations. This means space is reserved
             // for the args, which are dynamically written to at the time of a call. We'll call these "blanks",
@@ -1067,20 +1067,20 @@ fn mavm_codegen_expr<'a>(
             //
             //            ( codepoint, ( <blank_args>, local1, local2, ... localN ) )
             //
-            // Closures may also have captures. These are placed at the end of the tuple and are written to
-            // exactly once at the time of creation. They are effectively read-only, and by being at the end
+            // Closures may also have captures. These are placed at the beginning of the tuple and are written
+            // to exactly once at the time of creation. They are effectively read-only, and by being at the end
             // remove any type distinction between closures of different captures.
             //
-            //            ( codepoint, ( <blank_args>, <locals>, capture1, capture2, ..., captureN ) )
+            //            ( codepoint, ( capture1, capture2, ..., captureN, <blank_args>, <locals> ) )
             //
             // For efficiency, when a closure has no captures, we actually express it like a func pointer
-            // and then use code at runtime that checks the type
+            // and then use code at runtime that checks the type.
             //
             //              codepoint
             //
             // In this manner, a function pointer is equivalent to a closure with 0 captures, which is
             // why they are said to be the same type. Lastly, in the rare case a single item is present
-            // in the tuple, we de-tuplify
+            // in the tuple, we de-tuplify for efficiency.
             //
             //            ( codepoint, ( item ) )   === becomes ===>   ( codepoint, item )
             //
@@ -1103,17 +1103,23 @@ fn mavm_codegen_expr<'a>(
                     }
                 }
 
-                //code.push(Instruction::
+                let tree = TupleTree::new(*local_space, false);
+                code.push(opcode!(Noop, TupleTree::make_empty(&tree)));
 
-                /*let tree = TupleTree::new(arg_count + local_space + captures.len(), true);
+                for (index, capture) in captures.iter().enumerate() {
+                    if let Some(_) = locals.get(capture) {
+                        code.push(Instruction::from_opcode_imm(
+                            Opcode::TupleSet(*local_space),
+                            Value::from(index),
+                            debug,
+                        ))
+                    }
+                }
 
-                for arg in 0..*arg_count {
-                    tree
-                }*/
+                let container = Value::new_tuple(vec![label, Value::none()]);
 
-                //let container = Value::Tuple(Value::new_tuple(vec![label, ]));
-
-                code.push(opcode!(Noop, label));
+                code.push(opcode!(Noop, container));
+                code.push(opcode!(Tset, Value::from(1)));
             }
 
             Ok((label_gen, code, num_locals))

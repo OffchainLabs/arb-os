@@ -465,7 +465,8 @@ Expr12: Expr = {
     <qualifiers: (<Qualifier>)*> <lno: @L> "closure" "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> => {
         let view = qualifiers.contains(&"view");
         let write = qualifiers.contains(&"write");
-        let debug = DebugInfo::here(file_info, lno, filename);
+        let mut debug = DebugInfo::here(file_info, lno, filename);
+        debug.attributes.codegen_print = true;
         
         let id = stringtable.get(format!("closure #{}", closures.len() + 1));
         let closure = Func::new(id, false, view, write, true, fa, t, cb, BTreeSet::new(), 0, debug);

@@ -6,6 +6,7 @@
 
 use super::RuntimeEnvironment;
 use crate::compile::{CompileError, DebugInfo, FileInfo};
+use crate::console::Color;
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Value};
 use crate::pos::{try_display_location, Location};
@@ -229,7 +230,13 @@ impl fmt::Display for ExecutionError {
             ExecutionError::StoppedErr(s) => writeln!(f, "error with machine stopped: {}", s),
             ExecutionError::Wrapped(s, bee) => writeln!(f, "{} ({})", s, *bee),
             ExecutionError::RunningErr(s, cp, ov) => match ov {
-                Some(val) => writeln!(f, "{} ({}) with value {}", s, cp, val),
+                Some(val) => writeln!(
+                    f,
+                    "{} ({}) with value\n\t{}",
+                    s,
+                    cp,
+                    val.pretty_print(Color::RESET)
+                ),
                 None => writeln!(f, "{} ({})", s, cp),
             },
         }
