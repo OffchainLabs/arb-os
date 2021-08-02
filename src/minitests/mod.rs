@@ -618,7 +618,7 @@ fn test_gas_estimation(use_preferred_aggregator: bool) {
         &mut machine,
         Uint256::zero(),
         &wallet,
-        Some(gas_estimate.add(&Uint256::from_u64(5000))),
+        Some(gas_estimate.add(&Uint256::from_u64(500))),
     ).unwrap();
 
     let num_receipts_before = machine.runtime_env.get_all_receipt_logs().len();
