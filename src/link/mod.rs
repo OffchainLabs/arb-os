@@ -289,13 +289,13 @@ pub fn postlink_compile(
         &program.imported_funcs,
         program.globals.len() - 1,
     );
-    //consider_debug_printing(&code_2, did_print, "after fix_backward_labels");
+    consider_debug_printing(&code_2, did_print, "after fix_backward_labels");
 
     let code_3 = xformcode::fix_tuple_size(&code_2, program.globals.len())?;
-    //consider_debug_printing(&code_3, did_print, "after fix_tuple_size");
+    consider_debug_printing(&code_3, did_print, "after fix_tuple_size");
 
     let code_4 = optimize::peephole(&code_3);
-    //consider_debug_printing(&code_4, did_print, "after peephole optimization");
+    consider_debug_printing(&code_4, did_print, "after peephole optimization");
 
     let (mut code_5, jump_table_final) =
         striplabels::strip_labels(code_4, &jump_table, &program.imported_funcs)?;

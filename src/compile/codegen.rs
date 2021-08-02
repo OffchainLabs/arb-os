@@ -160,7 +160,7 @@ fn mavm_codegen_func(
     )?;
 
     match func.tipe {
-        Type::Func(prop, _, ret) => {
+        Type::Func(_prop, _, ret) => {
             // put makeframe Instruction at beginning of function, to build the frame (replacing placeholder)
 
             let prebuilt = !func.captures.is_empty(); // whether caller will pass in the frame

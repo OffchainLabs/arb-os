@@ -2537,7 +2537,7 @@ fn typecheck_expr(
                     for node in &mut nodes {
                         match node {
                             TypeCheckedNode::Statement(stat) => match &mut stat.kind {
-                                TypeCheckedStatementKind::Let(pat, ref mut expr) => {
+                                TypeCheckedStatementKind::Let(pat, ..) => {
                                     let ids: Vec<_> =
                                         pat.collect_identifiers().iter().map(|x| x.0).collect();
                                     idents.extend(ids);
