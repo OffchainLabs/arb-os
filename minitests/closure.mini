@@ -1,22 +1,38 @@
 
 var global: uint;
 
-//type Produce = closure(uint, uint) -> (uint, buffer);
-type Produce = func(uint, uint) -> (uint, buffer);
+type Produce = closure(uint, uint) -> (uint, buffer);
 
-func main() -> (uint, buffer) {
+view write func main() {
+	asm(tests().1) { log };
+}
 
-    let lambda = make_lambda();
+view write func tests() -> (uint, buffer) {
+
+    let lambda = capture_2();
 
     if (lambda(48, 96) != "Closures are so cool!") {
         return "Uh oh, closures don't work when passed around";
     }
-    return "";
+    
+    if (lambda(48, 96) != lambda(48, 96)) {
+        return "Uh oh, closures are stateful";
+    }
+    
+    lambda = capture_1(3);
+    
+    if (lambda(1, 2) != "Capture count doesn't matter!") {
+        return lambda(1, 2);
+    } 
+    
+    return test_global_capture();
 }
 
-#[print]
-func make_lambda() -> Produce {
-
+func capture_2() -> Produce {
+    
+    // Checks that captures work as expected
+    // Should not warn
+    
     let a = 32;
     let b = (64, 128, "Closures are so cool!");
 
@@ -40,6 +56,72 @@ func make_lambda() -> Produce {
     if (lambda(1024, 512) != "Closures are so cool!") {
         return error;
     }
-
     return lambda;
+}
+
+func capture_1(sum: uint) -> Produce {
+    
+    return closure(arg1: uint, arg2: uint) -> (uint, buffer) {
+        if (arg1 + arg2 == sum) {
+            return "Capture count doesn't matter!";
+        }
+        return "Uh oh, a wasn't 0";
+    };
+}
+
+view write func test_global_capture() -> (uint, buffer) {
+    
+    global = 2;
+    
+    let saved_global = 2;
+    let true_capture = closure() -> uint {
+        return saved_global;
+    };
+    saved_global = 1024; // no longer the same
+    
+    let viewable = view closure() -> uint {
+        return global;
+    };
+    
+    if (viewable() != 2) {
+        return "Could not read a 2";
+    }
+    
+    global = 4;
+    
+    if (viewable() != 4) {
+        return "Could not read a 4";
+    }
+    
+    let writeable = write closure(new: uint) {
+        global = new;
+    };
+    
+    writeable(16);
+    
+    if (viewable() != 16) {
+        return "Could not read-write a 16";
+    }
+    
+    let view_and_write = view write closure() {
+        global = global + 1;
+    };
+    
+    let loops = 0;
+    writeable(0);
+    
+    while (loops < 32) {
+        view_and_write();
+        loops = loops + 1;
+    }
+    
+    if (viewable() != 32) {
+        return "Could not update global";
+    }
+    
+    if (true_capture() != saved_global / 512) {
+        return "True global capture didn't work";
+    }
+    
+    return "";
 }

@@ -2543,7 +2543,7 @@ fn typecheck_expr(
                 //
                 // So, for the very short term, we'll just have closures be expensive and dangerous
                 // by giving them a large amount of fixed space.
-                let frame_size = 7;
+                let frame_size = 16;
 
                 closure.frame_size = frame_size;
                 closure.captures = captures.clone();

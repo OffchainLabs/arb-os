@@ -821,7 +821,7 @@ impl Machine {
         };
         println!("ArbGas cost of call: {}", cost);
         if let Some(ret_val) = self.stack.top() {
-            println!("Stack top: {}", ret_val);
+            println!("Stack top: {}", ret_val.pretty_print(Color::RESET));
         }
         match &self.state {
             MachineState::Stopped => {

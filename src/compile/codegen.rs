@@ -146,7 +146,7 @@ fn mavm_codegen_func(
     let (label_gen, mut space_for_locals, _slot_map) = mavm_codegen_statements(
         func.code,
         &mut code,
-        num_args,
+        locals.len(),
         &locals,
         label_gen,
         string_table,
@@ -1067,11 +1067,11 @@ fn mavm_codegen_expr<'a>(
             //
             //            ( codepoint, ( <blank_args>, local1, local2, ... localN ) )
             //
-            // Closures may also have captures. These are placed at the beginning of the tuple and are written
-            // to exactly once at the time of creation. They are effectively read-only, and by being at the end
+            // Closures may also have captures. These are placed after the args and are written to exactly
+            // once at the time of creation. They are effectively read-only, and by being at the end
             // remove any type distinction between closures of different captures.
             //
-            //            ( codepoint, ( capture1, capture2, ..., captureN, <blank_args>, <locals> ) )
+            //            ( codepoint, ( <blank_args>, capture1, capture2, ..., captureN, <locals> ) )
             //
             // For efficiency, when a closure has no captures, we actually express it like a func pointer
             // and then use code at runtime that checks the type.
@@ -1106,11 +1106,11 @@ fn mavm_codegen_expr<'a>(
                 let tree = TupleTree::new(*local_space, false);
                 code.push(opcode!(Noop, TupleTree::make_empty(&tree)));
 
-                for (index, capture) in captures.iter().enumerate() {
+                for (index, capture) in captures.iter().enumerate().rev() {
                     if let Some(_) = locals.get(capture) {
                         code.push(Instruction::from_opcode_imm(
                             Opcode::TupleSet(*local_space),
-                            Value::from(index),
+                            Value::from(index + nargs),
                             debug,
                         ))
                     }
@@ -1188,6 +1188,29 @@ fn mavm_codegen_expr<'a>(
                 code.push(opcode!(Noop, Value::Label(ret_label)));
             }
             let (lg, c, fexpr_locals) = expr!(fexpr, code, label_gen, n_args + 1)?;
+
+            // could be a closure, so let's check for the right interface
+            //   func vs (closure, frame)
+
+            let (codepoint_call, lg) = lg.next();
+
+            // check whether we're calling on a codepoint or closure tuple
+            c.push(opcode!(Dup0));
+            c.push(opcode!(Type));
+            c.push(opcode!(Equal, Value::from(1))); // 1 for codepoint
+            c.push(opcode!(Cjump, Value::Label(codepoint_call)));
+
+            // not a codepoint, let's unpack
+            c.push(opcode!(Dup0)); // return (closure, frame) (closure, frame)
+            c.push(opcode!(Tget, Value::from(1))); // return (closure, frame) frame
+            c.push(opcode!(Swap2)); // frame (closure, frame) return
+            c.push(opcode!(Swap1)); // frame return (closure, frame)
+            c.push(opcode!(Tget, Value::from(0))); // frame return closure
+
+            c.push(Instruction::from_opcode(
+                Opcode::Label(codepoint_call),
+                debug,
+            ));
             c.push(opcode!(Jump));
             c.push(Instruction::from_opcode(Opcode::Label(ret_label), debug));
             Ok((lg, c, max(num_locals, max(fexpr_locals, args_locals))))
@@ -1755,74 +1778,48 @@ fn codegen_fixed_array_mod_2<'a>(
     global_var_map: &HashMap<StringId, usize>,
     debug_info: DebugInfo,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
+    macro_rules! opcode {
+        ($opcode:ident) => {
+            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), debug_info)
+        };
+        ($opcode:ident, $immediate:expr) => {
+            Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::$opcode),
+                $immediate,
+                debug_info,
+            )
+        };
+    }
+
     if size <= 8 {
         // stack: idx tuple val
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Tset),
-            debug_info,
-        ));
+        code_in.push(opcode!(Tset));
         Ok((label_gen_in, code_in, num_locals))
     } else {
         let tuple_size = Value::Int(Uint256::from_usize(TUPLE_SIZE));
         // stack: idx tupletree val
-        code_in.push(Instruction::from_opcode_imm(
-            Opcode::AVMOpcode(AVMOpcode::Dup2),
-            tuple_size.clone(),
-            debug_info,
-        ));
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::AuxPush),
-            debug_info,
-        ));
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Dup1),
-            debug_info,
-        ));
+        code_in.push(opcode!(Dup2, tuple_size.clone()));
+        code_in.push(opcode!(AuxPush));
+        code_in.push(opcode!(Dup1));
+
         // stack: idx TUPLE_SIZE idx tupletree val; aux: tupletree
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Mod),
-            debug_info,
-        ));
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Dup0),
-            debug_info,
-        ));
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::AuxPush),
-            debug_info,
-        ));
+        code_in.push(opcode!(Mod));
+        code_in.push(opcode!(Dup0));
+        code_in.push(opcode!(AuxPush));
+
         // stack: slot idx tupletree val; aux: slot tupletree
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Swap1),
-            debug_info,
-        ));
-        code_in.push(Instruction::from_opcode_imm(
-            Opcode::AVMOpcode(AVMOpcode::Swap1),
-            tuple_size,
-            debug_info,
-        ));
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Div),
-            debug_info,
-        ));
+        code_in.push(opcode!(Swap1));
+        code_in.push(opcode!(Swap1, tuple_size));
+        code_in.push(opcode!(Div));
+
         // stack: subidx slot tupletree val; aux: slot tupletree
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Swap2),
-            debug_info,
-        ));
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Swap1),
-            debug_info,
-        ));
+        code_in.push(opcode!(Swap2));
+        code_in.push(opcode!(Swap1));
+
         // stack: slot tupletree subidx val; aux: slot tupletree
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Tget),
-            debug_info,
-        ));
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Swap1),
-            debug_info,
-        ));
+        code_in.push(opcode!(Tget));
+        code_in.push(opcode!(Swap1));
+
         // stack: subidx subtupletree val; aux: slot tupletree
 
         let (label_gen, code, inner_locals) = codegen_fixed_array_mod_2(
@@ -1839,23 +1836,12 @@ fn codegen_fixed_array_mod_2<'a>(
         )?;
 
         // stack: newsubtupletree; aux: slot tupletree
-        code.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::AuxPop),
-            debug_info,
-        ));
-        code.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::AuxPop),
-            debug_info,
-        ));
-        code.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Swap1),
-            debug_info,
-        ));
+        code.push(opcode!(AuxPop));
+        code.push(opcode!(AuxPop));
+        code.push(opcode!(Swap1));
+
         // stack: slot tupletree newsubtupletree
-        code.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Tset),
-            debug_info,
-        ));
+        code.push(opcode!(Tset));
 
         Ok((label_gen, code, max(num_locals, inner_locals)))
     }

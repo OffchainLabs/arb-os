@@ -6,6 +6,7 @@
 //! nested tuples
 
 use crate::compile::{CompileError, DebugInfo};
+use crate::console::Color;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
 use crate::uint256::Uint256;
 
@@ -44,8 +45,12 @@ pub fn fix_tuple_size(
                     code_out.push(opcode!(AuxPush)); // move return address to aux stack
                 }
                 locals_tree = TupleTree::new(space, true);
-                if let Some(_) = &insn.immediate {
-                    panic!("{} somehow has an immediate", insn.opcode);
+                if let Some(imm) = &insn.immediate {
+                    panic!(
+                        "{} somehow has an immediate {}",
+                        insn.opcode,
+                        imm.pretty_print(Color::RED)
+                    );
                 }
 
                 match prebuilt {
@@ -53,6 +58,7 @@ pub fn fix_tuple_size(
                     true => code_out.push(opcode!(AuxPush)),
                 }
 
+                // need to offset by nargs
                 for lnum in 0..nargs {
                     locals_tree.write_code(true, lnum, &mut code_out, debug_info)?;
                 }
@@ -446,7 +452,7 @@ impl TupleTree {
                 }
             }
             return Err(CompileError::new(
-                String::from("Compile error: TupleTree::write_code"),
+                String::from("Internal error in write_code:"),
                 "out-of-bounds write".to_string(),
                 debug_info.location.into_iter().collect(),
             ));
