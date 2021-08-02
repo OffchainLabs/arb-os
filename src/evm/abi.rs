@@ -230,15 +230,23 @@ impl AbiForContract {
         };
         let logs = machine.runtime_env.get_all_receipt_logs();
         let sends = machine.runtime_env.get_all_sends();
-        assert_eq!(logs.len(), num_logs_before+1);
+        assert_eq!(logs.len(), num_logs_before + 1);
         assert_eq!(sends.len(), num_sends_before);
         assert!(logs[num_logs_before].succeeded());
 
         let fee_stats = logs[num_logs_before]._get_fee_stats();
         let wei_stats = &fee_stats[2];
-        let wei_spent = wei_stats[0].add(&wei_stats[1]).add(&wei_stats[2]).add(&wei_stats[3]);
+        let wei_spent = wei_stats[0]
+            .add(&wei_stats[1])
+            .add(&wei_stats[2])
+            .add(&wei_stats[3]);
         let gas_price = &fee_stats[1][3];
-        let gas_estimate = wei_spent.add(gas_price).sub(&Uint256::one()).unwrap().div(gas_price).unwrap();
+        let gas_estimate = wei_spent
+            .add(gas_price)
+            .sub(&Uint256::one())
+            .unwrap()
+            .div(gas_price)
+            .unwrap();
 
         Ok((gas_estimate, fee_stats))
     }

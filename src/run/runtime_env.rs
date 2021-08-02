@@ -234,18 +234,8 @@ impl RuntimeEnvironment {
         Uint256::_from_gwei(200)
     }
 
-    pub fn insert_l2_message(
-        &mut self,
-        sender_addr: Uint256,
-        msg: &[u8],
-    ) -> Uint256 {
-        let default_id = self.insert_l1_message(
-            3,
-            sender_addr.clone(),
-            msg,
-            None,
-            None,
-        );
+    pub fn insert_l2_message(&mut self, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
+        let default_id = self.insert_l1_message(3, sender_addr.clone(), msg, None, None);
         if msg[0] == 0 {
             Uint256::avm_hash2(
                 &sender_addr,
@@ -260,11 +250,7 @@ impl RuntimeEnvironment {
     }
 
     #[cfg(test)]
-    pub fn insert_l2_message_for_gas_estimation(
-        &mut self,
-        sender_addr: Uint256,
-        msg: &[u8],
-    ) {
+    pub fn insert_l2_message_for_gas_estimation(&mut self, sender_addr: Uint256, msg: &[u8]) {
         let _ = self.insert_l1_message(10u8, sender_addr, msg, None, None);
     }
 
@@ -335,7 +321,7 @@ impl RuntimeEnvironment {
             value,
             Vec::from(data),
             wallet,
-            true
+            true,
         );
 
         self.insert_l2_message_for_gas_estimation(aggregator, &buf)
