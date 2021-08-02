@@ -2503,13 +2503,15 @@ fn typecheck_expr(
                                 TypeCheckedStatementKind::Let(pat, ref mut expr) => {
                                     let right = vec![TypeCheckedNode::Expression(expr)];
                                     captures.extend(find_captures(right, local.clone()));
-                                    local
-                                        .extend(pat.collect_identifiers().into_iter().map(|x| x.0));
+                                    local.extend(pat.collect_identifiers().iter().map(|x| x.0));
                                     continue;
                                 }
                                 _ => {}
                             },
                             TypeCheckedNode::Expression(expr) => match &mut expr.kind {
+                                TypeCheckedExprKind::IfLet(id, ..) => {
+                                    local.insert(*id);
+                                }
                                 TypeCheckedExprKind::LocalVariableRef(id, _tipe) => {
                                     if !local.contains(&id) {
                                         captures.insert(*id);
@@ -2527,13 +2529,41 @@ fn typecheck_expr(
                     captures
                 }
 
+                fn all_idents(
+                    mut nodes: Vec<TypeCheckedNode>, // nodes of the same scope
+                ) -> HashSet<StringId> {
+                    let mut idents = HashSet::new();
+
+                    for node in &mut nodes {
+                        match node {
+                            TypeCheckedNode::Statement(stat) => match &mut stat.kind {
+                                TypeCheckedStatementKind::Let(pat, ref mut expr) => {
+                                    let ids: Vec<_> =
+                                        pat.collect_identifiers().iter().map(|x| x.0).collect();
+                                    idents.extend(ids);
+                                }
+                                _ => {}
+                            },
+                            TypeCheckedNode::Expression(expr) => match &mut expr.kind {
+                                TypeCheckedExprKind::IfLet(id, ..) => {
+                                    idents.insert(*id);
+                                }
+                                TypeCheckedExprKind::LocalVariableRef(id, ..) => {
+                                    idents.insert(*id);
+                                }
+                                _ => {}
+                            },
+                            TypeCheckedNode::StructField(_) => {}
+                            TypeCheckedNode::Type(_) => continue,
+                        }
+                        idents.extend(all_idents(node.child_nodes()));
+                    }
+                    idents
+                }
+
                 let args: HashSet<StringId> = closure.args.iter().map(|arg| arg.name).collect();
                 let arg_count = args.len();
                 let captures = find_captures(closure.child_nodes(), args);
-
-                for id in &captures {
-                    println!("captured {}", string_table.name_from_id(*id));
-                }
 
                 // We don't yet have an AST-walker that efficiently assigns slot numbers.
                 // The plan is to soon do this: instead of determining slot assignments for
@@ -2541,9 +2571,8 @@ fn typecheck_expr(
                 // a position for each identifier. Then, ClosureLoad(), MakeFrame(), and non-closure
                 // functions in general will both cost less gas and pay down technical debt.
                 //
-                // So, for the very short term, we'll just have closures be expensive and dangerous
-                // by giving them a large amount of fixed space.
-                let frame_size = 16;
+                // So, for the very short term, we'll just take the maximum use possible.
+                let frame_size = arg_count + all_idents(closure.child_nodes()).len() + 1;
 
                 closure.frame_size = frame_size;
                 closure.captures = captures.clone();

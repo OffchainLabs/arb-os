@@ -31,7 +31,6 @@ view write func tests() -> (uint, buffer) {
 func capture_2() -> Produce {
     
     // Checks that captures work as expected
-    // Should not warn
     
     let a = 32;
     let b = (64, 128, "Closures are so cool!");
