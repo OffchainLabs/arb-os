@@ -20,6 +20,8 @@ pub enum Label {
     Anon(usize),
     External(usize), // slot in imported funcs list
     Evm(usize),      // program counter in EVM contract
+
+    Unique(usize),
 }
 
 impl Label {
@@ -30,6 +32,7 @@ impl Label {
         func_offset: usize,
     ) -> (Self, usize) {
         match self {
+            Label::Unique(_id) => (self, func_offset),
             Label::Func(sid) => (Label::Func(sid + func_offset), sid + func_offset),
             Label::Closure(sid) => (Label::Closure(sid + func_offset), sid + func_offset),
             Label::Anon(pc) => (Label::Anon(pc + int_offset), func_offset),
@@ -40,6 +43,10 @@ impl Label {
 
     pub fn avm_hash(&self) -> Value {
         match self {
+            Label::Unique(id) => Value::avm_hash2(
+                &Value::Int(Uint256::from_usize(4)),
+                &Value::Int(Uint256::from_usize(*id)),
+            ),
             Label::Func(sid) | Label::Closure(sid) => Value::avm_hash2(
                 &Value::Int(Uint256::from_usize(4)),
                 &Value::Int(Uint256::from_usize(*sid)),
@@ -62,6 +69,7 @@ impl Label {
 impl fmt::Display for Label {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Label::Unique(id) => write!(f, "unique_{}", id),
             Label::Func(sid) => write!(f, "function_{}", sid),
             Label::Closure(sid) => write!(f, "closure_{}", sid),
             Label::Anon(n) => write!(f, "label_{}", n),
@@ -139,17 +147,6 @@ impl<T> Instruction<T> {
                 self.debug_info,
             )),
             None => Ok(self),
-        }
-    }
-
-    pub fn xlate_labels(self, xlate_map: &HashMap<Label, &Label>) -> Self {
-        match self.immediate {
-            Some(val) => Instruction::from_opcode_imm(
-                self.opcode,
-                val.xlate_labels(xlate_map),
-                self.debug_info,
-            ),
-            None => self,
         }
     }
 }
@@ -797,25 +794,8 @@ impl Value {
             }
         }
     }
-
-    pub fn xlate_labels(self, label_map: &HashMap<Label, &Label>) -> Self {
-        match self {
-            Value::Int(_) | Value::CodePoint(_) | Value::Buffer(_) => self,
-            Value::Tuple(v) => {
-                let mut newv = Vec::new();
-                for val in &*v {
-                    newv.push(val.clone().xlate_labels(label_map));
-                }
-                Value::new_tuple(newv)
-            }
-            Value::Label(label) => match label_map.get(&label) {
-                Some(label2) => Value::Label(**label2),
-                None => self,
-            },
-        }
-    }
-
-    ///Converts `Value` to usize if possible, otherwise returns `None`.
+    
+    /// Converts `Value` to usize if possible, otherwise returns `None`.
     pub fn to_usize(&self) -> Option<usize> {
         match self {
             Value::Int(i) => i.to_usize(),

@@ -6,7 +6,7 @@
 
 use crate::console::Color;
 use crate::link::{link, postlink_compile, ExportedFunc, Import, ImportedFunc, LinkedProgram};
-use crate::mavm::Instruction;
+use crate::mavm::{Instruction, LabelGenerator};
 use crate::pos::{BytePos, Location};
 use crate::stringtable::{StringId, StringTable};
 use ast::Func;
@@ -38,7 +38,7 @@ mod source;
 mod typecheck;
 lalrpop_mod!(mini);
 
-///Command line options for compile subcommand.
+/// Command line options for compile subcommand.
 #[derive(Clap, Debug, Default)]
 pub struct CompileStruct {
     pub input: Vec<String>,
@@ -82,7 +82,7 @@ impl FromStr for InliningHeuristic {
     }
 }
 
-///Represents the contents of a source file after parsing.
+/// Represents the contents of a source file after parsing.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Module {
     //TODO: Remove this field
@@ -110,7 +110,7 @@ struct Module {
     name: String,
 }
 
-///Represents the contents of a source file after type checking is done.
+/// Represents the contents of a source file after type checking is done.
 #[derive(Clone, Debug)]
 struct TypeCheckedModule {
     /// Collection of functions defined locally within the source file that have been validated by
@@ -181,7 +181,7 @@ impl CompileStruct {
                 compiled_progs.push(prog)
             });
         }
-        let linked_prog = match link(&compiled_progs, self.test_mode, &mut error_system) {
+        let linked_prog = match link(&compiled_progs, self.test_mode) {
             Ok(idk) => idk,
             Err(err) => {
                 error_system.errors.push(err);
@@ -190,7 +190,7 @@ impl CompileStruct {
             }
         };
 
-        //If this condition is true it means that __fixedLocationGlobal will not be at
+        // If this condition is true it means that __fixedLocationGlobal will not be at
         // index [0], but rather [0][0] or [0][0][0] etc
         if linked_prog.globals.len() >= 58 {
             panic!("Too many globals defined in program, location of first global is not correct")
@@ -282,7 +282,8 @@ impl TypeCheckedModule {
             name,
         }
     }
-    ///Inlines functions in the AST by replacing function calls with `CodeBlock` expressions where
+
+    /// Inlines functions in the AST by replacing function calls with `CodeBlock` expressions where
     /// appropriate
     fn inline(&mut self, heuristic: &InliningHeuristic) {
         let mut new_funcs = self.checked_funcs.clone();
@@ -296,14 +297,16 @@ impl TypeCheckedModule {
         }
         self.checked_funcs = new_funcs;
     }
-    ///Propagates inherited attributes down top-level decls.
+
+    /// Propagates inherited attributes down top-level decls.
     fn propagate_attributes(&mut self) {
         for (_id, func) in &mut self.checked_funcs {
             let attributes = func.debug_info.attributes.clone();
             TypeCheckedNode::propagate_attributes(func.child_nodes(), &attributes);
         }
     }
-    ///Creates callgraph that associates module functions to those that they call
+
+    /// Creates callgraph that associates module functions to those that they call
     fn build_callgraph(
         &mut self,
     ) -> BTreeMap<StringId, (Vec<(StringId, Option<Import>)>, Location)> {
@@ -331,12 +334,13 @@ impl TypeCheckedModule {
                 }
             }
 
-            call_graph.insert(func.name, (calls, func.debug_info.location.unwrap()));
+            call_graph.insert(func.id, (calls, func.debug_info.location.unwrap()));
         }
 
         call_graph
     }
-    ///Reasons about control flow and construct usage within the typechecked AST
+
+    /// Reasons about control flow and construct usage within the typechecked AST
     fn flowcheck(&mut self, error_system: &mut ErrorSystem) {
         let mut flow_warnings = vec![];
 
@@ -409,23 +413,23 @@ impl TypeCheckedModule {
     }
 }
 
-///Represents a mini program or module that has been compiled and possibly linked, but has not had
+/// Represents a mini program or module that has been compiled and possibly linked, but has not had
 /// post-link compilation steps applied. Is directly serialized to and from .mao files.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CompiledProgram {
-    ///Instructions to be run to execute the program/module
+    /// Instructions to be run to execute the program/module
     pub code: Vec<Instruction>,
-    ///The list of exported functions exported through the old import/export system
+    /// The list of exported functions exported through the old import/export system
     pub exported_funcs: Vec<ExportedFunc>,
-    ///The list of imported functions imported through the old import/export system
+    /// The list of imported functions imported through the old import/export system
     pub imported_funcs: Vec<ImportedFunc>,
-    ///Highest ID used for any global in this program, used for linking
+    /// Highest ID used for any global in this program, used for linking
     pub globals: Vec<GlobalVarDecl>,
-    ///Contains list of offsets of the various modules contained in this program
+    /// Contains list of offsets of the various modules contained in this program
     pub source_file_map: Option<SourceFileMap>,
-    ///Map from u64 hashes of file names to the `String`s, `Path`s, and `Content`s they originate from
+    /// Map from u64 hashes of file names to the `String`s, `Path`s, and `Content`s they originate from
     pub file_info_chart: HashMap<u64, FileInfo>,
-    ///Tree of the types
+    /// Tree of the types
     pub type_tree: TypeTree,
 }
 
@@ -450,7 +454,7 @@ impl CompiledProgram {
         }
     }
 
-    ///Takes self by value and returns a tuple. The first value in the tuple is modified version of
+    /// Takes self by value and returns a tuple. The first value in the tuple is modified version of
     /// self with internal code references shifted forward by int_offset instructions, external code
     /// references offset by ext_offset instructions, function references shifted forward by
     /// func_offset, num_globals modified assuming the first *globals_offset* slots are occupied,
@@ -510,7 +514,7 @@ impl CompiledProgram {
         )
     }
 
-    ///Writes self to output in format "format".  Supported values are: "pretty", "json", or
+    /// Writes self to output in format "format".  Supported values are: "pretty", "json", or
     /// "bincode" if None is specified, json is used, and if an invalid format is specified this
     /// value appended by "invalid format: " will be written instead
     pub fn _to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
@@ -547,7 +551,7 @@ impl CompiledProgram {
     }
 }
 
-///Returns either a CompiledProgram generated from source code at path, otherwise returns a
+/// Returns either a CompiledProgram generated from source code at path, otherwise returns a
 /// CompileError.
 ///
 /// The file_id specified will be used as the file_id in locations originating from this source
@@ -625,7 +629,7 @@ pub fn compile_from_file(
     }
 }
 
-///Prints the AST nodes with indentation representing their depth, currently not used.
+/// Prints the AST nodes with indentation representing their depth, currently not used.
 fn _print_node(node: &mut TypeCheckedNode, state: &String, mut_state: &mut usize) -> bool {
     for _ in 0..*mut_state {
         print!("{}", state);
@@ -635,14 +639,14 @@ fn _print_node(node: &mut TypeCheckedNode, state: &String, mut_state: &mut usize
     true
 }
 
-///Compiles a `Vec<CompiledProgram>` from a folder or generates a `CompileError` if a problem is
-///encountered during compilation.
+/// Compiles a `Vec<CompiledProgram>` from a folder or generates a `CompileError` if a problem is
+/// encountered during compilation.
 ///
-///The `folder` argument gives the path to the folder, `library` optionally contains a library
-///prefix attached to the front of all paths, `main` contains the name of the main file in the
-///folder, `file_info_chart` contains a map from the `u64` hashes of file names to the `FileInfo`
-///they represent, useful for formatting errors, and `inline` determines whether inlining is used
-///when compiling this folder.
+/// The `folder` argument gives the path to the folder, `library` optionally contains a library
+/// prefix attached to the front of all paths, `main` contains the name of the main file in the
+/// folder, `file_info_chart` contains a map from the `u64` hashes of file names to the `FileInfo`
+/// they represent, useful for formatting errors, and `inline` determines whether inlining is used
+/// when compiling this folder.
 pub fn compile_from_folder(
     folder: &Path,
     library: Option<&str>,
@@ -655,7 +659,7 @@ pub fn compile_from_folder(
     release_build: bool,
     builtins: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
-    let (mut programs, import_map) = create_program_tree(
+    let (mut programs, mut import_map) = create_program_tree(
         folder,
         library,
         main,
@@ -665,7 +669,7 @@ pub fn compile_from_folder(
         builtins,
     )?;
 
-    resolve_imports(&mut programs, &import_map, error_system)?;
+    resolve_imports(&mut programs, &mut import_map, error_system)?;
 
     //Conversion of programs from `HashMap` to `Vec` for typechecking
     let type_tree = create_type_tree(&programs);
@@ -703,10 +707,45 @@ pub fn compile_from_folder(
             .for_each(|module| module.inline(cool));
     }
 
+    let mut funcs = HashMap::new();
+
     for module in &mut typechecked_modules {
         module.propagate_attributes();
-    }
 
+        let imports: HashMap<_, _> = module
+            .imports
+            .iter()
+            .map(|imp| (imp.id.unwrap_or_default(), imp.clone()))
+            .collect();
+
+        for (_, func) in &mut module.checked_funcs {
+            let unique_id = Import::unique_id(&module.path, &func.name);
+            func.unique_id = Some(unique_id);
+            func.imports = imports.clone();
+            funcs.insert(unique_id, func.clone());
+        }
+    }
+    
+    /*let mut mavm_funcs = vec![];
+    
+    for module in &mut typechecked_modules {
+        
+        for (_, func) in &mut module.checked_funcs {
+            
+            let mavm_func = codegen::mavm_codegen_func(
+                func.clone(),
+                LabelGenerator::new(),
+                &module.string_table,
+                &HashMap::new(),
+                &HashMap::new(),
+                file_info_chart,
+                error_system,
+                release_build,
+            )?;
+            mavm_funcs.push(mavm_func);
+        }
+    }*/
+    
     let progs = codegen_programs(
         typechecked_modules,
         file_info_chart,
@@ -718,7 +757,7 @@ pub fn compile_from_folder(
     Ok(progs)
 }
 
-///Converts the `Vec<String>` used to identify a path into a single formatted string
+/// Converts the `Vec<String>` used to identify a path into a single formatted string
 fn path_display(path: &Vec<String>) -> String {
     let mut s = "".to_string();
     if let Some(first) = path.get(0) {
@@ -731,7 +770,7 @@ fn path_display(path: &Vec<String>) -> String {
     s
 }
 
-///Parsing stage of the compiler, creates a `HashMap` containing a list of modules and imports
+/// Parsing stage of the compiler, creates a `HashMap` containing a list of modules and imports
 /// generated by interpreting the contents of `folder` as source code. Returns a `CompileError` if
 /// the contents of `folder` fail to parse.
 fn create_program_tree(
@@ -816,6 +855,7 @@ fn create_program_tree(
                     error_system,
                 )?,
                 path.clone(),
+                &mut string_table,
                 builtins,
             );
         paths.append(&mut imports.iter().map(|imp| imp.path.clone()).collect());
@@ -842,21 +882,21 @@ fn create_program_tree(
 
 fn resolve_imports(
     programs: &mut HashMap<Vec<String>, Module>,
-    import_map: &HashMap<Vec<String>, Vec<Import>>,
+    import_map: &mut HashMap<Vec<String>, Vec<Import>>,
     error_system: &mut ErrorSystem,
 ) -> Result<(), CompileError> {
     for (name, imports) in import_map {
         for import in imports {
             let import_path = import.path.clone();
             let (named_type, imp_func) = if let Some(program) = programs.get_mut(&import_path) {
-                //Looks up info from target program
-                let index = program.string_table.get(import.name.clone());
+                // Looks up info from target program
+                let index = program.string_table.get_if_exists(&import.name.clone()).unwrap();
                 let named_type = program.named_types.get(&index).cloned();
                 let imp_func = program.func_table.get(&index).cloned();
                 (named_type, imp_func)
             } else {
                 return Err(CompileError::new(
-                    String::from("Compile error: Internal error"),
+                    String::from("Internal error"),
                     format!(
                         "Can not find target file for import \"{}::{}\"",
                         import.path.get(0).cloned().unwrap_or_else(String::new),
@@ -865,28 +905,39 @@ fn resolve_imports(
                     import.location.into_iter().collect(),
                 ));
             };
-            //Modifies origin program to include import
+            
+            // Modifies origin program to include import
             let origin_program = programs.get_mut(name).ok_or_else(|| {
                 CompileError::new(
-                    String::from("Compile error: Internal error"),
+                    String::from("Internal error"),
                     format!(
-                        "Can not find originating file for import \"{}::{}\"",
-                        import.path.get(0).cloned().unwrap_or_else(String::new),
-                        import.name
+                        "Can not find originating file for import {}::{}",
+                        Color::red(import.path.get(0).map(String::as_str).unwrap_or_default()),
+                        Color::red(&import.name)
                     ),
                     import.location.into_iter().collect(),
                 )
             })?;
-            let index = origin_program.string_table.get(import.name.clone());
+            
+            let string_id = match origin_program.string_table.get_if_exists(&import.name) {
+                Some(string_id) => string_id,
+                None => return Err(CompileError::new(
+                    format!("Internal error"),
+                    format!("Import {} has no string id", import.name),
+                    import.loc()
+                )),
+            };
+            
             if let Some(named_type) = named_type {
-                origin_program.named_types.insert(index, named_type.clone());
+                origin_program.named_types.insert(string_id, named_type.clone());
             } else if let Some(imp_func) = imp_func {
-                origin_program.func_table.insert(index, imp_func.clone());
+                origin_program.func_table.insert(string_id, imp_func.clone());
                 origin_program.imported_funcs.push(ImportedFunc::new(
                     origin_program.imported_funcs.len(),
-                    index,
+                    string_id,
                     &origin_program.string_table,
                 ));
+                
             } else {
                 error_system.warnings.push(CompileError::new_warning(
                     String::from("Compile warning"),
@@ -903,7 +954,7 @@ fn resolve_imports(
     Ok(())
 }
 
-///Constructor for `TypeTree`
+/// Constructor for `TypeTree`
 fn create_type_tree(program_tree: &HashMap<Vec<String>, Module>) -> TypeTree {
     program_tree
         .iter()
@@ -1073,7 +1124,7 @@ fn check_global_constants(
     }
 }
 
-///Walks the program callgraph function by function across module boundries,
+/// Walks the program callgraph function by function across module boundries,
 /// deleting edges in each module's callgraph along the way to eliminate all reachable functions
 fn callgraph_descend(
     func: StringId,
@@ -1116,7 +1167,7 @@ fn callgraph_descend(
     }
 }
 
-///Walks the callgraph, pruning and/or warning on any unused functions
+/// Walks the callgraph, pruning and/or warning on any unused functions
 fn consume_program_callgraph(
     mut program_callgraph: HashMap<
         Vec<String>,
@@ -1164,12 +1215,7 @@ fn consume_program_callgraph(
             if !func_name.starts_with('_') {
                 error_system.warnings.push(CompileError::new_warning(
                     String::from("Compile warning"),
-                    format!(
-                        "func {}{}{} is unreachable",
-                        error_system.warn_color,
-                        func_name,
-                        CompileError::RESET,
-                    ),
+                    format!("func {} is unreachable", Color::color(error_system.warn_color, func_name)),
                     vec![data.1],
                 ));
             }
@@ -1209,14 +1255,7 @@ fn codegen_programs(
             file_info_chart,
             error_system,
             release_build,
-        )
-        .map_err(|e| {
-            CompileError::new(
-                String::from("Codegen error"),
-                e.reason.to_string(),
-                e.location.into_iter().collect(),
-            )
-        })?;
+        )?;
         progs.push(CompiledProgram::new(
             code_out.to_vec(),
             exported_funcs,
@@ -1246,7 +1285,7 @@ pub fn comma_list(input: &[String]) -> String {
     base
 }
 
-///Converts source string `source` into a series of `TopLevelDecl`s, uses identifiers from
+/// Converts source string `source` into a series of `TopLevelDecl`s, uses identifiers from
 /// `string_table` and records new ones in it as well. The `file_id` argument is used to construct
 /// file information for the location fields.
 pub fn parse_from_source(
@@ -1333,16 +1372,16 @@ pub fn parse_from_source(
     Ok((parsed, closures))
 }
 
-///Represents any error encountered during compilation.
+/// Represents any error encountered during compilation.
 #[derive(Debug, Clone)]
 pub struct CompileError {
-    ///The error title
+    /// The error title
     pub title: String,
-    ///What the error is.
+    /// What the error is.
     pub description: String,
-    ///Where the error happened.
+    /// Where the error happened.
     pub locations: Vec<Location>,
-    ///Whether the error should not stop compilation
+    /// Whether the error should not stop compilation
     pub is_warning: bool,
 }
 
@@ -1376,6 +1415,15 @@ impl CompileError {
             title: String::from("Typecheck Error"),
             description,
             locations,
+            is_warning: false,
+        }
+    }
+    
+    pub fn new_codegen_error(description: String, location: Option<Location>) -> Self {
+        CompileError {
+            title: String::from("Codegen Error"),
+            description,
+            locations: location.into_iter().collect(),
             is_warning: false,
         }
     }
@@ -1492,7 +1540,7 @@ impl ErrorSystem {
     }
 }
 
-///Lists the offset of each source file contained by a CompiledProgram in offsets, and the
+/// Lists the offset of each source file contained by a CompiledProgram in offsets, and the
 /// instruction directly following the last in the CompiledProgram.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SourceFileMap {
@@ -1515,13 +1563,13 @@ impl SourceFileMap {
         }
     }
 
-    ///Adds a new source file to self with offset at current end
+    /// Adds a new source file to self with offset at current end
     pub fn push(&mut self, size: usize, filepath: String) {
         self.offsets.push((self.end, filepath));
         self.end += size;
     }
 
-    ///Panics if offset is past the end of the SourceFileMap
+    /// Panics if offset is past the end of the SourceFileMap
     pub fn get(&self, offset: usize) -> String {
         for i in 0..(self.offsets.len() - 1) {
             if offset < self.offsets[i + 1].0 {
@@ -1535,7 +1583,7 @@ impl SourceFileMap {
     }
 }
 
-///Lists the offset of each source file contained by a CompiledProgram in offsets, and the
+/// Lists the offset of each source file contained by a CompiledProgram in offsets, and the
 /// instruction directly following the last in the CompiledProgram.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(transparent)]

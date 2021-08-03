@@ -1334,7 +1334,8 @@ pub enum FuncDeclKind {
 /// assumed to be derived from tipe, and this must be upheld by the user of this type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Func<T = Statement> {
-    pub name: StringId,
+    pub name: String,
+    pub id: StringId,
     pub args: Vec<FuncArg>,
     pub ret_type: Type,
     pub code: Vec<T>,
@@ -1342,13 +1343,16 @@ pub struct Func<T = Statement> {
     pub kind: FuncDeclKind,
     pub captures: BTreeSet<StringId>,
     pub frame_size: usize,
+    pub unique_id: Option<usize>,
+    pub imports: HashMap<StringId, Import>,
     pub properties: FuncProperties,
     pub debug_info: DebugInfo,
 }
 
 impl Func {
     pub fn new(
-        name: StringId,
+        name: String,
+        id: StringId,
         exported: bool,
         view: bool,
         write: bool,
@@ -1369,17 +1373,19 @@ impl Func {
         let ret_type = ret_type.unwrap_or(Type::Void);
         Func {
             name,
+            id,
             args: args_vec,
             ret_type: ret_type.clone(),
             code,
             tipe: Type::Func(prop, arg_types, Box::new(ret_type)),
-            kind: if exported {
-                FuncDeclKind::Public
-            } else {
-                FuncDeclKind::Private
+            kind: match exported {
+                true => FuncDeclKind::Public,
+                false => FuncDeclKind::Private,
             },
             captures,
             frame_size,
+            unique_id: None,
+            imports: HashMap::new(),
             properties: prop,
             debug_info,
         }

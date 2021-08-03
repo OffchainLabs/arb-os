@@ -22,25 +22,14 @@ use crate::uint256::Uint256;
 use std::collections::{BTreeMap, HashSet};
 use std::{cmp::max, collections::HashMap};
 
-///Represents any encountered during codegen
-#[derive(Debug)]
-pub struct CodegenError {
-    pub reason: String,
-    pub location: Option<Location>,
-}
-
-pub fn new_codegen_error(reason: String, location: Option<Location>) -> CodegenError {
-    CodegenError { reason, location }
-}
-
-///Top level function for code generation, generates code for modules.
+/// Top level function for code generation, generates code for modules.
 ///
-///In this function, funcs represents a list of functions in scope, string_table is used to get
+/// In this function, funcs represents a list of functions in scope, string_table is used to get
 /// builtins, imported_funcs is a list of functions imported from other modules, and global_vars
 /// lists the globals available in the module.
 ///
 /// The function returns a vector of instructions representing the generated code if it is
-/// successful, otherwise it returns a CodegenError.
+/// successful, otherwise it returns a `CompileError`.
 pub fn mavm_codegen(
     funcs: BTreeMap<StringId, TypeCheckedFunc>,
     string_table: &StringTable,
@@ -49,7 +38,7 @@ pub fn mavm_codegen(
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     error_system: &mut ErrorSystem,
     release_build: bool,
-) -> Result<Vec<Instruction>, CodegenError> {
+) -> Result<Vec<Instruction>, CompileError> {
     let mut import_func_map = HashMap::new();
     for imp_func in imported_funcs {
         import_func_map.insert(imp_func.name_id, Label::External(imp_func.slot_num));
@@ -63,7 +52,8 @@ pub fn mavm_codegen(
     let mut label_gen = LabelGenerator::new();
     let mut funcs_code = BTreeMap::new();
     for (_id, func) in funcs {
-        let id = func.name;
+        let id = func.id;
+        let import_func_map = func.imports.iter().map(|(id, imp)| (*id, Label::Unique(imp.unique_id))).collect();
         let (lg, function_code) = mavm_codegen_func(
             func,
             label_gen,
@@ -92,8 +82,8 @@ pub fn mavm_codegen(
 /// module.
 ///
 /// If successful the function returns a tuple containing the state of the label generator after
-/// codegen, and a vector of the generated code, otherwise it returns a CodegenError.
-fn mavm_codegen_func(
+/// codegen, and a vector of the generated code, otherwise it returns a `CompileError`.
+pub fn mavm_codegen_func(
     mut func: TypeCheckedFunc,
     label_gen: LabelGenerator,
     string_table: &StringTable,
@@ -102,7 +92,7 @@ fn mavm_codegen_func(
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     error_system: &mut ErrorSystem,
     release_build: bool,
-) -> Result<(LabelGenerator, Vec<Instruction>), CodegenError> {
+) -> Result<(LabelGenerator, Vec<Instruction>), CompileError> {
     if func.ret_type == Type::Void
         && func.code.last().cloned().map(|s| s.kind) != Some(TypeCheckedStatementKind::ReturnVoid())
     {
@@ -119,9 +109,21 @@ fn mavm_codegen_func(
     let debug_info = func.debug_info;
     code.push(Instruction::from_opcode(
         match func.properties.closure {
-            true => Opcode::Label(Label::Closure(func.name)),
-            false => Opcode::Label(Label::Func(func.name)),
+            true => Opcode::Label(Label::Closure(func.id)),
+            false => Opcode::Label(Label::Func(func.id)),
         },
+        debug_info,
+    ));
+    code.push(Instruction::from_opcode(
+        Opcode::Label(Label::Unique(
+            match func.unique_id {
+                Some(id) => id,
+                None => return Err(CompileError::new_codegen_error(
+                    format!("Func {} has no id", Color::red(&func.name)),
+                    func.debug_info.location
+                )),
+            }
+        )),
         debug_info,
     ));
 
@@ -175,7 +177,7 @@ fn mavm_codegen_func(
             );
         }
         wrong => {
-            return Err(new_codegen_error(
+            return Err(CompileError::new_codegen_error(
                 format!(
                     "type checking bug: func with non-func type {}",
                     Color::red(wrong.display())
@@ -203,7 +205,7 @@ fn mavm_codegen_code_block<'a>(
     error_system: &mut ErrorSystem,
     debug_info: DebugInfo,
     release_build: bool,
-) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
+) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CompileError> {
     let (bottom_label, lg) = label_gen.next();
     scopes.push((
         block.scope.clone().unwrap_or("_".to_string()),
@@ -268,7 +270,7 @@ fn mavm_codegen_code_block<'a>(
 /// If successful the function returns a tuple containing the updated label generator, maximum
 /// number of locals used so far by this call frame, a bool that is set to true when the function
 /// may continue past the end of the generated code, and a map of locals available at the end of the
-/// statement sequence, otherwise the function returns a CodegenError.
+/// statement sequence, otherwise the function returns a `CompileError`.
 fn mavm_codegen_statements(
     statements: Vec<TypeCheckedStatement>, // statements to codegen
     code: &mut Vec<Instruction>,           // accumulates the code as it's generated
@@ -283,7 +285,7 @@ fn mavm_codegen_statements(
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     error_system: &mut ErrorSystem,
     release_build: bool,
-) -> Result<(LabelGenerator, usize, HashMap<StringId, usize>), CodegenError> {
+) -> Result<(LabelGenerator, usize, HashMap<StringId, usize>), CompileError> {
     let mut bindings = HashMap::new();
     for statement in statements {
         let mut new_locals = locals.clone();
@@ -321,7 +323,7 @@ fn mavm_codegen_statements(
 /// If successful the function returns a tuple containing the updated label generator, number of
 /// locals slots used by this statement, a bool that is set to true if execution can not continue
 /// past this statement, and a map of locals generated by this statement, otherwise the function
-/// returns a CodegenError.
+/// returns a `CompileError`.
 fn mavm_codegen_statement(
     statement: TypeCheckedStatement, // statement to codegen
     mut code: &mut Vec<Instruction>, // accumulates the code as it's generated
@@ -336,7 +338,7 @@ fn mavm_codegen_statement(
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     error_system: &mut ErrorSystem,
     release_build: bool,
-) -> Result<(LabelGenerator, usize, HashMap<StringId, usize>), CodegenError> {
+) -> Result<(LabelGenerator, usize, HashMap<StringId, usize>), CompileError> {
     let debug = statement.debug_info;
     let loc = statement.debug_info.location;
     match &statement.kind {
@@ -386,7 +388,7 @@ fn mavm_codegen_statement(
                 .rev()
                 .find(|(s, _, _)| scope_id == s)
                 .ok_or_else(|| {
-                    new_codegen_error(format!("could not find scope {}", scope_id), loc)
+                    CompileError::new_codegen_error(format!("could not find scope {}", scope_id), loc)
                 })?;
             if let Some(tipe) = t {
                 if *tipe
@@ -508,7 +510,7 @@ fn mavm_codegen_statement(
             let slot_num = match locals.get(name) {
                 Some(slot) => slot,
                 None => {
-                    return Err(new_codegen_error(
+                    return Err(CompileError::new_codegen_error(
                         "assigned to non-existent variable".to_string(),
                         loc,
                     ))
@@ -739,7 +741,7 @@ fn mavm_codegen_tuple_pattern(
     global_var_map: &HashMap<StringId, usize>,
     string_table: &StringTable,
     debug_info: DebugInfo,
-) -> Result<(usize, HashMap<usize, usize>, HashSet<usize>), CodegenError> {
+) -> Result<(usize, HashMap<usize, usize>, HashSet<usize>), CompileError> {
     match &pattern.kind {
         MatchPatternKind::Bind(name) => {
             let mut bindings = HashMap::new();
@@ -761,7 +763,7 @@ fn mavm_codegen_tuple_pattern(
             } else {
                 code.push(Instruction::from_opcode(
                     Opcode::SetGlobalVar(*global_var_map.get(id).ok_or_else(|| {
-                        new_codegen_error(
+                        CompileError::new_codegen_error(
                             "assigned to non-existent variable in mixed let".to_string(),
                             debug_info.location,
                         )
@@ -803,7 +805,7 @@ fn mavm_codegen_tuple_pattern(
                 bindings.extend(new_bindings);
                 for name in new_assignments {
                     if !assignments.insert(name) {
-                        return Err(new_codegen_error(
+                        return Err(CompileError::new_codegen_error(
                             format!(
                                 "assigned to variable {} in mixed let multiple times",
                                 string_table.name_from_id(name)
@@ -829,7 +831,7 @@ fn mavm_codegen_tuple_pattern(
 ///
 /// If successful this function returns a tuple containing the updated label_gen, a mutable
 /// reference to the generated code, and a usize containing the number of locals used by the
-/// expression, otherwise it returns a CodegenError.
+/// expression, otherwise it returns a `CompileError`.
 fn mavm_codegen_expr<'a>(
     expr: &TypeCheckedExpr,
     mut code: &'a mut Vec<Instruction>,
@@ -844,7 +846,7 @@ fn mavm_codegen_expr<'a>(
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     error_system: &mut ErrorSystem,
     release_build: bool,
-) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
+) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CompileError> {
     macro_rules! expr {
         ($expr:expr) => {
             expr!($expr, code, label_gen, 0)
@@ -925,7 +927,7 @@ fn mavm_codegen_expr<'a>(
                         .exp(&Uint256::from_usize(160))
                         .sub(&Uint256::one())
                         .ok_or_else(|| {
-                            new_codegen_error("Underflow on subtraction".to_string(), loc)
+                            CompileError::new_codegen_error("Underflow on subtraction".to_string(), loc)
                         })?;
                     (
                         Some(Opcode::AVMOpcode(AVMOpcode::BitwiseAnd)),
@@ -1048,7 +1050,7 @@ fn mavm_codegen_expr<'a>(
             }
             None => {
                 println!("local: {:?}", *name);
-                Err(new_codegen_error(
+                Err(CompileError::new_codegen_error(
                     "tried to access non-existent local variable".to_string(),
                     loc,
                 ))
@@ -1098,7 +1100,7 @@ fn mavm_codegen_expr<'a>(
                             debug,
                         )),
                         None => {
-                            return Err(new_codegen_error("capture doesn't exist".to_string(), loc))
+                            return Err(CompileError::new_codegen_error("capture doesn't exist".to_string(), loc))
                         }
                     }
                 }
@@ -1129,6 +1131,7 @@ fn mavm_codegen_expr<'a>(
             Ok((label_gen, code, num_locals))
         }
         TypeCheckedExprKind::FuncRef(name, _) => {
+            
             let the_label = match import_func_map.get(name) {
                 Some(label) => *label,
                 None => Label::Func(*name),
@@ -1141,7 +1144,7 @@ fn mavm_codegen_expr<'a>(
             let tuple_size = if let Type::Tuple(fields) = tce_type {
                 fields.len()
             } else {
-                return Err(new_codegen_error(
+                return Err(CompileError::new_codegen_error(
                     format!(
                         "type-checking bug: tuple lookup in non-tuple type {}",
                         Color::red(tce_type.display())
@@ -1325,19 +1328,19 @@ fn mavm_codegen_expr<'a>(
             let (default_val, _is_safe) = base_type.default_value();
             let the_expr = TypeCheckedExpr {
                 kind: TypeCheckedExprKind::FunctionCall(
-                    Box::new(TypeCheckedExpr {
-                        kind: TypeCheckedExprKind::FuncRef(
+                    Box::new(TypeCheckedExpr::new(
+                        TypeCheckedExprKind::FuncRef(
                             string_table.get_if_exists("builtin_arrayNew").unwrap(),
                             call_type.clone(),
                         ),
-                        debug_info: DebugInfo::from(loc),
-                    }),
+                        DebugInfo::from(loc)
+                    )),
                     vec![
                         *sz_expr.clone(),
-                        TypeCheckedExpr {
-                            kind: TypeCheckedExprKind::Const(default_val, Type::Any),
-                            debug_info: DebugInfo::from(loc),
-                        },
+                        TypeCheckedExpr::new(
+                            TypeCheckedExprKind::Const(default_val, Type::Any),
+                            DebugInfo::from(loc),
+                        ),
                     ],
                     call_type,
                     FuncProperties::pure(),
@@ -1676,7 +1679,7 @@ fn codegen_fixed_array_mod<'a>(
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     error_system: &mut ErrorSystem,
     release_build: bool,
-) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
+) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CompileError> {
     let (label_gen, code, val_locals) = mavm_codegen_expr(
         val_expr,
         code_in,
@@ -1777,7 +1780,7 @@ fn codegen_fixed_array_mod_2<'a>(
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
     debug_info: DebugInfo,
-) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
+) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CompileError> {
     macro_rules! opcode {
         ($opcode:ident) => {
             Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), debug_info)
