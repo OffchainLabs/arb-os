@@ -174,9 +174,9 @@ impl CompileStruct {
                 compiled_progs.push(prog)
             });
         }
-        
+
         let linked_prog = link(&compiled_progs, self.test_mode);
-        
+
         // If this condition is true it means that __fixedLocationGlobal will not be at
         // index [0], but rather [0][0] or [0][0][0] etc
         if linked_prog.globals.len() >= 58 {
@@ -464,7 +464,7 @@ impl CompiledProgram {
                 self.file_info_chart,
                 self.type_tree,
             ),
-            max_func_offset
+            max_func_offset,
         )
     }
 
@@ -1464,17 +1464,17 @@ impl CompileError {
     }
 }
 
-///A collection of all compiler warnings encountered and the mechanism to handle them.
+/// A collection of all compiler warnings encountered and the mechanism to handle them.
 pub struct ErrorSystem {
-    ///All compilation errors
+    /// All compilation errors
     pub errors: Vec<CompileError>,
-    ///All compilation warnings
+    /// All compilation warnings
     pub warnings: Vec<CompileError>,
-    ///Whether these should halt compilation
+    /// Whether these should halt compilation
     pub warnings_are_errors: bool,
-    ///The color to use when highlighting parts of the body text
+    /// The color to use when highlighting parts of the body text
     pub warn_color: &'static str,
-    ///File information that helps the error system pretty-print errors and warnings
+    /// File information that helps the error system pretty-print errors and warnings
     pub file_info_chart: BTreeMap<u64, FileInfo>,
 }
 

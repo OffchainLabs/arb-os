@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-//!Contains types and utilities for constructing the mini AST
+//! Contains types and utilities for constructing the mini AST
 
 use crate::compile::typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNode};
 use crate::compile::{path_display, CompileError, Lines};
@@ -18,7 +18,7 @@ use std::fmt;
 use std::fmt::Formatter;
 
 /// This is a map of the types at a given location, with the Vec<String> representing the module path
-/// and the usize representing the stringID of the type at that location.
+/// and the usize representing the `StringId` of the type at that location.
 pub type TypeTree = HashMap<(Vec<String>, usize), (Type, String)>;
 
 /// Debugging info serialized into mini executables, currently only contains a location.

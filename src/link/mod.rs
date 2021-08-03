@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-//!Provides types and utilities for linking together compiled mini programs
+//! Provides types and utilities for linking together compiled mini programs
 
 use crate::compile::{
     comma_list, CompileError, CompiledProgram, DebugInfo, ErrorSystem, FileInfo, GlobalVarDecl,
@@ -55,7 +55,7 @@ impl SerializableTypeTree {
     }
 }
 
-///Represents a mini program that has gone through the post-link compilation step.
+/// Represents a mini program that has gone through the post-link compilation step.
 ///
 /// This is typically constructed via the `postlink_compile` function.
 #[derive(Serialize, Deserialize)]
@@ -71,7 +71,7 @@ pub struct LinkedProgram {
 }
 
 impl LinkedProgram {
-    ///Serializes self to the format specified by the format argument, with a default of json for
+    /// Serializes self to the format specified by the format argument, with a default of json for
     /// None. The output is written to a dynamically dispatched implementor of `std::io::Write`,
     /// specified by the output argument.
     pub fn to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
@@ -233,10 +233,8 @@ pub fn postlink_compile(
             }
         }
     }
-    let (code_2, jump_table) = striplabels::fix_nonforward_labels(
-        &program.code,
-        program.globals.len() - 1,
-    );
+    let (code_2, jump_table) =
+        striplabels::fix_nonforward_labels(&program.code, program.globals.len() - 1);
     consider_debug_printing(&code_2, did_print, "after fix_backward_labels");
 
     let code_3 = xformcode::fix_tuple_size(&code_2, program.globals.len())?;
@@ -245,8 +243,7 @@ pub fn postlink_compile(
     let code_4 = optimize::peephole(&code_3);
     consider_debug_printing(&code_4, did_print, "after peephole optimization");
 
-    let (mut code_5, jump_table_final) =
-        striplabels::strip_labels(code_4, &jump_table)?;
+    let (mut code_5, jump_table_final) = striplabels::strip_labels(code_4, &jump_table)?;
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
 
     hardcode_jump_table_into_register(&mut code_5, &jump_table_value, test_mode);
@@ -307,10 +304,7 @@ fn hardcode_jump_table_into_register(
 
 /// Combines the `CompiledProgram`s in progs_in into a single `CompiledProgram` with offsets adjusted
 /// to avoid collisions and auto-linked programs added.
-pub fn link(
-    progs_in: &[CompiledProgram],
-    test_mode: bool,
-) -> CompiledProgram {
+pub fn link(progs_in: &[CompiledProgram], test_mode: bool) -> CompiledProgram {
     let progs = progs_in.to_vec();
     let type_tree = progs[0].type_tree.clone();
     let mut insns_so_far: usize = 3; // leave 2 insns of space at beginning for initialization

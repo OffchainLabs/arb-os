@@ -2,12 +2,12 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-//!Converts non-type checked ast nodes to type checked versions, and other related utilities.
+//! Converts non-type checked ast nodes to type checked versions, and other related utilities.
 
 use super::ast::{
-    Attributes, BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func,
-    GlobalVarDecl, MatchPattern, MatchPatternKind, Statement, StatementKind, StructField,
-    TopLevelDecl, TrinaryOp, Type, TypeTree, UnaryOp,
+    Attributes, BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func, GlobalVarDecl,
+    MatchPattern, MatchPatternKind, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp,
+    Type, TypeTree, UnaryOp,
 };
 use crate::compile::ast::{FieldInitializer, FuncProperties};
 use crate::compile::{CompileError, ErrorSystem, InliningHeuristic};
@@ -251,11 +251,7 @@ impl InliningMode {
 /// Used to inline an AST node
 fn inline(
     to_do: &mut TypeCheckedNode,
-    state: &(
-        &Vec<TypeCheckedFunc>,
-        &StringTable,
-        &InliningHeuristic,
-    ),
+    state: &(&Vec<TypeCheckedFunc>, &StringTable, &InliningHeuristic),
     _mut_state: &mut (InliningMode, Vec<usize>),
 ) -> bool {
     if let TypeCheckedNode::Statement(stat) = to_do {

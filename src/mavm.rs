@@ -18,17 +18,13 @@ pub enum Label {
     Func(StringId),    // these are the same,
     Closure(StringId), // it's just for printing & debug purposes
     Anon(usize),
-    Evm(usize),      // program counter in EVM contract
+    Evm(usize), // program counter in EVM contract
 
     Unique(usize),
 }
 
 impl Label {
-    pub fn relocate(
-        self,
-        int_offset: usize,
-        func_offset: usize,
-    ) -> (Self, usize) {
+    pub fn relocate(self, int_offset: usize, func_offset: usize) -> (Self, usize) {
         match self {
             Label::Unique(_id) => (self, func_offset),
             Label::Func(sid) => (Label::Func(sid + func_offset), sid + func_offset),
@@ -179,8 +175,7 @@ impl Instruction {
         let opcode = match self.opcode {
             Opcode::PushExternal(off) => Opcode::PushExternal(off),
             Opcode::Label(label) => {
-                let (new_label, new_func_offset) =
-                    label.relocate(int_offset, func_offset);
+                let (new_label, new_func_offset) = label.relocate(int_offset, func_offset);
                 if max_func_offset < new_func_offset {
                     max_func_offset = new_func_offset;
                 }
@@ -650,12 +645,12 @@ pub enum Value {
 }
 
 impl Value {
-    ///Returns a value containing no data, a zero sized tuple.
+    /// Returns a value containing no data, a zero sized tuple.
     pub fn none() -> Self {
         Value::Tuple(Arc::new(vec![]))
     }
 
-    ///Creates a single tuple `Value` from a `Vec<Value>`
+    /// Creates a single tuple `Value` from a `Vec<Value>`
     pub fn new_tuple(v: Vec<Value>) -> Self {
         Value::Tuple(Arc::new(v))
     }
@@ -751,11 +746,7 @@ impl Value {
         }
     }
 
-    pub fn relocate(
-        self,
-        int_offset: usize,
-        func_offset: usize,
-    ) -> (Self, usize) {
+    pub fn relocate(self, int_offset: usize, func_offset: usize) -> (Self, usize) {
         match self {
             Value::Int(_) => (self, 0),
             Value::Buffer(_) => (self, 0),
@@ -763,8 +754,7 @@ impl Value {
                 let mut rel_v = Vec::new();
                 let mut max_func_offset = 0;
                 for val in &*v {
-                    let (new_val, new_func_offset) =
-                        val.clone().relocate(int_offset, func_offset);
+                    let (new_val, new_func_offset) = val.clone().relocate(int_offset, func_offset);
                     rel_v.push(new_val);
                     if (max_func_offset < new_func_offset) {
                         max_func_offset = new_func_offset;
@@ -774,8 +764,7 @@ impl Value {
             }
             Value::CodePoint(cpt) => (Value::CodePoint(cpt.relocate(int_offset)), 0),
             Value::Label(label) => {
-                let (new_label, new_func_offset) =
-                    label.relocate(int_offset, func_offset);
+                let (new_label, new_func_offset) = label.relocate(int_offset, func_offset);
                 (Value::Label(new_label), new_func_offset)
             }
         }

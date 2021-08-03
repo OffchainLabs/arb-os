@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-//!Contains utilities for generating instructions from AST structures.
+//! Contains utilities for generating instructions from AST structures.
 
 use super::ast::{BinaryOp, FuncProperties, GlobalVarDecl, TrinaryOp, Type, UnaryOp};
 use super::typecheck::{
@@ -257,7 +257,7 @@ fn mavm_codegen_code_block<'a>(
     }
 }
 
-///Generates code for the provided statements with index 0 generated first. code represents the
+/// Generates code for the provided statements with index 0 generated first. code represents the
 /// code generated previously, num_locals the maximum number of locals used at any point in the call
 /// frame so far, locals is a map of local variables, label_gen points to the next available locals
 /// slot, string_table is used to get builtins, import_func_map associates each imported function
@@ -310,7 +310,7 @@ fn mavm_codegen_statements(
     Ok((label_gen, num_locals, bindings))
 }
 
-///Generates code for the provided statement. code represents the code generated previously,
+/// Generates code for the provided statement. code represents the code generated previously,
 /// num_locals the maximum number of locals used at any point in the call frame so far, locals is a
 /// map of local variables, label_gen points to the next available locals slot, string_table is used
 /// to get builtins, import_func_map associates each imported function with a label, and
@@ -726,7 +726,7 @@ fn mavm_codegen_statement(
     }
 }
 
-///Generates code for assigning the contents of a tuple on the top of the stack to a sequential set
+/// Generates code for assigning the contents of a tuple on the top of the stack to a sequential set
 /// of locals.  code represents previously generated code, pattern is a slice of match patterns
 /// corresponding to the structure of the tuple, local_slot_num_base is the slot of the first local
 /// being assigned to, and loc is the location the operation originates from in the source code.
@@ -1664,7 +1664,7 @@ fn mavm_codegen_expr<'a>(
     }
 }
 
-///Used to codegen the FixedArrayMod variant of TypeCheckedExpr.
+/// Used to codegen the FixedArrayMod variant of TypeCheckedExpr.
 fn codegen_fixed_array_mod<'a>(
     arr_expr: &TypeCheckedExpr,
     idx_expr: &TypeCheckedExpr,
@@ -1772,7 +1772,7 @@ fn codegen_fixed_array_mod<'a>(
     .map(|(lg, code, num_locals)| (lg, code, max(num_locals, exp_locals)))
 }
 
-///Used by codegen_fixed_array_mod, you should not call this directly.
+/// Used by codegen_fixed_array_mod, you should not call this directly.
 fn codegen_fixed_array_mod_2<'a>(
     val_expr: &TypeCheckedExpr,
     size: usize,
