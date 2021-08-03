@@ -9,7 +9,7 @@ use crate::compile::{
     SourceFileMap, Type, TypeTree,
 };
 use crate::console::Color;
-use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
+use crate::mavm::{AVMOpcode, Instruction, Opcode, Value, LabelId};
 use crate::pos::{try_display_location, Location};
 use crate::stringtable::StringId;
 use serde::{Deserialize, Serialize};
@@ -127,7 +127,7 @@ pub struct Import {
     /// Name of `Type` or function to be imported.
     pub name: String,
     /// Unique global id this import refers to
-    pub unique_id: usize,
+    pub unique_id: LabelId,
     /// `StringId` of the use-statement from parsing according to the containing module's `StringTable`
     pub id: Option<StringId>,
     /// Location of the use-statement in code
@@ -168,11 +168,11 @@ impl Import {
         }
     }
 
-    pub fn unique_id(path: &Vec<String>, name: &String) -> usize {
+    pub fn unique_id(path: &Vec<String>, name: &String) -> LabelId {
         let mut hasher = DefaultHasher::new();
         path.hash(&mut hasher);
         name.hash(&mut hasher);
-        hasher.finish() as usize
+        hasher.finish()
     }
 }
 

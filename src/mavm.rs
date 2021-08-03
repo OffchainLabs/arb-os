@@ -4,7 +4,6 @@
 
 use crate::compile::{DebugInfo, TypeTree};
 use crate::console::Color;
-use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
 use ethers_core::utils::keccak256;
@@ -13,36 +12,29 @@ use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::{collections::HashMap, fmt, sync::Arc};
 
+pub type LabelId = u64;
+
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Label {
-    Func(StringId),    // these are the same,
-    Closure(StringId), // it's just for printing & debug purposes
+    Func(LabelId),    // these are the same,
+    Closure(LabelId), // it's just for printing & debug purposes
     Anon(usize),
     Evm(usize), // program counter in EVM contract
-
-    Unique(usize),
 }
 
 impl Label {
     pub fn relocate(self, int_offset: usize, func_offset: usize) -> (Self, usize) {
         match self {
-            Label::Unique(_id) => (self, func_offset),
-            Label::Func(sid) => (Label::Func(sid + func_offset), sid + func_offset),
-            Label::Closure(sid) => (Label::Closure(sid + func_offset), sid + func_offset),
             Label::Anon(pc) => (Label::Anon(pc + int_offset), func_offset),
-            Label::Evm(_) => (self, func_offset),
+            _ => (self, func_offset),
         }
     }
 
     pub fn avm_hash(&self) -> Value {
         match self {
-            Label::Unique(id) => Value::avm_hash2(
+            Label::Func(id) | Label::Closure(id) => Value::avm_hash2(
                 &Value::Int(Uint256::from_usize(4)),
-                &Value::Int(Uint256::from_usize(*id)),
-            ),
-            Label::Func(sid) | Label::Closure(sid) => Value::avm_hash2(
-                &Value::Int(Uint256::from_usize(4)),
-                &Value::Int(Uint256::from_usize(*sid)),
+                &Value::Int(Uint256::from_u64(*id)),
             ),
             Label::Anon(n) => Value::avm_hash2(
                 &Value::Int(Uint256::from_usize(5)),
@@ -58,7 +50,6 @@ impl Label {
 impl fmt::Display for Label {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Label::Unique(id) => write!(f, "unique_{}", id),
             Label::Func(sid) => write!(f, "function_{}", sid),
             Label::Closure(sid) => write!(f, "closure_{}", sid),
             Label::Anon(n) => write!(f, "label_{}", n),

@@ -8,7 +8,7 @@ use crate::compile::typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNod
 use crate::compile::{path_display, CompileError, Lines};
 use crate::console::Color;
 use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
-use crate::mavm::{Instruction, Value};
+use crate::mavm::{Instruction, Value, LabelId};
 use crate::pos::{BytePos, Location};
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
@@ -1343,7 +1343,7 @@ pub struct Func<T = Statement> {
     pub public: bool,
     pub captures: BTreeSet<StringId>,
     pub frame_size: usize,
-    pub unique_id: Option<usize>,
+    pub unique_id: Option<LabelId>,
     pub imports: HashMap<StringId, Import>,
     pub properties: FuncProperties,
     pub debug_info: DebugInfo,

@@ -659,11 +659,11 @@ pub fn compile_from_folder(
             .for_each(|module| module.inline(cool));
     }
 
-    let mut funcs = HashMap::new();
+    //let mut funcs = HashMap::new();
 
     for module in &mut typechecked_modules {
         module.propagate_attributes();
-
+        
         let imports: HashMap<_, _> = module
             .imports
             .iter()
@@ -674,10 +674,10 @@ pub fn compile_from_folder(
             let unique_id = Import::unique_id(&module.path, &func.name);
             func.unique_id = Some(unique_id);
             func.imports = imports.clone();
-            funcs.insert(unique_id, func.clone());
+            //funcs.insert(unique_id, func.clone());
         }
     }
-
+    
     /*let mut mavm_funcs = vec![];
 
     for module in &mut typechecked_modules {

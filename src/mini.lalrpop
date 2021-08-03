@@ -468,7 +468,8 @@ Expr12: Expr = {
             
         let view = qualifiers.contains(&"view");
         let write = qualifiers.contains(&"write");
-        let debug = DebugInfo::here(file_info, lno, filename);
+        let mut debug = DebugInfo::here(file_info, lno, filename);
+        debug.attributes.codegen_print = true;
         
         let name = format!("closure #{}", closures.len() + 1);
         let id = stringtable.get(name.clone());
