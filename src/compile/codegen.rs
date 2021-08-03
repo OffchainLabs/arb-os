@@ -38,7 +38,7 @@ pub fn mavm_codegen(
 ) -> Result<Vec<Instruction>, CompileError> {
     let mut global_var_map = HashMap::new();
     let mut func_labels = HashMap::new();
-    
+
     for (idx, gv) in global_vars.iter().enumerate() {
         global_var_map.insert(gv.name_id, idx);
     }
@@ -48,17 +48,16 @@ pub fn mavm_codegen(
             false => func_labels.insert(*id, Label::Func(func.unique_id.unwrap())),
         };
     }
-    
+
     let mut label_gen = LabelGenerator::new();
     let mut funcs_code = BTreeMap::new();
     for (id, func) in funcs {
-        
         let mut func_labels = func_labels.clone();
-        
+
         for (id, imp) in &func.imports {
             func_labels.insert(*id, Label::Func(imp.unique_id));
         }
-        
+
         let (lg, function_code) = mavm_codegen_func(
             func,
             label_gen,
@@ -112,24 +111,23 @@ pub fn mavm_codegen_func(
     }
     let mut code = vec![];
     let debug_info = func.debug_info;
-    
+
     let unique_id = match func.unique_id {
         Some(id) => id,
-        None => return Err(CompileError::new_codegen_error(
-            format!("Func {} has no id", Color::red(&func.name)),
-            func.debug_info.location,
-        )),
+        None => {
+            return Err(CompileError::new_codegen_error(
+                format!("Func {} has no id", Color::red(&func.name)),
+                func.debug_info.location,
+            ))
+        }
     };
-    
+
     let label = match func.properties.closure {
         true => Label::Closure(unique_id),
         false => Label::Func(unique_id),
     };
-    
-    code.push(Instruction::from_opcode(
-        Opcode::Label(label),
-        debug_info,
-    ));
+
+    code.push(Instruction::from_opcode(Opcode::Label(label), debug_info));
 
     let num_args = func.args.len();
     let mut locals = HashMap::new();
@@ -1146,10 +1144,12 @@ fn mavm_codegen_expr<'a>(
         TypeCheckedExprKind::FuncRef(name, _) => {
             let the_label = match func_labels.get(name) {
                 Some(label) => *label,
-                None => return Err(CompileError::new_codegen_error(
-                    format!("No label for func ref {}", Color::red(name)),
-                    debug.location
-                )),
+                None => {
+                    return Err(CompileError::new_codegen_error(
+                        format!("No label for func ref {}", Color::red(name)),
+                        debug.location,
+                    ))
+                }
             };
             code.push(opcode!(Noop, Value::Label(the_label)));
             Ok((label_gen, code, num_locals))

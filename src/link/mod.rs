@@ -9,7 +9,7 @@ use crate::compile::{
     SourceFileMap, Type, TypeTree,
 };
 use crate::console::Color;
-use crate::mavm::{AVMOpcode, Instruction, Opcode, Value, LabelId};
+use crate::mavm::{AVMOpcode, Instruction, LabelId, Opcode, Value};
 use crate::pos::{try_display_location, Location};
 use crate::stringtable::StringId;
 use serde::{Deserialize, Serialize};

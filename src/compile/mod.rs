@@ -659,11 +659,9 @@ pub fn compile_from_folder(
             .for_each(|module| module.inline(cool));
     }
 
-    //let mut funcs = HashMap::new();
-
     for module in &mut typechecked_modules {
         module.propagate_attributes();
-        
+
         let imports: HashMap<_, _> = module
             .imports
             .iter()
@@ -674,29 +672,8 @@ pub fn compile_from_folder(
             let unique_id = Import::unique_id(&module.path, &func.name);
             func.unique_id = Some(unique_id);
             func.imports = imports.clone();
-            //funcs.insert(unique_id, func.clone());
         }
     }
-    
-    /*let mut mavm_funcs = vec![];
-
-    for module in &mut typechecked_modules {
-
-        for (_, func) in &mut module.checked_funcs {
-
-            let mavm_func = codegen::mavm_codegen_func(
-                func.clone(),
-                LabelGenerator::new(),
-                &module.string_table,
-                &HashMap::new(),
-                &HashMap::new(),
-                file_info_chart,
-                error_system,
-                release_build,
-            )?;
-            mavm_funcs.push(mavm_func);
-        }
-    }*/
 
     let progs = codegen_programs(
         typechecked_modules,

@@ -464,12 +464,9 @@ Expr12: Expr = {
 	<lno: @L> "unioncast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::UnionCast(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
     
     <qualifiers: (<Qualifier>)*> <lno: @L> "closure" "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> => {
-        
-            
         let view = qualifiers.contains(&"view");
         let write = qualifiers.contains(&"write");
-        let mut debug = DebugInfo::here(file_info, lno, filename);
-        debug.attributes.codegen_print = true;
+        let debug = DebugInfo::here(file_info, lno, filename);
         
         let name = format!("closure #{}", closures.len() + 1);
         let id = stringtable.get(name.clone());

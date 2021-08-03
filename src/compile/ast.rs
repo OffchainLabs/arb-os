@@ -8,7 +8,7 @@ use crate::compile::typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNod
 use crate::compile::{path_display, CompileError, Lines};
 use crate::console::Color;
 use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
-use crate::mavm::{Instruction, Value, LabelId};
+use crate::mavm::{Instruction, LabelId, Value};
 use crate::pos::{BytePos, Location};
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
