@@ -124,30 +124,6 @@ impl<'a> TypeCheckedNode<'a> {
 }
 
 pub type TypeCheckedFunc = Func<TypeCheckedStatement>;
-/*#[derive(Clone, Debug)]
-pub struct TypeCheckedFunc {
-    pub func: Func<TypeCheckedStatement>,
-    pub captures: BTreeSet<StringId>,
-    pub frame_size: usize,
-}
-
-impl TypeCheckedFunc {
-    pub fn new(
-        func: Func<TypeCheckedStatement>,
-        captures: BTreeSet<StringId>,
-        frame_size: usize,
-    ) -> Self {
-        Self {
-            func,
-            captures,
-            frame_size,
-        }
-    }
-
-    pub fn func(func: Func<TypeCheckedStatement>) -> Self {
-        TypeCheckedFunc::new(func, BTreeSet::new(), 0)
-    }
-}*/
 
 impl AbstractSyntaxTree for TypeCheckedFunc {
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
