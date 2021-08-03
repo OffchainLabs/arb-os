@@ -794,7 +794,7 @@ impl Value {
             }
         }
     }
-    
+
     /// Converts `Value` to usize if possible, otherwise returns `None`.
     pub fn to_usize(&self) -> Option<usize> {
         match self {

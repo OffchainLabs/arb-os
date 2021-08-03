@@ -53,7 +53,11 @@ pub fn mavm_codegen(
     let mut funcs_code = BTreeMap::new();
     for (_id, func) in funcs {
         let id = func.id;
-        let import_func_map = func.imports.iter().map(|(id, imp)| (*id, Label::Unique(imp.unique_id))).collect();
+        let import_func_map = func
+            .imports
+            .iter()
+            .map(|(id, imp)| (*id, Label::Unique(imp.unique_id)))
+            .collect();
         let (lg, function_code) = mavm_codegen_func(
             func,
             label_gen,
@@ -115,15 +119,15 @@ pub fn mavm_codegen_func(
         debug_info,
     ));
     code.push(Instruction::from_opcode(
-        Opcode::Label(Label::Unique(
-            match func.unique_id {
-                Some(id) => id,
-                None => return Err(CompileError::new_codegen_error(
+        Opcode::Label(Label::Unique(match func.unique_id {
+            Some(id) => id,
+            None => {
+                return Err(CompileError::new_codegen_error(
                     format!("Func {} has no id", Color::red(&func.name)),
-                    func.debug_info.location
-                )),
+                    func.debug_info.location,
+                ))
             }
-        )),
+        })),
         debug_info,
     ));
 
@@ -388,7 +392,10 @@ fn mavm_codegen_statement(
                 .rev()
                 .find(|(s, _, _)| scope_id == s)
                 .ok_or_else(|| {
-                    CompileError::new_codegen_error(format!("could not find scope {}", scope_id), loc)
+                    CompileError::new_codegen_error(
+                        format!("could not find scope {}", scope_id),
+                        loc,
+                    )
                 })?;
             if let Some(tipe) = t {
                 if *tipe
@@ -927,7 +934,10 @@ fn mavm_codegen_expr<'a>(
                         .exp(&Uint256::from_usize(160))
                         .sub(&Uint256::one())
                         .ok_or_else(|| {
-                            CompileError::new_codegen_error("Underflow on subtraction".to_string(), loc)
+                            CompileError::new_codegen_error(
+                                "Underflow on subtraction".to_string(),
+                                loc,
+                            )
                         })?;
                     (
                         Some(Opcode::AVMOpcode(AVMOpcode::BitwiseAnd)),
@@ -1100,7 +1110,10 @@ fn mavm_codegen_expr<'a>(
                             debug,
                         )),
                         None => {
-                            return Err(CompileError::new_codegen_error("capture doesn't exist".to_string(), loc))
+                            return Err(CompileError::new_codegen_error(
+                                "capture doesn't exist".to_string(),
+                                loc,
+                            ))
                         }
                     }
                 }
@@ -1131,7 +1144,6 @@ fn mavm_codegen_expr<'a>(
             Ok((label_gen, code, num_locals))
         }
         TypeCheckedExprKind::FuncRef(name, _) => {
-            
             let the_label = match import_func_map.get(name) {
                 Some(label) => *label,
                 None => Label::Func(*name),
@@ -1333,7 +1345,7 @@ fn mavm_codegen_expr<'a>(
                             string_table.get_if_exists("builtin_arrayNew").unwrap(),
                             call_type.clone(),
                         ),
-                        DebugInfo::from(loc)
+                        DebugInfo::from(loc),
                     )),
                     vec![
                         *sz_expr.clone(),

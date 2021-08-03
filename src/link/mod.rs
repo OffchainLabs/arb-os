@@ -150,11 +150,11 @@ impl Import {
             location,
         }
     }
-    
+
     pub fn loc(&self) -> Vec<Location> {
         self.location.into_iter().collect()
     }
-    
+
     pub fn new_builtin(virtual_file: &str, name: &str) -> Self {
         let path = vec!["core".to_string(), virtual_file.to_string()];
         let name = name.to_string();
@@ -192,13 +192,6 @@ impl ImportedFunc {
             name: string_table.name_from_id(name_id).to_string(),
         }
     }
-
-    ///Takes self by value and returns self with slot_number increased by ext_offset. Used to assign
-    /// unique slot numbers when linking multiple source files.
-    pub fn relocate(mut self, _int_offset: usize, ext_offset: usize) -> Self {
-        self.slot_num += ext_offset;
-        self
-    }
 }
 
 /// Represents a function that is part of the modules public interface.  The label field represents
@@ -234,16 +227,6 @@ impl ExportedFunc {
             },
             new_func_offset,
         )
-    }
-}
-
-impl ExportedFunc {
-    pub fn new(name_id: StringId, label: Label, tipe: Type, string_table: &StringTable) -> Self {
-        Self {
-            name: string_table.name_from_id(name_id).to_string(),
-            label,
-            tipe,
-        }
     }
 }
 
@@ -466,14 +449,13 @@ pub fn link(
             ),
         ]
     };
-    
+
     for mut rel_prog in relocated_progs {
         linked_code.append(&mut rel_prog.code);
     }
 
     Ok(CompiledProgram::new(
         linked_code,
-        vec![],
         vec![],
         global_num_limit,
         Some(merged_source_file_map),

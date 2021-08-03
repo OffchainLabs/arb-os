@@ -12,7 +12,7 @@ use super::ast::{
 use crate::compile::ast::{FieldInitializer, FuncProperties};
 use crate::compile::{CompileError, ErrorSystem, InliningHeuristic};
 use crate::console::Color;
-use crate::link::{ExportedFunc, Import, ImportedFunc};
+use crate::link::{Import, ImportedFunc};
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::{Column, Location};
 use crate::stringtable::{StringId, StringTable};
@@ -1268,12 +1268,12 @@ pub fn sort_top_level_decls(
     } else {
         vec![]
     };
-    
+
     // we wait till now to assign stringIDs to keep the upgrade loop happy
     for import in &mut imports {
         import.id = Some(string_table.get(import.name.clone()));
     }
-    
+
     //let mut imports = vec![];
     let mut funcs = vec![];
     let mut named_types = HashMap::new();
@@ -1327,7 +1327,6 @@ pub fn typecheck_top_level_decls(
 ) -> Result<
     (
         BTreeMap<StringId, TypeCheckedFunc>,
-        Vec<ExportedFunc>,
         Vec<GlobalVarDecl>,
         StringTable,
     ),
@@ -1344,7 +1343,6 @@ pub fn typecheck_top_level_decls(
         .enumerate()
         .map(|(idx, var)| (var.name_id, (var.tipe.clone(), idx)))
         .collect::<HashMap<_, _>>();
-    let mut exported_funcs = Vec::new();
 
     let type_table: HashMap<_, _> = named_types.clone().into_iter().collect();
 
@@ -1370,30 +1368,19 @@ pub fn typecheck_top_level_decls(
     let mut checked_closures = BTreeMap::new();
 
     for func in &funcs {
-        let checked_func = typecheck_function(
-            &func,
-            &type_table,
-            &resolved_global_vars_map,
-            &func_table,
-            type_tree,
-            &string_table,
-            &mut checked_closures,
-            &mut undefinable_ids,
-        )?;
-        match func.kind {
-            FuncDeclKind::Public => {
-                exported_funcs.push(ExportedFunc::new(
-                    checked_func.id,
-                    Label::Func(checked_func.id),
-                    checked_func.tipe.clone(),
-                    &string_table,
-                ));
-                checked_funcs.insert(func.id, checked_func);
-            }
-            FuncDeclKind::Private => {
-                checked_funcs.insert(func.id, checked_func);
-            }
-        }
+        checked_funcs.insert(
+            func.id,
+            typecheck_function(
+                &func,
+                &type_table,
+                &resolved_global_vars_map,
+                &func_table,
+                type_tree,
+                &string_table,
+                &mut checked_closures,
+                &mut undefinable_ids,
+            )?,
+        );
     }
 
     checked_funcs.extend(checked_closures);
@@ -1403,7 +1390,7 @@ pub fn typecheck_top_level_decls(
         res_global_vars.push(global_var);
     }
 
-    Ok((checked_funcs, exported_funcs, res_global_vars, string_table))
+    Ok((checked_funcs, res_global_vars, string_table))
 }
 
 /// If successful, produces a `TypeCheckedFunc` from `FuncDecl` reference fd, according to global

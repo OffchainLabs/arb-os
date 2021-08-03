@@ -5,7 +5,7 @@
 //! Contains utilities for compiling mini source code.
 
 use crate::console::Color;
-use crate::link::{link, postlink_compile, ExportedFunc, Import, ImportedFunc, LinkedProgram};
+use crate::link::{link, postlink_compile, Import, ImportedFunc, LinkedProgram};
 use crate::mavm::{Instruction, LabelGenerator};
 use crate::pos::{BytePos, Location};
 use crate::stringtable::{StringId, StringTable};
@@ -120,8 +120,6 @@ struct TypeCheckedModule {
     string_table: StringTable,
     /// The list of imported functions imported through the old import/export system
     imported_funcs: Vec<ImportedFunc>,
-    /// The list of exported functions exported through the old import/export system
-    exported_funcs: Vec<ExportedFunc>,
     /// Map from `StringId`s in this file to the `Type`s they represent.
     named_types: HashMap<StringId, Type>,
     /// List of constants used in this file.
@@ -261,7 +259,6 @@ impl TypeCheckedModule {
         checked_funcs: BTreeMap<StringId, TypeCheckedFunc>,
         string_table: StringTable,
         imported_funcs: Vec<ImportedFunc>,
-        exported_funcs: Vec<ExportedFunc>,
         named_types: HashMap<usize, Type>,
         constants: HashSet<String>,
         global_vars: Vec<GlobalVarDecl>,
@@ -273,7 +270,6 @@ impl TypeCheckedModule {
             checked_funcs,
             string_table,
             imported_funcs,
-            exported_funcs,
             constants,
             named_types,
             global_vars,
@@ -419,8 +415,6 @@ impl TypeCheckedModule {
 pub struct CompiledProgram {
     /// Instructions to be run to execute the program/module
     pub code: Vec<Instruction>,
-    /// The list of exported functions exported through the old import/export system
-    pub exported_funcs: Vec<ExportedFunc>,
     /// The list of imported functions imported through the old import/export system
     pub imported_funcs: Vec<ImportedFunc>,
     /// Highest ID used for any global in this program, used for linking
@@ -436,7 +430,6 @@ pub struct CompiledProgram {
 impl CompiledProgram {
     pub fn new(
         code: Vec<Instruction>,
-        exported_funcs: Vec<ExportedFunc>,
         imported_funcs: Vec<ImportedFunc>,
         globals: Vec<GlobalVarDecl>,
         source_file_map: Option<SourceFileMap>,
@@ -445,7 +438,6 @@ impl CompiledProgram {
     ) -> Self {
         CompiledProgram {
             code,
-            exported_funcs,
             imported_funcs,
             globals,
             source_file_map,
@@ -481,25 +473,11 @@ impl CompiledProgram {
             }
         }
 
-        let mut relocated_exported_funcs = Vec::new();
-        for exp_func in self.exported_funcs {
-            let (relocated_exp_func, new_func_offset) =
-                exp_func.relocate(int_offset, ext_offset, func_offset);
-            relocated_exported_funcs.push(relocated_exp_func);
-            if max_func_offset < new_func_offset {
-                max_func_offset = new_func_offset;
-            }
-        }
-
         let mut relocated_imported_funcs = Vec::new();
-        for imp_func in self.imported_funcs {
-            relocated_imported_funcs.push(imp_func.relocate(int_offset, ext_offset));
-        }
 
         (
             CompiledProgram::new(
                 relocated_code,
-                relocated_exported_funcs,
                 relocated_imported_funcs,
                 {
                     let mut new_vec = globals_offset.clone();
@@ -520,7 +498,6 @@ impl CompiledProgram {
     pub fn _to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
         match format {
             Some("pretty") => {
-                writeln!(output, "exported: {:?}", self.exported_funcs).unwrap();
                 writeln!(output, "imported: {:?}", self.imported_funcs).unwrap();
                 for (idx, insn) in self.code.iter().enumerate() {
                     writeln!(output, "{:04}:  {}", idx, insn).unwrap();
@@ -725,13 +702,13 @@ pub fn compile_from_folder(
             funcs.insert(unique_id, func.clone());
         }
     }
-    
+
     /*let mut mavm_funcs = vec![];
-    
+
     for module in &mut typechecked_modules {
-        
+
         for (_, func) in &mut module.checked_funcs {
-            
+
             let mavm_func = codegen::mavm_codegen_func(
                 func.clone(),
                 LabelGenerator::new(),
@@ -745,7 +722,7 @@ pub fn compile_from_folder(
             mavm_funcs.push(mavm_func);
         }
     }*/
-    
+
     let progs = codegen_programs(
         typechecked_modules,
         file_info_chart,
@@ -890,7 +867,10 @@ fn resolve_imports(
             let import_path = import.path.clone();
             let (named_type, imp_func) = if let Some(program) = programs.get_mut(&import_path) {
                 // Looks up info from target program
-                let index = program.string_table.get_if_exists(&import.name.clone()).unwrap();
+                let index = program
+                    .string_table
+                    .get_if_exists(&import.name.clone())
+                    .unwrap();
                 let named_type = program.named_types.get(&index).cloned();
                 let imp_func = program.func_table.get(&index).cloned();
                 (named_type, imp_func)
@@ -905,7 +885,7 @@ fn resolve_imports(
                     import.location.into_iter().collect(),
                 ));
             };
-            
+
             // Modifies origin program to include import
             let origin_program = programs.get_mut(name).ok_or_else(|| {
                 CompileError::new(
@@ -918,26 +898,31 @@ fn resolve_imports(
                     import.location.into_iter().collect(),
                 )
             })?;
-            
+
             let string_id = match origin_program.string_table.get_if_exists(&import.name) {
                 Some(string_id) => string_id,
-                None => return Err(CompileError::new(
-                    format!("Internal error"),
-                    format!("Import {} has no string id", import.name),
-                    import.loc()
-                )),
+                None => {
+                    return Err(CompileError::new(
+                        format!("Internal error"),
+                        format!("Import {} has no string id", import.name),
+                        import.loc(),
+                    ))
+                }
             };
-            
+
             if let Some(named_type) = named_type {
-                origin_program.named_types.insert(string_id, named_type.clone());
+                origin_program
+                    .named_types
+                    .insert(string_id, named_type.clone());
             } else if let Some(imp_func) = imp_func {
-                origin_program.func_table.insert(string_id, imp_func.clone());
+                origin_program
+                    .func_table
+                    .insert(string_id, imp_func.clone());
                 origin_program.imported_funcs.push(ImportedFunc::new(
                     origin_program.imported_funcs.len(),
                     string_id,
                     &origin_program.string_table,
                 ));
-                
             } else {
                 error_system.warnings.push(CompileError::new_warning(
                     String::from("Compile warning"),
@@ -1003,7 +988,7 @@ fn typecheck_programs(
                  name,
              }| {
                 let mut typecheck_issues = vec![];
-                let (mut checked_funcs, exported_funcs, global_vars, string_table) =
+                let (mut checked_funcs, global_vars, string_table) =
                     typecheck::typecheck_top_level_decls(
                         funcs,
                         closures,
@@ -1072,7 +1057,6 @@ fn typecheck_programs(
                         checked_funcs,
                         string_table,
                         imported_funcs,
-                        exported_funcs,
                         named_types,
                         constants,
                         global_vars,
@@ -1215,7 +1199,10 @@ fn consume_program_callgraph(
             if !func_name.starts_with('_') {
                 error_system.warnings.push(CompileError::new_warning(
                     String::from("Compile warning"),
-                    format!("func {} is unreachable", Color::color(error_system.warn_color, func_name)),
+                    format!(
+                        "func {} is unreachable",
+                        Color::color(error_system.warn_color, func_name)
+                    ),
                     vec![data.1],
                 ));
             }
@@ -1238,7 +1225,6 @@ fn codegen_programs(
         checked_funcs,
         string_table,
         imported_funcs,
-        exported_funcs,
         named_types: _,
         constants: _,
         global_vars,
@@ -1258,7 +1244,6 @@ fn codegen_programs(
         )?;
         progs.push(CompiledProgram::new(
             code_out.to_vec(),
-            exported_funcs,
             imported_funcs,
             global_vars,
             Some(SourceFileMap::new(
@@ -1418,7 +1403,7 @@ impl CompileError {
             is_warning: false,
         }
     }
-    
+
     pub fn new_codegen_error(description: String, location: Option<Location>) -> Self {
         CompileError {
             title: String::from("Codegen Error"),
