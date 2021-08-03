@@ -18,7 +18,6 @@ pub enum Label {
     Func(StringId),    // these are the same,
     Closure(StringId), // it's just for printing & debug purposes
     Anon(usize),
-    External(usize), // slot in imported funcs list
     Evm(usize),      // program counter in EVM contract
 
     Unique(usize),
@@ -28,7 +27,6 @@ impl Label {
     pub fn relocate(
         self,
         int_offset: usize,
-        ext_offset: usize,
         func_offset: usize,
     ) -> (Self, usize) {
         match self {
@@ -36,7 +34,6 @@ impl Label {
             Label::Func(sid) => (Label::Func(sid + func_offset), sid + func_offset),
             Label::Closure(sid) => (Label::Closure(sid + func_offset), sid + func_offset),
             Label::Anon(pc) => (Label::Anon(pc + int_offset), func_offset),
-            Label::External(slot) => (Label::External(slot + ext_offset), func_offset),
             Label::Evm(_) => (self, func_offset),
         }
     }
@@ -55,10 +52,6 @@ impl Label {
                 &Value::Int(Uint256::from_usize(5)),
                 &Value::Int(Uint256::from_usize(*n)),
             ),
-            Label::External(n) => Value::avm_hash2(
-                &Value::Int(Uint256::from_usize(6)),
-                &Value::Int(Uint256::from_usize(*n)),
-            ),
             Label::Evm(_) => {
                 panic!("tried to avm_hash an EVM label");
             }
@@ -73,7 +66,6 @@ impl fmt::Display for Label {
             Label::Func(sid) => write!(f, "function_{}", sid),
             Label::Closure(sid) => write!(f, "closure_{}", sid),
             Label::Anon(n) => write!(f, "label_{}", n),
-            Label::External(slot) => write!(f, "external_{}", slot),
             Label::Evm(pc) => write!(f, "EvmPC({})", pc),
         }
     }
@@ -180,16 +172,15 @@ impl Instruction {
     pub fn relocate(
         self,
         int_offset: usize,
-        ext_offset: usize,
         func_offset: usize,
         globals_offset: usize,
     ) -> (Self, usize) {
         let mut max_func_offset = func_offset;
         let opcode = match self.opcode {
-            Opcode::PushExternal(off) => Opcode::PushExternal(off + ext_offset),
+            Opcode::PushExternal(off) => Opcode::PushExternal(off),
             Opcode::Label(label) => {
                 let (new_label, new_func_offset) =
-                    label.relocate(int_offset, ext_offset, func_offset);
+                    label.relocate(int_offset, func_offset);
                 if max_func_offset < new_func_offset {
                     max_func_offset = new_func_offset;
                 }
@@ -201,7 +192,7 @@ impl Instruction {
         };
         let imm = match self.immediate {
             Some(imm) => {
-                let (new_imm, new_func_offset) = imm.relocate(int_offset, ext_offset, func_offset);
+                let (new_imm, new_func_offset) = imm.relocate(int_offset, func_offset);
                 if max_func_offset < new_func_offset {
                     max_func_offset = new_func_offset;
                 }
@@ -256,10 +247,6 @@ impl CodePt {
         CodePt::Internal(pc)
     }
 
-    pub fn new_external(name: StringId) -> Self {
-        CodePt::External(name)
-    }
-
     pub fn new_in_segment(seg_num: usize, offset: usize) -> Self {
         CodePt::InSegment(seg_num, offset)
     }
@@ -291,10 +278,10 @@ impl CodePt {
         }
     }
 
-    pub fn relocate(self, int_offset: usize, ext_offset: usize) -> Self {
+    pub fn relocate(self, int_offset: usize) -> Self {
         match self {
             CodePt::Internal(pc) => CodePt::Internal(pc + int_offset),
-            CodePt::External(off) => CodePt::External(off + ext_offset),
+            CodePt::External(off) => CodePt::External(off),
             CodePt::InSegment(_, _) => {
                 panic!("tried to relocate/link code at runtime");
             }
@@ -767,7 +754,6 @@ impl Value {
     pub fn relocate(
         self,
         int_offset: usize,
-        ext_offset: usize,
         func_offset: usize,
     ) -> (Self, usize) {
         match self {
@@ -778,7 +764,7 @@ impl Value {
                 let mut max_func_offset = 0;
                 for val in &*v {
                     let (new_val, new_func_offset) =
-                        val.clone().relocate(int_offset, ext_offset, func_offset);
+                        val.clone().relocate(int_offset, func_offset);
                     rel_v.push(new_val);
                     if (max_func_offset < new_func_offset) {
                         max_func_offset = new_func_offset;
@@ -786,10 +772,10 @@ impl Value {
                 }
                 (Value::new_tuple(rel_v), max_func_offset)
             }
-            Value::CodePoint(cpt) => (Value::CodePoint(cpt.relocate(int_offset, ext_offset)), 0),
+            Value::CodePoint(cpt) => (Value::CodePoint(cpt.relocate(int_offset)), 0),
             Value::Label(label) => {
                 let (new_label, new_func_offset) =
-                    label.relocate(int_offset, ext_offset, func_offset);
+                    label.relocate(int_offset, func_offset);
                 (Value::Label(new_label), new_func_offset)
             }
         }

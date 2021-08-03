@@ -5,15 +5,15 @@
 //!Converts non-type checked ast nodes to type checked versions, and other related utilities.
 
 use super::ast::{
-    Attributes, BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func, FuncDeclKind,
+    Attributes, BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func,
     GlobalVarDecl, MatchPattern, MatchPatternKind, Statement, StatementKind, StructField,
     TopLevelDecl, TrinaryOp, Type, TypeTree, UnaryOp,
 };
 use crate::compile::ast::{FieldInitializer, FuncProperties};
 use crate::compile::{CompileError, ErrorSystem, InliningHeuristic};
 use crate::console::Color;
-use crate::link::{Import, ImportedFunc};
-use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
+use crate::link::Import;
+use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
 use crate::pos::{Column, Location};
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
@@ -253,7 +253,6 @@ fn inline(
     to_do: &mut TypeCheckedNode,
     state: &(
         &Vec<TypeCheckedFunc>,
-        &Vec<ImportedFunc>,
         &StringTable,
         &InliningHeuristic,
     ),
@@ -275,7 +274,7 @@ fn inline(
             {
                 let found_func = state.0.iter().find(|func| func.id == id);
                 if let Some(func) = found_func {
-                    if match state.3 {
+                    if match state.2 {
                         InliningHeuristic::All => {
                             _mut_state.0.and(&func.debug_info.attributes.inline)
                                 == InliningMode::Never
@@ -714,13 +713,12 @@ impl TypeCheckedFunc {
     pub fn inline(
         &mut self,
         funcs: &Vec<TypeCheckedFunc>,
-        imported_funcs: &Vec<ImportedFunc>,
         string_table: &StringTable,
         heuristic: &InliningHeuristic,
     ) {
         self.recursive_apply(
             inline,
-            &(funcs, imported_funcs, string_table, heuristic),
+            &(funcs, string_table, heuristic),
             &mut (InliningMode::Auto, vec![]),
         );
     }
@@ -1313,7 +1311,7 @@ pub fn sort_top_level_decls(
     )
 }
 
-/// Performs typechecking various top level declarations, including `ImportedFunc`s, `FuncDecl`s,
+/// Performs typechecking various top level declarations, `FuncDecl`s,
 /// named `Type`s, and global variables.
 pub fn typecheck_top_level_decls(
     funcs: Vec<Func>,
@@ -1506,7 +1504,7 @@ pub fn typecheck_function(
         ret_type: func.ret_type.clone(),
         code: tc_stats,
         tipe: func.tipe.clone(),
-        kind: func.kind,
+        public: func.public,
         captures: BTreeSet::new(),
         frame_size: 0,
         unique_id: func.unique_id,

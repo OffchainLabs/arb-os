@@ -14,9 +14,8 @@ use crate::compile::typecheck::{
 };
 use crate::compile::{CompileError, ErrorSystem, FileInfo};
 use crate::console::Color;
-use crate::link::{ImportedFunc, TupleTree, TUPLE_SIZE};
+use crate::link::{TupleTree, TUPLE_SIZE};
 use crate::mavm::{AVMOpcode, Buffer, Instruction, Label, LabelGenerator, Opcode, Value};
-use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use std::collections::{BTreeMap, HashSet};
@@ -25,25 +24,18 @@ use std::{cmp::max, collections::HashMap};
 /// Top level function for code generation, generates code for modules.
 ///
 /// In this function, funcs represents a list of functions in scope, string_table is used to get
-/// builtins, imported_funcs is a list of functions imported from other modules, and global_vars
-/// lists the globals available in the module.
+/// builtins, and global_vars lists the globals available in the module.
 ///
 /// The function returns a vector of instructions representing the generated code if it is
 /// successful, otherwise it returns a `CompileError`.
 pub fn mavm_codegen(
     funcs: BTreeMap<StringId, TypeCheckedFunc>,
     string_table: &StringTable,
-    imported_funcs: &[ImportedFunc],
     global_vars: &[GlobalVarDecl],
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     error_system: &mut ErrorSystem,
     release_build: bool,
 ) -> Result<Vec<Instruction>, CompileError> {
-    let mut import_func_map = HashMap::new();
-    for imp_func in imported_funcs {
-        import_func_map.insert(imp_func.name_id, Label::External(imp_func.slot_num));
-    }
-
     let mut global_var_map = HashMap::new();
     for (idx, gv) in global_vars.iter().enumerate() {
         global_var_map.insert(gv.name_id, idx);

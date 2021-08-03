@@ -9,9 +9,9 @@ use crate::compile::{
     SourceFileMap, Type, TypeTree,
 };
 use crate::console::Color;
-use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
+use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
 use crate::pos::{try_display_location, Location};
-use crate::stringtable::{StringId, StringTable};
+use crate::stringtable::StringId;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::{DefaultHasher, HashMap};
 use std::collections::BTreeMap;
@@ -176,60 +176,6 @@ impl Import {
     }
 }
 
-///Represents a function imported from another mini program or module.
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
-pub struct ImportedFunc {
-    pub name_id: StringId,
-    pub slot_num: usize,
-    pub name: String,
-}
-
-impl ImportedFunc {
-    pub fn new(slot_num: usize, name_id: StringId, string_table: &StringTable) -> Self {
-        ImportedFunc {
-            name_id,
-            slot_num,
-            name: string_table.name_from_id(name_id).to_string(),
-        }
-    }
-}
-
-/// Represents a function that is part of the modules public interface.  The label field represents
-/// the start location of the function in the program it is contained in.
-///
-/// This struct differs from `ExportedFuncPoint` because the label field points to a virtual label
-/// rather than an absolute address.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExportedFunc {
-    pub name: String,
-    pub label: Label,
-    pub tipe: Type,
-}
-
-impl ExportedFunc {
-    /// Takes self by value and returns a tuple. The first field of the tuple is self with internal,
-    /// external, and function references increased by int_offset, ext_offset, and func_offset
-    /// instructions respectively.  The second field is the instruction after the end of self,
-    /// calculated by taking the sum of func_offset and the function length.
-    pub fn relocate(
-        self,
-        int_offset: usize,
-        ext_offset: usize,
-        func_offset: usize,
-    ) -> (Self, usize) {
-        let (relocated_label, new_func_offset) =
-            self.label.relocate(int_offset, ext_offset, func_offset);
-        (
-            ExportedFunc {
-                name: self.name,
-                label: relocated_label,
-                tipe: self.tipe,
-            },
-            new_func_offset,
-        )
-    }
-}
-
 /// Converts a linked `CompiledProgram` into a `LinkedProgram` by fixing non-forward jumps,
 /// converting wide tuples to nested tuples, performing code optimizations, converting the jump
 /// table to a static value, and combining the file info chart with the associated argument.
@@ -289,7 +235,6 @@ pub fn postlink_compile(
     }
     let (code_2, jump_table) = striplabels::fix_nonforward_labels(
         &program.code,
-        &program.imported_funcs,
         program.globals.len() - 1,
     );
     consider_debug_printing(&code_2, did_print, "after fix_backward_labels");
@@ -301,7 +246,7 @@ pub fn postlink_compile(
     consider_debug_printing(&code_4, did_print, "after peephole optimization");
 
     let (mut code_5, jump_table_final) =
-        striplabels::strip_labels(code_4, &jump_table, &program.imported_funcs)?;
+        striplabels::strip_labels(code_4, &jump_table)?;
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
 
     hardcode_jump_table_into_register(&mut code_5, &jump_table_value, test_mode);
@@ -360,21 +305,16 @@ fn hardcode_jump_table_into_register(
     );
 }
 
-///Combines the `CompiledProgram`s in progs_in into a single `CompiledProgram` with offsets adjusted
+/// Combines the `CompiledProgram`s in progs_in into a single `CompiledProgram` with offsets adjusted
 /// to avoid collisions and auto-linked programs added.
-///
-/// Also prints a warning message to the console if import and export types between modules don't
-/// match.
 pub fn link(
     progs_in: &[CompiledProgram],
     test_mode: bool,
-) -> Result<CompiledProgram, CompileError> {
+) -> CompiledProgram {
     let progs = progs_in.to_vec();
     let type_tree = progs[0].type_tree.clone();
     let mut insns_so_far: usize = 3; // leave 2 insns of space at beginning for initialization
-    let mut imports_so_far: usize = 0;
     let mut int_offsets = Vec::new();
-    let mut ext_offsets = Vec::new();
     let mut merged_source_file_map = SourceFileMap::new_empty();
     let mut merged_file_info_chart = HashMap::new();
     let mut global_num_limit = vec![];
@@ -389,8 +329,6 @@ pub fn link(
         );
         int_offsets.push(insns_so_far);
         insns_so_far += prog.code.len();
-        ext_offsets.push(imports_so_far);
-        imports_so_far += prog.imported_funcs.len();
     }
 
     let mut relocated_progs = Vec::new();
@@ -401,7 +339,6 @@ pub fn link(
         let source_file_map = prog.source_file_map.clone();
         let (relocated_prog, new_func_offset) = prog.relocate(
             int_offsets[i],
-            ext_offsets[i],
             func_offset,
             global_num_limit,
             source_file_map,
@@ -454,12 +391,11 @@ pub fn link(
         linked_code.append(&mut rel_prog.code);
     }
 
-    Ok(CompiledProgram::new(
+    CompiledProgram::new(
         linked_code,
-        vec![],
         global_num_limit,
         Some(merged_source_file_map),
         merged_file_info_chart,
         type_tree,
-    ))
+    )
 }

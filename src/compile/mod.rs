@@ -5,8 +5,8 @@
 //! Contains utilities for compiling mini source code.
 
 use crate::console::Color;
-use crate::link::{link, postlink_compile, Import, ImportedFunc, LinkedProgram};
-use crate::mavm::{Instruction, LabelGenerator};
+use crate::link::{link, postlink_compile, Import, LinkedProgram};
+use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
 use crate::stringtable::{StringId, StringTable};
 use ast::Func;
@@ -85,9 +85,6 @@ impl FromStr for InliningHeuristic {
 /// Represents the contents of a source file after parsing.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Module {
-    //TODO: Remove this field
-    /// The list of imported functions imported through the old import/export system
-    imported_funcs: Vec<ImportedFunc>,
     /// List of functions defined locally within the source file
     funcs: Vec<Func>,
     /// List of closures defined locally within the source file
@@ -118,8 +115,6 @@ struct TypeCheckedModule {
     checked_funcs: BTreeMap<StringId, TypeCheckedFunc>,
     /// Map from `StringId`s to the names they derived from.
     string_table: StringTable,
-    /// The list of imported functions imported through the old import/export system
-    imported_funcs: Vec<ImportedFunc>,
     /// Map from `StringId`s in this file to the `Type`s they represent.
     named_types: HashMap<StringId, Type>,
     /// List of constants used in this file.
@@ -179,15 +174,9 @@ impl CompileStruct {
                 compiled_progs.push(prog)
             });
         }
-        let linked_prog = match link(&compiled_progs, self.test_mode) {
-            Ok(idk) => idk,
-            Err(err) => {
-                error_system.errors.push(err);
-                error_system.file_info_chart = file_info_chart;
-                return Err(error_system);
-            }
-        };
-
+        
+        let linked_prog = link(&compiled_progs, self.test_mode);
+        
         // If this condition is true it means that __fixedLocationGlobal will not be at
         // index [0], but rather [0][0] or [0][0][0] etc
         if linked_prog.globals.len() >= 58 {
@@ -226,7 +215,6 @@ impl CompileStruct {
 
 impl Module {
     fn new(
-        imported_funcs: Vec<ImportedFunc>,
         funcs: Vec<Func>,
         closures: BTreeMap<usize, Func>,
         named_types: HashMap<usize, Type>,
@@ -239,7 +227,6 @@ impl Module {
         name: String,
     ) -> Self {
         Self {
-            imported_funcs,
             funcs,
             closures,
             named_types,
@@ -258,7 +245,6 @@ impl TypeCheckedModule {
     fn new(
         checked_funcs: BTreeMap<StringId, TypeCheckedFunc>,
         string_table: StringTable,
-        imported_funcs: Vec<ImportedFunc>,
         named_types: HashMap<usize, Type>,
         constants: HashSet<String>,
         global_vars: Vec<GlobalVarDecl>,
@@ -269,7 +255,6 @@ impl TypeCheckedModule {
         Self {
             checked_funcs,
             string_table,
-            imported_funcs,
             constants,
             named_types,
             global_vars,
@@ -286,7 +271,6 @@ impl TypeCheckedModule {
         for (_id, func) in &mut new_funcs {
             func.inline(
                 &self.checked_funcs.values().cloned().collect(),
-                &self.imported_funcs,
                 &self.string_table,
                 heuristic,
             )
@@ -415,8 +399,6 @@ impl TypeCheckedModule {
 pub struct CompiledProgram {
     /// Instructions to be run to execute the program/module
     pub code: Vec<Instruction>,
-    /// The list of imported functions imported through the old import/export system
-    pub imported_funcs: Vec<ImportedFunc>,
     /// Highest ID used for any global in this program, used for linking
     pub globals: Vec<GlobalVarDecl>,
     /// Contains list of offsets of the various modules contained in this program
@@ -430,7 +412,6 @@ pub struct CompiledProgram {
 impl CompiledProgram {
     pub fn new(
         code: Vec<Instruction>,
-        imported_funcs: Vec<ImportedFunc>,
         globals: Vec<GlobalVarDecl>,
         source_file_map: Option<SourceFileMap>,
         file_info_chart: HashMap<u64, FileInfo>,
@@ -438,7 +419,6 @@ impl CompiledProgram {
     ) -> Self {
         CompiledProgram {
             code,
-            imported_funcs,
             globals,
             source_file_map,
             file_info_chart,
@@ -456,7 +436,6 @@ impl CompiledProgram {
     pub fn relocate(
         self,
         int_offset: usize,
-        ext_offset: usize,
         func_offset: usize,
         globals_offset: Vec<GlobalVarDecl>,
         source_file_map: Option<SourceFileMap>,
@@ -466,19 +445,16 @@ impl CompiledProgram {
         for insn in &self.code {
             let (relocated_insn, new_func_offset) =
                 insn.clone()
-                    .relocate(int_offset, ext_offset, func_offset, globals_offset.len());
+                    .relocate(int_offset, func_offset, globals_offset.len());
             relocated_code.push(relocated_insn);
             if max_func_offset < new_func_offset {
                 max_func_offset = new_func_offset;
             }
         }
 
-        let mut relocated_imported_funcs = Vec::new();
-
         (
             CompiledProgram::new(
                 relocated_code,
-                relocated_imported_funcs,
                 {
                     let mut new_vec = globals_offset.clone();
                     new_vec.append(&mut self.globals.clone());
@@ -488,7 +464,7 @@ impl CompiledProgram {
                 self.file_info_chart,
                 self.type_tree,
             ),
-            max_func_offset,
+            max_func_offset
         )
     }
 
@@ -498,7 +474,6 @@ impl CompiledProgram {
     pub fn _to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
         match format {
             Some("pretty") => {
-                writeln!(output, "imported: {:?}", self.imported_funcs).unwrap();
                 for (idx, insn) in self.code.iter().enumerate() {
                     writeln!(output, "{:04}:  {}", idx, insn).unwrap();
                 }
@@ -840,7 +815,6 @@ fn create_program_tree(
         programs.insert(
             path.clone(),
             Module::new(
-                vec![],
                 funcs,
                 closures,
                 named_types,
@@ -918,11 +892,6 @@ fn resolve_imports(
                 origin_program
                     .func_table
                     .insert(string_id, imp_func.clone());
-                origin_program.imported_funcs.push(ImportedFunc::new(
-                    origin_program.imported_funcs.len(),
-                    string_id,
-                    &origin_program.string_table,
-                ));
             } else {
                 error_system.warnings.push(CompileError::new_warning(
                     String::from("Compile warning"),
@@ -975,7 +944,6 @@ fn typecheck_programs(
         .into_par_iter()
         .map(
             |Module {
-                 imported_funcs,
                  funcs,
                  closures,
                  named_types,
@@ -1056,7 +1024,6 @@ fn typecheck_programs(
                     TypeCheckedModule::new(
                         checked_funcs,
                         string_table,
-                        imported_funcs,
                         named_types,
                         constants,
                         global_vars,
@@ -1224,7 +1191,6 @@ fn codegen_programs(
     for TypeCheckedModule {
         checked_funcs,
         string_table,
-        imported_funcs,
         named_types: _,
         constants: _,
         global_vars,
@@ -1236,7 +1202,6 @@ fn codegen_programs(
         let code_out = codegen::mavm_codegen(
             checked_funcs,
             &string_table,
-            &imported_funcs,
             &global_vars,
             file_info_chart,
             error_system,
@@ -1244,7 +1209,6 @@ fn codegen_programs(
         )?;
         progs.push(CompiledProgram::new(
             code_out.to_vec(),
-            imported_funcs,
             global_vars,
             Some(SourceFileMap::new(
                 code_out.len(),

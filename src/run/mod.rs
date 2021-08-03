@@ -182,8 +182,6 @@ mod tests {
                     Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Inbox), None), // should block, stopping execution
                 ],
                 static_val: Value::none(),
-                imported_funcs: vec![],
-                exported_funcs: vec![],
                 file_name_chart: HashMap::new(),
             },
             vec![val.clone()],
