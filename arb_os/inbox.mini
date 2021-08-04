@@ -70,7 +70,7 @@ type Inbox = struct {
     atStartOfBlock: bool,           // true iff we should start a new Arbitrum block when the next message arrives
     inboxHashAccumulator: bytes32,  // hash accumulator covering all inbox messages so far
     pendingMessage: option<IncomingRequest>,  // message being held until sideloads have had a chance to be processed
-}
+};
 
 var globalInbox: Inbox;
 var globalInputQueue: struct {
@@ -247,7 +247,7 @@ type IncomingRequestFromInbox = struct {
     gasPriceL1: uint,         // L1 gas price paid by this tx
     msgSize: uint,            // size of payload message
     msgData: buffer,          // payload message data
-}
+};
 
 type IncomingRequest = struct {
     kind: uint,               // type of message
@@ -261,24 +261,24 @@ type IncomingRequest = struct {
     aggregator: option<AggregatorInfo>,
     adminMode: bool,          // true iff this is a sideloaded message inserted for private execution by a node
     gasEstimationParams: option<GasEstimationParams>,  // used if this is a gas estimation message
-}
+};
 
 type GasEstimationParams = struct {
     computeGasLimit: uint,
     ignoreGasPrice: bool,
     ignoreMaxGas: bool,
-}
+};
 
 type RequestProvenance = struct {
     l1SeqNum: uint,
     parentRequestId: uint,
     indexInParent: uint,
-}
+};
 
 type AggregatorInfo = struct {
     aggregator: option<address>,
     calldataUnits: uint,
-}
+};
 
 func hashIncomingRequest(req: IncomingRequest) -> bytes32 {  // a convenient hash over some fields of a request
     return hash(
@@ -524,7 +524,7 @@ view func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData>
 
 type IncomingRequestQueue = struct {
     q: Queue,
-}
+};
 
 func incomingRequestQueue_new() -> IncomingRequestQueue {
     return struct { q: queue_new() };
@@ -553,7 +553,7 @@ func incomingRequestQueue_put(q: IncomingRequestQueue, req: IncomingRequest) -> 
 
 type IncomingRequestQueueStack = struct {
     qs: QueueStack,
-}
+};
 
 func incomingRequestQueueStack_new() -> IncomingRequestQueueStack {
     return struct { qs: queuestack_new() };
@@ -571,7 +571,7 @@ func incomingRequestQueueStack_push(qs: IncomingRequestQueueStack, q: IncomingRe
 
 type TxRequestQueue = struct {
     q: Queue,
-}
+};
 
 func txRequestQueue_new() -> TxRequestQueue {
     return struct { q: queue_new() };

@@ -48,7 +48,7 @@ type PerBlockReceiptData = struct {
     totalGasUsed: uint,
     numTx: uint,
     numEvmLogs: uint,
-}
+};
 
 type OutputStatistics = struct {
     totalGasUsed: uint,
@@ -56,7 +56,7 @@ type OutputStatistics = struct {
     numEvmLogs: uint,
     numLogs: uint,
     numSends: uint,
-}
+};
 
 public write func output_init() {
     logsQueuedForEndOfBlock = queue_new();
@@ -375,7 +375,7 @@ type LogWith4Topics = struct {  // the structure that ArbOS uses to represent (a
     topic1: uint,
     topic2: uint,
     topic3: uint,
-}
+};
 
 view func updateEvmLogForSendToL1(rawLog: any, state: any) -> (any, any) {
     // This is designed to be used by evmlogs_forall. When used by evmlogs_forall in its pass through

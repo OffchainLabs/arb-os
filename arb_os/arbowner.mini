@@ -489,54 +489,6 @@ view write func arbowner_setFairGasPriceSender(_topFrame: EvmCallFrame, calldata
     evmOp_return(0, 0);
 }
 
-// function isFairGasPriceSender(address addr) external view returns(bool);
-view write func arbowner_isFairGasPriceSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownPc(170, 0, 0);
-    }
-    let mem = bytearray_set256(
-        bytearray_new(0),
-        0,
-        uint(isFairGasPriceSender(address(bytearray_get256(calldata, 4)))),
-    );
-    if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, 32);
-    } else {
-        evmOp_revert_knownPc(171, 0, 0);
-    }
-}
-
-// function getAllFairGasPriceSenders() external view returns(bytes memory);
-view write func arbowner_getAllFairGasPriceSenders(_topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 4) {
-        evmOp_revert_knownPc(180, 0, 0);
-    }
-    if let Some(serialized) = getSerializedFairGasPriceSenders() {
-        let mem = bytearray_copy(
-            serialized,
-            0,
-            bytearray_set256(
-                bytearray_set256(
-                    bytearray_new(0),
-                    0,
-                    32,
-                ),
-                32,
-                bytearray_size(serialized),
-            ),
-            64,
-            bytearray_size(serialized),  // don't need to round up, because already a multiple of 32
-        );
-        if (evmCallStack_setTopFrameMemory(mem)) {
-            evmOp_return(0, bytearray_size(mem));
-        } else {
-            evmOp_revert_knownPc(181, 0, 0);
-        }
-    } else {
-        evmOp_revert_knownPc(182, 0, 0);
-    }
-}
-
 // function getLastUpgradeHash() external view returns(bytes32);
 view write func arbowner_getLastUpgradeHash(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {

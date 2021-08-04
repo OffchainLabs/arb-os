@@ -34,7 +34,7 @@ type SignedTx = struct {
     v: uint,
     r: uint,
     s: uint
-}
+};
 
 write func main(kind: uint, value: any) {
     if (kind == 0) {

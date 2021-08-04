@@ -2,7 +2,8 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::mavm::Value;
+use crate::console::Color;
+use crate::mavm::{Buffer, Value};
 use crate::run::{_bytestack_from_bytes, load_from_file, run, run_from_file, Machine};
 use crate::uint256::Uint256;
 use num_bigint::{BigUint, RandBigInt};
@@ -21,20 +22,22 @@ fn test_from_file_with_args_and_return(
 ) {
     let res = run_from_file(path, args, coverage_filename, false);
     match res {
-        Ok(res) => {
-            assert_eq!(res[0], ret);
-        }
-        Err(e) => {
-            panic!("{:?}", e);
+        Ok(res) => match &res[0] {
+            Value::Buffer(_) if res[0] != ret => panic!("{}", Color::red(&res[0])),
+            _ => assert_eq!(res[0], ret),
+        },
+        Err((error, trace)) => {
+            println!("{}", error);
+            panic!("{:?}", trace);
         }
     }
 }
 
-fn test_from_file(path: &Path) {
+fn test_from_file(path: &Path, ret: Value) {
     test_from_file_with_args_and_return(
         path,
         vec![],
-        Value::Int(Uint256::zero()),
+        ret,
         Some({
             let mut file = path.to_str().unwrap().to_string();
             let length = file.len();
@@ -44,79 +47,89 @@ fn test_from_file(path: &Path) {
     );
 }
 
+/// Runs a .mexe file, seeing if any string-encoded error messages are reported
+fn test_for_error_string(path: &Path) {
+    test_from_file(path, Value::Buffer(Buffer::new_empty()))
+}
+
+/// Runs a .mexe file, seeing if any integer-encoded error messages are reported
+fn test_for_numeric_error_code(path: &Path) {
+    test_from_file(path, Value::Int(Uint256::from_usize(0)))
+}
+
 #[test]
 fn test_arraytest() {
-    test_from_file(Path::new("builtin/arraytest.mexe"));
+    test_for_numeric_error_code(Path::new("builtin/arraytest.mexe"));
 }
 
 #[test]
 fn test_kvstest() {
-    test_from_file(Path::new("builtin/kvstest.mexe"));
+    test_for_numeric_error_code(Path::new("builtin/kvstest.mexe"));
 }
 
 #[test]
 fn test_storage_map() {
-    test_from_file(Path::new("stdlib/storageMapTest.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/storageMapTest.mexe"));
 }
 
 #[test]
 fn test_queuetest() {
-    test_from_file(Path::new("stdlib/queuetest.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/queuetest.mexe"));
 }
 
 #[test]
 fn test_globaltest() {
-    test_from_file(Path::new("builtin/globaltest.mexe"));
+    test_for_numeric_error_code(Path::new("builtin/globaltest.mexe"));
 }
 
 #[test]
 fn test_pqtest() {
-    test_from_file(Path::new("stdlib/priorityqtest.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/priorityqtest.mexe"));
 }
 
 #[test]
 fn test_bytearray() {
-    test_from_file(Path::new("stdlib/bytearraytest.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/bytearraytest.mexe"));
 }
 
 #[test]
 fn test_map() {
-    test_from_file(Path::new("builtin/maptest.mexe"));
+    test_for_numeric_error_code(Path::new("builtin/maptest.mexe"));
 }
 
 #[test]
 fn test_keccak() {
-    test_from_file(Path::new("stdlib/keccaktest.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/keccaktest.mexe"));
 }
 
 #[test]
 fn test_bls() {
-    test_from_file(Path::new("stdlib/blstest.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/blstest.mexe"));
 }
 
 #[test]
 fn test_sha256() {
-    test_from_file(Path::new("stdlib/sha256test.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/sha256test.mexe"));
 }
 
 #[test]
 fn test_fixedpoint() {
-    test_from_file(Path::new("stdlib/fixedpointtest.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/fixedpointtest.mexe"));
 }
 
 #[test]
 fn test_ripemd160() {
-    test_from_file(Path::new("stdlib/ripemd160test.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/ripemd160test.mexe"));
 }
 
 #[test]
 fn test_biguint() {
-    test_from_file(Path::new("stdlib/biguinttest.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/biguinttest.mexe"));
 }
 
 #[test]
 fn test_expanding_int_array() {
-    test_from_file(Path::new("stdlib/expandingIntArrayTest.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/expandingIntArrayTest.mexe"));
 }
 
 #[test]
@@ -221,7 +234,13 @@ fn test_rlp_list3(
 
 #[test]
 fn test_codeload() {
-    test_from_file(Path::new("minitests/codeloadtest.mexe"));
+    test_for_numeric_error_code(Path::new("minitests/codeloadtest.mexe"));
+}
+
+#[test]
+fn test_closures() {
+    test_for_error_string(Path::new("minitests/simple-closure.mexe"));
+    test_for_error_string(Path::new("minitests/closure.mexe"));
 }
 
 #[test]

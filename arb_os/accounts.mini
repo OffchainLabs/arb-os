@@ -38,7 +38,7 @@ type AccountStore = struct {
     numContracts: uint,
     codeRefTable: map<bytes32, CodeRef>,
     escrowStore: EscrowStore,
-}
+};
 
 // CodeRefs are reference-counted, but accuracy of the reference count only affects performance, not correctness.
 // If we drop a CodeRef too early, the result is that we might recompile some EVM code that we already compiled,
@@ -52,12 +52,12 @@ type CodeRef = struct {
     code: ByteArray,                         // EVM code
     evmJumpTable: map<uint, view write func()>,  // maps each valid EVM jump destination to the corresponding AVM codepoint
     startCodePoint: view write func(),           // entry point for the translated AVM code
-}
+};
 
 type EscrowStore = struct {
     nextKey: uint,
     escrowedValues: StorageMap,   // amount escrowed under each key; StorageMap is a zero-default uint->uint map
-}
+};
 
 type Account = struct {
     addr: address,
@@ -67,20 +67,20 @@ type Account = struct {
     contractInfo: option<AccountContractInfo>,  // info on the contract at this address, if there is one
     aggregatorInfo: option<AggregatorInfo>,     // info on the aggregator using this address, if there is one
     aggregatorToPay: option<address>,           // aggregator this user prefers; if None, use the default aggregator
-}
+};
 
 type AccountContractInfo = struct {
     code: ByteArray,                         // deployed EVM code for the contract
     evmJumpTable: map<uint, view write func()>,  // maps each valid EVM jump destination to the corresponding AVM codepoint
     startCodePoint: view write func(),           // entry point for the translated AVM code
     storage: StorageMap,
-}
+};
 
 type AggregatorInfo = struct {
     decompressionState: option<AggregatorDecompressionState>,
     feeCollector: address,    // address to pay this aggregator's fees to (could be, e.g., aggregator's cold wallet)
     baseTxFeeL1Gas: uint,     // base fee per L2 tx that this aggregator charges
-}
+};
 
 // globalAccountStore is the authoritative source of info on accounts that exist on this chain
 // Note that other accountStores will exist, but these others are all contingent somehow,
@@ -671,15 +671,15 @@ public func account_getCode(acct: Account) -> option<ByteArray> {
 type asfa_wrappedState = struct {
     innerClosure: func(Account, any) -> any,
     innerState: any,
-}
+};
 
 // Iterate over all of the accounts in an accountStore.
 // For each account, do    state = closure(account, state)
 // Return the resulting state
 // The order of traversal is deterministic but weird, and might change in future upgrades, so don't rely on it.
-public func accountStore_forall(acctStore: AccountStore, closure: func(Account, any) -> any, startState: any) -> any {
+public func accountStore_forall(acctStore: AccountStore, closure_: func(Account, any) -> any, startState: any) -> any {
     let wrappedState = struct {
-        innerClosure: closure,
+        innerClosure: closure_,
         innerState: startState,
     };
     wrappedState = unsafecast<asfa_wrappedState>(builtin_kvsForall(

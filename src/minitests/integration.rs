@@ -244,4 +244,12 @@ fn test_error_system() {
         ],
         &[],
     );
+
+    // check that replicas aren't allowed
+    check_issues(
+        "minitests/replicas.mini",
+        vec!["replicas".to_string()].into_iter().collect(),
+        &[],
+        &[&[2, 6]],
+    );
 }

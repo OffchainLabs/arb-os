@@ -3,6 +3,7 @@
  */
 
 use crate::compile::{DebugInfo, TypeTree};
+use crate::console::Color;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
@@ -14,7 +15,8 @@ use std::{collections::HashMap, fmt, sync::Arc};
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Label {
-    Func(StringId),
+    Func(StringId),    // these are the same,
+    Closure(StringId), // it's just for printing & debug purposes
     Anon(usize),
     External(usize), // slot in imported funcs list
     Evm(usize),      // program counter in EVM contract
@@ -29,6 +31,7 @@ impl Label {
     ) -> (Self, usize) {
         match self {
             Label::Func(sid) => (Label::Func(sid + func_offset), sid + func_offset),
+            Label::Closure(sid) => (Label::Closure(sid + func_offset), sid + func_offset),
             Label::Anon(pc) => (Label::Anon(pc + int_offset), func_offset),
             Label::External(slot) => (Label::External(slot + ext_offset), func_offset),
             Label::Evm(_) => (self, func_offset),
@@ -37,7 +40,7 @@ impl Label {
 
     pub fn avm_hash(&self) -> Value {
         match self {
-            Label::Func(sid) => Value::avm_hash2(
+            Label::Func(sid) | Label::Closure(sid) => Value::avm_hash2(
                 &Value::Int(Uint256::from_usize(4)),
                 &Value::Int(Uint256::from_usize(*sid)),
             ),
@@ -60,6 +63,7 @@ impl fmt::Display for Label {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Label::Func(sid) => write!(f, "function_{}", sid),
+            Label::Closure(sid) => write!(f, "closure_{}", sid),
             Label::Anon(n) => write!(f, "label_{}", n),
             Label::External(slot) => write!(f, "external_{}", slot),
             Label::Evm(pc) => write!(f, "EvmPC({})", pc),
@@ -213,6 +217,18 @@ impl Instruction {
             max_func_offset,
         )
     }
+
+    pub fn pretty_print(&self, highlight: &str) -> String {
+        let label_color = Color::PINK;
+        match &self.immediate {
+            Some(value) => format!(
+                "{} {}",
+                self.opcode.pretty_print(label_color),
+                value.pretty_print(highlight)
+            ),
+            None => format!("{}", self.opcode.pretty_print(label_color)),
+        }
+    }
 }
 
 impl<T> fmt::Display for Instruction<T>
@@ -221,7 +237,10 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.immediate {
-            Some(v) => write!(f, "[{}]\n        {}", v, self.opcode),
+            Some(value) => match value {
+                Value::Tuple(_) => write!(f, "[{}]\n        {}", value, self.opcode),
+                _ => write!(f, "{} {}", self.opcode, value),
+            },
             None => write!(f, "{}", self.opcode),
         }
     }
@@ -840,6 +859,39 @@ impl Value {
             panic!();
         }
     }
+
+    pub fn pretty_print(&self, highlight: &str) -> String {
+        match self {
+            Value::Int(i) => Color::color(highlight, i),
+            Value::Buffer(_buf) => Color::lavender(self),
+            Value::CodePoint(pc) => Color::color(highlight, pc),
+            Value::Label(label) => Color::color(highlight, label),
+            Value::Tuple(tup) => match tup.is_empty() {
+                true => Color::grey("_"),
+                false => {
+                    let mut s = Color::color(highlight, "(");
+                    for (i, value) in tup.iter().enumerate() {
+                        let child = value.pretty_print(highlight);
+                        match i == 0 {
+                            true => {
+                                s = format!("{}{}", s, child);
+                            }
+                            false => {
+                                s = format!("{}{} {}", s, Color::grey(","), child);
+                            }
+                        }
+                    }
+                    format!("{}{}", s, Color::color(highlight, ")"))
+                }
+            },
+        }
+    }
+}
+
+impl From<usize> for Value {
+    fn from(v: usize) -> Self {
+        Self::Int(Uint256::from_usize(v))
+    }
 }
 
 impl fmt::Display for Value {
@@ -847,7 +899,11 @@ impl fmt::Display for Value {
         match self {
             Value::Int(i) => i.fmt(f),
             Value::Buffer(buf) => {
-                write!(f, "Buffer({})", buf.hex_encode())
+                write!(
+                    f,
+                    "\"{}\"",
+                    String::from_utf8_lossy(&hex::decode(buf.hex_encode()).unwrap())
+                )
             }
             Value::CodePoint(pc) => write!(f, "CodePoint({})", pc),
             Value::Label(label) => write!(f, "Label({})", label),
@@ -874,7 +930,7 @@ impl fmt::Display for Value {
 pub enum Opcode {
     GetLocal,
     SetLocal,
-    MakeFrame(usize, usize, bool),
+    MakeFrame(usize, usize, bool, bool),
     Label(Label),
     PushExternal(usize), // push codeptr of external function -- index in imported_funcs
     TupleGet(usize),     // arg is size of anysize_tuple
@@ -1017,6 +1073,17 @@ impl Opcode {
             _ => false,
         }
     }
+
+    pub fn pretty_print(&self, label_color: &str) -> String {
+        match self {
+            Opcode::MakeFrame(nargs, space, prebuilt, return_address) => match prebuilt {
+                true => format!("MakeFrame<{}, {}, {}>", nargs, space, return_address),
+                false => format!("MakeFrame({}, {}, {})", nargs, space, return_address),
+            },
+            Opcode::Label(label) => Value::Label(*label).pretty_print(label_color),
+            _ => format!("{}", self.to_name()),
+        }
+    }
 }
 
 impl Opcode {
@@ -1102,10 +1169,22 @@ impl Opcode {
     pub fn to_name(&self) -> &str {
         match self {
             Opcode::AVMOpcode(avm) => avm.to_name(),
+            Opcode::GetLocal => "GetLocal",
+            Opcode::SetLocal => "SetLocal",
+            Opcode::GetGlobalVar(_) => "GetGlobal",
+            Opcode::SetGlobalVar(_) => "SetGlobal",
+            Opcode::Label(_) => "Label",
+            Opcode::PushExternal(_) => "PushExternal",
+            Opcode::TupleGet(_) => "TupleGet",
+            Opcode::TupleSet(_) => "TupleSet",
+            Opcode::ArrayGet => "ArrayGet",
+            Opcode::UncheckedFixedArrayGet(_) => "UncheckedFixedArrayGet",
+            Opcode::Return => "return",
             Opcode::UnaryMinus => "unaryminus",
             Opcode::LogicalAnd => "logicaland",
             Opcode::LogicalOr => "logicalor",
-            _ => "Unknown",
+            Opcode::Len => "len",
+            _ => "to_name() not implemented",
         }
     }
 }
@@ -1395,7 +1474,9 @@ fn test_consistent_opcode_numbers() {
 impl fmt::Display for Opcode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Opcode::MakeFrame(s1, s2, ret) => write!(f, "MakeFrame({}, {}, {})", s1, s2, ret),
+            Opcode::MakeFrame(s1, s2, pre, ret) => {
+                write!(f, "MakeFrame({}, {}, {}, {})", s1, s2, pre, ret)
+            }
             Opcode::Label(label) => label.fmt(f),
             _ => write!(f, "{}", self.to_name()),
         }

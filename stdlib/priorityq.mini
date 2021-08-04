@@ -9,13 +9,13 @@ use core::array::array_resize;
 type PqItem = struct {
     priority: uint,
     item: any,
-}
+};
 
 type PriorityQ = struct {
     size: uint,
     capacity: uint,
     contents: []PqItem,
-}
+};
 
 public func priorityq_new() -> PriorityQ {
     return struct {
