@@ -984,14 +984,13 @@ impl Opcode {
         match self {
             Opcode::AVMOpcode(AVMOpcode::Inbox)
             | Opcode::AVMOpcode(AVMOpcode::InboxPeek)
-            | Opcode::AVMOpcode(AVMOpcode::Send)        // 2 sends can't be reordered even though no state is read
             | Opcode::AVMOpcode(AVMOpcode::Rpush)
             | Opcode::AVMOpcode(AVMOpcode::PushInsn)
             | Opcode::AVMOpcode(AVMOpcode::PushInsnImm)
             | Opcode::AVMOpcode(AVMOpcode::ErrCodePoint)
             | Opcode::AVMOpcode(AVMOpcode::ErrPush)
             | Opcode::AVMOpcode(AVMOpcode::PushGas)
-            | Opcode::AVMOpcode(AVMOpcode::Sideload)    // this is special-cased, so we can't reorder these
+            | Opcode::AVMOpcode(AVMOpcode::Sideload)
             | Opcode::AVMOpcode(AVMOpcode::Jump)
             | Opcode::AVMOpcode(AVMOpcode::Cjump)
             | Opcode::AVMOpcode(AVMOpcode::AuxPop)

@@ -1,5 +1,5 @@
 //
-// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
 //
 
 use crate::compile::{AbstractSyntaxTree, StructField, Type, TypeCheckedNode, TypeTree};
