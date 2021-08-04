@@ -832,7 +832,13 @@ impure func payForTxAndL1Gas(
             paymentLimitWei,
             feeStats.noFeeGasEstimationMode,
         );
-        feeStats = ufs;
+        feeStats = ufs with {
+            price: ufs.price with {
+                tx: txPrice + feeStats.price.tx
+            } with {
+                calldataUnit: calldataUnitPrice + feeStats.price.calldataUnit
+            }
+        };
         totalWeiPaid = totalWeiPaid + weiPaid;
         fullyPaid
     }) {
