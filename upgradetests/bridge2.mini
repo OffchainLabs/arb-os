@@ -19,7 +19,7 @@ type GlobalsAfterUpgrade = struct {
     _jump_table: any,
 }
 
-public impure func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> (GlobalsAfterUpgrade, uint) {
+public view func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> (GlobalsAfterUpgrade, uint) {
     let newGlobal1 = set_newGlobal1_onUpgrade(input_globals);
     let newGlobal2 = set_newGlobal2_onUpgrade(input_globals);
     let newGlobal3 = set_newGlobal3_onUpgrade(input_globals);

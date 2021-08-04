@@ -44,7 +44,8 @@ pub trait AbstractSyntaxTree {
             }
         }
     }
-    fn is_pure(&mut self) -> bool;
+    fn is_view(&mut self, type_tree: &TypeTree) -> bool;
+    fn is_write(&mut self, type_tree: &TypeTree) -> bool;
 }
 
 ///Represents a mutable reference to any AST node.
@@ -61,16 +62,26 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
         match self {
             TypeCheckedNode::Statement(stat) => stat.child_nodes(),
             TypeCheckedNode::Expression(exp) => exp.child_nodes(),
-            TypeCheckedNode::StructField(field) => field.child_nodes(),
+            TypeCheckedNode::StructField(field) => {
+                vec![TypeCheckedNode::Expression(&mut field.value)]
+            }
             TypeCheckedNode::Type(tipe) => tipe.child_nodes(),
         }
     }
-    fn is_pure(&mut self) -> bool {
+    fn is_view(&mut self, type_tree: &TypeTree) -> bool {
         match self {
-            TypeCheckedNode::Statement(stat) => stat.is_pure(),
-            TypeCheckedNode::Expression(exp) => exp.is_pure(),
-            TypeCheckedNode::StructField(field) => field.is_pure(),
-            TypeCheckedNode::Type(_) => true,
+            TypeCheckedNode::Statement(stat) => stat.is_view(type_tree),
+            TypeCheckedNode::Expression(exp) => exp.is_view(type_tree),
+            TypeCheckedNode::StructField(field) => field.is_view(type_tree),
+            TypeCheckedNode::Type(_) => false,
+        }
+    }
+    fn is_write(&mut self, type_tree: &TypeTree) -> bool {
+        match self {
+            TypeCheckedNode::Statement(stat) => stat.is_write(type_tree),
+            TypeCheckedNode::Expression(exp) => exp.is_write(type_tree),
+            TypeCheckedNode::StructField(field) => field.is_write(type_tree),
+            TypeCheckedNode::Type(_) => false,
         }
     }
 }
@@ -113,9 +124,16 @@ impl<'a> TypeCheckedNode<'a> {
 
 ///Keeps track of compiler enforced properties, currently only tracks purity, may be extended to
 /// keep track of potential to throw or other properties.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PropertiesList {
-    pub pure: bool,
+    pub view: bool,
+    pub write: bool,
+}
+
+impl PropertiesList {
+    pub fn new(view: bool, write: bool) -> Self {
+        PropertiesList { view, write }
+    }
 }
 
 pub type TypeCheckedFunc = Func<TypeCheckedStatement>;
@@ -127,8 +145,15 @@ impl AbstractSyntaxTree for TypeCheckedFunc {
             .map(|stat| TypeCheckedNode::Statement(stat))
             .collect()
     }
-    fn is_pure(&mut self) -> bool {
-        self.code.iter_mut().all(|statement| statement.is_pure())
+    fn is_view(&mut self, type_tree: &TypeTree) -> bool {
+        self.code
+            .iter_mut()
+            .any(|statement| statement.is_view(type_tree))
+    }
+    fn is_write(&mut self, type_tree: &TypeTree) -> bool {
+        self.code
+            .iter_mut()
+            .any(|statement| statement.is_write(type_tree))
     }
 }
 
@@ -852,17 +877,29 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
             }
         }
     }
-    fn is_pure(&mut self) -> bool {
-        if let TypeCheckedStatementKind::Noop() | TypeCheckedStatementKind::ReturnVoid() = self.kind
-        {
-            true
-        } else if let TypeCheckedStatementKind::AssignGlobal(_, _) = self.kind {
-            false
-        } else if let TypeCheckedStatementKind::Asm(vec, _) = &self.kind {
-            vec.iter().all(|insn| insn.is_pure())
-                && self.child_nodes().iter_mut().all(|node| node.is_pure())
-        } else {
-            self.child_nodes().iter_mut().all(|node| node.is_pure())
+    fn is_view(&mut self, type_tree: &TypeTree) -> bool {
+        match &mut self.kind {
+            TypeCheckedStatementKind::Asm(insns, args) => {
+                insns.iter().any(|insn| insn.is_view(type_tree))
+                    || args.iter_mut().any(|expr| expr.is_view(type_tree))
+            }
+            _ => self
+                .child_nodes()
+                .iter_mut()
+                .any(|node| node.is_view(type_tree)),
+        }
+    }
+    fn is_write(&mut self, type_tree: &TypeTree) -> bool {
+        match &mut self.kind {
+            TypeCheckedStatementKind::AssignGlobal(_, _) => true,
+            TypeCheckedStatementKind::Asm(insns, args) => {
+                insns.iter().any(|insn| insn.is_write(type_tree))
+                    || args.iter_mut().any(|expr| expr.is_write(type_tree))
+            }
+            _ => self
+                .child_nodes()
+                .iter_mut()
+                .any(|node| node.is_write(type_tree)),
         }
     }
 }
@@ -1038,23 +1075,57 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                 .collect(),
         }
     }
-    fn is_pure(&mut self) -> bool {
+    fn is_view(&mut self, type_tree: &TypeTree) -> bool {
         match &mut self.kind {
-            TypeCheckedExprKind::FuncRef(_, tipe) => {
-                if let Type::Func(impure, _, _) = tipe {
-                    !*impure
-                } else {
-                    panic!("Internal error: func ref has non function type")
-                }
+            TypeCheckedExprKind::FunctionCall(func, args, _, _) => {
+                let func_type = func
+                    .get_type()
+                    .get_representation(type_tree)
+                    .expect("Type tree inconsistency");
+
+                let view = match func_type {
+                    Type::Func(view, ..) => view,
+                    _ => panic!("Internal error: func call has non function type {:?}", func),
+                };
+                view || func.is_view(type_tree)
+                    || args.iter_mut().any(|expr| expr.is_view(type_tree))
             }
             TypeCheckedExprKind::Asm(_, insns, args) => {
-                insns.iter().all(|insn| insn.is_pure())
-                    && args.iter_mut().all(|expr| expr.is_pure())
+                insns.iter().any(|insn| insn.is_view(type_tree))
+                    || args.iter_mut().any(|expr| expr.is_view(type_tree))
             }
-            TypeCheckedExprKind::GlobalVariableRef(_, _)
-            | TypeCheckedExprKind::GetGas
-            | TypeCheckedExprKind::SetGas(_) => false,
-            _ => self.child_nodes().iter_mut().all(|node| node.is_pure()),
+            TypeCheckedExprKind::GetGas | TypeCheckedExprKind::GlobalVariableRef(_, _) => true,
+            _ => self
+                .child_nodes()
+                .iter_mut()
+                .any(|node| node.is_view(type_tree)),
+        }
+    }
+    fn is_write(&mut self, type_tree: &TypeTree) -> bool {
+        match &mut self.kind {
+            TypeCheckedExprKind::FunctionCall(func, args, _, _) => {
+                let func_type = func
+                    .get_type()
+                    .get_representation(type_tree)
+                    .expect("Type tree inconsistency");
+
+                let write = match func_type {
+                    Type::Func(_, write, ..) => write,
+                    _ => panic!("Internal error: func call has non function type {:?}", func),
+                };
+                write
+                    || func.is_write(type_tree)
+                    || args.iter_mut().any(|expr| expr.is_write(type_tree))
+            }
+            TypeCheckedExprKind::Asm(_, insns, args) => {
+                insns.iter().any(|insn| insn.is_write(type_tree))
+                    || args.iter_mut().any(|expr| expr.is_write(type_tree))
+            }
+            TypeCheckedExprKind::SetGas(_) => true,
+            _ => self
+                .child_nodes()
+                .iter_mut()
+                .any(|node| node.is_write(type_tree)),
         }
     }
 }
@@ -1110,8 +1181,11 @@ impl AbstractSyntaxTree for TypeCheckedFieldInitializer {
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
         vec![TypeCheckedNode::Expression(&mut self.value)]
     }
-    fn is_pure(&mut self) -> bool {
-        self.value.is_pure()
+    fn is_view(&mut self, type_tree: &TypeTree) -> bool {
+        self.value.is_view(type_tree)
+    }
+    fn is_write(&mut self, type_tree: &TypeTree) -> bool {
+        self.value.is_write(type_tree)
     }
 }
 
@@ -1367,7 +1441,7 @@ pub fn typecheck_function(
         tipe: fd.tipe.clone(),
         kind: fd.kind,
         debug_info: DebugInfo::from(fd.debug_info),
-        properties: fd.properties.clone(),
+        properties: fd.properties,
     })
 }
 
@@ -2160,7 +2234,7 @@ fn typecheck_expr(
                     scopes,
                 )?;
                 match tc_fexpr.get_type().get_representation(type_tree)? {
-                    Type::Func(impure, arg_types, ret_type) => {
+                    Type::Func(view, write, arg_types, ret_type) => {
                         if args.len() == arg_types.len() {
                             let mut tc_args = Vec::new();
                             for i in 0..args.len() {
@@ -2196,7 +2270,7 @@ fn typecheck_expr(
                                 Box::new(tc_fexpr),
                                 tc_args,
                                 *ret_type,
-                                PropertiesList { pure: !impure },
+                                PropertiesList::new(view, write),
                             ))
                         } else {
                             Err(CompileError::new_type_error(
@@ -3917,13 +3991,25 @@ impl AbstractSyntaxTree for TypeCheckedCodeBlock {
             )
             .collect()
     }
-    fn is_pure(&mut self) -> bool {
-        self.body.iter_mut().all(|statement| statement.is_pure())
-            && self
+    fn is_view(&mut self, type_tree: &TypeTree) -> bool {
+        self.body
+            .iter_mut()
+            .any(|statement| statement.is_view(type_tree))
+            || self
                 .ret_expr
                 .as_mut()
-                .map(|expr| expr.is_pure())
-                .unwrap_or(true)
+                .map(|expr| expr.is_view(type_tree))
+                .unwrap_or(false)
+    }
+    fn is_write(&mut self, type_tree: &TypeTree) -> bool {
+        self.body
+            .iter_mut()
+            .any(|statement| statement.is_write(type_tree))
+            || self
+                .ret_expr
+                .as_mut()
+                .map(|expr| expr.is_write(type_tree))
+                .unwrap_or(false)
     }
 }
 

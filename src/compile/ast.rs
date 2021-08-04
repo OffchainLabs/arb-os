@@ -8,6 +8,7 @@ use crate::compile::typecheck::{
     AbstractSyntaxTree, InliningMode, PropertiesList, TypeCheckedNode,
 };
 use crate::compile::{path_display, CompileError};
+use crate::console::Color;
 use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
 use crate::mavm::{Instruction, Value};
 use crate::pos::Location;
@@ -46,6 +47,10 @@ impl DebugInfo {
             location,
             attributes,
         }
+    }
+
+    pub fn locs(&self) -> Vec<Location> {
+        self.location.into_iter().collect()
     }
 }
 
@@ -95,7 +100,7 @@ pub enum Type {
     FixedArray(Box<Type>, usize),
     Struct(Vec<StructField>),
     Nominal(Vec<String>, StringId),
-    Func(bool, Vec<Type>, Box<Type>),
+    Func(bool, bool, Vec<Type>, Box<Type>),
     Map(Box<Type>, Box<Type>),
     Any,
     Every,
@@ -126,15 +131,22 @@ impl AbstractSyntaxTree for Type {
                 .iter_mut()
                 .map(|field| TypeCheckedNode::Type(&mut field.tipe))
                 .collect(),
-            Type::Func(_, args, ret) => vec![TypeCheckedNode::Type(ret)]
+            Type::Func(_, _, args, ret) => vec![TypeCheckedNode::Type(ret)]
                 .into_iter()
                 .chain(args.iter_mut().map(|t| TypeCheckedNode::Type(t)))
                 .collect(),
             Type::Map(key, value) => vec![TypeCheckedNode::Type(key), TypeCheckedNode::Type(value)],
         }
     }
-    fn is_pure(&mut self) -> bool {
-        true
+
+    /// for iteration purposes we say types themselves are not view
+    fn is_view(&mut self, _: &TypeTree) -> bool {
+        false
+    }
+
+    /// for iteration purposes we say types themselves are not write
+    fn is_write(&mut self, _: &TypeTree) -> bool {
+        false
     }
 }
 
@@ -173,7 +185,7 @@ impl Type {
                 }
                 tipes
             }
-            Type::Func(_, args, ret) => {
+            Type::Func(_, _, args, ret) => {
                 let mut tipes = ret.find_nominals();
                 for arg in args {
                     tipes.extend(arg.find_nominals());
@@ -271,8 +283,8 @@ impl Type {
                     false
                 }
             }
-            Type::Func(_, args, ret) => {
-                if let Type::Func(_, args2, ret2) = rhs {
+            Type::Func(_, _, args, ret) => {
+                if let Type::Func(_, _, args2, ret2) = rhs {
                     //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
                     type_vectors_covariant_castable(args2, args, type_tree, seen.clone())
                         && (ret.covariant_castable(ret2, type_tree, seen))
@@ -375,10 +387,11 @@ impl Type {
                     false
                 }
             }
-            Type::Func(is_impure, args, ret) => {
-                if let Type::Func(is_impure2, args2, ret2) = rhs {
+            Type::Func(view, write, args, ret) => {
+                if let Type::Func(view2, write2, args2, ret2) = rhs {
                     //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
-                    (*is_impure || !is_impure2)
+                    (*view || !view2)
+                        && (*write || !write2)
                         && type_vectors_castable(args2, args, type_tree, seen.clone())
                         && (ret.castable(ret2, type_tree, seen))
                 } else {
@@ -476,10 +489,11 @@ impl Type {
                     false
                 }
             }
-            Type::Func(is_impure, args, ret) => {
-                if let Type::Func(is_impure2, args2, ret2) = rhs {
+            Type::Func(view, write, args, ret) => {
+                if let Type::Func(view2, write2, args2, ret2) = rhs {
                     //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
-                    (*is_impure || !is_impure2)
+                    (*view || !view2)
+                        && (*write || !write2)
                         && arg_vectors_assignable(args2, args, type_tree, seen.clone())
                         && (ret.assignable(ret2, type_tree, seen))
                 } else {
@@ -608,8 +622,8 @@ impl Type {
                     }
                 }
             }
-            Type::Func(is_impure, args, ret) => {
-                if let Type::Func(is_impure2, args2, ret2) = rhs {
+            Type::Func(view, write, args, ret) => {
+                if let Type::Func(view2, write2, args2, ret2) = rhs {
                     for (index, (left, right)) in args.iter().zip(args2.iter()).enumerate() {
                         if let Some(inner) = left.first_mismatch(right, type_tree, seen.clone()) {
                             return Some(TypeMismatch::FuncArg(index, Box::new(inner)));
@@ -621,8 +635,11 @@ impl Type {
                     if let Some(inner) = ret.first_mismatch(ret2, type_tree, seen) {
                         return Some(TypeMismatch::FuncReturn(Box::new(inner)));
                     }
-                    if !is_impure && *is_impure2 {
-                        return Some(TypeMismatch::Purity);
+                    if !view && *view2 {
+                        return Some(TypeMismatch::View);
+                    }
+                    if !write && *write2 {
+                        return Some(TypeMismatch::Write);
                     }
                     None
                 } else {
@@ -708,9 +725,9 @@ impl Type {
                                 | Type::Buffer
                                 | Type::Every => String::new(),
                                 _ => format!(
-                                    "\nleft: {}\nright {}\nFirst mismatch: ",
-                                    left.display(),
-                                    right.display()
+                                    "\nleft: {}\nright: {}\nFirst mismatch: ",
+                                    Color::red(left.print(type_tree)),
+                                    Color::red(right.print(type_tree)),
                                 ),
                             },
                         }
@@ -771,7 +788,9 @@ impl Type {
                 }
                 (value_from_field_list(vals), is_safe)
             }
-            Type::Map(_, _) | Type::Func(_, _, _) | Type::Nominal(_, _) => (Value::none(), false),
+            Type::Map(_, _) | Type::Func(_, _, _, _) | Type::Nominal(_, _) => {
+                (Value::none(), false)
+            }
             Type::Any => (Value::none(), true),
             Type::Every => (Value::none(), false),
             Type::Option(_) => (Value::new_tuple(vec![Value::Int(Uint256::zero())]), true),
@@ -782,6 +801,10 @@ impl Type {
     pub fn display(&self) -> String {
         self.display_indented(0, "::", None, false, &TypeTree::new())
             .0
+    }
+
+    pub fn print(&self, type_tree: &TypeTree) -> String {
+        self.display_indented(0, "::", None, false, type_tree).0
     }
 
     pub fn display_separator(
@@ -899,10 +922,13 @@ impl Type {
                 ));
                 (out, type_set)
             }
-            Type::Func(impure, args, ret) => {
+            Type::Func(view, write, args, ret) => {
                 let mut out = String::new();
-                if *impure {
-                    out.push_str("impure ");
+                if *view {
+                    out.push_str("view ");
+                }
+                if *write {
+                    out.push_str("write ");
                 }
                 out.push_str("func(");
                 for arg in args {
@@ -1116,8 +1142,8 @@ impl PartialEq for Type {
             (Type::FixedArray(a1, s1), Type::FixedArray(a2, s2)) => (s1 == s2) && (*a1 == *a2),
             (Type::Struct(f1), Type::Struct(f2)) => struct_field_vectors_equal(&f1, &f2),
             (Type::Map(k1, v1), Type::Map(k2, v2)) => (*k1 == *k2) && (*v1 == *v2),
-            (Type::Func(i1, a1, r1), Type::Func(i2, a2, r2)) => {
-                (i1 == i2) && type_vectors_equal(&a1, &a2) && (*r1 == *r2)
+            (Type::Func(v1, w1, a1, r1), Type::Func(v2, w2, a2, r2)) => {
+                (v1 == v2) && (w1 == w2) && type_vectors_equal(&a1, &a2) && (*r1 == *r2)
             }
             (Type::Nominal(p1, id1), Type::Nominal(p2, id2)) => (p1, id1) == (p2, id2),
             (Type::Option(x), Type::Option(y)) => *x == *y,
@@ -1160,7 +1186,8 @@ pub enum TypeMismatch {
     Option(Box<TypeMismatch>),
     Union(usize, Box<TypeMismatch>),
     UnionLength(usize, usize),
-    Purity,
+    View,
+    Write,
 }
 
 impl fmt::Display for TypeMismatch {
@@ -1220,7 +1247,12 @@ impl fmt::Display for TypeMismatch {
                     "left func has {} args but right func has {} args",
                     left, right
                 ),
-                TypeMismatch::Purity => format!("assigning impure function to pure function"),
+                TypeMismatch::View =>
+                    format!("assigning {} function to pure function", Color::red("view")),
+                TypeMismatch::Write => format!(
+                    "assigning {} function to pure function",
+                    Color::red("write")
+                ),
             }
         )
     }
@@ -1282,7 +1314,7 @@ pub enum FuncDeclKind {
     Private,
 }
 
-///Represents a top level function declaration.  The is_impure, args, and ret_type fields are
+///Represents a top level function declaration.  The view, write, args, and ret_type fields are
 /// assumed to be derived from tipe, and this must be upheld by the user of this type.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Func<T = Statement> {
@@ -1299,7 +1331,8 @@ pub struct Func<T = Statement> {
 impl Func {
     pub fn new(
         name: StringId,
-        is_impure: bool,
+        view: bool,
+        write: bool,
         args: Vec<FuncArg>,
         ret_type: Type,
         code: Vec<Statement>,
@@ -1316,14 +1349,14 @@ impl Func {
             args: args_vec,
             ret_type: ret_type.clone(),
             code,
-            tipe: Type::Func(is_impure, arg_types, Box::new(ret_type)),
+            tipe: Type::Func(view, write, arg_types, Box::new(ret_type)),
             kind: if exported {
                 FuncDeclKind::Public
             } else {
                 FuncDeclKind::Private
             },
             debug_info,
-            properties: PropertiesList { pure: !is_impure },
+            properties: PropertiesList::new(view, write),
         }
     }
 }

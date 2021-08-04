@@ -21,7 +21,7 @@ type opClosure = struct {
 }
 
 
-impure func main() {
+write func main() {
 	asm(tests(),) { log };
 }
 

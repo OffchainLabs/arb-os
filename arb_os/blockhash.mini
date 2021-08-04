@@ -7,14 +7,14 @@ var blockhashes: struct {
     oldHashes: [256]bytes32,
 };
 
-public impure func blockhash_init() {
+public write func blockhash_init() {
     blockhashes = struct {
         latestBlockNum: 0,
         oldHashes: newfixedarray(256, bytes32(0)),
     };
 }
 
-public impure func blockhash_getForBlock(blockNum: uint) -> option<bytes32> {
+public view func blockhash_getForBlock(blockNum: uint) -> option<bytes32> {
     return xif ( (blockNum > blockhashes.latestBlockNum) || (blockNum < blockhashes.latestBlockNum-255) ) {
         None<bytes32>
     } else {
@@ -22,7 +22,7 @@ public impure func blockhash_getForBlock(blockNum: uint) -> option<bytes32> {
     };
 }
 
-public impure func blockhash_submitHash(ethBlockNum: uint, inboxAccumHash: bytes32) {
+public view write func blockhash_submitHash(ethBlockNum: uint, inboxAccumHash: bytes32) {
     let b = xif(ethBlockNum+255 > blockhashes.latestBlockNum) {
         blockhashes.latestBlockNum - 255
     } else {

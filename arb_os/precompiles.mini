@@ -43,7 +43,7 @@ use arbretryable::arbretryable_txcall;
 use arbstatistics::arbStatistics_txcall;
 
 
-public impure func precompiles_init(acctStore: AccountStore, isUpgrade: bool) -> option<AccountStore> {
+public view write func precompiles_init(acctStore: AccountStore, isUpgrade: bool) -> option<AccountStore> {
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x01),
@@ -187,7 +187,7 @@ public impure func precompiles_init(acctStore: AccountStore, isUpgrade: bool) ->
     return Some(acctStore);
 }
 
-public impure func makeTrampoline(txcallFunc: impure func()) -> impure func() {
+public view write func makeTrampoline(txcallFunc: view write func()) -> view write func() {
     // make a small code snippet that function-calls to txcallFunc (with a dummy return address)
     return asm(
         const::AVM_nop,
@@ -200,7 +200,7 @@ public impure func makeTrampoline(txcallFunc: impure func()) -> impure func() {
     ) func() { pushinsnimm };
 }
 
-public impure func precompile_0x01() {  // ecrecover
+public view write func precompile_0x01() {  // ecrecover
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) != 4*32) {
@@ -223,7 +223,7 @@ public impure func precompile_0x01() {  // ecrecover
     evmOp_revert_knownPc(0, 0, 0);
 }
 
-public impure func precompile_0x02() {  // sha256
+public view write func precompile_0x02() {  // sha256
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         let result = sha256_byteArray(calldata);
@@ -238,7 +238,7 @@ public impure func precompile_0x02() {  // sha256
     evmOp_revert_knownPc(0, 0, 0);
 }
 
-public impure func precompile_0x03() {  // ripemd160
+public view write func precompile_0x03() {  // ripemd160
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         let result = ripemd160_byteArray(calldata);
@@ -253,7 +253,7 @@ public impure func precompile_0x03() {  // ripemd160
     evmOp_revert_knownPc(0, 0, 0);
 }
 
-public impure func precompile_0x04() {  // identity function
+public view write func precompile_0x04() {  // identity function
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         let success = evmCallStack_setTopFrameMemory(calldata);
@@ -265,7 +265,7 @@ public impure func precompile_0x04() {  // identity function
     evmOp_revert_knownPc(0, 0, 0);
 }
 
-public impure func precompile_0x05() {  // modexp
+public view write func precompile_0x05() {  // modexp
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
 
@@ -313,7 +313,7 @@ public impure func precompile_0x05() {  // modexp
     evmOp_revert_knownPc(2, 0, 0);
 }
 
-public impure func precompile_0x06() {  // ecadd
+public view write func precompile_0x06() {  // ecadd
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         let x0 = bytearray_get256(calldata, 0);
@@ -343,7 +343,7 @@ public impure func precompile_0x06() {  // ecadd
     evmOp_revert_knownPc(0, 0, 0);
 }
 
-public impure func precompile_0x07() {  // ecmul
+public view write func precompile_0x07() {  // ecmul
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         let x0 = bytearray_get256(calldata, 0);
@@ -372,7 +372,7 @@ public impure func precompile_0x07() {  // ecmul
     evmOp_revert_knownPc(0, 0, 0);
 }
 
-public impure func precompile_0x08() { // ecpairing
+public view write func precompile_0x08() { // ecpairing
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         let numPts = bytearray_size(calldata) / (6*32);
@@ -412,7 +412,7 @@ public impure func precompile_0x08() { // ecpairing
     evmOp_revert_knownPc(0, 0, 0);
 }
 
-public impure func precompile_0x09() { // Blake2
+public view write func precompile_0x09() { // Blake2
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) != 213) {
@@ -442,6 +442,6 @@ public impure func precompile_0x09() { // Blake2
     }
 }
 
-public impure func revertPrecompile() {
+public view write func revertPrecompile() {
     evmOp_revert_knownPc(0, 0, 0);
 }

@@ -63,12 +63,12 @@ use std::rlp::keccakOfRlpEncodedUintPair;
 var upgradeInProgress: option<AvmCodeBuilder>;
 var previousArbosUpgradeHash: bytes32;
 
-public impure func arbowner_init() {
+public write func arbowner_init() {
     upgradeInProgress = None<AvmCodeBuilder>;
     previousArbosUpgradeHash = bytes32(0);
 }
 
-public impure func arbowner_txcall() {
+public view write func arbowner_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
         // make sure the caller is either address zero or the chain's owner
         let caller = evmCallFrame_getCaller(topFrame);
@@ -136,7 +136,7 @@ public impure func arbowner_txcall() {
 }
 
 // function addToReserveFunds() external payable;
-impure func arbowner_addToReserveFunds(topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_addToReserveFunds(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 50, 0, 0);
     }
@@ -150,7 +150,7 @@ impure func arbowner_addToReserveFunds(topFrame: EvmCallFrame, calldata: ByteArr
 }
 
 // function startCodeUpload() external;
-impure func arbowner_startCodeUpload(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_startCodeUpload(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(20, 0, 0);
     }
@@ -159,7 +159,7 @@ impure func arbowner_startCodeUpload(_topFrame: EvmCallFrame, calldata: ByteArra
 }
 
 // function startCodeUploadWithCheck(bytes32 oldCodeHash) external;
-impure func arbowner_startCodeUploadWithCheck(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_startCodeUploadWithCheck(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(20, 0, 0);
     }
@@ -173,7 +173,7 @@ impure func arbowner_startCodeUploadWithCheck(_topFrame: EvmCallFrame, calldata:
 }
 
 // function continueCodeUpload(bytes calldata marshalledCode) external;
-impure func arbowner_continueCodeUpload(_topFrame: EvmCallFrame, calldata: ByteArray) { // (bytes)
+view write func arbowner_continueCodeUpload(_topFrame: EvmCallFrame, calldata: ByteArray) { // (bytes)
     if (bytearray_size(calldata) < 68) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 30, 0, 0);
     }
@@ -192,7 +192,7 @@ impure func arbowner_continueCodeUpload(_topFrame: EvmCallFrame, calldata: ByteA
 }
 
 // function getUploadedCodeHash() external view returns(bytes32);
-impure func arbowner_getUploadedCodeHash(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_getUploadedCodeHash(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 140, 0, 0);
     }
@@ -209,7 +209,7 @@ impure func arbowner_getUploadedCodeHash(_topFrame: EvmCallFrame, calldata: Byte
 }
 
 // function finishCodeUploadAsArbosUpgrade(bytes32 newCodeHash, bytes32 oldCodeHash) external;
-impure func arbowner_finishCodeUploadAsArbosUpgrade(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_finishCodeUploadAsArbosUpgrade(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 68) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 40, 0, 0);
     }
@@ -228,7 +228,7 @@ impure func arbowner_finishCodeUploadAsArbosUpgrade(_topFrame: EvmCallFrame, cal
         if ((oldCodeHash != bytes32(0)) && (oldCodeHash != previousArbosUpgradeHash)) {
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 43, 0, 0);
         }
-        let upgradeCodePoint = unsafecast<impure func()>(avmCodeBuilder_finish(upgrade));
+        let upgradeCodePoint = unsafecast<view write func()>(avmCodeBuilder_finish(upgrade));
         upgradeInProgress = None<AvmCodeBuilder>;
         previousArbosUpgradeHash = newCodeHash;
         let _ = evmCallStack_returnFromCall(true, 0, 0, Some(upgradeCodePoint));
@@ -238,7 +238,7 @@ impure func arbowner_finishCodeUploadAsArbosUpgrade(_topFrame: EvmCallFrame, cal
 }
 
 // function getChainParameter(uint which) external view returns(uint);
-impure func arbowner_getChainParameter(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_getChainParameter(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 70, 0, 0);
     }
@@ -256,7 +256,7 @@ impure func arbowner_getChainParameter(_topFrame: EvmCallFrame, calldata: ByteAr
 }
 
 // function setChainParameter(uint which, uint value) external;
-impure func arbowner_setChainParameter(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_setChainParameter(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 68) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 80, 0, 0);
     }
@@ -268,7 +268,7 @@ impure func arbowner_setChainParameter(_topFrame: EvmCallFrame, calldata: ByteAr
 }
 
 // function getTotalOfEthBalances() external view returns(uint);
-impure func arbowner_getTotalOfEthBalances(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_getTotalOfEthBalances(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 150, 0, 0);
     }
@@ -289,7 +289,7 @@ func totalEthClosure(acct: Account, state: uint) -> uint {
 }
 
 // function deployContract(bytes calldata constructorData, address deemedSender, uint deemedNonce) external payable returns(address);
-impure func arbowner_deployContract(topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_deployContract(topFrame: EvmCallFrame, calldata: ByteArray) {
     let calldataSize = bytearray_size(calldata);
     if (calldataSize < 4+4*32) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 160, 0, 0);
@@ -317,7 +317,7 @@ impure func arbowner_deployContract(topFrame: EvmCallFrame, calldata: ByteArray)
 }
 
 // function serializeAllParameters() external view returns(bytes memory);
-impure func arbowner_serializeAllParameters(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_serializeAllParameters(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(170, 0, 0);
     }
@@ -342,7 +342,7 @@ impure func arbowner_serializeAllParameters(_topFrame: EvmCallFrame, calldata: B
 }
 
 // function isFairGasPriceSender(address addr) external view returns(bool);
-impure func arbowner_isFairGasPriceSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_isFairGasPriceSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(170, 0, 0);
     }
@@ -359,7 +359,7 @@ impure func arbowner_isFairGasPriceSender(_topFrame: EvmCallFrame, calldata: Byt
 }
 
 // function getAllFairGasPriceSenders() external view returns(bytes memory);
-impure func arbowner_getAllFairGasPriceSenders(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_getAllFairGasPriceSenders(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(180, 0, 0);
     }
@@ -390,7 +390,7 @@ impure func arbowner_getAllFairGasPriceSenders(_topFrame: EvmCallFrame, calldata
 }
 
 // function allowAllSenders() external;
-impure func arbowner_allowAllSenders(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_allowAllSenders(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(190, 0, 0);
     }
@@ -399,7 +399,7 @@ impure func arbowner_allowAllSenders(_topFrame: EvmCallFrame, calldata: ByteArra
 }
 
 // function allowOnlyOwnerToSend() external;
-impure func arbowner_allowOnlyOwnerToSend(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_allowOnlyOwnerToSend(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(200, 0, 0);
     }
@@ -408,7 +408,7 @@ impure func arbowner_allowOnlyOwnerToSend(_topFrame: EvmCallFrame, calldata: Byt
 }
 
 // function isAllowedSender(address addr) external view returns(bool);
-impure func arbowner_isAllowedSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_isAllowedSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(210, 0, 0);
     }
@@ -425,7 +425,7 @@ impure func arbowner_isAllowedSender(_topFrame: EvmCallFrame, calldata: ByteArra
 }
 
 // function addAllowedSender(address addr) external;
-impure func arbowner_addAllowedSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_addAllowedSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(220, 0, 0);
     }
@@ -434,7 +434,7 @@ impure func arbowner_addAllowedSender(_topFrame: EvmCallFrame, calldata: ByteArr
 }
 
 // function removeAllowedSender(address addr) external;
-impure func arbowner_removeAllowedSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_removeAllowedSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(230, 0, 0);
     }
@@ -443,7 +443,7 @@ impure func arbowner_removeAllowedSender(_topFrame: EvmCallFrame, calldata: Byte
 }
 
 // function getAllAllowedSenders() external view returns(bytes memory);
-impure func arbowner_getAllAllowedSenders(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_getAllAllowedSenders(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(240, 0, 0);
     }
@@ -471,7 +471,7 @@ impure func arbowner_getAllAllowedSenders(_topFrame: EvmCallFrame, calldata: Byt
 }
 
 // function setL1GasPriceEstimate(uint priceInGwei) external;
-impure func arbowner_setL1GasPriceEstimate(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_setL1GasPriceEstimate(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(250, 0, 0);
     }
@@ -481,7 +481,7 @@ impure func arbowner_setL1GasPriceEstimate(_topFrame: EvmCallFrame, calldata: By
 }
 
 // function setFairGasPriceSender(address addr, bool isFairGasPriceSender) external;
-impure func arbowner_setFairGasPriceSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_setFairGasPriceSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 68) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 210, 0, 0);
     }
@@ -490,7 +490,7 @@ impure func arbowner_setFairGasPriceSender(_topFrame: EvmCallFrame, calldata: By
 }
 
 // function isFairGasPriceSender(address addr) external view returns(bool);
-impure func arbowner_isFairGasPriceSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_isFairGasPriceSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(170, 0, 0);
     }
@@ -507,7 +507,7 @@ impure func arbowner_isFairGasPriceSender(_topFrame: EvmCallFrame, calldata: Byt
 }
 
 // function getAllFairGasPriceSenders() external view returns(bytes memory);
-impure func arbowner_getAllFairGasPriceSenders(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_getAllFairGasPriceSenders(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(180, 0, 0);
     }
@@ -538,7 +538,7 @@ impure func arbowner_getAllFairGasPriceSenders(_topFrame: EvmCallFrame, calldata
 }
 
 // function getLastUpgradeHash() external view returns(bytes32);
-impure func arbowner_getLastUpgradeHash(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_getLastUpgradeHash(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(190, 0, 0);
     }

@@ -31,7 +31,7 @@ use std::bls::bls_makeKey;
 use std::bls::bls_marshalPublicKey;
 
 
-public impure func arbBLS_txcall() {
+public view write func arbBLS_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) < 4) {
@@ -56,7 +56,7 @@ func getFuncCode(ba: ByteArray) -> uint {
     return (bytearray_get256(ba, 0) >> 224);
 }
 
-impure func arbBLS_register(topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbBLS_register(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4+32*4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbBLS), 170, 0, 0);
     }
@@ -76,7 +76,7 @@ impure func arbBLS_register(topFrame: EvmCallFrame, calldata: ByteArray) {
     }
 }
 
-impure func arbBLS_getPublicKey(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> (uint, uint, uint, uint)
+view write func arbBLS_getPublicKey(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> (uint, uint, uint, uint)
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownCodePc(address(const::Address_ArbBLS), 180, 0, 0);
     }

@@ -13,7 +13,7 @@ use inbox::mainRunLoop;
 
 var inErrorHandler: bool;  // tracks when we're in an error handler, to detect recursive errors
 
-public impure func errorHandler_init() {
+public view write func errorHandler_init() {
     inErrorHandler = false;
 
     // set up the default error handler
@@ -24,7 +24,7 @@ public impure func errorHandler_init() {
     asm(pushAndJump) { errset };
 }
 
-public impure func errorHandler() {
+public view write func errorHandler() {
     // If we got here, it's because either:
     // 1.  some AVM instruction hit an Error, which could happen for several reasons
     //   A.  untrusted application code tried to do something erroneous, like dividing by zero
