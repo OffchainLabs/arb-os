@@ -2509,8 +2509,8 @@ impl ArbosTest {
             Some(code),
             Some(storage),
         )?;
-        let _ = machine.runtime_env.get_and_incr_seq_num(&Uint256::zero());
-        let _ = machine.runtime_env.get_and_incr_seq_num(&Uint256::zero());
+        let _ = machine.runtime_env.get_seq_num(&Uint256::zero(), true);
+        let _ = machine.runtime_env.get_seq_num(&Uint256::zero(), true);
         self.call(machine, Uint256::zero(), addr.clone(), calldata, balance)?;
         self._get_marshalled_storage(machine, addr)
     }
