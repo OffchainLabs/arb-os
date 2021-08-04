@@ -1,5 +1,5 @@
 //
-// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
 //
 
 use crate::compile::{AbstractSyntaxTree, StructField, Type, TypeCheckedNode, TypeTree};
@@ -233,7 +233,7 @@ fn write_subtypes(
         for (subtype, name) in vec_subtypes {
             writeln!(
                 code,
-                "type {}{}{} = {}",
+                "type {}{}{} = {};",
                 prefix.unwrap_or(""),
                 if let Type::Nominal(a, _) = subtype.clone() {
                     a.iter().map(|name| name.clone() + "_").collect::<String>()
@@ -355,7 +355,7 @@ fn type_decl_string(
     type_tree: &TypeTree,
 ) -> String {
     format!(
-        "type {} = {}",
+        "type {} = {};",
         type_name,
         tipe.display_separator("_", prefix, true, type_tree).0
     )

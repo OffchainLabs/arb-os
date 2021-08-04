@@ -96,7 +96,6 @@ BodyDecl: TopLevelDecl = {
 }
 
 TypeDecl: TypeDecl = {
-	"type" <Ident> "=" <Type> => new_type_decl(<>),
     "type" <Ident> "=" <Type> ";" => new_type_decl(<>),
 }
 

@@ -22,7 +22,7 @@ type MessageBatch = struct {
     template: IncomingRequest,
     stream: ByteStream,
     numSoFar: uint,
-}
+};
 
 public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
     return xif ( ((msg.kind == const::L1MessageType_L2) || (msg.kind == const::L1MessageType_L2ForGasEstimation))

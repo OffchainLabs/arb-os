@@ -38,14 +38,14 @@ use std::stack::stack_push;
 type StorageMap = struct {
     tree: StorageMapNode,
     size: uint,
-}
+};
 
-type StorageMapNode = [8]any
+type StorageMapNode = [8]any;
 
 type StorageMapCell = struct {
     key: uint,
     value: uint,
-}
+};
 
 
 public func storageMap_new() -> StorageMap {
@@ -89,7 +89,7 @@ type Unwinder = struct {
     kvs: [8]any,
     index: uint,
     next: option<Unwinder>,
-}
+};
 
 #[noinline, ] public func storageMap_set(s: StorageMap, key: uint, value: uint) -> StorageMap {
     let (utree, maybeUnwinder, delta) = storageMap_set2(s.tree, key, value);
@@ -216,7 +216,7 @@ type StorageMapDiff_State = struct {
     diffs: Stack,
     otherSM: StorageMap,
     firstOne: bool,
-}
+};
 
 public func storageMap_diff(s0: StorageMap, s1: StorageMap) -> Stack {
     let res1 = unsafecast<StorageMapDiff_State>(storageMap_forall(

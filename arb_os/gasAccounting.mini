@@ -71,7 +71,7 @@ type GasAccountingInfo = struct {
     gasAllocatedToThisBlock: uint,     // total amount of gas allocated to the current Arbitrum block
     retryablePrices: RetryablePrices,  // prices of retryable txs
     allowedSenders: SetOfAddresses,    // who is allowed to send txs
-}
+};
 
 var gasAccountingInfo: GasAccountingInfo;
 
@@ -81,25 +81,25 @@ type GasPrices = struct {    // all prices in this struct are denominated in wei
     perArbGasBase: uint,        // base price for ArbGas
     perArbGasCongestion: uint,  // amount added to ArbGas price due to congestion
     perArbGasTotal: uint,       // perArbGasBase + perArbGasCongestion
-}
+};
 
 type CongestionState = struct {
     gasPool: int,         // amount of gas available for use (note: signed value; if negative, we have overused gas)
     lastArbBlockNumSeen: uint,
     lastTimestampSeen: uint,
     congestionPriceWei: uint,
-}
+};
 
 type PricingParameters = struct {
     l1GasPerL1CalldataUnit: uint,  // price per calldata unit, in L1 gas (zero byte = 4 units, nonzero byte = 16 units)
     l1GasPerStorage: uint,         // price per storage allocation, in L1 gas
     arbGasDivisor: uint,           // base ArbGas price is L1 gas price / arbGasDivisor
-}
+};
 
 type FeeConfig = struct {
     baseFeeMultiplier: FixedPoint,   // multiply base fee by this to get total fee
     shareForNetFee: FixedPoint,      // total fee times this == network fee
-}
+};
 
 type TxGasState = struct {        // this is the gas state of the currently running transaction
     gasInReserve: uint,           // how much gas is being held in reserve
@@ -108,18 +108,18 @@ type TxGasState = struct {        // this is the gas state of the currently runn
     price: uint,                  // price of gas for this tx, in wei per unit of gas
     weiHeldForGas: uint,          // amount of currency we're holding to cover the current tx's gas use
     refundTo: address,            // who gets a refund for any unused gas when current tx is finished
-}
+};
 
 type GasUsage = struct {
     gasUsed: uint,
     gasPriceWei: uint,
-}
+};
 
 type RetryablePrices = struct {
     perTx: uint,                // base charge per retryable
     perCalldataByte: uint,      // charge per byte, rather than per unit, because this covers cost of storage
     nextUpdateTimestamp: uint,  // next time when retryable prices might be modified
-}
+};
 
 public view write func gasAccounting_init() {    // initialize on boot, before we have gotten the chain init message
     initGasPriceEstimator();
@@ -1053,7 +1053,7 @@ type FourResources = struct {
     calldataUnit: uint,
     storage: uint,
     compute: uint,
-}
+};
 
 // Fee stats for a transaction, for inclusion in tx receipt
 type TxFeeStats = struct {
@@ -1062,7 +1062,7 @@ type TxFeeStats = struct {
     weiPaid: FourResources,
     paidAggregator: address,
     noFeeGasEstimationMode: bool,
-}
+};
 
 public func txFeeStats_zero() -> TxFeeStats {
     let frZero = struct {
@@ -1086,7 +1086,7 @@ public func txFeeStats_setL2Prices(stats: TxFeeStats, prices: GasPrices) -> TxFe
     return stats;
 }
 
-type DeferredPayments = Stack
+type DeferredPayments = Stack;
 
 public func deferredPayments_new() -> DeferredPayments {
     return stack_new();
