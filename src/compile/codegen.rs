@@ -12,7 +12,7 @@ use crate::compile::ast::{DebugInfo, MatchPatternKind};
 use crate::compile::typecheck::{
     TypeCheckedCodeBlock, TypeCheckedExprKind, TypeCheckedStatementKind,
 };
-use crate::compile::{CompileError, ErrorSystem, FileInfo};
+use crate::compile::CompileError;
 use crate::console::Color;
 use crate::link::{TupleTree, TUPLE_SIZE};
 use crate::mavm::{AVMOpcode, Buffer, Instruction, Label, LabelGenerator, Opcode, Value};
@@ -28,18 +28,17 @@ use std::{cmp::max, collections::HashMap};
 ///
 /// The function returns a vector of instructions representing the generated code if it is
 /// successful, otherwise it returns a `CompileError`.
-pub fn mavm_codegen(
+/*pub fn mavm_codegen(
     funcs: BTreeMap<StringId, TypeCheckedFunc>,
     string_table: &StringTable,
-    global_vars: &[GlobalVarDecl],
-    file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    error_system: &mut ErrorSystem,
+    global_vars: &HashMap<StringId, GlobalVarDecl>,
+    issues: &mut Vec<CompileError>,
     release_build: bool,
 ) -> Result<Vec<Instruction>, CompileError> {
-    let mut global_var_map = HashMap::new();
+    /*let mut global_var_map = HashMap::new();
     for (idx, gv) in global_vars.iter().enumerate() {
-        global_var_map.insert(gv.name_id, idx);
-    }
+        global_var_map.insert(gv.id, idx);
+    }*/
 
     let mut label_gen = LabelGenerator::new();
     let mut funcs_code = BTreeMap::new();
@@ -48,9 +47,8 @@ pub fn mavm_codegen(
             func,
             label_gen,
             string_table,
-            &global_var_map,
-            file_info_chart,
-            error_system,
+            global_vars,
+            issues,
             release_build,
         )?;
         label_gen = lg;
@@ -61,7 +59,7 @@ pub fn mavm_codegen(
         code.append(&mut func)
     }
     Ok(code)
-}
+}*/
 
 /// This generates code for individual mini functions.
 ///
@@ -74,13 +72,13 @@ pub fn mavm_codegen(
 /// codegen, and a vector of the generated code, otherwise it returns a `CompileError`.
 pub fn mavm_codegen_func(
     mut func: TypeCheckedFunc,
-    label_gen: LabelGenerator,
     string_table: &StringTable,
-    global_var_map: &HashMap<StringId, usize>,
-    file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    error_system: &mut ErrorSystem,
+    global_vars: &HashMap<StringId, GlobalVarDecl>,
+    issues: &mut Vec<CompileError>,
     release_build: bool,
-) -> Result<(LabelGenerator, Vec<Instruction>), CompileError> {
+) -> Result<Vec<Instruction>, CompileError> {
+    let mut label_gen = LabelGenerator::new();
+
     if func.ret_type == Type::Void
         && func.code.last().cloned().map(|s| s.kind) != Some(TypeCheckedStatementKind::ReturnVoid())
     {
@@ -139,11 +137,10 @@ pub fn mavm_codegen_func(
         label_gen,
         string_table,
         &func.func_labels,
-        global_var_map,
+        global_vars,
         0,
         &mut vec![],
-        file_info_chart,
-        error_system,
+        issues,
         release_build,
     )?;
 
@@ -173,7 +170,7 @@ pub fn mavm_codegen_func(
         }
     }
 
-    Ok((label_gen, code))
+    Ok(code)
 }
 
 fn mavm_codegen_code_block<'a>(
@@ -184,11 +181,10 @@ fn mavm_codegen_code_block<'a>(
     label_gen: LabelGenerator,
     string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
-    global_var_map: &HashMap<StringId, usize>,
+    global_vars: &HashMap<StringId, GlobalVarDecl>,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
-    file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    error_system: &mut ErrorSystem,
+    issues: &mut Vec<CompileError>,
     debug_info: DebugInfo,
     release_build: bool,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CompileError> {
@@ -206,11 +202,10 @@ fn mavm_codegen_code_block<'a>(
         lg,
         string_table,
         func_labels,
-        global_var_map,
+        global_vars,
         prepushed_vals,
         scopes,
-        file_info_chart,
-        error_system,
+        issues,
         release_build,
     )?;
     if let Some(ret_expr) = &block.ret_expr {
@@ -224,11 +219,10 @@ fn mavm_codegen_code_block<'a>(
             lab_gen,
             string_table,
             func_labels,
-            global_var_map,
+            global_vars,
             prepushed_vals,
             scopes,
-            file_info_chart,
-            error_system,
+            issues,
             release_build,
         )
         .map(|(lg, code, exp_locals)| (lg, code, max(num_locals, max(exp_locals, nl))))?;
@@ -251,7 +245,7 @@ fn mavm_codegen_code_block<'a>(
 /// code generated previously, num_locals the maximum number of locals used at any point in the call
 /// frame so far, locals is a map of local variables, label_gen points to the next available locals
 /// slot, string_table is used to get builtins, func_labels associates each imported function
-/// with a label, and global_var_map maps global variable IDs to their slot number.
+/// with a label, and global_vars maps global variable IDs to their slot number.
 ///
 /// If successful the function returns a tuple containing the updated label generator, maximum
 /// number of locals used so far by this call frame, a bool that is set to true when the function
@@ -265,11 +259,10 @@ fn mavm_codegen_statements(
     mut label_gen: LabelGenerator,
     string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
-    global_var_map: &HashMap<StringId, usize>,
+    global_vars: &HashMap<StringId, GlobalVarDecl>,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
-    file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    error_system: &mut ErrorSystem,
+    issues: &mut Vec<CompileError>,
     release_build: bool,
 ) -> Result<(LabelGenerator, usize, HashMap<StringId, usize>), CompileError> {
     let mut bindings = HashMap::new();
@@ -284,11 +277,10 @@ fn mavm_codegen_statements(
             label_gen,
             string_table,
             func_labels,
-            global_var_map,
+            global_vars,
             prepushed_vals,
             scopes,
-            file_info_chart,
-            error_system,
+            issues,
             release_build,
         )?;
         label_gen = lg;
@@ -304,7 +296,7 @@ fn mavm_codegen_statements(
 /// num_locals the maximum number of locals used at any point in the call frame so far, locals is a
 /// map of local variables, label_gen points to the next available locals slot, string_table is used
 /// to get builtins, func_labels associates each imported function with a label, and
-/// global_var_map maps global variable IDs to their slot number.
+/// global_vars maps global variable IDs to their slot number.
 ///
 /// If successful the function returns a tuple containing the updated label generator, number of
 /// locals slots used by this statement, a bool that is set to true if execution can not continue
@@ -318,11 +310,10 @@ fn mavm_codegen_statement(
     mut label_gen: LabelGenerator,
     string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
-    global_var_map: &HashMap<StringId, usize>,
+    global_vars: &HashMap<StringId, GlobalVarDecl>,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
-    file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    error_system: &mut ErrorSystem,
+    issues: &mut Vec<CompileError>,
     release_build: bool,
 ) -> Result<(LabelGenerator, usize, HashMap<StringId, usize>), CompileError> {
     let debug = statement.debug_info;
@@ -341,11 +332,10 @@ fn mavm_codegen_statement(
                 label_gen,
                 string_table,
                 func_labels,
-                global_var_map,
+                global_vars,
                 prepushed_vals,
                 scopes,
-                file_info_chart,
-                error_system,
+                issues,
                 release_build,
             )?;
             if prepushed_vals > 0 {
@@ -413,11 +403,10 @@ fn mavm_codegen_statement(
                     label_gen,
                     string_table,
                     func_labels,
-                    global_var_map,
+                    global_vars,
                     prepushed_vals,
                     &mut inner_scopes,
-                    file_info_chart,
-                    error_system,
+                    issues,
                     release_build,
                 )?
             } else {
@@ -439,11 +428,10 @@ fn mavm_codegen_statement(
                 label_gen,
                 string_table,
                 func_labels,
-                global_var_map,
+                global_vars,
                 prepushed_vals,
                 scopes,
-                file_info_chart,
-                error_system,
+                issues,
                 release_build,
             )?;
             if !(expr.get_type() == Type::Void || expr.get_type() == Type::Every) {
@@ -452,7 +440,7 @@ fn mavm_codegen_statement(
                     debug,
                 ));
                 if expr.get_type() != Type::Tuple(vec![]) {
-                    error_system.warnings.push(CompileError::new_warning(
+                    issues.push(CompileError::new_warning(
                         String::from("Compile warning"),
                         format!(
                             "expression statement returns value of type {:?}, which is discarded",
@@ -473,11 +461,10 @@ fn mavm_codegen_statement(
                 label_gen,
                 string_table,
                 func_labels,
-                global_var_map,
+                global_vars,
                 prepushed_vals,
                 scopes,
-                file_info_chart,
-                error_system,
+                issues,
                 release_build,
             )?;
             label_gen = lg;
@@ -487,7 +474,7 @@ fn mavm_codegen_statement(
                 &pat,
                 num_locals,
                 locals,
-                global_var_map,
+                global_vars,
                 string_table,
                 debug,
             )?;
@@ -513,11 +500,10 @@ fn mavm_codegen_statement(
                 label_gen,
                 string_table,
                 func_labels,
-                global_var_map,
+                global_vars,
                 prepushed_vals,
                 scopes,
-                file_info_chart,
-                error_system,
+                issues,
                 release_build,
             )?;
             label_gen = lg;
@@ -538,11 +524,10 @@ fn mavm_codegen_statement(
                 label_gen,
                 string_table,
                 func_labels,
-                global_var_map,
+                global_vars,
                 prepushed_vals,
                 scopes,
-                file_info_chart,
-                error_system,
+                issues,
                 release_build,
             )?;
             c.push(Instruction::from_opcode(Opcode::SetGlobalVar(*idx), debug));
@@ -578,11 +563,10 @@ fn mavm_codegen_statement(
                 label_gen,
                 string_table,
                 func_labels,
-                global_var_map,
+                global_vars,
                 prepushed_vals,
                 scopes,
-                file_info_chart,
-                error_system,
+                issues,
                 release_build,
             )?;
             label_gen = lg;
@@ -596,11 +580,10 @@ fn mavm_codegen_statement(
                 label_gen,
                 string_table,
                 func_labels,
-                global_var_map,
+                global_vars,
                 prepushed_vals,
                 scopes,
-                file_info_chart,
-                error_system,
+                issues,
                 release_build,
             )?;
             label_gen = lg;
@@ -628,11 +611,10 @@ fn mavm_codegen_statement(
                     label_gen,
                     string_table,
                     func_labels,
-                    global_var_map,
+                    global_vars,
                     prepushed_vals + i,
                     scopes,
-                    file_info_chart,
-                    error_system,
+                    issues,
                     release_build,
                 )?;
                 exp_locals = max(exp_locals, e_locals);
@@ -653,11 +635,10 @@ fn mavm_codegen_statement(
                 label_gen,
                 string_table,
                 func_labels,
-                global_var_map,
+                global_vars,
                 prepushed_vals,
                 scopes,
-                file_info_chart,
-                error_system,
+                issues,
                 release_build,
             )?;
             label_gen = lg;
@@ -704,11 +685,10 @@ fn mavm_codegen_statement(
                 label_gen,
                 string_table,
                 func_labels,
-                global_var_map,
+                global_vars,
                 prepushed_vals,
                 scopes,
-                file_info_chart,
-                error_system,
+                issues,
                 release_build,
             )?;
             Ok((lg, exp_locals, HashMap::new()))
@@ -727,7 +707,7 @@ fn mavm_codegen_tuple_pattern(
     pattern: &TypeCheckedMatchPattern,
     local_slot_num_base: usize,
     locals: &HashMap<usize, usize>,
-    global_var_map: &HashMap<StringId, usize>,
+    global_vars: &HashMap<StringId, GlobalVarDecl>,
     string_table: &StringTable,
     debug_info: DebugInfo,
 ) -> Result<(usize, HashMap<usize, usize>, HashSet<usize>), CompileError> {
@@ -751,12 +731,18 @@ fn mavm_codegen_tuple_pattern(
                 ))
             } else {
                 code.push(Instruction::from_opcode(
-                    Opcode::SetGlobalVar(*global_var_map.get(id).ok_or_else(|| {
-                        CompileError::new_codegen_error(
-                            "assigned to non-existent variable in mixed let".to_string(),
-                            debug_info.location,
-                        )
-                    })?),
+                    Opcode::SetGlobalVar(
+                        global_vars
+                            .get(id)
+                            .ok_or_else(|| {
+                                CompileError::new_codegen_error(
+                                    "assigned to non-existent variable in mixed let".to_string(),
+                                    debug_info.location,
+                                )
+                            })?
+                            .offset
+                            .unwrap(),
+                    ),
                     debug_info,
                 ))
             }
@@ -786,7 +772,7 @@ fn mavm_codegen_tuple_pattern(
                     pat,
                     local_slot_num_base + num_bindings,
                     locals,
-                    global_var_map,
+                    global_vars,
                     string_table,
                     debug_info,
                 )?;
@@ -815,7 +801,7 @@ fn mavm_codegen_tuple_pattern(
 /// at any previous point in the callframe, locals is the table of local variable names to slot
 /// numbers, label_gen points to the first available locals slot, string_table is used to get
 /// builtins, func_labels maps stringIDs for imported function to their associated labels,
-/// global_var_map maps stringIDs to their associated slot numbers, and prepushed_vals indicates the
+/// global_vars maps stringIDs to their associated slot numbers, and prepushed_vals indicates the
 /// number of items on the stack at the start of the call, this is needed for early returns.
 ///
 /// If successful this function returns a tuple containing the updated label_gen, a mutable
@@ -829,11 +815,10 @@ fn mavm_codegen_expr<'a>(
     mut label_gen: LabelGenerator,
     string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
-    global_var_map: &HashMap<StringId, usize>,
+    global_vars: &HashMap<StringId, GlobalVarDecl>,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
-    file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    error_system: &mut ErrorSystem,
+    issues: &mut Vec<CompileError>,
     release_build: bool,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CompileError> {
     macro_rules! expr {
@@ -849,11 +834,10 @@ fn mavm_codegen_expr<'a>(
                 $label_gen,
                 string_table,
                 func_labels,
-                global_var_map,
+                global_vars,
                 prepushed_vals + $prepushed,
                 scopes,
-                file_info_chart,
-                error_system,
+                issues,
                 release_build,
             )
         };
@@ -1225,11 +1209,10 @@ fn mavm_codegen_expr<'a>(
             label_gen,
             string_table,
             func_labels,
-            global_var_map,
+            global_vars,
             prepushed_vals,
             scopes,
-            file_info_chart,
-            error_system,
+            issues,
             debug,
             release_build,
         ),
@@ -1413,12 +1396,11 @@ fn mavm_codegen_expr<'a>(
             label_gen,
             string_table,
             func_labels,
-            global_var_map,
+            global_vars,
             debug,
             prepushed_vals,
             scopes,
-            file_info_chart,
-            error_system,
+            issues,
             release_build,
         ),
         TypeCheckedExprKind::MapMod(map, key, val, t) => {
@@ -1499,11 +1481,10 @@ fn mavm_codegen_expr<'a>(
                 lab_gen,
                 string_table,
                 func_labels,
-                global_var_map,
+                global_vars,
                 prepushed_vals,
                 scopes,
-                file_info_chart,
-                error_system,
+                issues,
                 debug,
                 release_build,
             )?;
@@ -1520,11 +1501,10 @@ fn mavm_codegen_expr<'a>(
                     block_lab_gen,
                     string_table,
                     func_labels,
-                    global_var_map,
+                    global_vars,
                     prepushed_vals,
                     scopes,
-                    file_info_chart,
-                    error_system,
+                    issues,
                     debug,
                     release_build,
                 )?;
@@ -1548,11 +1528,10 @@ fn mavm_codegen_expr<'a>(
                 lgg,
                 string_table,
                 func_labels,
-                global_var_map,
+                global_vars,
                 prepushed_vals,
                 scopes,
-                file_info_chart,
-                error_system,
+                issues,
                 release_build,
             )?;
             label_gen = lg;
@@ -1575,11 +1554,10 @@ fn mavm_codegen_expr<'a>(
                 label_gen,
                 string_table,
                 func_labels,
-                global_var_map,
+                global_vars,
                 prepushed_vals,
                 scopes,
-                file_info_chart,
-                error_system,
+                issues,
                 debug,
                 release_build,
             )?;
@@ -1598,11 +1576,10 @@ fn mavm_codegen_expr<'a>(
                     lg2,
                     string_table,
                     func_labels,
-                    global_var_map,
+                    global_vars,
                     prepushed_vals,
                     scopes,
-                    file_info_chart,
-                    error_system,
+                    issues,
                     debug,
                     release_build,
                 )?;
@@ -1638,11 +1615,10 @@ fn mavm_codegen_expr<'a>(
                 label_gen,
                 string_table,
                 func_labels,
-                global_var_map,
+                global_vars,
                 prepushed_vals,
                 scopes,
-                file_info_chart,
-                error_system,
+                issues,
                 release_build,
             )?;
             scopes.pop();
@@ -1671,12 +1647,11 @@ fn codegen_fixed_array_mod<'a>(
     label_gen_in: LabelGenerator,
     string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
-    global_var_map: &HashMap<StringId, usize>,
+    global_vars: &HashMap<StringId, GlobalVarDecl>,
     debug_info: DebugInfo,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
-    file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    error_system: &mut ErrorSystem,
+    issues: &mut Vec<CompileError>,
     release_build: bool,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CompileError> {
     let (label_gen, code, val_locals) = mavm_codegen_expr(
@@ -1687,11 +1662,10 @@ fn codegen_fixed_array_mod<'a>(
         label_gen_in,
         string_table,
         func_labels,
-        global_var_map,
+        global_vars,
         prepushed_vals,
         scopes,
-        file_info_chart,
-        error_system,
+        issues,
         release_build,
     )?;
     let (label_gen, code, arr_locals) = mavm_codegen_expr(
@@ -1702,11 +1676,10 @@ fn codegen_fixed_array_mod<'a>(
         label_gen,
         string_table,
         func_labels,
-        global_var_map,
+        global_vars,
         prepushed_vals + 1,
         scopes,
-        file_info_chart,
-        error_system,
+        issues,
         release_build,
     )?;
     let (mut label_gen, code, idx_locals) = mavm_codegen_expr(
@@ -1717,11 +1690,10 @@ fn codegen_fixed_array_mod<'a>(
         label_gen,
         string_table,
         func_labels,
-        global_var_map,
+        global_vars,
         prepushed_vals + 2,
         scopes,
-        file_info_chart,
-        error_system,
+        issues,
         release_build,
     )?;
     if size != 8 {
@@ -1761,7 +1733,7 @@ fn codegen_fixed_array_mod<'a>(
         label_gen,
         string_table,
         func_labels,
-        global_var_map,
+        global_vars,
         debug_info,
     )
     .map(|(lg, code, num_locals)| (lg, code, max(num_locals, exp_locals)))
@@ -1777,7 +1749,7 @@ fn codegen_fixed_array_mod_2<'a>(
     label_gen_in: LabelGenerator,
     string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
-    global_var_map: &HashMap<StringId, usize>,
+    global_vars: &HashMap<StringId, GlobalVarDecl>,
     debug_info: DebugInfo,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CompileError> {
     macro_rules! opcode {
@@ -1833,7 +1805,7 @@ fn codegen_fixed_array_mod_2<'a>(
             label_gen_in,
             string_table,
             func_labels,
-            global_var_map,
+            global_vars,
             debug_info,
         )?;
 

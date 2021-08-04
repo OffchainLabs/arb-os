@@ -6,7 +6,7 @@
 
 use crate::console::Color;
 use crate::link::{link, postlink_compile, Import, LinkedProgram};
-use crate::mavm::{Instruction, Label};
+use crate::mavm::{Instruction, Label, LabelGenerator};
 use crate::pos::{BytePos, Location};
 use crate::stringtable::{StringId, StringTable};
 use ast::Func;
@@ -24,7 +24,6 @@ use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
 use std::path::Path;
-use std::sync::Arc;
 use typecheck::TypeCheckedFunc;
 
 pub use ast::{DebugInfo, GlobalVarDecl, StructField, TopLevelDecl, Type, TypeTree};
@@ -145,6 +144,7 @@ impl CompileStruct {
 
         let mut compiled_progs = Vec::new();
         let mut file_info_chart = BTreeMap::new();
+        let mut globals = vec![];
 
         for filename in &self.input {
             let path = Path::new(filename);
@@ -152,7 +152,7 @@ impl CompileStruct {
                 Some(path) => Some(Path::new(path)),
                 None => None,
             };
-            match compile_from_file(
+            let (progs, all_globals) = match compile_from_file(
                 path,
                 &mut file_info_chart,
                 &self.inline,
@@ -168,21 +168,23 @@ impl CompileStruct {
                     error_system.file_info_chart = file_info_chart;
                     return Err(error_system);
                 }
-            }
-            .into_iter()
-            .for_each(|prog| {
+            };
+
+            globals = all_globals;
+
+            for prog in progs {
                 file_info_chart.extend(prog.file_info_chart.clone());
                 compiled_progs.push(prog)
-            });
+            }
         }
-
-        let linked_prog = link(&compiled_progs, self.test_mode);
 
         // If this condition is true it means that __fixedLocationGlobal will not be at
         // index [0], but rather [0][0] or [0][0][0] etc
-        if linked_prog.globals.len() >= 58 {
+        if globals.len() >= 58 {
             panic!("Too many globals defined in program, location of first global is not correct")
         }
+
+        let linked_prog = link(compiled_progs, globals, self.test_mode);
 
         let postlinked_prog = match postlink_compile(
             linked_prog,
@@ -400,7 +402,7 @@ impl TypeCheckedModule {
 pub struct CompiledProgram {
     /// Instructions to be run to execute the program/module
     pub code: Vec<Instruction>,
-    /// Highest ID used for any global in this program, used for linking
+    /// All globals used in this program
     pub globals: Vec<GlobalVarDecl>,
     /// Contains list of offsets of the various modules contained in this program
     pub source_file_map: Option<SourceFileMap>,
@@ -428,9 +430,8 @@ impl CompiledProgram {
     }
 
     /// Takes self by value and returns a tuple. The first value in the tuple is modified version of
-    /// self with internal code references shifted forward by int_offset instructions, external code
-    /// references offset by ext_offset instructions, function references shifted forward by
-    /// func_offset, num_globals modified assuming the first *globals_offset* slots are occupied,
+    /// self with internal code references shifted forward by int_offset instructions,
+    /// num_globals modified assuming the first *globals_offset* slots are occupied,
     /// and source_file_map replacing the existing source_file_map field.
     ///
     /// The second value of the tuple is the function offset after applying this operation.
@@ -438,15 +439,12 @@ impl CompiledProgram {
         self,
         int_offset: usize,
         func_offset: usize,
-        globals_offset: Vec<GlobalVarDecl>,
         source_file_map: Option<SourceFileMap>,
     ) -> (Self, usize) {
         let mut relocated_code = Vec::new();
         let mut max_func_offset = func_offset;
         for insn in &self.code {
-            let (relocated_insn, new_func_offset) =
-                insn.clone()
-                    .relocate(int_offset, func_offset, globals_offset.len());
+            let (relocated_insn, new_func_offset) = insn.clone().relocate(int_offset, func_offset);
             relocated_code.push(relocated_insn);
             if max_func_offset < new_func_offset {
                 max_func_offset = new_func_offset;
@@ -456,11 +454,7 @@ impl CompiledProgram {
         (
             CompiledProgram::new(
                 relocated_code,
-                {
-                    let mut new_vec = globals_offset.clone();
-                    new_vec.append(&mut self.globals.clone());
-                    new_vec
-                },
+                self.globals,
                 source_file_map,
                 self.file_info_chart,
                 self.type_tree,
@@ -518,7 +512,7 @@ pub fn compile_from_file(
     error_system: &mut ErrorSystem,
     release_build: bool,
     builtins: bool,
-) -> Result<Vec<CompiledProgram>, CompileError> {
+) -> Result<(Vec<CompiledProgram>, Vec<GlobalVarDecl>), CompileError> {
     let library = path
         .parent()
         .map(|par| {
@@ -611,7 +605,7 @@ pub fn compile_from_folder(
     error_system: &mut ErrorSystem,
     release_build: bool,
     builtins: bool,
-) -> Result<Vec<CompiledProgram>, CompileError> {
+) -> Result<(Vec<CompiledProgram>, Vec<GlobalVarDecl>), CompileError> {
     let (mut programs, mut import_map) = create_program_tree(
         folder,
         library,
@@ -660,45 +654,18 @@ pub fn compile_from_folder(
             .for_each(|module| module.inline(cool));
     }
 
-    // Give func's the data they need to be separated from their origin modules
     for module in &mut typechecked_modules {
         module.propagate_attributes();
-
-        for (_, func) in &mut module.checked_funcs {
-            let unique_id = Import::unique_id(&module.path, &func.name);
-            func.unique_id = Some(unique_id);
-        }
-
-        let mut func_labels = HashMap::new(); // local StringId to global Labels
-
-        for (id, func) in &module.checked_funcs {
-            match func.properties.closure {
-                true => func_labels.insert(*id, Label::Closure(func.unique_id.unwrap())),
-                false => func_labels.insert(*id, Label::Func(func.unique_id.unwrap())),
-            };
-        }
-        for import in &module.imports {
-            match import.id {
-                Some(id) => drop(func_labels.insert(id, Label::Func(import.unique_id))),
-                None => panic!("Import without id {:#?}", &import),
-            }
-        }
-
-        let func_labels = Arc::new(func_labels);
-        for (_, func) in &mut module.checked_funcs {
-            func.func_labels = func_labels.clone();
-        }
     }
 
-    let progs = codegen_programs(
+    let (progs, globals) = codegen_programs(
         typechecked_modules,
-        file_info_chart,
         error_system,
         type_tree,
         folder,
         release_build,
     )?;
-    Ok(progs)
+    Ok((progs, globals))
 }
 
 /// Converts the `Vec<String>` used to identify a path into a single formatted string
@@ -1173,44 +1140,100 @@ fn consume_program_callgraph(
 
 fn codegen_programs(
     typechecked_modules: Vec<TypeCheckedModule>,
-    file_info_chart: &mut BTreeMap<u64, FileInfo>,
     error_system: &mut ErrorSystem,
     type_tree: TypeTree,
     folder: &Path,
     release_build: bool,
-) -> Result<Vec<CompiledProgram>, CompileError> {
-    let mut progs = vec![];
-    for TypeCheckedModule {
-        checked_funcs,
-        string_table,
-        named_types: _,
-        constants: _,
-        global_vars,
-        imports: _,
-        path: _,
-        name,
-    } in typechecked_modules
-    {
-        let code_out = codegen::mavm_codegen(
-            checked_funcs,
-            &string_table,
-            &global_vars,
-            file_info_chart,
-            error_system,
-            release_build,
-        )?;
-        progs.push(CompiledProgram::new(
-            code_out.to_vec(),
-            global_vars,
-            Some(SourceFileMap::new(
-                code_out.len(),
-                folder.join(name.clone()).display().to_string(),
-            )),
-            HashMap::new(),
-            type_tree.clone(),
-        ))
+) -> Result<(Vec<CompiledProgram>, Vec<GlobalVarDecl>), CompileError> {
+    let mut work_list = vec![];
+    let mut globals_so_far = 0;
+
+    for mut module in typechecked_modules {
+        // assign globals to the right of all prior
+        let mut global_vars = HashMap::new();
+        for mut global in module.global_vars {
+            global.offset = Some(globals_so_far);
+            global_vars.insert(global.id, global);
+            globals_so_far += 1;
+        }
+
+        // add universal labels to functions
+        for (_, func) in &mut module.checked_funcs {
+            let unique_id = Import::unique_id(&module.path, &func.name);
+            func.unique_id = Some(unique_id);
+        }
+
+        let mut func_labels = HashMap::new(); // local StringId to global Labels
+
+        for (id, func) in &module.checked_funcs {
+            match func.properties.closure {
+                true => func_labels.insert(*id, Label::Closure(func.unique_id.unwrap())),
+                false => func_labels.insert(*id, Label::Func(func.unique_id.unwrap())),
+            };
+        }
+        for import in &module.imports {
+            match import.id {
+                Some(id) => drop(func_labels.insert(id, Label::Func(import.unique_id))),
+                None => panic!("Import without id {:#?}", &import),
+            }
+        }
+
+        for (_, mut func) in module.checked_funcs {
+            func.func_labels = func_labels.clone();
+            work_list.push((
+                func,
+                func_labels.clone(),
+                module.string_table.clone(),
+                global_vars.clone(),
+                module.name.clone(),
+            ));
+        }
     }
-    Ok(progs)
+
+    let (progs, issues) = work_list
+        .into_par_iter()
+        .map(|(func, func_labels, string_table, global_vars, name)| {
+            let mut codegen_issues = vec![];
+
+            let code = codegen::mavm_codegen_func(
+                func,
+                &string_table,
+                &global_vars,
+                &mut codegen_issues,
+                release_build,
+            )?;
+
+            let source = Some(SourceFileMap::new(
+                code.len(),
+                folder.join(name.clone()).display().to_string(),
+            ));
+
+            let mut global_vars: Vec<_> = global_vars.clone().into_iter().map(|g| g.1).collect();
+
+            global_vars.push(GlobalVarDecl::new(
+                usize::MAX,
+                "_jump_table".to_string(),
+                Type::Any,
+                None,
+            ));
+
+            let prog =
+                CompiledProgram::new(code, global_vars, source, HashMap::new(), type_tree.clone());
+
+            Ok((prog, codegen_issues))
+        })
+        .collect::<Result<(Vec<CompiledProgram>, Vec<Vec<CompileError>>), CompileError>>()?;
+
+    for issue in issues.into_iter().flatten() {
+        match issue.is_warning {
+            true => error_system.warnings.push(issue),
+            false => error_system.errors.push(issue),
+        }
+    }
+
+    let globals = progs[0].globals.clone(); // They're all the same
+
+    Ok((progs, globals))
 }
 
 pub fn comma_list(input: &[String]) -> String {

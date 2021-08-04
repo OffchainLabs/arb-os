@@ -16,7 +16,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::fmt::Formatter;
-use std::sync::Arc;
 
 /// This is a map of the types at a given location, with the Vec<String> representing the module path
 /// and the usize representing the `StringId` of the type at that location.
@@ -1307,18 +1306,20 @@ pub fn new_func_arg(name: StringId, tipe: Type, debug_info: DebugInfo) -> FuncAr
 /// Represents a declaration of a global mini variable.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GlobalVarDecl {
-    pub name_id: StringId,
+    pub id: StringId,
     pub name: String,
     pub tipe: Type,
+    pub offset: Option<usize>,
     pub location: Option<Location>,
 }
 
 impl GlobalVarDecl {
-    pub fn new(name_id: StringId, name: String, tipe: Type, location: Option<Location>) -> Self {
+    pub fn new(id: StringId, name: String, tipe: Type, location: Option<Location>) -> Self {
         GlobalVarDecl {
-            name_id,
+            id,
             name,
             tipe,
+            offset: None,
             location,
         }
     }
@@ -1348,7 +1349,7 @@ pub struct Func<T = Statement> {
     /// A global id unique to this function used for building jump labels
     pub unique_id: Option<LabelId>,
     /// Associates `StringId`s in this func's context with the global label scheme
-    pub func_labels: Arc<HashMap<StringId, Label>>,
+    pub func_labels: HashMap<StringId, Label>,
     /// Additional properties like viewness that this func has
     pub properties: FuncProperties,
     pub debug_info: DebugInfo,
@@ -1387,7 +1388,7 @@ impl Func {
             captures,
             frame_size,
             unique_id: None,
-            func_labels: Arc::new(HashMap::new()),
+            func_labels: HashMap::new(),
             properties: prop,
             debug_info,
         }

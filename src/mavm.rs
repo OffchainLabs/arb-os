@@ -156,12 +156,7 @@ impl Instruction {
         }
     }
 
-    pub fn relocate(
-        self,
-        int_offset: usize,
-        func_offset: usize,
-        globals_offset: usize,
-    ) -> (Self, usize) {
+    pub fn relocate(self, int_offset: usize, func_offset: usize) -> (Self, usize) {
         let mut max_func_offset = func_offset;
         let opcode = match self.opcode {
             Opcode::PushExternal(off) => Opcode::PushExternal(off),
@@ -172,8 +167,6 @@ impl Instruction {
                 }
                 Opcode::Label(new_label)
             }
-            Opcode::GetGlobalVar(idx) => Opcode::GetGlobalVar(idx + globals_offset),
-            Opcode::SetGlobalVar(idx) => Opcode::SetGlobalVar(idx + globals_offset),
             _ => self.opcode,
         };
         let imm = match self.immediate {

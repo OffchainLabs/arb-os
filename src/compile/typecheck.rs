@@ -1335,7 +1335,7 @@ pub fn typecheck_top_level_decls(
     let global_vars_map = global_vars
         .iter()
         .enumerate()
-        .map(|(idx, var)| (var.name_id, (var.tipe.clone(), idx)))
+        .map(|(idx, var)| (var.id, (var.tipe.clone(), idx)))
         .collect::<HashMap<_, _>>();
 
     let type_table: HashMap<_, _> = named_types.clone().into_iter().collect();

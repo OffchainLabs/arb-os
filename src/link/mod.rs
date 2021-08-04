@@ -304,14 +304,17 @@ fn hardcode_jump_table_into_register(
 
 /// Combines the `CompiledProgram`s in progs_in into a single `CompiledProgram` with offsets adjusted
 /// to avoid collisions and auto-linked programs added.
-pub fn link(progs_in: &[CompiledProgram], test_mode: bool) -> CompiledProgram {
+pub fn link(
+    progs_in: Vec<CompiledProgram>,
+    globals: Vec<GlobalVarDecl>,
+    test_mode: bool,
+) -> CompiledProgram {
     let progs = progs_in.to_vec();
     let type_tree = progs[0].type_tree.clone();
     let mut insns_so_far: usize = 3; // leave 2 insns of space at beginning for initialization
     let mut int_offsets = Vec::new();
     let mut merged_source_file_map = SourceFileMap::new_empty();
     let mut merged_file_info_chart = HashMap::new();
-    let mut global_num_limit = vec![];
 
     for prog in &progs {
         merged_source_file_map.push(
@@ -331,24 +334,19 @@ pub fn link(progs_in: &[CompiledProgram], test_mode: bool) -> CompiledProgram {
         merged_file_info_chart.extend(prog.file_info_chart.clone());
 
         let source_file_map = prog.source_file_map.clone();
-        let (relocated_prog, new_func_offset) = prog.relocate(
-            int_offsets[i],
-            func_offset,
-            global_num_limit,
-            source_file_map,
-        );
+        let (relocated_prog, new_func_offset) =
+            prog.relocate(int_offsets[i], func_offset, source_file_map);
 
-        global_num_limit = relocated_prog.globals.clone();
         relocated_progs.push(relocated_prog);
         func_offset = new_func_offset + 1;
     }
 
-    global_num_limit.push(GlobalVarDecl::new(
+    /*global_num_limit.push(GlobalVarDecl::new(
         usize::MAX,
         "_jump_table".to_string(),
         Type::Any,
         None,
-    ));
+    ));*/
 
     // Initialize globals or allow jump table retrieval
     let mut linked_code = if test_mode {
@@ -360,7 +358,7 @@ pub fn link(progs_in: &[CompiledProgram], test_mode: bool) -> CompiledProgram {
             ),
             Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
-                make_uninitialized_tuple(global_num_limit.len()),
+                make_uninitialized_tuple(globals.len()),
                 DebugInfo::default(),
             ),
             Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Rset), DebugInfo::default()),
@@ -375,7 +373,7 @@ pub fn link(progs_in: &[CompiledProgram], test_mode: bool) -> CompiledProgram {
             ),
             Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Rset),
-                make_uninitialized_tuple(global_num_limit.len()),
+                make_uninitialized_tuple(globals.len()),
                 DebugInfo::default(),
             ),
         ]
@@ -387,7 +385,7 @@ pub fn link(progs_in: &[CompiledProgram], test_mode: bool) -> CompiledProgram {
 
     CompiledProgram::new(
         linked_code,
-        global_num_limit,
+        globals,
         Some(merged_source_file_map),
         merged_file_info_chart,
         type_tree,
