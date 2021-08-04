@@ -75,7 +75,12 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
     writeln!(code, "").unwrap();
     writeln!(
         code,
-        "// This file is machine-generated. Don't edit it unless you know what you're doing."
+        "//\n// This file is machine-generated. Don't edit it unless you know what you're doing."
+    )
+    .unwrap();
+    writeln!(
+        code,
+        "//\n// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.\n//"
     )
     .unwrap();
     writeln!(code, "").unwrap();

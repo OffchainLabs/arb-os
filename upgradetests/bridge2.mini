@@ -1,5 +1,9 @@
 
+//
 // This file is machine-generated. Don't edit it unless you know what you're doing.
+//
+// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
+//
 
 use impl2::set_newGlobal1_onUpgrade;
 use impl2::set_newGlobal2_onUpgrade;
