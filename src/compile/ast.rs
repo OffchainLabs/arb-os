@@ -8,7 +8,7 @@ use crate::compile::typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNod
 use crate::compile::{path_display, CompileError, Lines};
 use crate::console::Color;
 use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
-use crate::mavm::{Instruction, LabelId, Value};
+use crate::mavm::{Instruction, Label, LabelId, Value};
 use crate::pos::{BytePos, Location};
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::fmt::Formatter;
+use std::sync::Arc;
 
 /// This is a map of the types at a given location, with the Vec<String> representing the module path
 /// and the usize representing the `StringId` of the type at that location.
@@ -1342,9 +1343,13 @@ pub struct Func<T = Statement> {
     pub tipe: Type,
     pub public: bool,
     pub captures: BTreeSet<StringId>,
+    /// The minimum tuple-tree size needed to generate this func
     pub frame_size: usize,
+    /// A global id unique to this function used for building jump labels
     pub unique_id: Option<LabelId>,
-    pub imports: HashMap<StringId, Import>,
+    /// Associates `StringId`s in this func's context with the global label scheme
+    pub func_labels: Arc<HashMap<StringId, Label>>,
+    /// Additional properties like viewness that this func has
     pub properties: FuncProperties,
     pub debug_info: DebugInfo,
 }
@@ -1382,7 +1387,7 @@ impl Func {
             captures,
             frame_size,
             unique_id: None,
-            imports: HashMap::new(),
+            func_labels: Arc::new(HashMap::new()),
             properties: prop,
             debug_info,
         }

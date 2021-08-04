@@ -6,7 +6,7 @@
 
 use crate::console::Color;
 use crate::link::{link, postlink_compile, Import, LinkedProgram};
-use crate::mavm::Instruction;
+use crate::mavm::{Instruction, Label};
 use crate::pos::{BytePos, Location};
 use crate::stringtable::{StringId, StringTable};
 use ast::Func;
@@ -24,6 +24,7 @@ use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
 use std::path::Path;
+use std::sync::Arc;
 use typecheck::TypeCheckedFunc;
 
 pub use ast::{DebugInfo, GlobalVarDecl, StructField, TopLevelDecl, Type, TypeTree};
@@ -623,7 +624,7 @@ pub fn compile_from_folder(
 
     resolve_imports(&mut programs, &mut import_map, error_system)?;
 
-    //Conversion of programs from `HashMap` to `Vec` for typechecking
+    // Conversion of programs from `HashMap` to `Vec` for typechecking
     let type_tree = create_type_tree(&programs);
     let mut modules = vec![programs
         .remove(&if let Some(lib) = library {
@@ -659,19 +660,33 @@ pub fn compile_from_folder(
             .for_each(|module| module.inline(cool));
     }
 
+    // Give func's the data they need to be separated from their origin modules
     for module in &mut typechecked_modules {
         module.propagate_attributes();
-
-        let imports: HashMap<_, _> = module
-            .imports
-            .iter()
-            .map(|imp| (imp.id.unwrap_or_default(), imp.clone()))
-            .collect();
 
         for (_, func) in &mut module.checked_funcs {
             let unique_id = Import::unique_id(&module.path, &func.name);
             func.unique_id = Some(unique_id);
-            func.imports = imports.clone();
+        }
+
+        let mut func_labels = HashMap::new(); // local StringId to global Labels
+
+        for (id, func) in &module.checked_funcs {
+            match func.properties.closure {
+                true => func_labels.insert(*id, Label::Closure(func.unique_id.unwrap())),
+                false => func_labels.insert(*id, Label::Func(func.unique_id.unwrap())),
+            };
+        }
+        for import in &module.imports {
+            match import.id {
+                Some(id) => drop(func_labels.insert(id, Label::Func(import.unique_id))),
+                None => panic!("Import without id {:#?}", &import),
+            }
+        }
+
+        let func_labels = Arc::new(func_labels);
+        for (_, func) in &mut module.checked_funcs {
+            func.func_labels = func_labels.clone();
         }
     }
 
