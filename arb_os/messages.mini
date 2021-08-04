@@ -61,7 +61,7 @@ type TxRequestData = struct {
     incomingRequest: IncomingRequest,       // original request that led to this; used for making tx receipt
     feeStats: TxFeeStats,                   // info about the fees paid by this tx
     fromRetryable: option<RetryableTx>,     // if this is redeeming a retryable, this references the retryable
-}
+};
 
 // Process a request.
 // Return None if message is malformatted; otherwise handle errors and return Some(()); if no error, never return

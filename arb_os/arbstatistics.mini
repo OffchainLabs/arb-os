@@ -68,7 +68,7 @@ type ArbStatistics = struct {
     storage: uint,
     arbGasUsed: uint,
     numTxReceipts: uint,
-}
+};
 
 var arbStats: ArbStatistics;
 

@@ -102,7 +102,7 @@ public func flipEndian256(x: uint) -> uint {
 type Hasher = struct {
     accumulator: [7]uint,
     offset: uint,
-}
+};
 
 public func hasher_new() -> Hasher {
     return struct {

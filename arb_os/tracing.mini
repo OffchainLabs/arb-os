@@ -16,7 +16,7 @@ use std::stack::stack_pop;
 
 type EvmTracer = struct {
     recordStack: Stack,
-}
+};
 
 public view write func evmTracer_clear() {
     outbox_setEvmTracer(evmTracer_new());

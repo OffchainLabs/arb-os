@@ -71,7 +71,7 @@ type IndexedAddressTable = struct {
     byIndex: ExpandingIntArray,
     byAddress: map<address, uint>,
     size: uint
-}
+};
 
 var globalIndexedAddressTable: IndexedAddressTable;
 
@@ -460,13 +460,13 @@ type FunctionTableEntry = struct {
     callDataPrefix: any,    //FIXME: really a ByteArray, but compiler previously didn't allow array of imported type
     maxGas: uint,
     payable: bool,
-}
+};
 
-type FunctionTable = []FunctionTableEntry
+type FunctionTable = []FunctionTableEntry;
 
 type AggregatorDecompressionState = struct {
     functionTable: FunctionTable,
-}
+};
 
 public func parseAggregatorFunctionTable(
     contents: ByteArray

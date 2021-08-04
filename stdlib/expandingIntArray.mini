@@ -8,7 +8,7 @@ type ExpandingIntArray = struct {
     size: uint,
     chunk: uint,
     contents: [8]any,
-}
+};
 
 public func expandingIntArray_new() -> ExpandingIntArray {
     return struct {
@@ -73,7 +73,7 @@ type Unwinder = struct {
     tree: [8]any,
     slot: uint,
     next: option<Unwinder>,
-}
+};
 
 public func expandingIntArray_set(arr: ExpandingIntArray, index: uint, value: uint) -> ExpandingIntArray {
     return expandingIntArray_setN(arr, 1, index, value);
