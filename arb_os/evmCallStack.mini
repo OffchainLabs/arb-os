@@ -1363,7 +1363,11 @@ public view func evmCallStack_getAccountStoreInCurrentContext() -> AccountStore 
     };
 }
 
-public view write func evmCallStack_setAccountStoreInCurrentContext(acctStore: AccountStore) {
+public view write func evmCallStack_withAccountStoreInCurrentContext(
+    clo: view write func(AccountStore) -> (AccountStore, any)
+) -> any {
+    let (acctStore, ret) = clo(evmCallStack_getAccountStoreInCurrentContext());
+
     if let Some(topFrame) = globalCallStack {
         set topFrame.accountStore = acctStore;
         set topFrame.runningAsAccount = accountStore_get(acctStore, topFrame.runningAs);
@@ -1371,6 +1375,8 @@ public view write func evmCallStack_setAccountStoreInCurrentContext(acctStore: A
     } else {
         safeSetGlobalAccountStore(acctStore);
     }
+
+    return ret;
 }
 
 public view write func _evmCallStack_transferEthInCurrentContext(from: address, to: address, amount: uint) -> option<()> {

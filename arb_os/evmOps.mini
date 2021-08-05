@@ -28,8 +28,7 @@ use evmCallStack::evmCallStack_callHitError;
 use evmCallStack::evmCallStack_runningCodeFromAccount;
 use evmCallStack::snapshotAuxStack;
 use evmCallStack::evmCallStack_changeNumAccounts;
-use evmCallStack::evmCallStack_getAccountStoreInCurrentContext;
-use evmCallStack::evmCallStack_setAccountStoreInCurrentContext;
+use evmCallStack::evmCallStack_withAccountStoreInCurrentContext;
 use evmCallStack::evmCallStack_currentFrameStorageDelta;
 
 use evmCallStack::evmCallFrame_runningAsAccount;
@@ -41,6 +40,7 @@ use evmCallStack::evmCallFrame_getCallvalue;
 use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallFrame_shouldRevertOnStorageWrite;
 
+use accounts::AccountStore;
 use accounts::accountStore_createOrAddCodeRef;
 use accounts::account_getAddress;
 use accounts::account_getCodeSize;
@@ -1074,10 +1074,19 @@ public view write func evmOp_create2(value: uint, offset: uint, length: uint, sa
         if (constructorSucceeded) {
             if let Some(contractCode) = evmCallStack_getTopFrameReturnData() {
                 if ((bytearray_size(contractCode) == 0) || (bytearray_getByte(contractCode, 0) != 0xef)) { // required by EIP-3541
-                    let astore = evmCallStack_getAccountStoreInCurrentContext();
-                    if let Some(res) = accountStore_createOrAddCodeRef(astore, contractCode) {
-                        let (uastore, startPoint2, evmJumpTable2, _) = res;
-                        evmCallStack_setAccountStoreInCurrentContext(uastore);
+                    if let Some(res) = unsafecast<option<(view write func(), map<uint, view write func()>)> >(
+                        evmCallStack_withAccountStoreInCurrentContext(
+                            view write closure(acctStore: AccountStore) -> (AccountStore, any) {
+                                return xif let Some(res3) = accountStore_createOrAddCodeRef(acctStore, contractCode) {
+                                    let (uastore, startPoint3, evmJumpTable3, _) = res3;
+                                    (uastore, Some((startPoint3, evmJumpTable3)))
+                                } else {
+                                    (acctStore, None<(view write func(), map<uint, view write func()>)>)
+                                };
+                            }
+                        )
+                    ) {
+                        let (startPoint2, evmJumpTable2) = res;
                         if let Some(oldAcct) = evmCallStack_getAccount(newAddress) {
                             let storage = xif let Some(st) = account_getAllStorage(oldAcct) {
                                 st

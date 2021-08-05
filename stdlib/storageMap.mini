@@ -23,7 +23,6 @@
 
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
-use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_set256;
 
 use std::bytestream::bytestream_new;
@@ -219,44 +218,66 @@ type StorageMapDiff_State = struct {
 };
 
 public func storageMap_diff(s0: StorageMap, s1: StorageMap) -> Stack {
-    let res1 = unsafecast<StorageMapDiff_State>(storageMap_forall(
-        s0,
-        unsafecast<func(uint, uint, any) -> any>(smdiffClosure),
-        struct {
-            diffs: stack_new(),
-            otherSM: s1,
-            firstOne: true,
-        }
-    ));
-    res1 = unsafecast<StorageMapDiff_State>(storageMap_forall(
-        s1,
-        unsafecast<func(uint, uint, any) -> any>(smdiffClosure),
-        struct {
-            diffs: res1.diffs,
-            otherSM: s0,
-            firstOne: false
-        }
-    ));
-    return res1.diffs;
-}
+    let result = unsafecast<Stack>(
+        storageMap_forall(
+            s0,
+            unsafecast<func(uint, uint, any) -> any>(
+                closure(index: uint, value: uint, soFar: Stack) -> Stack {
+                    let val1 = storageMap_get(s1, index);
+                    return xif (val1 == value) {
+                        soFar
+                    } else {
+                        stack_push(soFar, (index, value, val1))
+                    };
+                }
+            ),
+            stack_new()
+        )
+    );
 
-func smdiffClosure(k: uint, v: uint, state: StorageMapDiff_State) -> StorageMapDiff_State {
-    let otherVal = storageMap_get(state.otherSM, k);
-    return xif (state.firstOne) {
-        xif (v == otherVal) {
-            state
-        } else {
-            state with { diffs: stack_push(state.diffs, (k, v, otherVal)) }
-        }
-    } elseif (otherVal == 0) {
-        state with { diffs: stack_push(state.diffs, (k, 0, v)) }
-    } else {
-        state
-    };
+    result = unsafecast<Stack>(
+        storageMap_forall(
+            s1,
+            unsafecast<func(uint, uint, any) -> any>(
+                closure(index: uint, value: uint, soFar: Stack) -> Stack {
+                    let val0 = storageMap_get(s0, index);
+                    return xif (val0 == 0) {
+                        stack_push(soFar, (index, val0, value))
+                    } else {
+                        soFar
+                    };
+                }
+            ),
+            result
+        )
+    );
+
+    return result;
 }
 
 public func storageMap_serialize(s: StorageMap) -> ByteArray {
-    return unsafecast<ByteArray>(storageMap_forall(s, smSerHelper, bytearray_new(0)));
+    let result = storageMap_forall(
+        s,
+        unsafecast<func(uint, uint, any) -> any>(
+            closure(index: uint, value: uint, soFar: (ByteArray, uint)) -> (ByteArray, uint) {
+                let (ba, sz) = soFar;
+                return (
+                    bytearray_set256(
+                        bytearray_set256(
+                            ba,
+                            sz,
+                            index,
+                        ),
+                        sz + 32,
+                        value,
+                    ),
+                    sz + 64
+                );
+            }
+        ),
+        (bytearray_new(0), 0),
+    );
+    return unsafecast<(ByteArray, uint)>(result).0;
 }
 
 public func storageMap_deserialize(ba: ByteArray) -> option<StorageMap> {
@@ -272,35 +293,21 @@ public func storageMap_deserialize(ba: ByteArray) -> option<StorageMap> {
     return Some(ret);
 }
 
-func smSerHelper(index: uint, value: uint, state: any) -> any {
-    let ba = unsafecast<ByteArray>(state);
-    let sz = bytearray_size(ba);
-    return bytearray_set256(
-        bytearray_set256(
-            ba,
-            sz,
-            index,
-        ),
-        sz+32,
-        value,
-    );
-}
-
 public func storageMap_serializeListOfNonzeros(s: StorageMap) -> ByteArray {
     // list the keys that have non-zero values (but not the values)
-    return unsafecast<ByteArray>(storageMap_forall(s, smSerNZHelper, bytearray_new(0)));
-}
-
-func smSerNZHelper(index: uint, value: uint, state: any) -> any {
-    let ba = unsafecast<ByteArray>(state);
-    let sz = bytearray_size(ba);
-    return xif (value == 0) {
-        ba
-    } else {
-        bytearray_set256(
-            ba,
-            sz,
-            index,
-        )
-    };
+    let result = storageMap_forall(
+        s,
+        unsafecast<func(uint, uint, any) -> any>(
+            closure(index: uint, value: uint, soFar: (ByteArray, uint)) -> (ByteArray, uint) {
+                return xif (value != 0) {
+                    let (ba, sz) = soFar;
+                    (bytearray_set256(ba, sz, index), sz+32)
+                } else {
+                    soFar
+                };
+            }
+        ),
+        (bytearray_new(0), 0),
+    );
+    return unsafecast<(ByteArray, uint)>(result).0;
 }

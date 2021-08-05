@@ -2,6 +2,7 @@
 // Copyright 2021, Offchain Labs, Inc. All rights reserved.
 //
 
+use accounts::AccountStore;
 use accounts::safeGetGlobalAccountStore;
 use accounts::safeSetGlobalAccountStore;
 use accounts::accountStore_get;
@@ -21,8 +22,7 @@ use evmCallStack::setRetryBufferInCurrentContext;
 use evmCallStack::evmCallStack_callRetryableTxAndReturn;
 use evmCallStack::evmCallStack_transferEthFromEscrow;
 use evmCallStack::evmCallStack_currentTxRequestGasBid;
-use evmCallStack::evmCallStack_getAccountStoreInCurrentContext;
-use evmCallStack::evmCallStack_setAccountStoreInCurrentContext;
+use evmCallStack::evmCallStack_withAccountStoreInCurrentContext;
 
 use evmlogs::EvmLogs;
 use evmlogs::evmlogs_empty;
@@ -259,18 +259,25 @@ public view write func retryBuffer_delete(rbuf: RetryBuffer, txId: uint, withRef
         if (withRefund) {
             // credit the escrowed callvalue back to the beneficiary
             if (evmCallStack_isEmpty()) {
-                if let Some(astore) = accountStore_payFromEscrow(
-                    evmCallStack_getAccountStoreInCurrentContext(),
-                    rtx.callvalueEscrowKey,
-                    rtx.beneficiary,
-                    rtx.callvalue
-                ) {
-                    evmCallStack_setAccountStoreInCurrentContext(astore);
-                }  // else something went badly wrong and we can't refund the callvalue
-            } else {
-                // try to refund from the escrow, ignoring errors (which should never happen)
-                if (evmCallStack_transferEthFromEscrow(rtx.callvalueEscrowKey, rtx.beneficiary, rtx.callvalue) == None<()>) {
-                    debug(11001);
+                let res = unsafecast<bool>(evmCallStack_withAccountStoreInCurrentContext(
+                    closure(acctStore: AccountStore) -> (AccountStore, any) {
+                        return xif let Some(astore) = accountStore_payFromEscrow(
+                            acctStore,
+                            rtx.callvalueEscrowKey,
+                            rtx.beneficiary,
+                            rtx.callvalue
+                        ) {
+                            (astore, true)
+                        } else {
+                            (acctStore, false)
+                        };
+                    }
+                ));
+                if (!res) {
+                    // try to refund from the escrow, ignoring errors (which should never happen)
+                    if (evmCallStack_transferEthFromEscrow(rtx.callvalueEscrowKey, rtx.beneficiary, rtx.callvalue) == None<()>) {
+                        debug(11001);
+                    }
                 }
             }
         }
