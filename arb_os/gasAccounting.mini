@@ -8,6 +8,7 @@ use std::bytearray::ByteArray;
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsForall;
 
+use accounts::Account;
 use accounts::safeGetGlobalAccountStore;
 use accounts::safeSetGlobalAccountStore;
 use accounts::accountStore_get;
@@ -27,7 +28,7 @@ use chainParameters::chainParams_get;
 use chainParameters::chainParams_getOrDie;
 
 use evmCallStack::evmCallStack_getAccountInCurrentContext;
-use evmCallStack::evmCallStack_setAccountInCurrentContext;
+use evmCallStack::evmCallStack_withAccountInCurrentContext;
 
 use messages::TxRequestData;
 
@@ -319,15 +320,14 @@ public view func gasAccounting_getTxBaseFeeL1Gas(maybeAggregatorAddr: option<add
 
 public view write func gasAccounting_setTxBaseFeeL1Gas(aggregator: address, fee: uint) -> option<()> {
     return xif (    (fee < chainParams_getOrDie(const::Atom_Param_MinBaseTxFeeL1Gas))
-         || (fee > chainParams_getOrDie(const::Atom_Param_MaxBaseTxFeeL1Gas)) ) {
+                 || (fee > chainParams_getOrDie(const::Atom_Param_MaxBaseTxFeeL1Gas)) ) {
         None<()>
     } else {
-        evmCallStack_setAccountInCurrentContext(
+        let _ = evmCallStack_withAccountInCurrentContext(
             aggregator,
-            account_setBaseTxFeeL1Gas(
-                evmCallStack_getAccountInCurrentContext(aggregator),
-                fee
-            ),
+            closure(acct: Account) -> (Account, any) {
+                return (account_setBaseTxFeeL1Gas(acct, fee), ());
+            }
         );
         Some(())
     };

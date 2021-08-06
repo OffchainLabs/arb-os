@@ -2,6 +2,7 @@
 // Copyright 2021, Offchain Labs, Inc. All rights reserved.
 //
 
+use accounts::Account;
 use accounts::account_setAggregatorToPay;
 use accounts::account_getAggregatorToPayAsOption;
 use accounts::account_getFeeCollector;
@@ -18,7 +19,7 @@ use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallFrame_getCaller;
 use evmCallStack::evmCallStack_callHitError;
 use evmCallStack::evmCallStack_getAccountInCurrentContext;
-use evmCallStack::evmCallStack_setAccountInCurrentContext;
+use evmCallStack::evmCallStack_withAccountInCurrentContext;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
@@ -96,16 +97,15 @@ view write func arbaggregator_setPreferredAggregator(topFrame: EvmCallFrame, cal
     let caller = evmCallFrame_getCaller(topFrame);
     let newPA = address(bytearray_get256(calldata, 4));
     let newVal = xif (newPA == address(0)) {
-         None<address>
-     } else {
-         Some(newPA)
-     };
-    evmCallStack_setAccountInCurrentContext(
+        None<address>
+    } else {
+        Some(newPA)
+    };
+    let _ = evmCallStack_withAccountInCurrentContext(
         caller,
-        account_setAggregatorToPay(
-            evmCallStack_getAccountInCurrentContext(caller),
-            newVal,
-        )
+        closure(acct: Account) -> (Account, any) {
+            return (account_setAggregatorToPay(acct, newVal), ());
+        }
     );
     evmOp_return(0, 0);
 }
@@ -161,13 +161,16 @@ view write func arbaggregator_setFeeCollector(topFrame: EvmCallFrame, calldata: 
     let aggregator = address(bytearray_get256(calldata, 4));
     let newCollector = address(bytearray_get256(calldata, 36));
 
-    let aggAcct = evmCallStack_getAccountInCurrentContext(aggregator);
-    let oldCollector = account_getFeeCollector(aggAcct);
-
-    if ((caller != address(0)) && (caller != chainParams_getOwner()) && (caller != oldCollector)) {
-        evmOp_revert_knownPc(61, 0, 0);
-    }
-    evmCallStack_setAccountInCurrentContext(aggregator, account_setFeeCollector(aggAcct, newCollector));
+    let _ = evmCallStack_withAccountInCurrentContext(
+        aggregator,
+        view write closure(acct: Account) -> (Account, any) {
+            let oldCollector = account_getFeeCollector(acct);
+            if ((caller != address(0)) && (caller != chainParams_getOwner()) && (caller != oldCollector)) {
+                evmOp_revert_knownPc(61, 0, 0);
+            }
+            return (account_setFeeCollector(acct, newCollector), ());
+        }
+    );
 
     evmOp_return(0, 0);
 }

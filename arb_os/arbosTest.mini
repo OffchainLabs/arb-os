@@ -15,6 +15,7 @@ use std::bytestream::bytestream_new;
 use std::storageMap::storageMap_serialize;
 use std::storageMap::storageMap_deserialize;
 
+use accounts::Account;
 use accounts::pristineAccount;
 use accounts::account_setContractInfo;
 use accounts::account_getAllStorage;
@@ -38,8 +39,7 @@ use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallStack_setAccount;
 use evmCallStack::evmCallFrame_getCaller;
 use evmCallStack::evmCallFrame_getAccount;
-use evmCallStack::evmCallStack_getAccountInCurrentContext;
-use evmCallStack::evmCallStack_setAccountInCurrentContext;
+use evmCallStack::evmCallStack_withAccountInCurrentContext;
 
 
 public view write func arbosTest_txcall() {
@@ -205,12 +205,11 @@ view write func arbosTest_setNonce(topFrame: EvmCallFrame, calldata: ByteArray) 
     }
     let addr = address(bytearray_get256(calldata, 4));
     let newNonce = bytearray_get256(calldata, 36);
-    evmCallStack_setAccountInCurrentContext(
+    let _ = evmCallStack_withAccountInCurrentContext(
         addr,
-        account_setNextSeqNum(
-            evmCallStack_getAccountInCurrentContext(addr),
-            newNonce,
-        ),
+        closure(acct: Account) -> (Account, any) {
+            return (account_setNextSeqNum(acct, newNonce), ());
+        }
     );
     evmOp_return(0, 0);
 }

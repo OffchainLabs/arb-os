@@ -1343,16 +1343,16 @@ public view func evmCallStack_getAccountInCurrentContext(addr: address) -> Accou
     return accountStore_get(evmCallStack_getAccountStoreInCurrentContext(), addr);
 }
 
-public view write func evmCallStack_setAccountInCurrentContext(addr: address, acct: Account) {
-    if ( ! evmCallStack_setAccount(addr, acct)) {
-        safeSetGlobalAccountStore(
-            accountStore_set(
-                safeGetGlobalAccountStore(),
-                addr,
-                acct,
-            )
-        );
-    }
+public view write func evmCallStack_withAccountInCurrentContext(
+    addr: address,
+    clo: view write func(Account) -> (Account, any)
+) -> any {
+    return evmCallStack_withAccountStoreInCurrentContext(
+        view write closure(acctStore: AccountStore) -> (AccountStore, any) {
+            let (acct, ret) = clo(accountStore_get(acctStore, addr));
+            return (accountStore_set(acctStore, addr, acct), ret);
+        }
+    );
 }
 
 public view func evmCallStack_getAccountStoreInCurrentContext() -> AccountStore {
@@ -1366,17 +1366,19 @@ public view func evmCallStack_getAccountStoreInCurrentContext() -> AccountStore 
 public view write func evmCallStack_withAccountStoreInCurrentContext(
     clo: view write func(AccountStore) -> (AccountStore, any)
 ) -> any {
-    let (acctStore, ret) = clo(evmCallStack_getAccountStoreInCurrentContext());
-
-    if let Some(topFrame) = globalCallStack {
+    return xif let Some(topFrame) = globalCallStack {
+        let (acctStore, ret) = clo(
+            accountStore_set(topFrame.accountStore, topFrame.runningAs, topFrame.runningAsAccount)
+        );
         set topFrame.accountStore = acctStore;
         set topFrame.runningAsAccount = accountStore_get(acctStore, topFrame.runningAs);
         globalCallStack = Some(topFrame);
+        ret
     } else {
+        let (acctStore, ret) = clo(safeGetGlobalAccountStore());
         safeSetGlobalAccountStore(acctStore);
-    }
-
-    return ret;
+        ret
+    };
 }
 
 public view write func _evmCallStack_transferEthInCurrentContext(from: address, to: address, amount: uint) -> option<()> {
