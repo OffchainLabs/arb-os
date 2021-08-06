@@ -383,7 +383,7 @@ view func updateEvmLogForSendToL1(rawLog: any, state: any) -> (any, any) {
     //      into proper EVM log items with batch-related fields filled in.
     // rawLog will be a log item, which is a tuple of length N+2, for a log with N topics
 
-    let log = unsafecast<LogWith4Topics>(rawLog); // safe because we checked don't access fields until we verify tuple length
+    let log = unsafecast<LogWith4Topics>(rawLog); // safe because we verify tuple length before accessing fields
     return xif ((asm(log) uint { tlen } == 6) && (log.topic0 == const::eventTopic_ArbSys_L2ToL1Transaction)) {
         xif let Some(res) = queue_get(unsafecast<Queue>(state)) {
             let (q, item) = res;

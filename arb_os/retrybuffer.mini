@@ -261,13 +261,13 @@ public view write func retryBuffer_delete(rbuf: RetryBuffer, txId: uint, withRef
             if (evmCallStack_isEmpty()) {
                 let res = unsafecast<bool>(evmCallStack_withAccountStoreInCurrentContext(
                     closure(acctStore: AccountStore) -> (AccountStore, any) {
-                        return xif let Some(astore) = accountStore_payFromEscrow(
+                        return xif let Some(updatedAcctStore) = accountStore_payFromEscrow(
                             acctStore,
                             rtx.callvalueEscrowKey,
                             rtx.beneficiary,
                             rtx.callvalue
                         ) {
-                            (astore, true)
+                            (updatedAcctStore, true)
                         } else {
                             (acctStore, false)
                         };
