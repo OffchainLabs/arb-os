@@ -776,7 +776,7 @@ fn create_program_tree(
         let mut file = File::open(folder.join(name.clone())).map_err(|why| {
             CompileError::new(
                 String::from("Compile error"),
-                format!("Can not open {}/{}: {:?}", folder.display(), name, why),
+                format!("Could not open {}/{}: {:?}", folder.display(), name, why),
                 vec![],
             )
         })?;
@@ -785,7 +785,7 @@ fn create_program_tree(
         file.read_to_string(&mut source).map_err(|why| {
             CompileError::new(
                 String::from("Compile error"),
-                format!("Can not read {}/{}: {:?}", folder.display(), name, why),
+                format!("Could not read {}/{}: {:?}", folder.display(), name, why),
                 vec![],
             )
         })?;
@@ -1223,6 +1223,7 @@ fn codegen_programs(
             imported_funcs,
             global_vars,
             Some(SourceFileMap::new(
+                name.clone(),
                 code_out.len(),
                 folder.join(name.clone()).display().to_string(),
             )),
@@ -1497,20 +1498,23 @@ impl ErrorSystem {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SourceFileMap {
     offsets: Vec<(usize, String)>,
+    filename: String,
     end: usize,
 }
 
 impl SourceFileMap {
-    pub fn new(size: usize, first_filepath: String) -> Self {
+    pub fn new(filename: String, size: usize, first_filepath: String) -> Self {
         SourceFileMap {
             offsets: vec![(0, first_filepath)],
+            filename,
             end: size,
         }
     }
 
-    pub fn new_empty() -> Self {
+    pub fn new_empty(filename: String) -> Self {
         SourceFileMap {
             offsets: Vec::new(),
+            filename,
             end: 0,
         }
     }
@@ -1531,7 +1535,10 @@ impl SourceFileMap {
         if offset < self.end {
             return self.offsets[self.offsets.len() - 1].1.clone();
         }
-        panic!("SourceFileMap: bounds check error");
+        panic!(
+            "SourceFileMap {}: bounds check error",
+            Color::red(&self.filename)
+        );
     }
 }
 

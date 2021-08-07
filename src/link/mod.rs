@@ -373,7 +373,7 @@ pub fn link(
     let mut imports_so_far: usize = 0;
     let mut int_offsets = Vec::new();
     let mut ext_offsets = Vec::new();
-    let mut merged_source_file_map = SourceFileMap::new_empty();
+    let mut merged_source_file_map = SourceFileMap::new_empty("merged".to_string());
     let mut global_num_limit = vec![];
 
     for prog in &progs {
