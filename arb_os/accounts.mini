@@ -174,8 +174,13 @@ public func accountStore_getRetryBuffer(acctStore: AccountStore) -> RetryBuffer 
     return acctStore.retryBuffer;
 }
 
-public func accountStore_setRetryBuffer(acctStore: AccountStore, rbuf: RetryBuffer) -> AccountStore {
-    return acctStore with { retryBuffer: rbuf };
+public view func accountStore_withRetryBuffer(
+    acctStore: AccountStore,
+    clo: view func(RetryBuffer) -> (RetryBuffer, any),
+) -> (AccountStore, any) {
+    let (urb, ret) = clo(acctStore.retryBuffer);
+    set acctStore.retryBuffer = urb;
+    return (acctStore, ret);
 }
 
 public func accountStore_getNumAccounts(acctStore: AccountStore) -> uint {
@@ -692,7 +697,7 @@ public func accountStore_forall(acctStore: AccountStore, applicator: func(Accoun
 // If a CodeRef exists for code, increment its reference count.
 // If one doesn't exist, create and initialize one.
 // Return the attributes of the resulting CodeRef
-public view write func accountStore_createOrAddCodeRef(
+public view func accountStore_createOrAddCodeRef(
     acctStore: AccountStore,
     code: ByteArray
 ) -> option<(

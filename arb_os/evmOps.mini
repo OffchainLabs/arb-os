@@ -1076,7 +1076,7 @@ public view write func evmOp_create2(value: uint, offset: uint, length: uint, sa
                 if ((bytearray_size(contractCode) == 0) || (bytearray_getByte(contractCode, 0) != 0xef)) { // required by EIP-3541
                     if let Some(res) = unsafecast<option<(view write func(), map<uint, view write func()>)> >(
                         evmCallStack_withAccountStoreInCurrentContext(
-                            view write closure(acctStore: AccountStore) -> (AccountStore, any) {
+                            view closure(acctStore: AccountStore) -> (AccountStore, any) {
                                 return xif let Some(res3) = accountStore_createOrAddCodeRef(acctStore, contractCode) {
                                     let (uastore, startPoint3, evmJumpTable3, _) = res3;
                                     (uastore, Some((startPoint3, evmJumpTable3)))

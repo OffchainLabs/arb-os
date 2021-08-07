@@ -43,7 +43,7 @@ use arbretryable::arbretryable_txcall;
 use arbstatistics::arbStatistics_txcall;
 
 
-public view write func precompiles_init(acctStore: AccountStore, isUpgrade: bool) -> option<AccountStore> {
+public func precompiles_init(acctStore: AccountStore, isUpgrade: bool) -> option<AccountStore> {
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x01),
@@ -187,7 +187,7 @@ public view write func precompiles_init(acctStore: AccountStore, isUpgrade: bool
     return Some(acctStore);
 }
 
-public view write func makeTrampoline(txcallFunc: view write func()) -> view write func() {
+public func makeTrampoline(txcallFunc: view write func()) -> view write func() {
     // make a small code snippet that function-calls to txcallFunc (with a dummy return address)
     return asm(
         const::AVM_nop,

@@ -13,7 +13,7 @@ use inbox::mainRunLoop;
 
 var inErrorHandler: bool;  // tracks when we're in an error handler, to detect recursive errors
 
-public view write func errorHandler_init() {
+public write func errorHandler_init() {
     inErrorHandler = false;
 
     // set up the default error handler

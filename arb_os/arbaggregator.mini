@@ -163,7 +163,7 @@ view write func arbaggregator_setFeeCollector(topFrame: EvmCallFrame, calldata: 
 
     let _ = evmCallStack_withAccountInCurrentContext(
         aggregator,
-        view write closure(acct: Account) -> (Account, any) {
+        view closure(acct: Account) -> (Account, any) {
             let oldCollector = account_getFeeCollector(acct);
             if ((caller != address(0)) && (caller != chainParams_getOwner()) && (caller != oldCollector)) {
                 evmOp_revert_knownPc(61, 0, 0);

@@ -118,7 +118,7 @@ view func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
     };
 }
 
-public view write func codeSegment_init() {
+public write func codeSegment_init() {
     let mask = 0;
     let opcode = 0;
     while (opcode < 256) {
@@ -161,7 +161,7 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
 // Generate AVM code for a parsed EVM code segment.
 // This builds an AVM code segment corresponding to the provided EVM code.
 // The AVM code is build from back to front, starting with the last EVM instruction (which is on top of the insns stack).
-#[noinline, ] view write func generateCodeForEvmSegment(
+#[noinline, ] func generateCodeForEvmSegment(
     insns: EvmInstructionStack,
     makePcTable: bool,
 ) -> (
@@ -503,14 +503,14 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
     };
 }
 
-public view write func translateEvmCodeSegment(
+public view func translateEvmCodeSegment(
     bs: ByteStream,
     makePcTable: bool,
 ) -> (AvmCodePoint, map<uint, AvmCodePoint>, Stack) {
     return generateCodeForEvmSegment(parseEvmCodeSegment(bs), makePcTable);
 }
 
-view write func pushEvmInsnDenomCheck(
+func pushEvmInsnDenomCheck(
     opcode: uint,
     numStackOperands: uint,
     restOfCode: AvmCodePoint,
@@ -539,7 +539,7 @@ view write func pushEvmInsnDenomCheck(
     );
 }
 
-view write func prependPops(numPops: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
+func prependPops(numPops: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
     while (numPops > 0) {
         restOfCode = pushInstruction(const::AVM_pop, restOfCode);
         numPops = numPops-1;
@@ -547,7 +547,7 @@ view write func prependPops(numPops: uint, restOfCode: AvmCodePoint) -> AvmCodeP
     return restOfCode;
 }
 
-view write func pushDupn(
+func pushDupn(
     n: uint, 
     restOfCode: AvmCodePoint,
 ) -> AvmCodePoint {
@@ -573,7 +573,7 @@ view write func pushDupn(
     };
 }
 
-view write func pushSwapn(
+func pushSwapn(
     n: uint, 
     restOfCode: AvmCodePoint,
 ) -> AvmCodePoint {
@@ -601,7 +601,7 @@ view write func pushSwapn(
     };
 }
 
-view write func pushEvmInsnCall(evmOpNum: uint, code: AvmCodePoint) -> AvmCodePoint {
+func pushEvmInsnCall(evmOpNum: uint, code: AvmCodePoint) -> AvmCodePoint {
     // Some EVM instructions compile to a procedure call to some Mini code.
     // These calls go indirectly through a dispatch function. The codepoint of the dispatch function is stored
     //     at a fixed location in the AVM Register.  So we will generate code to read the Register,

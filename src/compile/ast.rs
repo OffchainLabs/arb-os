@@ -1266,7 +1266,7 @@ impl fmt::Display for TypeMismatch {
                     Color::red("view")
                 ),
                 TypeMismatch::Write => format!(
-                    "assigning {} function to non-view function",
+                    "assigning {} function to non-write function",
                     Color::red("write")
                 ),
             }

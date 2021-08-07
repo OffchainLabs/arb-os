@@ -20,7 +20,7 @@ use accounts::accountStore_changeNumContracts;
 use accounts::accountStore_get;
 use accounts::accountStore_set;
 use accounts::accountStore_getRetryBuffer;
-use accounts::accountStore_setRetryBuffer;
+use accounts::accountStore_withRetryBuffer;
 use accounts::accountStore_transferEthBalance;
 use accounts::accountStore_destroyAccount;
 use accounts::accountStore_createOrAddCodeRef;
@@ -163,15 +163,12 @@ public view func getRetryBufferInCurrentContext() -> RetryBuffer {
     return accountStore_getRetryBuffer(astore);
 }
 
-public view write func setRetryBufferInCurrentContext(rbuf: RetryBuffer) {
-    if let Some(topFrame) = globalCallStack {
-        set topFrame.accountStore = accountStore_setRetryBuffer(topFrame.accountStore, rbuf);
-        globalCallStack = Some(topFrame);
-    } else {
-        safeSetGlobalAccountStore(
-            accountStore_setRetryBuffer(safeGetGlobalAccountStore(), rbuf)
-        );
-    }
+public view write func withRetryBufferInCurrentContext(clo: view func(RetryBuffer) -> (RetryBuffer, any)) -> any {
+    return evmCallStack_withAccountStoreInCurrentContext(
+        view closure(acctStore: AccountStore) -> (AccountStore, any) {
+            return accountStore_withRetryBuffer(acctStore, clo);
+        }
+    );
 }
 
 public view func evmCallStack_isEmpty() -> bool {                                                 
@@ -1345,10 +1342,10 @@ public view func evmCallStack_getAccountInCurrentContext(addr: address) -> Accou
 
 public view write func evmCallStack_withAccountInCurrentContext(
     addr: address,
-    clo: view write func(Account) -> (Account, any)
+    clo: view func(Account) -> (Account, any)
 ) -> any {
     return evmCallStack_withAccountStoreInCurrentContext(
-        view write closure(acctStore: AccountStore) -> (AccountStore, any) {
+        view closure(acctStore: AccountStore) -> (AccountStore, any) {
             let (acct, ret) = clo(accountStore_get(acctStore, addr));
             return (accountStore_set(acctStore, addr, acct), ret);
         }
@@ -1364,7 +1361,7 @@ public view func evmCallStack_getAccountStoreInCurrentContext() -> AccountStore 
 }
 
 public view write func evmCallStack_withAccountStoreInCurrentContext(
-    clo: view write func(AccountStore) -> (AccountStore, any)
+    clo: view func(AccountStore) -> (AccountStore, any)
 ) -> any {
     return xif let Some(topFrame) = globalCallStack {
         let (acctStore, ret) = clo(
