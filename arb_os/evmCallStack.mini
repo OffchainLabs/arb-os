@@ -32,6 +32,7 @@ use accounts::account_getStartCodePoint;
 use accounts::account_setContractInfo;
 use accounts::account_incrSeqNum;
 use accounts::account_getStorageSize;
+use accounts::accountStore_setRetryBuffer;
 
 use chainParameters::chainParams_getOrDie;
 use codeSegment::getDummyAcceptContractCode;
@@ -90,6 +91,7 @@ use inbox::mainRunLoop;
 
 use retrybuffer::RetryBuffer;
 use retrybuffer::RetryableTx;
+use retryBuffer::retryBuffer_trimTwo;
 
 use tracing::evmTracer_clear;
 use tracing::evmTracer_pushCall;
@@ -1376,6 +1378,18 @@ public view write func evmCallStack_withAccountStoreInCurrentContext(
         safeSetGlobalAccountStore(acctStore);
         ret
     };
+}
+
+public view write func evmCallStack_trimRetryBufferInCurrentContext() {
+    let rbuf = retryBuffer_trimTwo(accountStore_getRetryBuffer(evmCallStack_getAccountStoreInCurrentContext()));
+    if let Some(topFrame) = globalCallStack {
+        set topFrame.accountStore = accountStore_setRetryBuffer(topFrame.accountStore, rbuf);
+        globalCallStack = Some(topFrame);
+    } else {
+        safeSetGlobalAccountStore(
+            accountStore_setRetryBuffer(safeGetGlobalAccountStore(), rbuf)
+        );
+    }
 }
 
 public view write func _evmCallStack_transferEthInCurrentContext(from: address, to: address, amount: uint) -> option<()> {

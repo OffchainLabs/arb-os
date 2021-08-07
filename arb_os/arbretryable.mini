@@ -171,27 +171,31 @@ view write func arbRetryable_keepalive(topFrame: EvmCallFrame, calldata: ByteArr
 
     let txId = bytearray_get256(calldata, 4);
 
-    let _ = withRetryBufferInCurrentContext(
-        view closure(rbuf: RetryBuffer) -> (RetryBuffer, ()) {
-            if let Some(res) = retryBuffer_keepalive(rbuf, txId) {
+    let rawResult = withRetryBufferInCurrentContext(
+        view closure(rbuf: RetryBuffer) -> (RetryBuffer, option<uint>) {
+            return xif let Some(res) = retryBuffer_keepalive(rbuf, txId) {
                 let (*rbuf, newTimeout) = res;
-                debug((111, newTimeout));
-                if (arbRetryable_emitLifetimeExtended(topFrame, txId, newTimeout) == None<()>) {
-                    evmOp_revert_knownPc(52, 0, 0);
-                }
-                let mem = bytearray_set256(bytearray_new(0), 0, newTimeout);
-                if ( ! evmCallStack_setTopFrameMemory(mem)) {
-                    evmOp_revert_knownPc(53, 0, 0);
+                xif (arbRetryable_emitLifetimeExtended(topFrame, txId, newTimeout) == None<()>) {
+                    (rbuf, None<uint>)
+                } else {
+                    (rbuf, Some(newTimeout))
                 }
             } else {
-                evmOp_revert_knownPc(54, 0, 0);
-            }
-            return (rbuf, ());
+                (rbuf, None<uint>)
+            };
         }
     );
-
-    debug((113, bytearray_get256(evmCallStack_getTopFrameMemoryOrDie(), 0)));
-    evmOp_return(0, 32);
+    let result = unsafecast<option<uint> >(rawResult);
+    if let Some(ret) = result {
+        let mem = bytearray_set256(bytearray_new(0), 0, ret);
+        if (evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_return(0, 32);
+        } else {
+            evmOp_revert_knownPc(53, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownPc(54, 0, 0);
+    }
 }
 
 // function getBeneficiary(bytes32 ticketId) external view returns (address);
@@ -219,29 +223,30 @@ view write func arbRetryable_cancel(topFrame: EvmCallFrame, calldata: ByteArray)
     }
     let txId = bytearray_get256(calldata, 4);
 
-    let _ = withRetryBufferInCurrentContext(
-        view closure(rbuf: RetryBuffer) -> (RetryBuffer, ()) {
+    let rawResult = withRetryBufferInCurrentContext(
+        view closure(rbuf: RetryBuffer) -> (RetryBuffer, option<uint>) {
             return xif let Some(bene) = retryBuffer_getBeneficiary(rbuf, txId) {
                 let caller = evmCallFrame_getCaller(topFrame);
                 if ((caller != bene) && (caller != address(0))) {
-                    evmOp_revert_knownPc(71, 0, 0);
+                    return (rbuf, Some(71));
                 }
 
                 xif let Some(updatedRbuf) = retryBuffer_delete(rbuf, txId, true) {
                     arbRetryable_emitCanceled(topFrame, txId);
-                    (updatedRbuf, ())
+                    (updatedRbuf, None<uint>)
                 } else {
-                    evmOp_revert_knownPc(72, 0, 0);
-                    (rbuf, ())
+                    (rbuf, Some(72))
                 }
             } else {
-                evmOp_revert_knownPc(73, 0, 0);
-                (rbuf, ())
+                (rbuf, Some(73))
             };
         }
     );
-
-    evmOp_return(0, 0);
+    if let Some(revertCode) = unsafecast<option<uint> >(rawResult) {
+        evmOp_revert_knownPc(revertCode, 0, 0);
+    } else {
+        evmOp_return(0, 0);
+    }
 }
 
 // function getSubmissionPrice(uint calldataSize) external view returns (uint, uint);

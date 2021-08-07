@@ -6,8 +6,6 @@ use std::stack::Stack;
 use std::bytearray::ByteArray;
 use std::bytestream::ByteStream;
 
-use evmCallStack::evmCallStack_callHitError;
-
 use std::bytestream::bytestream_getByte;
 use std::bytestream::bytestream_getPartialWord;
 use std::stack::stack_new;
@@ -388,7 +386,7 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
                             code = pushValue(val, code);
                         } else {
                             // should never happen
-                            evmCallStack_callHitError(23);
+                            error;
                         }
                     }
                 }

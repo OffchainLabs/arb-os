@@ -161,18 +161,22 @@ view write func arbaggregator_setFeeCollector(topFrame: EvmCallFrame, calldata: 
     let aggregator = address(bytearray_get256(calldata, 4));
     let newCollector = address(bytearray_get256(calldata, 36));
 
-    let _ = evmCallStack_withAccountInCurrentContext(
+    let rawResult = evmCallStack_withAccountInCurrentContext(
         aggregator,
-        view closure(acct: Account) -> (Account, any) {
+        view closure(acct: Account) -> (Account, option<()>) {
             let oldCollector = account_getFeeCollector(acct);
-            if ((caller != address(0)) && (caller != chainParams_getOwner()) && (caller != oldCollector)) {
-                evmOp_revert_knownPc(61, 0, 0);
-            }
-            return (account_setFeeCollector(acct, newCollector), ());
+            return xif ((caller != address(0)) && (caller != chainParams_getOwner()) && (caller != oldCollector)) {
+                (acct, None<()>)
+            } else {
+                (account_setFeeCollector(acct, newCollector), Some(()))
+            };
         }
     );
-
-    evmOp_return(0, 0);
+    if (rawResult == cast<any>(None<()>)) {
+        evmOp_revert_knownPc(61, 0, 0);
+    } else {
+        evmOp_return(0, 0);
+    }
 }
 
 // function getTxBaseFee(address aggregator) external view returns (uint);
