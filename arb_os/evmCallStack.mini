@@ -20,7 +20,6 @@ use accounts::accountStore_changeNumContracts;
 use accounts::accountStore_get;
 use accounts::accountStore_set;
 use accounts::accountStore_getRetryBuffer;
-use accounts::accountStore_withRetryBuffer;
 use accounts::accountStore_transferEthBalance;
 use accounts::accountStore_destroyAccount;
 use accounts::accountStore_createOrAddCodeRef;
@@ -91,7 +90,6 @@ use inbox::mainRunLoop;
 
 use retrybuffer::RetryBuffer;
 use retrybuffer::RetryableTx;
-use retryBuffer::retryBuffer_trimTwo;
 
 use tracing::evmTracer_clear;
 use tracing::evmTracer_pushCall;
@@ -157,18 +155,13 @@ public write func evmCallStack_init() {
 }
 
 public view func getRetryBufferInCurrentContext() -> RetryBuffer {
-    let astore = xif let Some(frame) = globalCallStack {
-        frame.accountStore
-    } else {
-        safeGetGlobalAccountStore()
-    };
-    return accountStore_getRetryBuffer(astore);
+    return accountStore_getRetryBuffer(evmCallStack_getAccountStoreInCurrentContext());
 }
 
-public view write func withRetryBufferInCurrentContext(clo: view func(RetryBuffer) -> (RetryBuffer, any)) -> any {
-    return evmCallStack_withAccountStoreInCurrentContext(
-        view closure(acctStore: AccountStore) -> (AccountStore, any) {
-            return accountStore_withRetryBuffer(acctStore, clo);
+public view write func setRetryBufferInCurrentContext(rbuf: RetryBuffer) {
+    let _ = evmCallStack_withAccountStoreInCurrentContext(
+        closure(acctStore: AccountStore) -> (AccountStore, ()) {
+            return (accountStore_setRetryBuffer(acctStore, rbuf), ());
         }
     );
 }
@@ -1378,18 +1371,6 @@ public view write func evmCallStack_withAccountStoreInCurrentContext(
         safeSetGlobalAccountStore(acctStore);
         ret
     };
-}
-
-public view write func evmCallStack_trimRetryBufferInCurrentContext() {
-    let rbuf = retryBuffer_trimTwo(accountStore_getRetryBuffer(evmCallStack_getAccountStoreInCurrentContext()));
-    if let Some(topFrame) = globalCallStack {
-        set topFrame.accountStore = accountStore_setRetryBuffer(topFrame.accountStore, rbuf);
-        globalCallStack = Some(topFrame);
-    } else {
-        safeSetGlobalAccountStore(
-            accountStore_setRetryBuffer(safeGetGlobalAccountStore(), rbuf)
-        );
-    }
 }
 
 public view write func _evmCallStack_transferEthInCurrentContext(from: address, to: address, amount: uint) -> option<()> {

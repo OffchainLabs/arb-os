@@ -8,6 +8,7 @@ use accounts::safeSetGlobalAccountStore;
 use accounts::accountStore_get;
 use accounts::accountStore_set;
 use accounts::accountStore_getRetryBuffer;
+use accounts::accountStore_setRetryBuffer;
 use accounts::accountStore_withRetryBuffer;
 use accounts::accountStore_transferEthBalance;
 use accounts::accountStore_newEscrow;
@@ -20,8 +21,8 @@ use evmCallStack::evmCallStack_isEmpty;
 use evmCallStack::evmCallStack_callRetryableTxAndReturn;
 use evmCallStack::evmCallStack_transferEthFromEscrow;
 use evmCallStack::evmCallStack_currentTxRequestGasBid;
+use evmCallStack::evmCallStack_getAccountStoreInCurrentContext;
 use evmCallStack::evmCallStack_withAccountStoreInCurrentContext;
-use evmCallStack::withRetryBufferInCurrentContext;
 
 use evmlogs::EvmLogs;
 use evmlogs::evmlogs_empty;
@@ -563,35 +564,30 @@ func adjustGasInfoInFakeIncomingRequest(req: IncomingRequest, maxGas: uint, gasP
 // Redeem a retrayble, while executing an "outer" transaction.
 // Returns (success, returndata) for the "inner" retryable
 public view write func redeemRetryableTxInTx(txToRedeem: uint) -> (bool, ByteArray) {
-    let rawRetryableToTry = withRetryBufferInCurrentContext(
-        view closure(rbuf: RetryBuffer) -> (RetryBuffer, option<RetryableTx>) {
-            rbuf = retryBuffer_trimTwo(rbuf);
-            return xif let Some(rtx) = retryBuffer_get(rbuf, txToRedeem) {
-                xif let Some(rb) = retryBuffer_delete(rbuf, txToRedeem, false) {
-                    // we just deleted the retryable, without a credit-back to the beneficiary
-                    // this is safe because:
-                    //       if the tx succeeds, the callee got the funds so deleting without credit-back is correct
-                    //       if the tx reverts the deletion will be reverted so the retryable will still exist
-                    (rb, Some(rtx))
-                } else {
-                    (rbuf, None<RetryableTx>)
+    let rbuf = accountStore_getRetryBuffer(evmCallStack_getAccountStoreInCurrentContext());
+    return xif let Some(rtx) = retryBuffer_get(rbuf, txToRedeem) {
+        xif let Some(rb) = retryBuffer_delete(rbuf, txToRedeem, false) {
+            // we just deleted the retryable, without a credit-back to the beneficiary
+            // this is safe because:
+            //       if the tx succeeds, the callee got the funds so deleting without credit-back is correct
+            //       if the tx reverts the deletion will be reverted so the retryable will still exist
+            let _ = evmCallStack_withAccountStoreInCurrentContext(
+                closure(acctStore: AccountStore) -> (AccountStore, ()) {
+                    return (accountStore_setRetryBuffer(acctStore, rb), ());
                 }
-            } else {
-                (rbuf, None<RetryableTx>)
-            };
+            );
+            evmCallStack_callRetryableTxAndReturn(
+                rtx with {
+                    l1Message: adjustGasInfoInFakeIncomingRequest(
+                        rtx.l1Message,
+                        63 * (getGas()) / (64 * chainParams_getOrDie(const::Atom_Param_AvmGasPerArbGas)),  // inner tx will get approximately this much gas
+                        evmCallStack_currentTxRequestGasBid(),
+                    )
+                }
+            )
+        } else {
+            (false, bytearray_new(0))
         }
-    );
-    let retryableToTry = unsafecast<option<RetryableTx> >(rawRetryableToTry);
-    return xif let Some(rtx) = retryableToTry {
-        evmCallStack_callRetryableTxAndReturn(
-            rtx with {
-                l1Message: adjustGasInfoInFakeIncomingRequest(
-                    rtx.l1Message,
-                    63 * (getGas()) / (64 * chainParams_getOrDie(const::Atom_Param_AvmGasPerArbGas)),  // inner tx will get approximately this much gas
-                    evmCallStack_currentTxRequestGasBid(),
-                )
-            }
-        )
     } else {
         (false, bytearray_new(0))
     };
