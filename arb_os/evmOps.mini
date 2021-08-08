@@ -935,7 +935,7 @@ public view write func evmOp_gas() -> uint {
 }
 
 public view write func evmOp_revert(memOffset: uint, memNbytes: uint) {
-    let _ = evmCallStack_returnFromCall(false, memOffset, memNbytes, None<view write func()>);
+    let _ = evmCallStack_returnFromCall(const::TxResultCode_revert, memOffset, memNbytes, None<view write func()>);
 
     evm_runtimePanic(28);
 }
@@ -956,7 +956,7 @@ public view write func evmOp_revert_knownPc(evmPc: uint, memOffset: uint, memNby
 }
 
 public view write func evmOp_return(memOffset: uint, memNbytes: uint) {
-    let _ = evmCallStack_returnFromCall(true, memOffset, memNbytes, None<view write func()>);
+    let _ = evmCallStack_returnFromCall(const::TxResultCode_success, memOffset, memNbytes, None<view write func()>);
 
     evm_runtimePanic(29);
 }
