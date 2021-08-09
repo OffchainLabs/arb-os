@@ -33,7 +33,7 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
-
+          
   test:
     name: Test with ${{ matrix.rust }} rust on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -116,3 +116,45 @@ jobs:
           files: ./lcov.info,./lcov-mini.info
           fail_ci_if_error: true
           verbose: false
+
+  node:
+    name: Node integration test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Arbitrum
+        uses: actions/checkout@v2
+        with: 
+          repository: OffchainLabs/arbitrum
+          submodules: true
+
+      - name: Install dependencies
+        run: |
+          sudo add-apt-repository -y ppa:longsleep/golang-backports
+          sudo apt-get update && sudo apt-get install -y \
+            autoconf automake cmake libboost-dev libboost-filesystem-dev libgmp-dev \
+            librocksdb-dev libssl-dev libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev \
+            liblz4-dev libzstd-dev libtool golang-go clang-format cmake
+          sudo apt-get install librocksdb-dev
+          #git clone -b v6.11.4 https://github.com/facebook/rocksdb
+          #cd rocksdb && make shared_lib && sudo make install
+
+      - name: Checkout ArbOS
+        run: |
+          cd packages/arb-os/ && git checkout $GITHUB_SHA && cd -
+
+      - name: Install Arbitrum
+        run: |
+          mkdir packages/arb-avm-cpp/debug/
+          cd packages/arb-avm-cpp/debug/ && cmake .. -DCMAKE_BUILD_TYPE=Debug && make -j && cd -
+
+      - name: Test Node's C++ Database
+        run: |
+          ./packages/arb-avm-cpp/debug/bin/avm_tests
+
+      - name: Test Node's RPC
+        run: |
+          cd packages/arb-rpc-node/ && go test ./... && cd -
+
+      - name: Test Node's Core
+        run: |
+          cd packages/arb-node-core/ && go test ./... && cd -
