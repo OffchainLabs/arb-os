@@ -612,7 +612,16 @@ pub fn compile_from_folder(
     release_build: bool,
     builtins: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
-    let (mut programs, mut import_map) = create_program_tree(
+    let constants_default = folder.join("constants.json");
+    let constants_path = match constants_path {
+        Some(path) => Some(path),
+        None => match constants_default.exists() {
+            true => Some(constants_default.as_path()),
+            false => None,
+        },
+    };
+
+    let (mut programs, import_map) = create_program_tree(
         folder,
         library,
         main,
