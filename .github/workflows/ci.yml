@@ -120,13 +120,7 @@ jobs:
   node:
     name: Node integration test
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Arbitrum
-        uses: actions/checkout@v2
-        with: 
-          repository: OffchainLabs/arbitrum
-          submodules: true
-          
+    steps:          
       - name: Save current commit
         run: |
           echo "CURRENT_COMMIT=${{ github.event.pull_request.head.sha }}" >> $GITHUB_ENV
