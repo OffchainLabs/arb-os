@@ -61,6 +61,12 @@ impl Lines {
         }
     }
 
+    /// Returns the implied `Location` at a given location from the parser
+    pub fn loc(&self, lno: usize, file_id: u64) -> Location {
+        self.location(BytePos::from(lno), file_id)
+            .expect("bad byte offset in file")
+    }
+
     /// Returns which line `byte` points to
     pub fn line_number_at_byte(&self, byte: BytePos) -> Line {
         let num_lines = self.starting_bytes.len();
