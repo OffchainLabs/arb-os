@@ -132,21 +132,23 @@ jobs:
             librocksdb-dev libssl-dev libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev \
             liblz4-dev libzstd-dev libtool golang-go clang-format cmake
           sudo apt-get install librocksdb-dev
-          #git clone -b v6.11.4 https://github.com/facebook/rocksdb
-          #cd rocksdb && make shared_lib && sudo make install
+          #
+          # If apt's rocksdb is ever out of date, we'll need to use the following
+          #   git clone -b v6.11.4 https://github.com/facebook/rocksdb
+          #   cd rocksdb && make shared_lib && sudo make install
+          #
 
       - name: Clone Arbitrum
         run: |
           git clone --recursive https://github.com/OffchainLabs/arbitrum.git
           cd arbitrum && git submodule update --init --recursive
-          
+
       - name: Copy over this branch's ArbOS
         run: |
-          cd arbitrum && git submodule update --init --recursive && cd -
           rm -r arbitrum/packages/arb-os/*
           mv * arbitrum/packages/arb-os/ || true
 
-      - name: Install Arbitrum
+      - name: Build Arbitrum
         run: |
           mkdir arbitrum/packages/arb-avm-cpp/debug/
           cd $_
