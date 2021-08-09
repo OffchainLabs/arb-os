@@ -144,7 +144,7 @@ jobs:
         run: |
           cd arbitrum && git submodule update --init --recursive && cd -
           rm -r arbitrum/packages/arb-os/*
-          mv * arbitrum/packages/arb-os/
+          mv * arbitrum/packages/arb-os/ || true
 
       - name: Install Arbitrum
         run: |
