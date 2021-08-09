@@ -138,7 +138,7 @@ jobs:
       - name: Clone Arbitrum
         run: |
           git clone --recursive https://github.com/OffchainLabs/arbitrum.git
-          cd arbitrum && submodule update --init --recursive
+          cd arbitrum && git submodule update --init --recursive
           pwd
           
       - name: Checkout ArbOS
