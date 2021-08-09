@@ -140,8 +140,8 @@ jobs:
 
       - name: Checkout ArbOS
         run: |
-          echo checking out $(git rev-parse HEAD)
-          cd packages/arb-os/ && git checkout $(git rev-parse HEAD) && cd -
+          CURRENT_COMMIT=$(git rev-parse HEAD)
+          cd packages/arb-os/ && git checkout $CURRENT_COMMIT && cd -
 
       - name: Install Arbitrum
         run: |
