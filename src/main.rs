@@ -4,13 +4,12 @@
 
 #![allow(unused_parens)]
 
-use std::collections::BTreeMap;
-use crate::run::Machine;
-use crate::uint256::Uint256;
 use crate::compile::miniconstants::make_parameters_list;
 use crate::compile::CompileStruct;
 use crate::link::LinkedProgram;
 use crate::link::SerializableTypeTree;
+use crate::run::Machine;
+use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
 use clap::Clap;
 use compile::CompileError;
@@ -21,6 +20,7 @@ use run::{
     profile_gen_from_file, replay_from_testlog_file, run_from_file, ProfilerMode,
     RuntimeEnvironment,
 };
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
 use std::io::Read;
@@ -287,13 +287,13 @@ fn run_debug(code_0: Vec<Instruction>, table: Vec<(usize, usize)>) {
     let mut table_aux = vec![0; table.len()];
     for (i, loc) in table.iter() {
         table_aux[*i] = code_0.len() - *loc;
-    };
+    }
     let buf = get_file(&"/home/sami/arb-os/wasm-tests/test-buffer.wasm".to_string());
     machine.start_at_zero();
     machine.stack.push_usize(buf.len()); // io len
     machine.stack.push(Value::new_buffer(buf)); // io buffer
     machine.stack.push(wasm::make_table_internal(&table_aux)); // call table
-    // machine.debug(Some(CodePt::new_internal(code_len - 1)));
+                                                               // machine.debug(Some(CodePt::new_internal(code_len - 1)));
     let used = machine.run(Some(CodePt::new_internal(code_len - 1)));
 
     let len = machine.stack.nth(0);

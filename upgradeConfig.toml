@@ -1,6 +1,2 @@
-<<<<<<< HEAD
-data = ["globalAccountStore", "wasm_prog"]
-=======
 data = []
->>>>>>> b3d9cfd032f0de2867f071a2087a5157d78d94b5
 

@@ -2332,7 +2332,8 @@ impl Machine {
                         let buf = self.stack.pop_buffer(&self.state)?;
                         let (_, idx) = self.stack.pop_wasm_codepoint(&self.state)?;
                         println!("Going to run JIT");
-                        let (nbuf, _, len, gas_left, _, _) = self.wasm_instances[idx].run_immed(buf, arg, v);
+                        let (nbuf, _, len, gas_left, _, _) =
+                            self.wasm_instances[idx].run_immed(buf, arg, v);
                         println!("JIT success");
 
                         let gas256 = Uint256::from_u64(gas_left);

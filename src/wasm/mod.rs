@@ -2151,13 +2151,13 @@ impl JitWasm {
         let global_immed_func = Func::wrap(&store, move |_offset: i32| {
             immed2.replace_with(|_| {
                 Value::new_tuple(vec![
-                    Value::new_buffer(vec![]), // memory
-                    int_from_usize(0),         // call table
-                    Value::new_buffer(vec![]), // IO buffer
-                    int_from_usize(0),         // IO len
-                    int_from_usize(1000000000),   // gas left
-                    int_from_usize(0),         // Immed
-                    int_from_usize(0),         // Code point
+                    Value::new_buffer(vec![]),  // memory
+                    int_from_usize(0),          // call table
+                    Value::new_buffer(vec![]),  // IO buffer
+                    int_from_usize(0),          // IO len
+                    int_from_usize(1000000000), // gas left
+                    int_from_usize(0),          // Immed
+                    int_from_usize(0),          // Code point
                     int_from_usize(0),          // Generated jump table
                 ])
             });
@@ -2207,19 +2207,23 @@ impl JitWasm {
             }
         });
 
-        let tuple2buffer_func = Func::wrap(&store, move |ptr: i32, offset: i32, offset2: i32, len: i32| {
-            let v = &*immed8.borrow();
-            let tmp = get_tuple2_buffer(v.clone(), offset as usize, offset2 as usize, len as usize);
-            match &*memory_cell7.borrow() {
-                Some(memory) => {
-                    println!("tuple2 buffer {:?}", tmp);
-                    memory
-                        .write(ptr as usize, &tmp)
-                        .expect("cannot write memory");
+        let tuple2buffer_func = Func::wrap(
+            &store,
+            move |ptr: i32, offset: i32, offset2: i32, len: i32| {
+                let v = &*immed8.borrow();
+                let tmp =
+                    get_tuple2_buffer(v.clone(), offset as usize, offset2 as usize, len as usize);
+                match &*memory_cell7.borrow() {
+                    Some(memory) => {
+                        println!("tuple2 buffer {:?}", tmp);
+                        memory
+                            .write(ptr as usize, &tmp)
+                            .expect("cannot write memory");
+                    }
+                    _ => println!("warning, no memory"),
                 }
-                _ => println!("warning, no memory"),
-            }
-        });
+            },
+        );
 
         let insn_cell: Rc<RefCell<Vec<Instruction>>> = Rc::new(RefCell::new(vec![]));
         let insn1 = insn_cell.clone();
@@ -2404,7 +2408,19 @@ impl JitWasm {
         };
     }
 
-    pub fn run_immed(&self, buf: Buffer, len: usize, v: Value) -> (Buffer, Vec<u8>, usize, u64, Vec<Instruction>, Vec<(usize, usize)>) {
+    pub fn run_immed(
+        &self,
+        buf: Buffer,
+        len: usize,
+        v: Value,
+    ) -> (
+        Buffer,
+        Vec<u8>,
+        usize,
+        u64,
+        Vec<Instruction>,
+        Vec<(usize, usize)>,
+    ) {
         self.cell.replace_with(|_buf| buf);
         self.len_cell.replace_with(|_len| len as i32);
         self.immed_cell.replace_with(|_buf| v);
@@ -2425,7 +2441,18 @@ impl JitWasm {
         )
     }
 
-    pub fn run(&self, buf: Buffer, len: usize) -> (Buffer, Vec<u8>, usize, u64, Vec<Instruction>, Vec<(usize, usize)>) {
+    pub fn run(
+        &self,
+        buf: Buffer,
+        len: usize,
+    ) -> (
+        Buffer,
+        Vec<u8>,
+        usize,
+        u64,
+        Vec<Instruction>,
+        Vec<(usize, usize)>,
+    ) {
         self.cell.replace_with(|_buf| buf);
         self.len_cell.replace_with(|_len| len as i32);
         self.gas_cell.replace_with(|_gas| 1000000000);
@@ -2507,13 +2534,13 @@ pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
     // Initialize register
     init.push(push_value(Value::new_tuple(vec![
         int_from_usize(0), // memory
-        int_from_usize(0),         // call table
+        int_from_usize(0), // call table
         int_from_usize(0), // IO buffer
-        int_from_usize(0),         // IO len
-        int_from_usize(0),   // gas left
-        int_from_usize(0),         // Immed
-        int_from_usize(0),         // Code point
-        int_from_usize(0),            // Generated jump table
+        int_from_usize(0), // IO len
+        int_from_usize(0), // gas left
+        int_from_usize(0), // Immed
+        int_from_usize(0), // Code point
+        int_from_usize(0), // Generated jump table
     ])));
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(4))); // gas left
     init.push(immed_op(AVMOpcode::Tset, int_from_usize(0))); // memory
@@ -2917,7 +2944,7 @@ fn process_wasm_inner(
             init.push(get_frame());
             init.push(get64_from_buffer(4)); // offset, buffer
             init.push(simple_op(AVMOpcode::GetBuffer8)); // byte
-            // Write to memory
+                                                         // Write to memory
             init.push(get_frame());
             init.push(get64_from_buffer(0)); // pointer
             init.push(simple_op(AVMOpcode::Swap1));
@@ -2954,7 +2981,7 @@ fn process_wasm_inner(
             init.push(immed_op(AVMOpcode::Tget, int_from_usize(5))); // tuple, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(1)); // idx, tuple, buffer
-            // init.push(simple_op(AVMOpcode::DebugPrint));
+                                             // init.push(simple_op(AVMOpcode::DebugPrint));
             init.push(simple_op(AVMOpcode::Tget)); // int, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(0)); // address, int, buffer
@@ -3009,14 +3036,14 @@ fn process_wasm_inner(
         }
         if f.field().contains("globalimmed") {
             init.push(push_value(Value::new_tuple(vec![
-                Value::new_buffer(vec![]), // memory
-                int_from_usize(0),         // call table
-                Value::new_buffer(vec![]), // IO buffer
-                int_from_usize(0),         // IO len
-                int_from_usize(1000000000),   // gas left
-                int_from_usize(0),         // Immed
-                int_from_usize(0),         // Instruction
-                int_from_usize(0),         // Global table
+                Value::new_buffer(vec![]),  // memory
+                int_from_usize(0),          // call table
+                Value::new_buffer(vec![]),  // IO buffer
+                int_from_usize(0),          // IO len
+                int_from_usize(1000000000), // gas left
+                int_from_usize(0),          // Immed
+                int_from_usize(0),          // Instruction
+                int_from_usize(0),          // Global table
             ])));
             init.push(simple_op(AVMOpcode::Rpush));
             init.push(immed_op(AVMOpcode::Tset, int_from_usize(5)));
@@ -3126,10 +3153,7 @@ pub fn load(buffer: &[u8], param: &[u8]) -> Vec<Instruction> {
             int_from_u32(222),
             int_from_u32(333),
         ]),
-        Value::new_tuple(vec![
-            int_from_u32(10),
-            Value::new_buffer(vec![]),
-        ]),
+        Value::new_tuple(vec![int_from_u32(10), Value::new_buffer(vec![])]),
     ]);
     a.push(push_value(v));
     for i in 4..res.len() {
