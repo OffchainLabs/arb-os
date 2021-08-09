@@ -314,7 +314,7 @@ public func rlp_encodeList(
 var wasm_prog : any;
 
 public impure func rlp_init() {
-    let buf = #include "/home/sami/rlp-nohash.wasm";
+    let buf = #include "rlp-nohash.wasm";
     let ln = 17804;
     let compiled = asm(ln, buf,) any { compilewasm };
     wasm_prog = compiled;

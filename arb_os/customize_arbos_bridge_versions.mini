@@ -16,7 +16,7 @@ public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade
 
 public func set_wasm_prog_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> any {
     // return null;
-    let buf = #include "/home/sami/rlp-nohash.wasm";
+    let buf = #include "rlp-nohash.wasm";
     let ln = 17804;
     let compiled = asm(ln, buf,) any { compilewasm };
     return compiled;
