@@ -143,7 +143,12 @@ fn main() -> Result<(), CompileError> {
                 .build_global()
                 .expect("failed to initialize rayon thread pool");
 
-            let mut output = get_output(compile.output.clone()).unwrap();
+            let mut output = match compile.output {
+                Some(ref path) => File::create(path)
+                    .map(|f| Box::new(f) as Box<dyn io::Write>)
+                    .unwrap(),
+                None => Box::new(io::sink()),
+            };
 
             let error_system = match compile.invoke() {
                 Ok((program, error_system)) => {
