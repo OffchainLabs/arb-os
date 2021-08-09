@@ -123,6 +123,7 @@ jobs:
     steps:          
       - name: Save current commit
         run: |
+          echo "Saving commit ${{ github.event.pull_request.head.sha }}"
           echo "CURRENT_COMMIT=${{ github.event.pull_request.head.sha }}" >> $GITHUB_ENV
           
       - name: Checkout Arbitrum
@@ -145,6 +146,7 @@ jobs:
       - name: Checkout ArbOS
         run: |
           echo checking out ArbOS commit $CURRENT_COMMIT
+          git submodule update --init --recursive
           cd packages/arb-os/ && git fetch && git checkout $CURRENT_COMMIT && cd -
 
       - name: Install Arbitrum
