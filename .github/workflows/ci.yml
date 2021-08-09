@@ -143,6 +143,7 @@ jobs:
           
       - name: Checkout ArbOS
         run: |
+          cd arbitrum
           pwd
           echo checking out ArbOS commit $CURRENT_COMMIT
           git submodule update --init --recursive
