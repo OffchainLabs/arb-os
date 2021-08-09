@@ -145,7 +145,7 @@ jobs:
       - name: Checkout ArbOS
         run: |
           echo checking out ArbOS commit $CURRENT_COMMIT
-          cd packages/arb-os/ && git checkout $CURRENT_COMMIT && cd -
+          cd packages/arb-os/ && git fetch && git checkout $CURRENT_COMMIT && cd -
 
       - name: Install Arbitrum
         run: |
