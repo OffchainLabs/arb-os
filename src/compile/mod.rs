@@ -621,7 +621,7 @@ pub fn compile_from_folder(
         },
     };
 
-    let (mut programs, import_map) = create_program_tree(
+    let (mut programs, mut import_map) = create_program_tree(
         folder,
         library,
         main,
