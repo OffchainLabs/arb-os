@@ -170,6 +170,9 @@ StatementKind: StatementKind = {
         Expr::lno(ExprKind::If(Box::new(c), CodeBlock::new(t, None), r), lines, lno, file)
     ),
     "let" <p: MatchPattern> "=" <e: Expr> ";" => StatementKind::Let(p, e),
+    "let" <p: MatchPattern> ":" <lno: @L> <t: Type> "=" <e: Expr> ";" => {
+        StatementKind::Let(p, Expr::lno(ExprKind::Check(Box::new(e), t), lines, lno, file))
+    },
     <e: Expr> ";" => StatementKind::Expression(e),
     <i: Ident> "=" <e: Expr> ";" => StatementKind::Assign(i, e),
     "return" <e: Expr> ";" => StatementKind::Return(e),

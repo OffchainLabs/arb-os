@@ -29,7 +29,7 @@ type FixedPoint = struct {
 
 func main(arg: option<RandomGenerator>) -> (option<RandomGenerator>, option<option<option<Queue> > >) {
     
-    let a = struct {
+    let a: struct { val: option<RandomGenerator>, array: option<OutputBuffer> } = struct {
         val: arg,
         array: None<OutputBuffer>,
     };
