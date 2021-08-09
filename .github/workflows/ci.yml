@@ -139,29 +139,30 @@ jobs:
         run: |
           git clone --recursive https://github.com/OffchainLabs/arbitrum.git
           cd arbitrum && git submodule update --init --recursive
-          pwd
           
-      - name: Checkout ArbOS
+      - name: Copy over this branch's ArbOS
         run: |
-          cd arbitrum
-          pwd
-          echo checking out ArbOS commit $CURRENT_COMMIT
-          git submodule update --init --recursive
-          cd packages/arb-os/ && git fetch && git checkout $CURRENT_COMMIT && cd -
+          cd arbitrum && git submodule update --init --recursive && cd -
+          rm -r arbitrum/packages/arb-os/*
+          mv * arbitrum/packages/arb-os/
 
       - name: Install Arbitrum
         run: |
-          mkdir packages/arb-avm-cpp/debug/
-          cd packages/arb-avm-cpp/debug/ && cmake .. -DCMAKE_BUILD_TYPE=Debug && make -j && cd -
+          mkdir arbitrum/packages/arb-avm-cpp/debug/
+          cd $_
+          cmake .. -DCMAKE_BUILD_TYPE=Debug
+          make -j
 
       - name: Test Node's C++ Database
         run: |
-          ./packages/arb-avm-cpp/debug/bin/avm_tests
+          ./arbitrum/packages/arb-avm-cpp/debug/bin/avm_tests
 
       - name: Test Node's RPC
         run: |
-          cd packages/arb-rpc-node/ && go test ./... && cd -
+          cd arbitrum/packages/arb-rpc-node/
+          go test ./...
 
       - name: Test Node's Core
         run: |
-          cd packages/arb-node-core/ && go test ./... && cd -
+          cd arbitrum/packages/arb-node-core/
+          go test ./...
