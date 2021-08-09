@@ -510,6 +510,9 @@ Expr13: Expr = {
     <lno: @L> "error" => Expr::lno(ExprKind::Error, lines, lno, file),
     <lno: @L> "getGas" "(" ")" => Expr::lno(ExprKind::GetGas, lines, lno, file),
     <lno: @L> "setGas" "(" <e:Expr> ")" => Expr::lno(ExprKind::SetGas(Box::new(e)), lines, lno, file),
+    <lno: @L> "check" "(" <e: Expr> "," <t: Type> ")" => Expr::lno(
+        ExprKind::Check(Box::new(e), t), lines, lno, file
+    ),
     <lno: @L> <i: Ident> => Expr::lno(ExprKind::VariableRef(i), lines, lno, file),
     <lno: @L> <q: QuoteString> => Expr::lno(ExprKind::Quote(q), lines, lno, file),
 }

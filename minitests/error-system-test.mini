@@ -34,7 +34,7 @@ func main(arg: option<RandomGenerator>) -> (option<RandomGenerator>, option<opti
         array: None<OutputBuffer>,
     };
     
-    let (_, __) = (shadow, hop);
+    let (_, __) = (check(shadow, write func(uint, uint, uint)), check(hop, func()));
     
     return (Some(random_new(bytes32(0))), Some(Some(Some(queue_new()))));
 }
@@ -44,8 +44,8 @@ var used_global: uint;
 
 #[bad_attribute, inline]
 public func hop() {
-    used_global = crazy(4, 8, true, 4);
-    asm(used_global,) { log };
+    used_global = check(crazy(4, 8, check(true, bool), 4), uint);
+    asm(used_global) { log };
 }
 
 write view func crazy(n: uint, unused_arg: uint, unused_arg2: bool, _intentional: uint) -> uint {
@@ -90,14 +90,14 @@ write view func crazy(n: uint, unused_arg: uint, unused_arg2: bool, _intentional
           loopy = 4;            // should not warn
         };
         
-        let z = {{{4}}};
+        let z = check({{{4}}}, uint);
         let (z, z) = (z, 8);
         
         let unreachable_variable = 8;
         unreachable_variable = 4;
         return unreachable_variable;
         
-        cond = 4;    // is unreachable but still a valid assignment
+        cond = check(4, uint);    // is unreachable but still a valid assignment
     }
     return v;
     
@@ -105,7 +105,7 @@ write view func crazy(n: uint, unused_arg: uint, unused_arg2: bool, _intentional
     let _unused_on_purpose = const::NonExistantConstant;
     
     let with_init = newfixedarray(8, 0);
-    let (newSlotContents, returnValue) = (1, 2);
+    let (newSlotContents, returnValue) = check((1, 2), (uint, uint));
     let some_struct = struct {
         bloc: with_init with { [0] = newSlotContents },
         val: returnValue,
@@ -113,7 +113,7 @@ write view func crazy(n: uint, unused_arg: uint, unused_arg2: bool, _intentional
     
     let x = asm() uint { };
     let y = asm() uint { };
-    let some_option = Some(struct { x: x + 1, y: y });
+    let some_option = Some(struct { x: check(x + 1, uint), y: y });
     
     let unreachable_variable = 4;
     return unreachable_variable;

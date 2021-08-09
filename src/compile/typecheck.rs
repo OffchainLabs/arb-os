@@ -2059,9 +2059,36 @@ fn typecheck_expr(
     let loc = debug_info.location;
     Ok(TypeCheckedExpr {
         kind: match &expr.kind {
+            ExprKind::Error => Ok(TypeCheckedExprKind::Error),
             ExprKind::NewBuffer => Ok(TypeCheckedExprKind::NewBuffer),
             ExprKind::Quote(buf) => Ok(TypeCheckedExprKind::Quote(buf.clone())),
-            ExprKind::Error => Ok(TypeCheckedExprKind::Error),
+            ExprKind::Check(expr, tipe) => {
+                let tc_expr = typecheck_expr(
+                    expr,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    string_table,
+                    undefinable_ids,
+                    closures,
+                    scopes,
+                )?;
+
+                if !tipe.mutually_assignable(&tc_expr.get_type(), type_tree) {
+                    return Err(CompileError::new_type_error(
+                        format!(
+                            "This expression was marked {} but is actually {}",
+                            Color::red(tipe.print(type_tree)),
+                            Color::red(tc_expr.get_type().print(type_tree)),
+                        ),
+                        loc.into_iter().collect(),
+                    ));
+                }
+
+                Ok(tc_expr.kind)
+            }
             ExprKind::UnaryOp(op, subexpr) => {
                 let tc_sub = typecheck_expr(
                     subexpr,
