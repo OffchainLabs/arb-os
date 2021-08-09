@@ -137,11 +137,13 @@ jobs:
 
       - name: Clone Arbitrum
         run: |
-          git clone --recursive-submodules https://github.com/OffchainLabs/arbitrum.git
+          git clone --recursive https://github.com/OffchainLabs/arbitrum.git
           cd arbitrum && submodule update --init --recursive
+          pwd
           
       - name: Checkout ArbOS
         run: |
+          pwd
           echo checking out ArbOS commit $CURRENT_COMMIT
           git submodule update --init --recursive
           cd packages/arb-os/ && git fetch && git checkout $CURRENT_COMMIT && cd -
