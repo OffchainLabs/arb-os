@@ -28,9 +28,9 @@ type EvmInstruction = struct {
     opcode: uint,
     data: option<uint>,  // data to push, if it's a PUSH type instruction
     pc: uint,            // EVM program counter
-}
+};
 
-type EvmInstructionStack = Stack
+type EvmInstructionStack = Stack;
 
 func evmInstructionStack_new() -> EvmInstructionStack {
     return stack_new();
@@ -58,7 +58,7 @@ var codeSegGlobals: struct {
 //     * it is a JUMPDEST instruction
 // The resulting stack will have the last instruction on top. This is desirable because code generation wants
 //     to consume the instructions in reverse order.
-impure func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
+view func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
     let stack = evmInstructionStack_new();
     let evmPc = 0;
     let reachable = true;   // true if the next instruction is reachable
@@ -111,14 +111,14 @@ impure func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
                 }
                 evmPc = evmPc + 1;
             }
-            if ((codeSegGlobals.unreachableMask & (1 << opcode)) != 0) { reachable = false;    }
+            if ((codeSegGlobals.unreachableMask & (1 << opcode)) != 0) { reachable = false; }
         } else {
             return stack;
         }
     };
 }
 
-public impure func codeSegment_init() {
+public view write func codeSegment_init() {
     let mask = 0;
     let opcode = 0;
     while (opcode < 256) {
@@ -134,11 +134,11 @@ public impure func codeSegment_init() {
     };
 }
 
-impure func dummyAcceptFunction() {
+view write func dummyAcceptFunction() {
     evmOp_return(0, 0);
 }
 
-public impure func getDummyAcceptContractCode() -> AvmCodePoint {
+public view func getDummyAcceptContractCode() -> AvmCodePoint {
     return codeSegGlobals.dummyAcceptContractCode;
 }
 
@@ -161,7 +161,7 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
 // Generate AVM code for a parsed EVM code segment.
 // This builds an AVM code segment corresponding to the provided EVM code.
 // The AVM code is build from back to front, starting with the last EVM instruction (which is on top of the insns stack).
-#[noinline, ] impure func generateCodeForEvmSegment(
+#[noinline, ] view write func generateCodeForEvmSegment(
     insns: EvmInstructionStack,
     makePcTable: bool,
 ) -> (
@@ -503,14 +503,14 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
     };
 }
 
-public impure func translateEvmCodeSegment(
+public view write func translateEvmCodeSegment(
     bs: ByteStream,
     makePcTable: bool,
 ) -> (AvmCodePoint, map<uint, AvmCodePoint>, Stack) {
     return generateCodeForEvmSegment(parseEvmCodeSegment(bs), makePcTable);
 }
 
-impure func pushEvmInsnDenomCheck(
+view write func pushEvmInsnDenomCheck(
     opcode: uint,
     numStackOperands: uint,
     restOfCode: AvmCodePoint,
@@ -539,7 +539,7 @@ impure func pushEvmInsnDenomCheck(
     );
 }
 
-impure func prependPops(numPops: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
+view write func prependPops(numPops: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
     while (numPops > 0) {
         restOfCode = pushInstruction(const::AVM_pop, restOfCode);
         numPops = numPops-1;
@@ -547,7 +547,7 @@ impure func prependPops(numPops: uint, restOfCode: AvmCodePoint) -> AvmCodePoint
     return restOfCode;
 }
 
-impure func pushDupn(
+view write func pushDupn(
     n: uint, 
     restOfCode: AvmCodePoint,
 ) -> AvmCodePoint {
@@ -573,7 +573,7 @@ impure func pushDupn(
     };
 }
 
-impure func pushSwapn(
+view write func pushSwapn(
     n: uint, 
     restOfCode: AvmCodePoint,
 ) -> AvmCodePoint {
@@ -601,7 +601,7 @@ impure func pushSwapn(
     };
 }
 
-impure func pushEvmInsnCall(evmOpNum: uint, code: AvmCodePoint) -> AvmCodePoint {
+view write func pushEvmInsnCall(evmOpNum: uint, code: AvmCodePoint) -> AvmCodePoint {
     // Some EVM instructions compile to a procedure call to some Mini code.
     // These calls go indirectly through a dispatch function. The codepoint of the dispatch function is stored
     //     at a fixed location in the AVM Register.  So we will generate code to read the Register,

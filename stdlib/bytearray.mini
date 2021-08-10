@@ -5,17 +5,17 @@
 const MaxByteArraySize = 0x10000000000000000;
 
 
-type OpClosureFunc = func(any, uint) -> (uint, any)
+type OpClosureFunc = func(any, uint) -> (uint, any);
 type opClosure = struct {
 	f: OpClosureFunc,
 	val: any,
-} // usage: (newSlotContents, returnValue) = closure.f(closure.val, oldSlotContents)
+}; // usage: (newSlotContents, returnValue) = closure.f(closure.val, oldSlotContents)
 
 type ByteArray = struct { 
     size: uint,
     sliceOffset: uint,
     contents: buffer,
-}
+};
 
 // bytearray_new makes a new ByteArray
 // it will initially have size zero,
@@ -61,12 +61,12 @@ public func bytearray_getCalldataUnits(ba: ByteArray) -> uint {
 type MarshalledBytes = struct {
     nbytes: uint,
     contents: MarshalledBytesCell,
-}
+};
 
 type MarshalledBytesCell = struct {
     first: uint,
     rest: MarshalledBytesCell,
-}
+};
 
 public func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint {
     let nbytes = mb.nbytes;

@@ -9,31 +9,31 @@ use std::bytestream::bytestream_getByte;
 use std::rlp::rlp_decodeUint;
 
 
-type AvmCodePoint = impure func()
+type AvmCodePoint = view write func();
 
 type AvmCodeBuilder = struct {
     requireSafe: bool,
     code: AvmCodePoint,
     size: uint,
     codeMap: map<uint, AvmCodePoint>,
-}
+};
 
-public impure func pushInstruction(opcode: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
+public view write func pushInstruction(opcode: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
     // Push an instruction onto the beginning of a code segment, and return the resulting CodePoint.
     return asm(opcode, restOfCode) AvmCodePoint { pushinsn };
 }
 
-public impure func pushInstructionImm(opcode: uint, val: any, restOfCode: AvmCodePoint) -> AvmCodePoint {
+public view write func pushInstructionImm(opcode: uint, val: any, restOfCode: AvmCodePoint) -> AvmCodePoint {
     // Push an instruction (with immediate value) onto the beginning of a code segment, and return the resulting CodePoint.
     return asm(opcode, val, restOfCode) AvmCodePoint { pushinsnimm };
 }
 
-public impure func pushValue(val: any, restOfCode: AvmCodePoint) -> AvmCodePoint {
+public view write func pushValue(val: any, restOfCode: AvmCodePoint) -> AvmCodePoint {
     // Push a noop (with immediate value) onto the beginning of a code segment, and return the resulting CodePoint.
     return asm(const::AVM_nop, val, restOfCode) AvmCodePoint { pushinsnimm };
 }
 
-public impure func avmCodeBuilder_new(requireSafe: bool) -> AvmCodeBuilder {
+public view func avmCodeBuilder_new(requireSafe: bool) -> AvmCodeBuilder {
     let code = asm() AvmCodePoint { errcodept };
     return struct {
         requireSafe: requireSafe,
@@ -43,7 +43,7 @@ public impure func avmCodeBuilder_new(requireSafe: bool) -> AvmCodeBuilder {
     };
 }
 
-public impure func avmCodeBuilder_append(builder: AvmCodeBuilder, stream: ByteStream) -> option<AvmCodeBuilder> {
+public view write func avmCodeBuilder_append(builder: AvmCodeBuilder, stream: ByteStream) -> option<AvmCodeBuilder> {
     let requireSafe = builder.requireSafe;
     let code = builder.code;
     let size = builder.size;

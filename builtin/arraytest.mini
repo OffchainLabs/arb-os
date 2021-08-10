@@ -18,10 +18,10 @@ use core::array::array_resize;
 type opClosure = struct {
 	f: func(any, any) -> (any, any),
 	val: any,
-}
+};
 
 
-impure func main() {
+write func main() {
 	asm(tests(),) { log };
 }
 

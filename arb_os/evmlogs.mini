@@ -9,7 +9,7 @@
 type EvmLogs = struct {
     last: any,
     rest: EvmLogs,
-}
+};
 
 public func evmlogs_empty() -> EvmLogs {  // make an empty log-sequence
     return unsafecast<EvmLogs>(());
@@ -39,9 +39,9 @@ public func evmlogs_numLogs(logs: EvmLogs) -> uint {
     };
 }
 
-type EvmLogMapFunc = impure func(any, any) -> (any, any)  // (log, state) -> (updatedLog, updatedState)
+type EvmLogMapFunc = view write func(any, any) -> (any, any);  // (log, state) -> (updatedLog, updatedState)
 
-public func evmlogs_forall(logs: EvmLogs, mapFunc: EvmLogMapFunc, state: any) -> (EvmLogs, any) {
+public view write func evmlogs_forall(logs: EvmLogs, mapFunc: EvmLogMapFunc, state: any) -> (EvmLogs, any) {
     // reverse the order of the logs, so we can apply the map to them in order
     let revLogs = evmlogs_empty();
     while (! evmlogs_isEmpty(logs)) {

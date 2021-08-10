@@ -20,11 +20,11 @@ use gasAccounting::gasAccounting_notifyParamsChanged;
 
 var globalChainParameters: map<uint, uint>;
 
-public impure func chainParams_get(which: uint) -> option<uint> {
+public view func chainParams_get(which: uint) -> option<uint> {
     return globalChainParameters[which];
 }
 
-public impure func chainParams_getOrDie(which: uint) -> uint {
+public view func chainParams_getOrDie(which: uint) -> uint {
     return xif let Some(val) = chainParams_get(which) {
         val
     } else {
@@ -32,11 +32,11 @@ public impure func chainParams_getOrDie(which: uint) -> uint {
     };
 }
 
-public impure func chainParams_set(which: uint, value: uint) {
+public view write func chainParams_set(which: uint, value: uint) {
     set globalChainParameters[which] = value;
 }
 
-public impure func chainParams_init() {
+public write func chainParams_init() {
     globalChainParameters = chainParams_getDefaults();
 }
 
@@ -75,7 +75,7 @@ public func chainParams_getDefaults() -> map<uint, uint> {
     ;
 }
 
-public impure func chainParams_gotParamsMessage(data: ByteArray) {
+public view write func chainParams_gotParamsMessage(data: ByteArray) {
     let stream = bytestream_new(data);
     loop {
         let paramId = xif let Some(res) = bytestream_get256(stream) {
@@ -98,32 +98,32 @@ public impure func chainParams_gotParamsMessage(data: ByteArray) {
     }
 }
 
-public impure func notifyParamsChanged() {
+public view write func notifyParamsChanged() {
     gasAccounting_notifyParamsChanged();
     accounts_notifyParamsChanged();
 }
 
-public impure func chainParams_chainId() -> uint {
+public view func chainParams_chainId() -> uint {
     return chainParams_getOrDie(const::Atom_Param_ChainID);
 }
 
-public impure func chainParams_getOwner() -> address {
+public view func chainParams_getOwner() -> address {
     return address(chainParams_getOrDie(const::Atom_Param_ChainOwner));
 }
 
-public impure func chainParams_getDefaultAggregator() -> address {
+public view func chainParams_getDefaultAggregator() -> address {
     return address(chainParams_getOrDie(const::Atom_Param_DefaultAggregator));
 }
 
-public impure func chainParams_setDefaultAggregator(newDefault: address) {
+public view write func chainParams_setDefaultAggregator(newDefault: address) {
     chainParams_set(const::Atom_Param_DefaultAggregator, uint(newDefault));
 }
 
-public impure func chainParams_getSecondsPerSend() -> uint {
+public view func chainParams_getSecondsPerSend() -> uint {
     return chainParams_getOrDie(const::Atom_Param_SecondsPerSend);
 }
 
-public impure func chainParams_serializeAllParams() -> ByteArray {
+public view func chainParams_serializeAllParams() -> ByteArray {
     return unsafecast<ByteArray>(
         builtin_kvsForall(
             unsafecast<Kvs>(globalChainParameters),

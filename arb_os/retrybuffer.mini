@@ -76,13 +76,13 @@ type RetryableTx = struct {
     calldata: ByteArray,
     expiryTime: uint,             // timestamp when the retryable becomes eligible for removal, if nobody does a keepalive
     l1Message: IncomingRequest,   // deemed incoming message, for use in the tx receipt
-}
+};
 
 // RetryQueueItem records the fact that we want to check, at a given time, whether a given RetryableTx has expired.
 type RetryQueueItem = struct {
     txId: uint,         // id of item to check
     checkTime: uint,    // when to check for expiration of the item
-}
+};
 
 // RetryBuffer holds retryable transactions.
 // byTxId holds the active RetryableTx's, indexed by their txId
@@ -95,9 +95,9 @@ type RetryBuffer = struct {
     byTxId: map<uint, RetryableTx>,
     fifo: Queue,
     txLifetimeSeconds: uint   // lifetime to assign to any newly added items
-}
+};
 
-public impure func retryBuffer_new() -> RetryBuffer {
+public view func retryBuffer_new() -> RetryBuffer {
     return struct {
         byTxId: newmap<uint, RetryableTx>,
         fifo: queue_new(),
@@ -114,7 +114,7 @@ public func retryBuffer_setLifetime(rbuf: RetryBuffer, newLifetime: uint) -> Ret
     return rbuf;
 }
 
-public impure func retryBuffer_setDefaultLifetime(rbuf: RetryBuffer) -> RetryBuffer {
+public view func retryBuffer_setDefaultLifetime(rbuf: RetryBuffer) -> RetryBuffer {
     return retryBuffer_setLifetime(rbuf, chainParams_getOrDie(const::Atom_Param_RetryableTxLifetimeSeconds));
 }
 
@@ -122,7 +122,7 @@ public impure func retryBuffer_setDefaultLifetime(rbuf: RetryBuffer) -> RetryBuf
 // trimTwo will trim up to two entries, and trimOne will trim zero or one entries.
 // These are called by externally-callable mutating functions in this file, except init.
 // We also trim two items whenever we create or update a new item.
-public impure func retryBuffer_trimTwo(rbuf: RetryBuffer) -> RetryBuffer {
+public view write func retryBuffer_trimTwo(rbuf: RetryBuffer) -> RetryBuffer {
     // remove up to 2 aged-out items from the retryBuffer
     return xif let Some(rb) = retryBuffer_trimOne(rbuf) {
         xif let Some(rb2) = retryBuffer_trimOne(rb) {
@@ -139,7 +139,7 @@ public impure func retryBuffer_trimTwo(rbuf: RetryBuffer) -> RetryBuffer {
 // This will discard the item at the head of rbuf.fifo, if that items checkTime is in the past.
 //       (It will also discard that item's txId if it is actually expired.)
 // Return Some(updatedRbuf) if rbuf was modified, or None otherwise.
-impure func retryBuffer_trimOne(rbuf: RetryBuffer) -> option<RetryBuffer> {
+view write func retryBuffer_trimOne(rbuf: RetryBuffer) -> option<RetryBuffer> {
     let ret = None<RetryBuffer>;
     if let Some(res) = queue_get(rbuf.fifo) {
         let (uq, rawQitem) = res;
@@ -167,7 +167,7 @@ func retryBuffer_insert(rbuf: RetryBuffer, rtx: RetryableTx) -> RetryBuffer {
     };
 }
 
-impure func retryBuffer_insertNew(
+view func retryBuffer_insertNew(
     rbuf: RetryBuffer,
     txId: uint,
     sender: address,
@@ -220,14 +220,10 @@ public func retryBuffer_getBeneficiary(rbuf: RetryBuffer, txId: uint) -> option<
     return Some( (retryBuffer_get(rbuf, txId)?).beneficiary );
 }
 
-public func retryBuffer_getLifetime(rbuf: RetryBuffer) -> uint {
-    return rbuf.txLifetimeSeconds;
-}
-
 // Return the keepalive price for txId.
 // If txId exists, this returns Some((price, guaranteeTime)) where the price is guaranteed not to change until at least guaranteeTime.
 // If txId does not exist, this returns None.
-public impure func retryBuffer_getTxKeepalivePrice(rbuf: RetryBuffer, txId: uint) -> option<(uint, uint)>{
+public view write func retryBuffer_getTxKeepalivePrice(rbuf: RetryBuffer, txId: uint) -> option<(uint, uint)>{
     let rtx = retryBuffer_get(rbuf, txId)?;
     return Some(getRetryableTxPrice(bytearray_size(rtx.calldata)));
 }
@@ -235,7 +231,7 @@ public impure func retryBuffer_getTxKeepalivePrice(rbuf: RetryBuffer, txId: uint
 // Keep txId alive longer, if it exists.
 // Returns Some((updatedRetryBuffer, newExpiryTime)) if success.
 // Returns None if txId doesn't exist, or if its expiry is already >= 2 lifetimes in the future.
-public impure func retryBuffer_keepalive(rbuf: RetryBuffer, txId: uint) -> option<(RetryBuffer, uint)> {
+public view write func retryBuffer_keepalive(rbuf: RetryBuffer, txId: uint) -> option<(RetryBuffer, uint)> {
     rbuf = retryBuffer_trimTwo(rbuf);
     let rtx = retryBuffer_get(rbuf, txId)?;
     let newExpiryTime = rtx.expiryTime + rbuf.txLifetimeSeconds;
@@ -250,7 +246,7 @@ public impure func retryBuffer_keepalive(rbuf: RetryBuffer, txId: uint) -> optio
 }
 
 // Try to delete txId from rbuf.  Return updated rbuf, or None if txId didn't exist.
-public impure func retryBuffer_delete(rbuf: RetryBuffer, txId: uint, withRefund: bool) -> option<RetryBuffer> {
+public view write func retryBuffer_delete(rbuf: RetryBuffer, txId: uint, withRefund: bool) -> option<RetryBuffer> {
     // don't call retryBuffer_trimTwo here, because this is called by retryBuffer_trimOne, and we don't want to recurse
 
     return xif let Some(rtx) = retryBuffer_get(rbuf, txId) {
@@ -287,7 +283,7 @@ public impure func retryBuffer_delete(rbuf: RetryBuffer, txId: uint, withRefund:
 
 // Process a newly submitted retryable.
 // This must be called outside of a transaction.
-public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestData> {
+public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequestData> {
     // Parse the retryable data from the IncomingRequest.
     let sender = req.sender;
     let destination = address(bytearray_get256(req.msgData, 0));
@@ -555,7 +551,7 @@ func adjustGasInfoInFakeIncomingRequest(req: IncomingRequest, maxGas: uint, gasP
 
 // Redeem a retrayble, while executing an "outer" transaction.
 // Returns (success, returndata) for the "inner" retryable
-public impure func redeemRetryableTxInTx(txToRedeem: uint) -> (bool, ByteArray) {
+public view write func redeemRetryableTxInTx(txToRedeem: uint) -> (bool, ByteArray) {
     let rbuf = retryBuffer_trimTwo(getRetryBufferInCurrentContext());
     return xif let Some(rtx) = retryBuffer_get(rbuf, txToRedeem) {
         xif let Some(rb) = retryBuffer_delete(rbuf, txToRedeem, false) {

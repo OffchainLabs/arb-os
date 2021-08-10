@@ -31,7 +31,7 @@ use std::rlp::keccakOfRlpEncodedUintPair;
 use inbox::IncomingRequest;
 
 
-impure func fetchAndIncrSequenceNum(addr: address) -> uint {
+view write func fetchAndIncrSequenceNum(addr: address) -> uint {
     // Fetch sequence number, and increment it
     let globalAS = safeGetGlobalAccountStore();
     let (ret, updatedAcct) = account_fetchAndIncrSeqNum(
@@ -61,11 +61,11 @@ type TxRequestData = struct {
     incomingRequest: IncomingRequest,       // original request that led to this; used for making tx receipt
     feeStats: TxFeeStats,                   // info about the fees paid by this tx
     fromRetryable: option<RetryableTx>,     // if this is redeeming a retryable, this references the retryable
-}
+};
 
 // Process a request.
 // Return None if message is malformatted; otherwise handle errors and return Some(()); if no error, never return
-public impure func processL2Request(request: TxRequestData) -> option<()> {
+public view write func processL2Request(request: TxRequestData) -> option<()> {
     if let Some(sequenceNum) = request.seqNum {
         let expectedSeqNum = account_getNextSeqNum(accountStore_get(safeGetGlobalAccountStore(), request.caller));
         if (sequenceNum != expectedSeqNum) {

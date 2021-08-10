@@ -2,13 +2,13 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-type Stack = option<StackCell>
+type Stack = option<StackCell>;
 
 type StackCell = struct {
     top: [8]any,
     num: uint,
     rest: option<StackCell>
-}
+};
 
 
 public func stack_new() -> Stack {
