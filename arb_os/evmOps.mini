@@ -56,8 +56,6 @@ use accounts::account_isEmpty;
 use accounts::account_hasContract;
 use accounts::pristineAccount;
 
-use codeSegment::getDummyAcceptContractCode;
-
 use std::storageMap::storageMap_new;
 
 use inbox::inbox_currentTimestamp;
@@ -83,7 +81,8 @@ use std::bytestream::bytestream_new;
 
 use std::stack::stack_discardDeepestItems;
 
-use codeSegment::translateEvmCodeSegment;
+use std::codeSegment::getDummyAcceptContractCode;
+use std::codeSegment::translateEvmCodeSegment;
 
 use std::keccak::keccak256;
 use std::rlp::keccakOfRlpEncodedUintPair;
