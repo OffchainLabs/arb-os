@@ -5,7 +5,7 @@
 //!Provides utilities for dealing with nested tuples and conversion from large flat tuples to
 //! nested tuples
 
-use crate::compile::{CompileError, DebugInfo};
+use crate::compile::{CompileError, DebugInfo, GlobalVarDecl};
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
 use crate::uint256::Uint256;
 
@@ -256,8 +256,12 @@ pub fn jump_table_to_value(jump_table: Vec<CodePt>) -> Value {
 }
 
 ///Generates a `Value` that is a nested tuple with size total leaf values, all leaf values are null.
-pub fn make_uninitialized_tuple(size: usize) -> Value {
-    TupleTree::new(size, false).make_empty()
+pub fn make_defaults_tuple(size: &Vec<GlobalVarDecl>) -> Value {
+    TupleTree::new(size.len(), false).make_value(
+        size.iter()
+            .map(|decl| decl.tipe.default_value().0)
+            .collect(),
+    )
 }
 
 ///Represents tuple structure of mini value.

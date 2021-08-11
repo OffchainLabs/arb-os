@@ -4,10 +4,12 @@
 
 //!Provides types and utilities for linking together compiled mini programs
 
+use crate::compile::miniconstants::init_constant_table;
 use crate::compile::{
     comma_list, CompileError, CompiledProgram, DebugInfo, ErrorSystem, FileInfo, GlobalVarDecl,
     SourceFileMap, Type, TypeTree,
 };
+use crate::link::xformcode::make_defaults_tuple;
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::{try_display_location, Location};
 use crate::stringtable::{StringId, StringTable};
@@ -16,10 +18,8 @@ use std::collections::hash_map::{DefaultHasher, HashMap};
 use std::collections::BTreeMap;
 use std::hash::Hasher;
 use std::io;
-use xformcode::make_uninitialized_tuple;
-
-use crate::compile::miniconstants::init_constant_table;
 use std::path::Path;
+
 pub use xformcode::{value_from_field_list, TupleTree, TUPLE_SIZE};
 
 mod optimize;
@@ -405,7 +405,7 @@ pub fn link(
             ),
             Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
-                make_uninitialized_tuple(global_num_limit.len()),
+                make_defaults_tuple(&global_num_limit),
                 DebugInfo::default(),
             ),
             Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Rset), DebugInfo::default()),
@@ -420,7 +420,7 @@ pub fn link(
             ),
             Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Rset),
-                make_uninitialized_tuple(global_num_limit.len()),
+                make_defaults_tuple(&global_num_limit),
                 DebugInfo::default(),
             ),
         ]
