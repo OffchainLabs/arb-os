@@ -64,6 +64,7 @@ impl From<Option<Location>> for DebugInfo {
 pub enum TopLevelDecl {
     TypeDecl(TypeDecl),
     FuncDecl(Func),
+    GenericFuncDecl(GenericFunc),
     VarDecl(GlobalVarDecl),
     UseDecl(Import),
     ConstDecl,
@@ -101,6 +102,7 @@ pub enum Type {
     Every,
     Option(Box<Type>),
     Union(Vec<Type>),
+    Variable(Vec<String>, StringId),
 }
 
 impl AbstractSyntaxTree for Type {
@@ -115,7 +117,8 @@ impl AbstractSyntaxTree for Type {
             | Type::Buffer
             | Type::Any
             | Type::Every
-            | Type::Nominal(_, _) => vec![],
+            | Type::Nominal(_, _)
+            | Type::Variable(_, _) => vec![],
             Type::Tuple(types) | Type::Union(types) => {
                 types.iter_mut().map(|t| TypeCheckedNode::Type(t)).collect()
             }
@@ -228,7 +231,7 @@ impl Type {
                 Type::Uint | Type::Int | Type::Bool | Type::Bytes32 | Type::EthAddress => true,
                 _ => false,
             },
-            Type::Buffer | Type::Void | Type::Every => rhs == self,
+            Type::Buffer | Type::Void | Type::Every | Type::Variable(_, _) => rhs == self,
             Type::Tuple(tvec) => {
                 if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
                     type_vectors_covariant_castable(tvec, &tvec2, type_tree, seen)
@@ -270,7 +273,7 @@ impl Type {
                 } else {
                     false
                 }
-            }
+            },
             Type::Func(_, args, ret) => {
                 if let Type::Func(_, args2, ret2) = rhs {
                     //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
@@ -332,7 +335,7 @@ impl Type {
                 Type::Uint | Type::Int | Type::Bool | Type::Bytes32 | Type::EthAddress => true,
                 _ => false,
             },
-            Type::Buffer | Type::Void | Type::Every => rhs == self,
+            Type::Buffer | Type::Void | Type::Every | Type::Variable(_, _) => rhs == self,
             Type::Tuple(tvec) => {
                 if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
                     type_vectors_castable(tvec, &tvec2, type_tree, seen)
@@ -433,7 +436,8 @@ impl Type {
             | Type::Bytes32
             | Type::EthAddress
             | Type::Buffer
-            | Type::Every => (self == rhs),
+            | Type::Every
+            | Type::Variable(_, _) => (self == rhs),
             Type::Tuple(tvec) => {
                 if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
                     type_vectors_assignable(tvec, &tvec2, type_tree, seen)
@@ -539,7 +543,8 @@ impl Type {
             | Type::Bytes32
             | Type::EthAddress
             | Type::Buffer
-            | Type::Every => {
+            | Type::Every
+            | Type::Variable(_, _) => {
                 if self == rhs {
                     None
                 } else {
@@ -774,6 +779,7 @@ impl Type {
             Type::Map(_, _) | Type::Func(_, _, _) | Type::Nominal(_, _) => (Value::none(), false),
             Type::Any => (Value::none(), true),
             Type::Every => (Value::none(), false),
+            Type::Variable(_, _) => panic!("Tried to get the default value of a type variable"),
             Type::Option(_) => (Value::new_tuple(vec![Value::Int(Uint256::zero())]), true),
             Type::Union(_) => (Value::none(), false),
         }
@@ -898,6 +904,9 @@ impl Type {
                         .unwrap_or_else(|| "bad".to_string()),
                 ));
                 (out, type_set)
+            }
+            Type::Variable(path, id) => {
+                unimplemented!()
             }
             Type::Func(impure, args, ret) => {
                 let mut out = String::new();
@@ -1296,6 +1305,19 @@ pub struct Func<T = Statement> {
     pub properties: PropertiesList,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GenericFunc<T = Statement> {
+    pub name: StringId,
+    pub type_variables: Vec<(StringId, Type)>,
+    pub args: Vec<FuncArg>,
+    pub ret_type: Type,
+    pub code: Vec<T>,
+    pub tipe: Type,
+    pub kind: FuncDeclKind,
+    pub debug_info: DebugInfo,
+    pub properties: PropertiesList,
+}
+
 impl Func {
     pub fn new(
         name: StringId,
@@ -1313,6 +1335,39 @@ impl Func {
         }
         Func {
             name,
+            args: args_vec,
+            ret_type: ret_type.clone(),
+            code,
+            tipe: Type::Func(is_impure, arg_types, Box::new(ret_type)),
+            kind: if exported {
+                FuncDeclKind::Public
+            } else {
+                FuncDeclKind::Private
+            },
+            debug_info,
+            properties: PropertiesList { pure: !is_impure },
+        }
+    }
+}
+
+impl GenericFunc {
+    pub fn new(
+        name: StringId,
+        is_impure: bool,
+        args: Vec<FuncArg>,
+        ret_type: Type,
+        code: Vec<Statement>,
+        exported: bool,
+        debug_info: DebugInfo,
+    ) -> Self {
+        let mut arg_types = Vec::new();
+        let args_vec = args.to_vec();
+        for arg in args.iter() {
+            arg_types.push(arg.tipe.clone());
+        }
+        GenericFunc {
+            name,
+            type_variables: vec![],
             args: args_vec,
             ret_type: ret_type.clone(),
             code,

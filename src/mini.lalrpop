@@ -3,7 +3,7 @@
 //
 
 
-use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVarDecl, Type, CodeBlock,
+use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVarDecl, Type, CodeBlock, GenericFunc,
 StructField, FuncArg, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant,
 OptionConst, FieldInitializer, new_func_arg, new_type_decl};
 use crate::compile::{InliningMode, ErrorSystem, CompileError};
@@ -83,6 +83,7 @@ PathDecl: Vec<String> = {
 BodyDecl: TopLevelDecl = {
 	TypeDecl => TopLevelDecl::TypeDecl(<>),
 	FuncDecl => TopLevelDecl::FuncDecl(<>),
+	GenericFuncDecl => TopLevelDecl::GenericFuncDecl(<>),
 	GlobalVarDecl => TopLevelDecl::VarDecl(<>),
 }
 
@@ -93,6 +94,11 @@ TypeDecl: TypeDecl = {
 FuncDecl: Func = {
 	<lno: @L> <attribs: ("#[" <Attributes> "]")?> <p: "public"?> <imp: "impure"?> "func" <i:Ident> "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> =>
 	        Func::new(i, imp.is_some(), fa, t.unwrap_or(Type::Void), cb, p.is_some(), DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default())),
+}
+
+GenericFuncDecl: GenericFunc = {
+    <lno: @L> <attribs: ("#[" <Attributes> "]")?> <p: "public"?> <imp: "impure"?> "func<>" <i:Ident> "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> =>
+            GenericFunc::new(i, imp.is_some(), fa, t.unwrap_or(Type::Void), cb, p.is_some(), DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default())),
 }
 
 Return: Type = {
@@ -273,6 +279,7 @@ Type: Type = {
 	"option<" <t1:Type> ">" => Type::Option(Box::new(t1)),
 	"every" => Type::Every,
 	"union<" <t1:CommaedTypes> ">" => Type::Union(t1),
+	"*" <Ident> => Type::Variable(current_path.to_owned(), <>),
 	Ident => Type::Nominal(current_path.to_owned(), <>),
 };
 

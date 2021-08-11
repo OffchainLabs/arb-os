@@ -9,7 +9,7 @@ use super::ast::{
     GlobalVarDecl, MatchPattern, MatchPatternKind, Statement, StatementKind, StructField,
     TopLevelDecl, TrinaryOp, Type, TypeTree, UnaryOp,
 };
-use crate::compile::ast::FieldInitializer;
+use crate::compile::ast::{FieldInitializer, GenericFunc};
 use crate::compile::{CompileError, ErrorSystem, InliningHeuristic};
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
@@ -1139,6 +1139,7 @@ pub fn sort_top_level_decls(
     HashMap<usize, Type>,
     Vec<GlobalVarDecl>,
     HashMap<usize, Type>,
+    BTreeMap<StringId, GenericFunc>,
 ) {
     let mut imports = if builtins {
         builtin_func_decls()
@@ -1149,6 +1150,7 @@ pub fn sort_top_level_decls(
         vec![]
     };
     let mut funcs = BTreeMap::new();
+    let mut generic_funcs = BTreeMap::new();
     let mut named_types = HashMap::new();
     let mut func_table = HashMap::new();
     let mut global_vars = Vec::new();
@@ -1162,6 +1164,9 @@ pub fn sort_top_level_decls(
                 funcs.insert(fd.name, fd.clone());
                 func_table.insert(fd.name, fd.tipe.clone());
             }
+            TopLevelDecl::GenericFuncDecl(gf) => {
+                generic_funcs.insert(gf.name, gf.clone());
+            }
             TopLevelDecl::TypeDecl(td) => {
                 named_types.insert(td.name, td.tipe.clone());
             }
@@ -1171,13 +1176,14 @@ pub fn sort_top_level_decls(
             TopLevelDecl::ConstDecl => {}
         }
     }
-    (imports, funcs, named_types, global_vars, func_table)
+    (imports, funcs, named_types, global_vars, func_table, generic_funcs)
 }
 
 ///Performs typechecking various top level declarations, including `ImportedFunc`s, `FuncDecl`s,
 /// named `Type`s, and global variables.
 pub fn typecheck_top_level_decls(
     funcs: BTreeMap<StringId, Func>,
+    generic_funcs: BTreeMap<StringId, GenericFunc>,
     named_types: &HashMap<usize, Type>,
     mut global_vars: Vec<GlobalVarDecl>,
     imports: &Vec<Import>,
@@ -1242,6 +1248,19 @@ pub fn typecheck_top_level_decls(
         }
     }
 
+    for (id, func) in generic_funcs.iter() {
+        let f = typecheck_generic_function(
+            &func,
+            &type_table,
+            &resolved_global_vars_map,
+            &func_table,
+            type_tree,
+            &string_table,
+            &mut undefinable_ids,
+        )?;
+        checked_funcs.insert(*id, f);
+    }
+
     let mut res_global_vars = Vec::new();
     for global_var in global_vars {
         res_global_vars.push(global_var);
@@ -1256,6 +1275,127 @@ pub fn typecheck_top_level_decls(
 /// If not successful the function returns a `CompileError`.
 pub fn typecheck_function(
     fd: &Func,
+    type_table: &TypeTable,
+    global_vars: &HashMap<StringId, (Type, usize)>,
+    func_table: &TypeTable,
+    type_tree: &TypeTree,
+    string_table: &StringTable,
+    undefinable_ids: &mut HashMap<StringId, Option<Location>>,
+) -> Result<TypeCheckedFunc, CompileError> {
+    let mut hm = HashMap::new();
+    if fd.ret_type != Type::Void {
+        if fd.code.len() == 0 {
+            return Err(CompileError::new_type_error(
+                format!(
+                    "Func {}{}{} never returns",
+                    CompileError::RED,
+                    string_table.name_from_id(fd.name),
+                    CompileError::RESET,
+                ),
+                fd.debug_info.location.into_iter().collect(),
+            ));
+        }
+        if let Some(stat) = fd.code.last() {
+            match &stat.kind {
+                StatementKind::Return(_) => {}
+                _ => {
+                    return Err(CompileError::new_type_error(
+                        format!(
+                            "Func {}{}{}'s last statement is not a return",
+                            CompileError::RED,
+                            string_table.name_from_id(fd.name),
+                            CompileError::RESET,
+                        ),
+                        fd.debug_info
+                            .location
+                            .into_iter()
+                            .chain(stat.debug_info.location.into_iter())
+                            .collect(),
+                    ))
+                }
+            }
+        }
+    }
+
+    if let Some(location_option) = undefinable_ids.get(&fd.name) {
+        return Err(CompileError::new_type_error(
+            format!(
+                "Func {}{}{} has the same name as another top-level symbol",
+                CompileError::RED,
+                string_table.name_from_id(fd.name),
+                CompileError::RESET,
+            ),
+            location_option
+                .iter()
+                .chain(fd.debug_info.location.iter())
+                .cloned()
+                .collect(),
+        ));
+    }
+    undefinable_ids.insert(fd.name, fd.debug_info.location);
+
+    for arg in fd.args.iter() {
+        arg.tipe.get_representation(type_tree).map_err(|_| {
+            CompileError::new_type_error(
+                format!(
+                    "Unknown type for function argument {}{}{}",
+                    CompileError::RED,
+                    string_table.name_from_id(arg.name),
+                    CompileError::RESET,
+                ),
+                arg.debug_info.location.into_iter().collect(),
+            )
+        })?;
+        if let Some(location_option) = undefinable_ids.get(&arg.name) {
+            return Err(CompileError::new_type_error(
+                format!(
+                    "Func {}{}{}'s argument {}{}{} has the same name as a top-level symbol",
+                    CompileError::RED,
+                    string_table.name_from_id(fd.name),
+                    CompileError::RESET,
+                    CompileError::RED,
+                    string_table.name_from_id(arg.name),
+                    CompileError::RESET,
+                ),
+                location_option
+                    .iter()
+                    .chain(arg.debug_info.location.iter())
+                    .cloned()
+                    .collect(),
+            ));
+        }
+        hm.insert(arg.name, arg.tipe.clone());
+    }
+    let mut inner_type_table = type_table.clone();
+    inner_type_table.extend(hm);
+    let tc_stats = typecheck_statement_sequence(
+        &fd.code,
+        &fd.ret_type,
+        &inner_type_table,
+        global_vars,
+        func_table,
+        type_tree,
+        &undefinable_ids,
+        &mut vec![],
+    )?;
+    Ok(TypeCheckedFunc {
+        name: fd.name,
+        args: fd.args.clone(),
+        ret_type: fd.ret_type.clone(),
+        code: tc_stats,
+        tipe: fd.tipe.clone(),
+        kind: fd.kind,
+        debug_info: DebugInfo::from(fd.debug_info),
+        properties: fd.properties.clone(),
+    })
+}
+
+///If successful, produces a `TypeCheckedFunc` from `FuncDecl` reference fd, according to global
+/// state defined by type_table, global_vars, and func_table.
+///
+/// If not successful the function returns a `CompileError`.
+pub fn typecheck_generic_function(
+    fd: &GenericFunc,
     type_table: &TypeTable,
     global_vars: &HashMap<StringId, (Type, usize)>,
     func_table: &TypeTable,

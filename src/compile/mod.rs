@@ -29,6 +29,7 @@ pub use ast::{DebugInfo, GlobalVarDecl, StructField, TopLevelDecl, Type, TypeTre
 pub use source::Lines;
 use std::str::FromStr;
 pub use typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNode};
+use crate::compile::ast::GenericFunc;
 
 mod ast;
 mod codegen;
@@ -89,6 +90,8 @@ struct Module {
     imported_funcs: Vec<ImportedFunc>,
     ///List of functions defined locally within the source file
     funcs: BTreeMap<StringId, Func>,
+    ///List of generic functions defined locally within the source file
+    generic_funcs: BTreeMap<StringId, GenericFunc>,
     ///Map from `StringId`s in this file to the `Type`s they represent.
     named_types: HashMap<StringId, Type>,
     ///List of constants used in this file.
@@ -227,6 +230,7 @@ impl Module {
     fn new(
         imported_funcs: Vec<ImportedFunc>,
         funcs: BTreeMap<StringId, Func>,
+        generic_funcs: BTreeMap<StringId, GenericFunc>,
         named_types: HashMap<usize, Type>,
         constants: HashSet<String>,
         global_vars: Vec<GlobalVarDecl>,
@@ -239,6 +243,7 @@ impl Module {
         Self {
             imported_funcs,
             funcs,
+            generic_funcs,
             named_types,
             constants,
             global_vars,
@@ -803,7 +808,7 @@ fn create_program_tree(
 
         let mut string_table = StringTable::new();
         let mut used_constants = HashSet::new();
-        let (imports, funcs, named_types, global_vars, hm) = typecheck::sort_top_level_decls(
+        let (imports, funcs, named_types, global_vars, hm, generic_funcs) = typecheck::sort_top_level_decls(
             &parse_from_source(
                 source,
                 file_id,
@@ -823,6 +828,7 @@ fn create_program_tree(
             Module::new(
                 vec![],
                 funcs,
+                generic_funcs,
                 named_types,
                 used_constants,
                 global_vars,
@@ -938,6 +944,7 @@ fn typecheck_programs(
             |Module {
                  imported_funcs,
                  funcs,
+                generic_funcs,
                  named_types,
                  constants,
                  global_vars,
@@ -952,6 +959,7 @@ fn typecheck_programs(
                 let (exported_funcs, global_vars, string_table) =
                     typecheck::typecheck_top_level_decls(
                         funcs,
+                        generic_funcs,
                         &named_types,
                         global_vars,
                         &imports,
