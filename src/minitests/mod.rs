@@ -24,8 +24,14 @@ fn test_from_file_with_args_and_return(
     let res = run_from_file(path, args, coverage_filename, false);
     match res {
         Ok(res) => match &res[0] {
-            Value::Buffer(_) if res[0] != ret => panic!("{}", Color::red(&res[0])),
-            _ => assert_eq!(res[0], ret),
+            Value::Buffer(_) if res[0] != ret => panic!("{}", &res[0].pretty_print(Color::RED)),
+            _ => {
+                if res[0] != ret {
+                    println!("  - expected {}", ret.pretty_print(Color::RED));
+                    println!("  - executed {}", res[0].pretty_print(Color::RED));
+                    panic!("Unexpected result from test");
+                }
+            }
         },
         Err((error, trace)) => {
             println!("{}", error);
@@ -60,12 +66,12 @@ fn test_for_numeric_error_code(path: &Path) {
 
 #[test]
 fn test_arraytest() {
-    test_for_numeric_error_code(Path::new("builtin/arraytest.mexe"));
+    test_for_error_string(Path::new("builtin/arraytest.mexe"));
 }
 
 #[test]
 fn test_kvstest() {
-    test_for_numeric_error_code(Path::new("builtin/kvstest.mexe"));
+    test_for_error_string(Path::new("builtin/kvstest.mexe"));
 }
 
 #[test]
@@ -95,7 +101,7 @@ fn test_bytearray() {
 
 #[test]
 fn test_map() {
-    test_for_numeric_error_code(Path::new("builtin/maptest.mexe"));
+    test_for_error_string(Path::new("builtin/maptest.mexe"));
 }
 
 #[test]
@@ -105,7 +111,7 @@ fn test_keccak() {
 
 #[test]
 fn test_bls() {
-    test_for_numeric_error_code(Path::new("stdlib/blstest.mexe"));
+    test_for_error_string(Path::new("stdlib/blstest.mexe"));
 }
 
 #[test]

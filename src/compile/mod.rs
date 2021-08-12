@@ -842,12 +842,20 @@ fn resolve_imports(
             let import_path = import.path.clone();
             let (named_type, imp_func) = if let Some(program) = programs.get_mut(&import_path) {
                 // Looks up info from target program
-                let index = program
+                let string_id = program
                     .string_table
                     .get_if_exists(&import.name.clone())
-                    .unwrap();
-                let named_type = program.named_types.get(&index).cloned();
-                let imp_func = program.func_table.get(&index).cloned();
+                    .ok_or(CompileError::new(
+                        "Import Error",
+                        format!(
+                            "Symbol {} does not exist in {}",
+                            Color::red(&import.name),
+                            Color::red(&import.path.join("/"))
+                        ),
+                        import.location.into_iter().collect(),
+                    ))?;
+                let named_type = program.named_types.get(&string_id).cloned();
+                let imp_func = program.func_table.get(&string_id).cloned();
                 (named_type, imp_func)
             } else {
                 return Err(CompileError::new(
@@ -1342,37 +1350,51 @@ impl Display for CompileError {
 }
 
 impl CompileError {
-    pub fn new(title: String, description: String, locations: Vec<Location>) -> Self {
+    pub fn new<S, U>(title: S, description: U, locations: Vec<Location>) -> Self
+    where
+        S: std::string::ToString,
+        U: std::string::ToString,
+    {
         CompileError {
-            title,
-            description,
+            title: title.to_string(),
+            description: description.to_string(),
             locations,
             is_warning: false,
         }
     }
 
-    pub fn new_warning(title: String, description: String, locations: Vec<Location>) -> Self {
+    pub fn new_warning<S, U>(title: S, description: U, locations: Vec<Location>) -> Self
+    where
+        S: std::string::ToString,
+        U: std::string::ToString,
+    {
         CompileError {
-            title,
-            description,
+            title: title.to_string(),
+            description: description.to_string(),
             locations,
             is_warning: true,
         }
     }
 
-    pub fn new_type_error(description: String, locations: Vec<Location>) -> Self {
+    pub fn new_type_error<S>(description: S, locations: Vec<Location>) -> Self
+    where
+        S: std::string::ToString,
+    {
         CompileError {
             title: String::from("Typecheck Error"),
-            description,
+            description: description.to_string(),
             locations,
             is_warning: false,
         }
     }
 
-    pub fn new_codegen_error(description: String, location: Option<Location>) -> Self {
+    pub fn new_codegen_error<S>(description: S, location: Option<Location>) -> Self
+    where
+        S: std::string::ToString,
+    {
         CompileError {
             title: String::from("Codegen Error"),
-            description,
+            description: description.to_string(),
             locations: location.into_iter().collect(),
             is_warning: false,
         }
