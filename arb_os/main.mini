@@ -17,6 +17,7 @@ use arbowner::arbowner_init;
 use blockhash::blockhash_init;
 
 use chainParameters::chainParams_init;
+use chainParameters::notifyParamsChanged;
 
 use codeSegment::codeSegment_init;
 use codeSegment::translateEvmCodeSegment;
@@ -81,6 +82,8 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         if (initializePreinstalls(true) == None<()>) {
             panic;   // don't try to run without preinstalls and precompiles
         }
+
+        notifyParamsChanged();   // call this in case parameters changed during upgrade
     } else {
         // this is a clean start, not an upgrade
         errorHandler_init();

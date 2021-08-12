@@ -10,7 +10,7 @@ use accounts::accountStore_forall;
 use chainParameters::chainParams_getOwner;
 use chainParameters::chainParams_get;
 use chainParameters::chainParams_set;
-use chainParameters::notifyParamsChanged;
+use chainParameters::chainParams_create;
 use chainParameters::chainParams_serializeAllParams;
 
 use evmCallStack::EvmCallFrame;
@@ -103,6 +103,8 @@ public impure func arbowner_txcall() {
             arbowner_getChainParameter(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_setChainParameter) {
             arbowner_setChainParameter(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_createChainParameter) {
+            arbowner_createChainParameter(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_serializeAllParameters) {
             arbowner_serializeAllParameters(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_getTotalOfEthBalances) {
@@ -283,7 +285,16 @@ impure func arbowner_setChainParameter(_topFrame: EvmCallFrame, calldata: ByteAr
     let paramId = bytearray_get256(calldata, 4);
     let newValue = bytearray_get256(calldata, 36);
     chainParams_set(paramId, newValue);
-    notifyParamsChanged();
+    evmOp_return(0, 0);
+}
+
+impure func arbowner_createChainParameter(_topFrame: EvmCallFrame, calldata: ByteArray) { // (uint, uint)
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 85, 0, 0);
+    }
+    let paramId = bytearray_get256(calldata, 4);
+    let newValue = bytearray_get256(calldata, 36);
+    chainParams_create(paramId, newValue);
     evmOp_return(0, 0);
 }
 
@@ -346,7 +357,7 @@ impure func arbowner_serializeAllParameters(_topFrame: EvmCallFrame, calldata: B
         serialized,
         0,
         bytearray_set256(
-            bytearray_set256(bytearray_new(0), 0, 64),
+            bytearray_set256(bytearray_new(0), 0, 32),
             32,
             serSize,   // no need to round up, because serSize is already a multiple of 32
         ),

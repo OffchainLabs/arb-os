@@ -33,7 +33,15 @@ public impure func chainParams_getOrDie(which: uint) -> uint {
 }
 
 public impure func chainParams_set(which: uint, value: uint) {
+    if (globalChainParameters[which] == None<uint>) {
+        panic;
+    }
+    chainParams_create(which, value);
+}
+
+public impure func chainParams_create(which: uint, value: uint) {
     globalChainParameters = globalChainParameters with { [which] = value };
+    notifyParamsChanged();
 }
 
 public impure func chainParams_init() {
@@ -82,7 +90,6 @@ public impure func chainParams_gotParamsMessage(data: ByteArray) {
             stream = ustr;
             pid
         } else {
-            notifyParamsChanged();
             return;
             0
         };
@@ -91,9 +98,7 @@ public impure func chainParams_gotParamsMessage(data: ByteArray) {
             stream = ustr;
             val
         } else {
-            notifyParamsChanged();
-            return;
-            0
+            panic   // should never have an id without a matching value
         };
         chainParams_set(paramId, value);
     }
