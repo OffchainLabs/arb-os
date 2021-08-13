@@ -96,7 +96,6 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         evmOps_init();
         __fixedLocationGlobal = dispatchForEvmOp;
         blockhash_init();
-        inbox_init();
         accountStore_init();
         txReceipts_init();
         if (initializePreinstalls(false) == None<()>) {

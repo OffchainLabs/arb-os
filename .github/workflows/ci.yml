@@ -123,7 +123,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v1
-        
+
       - name: Install dependencies
         run: |
           sudo add-apt-repository -y ppa:longsleep/golang-backports
@@ -132,6 +132,7 @@ jobs:
             librocksdb-dev libssl-dev libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev \
             liblz4-dev libzstd-dev libtool golang-go clang-format cmake
           sudo apt-get install librocksdb-dev
+          curl -sSL "https://github.com/gotestyourself/gotestsum/releases/download/v1.7.0/gotestsum_1.7.0_linux_amd64.tar.gz" | sudo tar -xz -C /usr/local/bin gotestsum
           #
           # If apt's rocksdb is ever out of date, we'll need to use the following
           #   git clone -b v6.11.4 https://github.com/facebook/rocksdb
@@ -159,12 +160,12 @@ jobs:
         run: |
           ./arbitrum/packages/arb-avm-cpp/debug/bin/avm_tests
 
-      - name: Test Node's RPC
-        run: |
-          cd arbitrum/packages/arb-rpc-node/
-          go test ./...
-
       - name: Test Node's Core
         run: |
           cd arbitrum/packages/arb-node-core/
-          go test ./...
+          gotestsum --format testname
+
+      - name: Test Node's RPC
+        run: |
+          cd arbitrum/packages/arb-rpc-node/
+          gotestsum --format testname
