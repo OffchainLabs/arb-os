@@ -13,7 +13,7 @@ use crate::link::Import;
 use crate::pos::{BytePos, Location};
 use crate::mavm::{Value, Instruction, Opcode};
 use crate::uint256::Uint256;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, BTreeMap};
 
 
 grammar(stringtable: &mut StringTable, file_info: &Lines, filename: u64, current_path: &[String], constants: &mut HashMap<String, Uint256>, local_constants: &mut HashMap<String, Location>, used_constants: &mut HashSet<String>, error_system: &mut ErrorSystem);
@@ -295,6 +295,17 @@ CommaedTypes: Vec<Type> = {
     },
 };
 
+CommaedGenericTypeArgs: BTreeMap<StringId, Type> = {
+    <mut args: (<GenericFuncArg> ",")*> <last: GenericFuncArg> ","? => {
+        args.push(last);
+        args.into_iter().collect()
+    }
+}
+
+GenericFuncArg: (StringId, Type) = {
+	<lno: @L> <i:Ident> ":" <t:Type> => (i, t),
+}
+
 Ident: StringId = {
 	IdentString => stringtable.get(<>),
 };
@@ -386,6 +397,8 @@ Expr11: Expr = {
     <lno: @L> "Some(" <e: Expr> ")" => Expr { kind: ExprKind::OptionInitializer(Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
     <lno: @L> <f: Expr11> "(" <e: Expr> ")" => Expr { kind: ExprKind::FunctionCall(Box::new(f), vec![e]), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
     <lno: @L> <f: Expr11> "(" <c: CommaedExprs?> ")" => Expr { kind: ExprKind::FunctionCall(Box::new(f), c.unwrap_or(vec![])), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+    <lno: @L> <f: Ident>"::<" <vars: CommaedGenericTypeArgs> ">" => Expr { kind: ExprKind::GenericFuncRef(f, vars), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+
     <lno: @L> <e1:Expr11> "[" <e2:Expr> "]" => Expr {
         kind: ExprKind::ArrayOrMapRef(Box::new(e1), Box::new(e2)),
         debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))

@@ -14,7 +14,7 @@ use crate::pos::Location;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -273,7 +273,7 @@ impl Type {
                 } else {
                     false
                 }
-            },
+            }
             Type::Func(_, args, ret) => {
                 if let Type::Func(_, args2, ret2) = rhs {
                     //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
@@ -905,9 +905,7 @@ impl Type {
                 ));
                 (out, type_set)
             }
-            Type::Variable(path, id) => {
-                unimplemented!()
-            }
+            Type::Variable(_, _) => ("type variable".to_string(), type_set),
             Type::Func(impure, args, ret) => {
                 let mut out = String::new();
                 if *impure {
@@ -990,6 +988,37 @@ impl Type {
                 (s, subtypes)
             }
         }
+    }
+    fn resolve(&self, type_args: &BTreeMap<StringId, Type>) -> Result<Type, CompileError> {
+        let mut elf = self.clone();
+        let mut has_error = false;
+        elf.recursive_apply(
+            |val, _a, b| {
+                match val {
+                    TypeCheckedNode::Type(t) => match t {
+                        Type::Variable(_, id) => match type_args.get(id) {
+                            Some(inner) => **t = inner.clone(),
+                            None => {
+                                *b = true;
+                            }
+                        },
+                        _ => {}
+                    },
+                    _ => {}
+                }
+                true
+            },
+            &(),
+            &mut has_error,
+        );
+        if has_error {
+            return Err(CompileError::new(
+                "generics error".to_string(),
+                format!("Failed to resolve type variable"),
+                vec![],
+            ));
+        }
+        Ok(elf)
     }
 }
 
@@ -1381,6 +1410,18 @@ impl GenericFunc {
             properties: PropertiesList { pure: !is_impure },
         }
     }
+    pub(crate) fn resolve(
+        &self,
+        type_args: &BTreeMap<StringId, Type>,
+    ) -> Result<Type, CompileError> {
+        let x = self
+            .args
+            .iter()
+            .map(|arg| arg.tipe.resolve(type_args))
+            .collect::<Result<Vec<_>, _>>()?;
+        let y = self.ret_type.resolve(type_args)?;
+        Ok(Type::Func(self.properties.pure, x, Box::new(y)))
+    }
 }
 
 ///A statement in the mini language with associated `DebugInfo` that has not yet been type checked.
@@ -1545,6 +1586,7 @@ pub enum ExprKind {
     Constant(Constant),
     OptionInitializer(Box<Expr>),
     FunctionCall(Box<Expr>, Vec<Expr>),
+    GenericFuncRef(StringId, BTreeMap<StringId, Type>),
     CodeBlock(CodeBlock),
     ArrayOrMapRef(Box<Expr>, Box<Expr>),
     StructInitializer(Vec<FieldInitializer>),

@@ -25,11 +25,11 @@ use std::io::{self, Read};
 use std::path::Path;
 use typecheck::TypeCheckedFunc;
 
+use crate::compile::ast::GenericFunc;
 pub use ast::{DebugInfo, GlobalVarDecl, StructField, TopLevelDecl, Type, TypeTree};
 pub use source::Lines;
 use std::str::FromStr;
 pub use typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNode};
-use crate::compile::ast::GenericFunc;
 
 mod ast;
 mod codegen;
@@ -808,19 +808,20 @@ fn create_program_tree(
 
         let mut string_table = StringTable::new();
         let mut used_constants = HashSet::new();
-        let (imports, funcs, named_types, global_vars, hm, generic_funcs) = typecheck::sort_top_level_decls(
-            &parse_from_source(
-                source,
-                file_id,
-                &path,
-                &mut string_table,
-                constants_path,
-                &mut used_constants,
-                error_system,
-            )?,
-            path.clone(),
-            builtins,
-        );
+        let (imports, funcs, named_types, global_vars, hm, generic_funcs) =
+            typecheck::sort_top_level_decls(
+                &parse_from_source(
+                    source,
+                    file_id,
+                    &path,
+                    &mut string_table,
+                    constants_path,
+                    &mut used_constants,
+                    error_system,
+                )?,
+                path.clone(),
+                builtins,
+            );
         paths.append(&mut imports.iter().map(|imp| imp.path.clone()).collect());
         import_map.insert(path.clone(), imports.clone());
         programs.insert(
@@ -944,7 +945,7 @@ fn typecheck_programs(
             |Module {
                  imported_funcs,
                  funcs,
-                generic_funcs,
+                 generic_funcs,
                  named_types,
                  constants,
                  global_vars,

@@ -1176,7 +1176,14 @@ pub fn sort_top_level_decls(
             TopLevelDecl::ConstDecl => {}
         }
     }
-    (imports, funcs, named_types, global_vars, func_table, generic_funcs)
+    (
+        imports,
+        funcs,
+        named_types,
+        global_vars,
+        func_table,
+        generic_funcs,
+    )
 }
 
 ///Performs typechecking various top level declarations, including `ImportedFunc`s, `FuncDecl`s,
@@ -1231,6 +1238,7 @@ pub fn typecheck_top_level_decls(
             type_tree,
             &string_table,
             &mut undefinable_ids,
+            &generic_funcs,
         )?;
         match func.kind {
             FuncDeclKind::Public => {
@@ -1257,6 +1265,7 @@ pub fn typecheck_top_level_decls(
             type_tree,
             &string_table,
             &mut undefinable_ids,
+            &generic_funcs,
         )?;
         checked_funcs.insert(*id, f);
     }
@@ -1281,6 +1290,7 @@ pub fn typecheck_function(
     type_tree: &TypeTree,
     string_table: &StringTable,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
+    generics: &BTreeMap<StringId, GenericFunc>,
 ) -> Result<TypeCheckedFunc, CompileError> {
     let mut hm = HashMap::new();
     if fd.ret_type != Type::Void {
@@ -1377,6 +1387,7 @@ pub fn typecheck_function(
         type_tree,
         &undefinable_ids,
         &mut vec![],
+        generics,
     )?;
     Ok(TypeCheckedFunc {
         name: fd.name,
@@ -1402,6 +1413,7 @@ pub fn typecheck_generic_function(
     type_tree: &TypeTree,
     string_table: &StringTable,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
+    generics: &BTreeMap<StringId, GenericFunc>,
 ) -> Result<TypeCheckedFunc, CompileError> {
     let mut hm = HashMap::new();
     if fd.ret_type != Type::Void {
@@ -1498,6 +1510,7 @@ pub fn typecheck_generic_function(
         type_tree,
         &undefinable_ids,
         &mut vec![],
+        generics,
     )?;
     Ok(TypeCheckedFunc {
         name: fd.name,
@@ -1531,6 +1544,7 @@ fn typecheck_statement_sequence(
     type_tree: &TypeTree,
     undefinable_ids: &HashMap<StringId, Option<Location>>,
     scopes: &mut Vec<(String, Option<Type>)>,
+    generics: &BTreeMap<StringId, GenericFunc>,
 ) -> Result<Vec<TypeCheckedStatement>, CompileError> {
     typecheck_statement_sequence_with_bindings(
         &statements,
@@ -1542,6 +1556,7 @@ fn typecheck_statement_sequence(
         type_tree,
         undefinable_ids,
         scopes,
+        generics,
     )
 }
 
@@ -1557,6 +1572,7 @@ fn typecheck_statement_sequence_with_bindings<'a>(
     type_tree: &TypeTree,
     undefinable_ids: &HashMap<StringId, Option<Location>>,
     scopes: &mut Vec<(String, Option<Type>)>,
+    generics: &BTreeMap<StringId, GenericFunc>,
 ) -> Result<Vec<TypeCheckedStatement>, CompileError> {
     let mut inner_type_table = type_table.clone();
     for (sid, tipe) in bindings {
@@ -1573,6 +1589,7 @@ fn typecheck_statement_sequence_with_bindings<'a>(
             type_tree,
             undefinable_ids,
             scopes,
+            generics,
         )?;
         output.push(tcs);
         for (sid, bind) in bindings {
@@ -1597,6 +1614,7 @@ fn typecheck_statement<'a>(
     type_tree: &TypeTree,
     undefinable_ids: &HashMap<StringId, Option<Location>>,
     scopes: &mut Vec<(String, Option<Type>)>,
+    generics: &BTreeMap<StringId, GenericFunc>,
 ) -> Result<(TypeCheckedStatement, Vec<(StringId, Type)>), CompileError> {
     let kind = &statement.kind;
     let debug_info = statement.debug_info;
@@ -1625,6 +1643,7 @@ fn typecheck_statement<'a>(
                 type_tree,
                 undefinable_ids,
                 scopes,
+                generics,
             )?;
             if return_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
                 Ok((TypeCheckedStatementKind::Return(tc_expr), vec![]))
@@ -1654,6 +1673,7 @@ fn typecheck_statement<'a>(
                             type_tree,
                             undefinable_ids,
                             scopes,
+                            generics,
                         )
                     })
                     .transpose()?;
@@ -1707,6 +1727,7 @@ fn typecheck_statement<'a>(
                                 type_tree,
                                 undefinable_ids,
                                 scopes,
+                                generics,
                             )
                         })
                         .transpose()?,
@@ -1725,6 +1746,7 @@ fn typecheck_statement<'a>(
                 type_tree,
                 undefinable_ids,
                 scopes,
+                generics,
             )?),
             vec![],
         )),
@@ -1738,6 +1760,7 @@ fn typecheck_statement<'a>(
                 type_tree,
                 undefinable_ids,
                 scopes,
+                generics,
             )?;
             let tce_type = tc_expr.get_type();
             if tce_type == Type::Void {
@@ -1793,6 +1816,7 @@ fn typecheck_statement<'a>(
                 type_tree,
                 undefinable_ids,
                 scopes,
+                generics,
             )?;
             match type_table.get(name) {
                 Some(var_type) => {
@@ -1849,6 +1873,7 @@ fn typecheck_statement<'a>(
                 type_tree,
                 undefinable_ids,
                 scopes,
+                generics,
             )?;
             match tc_cond.get_type() {
                 Type::Bool => {
@@ -1861,6 +1886,7 @@ fn typecheck_statement<'a>(
                         type_tree,
                         undefinable_ids,
                         scopes,
+                        generics,
                     )?;
                     Ok((TypeCheckedStatementKind::While(tc_cond, tc_body), vec![]))
                 }
@@ -1885,6 +1911,7 @@ fn typecheck_statement<'a>(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?);
             }
             Ok((
@@ -1902,6 +1929,7 @@ fn typecheck_statement<'a>(
                 type_tree,
                 undefinable_ids,
                 scopes,
+                generics,
             )?;
             Ok((TypeCheckedStatementKind::DebugPrint(tce), vec![]))
         }
@@ -1915,6 +1943,7 @@ fn typecheck_statement<'a>(
                 type_tree,
                 undefinable_ids,
                 scopes,
+                generics,
             )?;
             match tce.get_type() {
                 Type::Tuple(vec) if vec.len() == 2 && vec[0] == Type::Bool => {
@@ -2022,6 +2051,7 @@ fn typecheck_expr(
     type_tree: &TypeTree,
     undefinable_ids: &HashMap<StringId, Option<Location>>,
     scopes: &mut Vec<(String, Option<Type>)>,
+    generics: &BTreeMap<StringId, GenericFunc>,
 ) -> Result<TypeCheckedExpr, CompileError> {
     let debug_info = expr.debug_info;
     let loc = debug_info.location;
@@ -2039,6 +2069,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 typecheck_unary_op(*op, tc_sub, loc, type_tree)
             }
@@ -2052,6 +2083,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 let tc_sub2 = typecheck_expr(
                     sub2,
@@ -2062,6 +2094,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 typecheck_binary_op(*op, tc_sub1, tc_sub2, type_tree, loc)
             }
@@ -2075,6 +2108,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 let tc_sub2 = typecheck_expr(
                     sub2,
@@ -2085,6 +2119,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 let tc_sub3 = typecheck_expr(
                     sub3,
@@ -2095,6 +2130,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 typecheck_trinary_op(*op, tc_sub1, tc_sub2, tc_sub3, type_tree, loc)
             }
@@ -2108,6 +2144,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 let tc_sub2 = typecheck_expr(
                     sub2,
@@ -2118,6 +2155,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 if (tc_sub1.get_type(), tc_sub2.get_type()) != (Type::Bool, Type::Bool) {
                     return Err(CompileError::new_type_error(
@@ -2144,6 +2182,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 let tc_sub2 = typecheck_expr(
                     sub2,
@@ -2154,6 +2193,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 if (tc_sub1.get_type(), tc_sub2.get_type()) != (Type::Bool, Type::Bool) {
                     return Err(CompileError::new_type_error(
@@ -2180,6 +2220,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?)))
             }
             ExprKind::VariableRef(name) => match func_table.get(name) {
@@ -2207,6 +2248,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 let uidx = idx.to_usize().unwrap();
                 if let Type::Tuple(tv) = tc_sub.get_type() {
@@ -2242,6 +2284,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 if let Type::Struct(v) = tc_sub.get_type().get_representation(type_tree)? {
                     for sf in v.iter() {
@@ -2298,6 +2341,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 match tc_fexpr.get_type().get_representation(type_tree)? {
                     Type::Func(impure, arg_types, ret_type) => {
@@ -2313,6 +2357,7 @@ fn typecheck_expr(
                                     type_tree,
                                     undefinable_ids,
                                     scopes,
+                                    generics,
                                 )?;
                                 tc_args.push(tc_arg);
                                 let resolved_arg_type = arg_types[i].clone();
@@ -2354,6 +2399,13 @@ fn typecheck_expr(
                     )),
                 }
             }
+            ExprKind::GenericFuncRef(func_name, vars) => {
+                let x = generics.get(func_name).ok_or_else(|| {
+                    CompileError::new("idk".to_string(), format!(""), loc.into_iter().collect())
+                })?;
+                let real = x.resolve(vars)?;
+                Ok(TypeCheckedExprKind::FuncRef(*func_name, real))
+            }
             ExprKind::CodeBlock(block) => Ok(TypeCheckedExprKind::CodeBlock(typecheck_codeblock(
                 block,
                 &type_table,
@@ -2363,6 +2415,7 @@ fn typecheck_expr(
                 type_tree,
                 undefinable_ids,
                 scopes,
+                generics,
             )?)),
             ExprKind::ArrayOrMapRef(array, index) => {
                 let tc_arr = typecheck_expr(
@@ -2374,6 +2427,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 let tc_idx = typecheck_expr(
                     &*index,
@@ -2384,6 +2438,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 match tc_arr.get_type().get_representation(type_tree)? {
                     Type::Array(t) => {
@@ -2458,6 +2513,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?),
                 tipe.get_representation(type_tree)?,
                 Type::Array(Box::new(tipe.clone())),
@@ -2473,6 +2529,7 @@ fn typecheck_expr(
                         type_tree,
                         undefinable_ids,
                         scopes,
+                        generics,
                     )?;
                     Ok(TypeCheckedExprKind::NewFixedArray(
                         *size,
@@ -2500,6 +2557,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 let tc_type = tc_expr.get_type();
                 if types
@@ -2534,6 +2592,7 @@ fn typecheck_expr(
                         type_tree,
                         undefinable_ids,
                         scopes,
+                        generics,
                     )?;
                     tc_fields.push(TypeCheckedFieldInitializer::new(
                         field.name.clone(),
@@ -2559,6 +2618,7 @@ fn typecheck_expr(
                         type_tree,
                         undefinable_ids,
                         scopes,
+                        generics,
                     )?;
                     types.push(tc_field.get_type().clone());
                     tc_fields.push(tc_field);
@@ -2575,6 +2635,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 let tc_index = typecheck_expr(
                     index,
@@ -2585,6 +2646,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 let tc_val = typecheck_expr(
                     val,
@@ -2595,6 +2657,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 match tc_arr.get_type().get_representation(type_tree)? {
                     Type::Array(t) => {
@@ -2694,6 +2757,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 let tc_val = typecheck_expr(
                     val,
@@ -2704,6 +2768,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 let tcs_type = tc_struc.get_type().get_representation(type_tree)?;
                 if let Type::Struct(fields) = &tcs_type {
@@ -2758,6 +2823,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 if t.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
                     Ok(TypeCheckedExprKind::Cast(Box::new(tc_expr), t.clone()))
@@ -2782,6 +2848,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 if t.castable(&tc_expr.get_type(), type_tree, HashSet::new()) {
                     Ok(TypeCheckedExprKind::Cast(Box::new(tc_expr), t.clone()))
@@ -2806,6 +2873,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 if t.covariant_castable(&tc_expr.get_type(), type_tree, HashSet::new()) {
                     Ok(TypeCheckedExprKind::Cast(Box::new(tc_expr), t.clone()))
@@ -2830,6 +2898,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?),
                 t.clone(),
             )),
@@ -2851,6 +2920,7 @@ fn typecheck_expr(
                         type_tree,
                         undefinable_ids,
                         scopes,
+                        generics,
                     )?);
                 }
                 Ok(TypeCheckedExprKind::Asm(
@@ -2878,6 +2948,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 match res.get_type().get_representation(type_tree)? {
                     Type::Option(t) => Ok(TypeCheckedExprKind::Try(Box::new(res), *t)),
@@ -2901,6 +2972,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 if expr.get_type() != Type::Uint {
                     Err(CompileError::new_type_error(
@@ -2924,6 +2996,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 let block = typecheck_codeblock(
                     block,
@@ -2934,6 +3007,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 let else_block = else_block
                     .clone()
@@ -2947,6 +3021,7 @@ fn typecheck_expr(
                             type_tree,
                             undefinable_ids,
                             scopes,
+                            generics,
                         )
                     })
                     .transpose()?;
@@ -2996,6 +3071,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 let tct = match tcr.get_type() {
                     Type::Option(t) => *t,
@@ -3017,6 +3093,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 let checked_else = else_block
                     .clone()
@@ -3030,6 +3107,7 @@ fn typecheck_expr(
                             type_tree,
                             undefinable_ids,
                             scopes,
+                            generics,
                         )
                     })
                     .transpose()?;
@@ -3069,6 +3147,7 @@ fn typecheck_expr(
                 type_tree,
                 undefinable_ids,
                 scopes,
+                generics,
             )?)),
             ExprKind::UnionCast(expr, tipe) => {
                 let tc_expr = typecheck_expr(
@@ -3080,6 +3159,7 @@ fn typecheck_expr(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )?;
                 if let Type::Union(types) = tc_expr.get_type().get_representation(type_tree)? {
                     if types.iter().any(|t| t == tipe) {
@@ -4076,6 +4156,7 @@ fn typecheck_codeblock(
     type_tree: &TypeTree,
     undefinable_ids: &HashMap<StringId, Option<Location>>,
     scopes: &mut Vec<(String, Option<Type>)>,
+    generics: &BTreeMap<StringId, GenericFunc>,
 ) -> Result<TypeCheckedCodeBlock, CompileError> {
     let mut output = Vec::new();
     let mut block_bindings = Vec::new();
@@ -4097,6 +4178,7 @@ fn typecheck_codeblock(
             type_tree,
             undefinable_ids,
             scopes,
+            generics,
         )?;
         output.push(statement);
         for (key, value) in bindings {
@@ -4125,6 +4207,7 @@ fn typecheck_codeblock(
                     type_tree,
                     undefinable_ids,
                     scopes,
+                    generics,
                 )
             })
             .transpose()?
