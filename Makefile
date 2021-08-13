@@ -135,6 +135,14 @@ run: compiler
 test:
 	cargo test --release 
 
+coverage: alltests.cov
+
+alltests.cov: compiler contracts
+	cd coverage && grep avmcodebuilder test_upgrade_arbos_to_different_version.cov > avmcodebuilder.cov
+	rm coverage/test_upgrade_arbos_to_different_version.cov
+	cat coverage/*.cov | sort -r | uniq | sort | uniq -f 1 | sort -k2,2 -k3,3n | grep -v test | grep -v Test > coverage/alltests.cov
+	./coverage/mini-coverage.sh ./coverage/alltests.cov > lcov-mini.info
+
 evmtest: $(ARBOS)
 	$(CARGORUN) evm-tests
 
@@ -155,5 +163,5 @@ benchmark: compiler $(TEMPLATES) $(ARBOS)
 	$(CARGORUN) make-benchmarks
 
 clean:
-	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe $(UPGRADETESTDIR)/*.mexe $(ARBOSDIR)/arbos.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/upgrade.json minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini
+	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe $(UPGRADETESTDIR)/*.mexe $(ARBOSDIR)/arbos.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/upgrade.json minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini *.cov coverage/*.cov lcov.info lcov-mini.info
 	rm -rf contracts/artifacts contracts/cache

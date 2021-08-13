@@ -1362,7 +1362,7 @@ fn test_payment_to_self() {
 
 pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let my_addr = Uint256::from_u64(1025);
 
@@ -1413,6 +1413,7 @@ pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), et
             .unwrap();
     }
 
+    machine.write_coverage("test_payment_to_self".to_string());
     Ok(())
 }
 
@@ -1423,7 +1424,7 @@ fn _test_upgrade_arbos_to_different_version() {
 
 fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos_before.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1462,6 +1463,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbos_version_orig = arbsys_orig_binding._arbos_version(&mut machine)?;
     assert_eq!(arbos_version, arbos_version_orig);
 
+    machine.write_coverage("test_upgrade_arbos_to_different_version".to_string());
     Ok(())
 }
 
@@ -1525,14 +1527,16 @@ pub fn _evm_run_with_gas_charging(
     // returns Ok(true) if success, Ok(false) if insufficient gas money, Err otherwise
     use std::convert::TryFrom;
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
-    machine
-        .runtime_env
-        .insert_eth_deposit_message(my_addr.clone(), my_addr.clone(), funding);
+    machine.runtime_env.insert_eth_deposit_message(
+        my_addr.clone(),
+        my_addr.clone(),
+        funding.clone(),
+    );
     let _gas_used = if debug {
         machine.debug(None)
     } else {
@@ -1543,6 +1547,7 @@ pub fn _evm_run_with_gas_charging(
     let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
     if let Err(receipt) = fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) {
         if receipt.unwrap().get_return_code() == Uint256::from_u64(3) {
+            machine.write_coverage(format!("test_gas_charging_{}", funding));
             return Ok(false);
         } else {
             panic!("unexpected failure deploying Fibonacci contract");
@@ -1561,6 +1566,7 @@ pub fn _evm_run_with_gas_charging(
         debug,
     ) {
         if receipt.unwrap().get_return_code() == Uint256::from_u64(3) {
+            machine.write_coverage(format!("test_gas_charging_{}", funding));
             return Ok(false);
         } else {
             panic!("unexpected failure deploying PaymentChannel contract");
@@ -1588,6 +1594,7 @@ pub fn _evm_run_with_gas_charging(
 
     if !logs[0].succeeded() {
         if logs[0].get_return_code() == Uint256::from_u64(3) {
+            machine.write_coverage(format!("test_gas_charging_{}", funding));
             return Ok(false);
         } else {
             panic!();
@@ -1624,6 +1631,7 @@ pub fn _evm_run_with_gas_charging(
             .unwrap();
     }
 
+    machine.write_coverage(format!("test_gas_charging_{}", funding));
     Ok(true)
 }
 
@@ -1637,7 +1645,7 @@ fn test_arbowner() {
 
 pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1675,6 +1683,7 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
             .unwrap();
     }
 
+    machine.write_coverage("test_arbowner".to_string());
     Ok(())
 }
 
@@ -1685,7 +1694,7 @@ fn test_arb_fair_gas_price_list() {
 
 fn _evm_test_arb_fair_gas_price_list() {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let wallet = machine.runtime_env.new_wallet();
     let _my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1730,6 +1739,8 @@ fn _evm_test_arb_fair_gas_price_list() {
         ((lis[0] == addr1.clone()) && (lis[1] == addr3.clone()))
             || ((lis[0] == addr3.clone()) && (lis[1] == addr1.clone()))
     );
+
+    machine.write_coverage("test_arb_fair_gas_price_list".to_string());
 }
 
 #[test]
@@ -1745,7 +1756,7 @@ pub fn _evm_test_tx_with_extra_gas(
     debug: bool,
 ) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1799,6 +1810,7 @@ pub fn _evm_test_tx_with_extra_gas(
             .unwrap();
     }
 
+    machine.write_coverage("test_run_tx_with_extra_gas".to_string());
     Ok(())
 }
 
@@ -1812,7 +1824,7 @@ fn test_arbgasinfo() {
 
 pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1903,12 +1915,13 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
             .unwrap();
     }
 
+    machine.write_coverage("test_arbgasinfo".to_string());
     Ok(())
 }
 
 pub fn _evm_test_rate_control(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1940,6 +1953,7 @@ pub fn _evm_test_rate_control(log_to: Option<&Path>, debug: bool) -> Result<(), 
             .unwrap();
     }
 
+    machine.write_coverage("evm_test_rate_control".to_string());
     Ok(())
 }
 
@@ -1950,7 +1964,7 @@ fn test_rollup_tracker() {
 
 pub fn _do_rollup_tracker_ops() {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let wallet = machine.runtime_env.new_wallet();
     let owner = Uint256::from_bytes(wallet.address().as_bytes());
@@ -2046,6 +2060,7 @@ pub fn _do_rollup_tracker_ops() {
 
     let _ = machine.run(None);
 
+    machine.write_coverage("test_rollup_tracker".to_string());
     // There isn't really a result we can check here, so this test just confirms that nothing crashes.
 }
 
@@ -2117,7 +2132,7 @@ fn test_arbaggregator() {
 
 pub fn _evm_test_arbaggregator(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -2216,6 +2231,7 @@ pub fn _evm_test_arbaggregator(log_to: Option<&Path>, debug: bool) -> Result<(),
             .unwrap();
     }
 
+    machine.write_coverage("test_arbaggregator".to_string());
     Ok(())
 }
 
@@ -2229,7 +2245,7 @@ fn test_retryable() {
 
 pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let my_addr = Uint256::from_u64(1234);
 
@@ -2385,6 +2401,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
             .unwrap();
     }
 
+    machine.write_coverage("test_retryable".to_string());
     Ok(())
 }
 
@@ -2395,7 +2412,7 @@ fn test_arb_statistics() {
 
 fn _test_arb_stats() -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let arbstats = _ArbStatistics::_new(false);
 
@@ -2408,6 +2425,7 @@ fn _test_arb_stats() -> Result<(), ethabi::Error> {
     // assert_eq!(_arbgas, Uint256::from_u64(1_490_972));  // disable this because it will vary over versions
     assert_eq!(txs, Uint256::from_u64(0));
     assert_eq!(contracts, Uint256::from_u64(19));
+    machine.write_coverage("test_arb_statistics".to_string());
     Ok(())
 }
 
@@ -2418,7 +2436,7 @@ fn test_allowed_senders() {
 
 fn _evm_test_allowed_senders() {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
     let wallet = machine.runtime_env.new_wallet();
 
     let arbowner = _ArbOwner::_new(&wallet, false);
@@ -2473,6 +2491,8 @@ fn _evm_test_allowed_senders() {
     assert!(arbowner
         ._is_allowed_sender(&mut machine, addr2.clone())
         .unwrap());
+
+    machine.write_coverage("test_allowed_senders".to_string());
 }
 
 pub struct ArbosTest {
@@ -2676,7 +2696,7 @@ impl ArbosTest {
 #[test]
 fn test_eventual_congestion_reject() {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
     let wallet = machine.runtime_env.new_wallet();
     let my_address = Uint256::from_bytes(wallet.address().as_bytes());
 
@@ -2705,6 +2725,7 @@ fn test_eventual_congestion_reject() {
             Err(_) => panic!(),
         };
         if res_code == 2 {
+            machine.write_coverage("test_eventual_congestion_reject".to_string());
             return;
         } // we hit congestion, as expected
         assert_eq!(res_code, 0); // we should report success, if haven't hit congestion yet
@@ -2715,7 +2736,7 @@ fn test_eventual_congestion_reject() {
 #[test]
 fn test_congestion_price_adjustment() {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
     let wallet = machine.runtime_env.new_wallet();
     let my_address = Uint256::from_bytes(wallet.address().as_bytes());
 
@@ -2782,12 +2803,14 @@ fn test_congestion_price_adjustment() {
         ._get_prices_in_wei_with_aggregator(&mut machine, my_address.clone())
         .unwrap();
     assert_eq!(prices2.4, Uint256::zero());
+
+    machine.write_coverage("test_congestion_price_adjustment".to_string());
 }
 
 #[test]
 fn test_set_gas_price_estimate() {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
-    machine.start_at_zero();
+    machine.start_at_zero(true);
     let wallet = machine.runtime_env.new_wallet();
     let my_address = Uint256::from_bytes(wallet.address().as_bytes());
 
@@ -2827,4 +2850,6 @@ fn test_set_gas_price_estimate() {
         .unwrap()
         .2;
     assert_eq!(storage_price, new_storage_price);
+
+    machine.write_coverage("test_set_gas_price_estimate".to_string());
 }

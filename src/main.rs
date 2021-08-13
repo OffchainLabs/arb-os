@@ -42,6 +42,8 @@ struct RunStruct {
     input: String,
     #[clap(short, long)]
     debug: bool,
+    #[clap(short, long)]
+    coverage: Option<String>,
 }
 
 ///Command line options for EvmDebug subcommand.
@@ -161,7 +163,7 @@ fn main() -> Result<(), CompileError> {
             let filename = run.input;
             let debug = run.debug;
             let path = Path::new(&filename);
-            match run_from_file(path, Vec::new(), debug) {
+            match run_from_file(path, Vec::new(), run.coverage, debug) {
                 Ok(logs) => {
                     println!("Logs: {:?}", logs);
                 }

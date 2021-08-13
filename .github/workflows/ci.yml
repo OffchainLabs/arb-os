@@ -138,6 +138,7 @@ jobs:
           #   git clone -b v6.11.4 https://github.com/facebook/rocksdb
           #   cd rocksdb && make shared_lib && sudo make install
           #
+          curl -sSL "https://github.com/gotestyourself/gotestsum/releases/download/v1.7.0/gotestsum_1.7.0_linux_amd64.tar.gz" | sudo tar -xz -C /usr/local/bin gotestsum
 
       - name: Clone Arbitrum
         run: |
@@ -163,7 +164,7 @@ jobs:
       - name: Test Node's Core
         run: |
           cd arbitrum/packages/arb-node-core/
-          gotestsum --format testname
+          gotestsum --format testname | tee issues | grep FAIL
 
       - name: Test Node's RPC
         run: |
