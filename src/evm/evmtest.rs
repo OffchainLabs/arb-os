@@ -103,6 +103,7 @@ fn run_one_test(
                 logfiles_path,
                 raw_filename,
             );
+            machine.write_coverage(raw_filename.to_string());
 
             match &v["post"] {
                 serde_json::Value::Null => {
@@ -198,7 +199,7 @@ fn start_test(blocknum: Uint256, timestamp: Uint256) -> (Machine, ArbosTest) {
         None,
     );
     let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
-    machine.start_at_zero();
+    machine.start_at_zero(true);
 
     let arbos_test = ArbosTest::new(false);
 
