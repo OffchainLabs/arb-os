@@ -158,7 +158,7 @@ jobs:
 
       - name: Test Node's C++ Database
         run: |
-          ./arbitrum/packages/arb-avm-cpp/debug/bin/avm_tests
+          ./arbitrum/packages/arb-avm-cpp/build/bin/avm_tests
 
       - name: Test Node's Core
         run: |
@@ -168,4 +168,4 @@ jobs:
       - name: Test Node's RPC
         run: |
           cd arbitrum/packages/arb-rpc-node/
-          gotestsum --format testname
+          gotestsum --format testname | tee issues | grep FAIL
