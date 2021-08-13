@@ -151,9 +151,9 @@ jobs:
 
       - name: Build Arbitrum
         run: |
-          mkdir arbitrum/packages/arb-avm-cpp/debug/
+          mkdir arbitrum/packages/arb-avm-cpp/build/
           cd $_
-          cmake .. -DCMAKE_BUILD_TYPE=Debug
+          cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
           make -j
 
       - name: Test Node's C++ Database
