@@ -18,6 +18,7 @@ use accounts::accountStore_transferEthBalance;
 use accounts::account_getEthBalance;
 use accounts::account_getNextSeqNum;
 use accounts::account_getAggregatorToPay;
+use accounts::account_getFeeCollector;
 use accounts::account_setBaseTxFeeL1Gas;
 
 use arbstatistics::arbStatistics_addToStorage;
@@ -423,9 +424,11 @@ public impure func getAddressForReserveFundsDeposit() -> address {
     return gasAccountingInfo.feeConfig.forCongestion;
 }
 
-public impure func gasAccounting_summaryToPublish() -> any {
+public impure func gasAccounting_summaryToPublish() -> (uint, uint, uint, uint, uint, int) {
     // get summary of gas prices and pool at present, for inclusion in block summary log
     let prices = gasAccountingInfo.currentPrices;
+
+    // Note: this struct is exposed to the node software, please note any modifications in your PRs
     return (
         prices.perL1CalldataUnit,
         prices.perStorageCell,
@@ -483,7 +486,7 @@ public impure func gasAccounting_startTxCharges(
             const::EscrowStoreID_txGas,
             gasAccountingInfo.feeConfig.forNetwork,
         );
-        return (const::TxResultCode_noGasFunds, acctStore);
+        return (const::TxResultCode_insufficientGasFunds, acctStore);
     }
 
     let gasUsedByOS = ((~0) - asm() uint { getgas }) / const::Charging_ArbGasPerAvmGas;
@@ -703,7 +706,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
     TxRequestData,
 ) {
     let tx = inbox_getNextUnpackedRequest();
-    if( (!allowedSenders_contains(tx.caller)) && (!tx.incomingRequest.adminMode) ) {
+    if ( (!allowedSenders_contains(tx.caller)) && (!tx.incomingRequest.adminMode) ) {
         return (const::TxResultCode_senderNotPermitted, tx);
     }
 
@@ -813,7 +816,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
             // sender didn't have enough gas funds
             // we took all of the funds to make a partial payment to the aggregator
             // now fail the tx
-            return (const::TxResultCode_noGasFunds, tx);
+            return (const::TxResultCode_insufficientGasFunds, tx);
         }
 
         // compute the number of ArbGas units corresponding to the L1 fees paid, and deduct them from the tx
@@ -943,11 +946,13 @@ impure func payForTxAndL1Gas(
     }
 
     if (aggregator == preferredAggregator) {
-        // pay aggregator; if insufficient funds, pay as much as we can then return false
+        // pay aggregator's fee collector; if insufficient funds, pay as much as we can then return false
+        let feeCollector = account_getFeeCollector(evmCallStack_getAccountInCurrentContext(aggregator));
+        
         if ( ! {
             let (fullyPaid, ufs, weiPaid) = tryToPayForL1Gas(
                 payer,
-                aggregator,
+                feeCollector,
                 basePriceTx,
                 calldataUnits * basePriceCalldataUnit,
                 feeStats,

@@ -431,7 +431,7 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
         // submission cost was higher than the maximum allowed by the request
         emitTxReceipt(
             req,
-            const::TxResultCode_noGasFunds,
+            const::TxResultCode_insufficientGasFunds,
             None<ByteArray>,
             None<EvmLogs>,
             None<GasUsage>,
