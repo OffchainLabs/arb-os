@@ -28,9 +28,9 @@ type EvmInstruction = struct {
     opcode: uint,
     data: option<uint>,  // data to push, if it's a PUSH type instruction
     pc: uint,            // EVM program counter
-}
+};
 
-type EvmInstructionStack = Stack
+type EvmInstructionStack = Stack;
 
 func evmInstructionStack_new() -> EvmInstructionStack {
     return stack_new();

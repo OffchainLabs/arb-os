@@ -33,14 +33,14 @@
 type Kvs = struct {
     tree: KvsNode,
     size: uint,
-}
+};
 
-type KvsNode = [8]any
+type KvsNode = [8]any;
 
 type KvsCell = struct {
     key: any,
     value: option<any>,
-}
+};
 
 
 public func builtin_kvsNew() -> Kvs {
@@ -88,7 +88,7 @@ type Unwinder = struct {
     kvs: [8]any,
     index: uint,
     next: option<Unwinder>,
-}
+};
 
 public func builtin_kvsSet(s: Kvs, key: any, value: any) -> Kvs {
     let (utree, maybeUnwinder, delta) = kvs_set2(s.tree, key, Some(value));

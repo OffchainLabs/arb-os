@@ -120,12 +120,12 @@ type EvmCallFrame = struct {
     sendQueue: Queue,                   // outgoing messages created so far in current top-level tx
     sendOnFailure: option<ByteArray>,   // message to send if this call fails
     parent: option<EvmCallFrame>,       // call-frame that created this one, or None if this is a top-level call
-}
+};
 
 type ReturnInfo = struct {  // information about a call that previously completed
     data: ByteArray,
     status: bool,     // true iff call succeeded
-}
+};
 
 type ResumeInfo = struct {            // information used to resume a call after a subcall returns
     codePoint: func(),                // where to resume execution
@@ -136,7 +136,7 @@ type ResumeInfo = struct {            // information used to resume a call after
     callType: uint,                   // call type of the subcall
     savedGas: uint,                   // how much of the caller's gas was not lent to the subcall
     givenGas: uint,                   // how much of the call's gas was lent to the subcall
-}
+};
 
 var globalCallStack: option<EvmCallFrame>;   // call frame of currently running call, if any
 var globalCurrentTxRequest: TxRequestData;  // request that launched the top-level call
@@ -144,7 +144,7 @@ var globalCurrentTxRequest: TxRequestData;  // request that launched the top-lev
 type IncomingRequestAndLogs = struct {
     req: IncomingRequest,
     evmLogs: EvmLogs,
-}
+};
 
 var globalCurrentRetryableRequest: option<IncomingRequestAndLogs>;  // describes the retryable request we're currently doing, if any
 

@@ -39,19 +39,19 @@ const n_modexp_c191_3f52 = 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c2
 type BLSHashedMessage = struct {
     x: uint,
     y: uint,
-}
+};
 
 type BLSSignature = struct {
     x: uint,
     y: uint,
-}
+};
 
 type BLSKey = struct {
     ax: uint,
     ay: uint,
     bx: uint,
     by: uint,
-}
+};
 
 // ==================================================================
 // BLS top level functions with built-in hashing

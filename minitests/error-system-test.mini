@@ -25,7 +25,7 @@ use std::outputbuffer::OutputBuffer;
 type FixedPoint = struct {
    val: uint,
    shiftFactor: ByteArray,
-}
+};
 
 func main(arg: option<RandomGenerator>) -> (option<RandomGenerator>, option<option<option<Queue> > >) {
     
