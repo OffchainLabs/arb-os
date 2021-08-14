@@ -14,8 +14,8 @@ type GlobalsBeforeUpgrade = struct {
 
 type GlobalsAfterUpgrade = struct {
     newGlobal2: uint,
-    newGlobal1: option<int> ,
     newGlobal3: (uint, uint, ),
+    newGlobal1: option<int> ,
     _jump_table: any,
 }
 
@@ -26,8 +26,8 @@ public view func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> 
     let _jump_table = (asm() GlobalsAfterUpgrade { rget })._jump_table;
     return (struct {
         newGlobal2: newGlobal2,
-        newGlobal1: newGlobal1,
         newGlobal3: newGlobal3,
+        newGlobal1: newGlobal1,
         _jump_table: _jump_table,
     }, 37);
 }
