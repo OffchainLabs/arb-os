@@ -147,7 +147,8 @@ jobs:
       - name: Copy over this branch's ArbOS
         run: |
           rm -r arbitrum/packages/arb-os/*
-          cp -r testlogs/* arbitrum/packages/arb-avm-cpp/tests/arbos-cases/
+          # We'd need `make testlogs` to generate these files
+          #   cp -r testlogs/* arbitrum/packages/arb-avm-cpp/tests/arbos-cases/
           mv * arbitrum/packages/arb-os/ || true
 
       - name: Build Arbitrum
