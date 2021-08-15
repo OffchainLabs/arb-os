@@ -1,0 +1,23 @@
+
+
+use other::other;
+
+#[print]
+var first: uint;
+var second: uint;
+
+#[print]
+view write func main() -> string {
+    
+    first = 4;
+    second = 2;
+
+    let _ = other();
+
+    if (first / second != second) {
+        return "order of globals is wrong";
+    }
+    
+    return "";
+}
+

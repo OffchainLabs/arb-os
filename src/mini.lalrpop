@@ -3,7 +3,7 @@
 //
 
 
-use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVarDecl, Type, CodeBlock, StructField, FuncArg, FuncProperties, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant, OptionConst, FieldInitializer, new_func_arg, new_type_decl};
+use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVar, Type, CodeBlock, StructField, FuncArg, FuncProperties, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant, OptionConst, FieldInitializer, new_func_arg, new_type_decl};
 use crate::compile::{InliningMode, ErrorSystem, CompileError};
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
@@ -124,8 +124,14 @@ FuncArg: FuncArg = {
 	<lno: @L> <i:Ident> ":" <t:Type> => new_func_arg(i, t, DebugInfo::from(file_info.location(BytePos::from(lno), filename))),
 }
 
-GlobalVarDecl: GlobalVarDecl = {
-	<lno: @L> "var" <i:Ident> ":" <t:Type> ";" => GlobalVarDecl::new(i, stringtable.name_from_id(i).clone(), t, file_info.location(BytePos::from(lno),filename)),
+GlobalVarDecl: GlobalVar = {
+    <attribs: ("#[" <Attributes> "]")?> "var" <lno: @L> <i:Ident> ":" <t:Type> ";" => {
+        let mut debug_info = DebugInfo::here(file_info, lno, filename);
+        debug_info.attributes = attribs.unwrap_or_default();
+        GlobalVar::new(
+            i, stringtable.name_from_id(i).clone(), t, debug_info
+        )
+    },
 }
 
 CodeBlock: Vec<Statement> = {
@@ -272,33 +278,34 @@ StructField: StructField = {
 }
 
 Type: Type = {
-	"uint" => Type::Uint,
-	"int" => Type::Int,
-	"bool" => Type::Bool,
-	"buffer" => Type::Buffer,
-	"bytes32" => Type::Bytes32,
-	"address" => Type::EthAddress,
-	"struct" "{" <StructFields> "}" => Type::Struct(<>),
-	<CommaedTypesInParens> => Type::Tuple(<>),
-	"[" "]" <Type> => Type::Array(Box::new(<>)),
-	"[" <s:UnsignedInteger> "]" <t:Type> => Type::FixedArray(
-		Box::new(t),
-		s.to_usize().unwrap(),
-	),
-	"map" "<" <t1:Type> "," <t2:Type> ","? ">" => Type::Map(Box::new(t1), Box::new(t2)),
-	"any" => Type::Any,
-	"option<" <t1:Type> ">" => Type::Option(Box::new(t1)),
-	"every" => Type::Every,
-	"union<" <t1:CommaedTypes> ">" => Type::Union(t1),
+    "uint" => Type::Uint,
+    "int" => Type::Int,
+    "bool" => Type::Bool,
+    "buffer" => Type::Buffer,
+    "bytes32" => Type::Bytes32,
+    "address" => Type::EthAddress,
+    "struct" "{" <StructFields> "}" => Type::Struct(<>),
+    <CommaedTypesInParens> => Type::Tuple(<>),
+    "[" "]" <Type> => Type::Array(Box::new(<>)),
+    "[" <s:UnsignedInteger> "]" <t:Type> => Type::FixedArray(
+	Box::new(t),
+	s.to_usize().unwrap(),
+    ),
+    "map" "<" <t1:Type> "," <t2:Type> ","? ">" => Type::Map(Box::new(t1), Box::new(t2)),
+    "string" => Type::Tuple(vec![Type::Uint, Type::Buffer]),
+    "any" => Type::Any,
+    "option<" <t1:Type> ">" => Type::Option(Box::new(t1)),
+    "every" => Type::Every,
+    "union<" <t1:CommaedTypes> ">" => Type::Union(t1),
     <q: Qualifier*> "func" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => {
         let view = q.contains(&"view");
         let write = q.contains(&"write");
-        Type::Func(FuncProperties::new(view, write, false), a, Box::new(r.unwrap_or(Type::Void)))
+        Type::Func(FuncProperties::new(view, write, false, false), a, Box::new(r.unwrap_or(Type::Void)))
     },
     <q: Qualifier*> "closure" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => {
         let view = q.contains(&"view");
         let write = q.contains(&"write");
-        Type::Func(FuncProperties::new(view, write, true), a, Box::new(r.unwrap_or(Type::Void)))
+        Type::Func(FuncProperties::new(view, write, true, false), a, Box::new(r.unwrap_or(Type::Void)))
     },
     Ident => Type::Nominal(current_path.to_owned(), <>),
 };

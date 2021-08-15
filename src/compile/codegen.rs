@@ -4,7 +4,7 @@
 
 //! Contains utilities for generating instructions from AST structures.
 
-use super::ast::{BinaryOp, FuncProperties, GlobalVarDecl, TrinaryOp, Type, UnaryOp};
+use super::ast::{BinaryOp, FuncProperties, GlobalVar, TrinaryOp, Type, UnaryOp};
 use super::typecheck::{
     TypeCheckedExpr, TypeCheckedFunc, TypeCheckedMatchPattern, TypeCheckedStatement,
 };
@@ -18,7 +18,7 @@ use crate::link::{TupleTree, TUPLE_SIZE};
 use crate::mavm::{AVMOpcode, Buffer, Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 use std::{cmp::max, collections::HashMap};
 
 /// Top level function for code generation, generates code for modules.
@@ -31,7 +31,7 @@ use std::{cmp::max, collections::HashMap};
 /*pub fn mavm_codegen(
     funcs: BTreeMap<StringId, TypeCheckedFunc>,
     string_table: &StringTable,
-    global_vars: &HashMap<StringId, GlobalVarDecl>,
+    global_vars: &HashMap<StringId, GlobalVar>,
     issues: &mut Vec<CompileError>,
     release_build: bool,
 ) -> Result<Vec<Instruction>, CompileError> {
@@ -73,7 +73,7 @@ use std::{cmp::max, collections::HashMap};
 pub fn mavm_codegen_func(
     mut func: TypeCheckedFunc,
     string_table: &StringTable,
-    global_vars: &HashMap<StringId, GlobalVarDecl>,
+    global_vars: &HashMap<StringId, GlobalVar>,
     issues: &mut Vec<CompileError>,
     release_build: bool,
 ) -> Result<Vec<Instruction>, CompileError> {
@@ -181,7 +181,7 @@ fn mavm_codegen_code_block<'a>(
     label_gen: LabelGenerator,
     string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
-    global_vars: &HashMap<StringId, GlobalVarDecl>,
+    global_vars: &HashMap<StringId, GlobalVar>,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
     issues: &mut Vec<CompileError>,
@@ -259,7 +259,7 @@ fn mavm_codegen_statements(
     mut label_gen: LabelGenerator,
     string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
-    global_vars: &HashMap<StringId, GlobalVarDecl>,
+    global_vars: &HashMap<StringId, GlobalVar>,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
     issues: &mut Vec<CompileError>,
@@ -310,7 +310,7 @@ fn mavm_codegen_statement(
     mut label_gen: LabelGenerator,
     string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
-    global_vars: &HashMap<StringId, GlobalVarDecl>,
+    global_vars: &HashMap<StringId, GlobalVar>,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
     issues: &mut Vec<CompileError>,
@@ -515,7 +515,7 @@ fn mavm_codegen_statement(
             ));
             Ok((label_gen, exp_locals, HashMap::new()))
         }
-        TypeCheckedStatementKind::AssignGlobal(idx, expr) => {
+        TypeCheckedStatementKind::AssignGlobal(id, expr) => {
             let (lg, c, exp_locals) = mavm_codegen_expr(
                 expr,
                 code,
@@ -530,7 +530,12 @@ fn mavm_codegen_statement(
                 issues,
                 release_build,
             )?;
-            c.push(Instruction::from_opcode(Opcode::SetGlobalVar(*idx), debug));
+            let global = global_vars.get(id).expect("No global exists for stringID");
+            let offset = global.offset.unwrap();
+            c.push(Instruction::from_opcode(
+                Opcode::SetGlobalVar(offset),
+                debug,
+            ));
             Ok((lg, exp_locals, HashMap::new()))
         }
         TypeCheckedStatementKind::While(cond, body) => {
@@ -707,7 +712,7 @@ fn mavm_codegen_tuple_pattern(
     pattern: &TypeCheckedMatchPattern,
     local_slot_num_base: usize,
     locals: &HashMap<usize, usize>,
-    global_vars: &HashMap<StringId, GlobalVarDecl>,
+    global_vars: &HashMap<StringId, GlobalVar>,
     string_table: &StringTable,
     debug_info: DebugInfo,
 ) -> Result<(usize, HashMap<usize, usize>, HashSet<usize>), CompileError> {
@@ -815,7 +820,7 @@ fn mavm_codegen_expr<'a>(
     mut label_gen: LabelGenerator,
     string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
-    global_vars: &HashMap<StringId, GlobalVarDecl>,
+    global_vars: &HashMap<StringId, GlobalVar>,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
     issues: &mut Vec<CompileError>,
@@ -1105,8 +1110,26 @@ fn mavm_codegen_expr<'a>(
 
             Ok((label_gen, code, num_locals))
         }
-        TypeCheckedExprKind::GlobalVariableRef(idx, _) => {
-            code.push(Instruction::from_opcode(Opcode::GetGlobalVar(*idx), debug));
+        TypeCheckedExprKind::GlobalVariableRef(id, _) => {
+            let global = match global_vars.get(id) {
+                Some(global) => global,
+                None => {
+                    return Err(CompileError::new(
+                        format!("Internal Error"),
+                        format!(
+                            "StringID {} doesn't exist in {:?}",
+                            Color::red(id),
+                            global_vars
+                        ),
+                        loc.into_iter().collect(),
+                    ))
+                }
+            };
+            let offset = global.offset.unwrap();
+            code.push(Instruction::from_opcode(
+                Opcode::GetGlobalVar(offset),
+                debug,
+            ));
             Ok((label_gen, code, num_locals))
         }
         TypeCheckedExprKind::FuncRef(name, _) => {
@@ -1647,7 +1670,7 @@ fn codegen_fixed_array_mod<'a>(
     label_gen_in: LabelGenerator,
     string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
-    global_vars: &HashMap<StringId, GlobalVarDecl>,
+    global_vars: &HashMap<StringId, GlobalVar>,
     debug_info: DebugInfo,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
@@ -1749,7 +1772,7 @@ fn codegen_fixed_array_mod_2<'a>(
     label_gen_in: LabelGenerator,
     string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
-    global_vars: &HashMap<StringId, GlobalVarDecl>,
+    global_vars: &HashMap<StringId, GlobalVar>,
     debug_info: DebugInfo,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CompileError> {
     macro_rules! opcode {

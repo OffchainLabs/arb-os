@@ -451,8 +451,12 @@ impl TupleTree {
                 }
             }
             return Err(CompileError::new(
-                String::from("Internal error in write_code:"),
-                "out-of-bounds write".to_string(),
+                String::from("Internal error in write_code"),
+                format!(
+                    "out-of-bounds write {} into {}",
+                    Color::red(index_in),
+                    Color::red(v.len())
+                ),
                 debug_info.location.into_iter().collect(),
             ));
         } else {

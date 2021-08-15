@@ -3,6 +3,7 @@
  */
 
 use crate::console::Color;
+use crate::evm::{test_contract_path2, AbiForContract};
 use crate::mavm::{Buffer, Value};
 use crate::run::{_bytestack_from_bytes, load_from_file, run, run_from_file, Machine};
 use crate::uint256::Uint256;
@@ -527,4 +528,49 @@ fn small_upgrade_auto_remap() {
         Value::Int(Uint256::from_u64(42))
     );
     machine.write_coverage("small_upgrade_auto_remap".to_string());
+}
+
+#[test]
+fn test_gasleft_with_delegatecall() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+    let my_addr = Uint256::from_u64(1025);
+
+    let mut greeter_contract =
+        AbiForContract::new_from_file(&test_contract_path2("Delegator", "Greeter")).unwrap();
+    if greeter_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .is_err()
+    {
+        panic!("failed to deploy Greeter contract");
+    }
+
+    let mut delegator_contract =
+        AbiForContract::new_from_file(&test_contract_path2("Delegator", "Delegator")).unwrap();
+    if delegator_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .is_err()
+    {
+        panic!("failed to deploy Delegator contract");
+    }
+
+    let (receipts, _) = delegator_contract
+        .call_function(
+            my_addr,
+            "testDelegate",
+            &[ethabi::Token::Address(greeter_contract.address.to_h160())],
+            &mut machine,
+            Uint256::zero(),
+            false,
+        )
+        .unwrap();
+
+    assert_eq!(receipts.len(), 1);
+    let logs = receipts[0]._get_evm_logs();
+    assert_eq!(logs.len(), 2);
+    let gasleft_before = Uint256::from_bytes(&logs[0].data);
+    let gasleft_after = Uint256::from_bytes(&logs[1].data);
+    assert!(gasleft_before > gasleft_after);
+
+    machine.write_coverage("test_gasleft_with_delegatecall".to_string());
 }

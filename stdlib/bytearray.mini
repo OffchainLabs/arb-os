@@ -39,7 +39,7 @@ public func bytearray_fromSizeAndBuffer(size: uint, buf: buffer) -> ByteArray {
     };
 }
 
-public func bytearray_toSizeAndBuffer(ba: ByteArray) -> (uint, buffer) {
+public func bytearray_toSizeAndBuffer(ba: ByteArray) -> string {
     let size = ba.size;
     let buf = newbuffer();  // make a fresh buffer, in case ba is a slice into a larger buffer
     let i = 0;

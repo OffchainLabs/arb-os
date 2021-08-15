@@ -5,7 +5,7 @@
 //! Converts non-type checked ast nodes to type checked versions, and other related utilities.
 
 use super::ast::{
-    Attributes, BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func, GlobalVarDecl,
+    Attributes, BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func, GlobalVar,
     MatchPattern, MatchPatternKind, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp,
     Type, TypeTree, UnaryOp,
 };
@@ -830,7 +830,7 @@ pub enum TypeCheckedStatementKind {
     Expression(TypeCheckedExpr),
     Let(TypeCheckedMatchPattern, TypeCheckedExpr),
     AssignLocal(StringId, TypeCheckedExpr),
-    AssignGlobal(usize, TypeCheckedExpr),
+    AssignGlobal(StringId, TypeCheckedExpr),
     While(TypeCheckedExpr, Vec<TypeCheckedStatement>),
     Asm(Vec<Instruction>, Vec<TypeCheckedExpr>),
     DebugPrint(TypeCheckedExpr),
@@ -918,7 +918,7 @@ pub enum TypeCheckedExprKind {
     ShortcutOr(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>),
     ShortcutAnd(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>),
     LocalVariableRef(StringId, Type),
-    GlobalVariableRef(usize, Type),
+    GlobalVariableRef(StringId, Type),
     Variant(Box<TypeCheckedExpr>),
     FuncRef(StringId, Type),
     TupleRef(Box<TypeCheckedExpr>, Uint256, Type),
@@ -1247,9 +1247,8 @@ pub fn sort_top_level_decls(
 ) -> (
     Vec<Import>,
     Vec<Func>,
-    BTreeMap<StringId, Func>,
     HashMap<usize, Type>,
-    Vec<GlobalVarDecl>,
+    Vec<GlobalVar>,
     HashMap<usize, Type>,
 ) {
     let (decls, closures) = parsed;
@@ -1272,7 +1271,7 @@ pub fn sort_top_level_decls(
     let mut funcs = vec![];
     let mut named_types = HashMap::new();
     let mut func_table = HashMap::new();
-    let mut global_vars = vec![];
+    let mut globals = vec![];
 
     for decl in decls {
         match decl {
@@ -1287,7 +1286,7 @@ pub fn sort_top_level_decls(
                 named_types.insert(td.name, td.tipe);
             }
             TopLevelDecl::VarDecl(vd) => {
-                global_vars.push(vd);
+                globals.push(vd);
             }
             TopLevelDecl::ConstDecl => {}
         }
@@ -1297,23 +1296,15 @@ pub fn sort_top_level_decls(
         func_table.insert(*id, closure.tipe.clone());
     }
 
-    (
-        imports,
-        funcs,
-        closures,
-        named_types,
-        global_vars,
-        func_table,
-    )
+    (imports, funcs, named_types, globals, func_table)
 }
 
 /// Performs typechecking various top level declarations, `FuncDecl`s,
 /// named `Type`s, and global variables.
 pub fn typecheck_top_level_decls(
     funcs: Vec<Func>,
-    closures: BTreeMap<StringId, Func>,
     named_types: &HashMap<usize, Type>,
-    mut global_vars: Vec<GlobalVarDecl>,
+    mut global_vars: Vec<GlobalVar>,
     imports: &Vec<Import>,
     string_table: StringTable,
     func_table: HashMap<usize, Type>,
@@ -1321,7 +1312,7 @@ pub fn typecheck_top_level_decls(
 ) -> Result<
     (
         BTreeMap<StringId, TypeCheckedFunc>,
-        Vec<GlobalVarDecl>,
+        Vec<GlobalVar>,
         StringTable,
     ),
     CompileError,
@@ -1334,16 +1325,10 @@ pub fn typecheck_top_level_decls(
     }
     let global_vars_map = global_vars
         .iter()
-        .enumerate()
-        .map(|(idx, var)| (var.id, (var.tipe.clone(), idx)))
+        .map(|var| (var.id, var.tipe.clone()))
         .collect::<HashMap<_, _>>();
 
     let type_table: HashMap<_, _> = named_types.clone().into_iter().collect();
-
-    let mut resolved_global_vars_map = HashMap::new();
-    for (name, (tipe, slot_num)) in global_vars_map {
-        resolved_global_vars_map.insert(name, (tipe, slot_num));
-    }
 
     let mut undefinable_ids = HashMap::new(); // ids no one is allowed to define
     for import in imports {
@@ -1351,11 +1336,6 @@ pub fn typecheck_top_level_decls(
             string_table.get_if_exists(&import.name).unwrap(),
             import.location,
         );
-    }
-    for (id, _) in &func_table {
-        if let Some(closure) = closures.get(id) {
-            undefinable_ids.insert(*id, closure.debug_info.location);
-        }
     }
 
     let mut checked_funcs = BTreeMap::new();
@@ -1367,7 +1347,7 @@ pub fn typecheck_top_level_decls(
             typecheck_function(
                 &func,
                 &type_table,
-                &resolved_global_vars_map,
+                &global_vars_map,
                 &func_table,
                 type_tree,
                 &string_table,
@@ -1394,7 +1374,7 @@ pub fn typecheck_top_level_decls(
 pub fn typecheck_function(
     func: &Func,
     type_table: &TypeTable,
-    global_vars: &HashMap<StringId, (Type, usize)>,
+    global_vars: &HashMap<StringId, Type>,
     func_table: &TypeTable,
     type_tree: &TypeTree,
     string_table: &StringTable,
@@ -1525,7 +1505,7 @@ fn typecheck_statement_sequence(
     statements: &[Statement],
     return_type: &Type,
     type_table: &TypeTable,
-    global_vars: &HashMap<StringId, (Type, usize)>,
+    global_vars: &HashMap<StringId, Type>,
     func_table: &TypeTable,
     type_tree: &TypeTree,
     string_table: &StringTable,
@@ -1554,7 +1534,7 @@ fn typecheck_statement_sequence_with_bindings<'a>(
     statements: &'a [Statement],
     return_type: &Type,
     type_table: &'a TypeTable,
-    global_vars: &'a HashMap<StringId, (Type, usize)>,
+    global_vars: &'a HashMap<StringId, Type>,
     func_table: &TypeTable,
     bindings: &[(StringId, Type)],
     type_tree: &TypeTree,
@@ -1599,7 +1579,7 @@ fn typecheck_statement<'a>(
     statement: &'a Statement,
     return_type: &Type,
     type_table: &'a TypeTable,
-    global_vars: &'a HashMap<StringId, (Type, usize)>,
+    global_vars: &'a HashMap<StringId, Type>,
     func_table: &TypeTable,
     type_tree: &TypeTree,
     string_table: &StringTable,
@@ -1801,7 +1781,7 @@ fn typecheck_statement<'a>(
 
             Ok((stat, bindings))
         }
-        StatementKind::Assign(name, expr) => {
+        StatementKind::Assign(id, expr) => {
             let tc_expr = typecheck_expr(
                 expr,
                 type_table,
@@ -1814,13 +1794,10 @@ fn typecheck_statement<'a>(
                 closures,
                 scopes,
             )?;
-            match type_table.get(name) {
+            match type_table.get(id) {
                 Some(var_type) => {
                     if var_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
-                        Ok((
-                            TypeCheckedStatementKind::AssignLocal(*name, tc_expr),
-                            vec![],
-                        ))
+                        Ok((TypeCheckedStatementKind::AssignLocal(*id, tc_expr), vec![]))
                     } else {
                         Err(CompileError::new_type_error(
                             format!(
@@ -1833,13 +1810,10 @@ fn typecheck_statement<'a>(
                         ))
                     }
                 }
-                None => match global_vars.get(&*name) {
-                    Some((var_type, idx)) => {
+                None => match global_vars.get(id) {
+                    Some(var_type) => {
                         if var_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
-                            Ok((
-                                TypeCheckedStatementKind::AssignGlobal(*idx, tc_expr),
-                                vec![],
-                            ))
+                            Ok((TypeCheckedStatementKind::AssignGlobal(*id, tc_expr), vec![]))
                         } else {
                             Err(CompileError::new_type_error(
                                 format!(
@@ -2046,7 +2020,7 @@ fn typecheck_patvec(
 fn typecheck_expr(
     expr: &Expr,
     type_table: &TypeTable,
-    global_vars: &HashMap<StringId, (Type, usize)>,
+    global_vars: &HashMap<StringId, Type>,
     func_table: &TypeTable,
     return_type: &Type,
     type_tree: &TypeTree,
@@ -2242,9 +2216,7 @@ fn typecheck_expr(
                 None => match type_table.get(id) {
                     Some(t) => Ok(TypeCheckedExprKind::LocalVariableRef(*id, (*t).clone())),
                     None => match global_vars.get(id) {
-                        Some((t, idx)) => {
-                            Ok(TypeCheckedExprKind::GlobalVariableRef(*idx, t.clone()))
-                        }
+                        Some(tipe) => Ok(TypeCheckedExprKind::GlobalVariableRef(*id, tipe.clone())),
                         None => Err(CompileError::new_type_error(
                             format!(
                                 "reference to unrecognized identifier {}",
@@ -4322,7 +4294,7 @@ impl AbstractSyntaxTree for TypeCheckedCodeBlock {
 fn typecheck_codeblock(
     block: &CodeBlock,
     type_table: &TypeTable,
-    global_vars: &HashMap<StringId, (Type, usize)>,
+    global_vars: &HashMap<StringId, Type>,
     func_table: &TypeTable,
     return_type: &Type,
     type_tree: &TypeTree,

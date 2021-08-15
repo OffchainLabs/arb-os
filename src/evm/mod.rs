@@ -31,11 +31,15 @@ pub struct CallInfo<'a> {
     mutating: bool,
 }
 
-pub fn test_contract_path(contract_name: &str) -> String {
+pub fn test_contract_path2(solidity_name: &str, json_name: &str) -> String {
     format!(
         "contracts/artifacts/arbos/test/{}.sol/{}.json",
-        contract_name, contract_name
+        solidity_name, json_name
     )
+}
+
+pub fn test_contract_path(contract_name: &str) -> String {
+    test_contract_path2(contract_name, contract_name)
 }
 
 pub fn evm_xcontract_call_with_constructors(

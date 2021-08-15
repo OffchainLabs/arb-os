@@ -1019,6 +1019,8 @@ impl Opcode {
                 true => format!("MakeFrame<{}, {}, {}>", nargs, space, return_address),
                 false => format!("MakeFrame({}, {}, {})", nargs, space, return_address),
             },
+            Opcode::SetGlobalVar(id) => format!("SetGlobal {}", Color::pink(id)),
+            Opcode::GetGlobalVar(id) => format!("GetGlobal {}", Color::pink(id)),
             Opcode::Label(label) => Value::Label(*label).pretty_print(label_color),
             _ => format!("{}", self.to_name()),
         }

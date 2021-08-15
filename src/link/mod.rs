@@ -5,7 +5,7 @@
 //! Provides types and utilities for linking together compiled mini programs
 
 use crate::compile::{
-    comma_list, CompileError, CompiledProgram, DebugInfo, ErrorSystem, FileInfo, GlobalVarDecl,
+    comma_list, CompileError, CompiledProgram, DebugInfo, ErrorSystem, FileInfo, GlobalVar,
     SourceFileMap, Type, TypeTree,
 };
 use crate::console::Color;
@@ -64,7 +64,7 @@ pub struct LinkedProgram {
     pub arbos_version: u64,
     pub code: Vec<Instruction<AVMOpcode>>,
     pub static_val: Value,
-    pub globals: Vec<GlobalVarDecl>,
+    pub globals: Vec<GlobalVar>,
     // #[serde(default)]
     pub file_info_chart: BTreeMap<u64, FileInfo>,
     pub type_tree: SerializableTypeTree,
@@ -235,13 +235,13 @@ pub fn postlink_compile(
     }
     let (code_2, jump_table) =
         striplabels::fix_nonforward_labels(&program.code, program.globals.len() - 1);
-    consider_debug_printing(&code_2, did_print, "after fix_backward_labels");
+    //consider_debug_printing(&code_2, did_print, "after fix_backward_labels");
 
     let code_3 = xformcode::fix_tuple_size(&code_2, program.globals.len())?;
-    consider_debug_printing(&code_3, did_print, "after fix_tuple_size");
+    //consider_debug_printing(&code_3, did_print, "after fix_tuple_size");
 
     let code_4 = optimize::peephole(&code_3);
-    consider_debug_printing(&code_4, did_print, "after peephole optimization");
+    //consider_debug_printing(&code_4, did_print, "after peephole optimization");
 
     let (mut code_5, jump_table_final) = striplabels::strip_labels(code_4, &jump_table)?;
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
@@ -306,7 +306,7 @@ fn hardcode_jump_table_into_register(
 /// to avoid collisions and auto-linked programs added.
 pub fn link(
     progs_in: Vec<CompiledProgram>,
-    globals: Vec<GlobalVarDecl>,
+    globals: Vec<GlobalVar>,
     test_mode: bool,
 ) -> CompiledProgram {
     let progs = progs_in.to_vec();
@@ -341,7 +341,7 @@ pub fn link(
         func_offset = new_func_offset + 1;
     }
 
-    /*global_num_limit.push(GlobalVarDecl::new(
+    /*global_num_limit.push(GlobalVar::new(
         usize::MAX,
         "_jump_table".to_string(),
         Type::Any,
@@ -378,6 +378,15 @@ pub fn link(
             ),
         ]
     };
+
+    if globals
+        .iter()
+        .any(|x| x.debug_info.attributes.codegen_print)
+    {
+        for curr in &mut linked_code {
+            curr.debug_info.attributes.codegen_print = true;
+        }
+    }
 
     for mut rel_prog in relocated_progs {
         linked_code.append(&mut rel_prog.code);

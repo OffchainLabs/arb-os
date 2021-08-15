@@ -6,7 +6,7 @@
 
 use crate::console::Color;
 use crate::link::{link, postlink_compile, Import, LinkedProgram};
-use crate::mavm::{Instruction, Label, LabelGenerator};
+use crate::mavm::{Instruction, Label};
 use crate::pos::{BytePos, Location};
 use crate::stringtable::{StringId, StringTable};
 use ast::Func;
@@ -26,7 +26,7 @@ use std::io::{self, Read};
 use std::path::Path;
 use typecheck::TypeCheckedFunc;
 
-pub use ast::{DebugInfo, GlobalVarDecl, StructField, TopLevelDecl, Type, TypeTree};
+pub use ast::{DebugInfo, GlobalVar, StructField, TopLevelDecl, Type, TypeTree};
 pub use source::Lines;
 use std::str::FromStr;
 pub use typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNode};
@@ -87,14 +87,12 @@ impl FromStr for InliningHeuristic {
 struct Module {
     /// List of functions defined locally within the source file
     funcs: Vec<Func>,
-    /// List of closures defined locally within the source file
-    closures: BTreeMap<StringId, Func>,
     /// Map from `StringId`s in this file to the `Type`s they represent.
     named_types: HashMap<StringId, Type>,
     /// List of constants used in this file.
     constants: HashSet<String>,
     /// List of global variables defined within this file.
-    global_vars: Vec<GlobalVarDecl>,
+    global_vars: Vec<GlobalVar>,
     /// List of imported constructs within this file.
     imports: Vec<Import>,
     /// Map from `StringId`s to the names they derived from.
@@ -120,12 +118,12 @@ struct TypeCheckedModule {
     /// List of constants used in this file.
     constants: HashSet<String>,
     /// List of global variables defined in this module.
-    global_vars: Vec<GlobalVarDecl>,
+    global_vars: Vec<GlobalVar>,
     /// The list of imports declared via `use` statements.
     imports: Vec<Import>,
     /// The path to the module
     path: Vec<String>,
-    /// The name of the module, this may be removed later.
+    /// The name of the module
     name: String,
 }
 
@@ -178,6 +176,10 @@ impl CompileStruct {
             }
         }
 
+        for global in globals.iter() {
+            println!("global {} {} {:?}", global.name, global.id, global.offset);
+        }
+
         // If this condition is true it means that __fixedLocationGlobal will not be at
         // index [0], but rather [0][0] or [0][0][0] etc
         if globals.len() >= 58 {
@@ -219,10 +221,9 @@ impl CompileStruct {
 impl Module {
     fn new(
         funcs: Vec<Func>,
-        closures: BTreeMap<usize, Func>,
         named_types: HashMap<usize, Type>,
         constants: HashSet<String>,
-        global_vars: Vec<GlobalVarDecl>,
+        global_vars: Vec<GlobalVar>,
         imports: Vec<Import>,
         string_table: StringTable,
         func_table: HashMap<usize, Type>,
@@ -231,7 +232,6 @@ impl Module {
     ) -> Self {
         Self {
             funcs,
-            closures,
             named_types,
             constants,
             global_vars,
@@ -250,7 +250,7 @@ impl TypeCheckedModule {
         string_table: StringTable,
         named_types: HashMap<usize, Type>,
         constants: HashSet<String>,
-        global_vars: Vec<GlobalVarDecl>,
+        global_vars: Vec<GlobalVar>,
         imports: Vec<Import>,
         path: Vec<String>,
         name: String,
@@ -403,7 +403,7 @@ pub struct CompiledProgram {
     /// Instructions to be run to execute the program/module
     pub code: Vec<Instruction>,
     /// All globals used in this program
-    pub globals: Vec<GlobalVarDecl>,
+    pub globals: Vec<GlobalVar>,
     /// Contains list of offsets of the various modules contained in this program
     pub source_file_map: Option<SourceFileMap>,
     /// Map from u64 hashes of file names to the `String`s, `Path`s, and `Content`s they originate from
@@ -415,7 +415,7 @@ pub struct CompiledProgram {
 impl CompiledProgram {
     pub fn new(
         code: Vec<Instruction>,
-        globals: Vec<GlobalVarDecl>,
+        globals: Vec<GlobalVar>,
         source_file_map: Option<SourceFileMap>,
         file_info_chart: HashMap<u64, FileInfo>,
         type_tree: TypeTree,
@@ -512,7 +512,7 @@ pub fn compile_from_file(
     error_system: &mut ErrorSystem,
     release_build: bool,
     builtins: bool,
-) -> Result<(Vec<CompiledProgram>, Vec<GlobalVarDecl>), CompileError> {
+) -> Result<(Vec<CompiledProgram>, Vec<GlobalVar>), CompileError> {
     let library = path
         .parent()
         .map(|par| {
@@ -605,7 +605,16 @@ pub fn compile_from_folder(
     error_system: &mut ErrorSystem,
     release_build: bool,
     builtins: bool,
-) -> Result<(Vec<CompiledProgram>, Vec<GlobalVarDecl>), CompileError> {
+) -> Result<(Vec<CompiledProgram>, Vec<GlobalVar>), CompileError> {
+    let constants_default = folder.join("constants.json");
+    let constants_path = match constants_path {
+        Some(path) => Some(path),
+        None => match constants_default.exists() {
+            true => Some(constants_default.as_path()),
+            false => None,
+        },
+    };
+
     let (mut programs, mut import_map) = create_program_tree(
         folder,
         library,
@@ -754,7 +763,7 @@ fn create_program_tree(
 
         let mut string_table = StringTable::new();
         let mut used_constants = HashSet::new();
-        let (imports, funcs, closures, named_types, global_vars, func_table) =
+        let (imports, funcs, named_types, global_vars, func_table) =
             typecheck::sort_top_level_decls(
                 parse_from_source(
                     source,
@@ -775,7 +784,6 @@ fn create_program_tree(
             path.clone(),
             Module::new(
                 funcs,
-                closures,
                 named_types,
                 used_constants,
                 global_vars,
@@ -791,21 +799,29 @@ fn create_program_tree(
 }
 
 fn resolve_imports(
-    programs: &mut HashMap<Vec<String>, Module>,
+    modules: &mut HashMap<Vec<String>, Module>,
     import_map: &mut HashMap<Vec<String>, Vec<Import>>,
     error_system: &mut ErrorSystem,
 ) -> Result<(), CompileError> {
     for (name, imports) in import_map {
         for import in imports {
             let import_path = import.path.clone();
-            let (named_type, imp_func) = if let Some(program) = programs.get_mut(&import_path) {
-                // Looks up info from target program
-                let index = program
+            let (named_type, imp_func) = if let Some(module) = modules.get_mut(&import_path) {
+                // Looks up info from target module
+                let string_id = module
                     .string_table
                     .get_if_exists(&import.name.clone())
-                    .unwrap();
-                let named_type = program.named_types.get(&index).cloned();
-                let imp_func = program.func_table.get(&index).cloned();
+                    .ok_or(CompileError::new(
+                        "Import Error".to_string(),
+                        format!(
+                            "Symbol {} does not exist in {}",
+                            Color::red(&import.name),
+                            Color::red(&import.path.join("/"))
+                        ),
+                        import.location.into_iter().collect(),
+                    ))?;
+                let named_type = module.named_types.get(&string_id).cloned();
+                let imp_func = module.func_table.get(&string_id).cloned();
                 (named_type, imp_func)
             } else {
                 return Err(CompileError::new(
@@ -819,8 +835,8 @@ fn resolve_imports(
                 ));
             };
 
-            // Modifies origin program to include import
-            let origin_program = programs.get_mut(name).ok_or_else(|| {
+            // Modifies origin module to include import
+            let origin_module = modules.get_mut(name).ok_or_else(|| {
                 CompileError::new(
                     String::from("Internal error"),
                     format!(
@@ -832,7 +848,7 @@ fn resolve_imports(
                 )
             })?;
 
-            let string_id = match origin_program.string_table.get_if_exists(&import.name) {
+            let string_id = match origin_module.string_table.get_if_exists(&import.name) {
                 Some(string_id) => string_id,
                 None => {
                     return Err(CompileError::new(
@@ -844,13 +860,31 @@ fn resolve_imports(
             };
 
             if let Some(named_type) = named_type {
-                origin_program
+                origin_module
                     .named_types
                     .insert(string_id, named_type.clone());
             } else if let Some(imp_func) = imp_func {
-                origin_program
-                    .func_table
-                    .insert(string_id, imp_func.clone());
+                let public = match imp_func {
+                    Type::Func(prop, _, _) => prop.public,
+                    x => panic!(
+                        "Func {} somehow has non-func type {}",
+                        import.name,
+                        x.display()
+                    ),
+                };
+
+                match public {
+                    true => {
+                        origin_module.func_table.insert(string_id, imp_func.clone());
+                    }
+                    false => {
+                        return Err(CompileError::new(
+                            format!("Import error"),
+                            format!("Func {} is private", Color::red(&import.name)),
+                            import.loc(),
+                        ))
+                    }
+                }
             } else {
                 error_system.warnings.push(CompileError::new_warning(
                     String::from("Compile warning"),
@@ -904,7 +938,6 @@ fn typecheck_programs(
         .map(
             |Module {
                  funcs,
-                 closures,
                  named_types,
                  constants,
                  global_vars,
@@ -918,7 +951,6 @@ fn typecheck_programs(
                 let (mut checked_funcs, global_vars, string_table) =
                     typecheck::typecheck_top_level_decls(
                         funcs,
-                        closures,
                         &named_types,
                         global_vars,
                         &imports,
@@ -1144,7 +1176,7 @@ fn codegen_programs(
     type_tree: TypeTree,
     folder: &Path,
     release_build: bool,
-) -> Result<(Vec<CompiledProgram>, Vec<GlobalVarDecl>), CompileError> {
+) -> Result<(Vec<CompiledProgram>, Vec<GlobalVar>), CompileError> {
     let mut work_list = vec![];
     let mut globals_so_far = 0;
 
@@ -1208,14 +1240,7 @@ fn codegen_programs(
                 folder.join(name.clone()).display().to_string(),
             ));
 
-            let mut global_vars: Vec<_> = global_vars.clone().into_iter().map(|g| g.1).collect();
-
-            global_vars.push(GlobalVarDecl::new(
-                usize::MAX,
-                "_jump_table".to_string(),
-                Type::Any,
-                None,
-            ));
+            let mut global_vars: Vec<_> = global_vars.into_iter().map(|g| g.1).collect();
 
             let prog =
                 CompiledProgram::new(code, global_vars, source, HashMap::new(), type_tree.clone());
@@ -1231,7 +1256,20 @@ fn codegen_programs(
         }
     }
 
-    let globals = progs[0].globals.clone(); // They're all the same
+    let mut globals = BTreeMap::new();
+    for prog in &progs {
+        for global in prog.globals.iter() {
+            globals.insert(global.offset, global.clone());
+        }
+    }
+
+    let mut globals: Vec<_> = globals.into_iter().map(|x| x.1).collect();
+    globals.push(GlobalVar::new(
+        usize::MAX,
+        "_jump_table".to_string(),
+        Type::Any,
+        DebugInfo::default(),
+    ));
 
     Ok((progs, globals))
 }

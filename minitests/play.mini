@@ -1,0 +1,7 @@
+
+
+func main(color: any) {
+
+     color = 1;
+
+}

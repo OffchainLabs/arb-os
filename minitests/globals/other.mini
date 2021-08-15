@@ -1,0 +1,13 @@
+
+#[print]
+var third: uint;
+
+#[print]
+public view write func other() -> uint {
+
+    let a = third + third;
+
+    third = a;
+
+    return a;
+}

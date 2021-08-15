@@ -75,7 +75,7 @@ impl From<Option<Location>> for DebugInfo {
 pub enum TopLevelDecl {
     TypeDecl(TypeDecl),
     FuncDecl(Func),
-    VarDecl(GlobalVarDecl),
+    VarDecl(GlobalVar),
     UseDecl(Import),
     ConstDecl,
 }
@@ -1305,31 +1305,26 @@ pub fn new_func_arg(name: StringId, tipe: Type, debug_info: DebugInfo) -> FuncAr
 
 /// Represents a declaration of a global mini variable.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GlobalVarDecl {
+pub struct GlobalVar {
+    #[serde(alias = "name_id")]
     pub id: StringId,
     pub name: String,
     pub tipe: Type,
     pub offset: Option<usize>,
-    pub location: Option<Location>,
+    #[serde(default)]
+    pub debug_info: DebugInfo,
 }
 
-impl GlobalVarDecl {
-    pub fn new(id: StringId, name: String, tipe: Type, location: Option<Location>) -> Self {
-        GlobalVarDecl {
+impl GlobalVar {
+    pub fn new(id: StringId, name: String, tipe: Type, debug_info: DebugInfo) -> Self {
+        Self {
             id,
             name,
             tipe,
             offset: None,
-            location,
+            debug_info,
         }
     }
-}
-
-/// Represents whether the FuncDecl that contains it is public or private.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub enum FuncDeclKind {
-    Public,
-    Private,
 }
 
 /// Represents a top level function declaration.  The view, write, args, and ret_type fields are
@@ -1375,7 +1370,7 @@ impl Func {
         for arg in args.iter() {
             arg_types.push(arg.tipe.clone());
         }
-        let prop = FuncProperties::new(view, write, closure);
+        let prop = FuncProperties::new(view, write, closure, public);
         let ret_type = ret_type.unwrap_or(Type::Void);
         Func {
             name,
@@ -1395,26 +1390,35 @@ impl Func {
     }
 }
 
-/// Keeps track of compiler enforced properties, currently only tracks purity, may be extended to
-/// keep track of potential to throw or other properties.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Hash)]
+/// The properties of a function or closure.
+#[derive(Debug, Clone, Copy, Eq, Serialize, Deserialize, Hash)]
 pub struct FuncProperties {
     pub view: bool,
     pub write: bool,
     pub closure: bool,
+    #[serde(default)]
+    pub public: bool,
+}
+
+/// We only want equality when comparing types, for which only purity makes sense
+impl PartialEq for FuncProperties {
+    fn eq(&self, other: &Self) -> bool {
+        self.purity() == other.purity()
+    }
 }
 
 impl FuncProperties {
-    pub fn new(view: bool, write: bool, closure: bool) -> Self {
+    pub fn new(view: bool, write: bool, closure: bool, public: bool) -> Self {
         FuncProperties {
             view,
             write,
             closure,
+            public,
         }
     }
 
     pub fn pure() -> Self {
-        Self::new(false, false, false)
+        Self::new(false, false, false, false)
     }
 
     pub fn purity(&self) -> (bool, bool) {
