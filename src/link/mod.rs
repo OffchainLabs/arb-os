@@ -244,6 +244,7 @@ pub fn postlink_compile(
     consider_debug_printing(&code_4, did_print, "after peephole optimization");
 
     let (mut code_5, jump_table_final) = striplabels::strip_labels(code_4, &jump_table)?;
+    let jump_table_len = jump_table_final.len();
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
 
     hardcode_jump_table_into_register(&mut code_5, &jump_table_value, test_mode);
@@ -269,6 +270,16 @@ pub fn postlink_compile(
             println!("{:04}  {}", idx, insn);
         }
         println!("============ after full compile/link =============");
+    }
+
+    if debug {
+        let globals_shape = make_uninitialized_tuple(program.globals.len());
+        println!(
+            "\nGlobal Vars\n{}\n",
+            globals_shape.pretty_print(Color::PINK)
+        );
+        let jump_shape = make_uninitialized_tuple(jump_table_len);
+        println!("Jump Table\n{}\n", jump_shape.pretty_print(Color::PINK));
     }
 
     file_info_chart.extend(program.file_info_chart.clone());
@@ -340,13 +351,6 @@ pub fn link(
         relocated_progs.push(relocated_prog);
         func_offset = new_func_offset + 1;
     }
-
-    /*global_num_limit.push(GlobalVar::new(
-        usize::MAX,
-        "_jump_table".to_string(),
-        Type::Any,
-        None,
-    ));*/
 
     // Initialize globals or allow jump table retrieval
     let mut linked_code = if test_mode {

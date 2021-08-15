@@ -52,7 +52,6 @@ use bridge_arbos_versions::remapGlobalsForUpgrade;
 
 // The compiler will always put __fixedLocationGlobal in slot 0 of the AVM Register,
 //     so we can rely on it not moving across upgrades.
-#[print]
 var __fixedLocationGlobal: view write func(uint);    // points to EVM op dispatch function
 
 view write func main(oldGlobals: GlobalsBeforeUpgrade) {

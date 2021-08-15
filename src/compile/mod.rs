@@ -176,10 +176,6 @@ impl CompileStruct {
             }
         }
 
-        for global in globals.iter() {
-            println!("global {} {} {:?}", global.name, global.id, global.offset);
-        }
-
         // If this condition is true it means that __fixedLocationGlobal will not be at
         // index [0], but rather [0][0] or [0][0][0] etc
         if globals.len() >= 58 {
