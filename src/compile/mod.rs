@@ -566,10 +566,8 @@ pub fn compile_from_file(
         Err(CompileError::new(
             String::from("Compile error"),
             format!(
-                "Could not parse {}{}{} as valid path",
-                CompileError::RED,
-                path.display(),
-                CompileError::RESET,
+                "Could not parse {} as valid path",
+                Color::red(path.display())
             ),
             vec![],
         ))
@@ -586,8 +584,8 @@ fn _print_node(node: &mut TypeCheckedNode, state: &String, mut_state: &mut usize
     true
 }
 
-/// Compiles a `Vec<CompiledProgram>` from a folder or generates a `CompileError` if a problem is
-/// encountered during compilation.
+/// Compiles a `Vec<CompiledProgram>` from a folder along with it's `Vec<GlobalVar>`
+/// or generates a `CompileError` if a problem is encountered during compilation.
 ///
 /// The `folder` argument gives the path to the folder, `library` optionally contains a library
 /// prefix attached to the front of all paths, `main` contains the name of the main file in the
@@ -1196,7 +1194,6 @@ fn codegen_programs(
         }
 
         let mut func_labels = HashMap::new(); // local StringId to global Labels
-
         for (id, func) in &module.checked_funcs {
             match func.properties.closure {
                 true => func_labels.insert(*id, Label::Closure(func.unique_id.unwrap())),
@@ -1210,8 +1207,7 @@ fn codegen_programs(
             }
         }
 
-        for (_, mut func) in module.checked_funcs {
-            func.func_labels = func_labels.clone();
+        for (_, func) in module.checked_funcs {
             work_list.push((
                 func,
                 func_labels.clone(),
@@ -1224,13 +1220,14 @@ fn codegen_programs(
 
     let (progs, issues) = work_list
         .into_par_iter()
-        .map(|(func, func_labels, string_table, global_vars, name)| {
+        .map(|(func, func_labels, string_table, globals, name)| {
             let mut codegen_issues = vec![];
 
             let code = codegen::mavm_codegen_func(
                 func,
                 &string_table,
-                &global_vars,
+                &globals,
+                &func_labels,
                 &mut codegen_issues,
                 release_build,
             )?;
@@ -1240,10 +1237,10 @@ fn codegen_programs(
                 folder.join(name.clone()).display().to_string(),
             ));
 
-            let mut global_vars: Vec<_> = global_vars.into_iter().map(|g| g.1).collect();
+            let globals: Vec<_> = globals.into_iter().map(|g| g.1).collect();
 
             let prog =
-                CompiledProgram::new(code, global_vars, source, HashMap::new(), type_tree.clone());
+                CompiledProgram::new(code, globals, source, HashMap::new(), type_tree.clone());
 
             Ok((prog, codegen_issues))
         })
@@ -1259,7 +1256,7 @@ fn codegen_programs(
     let mut globals = BTreeMap::new();
     for prog in &progs {
         for global in prog.globals.iter() {
-            globals.insert(global.offset, global.clone());
+            globals.insert(global.offset, global.clone()); // ensure duplicates aren't present
         }
     }
 

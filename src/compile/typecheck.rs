@@ -1484,7 +1484,6 @@ pub fn typecheck_function(
         captures: BTreeSet::new(),
         frame_size: 0,
         unique_id: func.unique_id,
-        func_labels: func.func_labels.clone(),
         properties: func.properties,
         debug_info: DebugInfo::from(func.debug_info),
     })

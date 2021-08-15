@@ -8,7 +8,7 @@ use crate::compile::typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNod
 use crate::compile::{path_display, CompileError, Lines};
 use crate::console::Color;
 use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
-use crate::mavm::{Instruction, Label, LabelId, Value};
+use crate::mavm::{Instruction, LabelId, Value};
 use crate::pos::{BytePos, Location};
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
@@ -1343,8 +1343,6 @@ pub struct Func<T = Statement> {
     pub frame_size: usize,
     /// A global id unique to this function used for building jump labels
     pub unique_id: Option<LabelId>,
-    /// Associates `StringId`s in this func's context with the global label scheme
-    pub func_labels: HashMap<StringId, Label>,
     /// Additional properties like viewness that this func has
     pub properties: FuncProperties,
     pub debug_info: DebugInfo,
@@ -1383,7 +1381,6 @@ impl Func {
             captures,
             frame_size,
             unique_id: None,
-            func_labels: HashMap::new(),
             properties: prop,
             debug_info,
         }

@@ -21,46 +21,6 @@ use crate::uint256::Uint256;
 use std::collections::HashSet;
 use std::{cmp::max, collections::HashMap};
 
-/// Top level function for code generation, generates code for modules.
-///
-/// In this function, funcs represents a list of functions in scope, string_table is used to get
-/// builtins, and global_vars lists the globals available in the module.
-///
-/// The function returns a vector of instructions representing the generated code if it is
-/// successful, otherwise it returns a `CompileError`.
-/*pub fn mavm_codegen(
-    funcs: BTreeMap<StringId, TypeCheckedFunc>,
-    string_table: &StringTable,
-    global_vars: &HashMap<StringId, GlobalVar>,
-    issues: &mut Vec<CompileError>,
-    release_build: bool,
-) -> Result<Vec<Instruction>, CompileError> {
-    /*let mut global_var_map = HashMap::new();
-    for (idx, gv) in global_vars.iter().enumerate() {
-        global_var_map.insert(gv.id, idx);
-    }*/
-
-    let mut label_gen = LabelGenerator::new();
-    let mut funcs_code = BTreeMap::new();
-    for (id, func) in funcs {
-        let (lg, function_code) = mavm_codegen_func(
-            func,
-            label_gen,
-            string_table,
-            global_vars,
-            issues,
-            release_build,
-        )?;
-        label_gen = lg;
-        funcs_code.insert(id, function_code);
-    }
-    let mut code = Vec::new();
-    for (_id, mut func) in funcs_code {
-        code.append(&mut func)
-    }
-    Ok(code)
-}*/
-
 /// This generates code for individual mini functions.
 ///
 /// In this function, func represents the function to be codegened, label_gen should point to the
@@ -74,11 +34,10 @@ pub fn mavm_codegen_func(
     mut func: TypeCheckedFunc,
     string_table: &StringTable,
     global_vars: &HashMap<StringId, GlobalVar>,
+    func_labels: &HashMap<StringId, Label>,
     issues: &mut Vec<CompileError>,
     release_build: bool,
 ) -> Result<Vec<Instruction>, CompileError> {
-    let mut label_gen = LabelGenerator::new();
-
     if func.ret_type == Type::Void
         && func.code.last().cloned().map(|s| s.kind) != Some(TypeCheckedStatementKind::ReturnVoid())
     {
@@ -129,14 +88,14 @@ pub fn mavm_codegen_func(
         locals.insert(*capture, next_slot);
     }
 
-    let (label_gen, mut space_for_locals, _slot_map) = mavm_codegen_statements(
+    let (_, mut space_for_locals, _slot_map) = mavm_codegen_statements(
         func.code,
         &mut code,
         locals.len(),
         &locals,
-        label_gen,
+        LabelGenerator::new(),
         string_table,
-        &func.func_labels,
+        func_labels,
         global_vars,
         0,
         &mut vec![],
