@@ -431,31 +431,19 @@ impl CompiledProgram {
     /// and source_file_map replacing the existing source_file_map field.
     ///
     /// The second value of the tuple is the function offset after applying this operation.
-    pub fn relocate(
-        self,
-        int_offset: usize,
-        func_offset: usize,
-        source_file_map: Option<SourceFileMap>,
-    ) -> (Self, usize) {
+    pub fn relocate(self, int_offset: usize, source_file_map: Option<SourceFileMap>) -> Self {
         let mut relocated_code = Vec::new();
-        let mut max_func_offset = func_offset;
         for insn in &self.code {
-            let (relocated_insn, new_func_offset) = insn.clone().relocate(int_offset, func_offset);
+            let relocated_insn = insn.clone().relocate(int_offset);
             relocated_code.push(relocated_insn);
-            if max_func_offset < new_func_offset {
-                max_func_offset = new_func_offset;
-            }
         }
 
-        (
-            CompiledProgram::new(
-                relocated_code,
-                self.globals,
-                source_file_map,
-                self.file_info_chart,
-                self.type_tree,
-            ),
-            max_func_offset,
+        CompiledProgram::new(
+            relocated_code,
+            self.globals,
+            source_file_map,
+            self.file_info_chart,
+            self.type_tree,
         )
     }
 

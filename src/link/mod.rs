@@ -340,16 +340,13 @@ pub fn link(
     }
 
     let mut relocated_progs = Vec::new();
-    let mut func_offset: usize = 0;
     for (i, prog) in progs.into_iter().enumerate() {
         merged_file_info_chart.extend(prog.file_info_chart.clone());
 
         let source_file_map = prog.source_file_map.clone();
-        let (relocated_prog, new_func_offset) =
-            prog.relocate(int_offsets[i], func_offset, source_file_map);
+        let relocated_prog = prog.relocate(int_offsets[i], source_file_map);
 
         relocated_progs.push(relocated_prog);
-        func_offset = new_func_offset + 1;
     }
 
     // Initialize globals or allow jump table retrieval

@@ -23,10 +23,10 @@ pub enum Label {
 }
 
 impl Label {
-    pub fn relocate(self, int_offset: usize, func_offset: usize) -> (Self, usize) {
+    pub fn relocate(self, int_offset: usize) -> Self {
         match self {
-            Label::Anon(pc) => (Label::Anon(pc + int_offset), func_offset),
-            _ => (self, func_offset),
+            Label::Anon(pc) => Label::Anon(pc + int_offset),
+            _ => self,
         }
     }
 
@@ -156,33 +156,23 @@ impl Instruction {
         }
     }
 
-    pub fn relocate(self, int_offset: usize, func_offset: usize) -> (Self, usize) {
-        let mut max_func_offset = func_offset;
+    pub fn relocate(self, int_offset: usize) -> Self {
         let opcode = match self.opcode {
             Opcode::PushExternal(off) => Opcode::PushExternal(off),
             Opcode::Label(label) => {
-                let (new_label, new_func_offset) = label.relocate(int_offset, func_offset);
-                if max_func_offset < new_func_offset {
-                    max_func_offset = new_func_offset;
-                }
+                let new_label = label.relocate(int_offset);
                 Opcode::Label(new_label)
             }
             _ => self.opcode,
         };
         let imm = match self.immediate {
             Some(imm) => {
-                let (new_imm, new_func_offset) = imm.relocate(int_offset, func_offset);
-                if max_func_offset < new_func_offset {
-                    max_func_offset = new_func_offset;
-                }
+                let new_imm = imm.relocate(int_offset);
                 Some(new_imm)
             }
             None => None,
         };
-        (
-            Instruction::new(opcode, imm, self.debug_info),
-            max_func_offset,
-        )
+        Instruction::new(opcode, imm, self.debug_info)
     }
 
     pub fn pretty_print(&self, highlight: &str) -> String {
@@ -730,26 +720,22 @@ impl Value {
         }
     }
 
-    pub fn relocate(self, int_offset: usize, func_offset: usize) -> (Self, usize) {
+    pub fn relocate(self, int_offset: usize) -> Self {
         match self {
-            Value::Int(_) => (self, 0),
-            Value::Buffer(_) => (self, 0),
+            Value::Int(_) => self,
+            Value::Buffer(_) => self,
             Value::Tuple(v) => {
                 let mut rel_v = Vec::new();
-                let mut max_func_offset = 0;
                 for val in &*v {
-                    let (new_val, new_func_offset) = val.clone().relocate(int_offset, func_offset);
+                    let new_val = val.clone().relocate(int_offset);
                     rel_v.push(new_val);
-                    if (max_func_offset < new_func_offset) {
-                        max_func_offset = new_func_offset;
-                    }
                 }
-                (Value::new_tuple(rel_v), max_func_offset)
+                Value::new_tuple(rel_v)
             }
-            Value::CodePoint(cpt) => (Value::CodePoint(cpt.relocate(int_offset)), 0),
+            Value::CodePoint(cpt) => Value::CodePoint(cpt.relocate(int_offset)),
             Value::Label(label) => {
-                let (new_label, new_func_offset) = label.relocate(int_offset, func_offset);
-                (Value::Label(new_label), new_func_offset)
+                let new_label = label.relocate(int_offset);
+                Value::Label(new_label)
             }
         }
     }
