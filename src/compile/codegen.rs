@@ -93,7 +93,7 @@ pub fn mavm_codegen_func(
         &mut code,
         locals.len(),
         &locals,
-        LabelGenerator::new(unique_id),
+        LabelGenerator::new(unique_id + 1),
         string_table,
         func_labels,
         globals,

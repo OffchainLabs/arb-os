@@ -732,7 +732,12 @@ impl Value {
             Value::Int(i) => Color::color(highlight, i),
             Value::Buffer(_buf) => Color::lavender(self),
             Value::CodePoint(pc) => Color::color(highlight, pc),
-            Value::Label(label) => Color::color(highlight, label % 1000),
+            Value::Label(label) => match label {
+                Label::Func(id) => Color::color(highlight, format!("func_{}", id % 256)),
+                Label::Closure(id) => Color::color(highlight, format!("λ_{}", id % 256)),
+                Label::Anon(id) => Color::color(highlight, format!("label_{}", id % 256)),
+                _ => Color::color(highlight, label),
+            },
             Value::Tuple(tup) => match tup.is_empty() {
                 true => Color::grey("_"),
                 false => {
