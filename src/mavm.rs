@@ -54,21 +54,18 @@ impl fmt::Display for Label {
 
 #[derive(Default)]
 pub struct LabelGenerator {
-    next: LabelId,
+    current: LabelId,
 }
 
 impl LabelGenerator {
-    pub fn new(next: LabelId) -> Self {
-        LabelGenerator { next }
+    pub fn new(current: LabelId) -> Self {
+        LabelGenerator { current }
     }
 
-    pub fn next(self) -> (Label, Self) {
-        (
-            Label::Anon(self.next),
-            LabelGenerator {
-                next: self.next + 1,
-            },
-        )
+    pub fn next(&mut self) -> Label {
+        let next = Label::Anon(self.current);
+        self.current += 1;
+        next
     }
 }
 
