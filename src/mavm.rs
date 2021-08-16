@@ -58,10 +58,14 @@ pub struct LabelGenerator {
 }
 
 impl LabelGenerator {
+    /// Creates a new label generator that will hand out labels starting at some value.
+    /// In practice, this means giving the generator a unique func id, so that local labels
+    /// are always unique regardless of the function they are in.
     pub fn new(current: LabelId) -> Self {
         LabelGenerator { current }
     }
 
+    /// Hands out a new label, advancing the generator
     pub fn next(&mut self) -> Label {
         let next = Label::Anon(self.current);
         self.current += 1;
