@@ -12,24 +12,18 @@ use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::{collections::HashMap, fmt, sync::Arc};
 
+/// A label who's value is the same across ArbOS versions
 pub type LabelId = u64;
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Label {
-    Func(LabelId),    // these are the same,
-    Closure(LabelId), // it's just for printing & debug purposes
-    Anon(usize),
-    Evm(usize), // program counter in EVM contract
+    Func(LabelId),    // A function uniquely identified by module & name
+    Closure(LabelId), // A closure uniquely identified by module & name
+    Anon(LabelId),    // An anonymous label identified by func/closure + count
+    Evm(usize),       // program counter in EVM contract
 }
 
 impl Label {
-    pub fn relocate(self, int_offset: usize) -> Self {
-        match self {
-            Label::Anon(pc) => Label::Anon(pc + int_offset),
-            _ => self,
-        }
-    }
-
     pub fn avm_hash(&self) -> Value {
         match self {
             Label::Func(id) | Label::Closure(id) => Value::avm_hash2(
@@ -38,7 +32,7 @@ impl Label {
             ),
             Label::Anon(n) => Value::avm_hash2(
                 &Value::Int(Uint256::from_usize(5)),
-                &Value::Int(Uint256::from_usize(*n)),
+                &Value::Int(Uint256::from_usize(*n as usize)),
             ),
             Label::Evm(_) => {
                 panic!("tried to avm_hash an EVM label");
@@ -60,12 +54,12 @@ impl fmt::Display for Label {
 
 #[derive(Default)]
 pub struct LabelGenerator {
-    next: usize,
+    next: LabelId,
 }
 
 impl LabelGenerator {
-    pub fn new() -> Self {
-        LabelGenerator { next: 0 }
+    pub fn new(next: LabelId) -> Self {
+        LabelGenerator { next }
     }
 
     pub fn next(self) -> (Label, Self) {
@@ -156,25 +150,6 @@ impl Instruction {
         }
     }
 
-    pub fn relocate(self, int_offset: usize) -> Self {
-        let opcode = match self.opcode {
-            Opcode::PushExternal(off) => Opcode::PushExternal(off),
-            Opcode::Label(label) => {
-                let new_label = label.relocate(int_offset);
-                Opcode::Label(new_label)
-            }
-            _ => self.opcode,
-        };
-        let imm = match self.immediate {
-            Some(imm) => {
-                let new_imm = imm.relocate(int_offset);
-                Some(new_imm)
-            }
-            None => None,
-        };
-        Instruction::new(opcode, imm, self.debug_info)
-    }
-
     pub fn pretty_print(&self, highlight: &str) -> String {
         let label_color = Color::PINK;
         match &self.immediate {
@@ -244,19 +219,6 @@ impl CodePt {
             }
             CodePt::External(_) => None,
             CodePt::Null => None,
-        }
-    }
-
-    pub fn relocate(self, int_offset: usize) -> Self {
-        match self {
-            CodePt::Internal(pc) => CodePt::Internal(pc + int_offset),
-            CodePt::External(off) => CodePt::External(off),
-            CodePt::InSegment(_, _) => {
-                panic!("tried to relocate/link code at runtime");
-            }
-            CodePt::Null => {
-                panic!("tried to relocate/link null codepoint");
-            }
         }
     }
 
@@ -720,26 +682,6 @@ impl Value {
         }
     }
 
-    pub fn relocate(self, int_offset: usize) -> Self {
-        match self {
-            Value::Int(_) => self,
-            Value::Buffer(_) => self,
-            Value::Tuple(v) => {
-                let mut rel_v = Vec::new();
-                for val in &*v {
-                    let new_val = val.clone().relocate(int_offset);
-                    rel_v.push(new_val);
-                }
-                Value::new_tuple(rel_v)
-            }
-            Value::CodePoint(cpt) => Value::CodePoint(cpt.relocate(int_offset)),
-            Value::Label(label) => {
-                let new_label = label.relocate(int_offset);
-                Value::Label(new_label)
-            }
-        }
-    }
-
     /// Converts `Value` to usize if possible, otherwise returns `None`.
     pub fn to_usize(&self) -> Option<usize> {
         match self {
@@ -790,7 +732,7 @@ impl Value {
             Value::Int(i) => Color::color(highlight, i),
             Value::Buffer(_buf) => Color::lavender(self),
             Value::CodePoint(pc) => Color::color(highlight, pc),
-            Value::Label(label) => Color::color(highlight, label),
+            Value::Label(label) => Color::color(highlight, label % 1000),
             Value::Tuple(tup) => match tup.is_empty() {
                 true => Color::grey("_"),
                 false => {

@@ -425,28 +425,6 @@ impl CompiledProgram {
         }
     }
 
-    /// Takes self by value and returns a tuple. The first value in the tuple is modified version of
-    /// self with internal code references shifted forward by int_offset instructions,
-    /// num_globals modified assuming the first *globals_offset* slots are occupied,
-    /// and source_file_map replacing the existing source_file_map field.
-    ///
-    /// The second value of the tuple is the function offset after applying this operation.
-    pub fn relocate(self, int_offset: usize, source_file_map: Option<SourceFileMap>) -> Self {
-        let mut relocated_code = Vec::new();
-        for insn in &self.code {
-            let relocated_insn = insn.clone().relocate(int_offset);
-            relocated_code.push(relocated_insn);
-        }
-
-        CompiledProgram::new(
-            relocated_code,
-            self.globals,
-            source_file_map,
-            self.file_info_chart,
-            self.type_tree,
-        )
-    }
-
     /// Writes self to output in format "format".  Supported values are: "pretty", "json", or
     /// "bincode" if None is specified, json is used, and if an invalid format is specified this
     /// value appended by "invalid format: " will be written instead

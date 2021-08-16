@@ -322,8 +322,6 @@ pub fn link(
 ) -> CompiledProgram {
     let progs = progs_in.to_vec();
     let type_tree = progs[0].type_tree.clone();
-    let mut insns_so_far: usize = 3; // leave 2 insns of space at beginning for initialization
-    let mut int_offsets = Vec::new();
     let mut merged_source_file_map = SourceFileMap::new_empty();
     let mut merged_file_info_chart = HashMap::new();
 
@@ -335,18 +333,7 @@ pub fn link(
                 None => "".to_string(),
             },
         );
-        int_offsets.push(insns_so_far);
-        insns_so_far += prog.code.len();
-    }
-
-    let mut relocated_progs = Vec::new();
-    for (i, prog) in progs.into_iter().enumerate() {
         merged_file_info_chart.extend(prog.file_info_chart.clone());
-
-        let source_file_map = prog.source_file_map.clone();
-        let relocated_prog = prog.relocate(int_offsets[i], source_file_map);
-
-        relocated_progs.push(relocated_prog);
     }
 
     // Initialize globals or allow jump table retrieval
@@ -389,8 +376,8 @@ pub fn link(
         }
     }
 
-    for mut rel_prog in relocated_progs {
-        linked_code.append(&mut rel_prog.code);
+    for mut prog in progs {
+        linked_code.append(&mut prog.code);
     }
 
     CompiledProgram::new(
