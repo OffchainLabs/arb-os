@@ -1446,7 +1446,7 @@ fn try_upgrade(
 #[test]
 pub fn test_gas_charging_underfunded() {
     match evm_run_with_gas_charging(None, Uint256::_from_gwei(20), false) {
-        Ok(result) => assert_eq!(result, false),
+        Ok(result) => assert_eq!(result, 3),
         Err(e) => panic!("error {}", e),
     }
 }
@@ -1454,7 +1454,7 @@ pub fn test_gas_charging_underfunded() {
 #[test]
 pub fn test_gas_charging_fully_funded() {
     match evm_run_with_gas_charging(None, Uint256::_from_eth(1000), false) {
-        Ok(result) => assert_eq!(result, true),
+        Ok(result) => assert_eq!(result, 0),
         Err(e) => panic!("error {}", e),
     }
 }
@@ -1463,7 +1463,7 @@ pub fn evm_run_with_gas_charging(
     log_to: Option<&Path>,
     funding: Uint256,
     debug: bool,
-) -> Result<bool, ethabi::Error> {
+) -> Result<u64, ethabi::Error> {
     // returns Ok(true) if success, Ok(false) if insufficient gas money, Err otherwise
     use std::convert::TryFrom;
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
@@ -1487,7 +1487,7 @@ pub fn evm_run_with_gas_charging(
     let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
     if let Err(receipt) = fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) {
         if receipt.unwrap().get_return_code() == Uint256::from_u64(3) {
-            return Ok(false);
+            return Ok(3);
         } else {
             panic!("unexpected failure deploying Fibonacci contract");
         }
@@ -1505,7 +1505,8 @@ pub fn evm_run_with_gas_charging(
         debug,
     ) {
         if receipt.unwrap().get_return_code() == Uint256::from_u64(3) {
-            return Ok(false);
+            machine.write_coverage(format!("test_gas_charging_{}", funding));
+            return Ok(3);
         } else {
             panic!("unexpected failure deploying PaymentChannel contract");
         }
@@ -1533,7 +1534,7 @@ pub fn evm_run_with_gas_charging(
     if !logs[0].succeeded() {
         if logs[0].get_return_code() == Uint256::from_u64(3) {
             machine.write_coverage(format!("test_gas_charging_{}", funding));
-            return Ok(false);
+            return Ok(3);
         } else {
             panic!();
         }
@@ -1553,13 +1554,7 @@ pub fn evm_run_with_gas_charging(
     assert_eq!(logs.len(), 1);
     assert_eq!(sends.len(), 0);
 
-    if !logs[0].succeeded() {
-        if logs[0].get_return_code() == Uint256::from_u64(3) {
-            return Ok(false);
-        } else {
-            panic!();
-        }
-    }
+    let result_code = logs[0].get_return_code().to_u64().unwrap();
 
     if let Some(path) = log_to {
         machine
@@ -1570,7 +1565,38 @@ pub fn evm_run_with_gas_charging(
     }
 
     machine.write_coverage(format!("test_gas_charging_{}", funding));
-    Ok(true)
+    Ok(result_code)
+}
+
+#[test]
+pub fn test_overuse_compute_gas() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    machine.runtime_env.insert_eth_deposit_message(
+        my_addr.clone(),
+        my_addr.clone(),
+        Uint256::_from_eth(1000),
+    );
+    let _ = machine.run(None);
+
+    // turn on gas charging
+    let arbowner = ArbOwner::new(&wallet, false);
+    let arbostest = ArbosTest::new(false);
+    arbowner.set_fees_enabled(&mut machine, true, true).unwrap();
+    machine
+        .runtime_env
+        ._advance_time(Uint256::one(), None, false);
+
+    let res = arbostest
+        .burn_arb_gas(&mut machine, my_addr, Uint256::from_u64(100_000_000))
+        .unwrap();
+    assert_eq!(res, 16);
+
+    machine.write_coverage(format!("test_overuse_compute_gas"));
 }
 
 #[test]

@@ -231,7 +231,7 @@ view write func arbowner_finishCodeUploadAsArbosUpgrade(_topFrame: EvmCallFrame,
         let upgradeCodePoint = unsafecast<view write func()>(avmCodeBuilder_finish(upgrade));
         upgradeInProgress = None<AvmCodeBuilder>;
         previousArbosUpgradeHash = newCodeHash;
-        let _ = evmCallStack_returnFromCall(true, 0, 0, Some(upgradeCodePoint));
+        let _ = evmCallStack_returnFromCall(const::TxResultCode_success, 0, 0, Some(upgradeCodePoint));
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 44, 0, 0);
     }
