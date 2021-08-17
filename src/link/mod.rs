@@ -181,6 +181,165 @@ impl Import {
     }
 }
 
+fn hardcode_jump_table_into_register(
+    code: &mut Vec<Instruction>,
+    jump_table: &Value,
+    test_mode: bool,
+) {
+    let offset = if test_mode { 1 } else { 2 };
+    let old_imm = code[offset].clone().immediate.unwrap();
+    code[offset] = Instruction::from_opcode_imm(
+        code[offset].opcode,
+        old_imm.replace_last_none(jump_table),
+        code[offset].debug_info,
+    );
+}
+
+pub type ProgGraph = DiGraph<CompiledProgram, usize>;
+
+/// Creates a graph of the `CompiledProgram`s and then combines them into a single
+/// `CompiledProgram` in such a way as to reduce the number of backward jumps.
+pub fn link(
+    progs: Vec<CompiledProgram>,
+    globals: Vec<GlobalVar>,
+    error_system: &mut ErrorSystem,
+    test_mode: bool,
+) -> CompiledProgram {
+    let mut merged_source_file_map = SourceFileMap::new_empty();
+    let mut merged_file_info_chart = HashMap::new();
+    let type_tree = progs[0].type_tree.clone();
+
+    let mut graph = ProgGraph::new();
+    let mut id_to_node = HashMap::new();
+
+    for prog in progs {
+        merged_source_file_map.push(
+            prog.code.len(),
+            match &prog.source_file_map {
+                Some(sfm) => sfm.get(0),
+                None => "".to_string(),
+            },
+        );
+        merged_file_info_chart.extend(prog.file_info_chart.clone());
+        let func_id = prog.unique_id;
+        let node = graph.add_node(prog);
+        id_to_node.insert(func_id, node);
+    }
+
+    for node in graph.node_indices() {
+        let prog = &graph[node];
+
+        let uniques = prog.code.iter().flat_map(|insn| insn.get_uniques());
+
+        let mut usages = HashMap::new();
+        for unique in uniques {
+            *usages.entry(unique).or_insert(0) += 1;
+        }
+
+        for (unique, count) in usages {
+            let dest = *id_to_node.get(&unique).unwrap();
+            if node != dest {
+                graph.add_edge(node, dest, count);
+            }
+        }
+    }
+
+    // Initialize globals or allow jump table retrieval
+    let mut linked_code = if test_mode {
+        vec![
+            Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::Noop),
+                Value::none(),
+                DebugInfo::default(),
+            ),
+            Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::Noop),
+                make_uninitialized_tuple(globals.len()),
+                DebugInfo::default(),
+            ),
+            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Rset), DebugInfo::default()),
+        ]
+    } else {
+        vec![
+            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Rpush), DebugInfo::default()),
+            Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::Noop),
+                Value::none(),
+                DebugInfo::default(),
+            ),
+            Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::Rset),
+                make_uninitialized_tuple(globals.len()),
+                DebugInfo::default(),
+            ),
+        ]
+    };
+
+    if globals
+        .iter()
+        .any(|x| x.debug_info.attributes.codegen_print)
+    {
+        for curr in &mut linked_code {
+            curr.debug_info.attributes.codegen_print = true;
+        }
+    }
+
+    let main = NodeIndex::from(0);
+    let mut dfs = DfsPostOrder::new(&graph, main);
+    let mut traversal = vec![];
+    while let Some(node) = dfs.next(&graph) {
+        traversal.push(node);
+    }
+    traversal.reverse();
+
+    let mut unvisited: HashSet<_> = graph.node_indices().collect();
+    for node in traversal {
+        unvisited.remove(&node);
+        let prog = &graph[node];
+        linked_code.append(&mut prog.code.clone());
+    }
+
+    for node in graph.node_indices() {
+        let name = &graph[node].name;
+        let path = &graph[node].path;
+        let debug_info = &graph[node].debug_info;
+
+        if ["core", "std", "meta"].contains(&path[0].as_str()) {
+            continue;
+        }
+
+        if unvisited.contains(&node) && !name.starts_with('_') {
+            error_system.warnings.push(CompileError::new_warning(
+                String::from("Compile warning"),
+                format!(
+                    "func {} is unreachable",
+                    Color::color(error_system.warn_color, name)
+                ),
+                debug_info.locs(),
+            ));
+        }
+    }
+
+    let graph = graph.map(|_, prog| prog.name.clone(), |_, e| e);
+
+    let mut file = File::create("callgraph.dot").expect("failed to open file");
+    let dot = Dot::with_config(&graph, &[Config::EdgeNoLabel]);
+    writeln!(&mut file, "{:?}", dot).expect("failed to write .dot file");
+
+    // check for unvisited
+
+    CompiledProgram::new(
+        String::from("entry_point"),
+        vec![String::from("meta"), String::from("link")],
+        linked_code,
+        globals,
+        Some(merged_source_file_map),
+        merged_file_info_chart,
+        type_tree,
+        DebugInfo::default(),
+    )
+}
+
 /// Converts a linked `CompiledProgram` into a `LinkedProgram` by fixing non-forward jumps,
 /// converting wide tuples to nested tuples, performing code optimizations, converting the jump
 /// table to a static value, and combining the file info chart with the associated argument.
@@ -290,6 +449,9 @@ pub fn postlink_compile(
             jump_table_len,
             jump_shape.pretty_print(Color::PINK)
         );
+
+        let size = code_final.iter().count() as f64;
+        println!("Total Instructions {}", size);
     }
 
     file_info_chart.extend(program.file_info_chart.clone());
@@ -307,143 +469,4 @@ pub fn postlink_compile(
         file_info_chart,
         type_tree: SerializableTypeTree::from_type_tree(program.type_tree),
     })
-}
-
-fn hardcode_jump_table_into_register(
-    code: &mut Vec<Instruction>,
-    jump_table: &Value,
-    test_mode: bool,
-) {
-    let offset = if test_mode { 1 } else { 2 };
-    let old_imm = code[offset].clone().immediate.unwrap();
-    code[offset] = Instruction::from_opcode_imm(
-        code[offset].opcode,
-        old_imm.replace_last_none(jump_table),
-        code[offset].debug_info,
-    );
-}
-
-pub type ProgGraph = DiGraph<CompiledProgram, usize>;
-
-/// Creates a graph of the `CompiledProgram`s and then combines them into a single
-/// `CompiledProgram` in such a way as to reduce the number of backward jumps.
-pub fn link(
-    progs: Vec<CompiledProgram>,
-    globals: Vec<GlobalVar>,
-    test_mode: bool,
-) -> CompiledProgram {
-    let mut merged_source_file_map = SourceFileMap::new_empty();
-    let mut merged_file_info_chart = HashMap::new();
-    let type_tree = progs[0].type_tree.clone();
-
-    let mut graph = ProgGraph::new();
-    let mut id_to_node = HashMap::new();
-
-    for prog in progs {
-        merged_source_file_map.push(
-            prog.code.len(),
-            match &prog.source_file_map {
-                Some(sfm) => sfm.get(0),
-                None => "".to_string(),
-            },
-        );
-        merged_file_info_chart.extend(prog.file_info_chart.clone());
-        let func_id = prog.unique_id;
-        let node = graph.add_node(prog);
-        id_to_node.insert(func_id, node);
-    }
-
-    for node in graph.node_indices() {
-        let prog = &graph[node];
-
-        let uniques = prog.code.iter().flat_map(|insn| insn.get_uniques());
-
-        let mut usages = HashMap::new();
-        for unique in uniques {
-            *usages.entry(unique).or_insert(0) += 1;
-        }
-
-        for (unique, count) in usages {
-            let dest = *id_to_node.get(&unique).unwrap();
-            if node != dest {
-                graph.add_edge(node, dest, count);
-            }
-        }
-    }
-
-    // Initialize globals or allow jump table retrieval
-    let mut linked_code = if test_mode {
-        vec![
-            Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Noop),
-                Value::none(),
-                DebugInfo::default(),
-            ),
-            Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Noop),
-                make_uninitialized_tuple(globals.len()),
-                DebugInfo::default(),
-            ),
-            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Rset), DebugInfo::default()),
-        ]
-    } else {
-        vec![
-            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Rpush), DebugInfo::default()),
-            Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Noop),
-                Value::none(),
-                DebugInfo::default(),
-            ),
-            Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Rset),
-                make_uninitialized_tuple(globals.len()),
-                DebugInfo::default(),
-            ),
-        ]
-    };
-
-    if globals
-        .iter()
-        .any(|x| x.debug_info.attributes.codegen_print)
-    {
-        for curr in &mut linked_code {
-            curr.debug_info.attributes.codegen_print = true;
-        }
-    }
-
-    let main = NodeIndex::from(0);
-    let mut dfs = DfsPostOrder::new(&graph, main);
-    let mut traversal = vec![];
-    while let Some(node) = dfs.next(&graph) {
-        traversal.push(node);
-    }
-    traversal.reverse();
-
-    let mut unvisited: HashSet<_> = graph.node_indices().collect();
-    for node in traversal {
-        unvisited.remove(&node);
-        let prog = &graph[node];
-        linked_code.append(&mut prog.code.clone());
-    }
-
-    let graph = graph.map(|_, prog| prog.name.clone(), |_, e| e);
-
-    let mut file = File::create("callgraph.dot").expect("failed to open file");
-    let dot = Dot::with_config(&graph, &[Config::EdgeNoLabel]);
-    writeln!(&mut file, "{:?}", dot).expect("failed to write .dot file");
-
-    // check for unvisited
-
-    CompiledProgram::new(
-        "entry_point".to_string(),
-        linked_code,
-        globals,
-        Some(merged_source_file_map),
-        merged_file_info_chart,
-        type_tree,
-        Import::unique_id(
-            &vec![String::from("meta"), String::from("link")],
-            &String::from("entry_point"),
-        ),
-    )
 }

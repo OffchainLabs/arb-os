@@ -793,25 +793,6 @@ impl TypeCheckedFunc {
 
         flowcheck_warnings
     }
-
-    pub fn determine_funcs_used(mut nodes: Vec<TypeCheckedNode>) -> HashSet<StringId> {
-        let mut calls = HashSet::new();
-
-        for node in &mut nodes {
-            match node {
-                TypeCheckedNode::Expression(expr) => match &expr.kind {
-                    TypeCheckedExprKind::FuncRef(id, _)
-                    | TypeCheckedExprKind::ClosureLoad(id, ..) => calls.insert(*id),
-                    _ => false,
-                },
-                _ => false,
-            };
-
-            calls.extend(Func::determine_funcs_used(node.child_nodes()));
-        }
-
-        return calls;
-    }
 }
 
 /// A mini statement that has been type checked.

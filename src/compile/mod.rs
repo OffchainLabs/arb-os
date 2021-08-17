@@ -182,7 +182,7 @@ impl CompileStruct {
             panic!("Too many globals defined in program, location of first global is not correct")
         }
 
-        let linked_prog = link(unlinked_progs, globals, self.test_mode);
+        let linked_prog = link(unlinked_progs, globals, &mut error_system, self.test_mode);
 
         let postlinked_prog = match postlink_compile(
             linked_prog,
@@ -285,40 +285,6 @@ impl TypeCheckedModule {
         }
     }
 
-    /// Creates callgraph that associates module functions to those that they call
-    fn build_callgraph(
-        &mut self,
-    ) -> BTreeMap<StringId, (Vec<(StringId, Option<Import>)>, Location)> {
-        let mut call_graph = BTreeMap::new();
-
-        let mut import_ids = HashMap::<StringId, Import>::new();
-        for import in &self.imports {
-            if let Some(id) = import.id {
-                import_ids.insert(id, import.clone());
-            }
-        }
-
-        for (_, func) in &mut self.checked_funcs {
-            let call_ids = Func::determine_funcs_used(func.child_nodes());
-            let mut calls = Vec::<(StringId, Option<Import>)>::new();
-
-            for id in call_ids {
-                match import_ids.get(&id) {
-                    None => calls.push((id, None)),
-                    Some(import) => {
-                        if import.path[0] != "core" && import.path[0] != "std" {
-                            calls.push((id, Some(import.clone())));
-                        }
-                    }
-                }
-            }
-
-            call_graph.insert(func.id, (calls, func.debug_info.location.unwrap()));
-        }
-
-        call_graph
-    }
-
     /// Reasons about control flow and construct usage within the typechecked AST
     fn flowcheck(&mut self, error_system: &mut ErrorSystem) {
         let mut flow_warnings = vec![];
@@ -398,6 +364,8 @@ impl TypeCheckedModule {
 pub struct CompiledProgram {
     /// Name of the program, usually the func from which it was derived
     pub name: String,
+    /// Path of the program
+    pub path: Vec<String>,
     /// Instructions to be run to execute the program/module
     pub code: Vec<Instruction>,
     /// All globals used in this program
@@ -410,26 +378,32 @@ pub struct CompiledProgram {
     pub type_tree: TypeTree,
     /// A global id unique to the source (usually a func) from which this program was compiled
     pub unique_id: LabelId,
+    /// This program's debug info
+    pub debug_info: DebugInfo,
 }
 
 impl CompiledProgram {
     pub fn new(
         name: String,
+        path: Vec<String>,
         code: Vec<Instruction>,
         globals: Vec<GlobalVar>,
         source_file_map: Option<SourceFileMap>,
         file_info_chart: HashMap<u64, FileInfo>,
         type_tree: TypeTree,
-        unique_id: LabelId,
+        debug_info: DebugInfo,
     ) -> Self {
+        let unique_id = Import::unique_id(&path, &name);
         CompiledProgram {
             name,
+            path,
             code,
             globals,
             source_file_map,
             file_info_chart,
             type_tree,
             unique_id,
+            debug_info,
         }
     }
 
@@ -617,12 +591,9 @@ pub fn compile_from_folder(
     }
 
     // Control flow analysis stage
-    let mut program_callgraph = HashMap::new();
     for module in &mut typechecked_modules {
         module.flowcheck(error_system);
-        program_callgraph.insert(module.path.clone(), module.build_callgraph());
     }
-    consume_program_callgraph(program_callgraph, &mut typechecked_modules, error_system);
 
     // Inlining stage
     if let Some(cool) = inline {
@@ -1034,110 +1005,6 @@ fn check_global_constants(
     }
 }
 
-/// Walks the program callgraph function by function across module boundries,
-/// deleting edges in each module's callgraph along the way to eliminate all reachable functions
-fn callgraph_descend(
-    func: StringId,
-    module: &TypeCheckedModule,
-    program_callgraph: &mut HashMap<
-        Vec<String>,
-        BTreeMap<StringId, (Vec<(StringId, Option<Import>)>, Location)>,
-    >,
-    paths_to_modules: &HashMap<Vec<String>, &TypeCheckedModule>,
-) {
-    if module.path[0] == "core" || module.path[0] == "std" {
-        return;
-    }
-
-    let module_callgraph = program_callgraph.get_mut(&module.path).unwrap();
-    let calls = match &module_callgraph.get(&func) {
-        Some(calls) => calls.0.clone(),
-        None => return,
-    };
-
-    module_callgraph.remove(&func);
-    for (call, dest) in calls {
-        match dest {
-            None => callgraph_descend(call, module, program_callgraph, paths_to_modules),
-            Some(import) => {
-                // outbound function crosses module boundry, so we jump there
-                let other_module = paths_to_modules.get(&import.path).unwrap();
-                let other_func = other_module
-                    .string_table
-                    .get_if_exists(&import.name)
-                    .unwrap();
-                callgraph_descend(
-                    other_func,
-                    other_module,
-                    program_callgraph,
-                    paths_to_modules,
-                );
-            }
-        }
-    }
-}
-
-/// Walks the callgraph, pruning and/or warning on any unused functions
-fn consume_program_callgraph(
-    mut program_callgraph: HashMap<
-        Vec<String>,
-        BTreeMap<StringId, (Vec<(StringId, Option<Import>)>, Location)>,
-    >,
-    modules: &mut Vec<TypeCheckedModule>,
-    error_system: &mut ErrorSystem,
-) {
-    let mut paths_to_modules = HashMap::<_, &TypeCheckedModule>::new();
-    let main_module = &modules[0];
-    let main_func = *modules[0].checked_funcs.keys().collect::<Vec<_>>()[0]; //.name;
-    for module in modules.iter() {
-        paths_to_modules.insert(module.path.clone(), module);
-    }
-
-    if main_module.path[0] == "std" || main_module.path[0] == "core" {
-        // the entry point is in the standard library,
-        // so we shouldn't require that functions be used
-        return;
-    }
-
-    callgraph_descend(
-        main_func,
-        main_module,
-        &mut program_callgraph,
-        &paths_to_modules,
-    );
-
-    // we transform to a mutable now, rather than before, since graph traversal would
-    // otherwise create ownership conflicts
-    let mut paths_to_modules = HashMap::<_, &mut TypeCheckedModule>::new();
-    for module in modules.iter_mut() {
-        paths_to_modules.insert(module.path.clone(), module);
-    }
-
-    for (path, module_callgraph) in program_callgraph {
-        if path[0] == "core" || path[0] == "std" {
-            continue;
-        }
-
-        for (func, data) in module_callgraph {
-            let module = paths_to_modules.get_mut(&path).unwrap();
-            let func_name = module.string_table.name_from_id(func);
-
-            if !func_name.starts_with('_') {
-                error_system.warnings.push(CompileError::new_warning(
-                    String::from("Compile warning"),
-                    format!(
-                        "func {} is unreachable",
-                        Color::color(error_system.warn_color, func_name)
-                    ),
-                    vec![data.1],
-                ));
-            }
-
-            module.checked_funcs.remove(&func);
-        }
-    }
-}
-
 fn codegen_programs(
     typechecked_modules: Vec<TypeCheckedModule>,
     error_system: &mut ErrorSystem,
@@ -1184,46 +1051,49 @@ fn codegen_programs(
                 module.string_table.clone(),
                 global_vars.clone(),
                 module.name.clone(),
+                module.path.clone(),
             ));
         }
     }
 
     let (progs, issues) = work_list
         .into_par_iter()
-        .map(|(func, func_labels, string_table, globals, name)| {
-            let mut codegen_issues = vec![];
+        .map(
+            |(func, func_labels, string_table, globals, module_name, module_path)| {
+                let mut codegen_issues = vec![];
+                let func_name = func.name.clone();
+                let debug_info = func.debug_info;
 
-            let func_id = func.unique_id.expect("func should have an ID by now");
-            let func_name = func.name.clone();
+                let code = codegen::mavm_codegen_func(
+                    func,
+                    &string_table,
+                    &globals,
+                    &func_labels,
+                    &mut codegen_issues,
+                    release_build,
+                )?;
 
-            let code = codegen::mavm_codegen_func(
-                func,
-                &string_table,
-                &globals,
-                &func_labels,
-                &mut codegen_issues,
-                release_build,
-            )?;
+                let source = Some(SourceFileMap::new(
+                    code.len(),
+                    folder.join(module_name.clone()).display().to_string(),
+                ));
 
-            let source = Some(SourceFileMap::new(
-                code.len(),
-                folder.join(name.clone()).display().to_string(),
-            ));
+                let globals: Vec<_> = globals.into_iter().map(|g| g.1).collect();
 
-            let globals: Vec<_> = globals.into_iter().map(|g| g.1).collect();
+                let prog = CompiledProgram::new(
+                    func_name,
+                    module_path,
+                    code,
+                    globals,
+                    source,
+                    HashMap::new(),
+                    type_tree.clone(),
+                    debug_info,
+                );
 
-            let prog = CompiledProgram::new(
-                func_name,
-                code,
-                globals,
-                source,
-                HashMap::new(),
-                type_tree.clone(),
-                func_id,
-            );
-
-            Ok((prog, codegen_issues))
-        })
+                Ok((prog, codegen_issues))
+            },
+        )
         .collect::<Result<(Vec<CompiledProgram>, Vec<Vec<CompileError>>), CompileError>>()?;
 
     for issue in issues.into_iter().flatten() {
