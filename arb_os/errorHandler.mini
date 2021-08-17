@@ -38,8 +38,8 @@ public view write func errorHandler() {
     //      we could run out of AVM gas while we're running this handler or cleaning up the application's state.
     // If that happens, we'll get thrown back to this error handler again, but with AVM gas set to MaxUint256.
     // When we re-enter this handler, it will look like the application ran out of gas.
-    // That's OK, because the only "harm" done is that the double-error situation of application error plus gas underflow
-    //      gets detected as just a gas underflow.  The effect on the application will be the same either way.
+    // That's OK, because the only "harm" done is that the double-error situation of application error plus gas
+    //      underflow gets detected as just a gas underflow. The effect on the application will be the same either way.
 
     let outOfGas = xif (inErrorHandler) {
         debug(666);
@@ -80,6 +80,6 @@ public view write func errorHandler() {
         // throw a soft error, in case _returnFromCall didn't resolve the problem
         evmCallStack_callHitError(0);  // this will never return
     }
-    //NOTREACHED
+    // NOTREACHED
     error;
 }
