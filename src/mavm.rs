@@ -809,9 +809,16 @@ impl Value {
     pub fn pretty_print(&self, highlight: &str) -> String {
         match self {
             Value::Int(i) => Color::color(highlight, i),
-            Value::Buffer(_buf) => Color::lavender(self),
             Value::CodePoint(pc) => Color::color(highlight, pc),
             Value::Label(label) => Color::color(highlight, label),
+            Value::Buffer(buf) => {
+                let mut text = String::from_utf8_lossy(&hex::decode(buf.hex_encode()).unwrap())
+                    .chars()
+                    .filter(|c| !c.is_ascii_control())
+                    .collect::<String>();
+                text.truncate(100);
+                Color::lavender(format!("\"{}\"", text))
+            }
             Value::Tuple(tup) => match tup.is_empty() {
                 true => Color::grey("_"),
                 false => {
@@ -844,13 +851,7 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Int(i) => i.fmt(f),
-            Value::Buffer(buf) => {
-                write!(
-                    f,
-                    "\"{}\"",
-                    String::from_utf8_lossy(&hex::decode(buf.hex_encode()).unwrap())
-                )
-            }
+            Value::Buffer(buf) => write!(f, "Buffer({})", buf.hex_encode()),
             Value::CodePoint(pc) => write!(f, "CodePoint({})", pc),
             Value::Label(label) => write!(f, "Label({})", label),
             Value::Tuple(tup) => {
