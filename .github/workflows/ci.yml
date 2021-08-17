@@ -41,6 +41,7 @@ jobs:
       matrix:
         os: [ubuntu-20.04]
         rust: [stable, nightly]
+      fail-fast: false
 
     steps:
       - name: Checkout
