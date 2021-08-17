@@ -105,8 +105,9 @@ FuncDecl: Func = {
         let view = qualifiers.contains(&"view");
         let write = qualifiers.contains(&"write");
         let debug = DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default());
+        let name = stringtable.name_from_id(i).clone();
         
-	    Func::new(i, public, view, write, false, fa, t, cb, BTreeSet::new(), 0, debug)
+	    Func::new(name, i, public, view, write, false, fa, t, cb, BTreeSet::new(), 0, debug)
     }
 }
 
@@ -466,8 +467,9 @@ Expr12: Expr = {
         let write = qualifiers.contains(&"write");
         let debug = DebugInfo::here(file_info, lno, filename);
         
-        let id = stringtable.get(format!("closure #{}", closures.len() + 1));
-        let closure = Func::new(id, false, view, write, true, fa, t, cb, BTreeSet::new(), 0, debug);
+        let name = format!("closure #{}", closures.len() + 1);
+        let id = stringtable.get(name.clone());
+        let closure = Func::new(name, id, false, view, write, true, fa, t, cb, BTreeSet::new(), 0, debug);
         
 	    closures.insert(id, closure.clone());
         

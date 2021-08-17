@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-//!Contains utilities for generating instructions from AST structures.
+//! Contains utilities for generating instructions from AST structures.
 
 use super::ast::{BinaryOp, FuncProperties, GlobalVarDecl, TrinaryOp, Type, UnaryOp};
 use super::typecheck::{
@@ -14,47 +14,28 @@ use crate::compile::typecheck::{
 };
 use crate::compile::{CompileError, ErrorSystem, FileInfo};
 use crate::console::Color;
-use crate::link::{ImportedFunc, TupleTree, TUPLE_SIZE};
+use crate::link::{TupleTree, TUPLE_SIZE};
 use crate::mavm::{AVMOpcode, Buffer, Instruction, Label, LabelGenerator, Opcode, Value};
-use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use std::collections::{BTreeMap, HashSet};
 use std::{cmp::max, collections::HashMap};
 
-///Represents any encountered during codegen
-#[derive(Debug)]
-pub struct CodegenError {
-    pub reason: String,
-    pub location: Option<Location>,
-}
-
-pub fn new_codegen_error(reason: String, location: Option<Location>) -> CodegenError {
-    CodegenError { reason, location }
-}
-
-///Top level function for code generation, generates code for modules.
+/// Top level function for code generation, generates code for modules.
 ///
-///In this function, funcs represents a list of functions in scope, string_table is used to get
-/// builtins, imported_funcs is a list of functions imported from other modules, and global_vars
-/// lists the globals available in the module.
+/// In this function, funcs represents a list of functions in scope, string_table is used to get
+/// builtins, and global_vars lists the globals available in the module.
 ///
 /// The function returns a vector of instructions representing the generated code if it is
-/// successful, otherwise it returns a CodegenError.
+/// successful, otherwise it returns a `CompileError`.
 pub fn mavm_codegen(
     funcs: BTreeMap<StringId, TypeCheckedFunc>,
     string_table: &StringTable,
-    imported_funcs: &[ImportedFunc],
     global_vars: &[GlobalVarDecl],
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     error_system: &mut ErrorSystem,
     release_build: bool,
-) -> Result<Vec<Instruction>, CodegenError> {
-    let mut import_func_map = HashMap::new();
-    for imp_func in imported_funcs {
-        import_func_map.insert(imp_func.name_id, Label::External(imp_func.slot_num));
-    }
-
+) -> Result<Vec<Instruction>, CompileError> {
     let mut global_var_map = HashMap::new();
     for (idx, gv) in global_vars.iter().enumerate() {
         global_var_map.insert(gv.name_id, idx);
@@ -62,13 +43,11 @@ pub fn mavm_codegen(
 
     let mut label_gen = LabelGenerator::new();
     let mut funcs_code = BTreeMap::new();
-    for (_id, func) in funcs {
-        let id = func.name;
+    for (id, func) in funcs {
         let (lg, function_code) = mavm_codegen_func(
             func,
             label_gen,
             string_table,
-            &import_func_map,
             &global_var_map,
             file_info_chart,
             error_system,
@@ -87,22 +66,21 @@ pub fn mavm_codegen(
 /// This generates code for individual mini functions.
 ///
 /// In this function, func represents the function to be codegened, label_gen should point to the
-/// next available label ID, string_table is used to get builtins, imported_func_map is a list of
+/// next available label ID, string_table is used to get builtins, imported_func_labels is a list of
 /// functions imported from other modules, and global_var_map lists the globals available in the
 /// module.
 ///
 /// If successful the function returns a tuple containing the state of the label generator after
-/// codegen, and a vector of the generated code, otherwise it returns a CodegenError.
-fn mavm_codegen_func(
+/// codegen, and a vector of the generated code, otherwise it returns a `CompileError`.
+pub fn mavm_codegen_func(
     mut func: TypeCheckedFunc,
     label_gen: LabelGenerator,
     string_table: &StringTable,
-    import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     error_system: &mut ErrorSystem,
     release_build: bool,
-) -> Result<(LabelGenerator, Vec<Instruction>), CodegenError> {
+) -> Result<(LabelGenerator, Vec<Instruction>), CompileError> {
     if func.ret_type == Type::Void
         && func.code.last().cloned().map(|s| s.kind) != Some(TypeCheckedStatementKind::ReturnVoid())
     {
@@ -117,13 +95,23 @@ fn mavm_codegen_func(
     }
     let mut code = vec![];
     let debug_info = func.debug_info;
-    code.push(Instruction::from_opcode(
-        match func.properties.closure {
-            true => Opcode::Label(Label::Closure(func.name)),
-            false => Opcode::Label(Label::Func(func.name)),
-        },
-        debug_info,
-    ));
+
+    let unique_id = match func.unique_id {
+        Some(id) => id,
+        None => {
+            return Err(CompileError::new_codegen_error(
+                format!("Func {} has no id", Color::red(&func.name)),
+                func.debug_info.location,
+            ))
+        }
+    };
+
+    let label = match func.properties.closure {
+        true => Label::Closure(unique_id),
+        false => Label::Func(unique_id),
+    };
+
+    code.push(Instruction::from_opcode(Opcode::Label(label), debug_info));
 
     let num_args = func.args.len();
     let mut locals = HashMap::new();
@@ -150,7 +138,7 @@ fn mavm_codegen_func(
         &locals,
         label_gen,
         string_table,
-        import_func_map,
+        &func.func_labels,
         global_var_map,
         0,
         &mut vec![],
@@ -175,7 +163,7 @@ fn mavm_codegen_func(
             );
         }
         wrong => {
-            return Err(new_codegen_error(
+            return Err(CompileError::new_codegen_error(
                 format!(
                     "type checking bug: func with non-func type {}",
                     Color::red(wrong.display())
@@ -195,7 +183,7 @@ fn mavm_codegen_code_block<'a>(
     locals: &HashMap<usize, usize>,
     label_gen: LabelGenerator,
     string_table: &StringTable,
-    import_func_map: &HashMap<StringId, Label>,
+    func_labels: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
@@ -203,7 +191,7 @@ fn mavm_codegen_code_block<'a>(
     error_system: &mut ErrorSystem,
     debug_info: DebugInfo,
     release_build: bool,
-) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
+) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CompileError> {
     let (bottom_label, lg) = label_gen.next();
     scopes.push((
         block.scope.clone().unwrap_or("_".to_string()),
@@ -217,7 +205,7 @@ fn mavm_codegen_code_block<'a>(
         locals,
         lg,
         string_table,
-        import_func_map,
+        func_labels,
         global_var_map,
         prepushed_vals,
         scopes,
@@ -235,7 +223,7 @@ fn mavm_codegen_code_block<'a>(
             &new_locals,
             lab_gen,
             string_table,
-            import_func_map,
+            func_labels,
             global_var_map,
             prepushed_vals,
             scopes,
@@ -259,16 +247,16 @@ fn mavm_codegen_code_block<'a>(
     }
 }
 
-///Generates code for the provided statements with index 0 generated first. code represents the
+/// Generates code for the provided statements with index 0 generated first. code represents the
 /// code generated previously, num_locals the maximum number of locals used at any point in the call
 /// frame so far, locals is a map of local variables, label_gen points to the next available locals
-/// slot, string_table is used to get builtins, import_func_map associates each imported function
+/// slot, string_table is used to get builtins, func_labels associates each imported function
 /// with a label, and global_var_map maps global variable IDs to their slot number.
 ///
 /// If successful the function returns a tuple containing the updated label generator, maximum
 /// number of locals used so far by this call frame, a bool that is set to true when the function
 /// may continue past the end of the generated code, and a map of locals available at the end of the
-/// statement sequence, otherwise the function returns a CodegenError.
+/// statement sequence, otherwise the function returns a `CompileError`.
 fn mavm_codegen_statements(
     statements: Vec<TypeCheckedStatement>, // statements to codegen
     code: &mut Vec<Instruction>,           // accumulates the code as it's generated
@@ -276,14 +264,14 @@ fn mavm_codegen_statements(
     locals: &HashMap<usize, usize>,        // lookup local variable slot number by name
     mut label_gen: LabelGenerator,
     string_table: &StringTable,
-    import_func_map: &HashMap<StringId, Label>,
+    func_labels: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     error_system: &mut ErrorSystem,
     release_build: bool,
-) -> Result<(LabelGenerator, usize, HashMap<StringId, usize>), CodegenError> {
+) -> Result<(LabelGenerator, usize, HashMap<StringId, usize>), CompileError> {
     let mut bindings = HashMap::new();
     for statement in statements {
         let mut new_locals = locals.clone();
@@ -295,7 +283,7 @@ fn mavm_codegen_statements(
             &new_locals,
             label_gen,
             string_table,
-            import_func_map,
+            func_labels,
             global_var_map,
             prepushed_vals,
             scopes,
@@ -312,16 +300,16 @@ fn mavm_codegen_statements(
     Ok((label_gen, num_locals, bindings))
 }
 
-///Generates code for the provided statement. code represents the code generated previously,
+/// Generates code for the provided statement. code represents the code generated previously,
 /// num_locals the maximum number of locals used at any point in the call frame so far, locals is a
 /// map of local variables, label_gen points to the next available locals slot, string_table is used
-/// to get builtins, import_func_map associates each imported function with a label, and
+/// to get builtins, func_labels associates each imported function with a label, and
 /// global_var_map maps global variable IDs to their slot number.
 ///
 /// If successful the function returns a tuple containing the updated label generator, number of
 /// locals slots used by this statement, a bool that is set to true if execution can not continue
 /// past this statement, and a map of locals generated by this statement, otherwise the function
-/// returns a CodegenError.
+/// returns a `CompileError`.
 fn mavm_codegen_statement(
     statement: TypeCheckedStatement, // statement to codegen
     mut code: &mut Vec<Instruction>, // accumulates the code as it's generated
@@ -329,14 +317,14 @@ fn mavm_codegen_statement(
     locals: &HashMap<usize, usize>,  // lookup local variable slot number by name
     mut label_gen: LabelGenerator,
     string_table: &StringTable,
-    import_func_map: &HashMap<StringId, Label>,
+    func_labels: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     error_system: &mut ErrorSystem,
     release_build: bool,
-) -> Result<(LabelGenerator, usize, HashMap<StringId, usize>), CodegenError> {
+) -> Result<(LabelGenerator, usize, HashMap<StringId, usize>), CompileError> {
     let debug = statement.debug_info;
     let loc = statement.debug_info.location;
     match &statement.kind {
@@ -352,7 +340,7 @@ fn mavm_codegen_statement(
                 &locals,
                 label_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
                 prepushed_vals,
                 scopes,
@@ -386,7 +374,10 @@ fn mavm_codegen_statement(
                 .rev()
                 .find(|(s, _, _)| scope_id == s)
                 .ok_or_else(|| {
-                    new_codegen_error(format!("could not find scope {}", scope_id), loc)
+                    CompileError::new_codegen_error(
+                        format!("could not find scope {}", scope_id),
+                        loc,
+                    )
                 })?;
             if let Some(tipe) = t {
                 if *tipe
@@ -421,7 +412,7 @@ fn mavm_codegen_statement(
                     locals,
                     label_gen,
                     string_table,
-                    import_func_map,
+                    func_labels,
                     global_var_map,
                     prepushed_vals,
                     &mut inner_scopes,
@@ -447,7 +438,7 @@ fn mavm_codegen_statement(
                 &locals,
                 label_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
                 prepushed_vals,
                 scopes,
@@ -481,7 +472,7 @@ fn mavm_codegen_statement(
                 &locals,
                 label_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
                 prepushed_vals,
                 scopes,
@@ -508,7 +499,7 @@ fn mavm_codegen_statement(
             let slot_num = match locals.get(name) {
                 Some(slot) => slot,
                 None => {
-                    return Err(new_codegen_error(
+                    return Err(CompileError::new_codegen_error(
                         "assigned to non-existent variable".to_string(),
                         loc,
                     ))
@@ -521,7 +512,7 @@ fn mavm_codegen_statement(
                 &locals,
                 label_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
                 prepushed_vals,
                 scopes,
@@ -546,7 +537,7 @@ fn mavm_codegen_statement(
                 &locals,
                 label_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
                 prepushed_vals,
                 scopes,
@@ -586,7 +577,7 @@ fn mavm_codegen_statement(
                 locals,
                 label_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
                 prepushed_vals,
                 scopes,
@@ -604,7 +595,7 @@ fn mavm_codegen_statement(
                 &locals,
                 label_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
                 prepushed_vals,
                 scopes,
@@ -636,7 +627,7 @@ fn mavm_codegen_statement(
                     locals,
                     label_gen,
                     string_table,
-                    import_func_map,
+                    func_labels,
                     global_var_map,
                     prepushed_vals + i,
                     scopes,
@@ -661,7 +652,7 @@ fn mavm_codegen_statement(
                 &locals,
                 label_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
                 prepushed_vals,
                 scopes,
@@ -712,7 +703,7 @@ fn mavm_codegen_statement(
                 locals,
                 label_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
                 prepushed_vals,
                 scopes,
@@ -725,7 +716,7 @@ fn mavm_codegen_statement(
     }
 }
 
-///Generates code for assigning the contents of a tuple on the top of the stack to a sequential set
+/// Generates code for assigning the contents of a tuple on the top of the stack to a sequential set
 /// of locals.  code represents previously generated code, pattern is a slice of match patterns
 /// corresponding to the structure of the tuple, local_slot_num_base is the slot of the first local
 /// being assigned to, and loc is the location the operation originates from in the source code.
@@ -739,7 +730,7 @@ fn mavm_codegen_tuple_pattern(
     global_var_map: &HashMap<StringId, usize>,
     string_table: &StringTable,
     debug_info: DebugInfo,
-) -> Result<(usize, HashMap<usize, usize>, HashSet<usize>), CodegenError> {
+) -> Result<(usize, HashMap<usize, usize>, HashSet<usize>), CompileError> {
     match &pattern.kind {
         MatchPatternKind::Bind(name) => {
             let mut bindings = HashMap::new();
@@ -761,7 +752,7 @@ fn mavm_codegen_tuple_pattern(
             } else {
                 code.push(Instruction::from_opcode(
                     Opcode::SetGlobalVar(*global_var_map.get(id).ok_or_else(|| {
-                        new_codegen_error(
+                        CompileError::new_codegen_error(
                             "assigned to non-existent variable in mixed let".to_string(),
                             debug_info.location,
                         )
@@ -803,7 +794,7 @@ fn mavm_codegen_tuple_pattern(
                 bindings.extend(new_bindings);
                 for name in new_assignments {
                     if !assignments.insert(name) {
-                        return Err(new_codegen_error(
+                        return Err(CompileError::new_codegen_error(
                             format!(
                                 "assigned to variable {} in mixed let multiple times",
                                 string_table.name_from_id(name)
@@ -823,13 +814,13 @@ fn mavm_codegen_tuple_pattern(
 /// code represents the previously generated code, num_locals is the maximum number of locals used
 /// at any previous point in the callframe, locals is the table of local variable names to slot
 /// numbers, label_gen points to the first available locals slot, string_table is used to get
-/// builtins, import_func_map maps stringIDs for imported function to their associated labels,
+/// builtins, func_labels maps stringIDs for imported function to their associated labels,
 /// global_var_map maps stringIDs to their associated slot numbers, and prepushed_vals indicates the
 /// number of items on the stack at the start of the call, this is needed for early returns.
 ///
 /// If successful this function returns a tuple containing the updated label_gen, a mutable
 /// reference to the generated code, and a usize containing the number of locals used by the
-/// expression, otherwise it returns a CodegenError.
+/// expression, otherwise it returns a `CompileError`.
 fn mavm_codegen_expr<'a>(
     expr: &TypeCheckedExpr,
     mut code: &'a mut Vec<Instruction>,
@@ -837,14 +828,14 @@ fn mavm_codegen_expr<'a>(
     locals: &HashMap<usize, usize>,
     mut label_gen: LabelGenerator,
     string_table: &StringTable,
-    import_func_map: &HashMap<StringId, Label>,
+    func_labels: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     error_system: &mut ErrorSystem,
     release_build: bool,
-) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
+) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CompileError> {
     macro_rules! expr {
         ($expr:expr) => {
             expr!($expr, code, label_gen, 0)
@@ -857,7 +848,7 @@ fn mavm_codegen_expr<'a>(
                 locals,
                 $label_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
                 prepushed_vals + $prepushed,
                 scopes,
@@ -925,7 +916,10 @@ fn mavm_codegen_expr<'a>(
                         .exp(&Uint256::from_usize(160))
                         .sub(&Uint256::one())
                         .ok_or_else(|| {
-                            new_codegen_error("Underflow on subtraction".to_string(), loc)
+                            CompileError::new_codegen_error(
+                                "Underflow on subtraction".to_string(),
+                                loc,
+                            )
                         })?;
                     (
                         Some(Opcode::AVMOpcode(AVMOpcode::BitwiseAnd)),
@@ -1048,7 +1042,7 @@ fn mavm_codegen_expr<'a>(
             }
             None => {
                 println!("local: {:?}", *name);
-                Err(new_codegen_error(
+                Err(CompileError::new_codegen_error(
                     "tried to access non-existent local variable".to_string(),
                     loc,
                 ))
@@ -1085,7 +1079,7 @@ fn mavm_codegen_expr<'a>(
             //            ( codepoint, ( item ) )   === becomes ===>   ( codepoint, item )
             //
 
-            let label = Value::Label(Label::Closure(*id));
+            let label = Value::Label(*func_labels.get(id).unwrap());
 
             if captures.is_empty() {
                 code.push(opcode!(Noop, label)); // Equivalent to a function call
@@ -1098,7 +1092,10 @@ fn mavm_codegen_expr<'a>(
                             debug,
                         )),
                         None => {
-                            return Err(new_codegen_error("capture doesn't exist".to_string(), loc))
+                            return Err(CompileError::new_codegen_error(
+                                "capture doesn't exist".to_string(),
+                                loc,
+                            ))
                         }
                     }
                 }
@@ -1129,9 +1126,14 @@ fn mavm_codegen_expr<'a>(
             Ok((label_gen, code, num_locals))
         }
         TypeCheckedExprKind::FuncRef(name, _) => {
-            let the_label = match import_func_map.get(name) {
+            let the_label = match func_labels.get(name) {
                 Some(label) => *label,
-                None => Label::Func(*name),
+                None => {
+                    return Err(CompileError::new_codegen_error(
+                        format!("No label for func ref {}", Color::red(name)),
+                        debug.location,
+                    ))
+                }
             };
             code.push(opcode!(Noop, Value::Label(the_label)));
             Ok((label_gen, code, num_locals))
@@ -1141,7 +1143,7 @@ fn mavm_codegen_expr<'a>(
             let tuple_size = if let Type::Tuple(fields) = tce_type {
                 fields.len()
             } else {
-                return Err(new_codegen_error(
+                return Err(CompileError::new_codegen_error(
                     format!(
                         "type-checking bug: tuple lookup in non-tuple type {}",
                         Color::red(tce_type.display())
@@ -1222,7 +1224,7 @@ fn mavm_codegen_expr<'a>(
             locals,
             label_gen,
             string_table,
-            import_func_map,
+            func_labels,
             global_var_map,
             prepushed_vals,
             scopes,
@@ -1325,19 +1327,19 @@ fn mavm_codegen_expr<'a>(
             let (default_val, _is_safe) = base_type.default_value();
             let the_expr = TypeCheckedExpr {
                 kind: TypeCheckedExprKind::FunctionCall(
-                    Box::new(TypeCheckedExpr {
-                        kind: TypeCheckedExprKind::FuncRef(
+                    Box::new(TypeCheckedExpr::new(
+                        TypeCheckedExprKind::FuncRef(
                             string_table.get_if_exists("builtin_arrayNew").unwrap(),
                             call_type.clone(),
                         ),
-                        debug_info: DebugInfo::from(loc),
-                    }),
+                        DebugInfo::from(loc),
+                    )),
                     vec![
                         *sz_expr.clone(),
-                        TypeCheckedExpr {
-                            kind: TypeCheckedExprKind::Const(default_val, Type::Any),
-                            debug_info: DebugInfo::from(loc),
-                        },
+                        TypeCheckedExpr::new(
+                            TypeCheckedExprKind::Const(default_val, Type::Any),
+                            DebugInfo::from(loc),
+                        ),
                     ],
                     call_type,
                     FuncProperties::pure(),
@@ -1410,7 +1412,7 @@ fn mavm_codegen_expr<'a>(
             locals,
             label_gen,
             string_table,
-            import_func_map,
+            func_labels,
             global_var_map,
             debug,
             prepushed_vals,
@@ -1496,7 +1498,7 @@ fn mavm_codegen_expr<'a>(
                 locals,
                 lab_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
                 prepushed_vals,
                 scopes,
@@ -1517,7 +1519,7 @@ fn mavm_codegen_expr<'a>(
                     locals,
                     block_lab_gen,
                     string_table,
-                    import_func_map,
+                    func_labels,
                     global_var_map,
                     prepushed_vals,
                     scopes,
@@ -1545,7 +1547,7 @@ fn mavm_codegen_expr<'a>(
                 &locals,
                 lgg,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
                 prepushed_vals,
                 scopes,
@@ -1572,7 +1574,7 @@ fn mavm_codegen_expr<'a>(
                 &new_locals,
                 label_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
                 prepushed_vals,
                 scopes,
@@ -1595,7 +1597,7 @@ fn mavm_codegen_expr<'a>(
                     &locals,
                     lg2,
                     string_table,
-                    import_func_map,
+                    func_labels,
                     global_var_map,
                     prepushed_vals,
                     scopes,
@@ -1635,7 +1637,7 @@ fn mavm_codegen_expr<'a>(
                 locals,
                 label_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
                 prepushed_vals,
                 scopes,
@@ -1657,7 +1659,7 @@ fn mavm_codegen_expr<'a>(
     }
 }
 
-///Used to codegen the FixedArrayMod variant of TypeCheckedExpr.
+/// Used to codegen the FixedArrayMod variant of TypeCheckedExpr.
 fn codegen_fixed_array_mod<'a>(
     arr_expr: &TypeCheckedExpr,
     idx_expr: &TypeCheckedExpr,
@@ -1668,7 +1670,7 @@ fn codegen_fixed_array_mod<'a>(
     locals: &HashMap<usize, usize>,
     label_gen_in: LabelGenerator,
     string_table: &StringTable,
-    import_func_map: &HashMap<StringId, Label>,
+    func_labels: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
     debug_info: DebugInfo,
     prepushed_vals: usize,
@@ -1676,7 +1678,7 @@ fn codegen_fixed_array_mod<'a>(
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     error_system: &mut ErrorSystem,
     release_build: bool,
-) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
+) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CompileError> {
     let (label_gen, code, val_locals) = mavm_codegen_expr(
         val_expr,
         code_in,
@@ -1684,7 +1686,7 @@ fn codegen_fixed_array_mod<'a>(
         locals,
         label_gen_in,
         string_table,
-        import_func_map,
+        func_labels,
         global_var_map,
         prepushed_vals,
         scopes,
@@ -1699,7 +1701,7 @@ fn codegen_fixed_array_mod<'a>(
         locals,
         label_gen,
         string_table,
-        import_func_map,
+        func_labels,
         global_var_map,
         prepushed_vals + 1,
         scopes,
@@ -1714,7 +1716,7 @@ fn codegen_fixed_array_mod<'a>(
         locals,
         label_gen,
         string_table,
-        import_func_map,
+        func_labels,
         global_var_map,
         prepushed_vals + 2,
         scopes,
@@ -1758,14 +1760,14 @@ fn codegen_fixed_array_mod<'a>(
         locals,
         label_gen,
         string_table,
-        import_func_map,
+        func_labels,
         global_var_map,
         debug_info,
     )
     .map(|(lg, code, num_locals)| (lg, code, max(num_locals, exp_locals)))
 }
 
-///Used by codegen_fixed_array_mod, you should not call this directly.
+/// Used by codegen_fixed_array_mod, you should not call this directly.
 fn codegen_fixed_array_mod_2<'a>(
     val_expr: &TypeCheckedExpr,
     size: usize,
@@ -1774,10 +1776,10 @@ fn codegen_fixed_array_mod_2<'a>(
     locals: &HashMap<usize, usize>,
     label_gen_in: LabelGenerator,
     string_table: &StringTable,
-    import_func_map: &HashMap<StringId, Label>,
+    func_labels: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
     debug_info: DebugInfo,
-) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
+) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CompileError> {
     macro_rules! opcode {
         ($opcode:ident) => {
             Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), debug_info)
@@ -1830,7 +1832,7 @@ fn codegen_fixed_array_mod_2<'a>(
             locals,
             label_gen_in,
             string_table,
-            import_func_map,
+            func_labels,
             global_var_map,
             debug_info,
         )?;

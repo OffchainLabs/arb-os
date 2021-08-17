@@ -2,18 +2,18 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-//!Converts non-type checked ast nodes to type checked versions, and other related utilities.
+//! Converts non-type checked ast nodes to type checked versions, and other related utilities.
 
 use super::ast::{
-    Attributes, BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func, FuncDeclKind,
-    GlobalVarDecl, MatchPattern, MatchPatternKind, Statement, StatementKind, StructField,
-    TopLevelDecl, TrinaryOp, Type, TypeTree, UnaryOp,
+    Attributes, BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func, GlobalVarDecl,
+    MatchPattern, MatchPatternKind, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp,
+    Type, TypeTree, UnaryOp,
 };
 use crate::compile::ast::{FieldInitializer, FuncProperties};
 use crate::compile::{CompileError, ErrorSystem, InliningHeuristic};
 use crate::console::Color;
-use crate::link::{ExportedFunc, Import, ImportedFunc};
-use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
+use crate::link::Import;
+use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
 use crate::pos::{Column, Location};
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
@@ -251,12 +251,7 @@ impl InliningMode {
 /// Used to inline an AST node
 fn inline(
     to_do: &mut TypeCheckedNode,
-    state: &(
-        &Vec<TypeCheckedFunc>,
-        &Vec<ImportedFunc>,
-        &StringTable,
-        &InliningHeuristic,
-    ),
+    state: &(&Vec<TypeCheckedFunc>, &StringTable, &InliningHeuristic),
     _mut_state: &mut (InliningMode, Vec<usize>),
 ) -> bool {
     if let TypeCheckedNode::Statement(stat) = to_do {
@@ -273,9 +268,9 @@ fn inline(
                 debug_info: _,
             } = **name
             {
-                let found_func = state.0.iter().find(|func| func.name == id);
+                let found_func = state.0.iter().find(|func| func.id == id);
                 if let Some(func) = found_func {
-                    if match state.3 {
+                    if match state.2 {
                         InliningHeuristic::All => {
                             _mut_state.0.and(&func.debug_info.attributes.inline)
                                 == InliningMode::Never
@@ -287,10 +282,10 @@ fn inline(
                     } {
                         return false;
                     }
-                    if _mut_state.1.iter().any(|id| *id == func.name) {
+                    if _mut_state.1.iter().any(|id| *id == func.id) {
                         return false;
                     } else {
-                        _mut_state.1.push(func.name);
+                        _mut_state.1.push(func.id);
                     }
                     let mut code: Vec<_> = if func.args.len() == 0 {
                         vec![]
@@ -714,13 +709,12 @@ impl TypeCheckedFunc {
     pub fn inline(
         &mut self,
         funcs: &Vec<TypeCheckedFunc>,
-        imported_funcs: &Vec<ImportedFunc>,
         string_table: &StringTable,
         heuristic: &InliningHeuristic,
     ) {
         self.recursive_apply(
             inline,
-            &(funcs, imported_funcs, string_table, heuristic),
+            &(funcs, string_table, heuristic),
             &mut (InliningMode::Auto, vec![]),
         );
     }
@@ -753,13 +747,12 @@ impl TypeCheckedFunc {
                     flowcheck_warnings.push(CompileError::new_warning(
                         String::from("Compile warning"),
                         format!(
-                            "func {}{}{}'s argument {}{}{} is declared but never used",
-                            error_system.warn_color,
-                            string_table.name_from_id(self.name.clone()),
-                            CompileError::RESET,
-                            error_system.warn_color,
-                            string_table.name_from_id(arg.name.clone()),
-                            CompileError::RESET,
+                            "func {}'s argument {} is declared but never used",
+                            Color::color(error_system.warn_color, &self.name),
+                            Color::color(
+                                error_system.warn_color,
+                                string_table.name_from_id(arg.name.clone())
+                            ),
                         ),
                         arg.debug_info.location.into_iter().collect(),
                     ));
@@ -769,13 +762,12 @@ impl TypeCheckedFunc {
                     flowcheck_warnings.push(CompileError::new_warning(
                         String::from("Compile warning"),
                         format!(
-                            "func {}{}{}'s argument {}{}{} is assigned but never used",
-                            error_system.warn_color,
-                            string_table.name_from_id(self.name.clone()),
-                            CompileError::RESET,
-                            error_system.warn_color,
-                            string_table.name_from_id(arg.name.clone()),
-                            CompileError::RESET,
+                            "func {}'s argument {} is assigned but never used",
+                            Color::color(error_system.warn_color, &self.name),
+                            Color::color(
+                                error_system.warn_color,
+                                string_table.name_from_id(arg.name.clone())
+                            ),
                         ),
                         vec![*loc],
                     ));
@@ -928,7 +920,7 @@ pub enum TypeCheckedExprKind {
     LocalVariableRef(StringId, Type),
     GlobalVariableRef(usize, Type),
     Variant(Box<TypeCheckedExpr>),
-    FuncRef(usize, Type),
+    FuncRef(StringId, Type),
     TupleRef(Box<TypeCheckedExpr>, Uint256, Type),
     DotRef(Box<TypeCheckedExpr>, StringId, usize, Type),
     Const(Value, Type),
@@ -1236,6 +1228,7 @@ impl AbstractSyntaxTree for TypeCheckedFieldInitializer {
 /// if they are not defined in string_table, they are inserted.
 fn builtin_func_decls() -> Vec<Import> {
     vec![
+        Import::new_builtin("assert", "builtin_assert"),
         Import::new_builtin("array", "builtin_arrayNew"),
         Import::new_builtin("array", "builtin_arrayGet"),
         Import::new_builtin("array", "builtin_arraySet"),
@@ -1250,6 +1243,7 @@ fn builtin_func_decls() -> Vec<Import> {
 pub fn sort_top_level_decls(
     parsed: (Vec<TopLevelDecl>, BTreeMap<StringId, Func>),
     file_path: Vec<String>,
+    string_table: &mut StringTable,
     builtins: bool,
 ) -> (
     Vec<Import>,
@@ -1270,6 +1264,12 @@ pub fn sort_top_level_decls(
         vec![]
     };
 
+    // we wait till now to assign stringIDs to keep the upgrade loop happy
+    for import in &mut imports {
+        import.id = Some(string_table.get(import.name.clone()));
+    }
+
+    //let mut imports = vec![];
     let mut funcs = vec![];
     let mut named_types = HashMap::new();
     let mut func_table = HashMap::new();
@@ -1281,7 +1281,7 @@ pub fn sort_top_level_decls(
                 imports.push(ud);
             }
             TopLevelDecl::FuncDecl(fd) => {
-                func_table.insert(fd.name, fd.tipe.clone());
+                func_table.insert(fd.id, fd.tipe.clone());
                 funcs.push(fd);
             }
             TopLevelDecl::TypeDecl(td) => {
@@ -1308,7 +1308,7 @@ pub fn sort_top_level_decls(
     )
 }
 
-/// Performs typechecking various top level declarations, including `ImportedFunc`s, `FuncDecl`s,
+/// Performs typechecking various top level declarations, `FuncDecl`s,
 /// named `Type`s, and global variables.
 pub fn typecheck_top_level_decls(
     funcs: Vec<Func>,
@@ -1322,7 +1322,6 @@ pub fn typecheck_top_level_decls(
 ) -> Result<
     (
         BTreeMap<StringId, TypeCheckedFunc>,
-        Vec<ExportedFunc>,
         Vec<GlobalVarDecl>,
         StringTable,
     ),
@@ -1339,7 +1338,6 @@ pub fn typecheck_top_level_decls(
         .enumerate()
         .map(|(idx, var)| (var.name_id, (var.tipe.clone(), idx)))
         .collect::<HashMap<_, _>>();
-    let mut exported_funcs = Vec::new();
 
     let type_table: HashMap<_, _> = named_types.clone().into_iter().collect();
 
@@ -1365,30 +1363,19 @@ pub fn typecheck_top_level_decls(
     let mut checked_closures = BTreeMap::new();
 
     for func in &funcs {
-        let checked_func = typecheck_function(
-            &func,
-            &type_table,
-            &resolved_global_vars_map,
-            &func_table,
-            type_tree,
-            &string_table,
-            &mut checked_closures,
-            &mut undefinable_ids,
-        )?;
-        match func.kind {
-            FuncDeclKind::Public => {
-                exported_funcs.push(ExportedFunc::new(
-                    checked_func.name,
-                    Label::Func(checked_func.name),
-                    checked_func.tipe.clone(),
-                    &string_table,
-                ));
-                checked_funcs.insert(func.name, checked_func);
-            }
-            FuncDeclKind::Private => {
-                checked_funcs.insert(func.name, checked_func);
-            }
-        }
+        checked_funcs.insert(
+            func.id,
+            typecheck_function(
+                &func,
+                &type_table,
+                &resolved_global_vars_map,
+                &func_table,
+                type_tree,
+                &string_table,
+                &mut checked_closures,
+                &mut undefinable_ids,
+            )?,
+        );
     }
 
     checked_funcs.extend(checked_closures);
@@ -1398,7 +1385,7 @@ pub fn typecheck_top_level_decls(
         res_global_vars.push(global_var);
     }
 
-    Ok((checked_funcs, exported_funcs, res_global_vars, string_table))
+    Ok((checked_funcs, res_global_vars, string_table))
 }
 
 /// If successful, produces a `TypeCheckedFunc` from `FuncDecl` reference fd, according to global
@@ -1406,7 +1393,7 @@ pub fn typecheck_top_level_decls(
 ///
 /// If not successful the function returns a `CompileError`.
 pub fn typecheck_function(
-    fd: &Func,
+    func: &Func,
     type_table: &TypeTable,
     global_vars: &HashMap<StringId, (Type, usize)>,
     func_table: &TypeTable,
@@ -1417,26 +1404,26 @@ pub fn typecheck_function(
 ) -> Result<TypeCheckedFunc, CompileError> {
     let mut hm = HashMap::new();
 
-    if fd.ret_type != Type::Void {
-        if fd.code.len() == 0 {
+    if func.ret_type != Type::Void {
+        if func.code.len() == 0 {
             return Err(CompileError::new_type_error(
                 format!(
                     "Func {} never returns",
-                    Color::red(string_table.name_from_id(fd.name))
+                    Color::red(string_table.name_from_id(func.id))
                 ),
-                fd.debug_info.location.into_iter().collect(),
+                func.debug_info.location.into_iter().collect(),
             ));
         }
-        if let Some(stat) = fd.code.last() {
+        if let Some(stat) = func.code.last() {
             match &stat.kind {
                 StatementKind::Return(_) => {}
                 _ => {
                     return Err(CompileError::new_type_error(
                         format!(
                             "Func {}'s last statement is not a return",
-                            Color::red(string_table.name_from_id(fd.name)),
+                            Color::red(string_table.name_from_id(func.id)),
                         ),
-                        fd.debug_info
+                        func.debug_info
                             .location
                             .into_iter()
                             .chain(stat.debug_info.location.into_iter())
@@ -1447,26 +1434,26 @@ pub fn typecheck_function(
         }
     }
 
-    if !fd.properties.closure {
+    if !func.properties.closure {
         // closure names are checked earlier
 
-        if let Some(location_option) = undefinable_ids.get(&fd.name) {
+        if let Some(location_option) = undefinable_ids.get(&func.id) {
             return Err(CompileError::new_type_error(
                 format!(
                     "Func {} has the same name as another top-level symbol",
-                    Color::red(string_table.name_from_id(fd.name)),
+                    Color::red(string_table.name_from_id(func.id)),
                 ),
                 location_option
                     .iter()
-                    .chain(fd.debug_info.location.iter())
+                    .chain(func.debug_info.location.iter())
                     .cloned()
                     .collect(),
             ));
         }
-        undefinable_ids.insert(fd.name, fd.debug_info.location);
+        undefinable_ids.insert(func.id, func.debug_info.location);
     }
 
-    for arg in fd.args.iter() {
+    for arg in func.args.iter() {
         arg.tipe.get_representation(type_tree).map_err(|_| {
             CompileError::new_type_error(
                 format!(
@@ -1480,7 +1467,7 @@ pub fn typecheck_function(
             return Err(CompileError::new_type_error(
                 format!(
                     "Func {}'s argument {} has the same name as a top-level symbol",
-                    Color::red(string_table.name_from_id(fd.name)),
+                    Color::red(string_table.name_from_id(func.id)),
                     Color::red(string_table.name_from_id(arg.name)),
                 ),
                 location_option
@@ -1496,8 +1483,8 @@ pub fn typecheck_function(
     let mut inner_type_table = type_table.clone();
     inner_type_table.extend(hm);
     let tc_stats = typecheck_statement_sequence(
-        &fd.code,
-        &fd.ret_type,
+        &func.code,
+        &func.ret_type,
         &inner_type_table,
         global_vars,
         func_table,
@@ -1508,16 +1495,19 @@ pub fn typecheck_function(
         &mut vec![],
     )?;
     Ok(TypeCheckedFunc {
-        name: fd.name,
-        args: fd.args.clone(),
-        ret_type: fd.ret_type.clone(),
+        name: func.name.clone(),
+        id: func.id,
+        args: func.args.clone(),
+        ret_type: func.ret_type.clone(),
         code: tc_stats,
-        tipe: fd.tipe.clone(),
-        kind: fd.kind,
+        tipe: func.tipe.clone(),
+        public: func.public,
         captures: BTreeSet::new(),
         frame_size: 0,
-        properties: fd.properties,
-        debug_info: DebugInfo::from(fd.debug_info),
+        unique_id: func.unique_id,
+        func_labels: func.func_labels.clone(),
+        properties: func.properties,
+        debug_info: DebugInfo::from(func.debug_info),
     })
 }
 
@@ -2444,7 +2434,7 @@ fn typecheck_expr(
                 scopes,
             )?)),
             ExprKind::Closure(func) => {
-                let id = func.name;
+                let id = func.id;
                 let tipe = func.tipe.clone();
 
                 // The closure must capture only variables that are in scope above it.

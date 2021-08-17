@@ -2,13 +2,13 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-//!Contains types and utilities for constructing the mini AST
+//! Contains types and utilities for constructing the mini AST
 
 use crate::compile::typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNode};
 use crate::compile::{path_display, CompileError, Lines};
 use crate::console::Color;
 use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
-use crate::mavm::{Instruction, Value};
+use crate::mavm::{Instruction, Label, LabelId, Value};
 use crate::pos::{BytePos, Location};
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
@@ -16,9 +16,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::fmt::Formatter;
+use std::sync::Arc;
 
 /// This is a map of the types at a given location, with the Vec<String> representing the module path
-/// and the usize representing the stringID of the type at that location.
+/// and the usize representing the `StringId` of the type at that location.
 pub type TypeTree = HashMap<(Vec<String>, usize), (Type, String)>;
 
 /// Debugging info serialized into mini executables, currently only contains a location.
@@ -1334,22 +1335,30 @@ pub enum FuncDeclKind {
 /// assumed to be derived from tipe, and this must be upheld by the user of this type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Func<T = Statement> {
-    pub name: StringId,
+    pub name: String,
+    pub id: StringId,
     pub args: Vec<FuncArg>,
     pub ret_type: Type,
     pub code: Vec<T>,
     pub tipe: Type,
-    pub kind: FuncDeclKind,
+    pub public: bool,
     pub captures: BTreeSet<StringId>,
+    /// The minimum tuple-tree size needed to generate this func
     pub frame_size: usize,
+    /// A global id unique to this function used for building jump labels
+    pub unique_id: Option<LabelId>,
+    /// Associates `StringId`s in this func's context with the global label scheme
+    pub func_labels: Arc<HashMap<StringId, Label>>,
+    /// Additional properties like viewness that this func has
     pub properties: FuncProperties,
     pub debug_info: DebugInfo,
 }
 
 impl Func {
     pub fn new(
-        name: StringId,
-        exported: bool,
+        name: String,
+        id: StringId,
+        public: bool,
         view: bool,
         write: bool,
         closure: bool,
@@ -1369,17 +1378,16 @@ impl Func {
         let ret_type = ret_type.unwrap_or(Type::Void);
         Func {
             name,
+            id,
             args: args_vec,
             ret_type: ret_type.clone(),
             code,
             tipe: Type::Func(prop, arg_types, Box::new(ret_type)),
-            kind: if exported {
-                FuncDeclKind::Public
-            } else {
-                FuncDeclKind::Private
-            },
+            public,
             captures,
             frame_size,
+            unique_id: None,
+            func_labels: Arc::new(HashMap::new()),
             properties: prop,
             debug_info,
         }
