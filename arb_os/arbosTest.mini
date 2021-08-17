@@ -24,7 +24,7 @@ use accounts::account_setNextSeqNum;
 
 use chainParameters::chainParams_getOrDie;
 
-use codeSegment::translateEvmCodeSegment;
+use std::codeSegment::translateEvmCodeSegment;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;

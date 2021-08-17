@@ -26,7 +26,7 @@ use core::kvs::builtin_kvsDelete;
 
 use chainParameters::chainParams_getDefaultAggregator;
 use chainParameters::chainParams_getOrDie;
-use codeSegment::translateEvmCodeSegment;
+use std::codeSegment::translateEvmCodeSegment;
 use decompression::AggregatorDecompressionState;
 use evmCallStack::evmCallStack_addStorageCharge;
 use evmCallStack::evmCallStack_isEmpty;

@@ -34,7 +34,6 @@ use accounts::account_incrSeqNum;
 use accounts::account_getStorageSize;
 
 use chainParameters::chainParams_getOrDie;
-use codeSegment::getDummyAcceptContractCode;
 
 use evmOps::evmOp_callAndReturn;
 
@@ -74,7 +73,8 @@ use gasAccounting::getAddressForReserveFundsDeposit;
 use gasAccounting::deferredPayments_apply;
 use gasAccounting::gasAccounting_getStoragePriceInArbGas;
 
-use codeSegment::translateEvmCodeSegment;
+use std::codeSegment::getDummyAcceptContractCode;
+use std::codeSegment::translateEvmCodeSegment;
 
 use output::emitTxReceipt;
 use output::queueMessageForSend;
