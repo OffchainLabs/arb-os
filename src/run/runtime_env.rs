@@ -13,7 +13,7 @@ use ethers_signers::{Signer, Wallet};
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::io::Read;
-use std::rc::Rc;
+use std::sync::Arc;
 use std::{collections::HashMap, fs::File, io, path::Path};
 
 #[derive(Debug, Clone)]
@@ -144,7 +144,7 @@ impl RuntimeEnvironment {
             .current_timestamp
             .add(&delta_timestamp.unwrap_or(Uint256::from_u64(13).mul(&delta_blocks)));
         if send_heartbeat_message {
-            self.insert_l2_message(Uint256::zero(), &[6u8], false);
+            self.insert_l2_message(Uint256::zero(), &[6u8]);
         }
     }
 
@@ -234,20 +234,9 @@ impl RuntimeEnvironment {
         Uint256::_from_gwei(200)
     }
 
-    pub fn insert_l2_message(
-        &mut self,
-        sender_addr: Uint256,
-        msg: &[u8],
-        is_buddy_deploy: bool,
-    ) -> Uint256 {
-        let default_id = self.insert_l1_message(
-            if is_buddy_deploy { 5 } else { 3 },
-            sender_addr.clone(),
-            msg,
-            None,
-            None,
-        );
-        if !is_buddy_deploy && (msg[0] == 0) {
+    pub fn insert_l2_message(&mut self, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
+        let default_id = self.insert_l1_message(3, sender_addr.clone(), msg, None, None);
+        if msg[0] == 0 {
             Uint256::avm_hash2(
                 &sender_addr,
                 &Uint256::avm_hash2(
@@ -258,6 +247,11 @@ impl RuntimeEnvironment {
         } else {
             default_id
         }
+    }
+
+    #[cfg(test)]
+    pub fn insert_l2_message_for_gas_estimation(&mut self, sender_addr: Uint256, msg: &[u8]) {
+        let _ = self.insert_l1_message(10u8, sender_addr, msg, None, None);
     }
 
     pub fn insert_l2_message_with_deposit(&mut self, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
@@ -289,7 +283,7 @@ impl RuntimeEnvironment {
         with_deposit: bool,
     ) -> Uint256 {
         let mut buf = vec![0u8];
-        let seq_num = self.get_and_incr_seq_num(&sender_addr.clone());
+        let seq_num = self.get_seq_num(&sender_addr.clone(), true);
         buf.extend(max_gas.to_bytes_be());
         buf.extend(gas_price_bid.to_bytes_be());
         buf.extend(seq_num.to_bytes_be());
@@ -300,8 +294,37 @@ impl RuntimeEnvironment {
         if with_deposit {
             self.insert_l2_message_with_deposit(sender_addr.clone(), &buf)
         } else {
-            self.insert_l2_message(sender_addr.clone(), &buf, false)
+            self.insert_l2_message(sender_addr.clone(), &buf)
         }
+    }
+
+    #[cfg(test)]
+    pub fn insert_gas_estimation_message(
+        &mut self,
+        max_gas: Uint256,
+        gas_price_bid: Uint256,
+        to_addr: Uint256,
+        value: Uint256,
+        data: &[u8],
+        aggregator: Uint256,
+        wallet: &Wallet,
+    ) {
+        let mut buf = vec![3u8];
+        buf.extend(aggregator.to_bytes_be());
+        buf.extend(max_gas.clone().to_bytes_be());
+
+        let _ = self._append_compressed_and_signed_tx_message_to_batch(
+            &mut buf,
+            max_gas,
+            gas_price_bid,
+            to_addr,
+            value,
+            Vec::from(data),
+            wallet,
+            true,
+        );
+
+        self.insert_l2_message_for_gas_estimation(aggregator, &buf)
     }
 
     pub fn insert_tx_message_from_contract(
@@ -324,7 +347,7 @@ impl RuntimeEnvironment {
         if with_deposit {
             self.insert_l2_message_with_deposit(sender_addr.clone(), &buf)
         } else {
-            self.insert_l2_message(sender_addr.clone(), &buf, false)
+            self.insert_l2_message(sender_addr.clone(), &buf)
         }
     }
 
@@ -365,10 +388,11 @@ impl RuntimeEnvironment {
         value: Uint256,
         calldata: &[u8],
         wallet: &Wallet,
+        is_gas_estimation: bool,
     ) -> (Vec<u8>, Vec<u8>) {
         let sender = Uint256::from_bytes(wallet.address().as_bytes());
         let mut result = vec![7u8, 0xffu8];
-        let seq_num = self.get_and_incr_seq_num(&sender);
+        let seq_num = self.get_seq_num(&sender, !is_gas_estimation);
         result.extend(seq_num.rlp_encode());
         result.extend(gas_price.rlp_encode());
         result.extend(gas_limit.rlp_encode());
@@ -406,7 +430,7 @@ impl RuntimeEnvironment {
         let mut result = self.compressor.compress_address(sender.clone());
 
         let mut buf = vec![0xffu8];
-        let seq_num = self.get_and_incr_seq_num(&sender);
+        let seq_num = self.get_seq_num(&sender, true);
         buf.extend(seq_num.rlp_encode());
         buf.extend(gas_price.rlp_encode());
         buf.extend(gas_limit.rlp_encode());
@@ -449,7 +473,7 @@ impl RuntimeEnvironment {
             buf.extend(msgs[i].clone());
         }
 
-        self.insert_l2_message(batch_sender.clone(), &buf, false);
+        self.insert_l2_message(batch_sender.clone(), &buf);
     }
 
     pub fn _append_compressed_and_signed_tx_message_to_batch(
@@ -461,6 +485,7 @@ impl RuntimeEnvironment {
         value: Uint256,
         calldata: Vec<u8>,
         wallet: &Wallet,
+        is_gas_estimation: bool,
     ) -> Vec<u8> {
         let (msg, tx_id_bytes) = self.make_compressed_and_signed_l2_message(
             gas_price_bid,
@@ -469,6 +494,7 @@ impl RuntimeEnvironment {
             value,
             &calldata,
             wallet,
+            is_gas_estimation,
         );
         let msg_size: u64 = msg.len().try_into().unwrap();
         let rlp_encoded_len = Uint256::from_u64(msg_size).rlp_encode();
@@ -478,7 +504,7 @@ impl RuntimeEnvironment {
     }
 
     pub fn insert_batch_message(&mut self, sender_addr: Uint256, batch: &[u8]) {
-        self.insert_l2_message(sender_addr, batch, false);
+        self.insert_l2_message(sender_addr, batch);
     }
 
     pub fn _insert_nonmutating_call_message(
@@ -494,7 +520,7 @@ impl RuntimeEnvironment {
         buf.extend(to_addr.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr, &buf, false);
+        self.insert_l2_message(sender_addr, &buf);
     }
 
     pub fn insert_eth_deposit_message(
@@ -514,13 +540,15 @@ impl RuntimeEnvironment {
         );
     }
 
-    pub fn get_and_incr_seq_num(&mut self, addr: &Uint256) -> Uint256 {
+    pub fn get_seq_num(&mut self, addr: &Uint256, do_increment: bool) -> Uint256 {
         let cur_seq_num = match self.caller_seq_nums.get(&addr) {
             Some(sn) => sn.clone(),
             None => Uint256::zero(),
         };
-        self.caller_seq_nums
-            .insert(addr.clone(), cur_seq_num.add(&Uint256::one()));
+        if do_increment {
+            self.caller_seq_nums
+                .insert(addr.clone(), cur_seq_num.add(&Uint256::one()));
+        }
         cur_seq_num
     }
 
@@ -963,8 +991,8 @@ pub struct _ArbosBlockSummaryLog {
     pub block_num: Uint256,
     pub timestamp: Uint256,
     pub gas_limit: Uint256,
-    stats_this_block: Rc<Vec<Value>>,
-    stats_all_time: Rc<Vec<Value>>,
+    stats_this_block: Arc<Vec<Value>>,
+    stats_all_time: Arc<Vec<Value>>,
     gas_summary: _BlockGasAccountingSummary,
 }
 

@@ -2,20 +2,13 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-use accounts::Account;
-use evmCallStack::EvmCallFrame;
-use evmlogs::EvmLogs;
 use std::avmcodebuilder::AvmCodePoint;
 use std::bytearray::ByteArray;
-use std::bytestream::ByteStream;
-use std::bytearray::MarshalledBytes;
 use std::stack::Stack;
-use std::storageMap::StorageMap;
 
 use blockhash::blockhash_getForBlock;
 
 use chainParameters::chainParams_chainId;
-use errorHandler::errorHandler;
 
 use evmCallStack::evmCallStack_stackInfo;
 use evmCallStack::evmCallStack_topFrame;
@@ -37,16 +30,15 @@ use evmCallStack::evmCallStack_changeNumAccounts;
 use evmCallStack::evmCallStack_getAccountStoreInCurrentContext;
 use evmCallStack::evmCallStack_setAccountStoreInCurrentContext;
 use evmCallStack::evmCallStack_inStaticCall;
+use evmCallStack::evmCallStack_touchMemoryOffset;
 
 use evmCallStack::evmCallFrame_runningAsAccount;
 use evmCallStack::evmCallFrame_runningCodeFromAccount;
 use evmCallStack::evmCallFrame_getAccount;
 use evmCallStack::evmCallFrame_getCaller;
 use evmCallStack::evmCallFrame_getMemory;
-use evmCallStack::evmCallFrame_getResumeCodePoint;
 use evmCallStack::evmCallFrame_getCallvalue;
 use evmCallStack::evmCallFrame_getCalldata;
-use evmCallStack::evmCallFrame_getEvmLogs;
 use evmCallStack::evmCallFrame_shouldRevertOnStorageWrite;
 use evmCallStack::evmCallFrame_constructorIsOnStackForAddress;
 
@@ -71,8 +63,6 @@ use std::storageMap::storageMap_new;
 use evmCallStack::evmCallStack_currentTimestamp;
 use evmCallStack::evmCallStack_currentEthBlockNumber;
 
-use evmlogs::evmlogs_empty;
-
 use gasAccounting::getArbGasPrice;
 use gasAccounting::getCurrentBlockGasLimit;
 
@@ -81,7 +71,6 @@ use tracing::evmTracer_pushCreate2;
 
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
-use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
@@ -90,8 +79,8 @@ use std::bytearray::bytearray_copy;
 use std::bytearray::bytearray_toSizeAndBuffer;
 use std::bytestream::bytestream_new;
 
-use std::stack::stack_pop;
-use std::stack::stack_isEmpty;
+use std::safeMath::safeAdd;
+
 use std::stack::stack_discardDeepestItems;
 
 use codeSegment::translateEvmCodeSegment;
@@ -180,6 +169,9 @@ public impure func evmOp_stop() {
 }
 
 public impure func evmOp_sha3(baseMemAddr: uint, nbytes: uint) -> bytes32 {
+    if(nbytes > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(baseMemAddr, nbytes));
+    }
     return keccak256(evmCallStack_getTopFrameMemoryOrDie(), baseMemAddr, nbytes);
 }
 
@@ -261,6 +253,9 @@ public impure func evmOp_calldatasize() -> uint {
 }
 
 public impure func evmOp_calldatacopy(memAddr: uint, calldataOffset: uint, nbytes: uint) {
+    if(nbytes > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
+    }
     if let Some(topFrame) = evmCallStack_topFrame() {
         let newMemory = bytearray_copy(
             evmCallFrame_getCalldata(topFrame),
@@ -289,6 +284,9 @@ public impure func evmOp_codesize() -> uint {
 }
 
 public impure func evmOp_codecopy(memAddr: uint, codeOffset: uint, nbytes: uint) {
+    if(nbytes > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
+    }
     if let Some(topFrame) = evmCallStack_topFrame() {
         let memory = evmCallFrame_getMemory(topFrame);
         if let Some(code) = account_getCode(
@@ -328,6 +326,9 @@ public impure func evmOp_extcodesize(addrAsUint: uint) -> uint {
 }
 
 public impure func evmOp_extcodecopy(addrAsUint: uint, memAddr: uint, codeOffset: uint, nbytes: uint) {
+    if(nbytes > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
+    }
     let addr = address(addrAsUint);     // truncates if necessary
     if let Some(topFrame) = evmCallStack_topFrame() {
         let memory = evmCallFrame_getMemory(topFrame);
@@ -388,6 +389,9 @@ public impure func evmOp_returndatasize() -> uint {
 }
 
 public impure func evmOp_returndatacopy(memAddr: uint, dataOffset: uint, nbytes: uint) {
+    if(nbytes > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
+    }
     let memory = evmCallStack_getTopFrameMemoryOrDie();
     if let Some(returnData) = evmCallStack_getTopFrameReturnData() {
         // if the returndata is smaller than nbytes,
@@ -428,6 +432,7 @@ public impure func evmOp_number() -> uint {
 }
 
 public impure func evmOp_mload(memAddr: uint) -> uint {
+    evmCallStack_touchMemoryOffset(safeAdd(memAddr, 31));
     if let Some(topFrame) = evmCallStack_topFrame() {
         return bytearray_get256(
             evmCallFrame_getMemory(topFrame),
@@ -440,6 +445,7 @@ public impure func evmOp_mload(memAddr: uint) -> uint {
 }
 
 public impure func evmOp_mstore(memAddr: uint, value: uint) {
+    evmCallStack_touchMemoryOffset(safeAdd(memAddr, 31));
     if let Some(topFrame) = evmCallStack_topFrame() {
         let memory = bytearray_set256(
             evmCallFrame_getMemory(topFrame),
@@ -455,6 +461,7 @@ public impure func evmOp_mstore(memAddr: uint, value: uint) {
 }
 
 public impure func evmOp_mstore8(memAddr: uint, value:uint) {
+    evmCallStack_touchMemoryOffset(memAddr);
     if let Some(topFrame) = evmCallStack_topFrame() {
         let memory = bytearray_setByte(
             evmCallFrame_getMemory(topFrame),
@@ -541,6 +548,9 @@ public impure func evmOp_log0(
     memAddr: uint, 
     nbytes: uint
 ) {
+    if(nbytes > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
+    }
     if let Some(topFrame) = evmCallStack_topFrame() {
         if (topFrame.static) {
             evmOp_revert_knownPc(0xfffffffffffffffe, 0, 0);
@@ -569,6 +579,9 @@ public impure func evmOp_log1(
     nbytes: uint, 
     topic0: uint
 ) {
+    if(nbytes > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
+    }
     if let Some(topFrame) = evmCallStack_topFrame() {
         if (topFrame.static) {
             evmOp_revert_knownPc(0xfffffffffffffffe, 0, 0);
@@ -599,6 +612,9 @@ public impure func evmOp_log2(
     topic0: uint,
     topic1: uint,
 ) {
+    if(nbytes > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
+    }
     if let Some(topFrame) = evmCallStack_topFrame() {
         if (topFrame.static) {
             evmOp_revert_knownPc(0xfffffffffffffffe, 0, 0);
@@ -631,6 +647,9 @@ public impure func evmOp_log3(
     topic1: uint,
     topic2: uint,
 ) {
+    if(nbytes > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
+    }
     if let Some(topFrame) = evmCallStack_topFrame() {
         if (topFrame.static) {
             evmOp_revert_knownPc(0xfffffffffffffffe, 0, 0);
@@ -665,6 +684,9 @@ public impure func evmOp_log4(
     topic2: uint,
     topic3: uint,
 ) {
+    if(nbytes > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
+    }
     if let Some(topFrame) = evmCallStack_topFrame() {
         if (topFrame.static) {
             evmOp_revert_knownPc(0xfffffffffffffffe, 0, 0);
@@ -759,6 +781,13 @@ public impure func evmOp_gas() -> uint {
     retOffset: uint,
     retLength: uint
 ) -> bool {
+    if(argsLength > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(argsOffset, argsLength));
+    }
+    if(retLength > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(retOffset, retLength));
+    }
+
     if (balance > 0) {
         if let Some(topFrame) = evmCallStack_topFrame() {
             if (topFrame.static) {
@@ -817,6 +846,13 @@ public impure func evmOp_gas() -> uint {
     retOffset: uint,
     retLength: uint
 ) -> bool {
+    if(argsLength > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(argsOffset, argsLength));
+    }
+    if(retLength > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(retOffset, retLength));
+    }
+
     let callee = address(calleeAsUint);     // truncates if necessary
 
     // This is the same as evmOp_call, except for the callKind.
@@ -859,6 +895,13 @@ public impure func evmOp_gas() -> uint {
     retOffset: uint,
     retLength: uint
 ) -> bool {
+    if(argsLength > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(argsOffset, argsLength));
+    }
+    if(retLength > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(retOffset, retLength));
+    }
+
     let callee = address(calleeAsUint);     // truncates if necessary
 
     // This is the same as evmOp_call, except for the callKind.
@@ -901,6 +944,13 @@ public impure func evmOp_gas() -> uint {
     retOffset: uint,
     retLength: uint
 ) -> bool {
+    if(argsLength > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(argsOffset, argsLength));
+    }
+    if(retLength > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(retOffset, retLength));
+    }
+
     let callee = address(calleeAsUint);     // truncates if necessary
 
     // This is the same as evmOp_call, except for the callKind.
@@ -936,6 +986,9 @@ public impure func evmOp_gas() -> uint {
 }
 
 public impure func evmOp_revert(memOffset: uint, memNbytes: uint) {
+    if(memNbytes > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(memOffset, memNbytes));
+    }
     let _ = evmCallStack_returnFromCall(false, memOffset, memNbytes, None<impure func()>);
 
     evm_runtimePanic(28);
@@ -962,6 +1015,9 @@ public impure func evmOp_revertIfStatic() {
 }
 
 public impure func evmOp_return(memOffset: uint, memNbytes: uint) {
+    if(memNbytes > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(memOffset, memNbytes));
+    }
     let _ = evmCallStack_returnFromCall(true, memOffset, memNbytes, None<impure func()>);
 
     evm_runtimePanic(29);
@@ -982,6 +1038,9 @@ public impure func evmOp_selfdestruct(ownerAsUint: uint) {
 }
 
 public impure func evmOp_create(value: uint, offset: uint, length: uint) -> address {
+    if (length > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(offset, length));
+    }
     if let Some(topFrame) = evmCallStack_topFrame() {
         if (topFrame.static) {
             evmOp_revert_knownPc(0xfffffffffffffffe, 0, 0);
@@ -1008,6 +1067,9 @@ public impure func evmOp_create(value: uint, offset: uint, length: uint) -> addr
 }
 
 public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: uint) -> address {
+    if (length > 0) {
+        evmCallStack_touchMemoryOffset(safeAdd(offset, length));
+    }
     if let Some(topFrame) = evmCallStack_topFrame() {
         if (topFrame.static) {
             evmOp_revert_knownPc(0xfffffffffffffffe, 0, 0);
@@ -1043,16 +1105,17 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
 
 #[noinline, ] public impure func doCreationOpcode(value: uint, constructorCode: ByteArray, newAddress: address) -> address {
     // make sure there isn't already an account at the given address
-    if let Some(acct) = evmCallStack_getAccount(newAddress) {
+    let originalAcct = xif let Some(acct) = evmCallStack_getAccount(newAddress) {
         if (account_hasContract(acct)) {
             // there is already a contract at that address; return failure
             return address(0);
         }
+        acct
     } else {
         // somehow there isn't an EVM callframe
         evm_runtimePanic(32);
-        panic;
-    }
+        panic
+    };
 
     let (startPoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(constructorCode), false);
 
@@ -1060,7 +1123,7 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
     if (evmCallStack_setAccount(
             newAddress,
             account_setContractInfo(
-                pristineAccount(newAddress),
+                originalAcct,
                 constructorCode,
                 evmJumpTable,
                 getDummyAcceptContractCode(),

@@ -10,7 +10,7 @@ use ethers_core::utils::keccak256;
 use serde::de::Visitor;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use std::{collections::HashMap, fmt, rc::Rc};
+use std::{collections::HashMap, fmt, sync::Arc};
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Label {
@@ -152,12 +152,12 @@ impl<T> Instruction<T> {
 
 impl Instruction<AVMOpcode> {
     pub fn _upload(&self, u: &mut CodeUploader) {
-        u._push_byte(self.opcode.to_number());
+        u.push_byte(self.opcode.to_number());
         if let Some(val) = &self.immediate {
-            u._push_byte(1u8);
-            val._upload(u);
+            u.push_byte(1u8);
+            val.upload(u);
         } else {
-            u._push_byte(0u8);
+            u.push_byte(0u8);
         }
     }
 }
@@ -245,11 +245,11 @@ impl CodePt {
         CodePt::InSegment(seg_num, offset)
     }
 
-    pub fn _upload(&self, u: &mut CodeUploader) {
+    pub fn upload(&self, u: &mut CodeUploader) {
         match self {
             CodePt::Internal(pc) => {
-                u._push_byte(1);
-                u._push_bytes(&Uint256::from_usize(u._translate_pc(*pc)).rlp_encode());
+                u.push_byte(1);
+                u.push_bytes(&Uint256::from_usize(u._translate_pc(*pc)).rlp_encode());
             }
             _ => {
                 panic!();
@@ -315,7 +315,7 @@ impl fmt::Display for CodePt {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Buffer {
-    root: Rc<BufferNode>,
+    root: Arc<BufferNode>,
     size: u128,
 }
 
@@ -329,15 +329,15 @@ pub enum BufferNode {
 pub struct BufferInternal {
     height: usize,
     capacity: u128,
-    left: Rc<BufferNode>,
-    right: Rc<BufferNode>,
+    left: Arc<BufferNode>,
+    right: Arc<BufferNode>,
     hash_val: Uint256,
 }
 
 impl Buffer {
     pub fn new_empty() -> Self {
         Buffer {
-            root: Rc::new(BufferNode::new_empty()),
+            root: Arc::new(BufferNode::new_empty()),
             size: 0,
         }
     }
@@ -359,6 +359,10 @@ impl Buffer {
         ret
     }
 
+    pub fn max_size(&self) -> u128 {
+        self.size
+    }
+
     fn avm_hash(&self) -> Uint256 {
         self.root.hash()
     }
@@ -377,7 +381,7 @@ impl Buffer {
 
     pub fn set_byte(&self, offset: u128, val: u8) -> Self {
         Buffer {
-            root: Rc::new(self.root.set_byte(offset, val)),
+            root: Arc::new(self.root.set_byte(offset, val)),
             size: if offset >= self.size {
                 offset + 1
             } else {
@@ -451,12 +455,12 @@ impl BufferNode {
         } else if v.len() == 0 {
             BufferNode::new_empty_internal(height, capacity)
         } else if v.len() as u128 <= capacity / 2 {
-            let left = Rc::new(BufferNode::_internal_from_bytes(
+            let left = Arc::new(BufferNode::_internal_from_bytes(
                 height - 1,
                 capacity / 2,
                 v,
             ));
-            let right = Rc::new(BufferNode::new_empty_internal(height - 1, capacity / 2));
+            let right = Arc::new(BufferNode::new_empty_internal(height - 1, capacity / 2));
             BufferNode::Internal(BufferInternal {
                 height,
                 capacity,
@@ -470,12 +474,12 @@ impl BufferNode {
             })
         } else {
             let mid = (capacity / 2) as usize;
-            let left = Rc::new(BufferNode::_internal_from_bytes(
+            let left = Arc::new(BufferNode::_internal_from_bytes(
                 height - 1,
                 capacity / 2,
                 &v[0..mid],
             ));
-            let right = Rc::new(BufferNode::_internal_from_bytes(
+            let right = Arc::new(BufferNode::_internal_from_bytes(
                 height - 1,
                 capacity / 2,
                 &v[mid..],
@@ -495,7 +499,7 @@ impl BufferNode {
     }
 
     fn new_empty_internal(height: usize, capacity: u128) -> Self {
-        let child = Rc::new(if height == 1 {
+        let child = Arc::new(if height == 1 {
             BufferNode::new_empty()
         } else {
             BufferNode::new_empty_internal(height - 1, capacity / 2)
@@ -558,8 +562,8 @@ impl BufferInternal {
         BufferInternal {
             height,
             capacity,
-            left: Rc::new(left.clone()),
-            right: Rc::new(right.clone()),
+            left: Arc::new(left.clone()),
+            right: Arc::new(right.clone()),
             hash_val: {
                 let mut b = left.hash().to_bytes_be();
                 b.extend(right.hash().to_bytes_be());
@@ -637,7 +641,7 @@ fn _levels_needed(x: u128) -> (usize, u128) {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Value {
     Int(Uint256),
-    Tuple(Rc<Vec<Value>>),
+    Tuple(Arc<Vec<Value>>),
     CodePoint(CodePt),
     Label(Label),
     Buffer(Buffer),
@@ -646,12 +650,12 @@ pub enum Value {
 impl Value {
     ///Returns a value containing no data, a zero sized tuple.
     pub fn none() -> Self {
-        Value::Tuple(Rc::new(vec![]))
+        Value::Tuple(Arc::new(vec![]))
     }
 
     ///Creates a single tuple `Value` from a `Vec<Value>`
     pub fn new_tuple(v: Vec<Value>) -> Self {
-        Value::Tuple(Rc::new(v))
+        Value::Tuple(Arc::new(v))
     }
 
     pub fn new_buffer(v: Vec<u8>) -> Self {
@@ -662,26 +666,29 @@ impl Value {
         Value::Buffer(v)
     }
 
-    pub fn _upload(&self, u: &mut CodeUploader) {
+    pub fn upload(&self, u: &mut CodeUploader) {
         match self {
             Value::Int(ui) => {
-                u._push_byte(0u8); // type code for uint
-                u._push_bytes(&ui.rlp_encode());
+                u.push_byte(0u8); // type code for uint
+                u.push_bytes(&ui.rlp_encode());
             }
             Value::Tuple(tup) => {
-                u._push_byte((10 + tup.len()) as u8);
+                u.push_byte((10 + tup.len()) as u8);
                 for subval in &**tup {
-                    subval._upload(u);
+                    subval.upload(u);
                 }
             }
             Value::CodePoint(cp) => {
-                cp._upload(u);
+                cp.upload(u);
             }
             Value::Buffer(buf) => {
                 if buf.size == 0 {
-                    u._push_byte(2u8);
+                    u.push_byte(2u8);
                 } else {
-                    panic!();
+                    u.push_byte(3u8);
+                    let size = buf.max_size() as usize;
+                    u.push_bytes(&Uint256::from_usize(size).rlp_encode());
+                    u.push_bytes(&buf.as_bytes(size));
                 }
             }
             _ => {
@@ -737,7 +744,7 @@ impl Value {
         if let Value::Tuple(tup) = self {
             let tlen = tup.len();
             let mut mut_tup = tup.clone();
-            let new_tup = Rc::<Vec<Value>>::make_mut(&mut mut_tup);
+            let new_tup = Arc::<Vec<Value>>::make_mut(&mut mut_tup);
             new_tup[tlen - 1] = new_tup[tlen - 1].replace_last_none(val);
             Value::new_tuple(new_tup.to_vec())
         } else {

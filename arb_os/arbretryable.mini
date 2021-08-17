@@ -12,8 +12,6 @@ use evmCallStack::evmCallFrame_getCaller;
 use evmCallStack::evmCallFrame_getCallvalue;
 use evmCallStack::evmCallFrame_getMemory;
 use evmCallStack::evmCallStack_callHitError;
-use evmCallStack::evmCallStack_getAccountInCurrentContext;
-use evmCallStack::evmCallStack_setAccountInCurrentContext;
 use evmCallStack::getRetryBufferInCurrentContext;
 use evmCallStack::setRetryBufferInCurrentContext;
 
@@ -247,7 +245,7 @@ impure func arbRetryable_getSubmissionPrice(_topFrame: EvmCallFrame, calldata: B
     }
 }
 
-impure func arbRetryable_emitTicketCreated(_topFrame: EvmCallFrame, txId: uint) {
+impure func _arbRetryable_emitTicketCreated(_topFrame: EvmCallFrame, txId: uint) {
     evmOp_log2(0, 0, const::eventTopic_ArbRetryableTx_TicketCreated, txId);
 }
 

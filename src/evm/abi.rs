@@ -197,6 +197,60 @@ impl AbiForContract {
         ))
     }
 
+    #[cfg(test)]
+    pub fn estimate_gas_for_function_call(
+        &self,
+        func_name: &str,
+        args: &[ethabi::Token],
+        machine: &mut Machine,
+        payment: Uint256,
+        aggregator: Uint256,
+        wallet: &Wallet,
+        debug: bool,
+    ) -> Result<(Uint256, Vec<Vec<Uint256>>), ethabi::Error> {
+        let this_function = self.contract.function(func_name)?;
+        let calldata = this_function.encode_input(args).unwrap();
+
+        machine.runtime_env.insert_gas_estimation_message(
+            Uint256::from_usize(10_000_000),
+            Uint256::zero(),
+            self.address.clone(),
+            payment,
+            &calldata,
+            aggregator,
+            wallet,
+        );
+
+        let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
+        let num_sends_before = machine.runtime_env.get_all_sends().len();
+        let _arbgas_used = if debug {
+            machine.debug(None)
+        } else {
+            machine.run(None)
+        };
+        let logs = machine.runtime_env.get_all_receipt_logs();
+        let sends = machine.runtime_env.get_all_sends();
+        assert_eq!(logs.len(), num_logs_before + 1);
+        assert_eq!(sends.len(), num_sends_before);
+        assert!(logs[num_logs_before].succeeded());
+
+        let fee_stats = logs[num_logs_before]._get_fee_stats();
+        let wei_stats = &fee_stats[2];
+        let wei_spent = wei_stats[0]
+            .add(&wei_stats[1])
+            .add(&wei_stats[2])
+            .add(&wei_stats[3]);
+        let gas_price = &fee_stats[1][3];
+        let gas_estimate = wei_spent
+            .add(gas_price)
+            .sub(&Uint256::one())
+            .unwrap()
+            .div(gas_price)
+            .unwrap();
+
+        Ok((gas_estimate, fee_stats))
+    }
+
     pub fn _send_retryable_tx(
         &self,
         sender: Uint256,
@@ -326,10 +380,11 @@ impl AbiForContract {
                 payment,
                 &calldata,
                 wallet,
+                false,
             );
         machine
             .runtime_env
-            .insert_l2_message(sender_addr, &tx_contents, false);
+            .insert_l2_message(sender_addr, &tx_contents);
 
         let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
         let num_sends_before = machine.runtime_env.get_all_sends().len();
@@ -368,6 +423,7 @@ impl AbiForContract {
                 payment,
                 calldata,
                 &wallet,
+                false,
             );
 
         Ok((Uint256::from_bytes(&tx_id_bytes)))
@@ -381,6 +437,7 @@ impl AbiForContract {
         machine: &mut Machine,
         payment: Uint256,
         wallet: &Wallet,
+        maybe_max_gas: Option<Uint256>,
     ) -> Result<Uint256, ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
@@ -389,12 +446,13 @@ impl AbiForContract {
             .runtime_env
             ._append_compressed_and_signed_tx_message_to_batch(
                 batch,
-                Uint256::from_usize(100_000_000),
+                maybe_max_gas.unwrap_or(Uint256::from_usize(100_000_000)),
                 Uint256::zero(),
                 self.address.clone(),
                 payment,
                 calldata,
                 &wallet,
+                false,
             );
 
         Ok((Uint256::from_bytes(&tx_id_bytes)))

@@ -4,15 +4,14 @@
 
 //!Contains types and utilities for constructing the mini AST
 
-use super::typecheck::{new_type_error, TypeError};
 use crate::compile::ast::TypeMismatch::FuncArgLength;
-use crate::compile::path_display;
 use crate::compile::typecheck::{
     AbstractSyntaxTree, InliningMode, PropertiesList, TypeCheckedNode,
 };
-use crate::link::{value_from_field_list, TUPLE_SIZE};
+use crate::compile::{path_display, CompileError, Lines};
+use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
 use crate::mavm::{Instruction, Value};
-use crate::pos::Location;
+use crate::pos::{BytePos, Location};
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
@@ -37,8 +36,8 @@ pub struct Attributes {
     ///Is true if the current node is a breakpoint, false otherwise.
     pub breakpoint: bool,
     pub inline: InliningMode,
-    ///Whether node should be pruned in a release build.
     #[serde(skip)]
+    ///Whether generated instructions should be printed to the console.
     pub codegen_print: bool,
 }
 
@@ -47,6 +46,14 @@ impl DebugInfo {
         DebugInfo {
             location,
             attributes,
+        }
+    }
+
+    /// builds a `DebugInfo` in-place at the parsing site
+    pub fn here(lines: &Lines, lno: usize, file: u64) -> Self {
+        DebugInfo {
+            location: lines.location(BytePos::from(lno), file),
+            attributes: Attributes::default(),
         }
     }
 }
@@ -67,7 +74,8 @@ pub enum TopLevelDecl {
     TypeDecl(TypeDecl),
     FuncDecl(Func),
     VarDecl(GlobalVarDecl),
-    UseDecl(Vec<String>, String),
+    UseDecl(Import),
+    ConstDecl,
 }
 
 ///Type Declaration, contains the StringId corresponding to the type name, and the underlying Type.
@@ -138,21 +146,61 @@ impl AbstractSyntaxTree for Type {
 
 impl Type {
     ///Gets the representation of a `Nominal` type, based on the types in `type_tree`, returns self
-    /// if the type is not `Nominal`, or a `TypeError` if the type of `self` cannot be resolved in
+    /// if the type is not `Nominal`, or a `CompileError` if the type of `self` cannot be resolved in
     /// `type_tree`.
-    pub fn get_representation(&self, type_tree: &TypeTree) -> Result<Self, TypeError> {
+    pub fn get_representation(&self, type_tree: &TypeTree) -> Result<Self, CompileError> {
         let mut base_type = self.clone();
         while let Type::Nominal(path, id) = base_type.clone() {
             base_type = type_tree
                 .get(&(path.clone(), id))
                 .cloned()
-                .ok_or(new_type_error(
+                .ok_or(CompileError::new_type_error(
                     format!("No type at {:?}, {}", path, id),
-                    None,
+                    vec![],
                 ))?
                 .0;
         }
         Ok(base_type)
+    }
+
+    ///Finds all nominal sub-types present under a type
+    pub fn find_nominals(&self) -> Vec<usize> {
+        match self {
+            Type::Nominal(_, id) => {
+                vec![*id]
+            }
+            Type::Array(tipe) | Type::FixedArray(tipe, ..) | Type::Option(tipe) => {
+                tipe.find_nominals()
+            }
+            Type::Tuple(entries) => {
+                let mut tipes = vec![];
+                for entry in entries {
+                    tipes.extend(entry.find_nominals());
+                }
+                tipes
+            }
+            Type::Func(_, args, ret) => {
+                let mut tipes = ret.find_nominals();
+                for arg in args {
+                    tipes.extend(arg.find_nominals());
+                }
+                tipes
+            }
+            Type::Struct(fields) => {
+                let mut tipes = vec![];
+                for field in fields {
+                    tipes.extend(field.tipe.find_nominals());
+                }
+                tipes
+            }
+
+            Type::Map(domain_tipe, codomain_tipe) => {
+                let mut tipes = domain_tipe.find_nominals();
+                tipes.extend(codomain_tipe.find_nominals());
+                tipes
+            }
+            _ => vec![],
+        }
     }
 
     ///If self is a Struct, and name is the StringID of a field of self, then returns Some(n), where
@@ -1032,6 +1080,15 @@ impl<T> MatchPattern<T> {
             cached,
         }
     }
+    pub fn collect_identifiers(&self) -> Vec<StringId> {
+        match &self.kind {
+            MatchPatternKind::Simple(id) => vec![*id],
+            MatchPatternKind::Tuple(pats) => pats
+                .iter()
+                .flat_map(|pat| pat.collect_identifiers())
+                .collect(),
+        }
+    }
 }
 
 ///Represents a constant mini value of type Option<T> for some type T.
@@ -1134,6 +1191,7 @@ pub enum ExprKind {
     IfLet(StringId, Box<Expr>, CodeBlock, Option<CodeBlock>),
     Loop(Vec<Statement>),
     NewBuffer,
+    Quote(Vec<u8>),
 }
 
 impl Expr {
@@ -1159,6 +1217,15 @@ impl Expr {
             kind: ExprKind::Trinary(op, Box::new(e1), Box::new(e2), Box::new(e3)),
             debug_info: DebugInfo::from(loc),
         }
+    }
+
+    /// Creates an expression whose DebugInfo is populated in-place at the parsing site
+    pub fn lno(kind: ExprKind, lines: &Lines, lno: usize, file: u64) -> Self {
+        Self::new(kind, DebugInfo::here(lines, lno, file))
+    }
+
+    pub fn new(kind: ExprKind, debug_info: DebugInfo) -> Self {
+        Self { kind, debug_info }
     }
 }
 

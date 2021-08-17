@@ -4,21 +4,12 @@
 
 use chainParameters::chainParams_chainId;
 
-use std::bls::BLSHashedMessage;
-use std::bls::BLSKey;
-use std::bls::BLSSignature;
-use std::bls::bls_defaultDomain;
-use std::bls::bls_hashToPoint;
-use std::bls::bls_verifySignature;
-
 use std::bytearray::ByteArray;
-use std::bytearray::MarshalledBytes;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_setByte;
-use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
 use std::bytearray::bytearray_getCalldataUnits;
@@ -26,17 +17,11 @@ use std::bytearray::bytearray_getCalldataUnits;
 use std::bytestream::ByteStream;
 use std::bytestream::bytestream_new;
 use std::bytestream::bytestream_getByte;
-use std::bytestream::bytestream_get256;
 use std::bytestream::bytestream_getN;
-use std::bytestream::bytestream_skipBytes;
-use std::bytestream::bytestream_bytesReadSoFar;
-use std::bytestream::bytestream_bytesRemaining;
 use std::bytestream::bytestream_getRemainingBytes;
-use std::bytestream::bytestream_getCalldataUnits;
 
 use std::expandingIntArray::ExpandingIntArray;
 use std::expandingIntArray::expandingIntArray_new;
-use std::expandingIntArray::expandingIntArray_size;
 use std::expandingIntArray::expandingIntArray_get;
 use std::expandingIntArray::expandingIntArray_set;
 
@@ -44,17 +29,10 @@ use std::keccak::keccak256;
 
 use std::rlp::rlp_encodeUint;
 
-use std::queue::Queue;
-use std::queue::queue_new;
-use std::queue::queue_put;
-
-use accounts::Account;
-use accounts::AccountStore;
 use accounts::getGlobalAccountStore;
 use accounts::accountStore_get;
 use accounts::account_getNextSeqNum;
 use accounts::account_getAggregatorDecompressionState;
-use accounts::account_getBlsKey;
 
 use evmCallStack::evmCallStack_getAccount;
 use evmCallStack::evmCallStack_addStorageCharge;
@@ -66,11 +44,8 @@ use messages::TxRequestData;
 use std::rlp::rlp_decodeAddress;
 use std::rlp::rlp_decodeUint;
 use std::rlp::rlp_encodeMessageInfo;
-use std::rlp::rlp_encodeAndHashMessageInfoForSignature;
 
 use retrybuffer::RetryableTx;
-
-use std::rlp::SignedTx;
 
 use signedTx::recoverSigner;
 
@@ -301,7 +276,8 @@ public impure func decompressAndVerifyEcdsaSignedTx(
     );
 }
 
-public impure func decompressAndVerifyBLSSignedTxBatch(
+/*
+public impure func _decompressAndVerifyBLSSignedTxBatch(
     ba: ByteArray,
     originalRequest: IncomingRequest,
     queueToFill: Queue,
@@ -390,6 +366,7 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
 
     return Some(queueToFill);
 }
+*/
 
 impure func decompressTx(
     stream: ByteStream,

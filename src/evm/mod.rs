@@ -16,13 +16,14 @@ use crate::compile::miniconstants::init_constant_table;
 pub use abi::{builtin_contract_path, contract_path, AbiForContract};
 pub use benchmarks::make_benchmarks;
 pub use evmtest::run_evm_tests;
+use std::option::Option::None;
 
 mod abi;
 mod benchmarks;
 #[cfg(test)]
 mod bls;
 mod evmtest;
-mod preinstalled_contracts;
+pub(crate) mod preinstalled_contracts;
 
 #[derive(Clone)]
 pub struct CallInfo<'a> {
@@ -1056,6 +1057,7 @@ pub fn _evm_xcontract_call_using_compressed_batch(
         &mut machine,
         Uint256::from_usize(10000),
         &wallet,
+        None,
     )?;
     let tx_id_2 = pc_contract._add_function_call_to_compressed_batch(
         &mut batch,
@@ -1070,6 +1072,7 @@ pub fn _evm_xcontract_call_using_compressed_batch(
         &mut machine,
         Uint256::zero(),
         &wallet,
+        None,
     )?;
 
     machine
@@ -1311,6 +1314,7 @@ pub fn _evm_xcontract_call_using_compressed_batch_2(
         &mut machine,
         Uint256::from_usize(10000),
         &wallet,
+        None,
     )?;
     let tx_id_2 = pc_contract._add_function_call_to_compressed_batch(
         &mut batch,
@@ -1325,6 +1329,7 @@ pub fn _evm_xcontract_call_using_compressed_batch_2(
         &mut machine,
         Uint256::zero(),
         &wallet,
+        None,
     )?;
 
     machine

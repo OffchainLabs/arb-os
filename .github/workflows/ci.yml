@@ -132,12 +132,12 @@ jobs:
             librocksdb-dev libssl-dev libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev \
             liblz4-dev libzstd-dev libtool golang-go clang-format cmake
           sudo apt-get install librocksdb-dev
-          curl -sSL "https://github.com/gotestyourself/gotestsum/releases/download/v1.7.0/gotestsum_1.7.0_linux_amd64.tar.gz" | sudo tar -xz -C /usr/local/bin gotestsum
           #
           # If apt's rocksdb is ever out of date, we'll need to use the following
           #   git clone -b v6.11.4 https://github.com/facebook/rocksdb
           #   cd rocksdb && make shared_lib && sudo make install
           #
+          curl -sSL "https://github.com/gotestyourself/gotestsum/releases/download/v1.7.0/gotestsum_1.7.0_linux_amd64.tar.gz" | sudo tar -xz -C /usr/local/bin gotestsum
 
       - name: Clone Arbitrum
         run: |
@@ -147,6 +147,8 @@ jobs:
       - name: Copy over this branch's ArbOS
         run: |
           rm -r arbitrum/packages/arb-os/*
+          # We'd need `make testlogs` to generate these files
+          #   cp -r testlogs/* arbitrum/packages/arb-avm-cpp/tests/arbos-cases/
           mv * arbitrum/packages/arb-os/ || true
 
       - name: Build Arbitrum
