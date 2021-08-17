@@ -6,7 +6,7 @@
 
 use crate::console::Color;
 use crate::link::{link, postlink_compile, Import, LinkedProgram};
-use crate::mavm::{Instruction, Label};
+use crate::mavm::{Instruction, Label, LabelId};
 use crate::pos::{BytePos, Location};
 use crate::stringtable::{StringId, StringTable};
 use ast::Func;
@@ -140,7 +140,7 @@ impl CompileStruct {
             file_info_chart: BTreeMap::new(),
         };
 
-        let mut compiled_progs = Vec::new();
+        let mut unlinked_progs = vec![];
         let mut file_info_chart = BTreeMap::new();
         let mut globals = vec![];
 
@@ -172,7 +172,7 @@ impl CompileStruct {
 
             for prog in progs {
                 file_info_chart.extend(prog.file_info_chart.clone());
-                compiled_progs.push(prog)
+                unlinked_progs.push(prog);
             }
         }
 
@@ -182,7 +182,7 @@ impl CompileStruct {
             panic!("Too many globals defined in program, location of first global is not correct")
         }
 
-        let linked_prog = link(compiled_progs, globals, self.test_mode);
+        let linked_prog = link(unlinked_progs, globals, self.test_mode);
 
         let postlinked_prog = match postlink_compile(
             linked_prog,
@@ -396,6 +396,8 @@ impl TypeCheckedModule {
 /// post-link compilation steps applied. Is directly serialized to and from .mao files.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CompiledProgram {
+    /// Name of the program, usually the func from which it was derived
+    pub name: String,
     /// Instructions to be run to execute the program/module
     pub code: Vec<Instruction>,
     /// All globals used in this program
@@ -406,22 +408,28 @@ pub struct CompiledProgram {
     pub file_info_chart: HashMap<u64, FileInfo>,
     /// Tree of the types
     pub type_tree: TypeTree,
+    /// A global id unique to the source (usually a func) from which this program was compiled
+    pub unique_id: LabelId,
 }
 
 impl CompiledProgram {
     pub fn new(
+        name: String,
         code: Vec<Instruction>,
         globals: Vec<GlobalVar>,
         source_file_map: Option<SourceFileMap>,
         file_info_chart: HashMap<u64, FileInfo>,
         type_tree: TypeTree,
+        unique_id: LabelId,
     ) -> Self {
         CompiledProgram {
+            name,
             code,
             globals,
             source_file_map,
             file_info_chart,
             type_tree,
+            unique_id,
         }
     }
 
@@ -1185,6 +1193,9 @@ fn codegen_programs(
         .map(|(func, func_labels, string_table, globals, name)| {
             let mut codegen_issues = vec![];
 
+            let func_id = func.unique_id.expect("func should have an ID by now");
+            let func_name = func.name.clone();
+
             let code = codegen::mavm_codegen_func(
                 func,
                 &string_table,
@@ -1201,8 +1212,15 @@ fn codegen_programs(
 
             let globals: Vec<_> = globals.into_iter().map(|g| g.1).collect();
 
-            let prog =
-                CompiledProgram::new(code, globals, source, HashMap::new(), type_tree.clone());
+            let prog = CompiledProgram::new(
+                func_name,
+                code,
+                globals,
+                source,
+                HashMap::new(),
+                type_tree.clone(),
+                func_id,
+            );
 
             Ok((prog, codegen_issues))
         })

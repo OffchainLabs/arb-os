@@ -151,6 +151,17 @@ impl Instruction {
         }
     }
 
+    pub fn get_uniques(&self) -> Vec<LabelId> {
+        let mut uniques = vec![];
+        if let Opcode::Label(Label::Func(id) | Label::Closure(id)) = self.opcode {
+            uniques.push(id);
+        }
+        if let Some(value) = &self.immediate {
+            uniques.extend(value.get_uniques());
+        }
+        uniques
+    }
+
     pub fn pretty_print(&self, highlight: &str) -> String {
         let label_color = Color::PINK;
         match &self.immediate {
@@ -726,6 +737,20 @@ impl Value {
         } else {
             panic!();
         }
+    }
+
+    pub fn get_uniques(&self) -> Vec<LabelId> {
+        let mut uniques = vec![];
+        match self {
+            Value::Label(Label::Func(id) | Label::Closure(id)) => uniques.push(*id),
+            Value::Tuple(tup) => {
+                for child in &**tup {
+                    uniques.extend(child.get_uniques());
+                }
+            }
+            _ => {}
+        }
+        uniques
     }
 
     pub fn pretty_print(&self, highlight: &str) -> String {

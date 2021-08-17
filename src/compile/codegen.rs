@@ -1046,11 +1046,7 @@ fn mavm_codegen_expr<'a>(
                 None => {
                     return Err(CompileError::new(
                         format!("Internal Error"),
-                        format!(
-                            "StringID {} doesn't exist in {:?}",
-                            Color::red(id),
-                            globals
-                        ),
+                        format!("StringID {} doesn't exist in {:?}", Color::red(id), globals),
                         loc.into_iter().collect(),
                     ))
                 }
