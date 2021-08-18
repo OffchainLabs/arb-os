@@ -244,45 +244,40 @@ pub fn link(
         }
     }
 
+    let mut debug_info = DebugInfo::default();
+    debug_info.attributes.codegen_print = globals
+        .iter()
+        .any(|x| x.debug_info.attributes.codegen_print);
+
     // Initialize globals or allow jump table retrieval
     let mut linked_code = if test_mode {
         vec![
             Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
                 Value::none(),
-                DebugInfo::default(),
-            ),
-            Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Noop),
-                make_uninitialized_tuple(globals.len()),
-                DebugInfo::default(),
-            ),
-            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Rset), DebugInfo::default()),
-        ]
-    } else {
-        vec![
-            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Rpush), DebugInfo::default()),
-            Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Noop),
-                Value::none(),
-                DebugInfo::default(),
+                debug_info,
             ),
             Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Rset),
                 make_uninitialized_tuple(globals.len()),
-                DebugInfo::default(),
+                debug_info,
+            ),
+        ]
+    } else {
+        vec![
+            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Rpush), debug_info),
+            Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::Noop),
+                Value::none(),
+                debug_info,
+            ),
+            Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::Rset),
+                make_uninitialized_tuple(globals.len()),
+                debug_info,
             ),
         ]
     };
-
-    if globals
-        .iter()
-        .any(|x| x.debug_info.attributes.codegen_print)
-    {
-        for curr in &mut linked_code {
-            curr.debug_info.attributes.codegen_print = true;
-        }
-    }
 
     let main = NodeIndex::from(0);
     let mut dfs = DfsPostOrder::new(&graph, main);
