@@ -751,7 +751,7 @@ fn resolve_imports(
                     .string_table
                     .get_if_exists(&import.name.clone())
                     .ok_or(CompileError::new(
-                        "Import Error".to_string(),
+                        "Import Error",
                         format!(
                             "Symbol {} does not exist in {}",
                             Color::red(&import.name),
@@ -1241,37 +1241,51 @@ impl Display for CompileError {
 }
 
 impl CompileError {
-    pub fn new(title: String, description: String, locations: Vec<Location>) -> Self {
+    pub fn new<S, U>(title: S, description: U, locations: Vec<Location>) -> Self
+    where
+        S: std::string::ToString,
+        U: std::string::ToString,
+    {
         CompileError {
-            title,
-            description,
+            title: title.to_string(),
+            description: description.to_string(),
             locations,
             is_warning: false,
         }
     }
 
-    pub fn new_warning(title: String, description: String, locations: Vec<Location>) -> Self {
+    pub fn new_warning<S, U>(title: S, description: U, locations: Vec<Location>) -> Self
+    where
+        S: std::string::ToString,
+        U: std::string::ToString,
+    {
         CompileError {
-            title,
-            description,
+            title: title.to_string(),
+            description: description.to_string(),
             locations,
             is_warning: true,
         }
     }
 
-    pub fn new_type_error(description: String, locations: Vec<Location>) -> Self {
+    pub fn new_type_error<S>(description: S, locations: Vec<Location>) -> Self
+    where
+        S: std::string::ToString,
+    {
         CompileError {
             title: String::from("Typecheck Error"),
-            description,
+            description: description.to_string(),
             locations,
             is_warning: false,
         }
     }
 
-    pub fn new_codegen_error(description: String, location: Option<Location>) -> Self {
+    pub fn new_codegen_error<S>(description: S, location: Option<Location>) -> Self
+    where
+        S: std::string::ToString,
+    {
         CompileError {
             title: String::from("Codegen Error"),
-            description,
+            description: description.to_string(),
             locations: location.into_iter().collect(),
             is_warning: false,
         }

@@ -17,8 +17,8 @@ use blockhash::blockhash_init;
 
 use chainParameters::chainParams_init;
 
-use codeSegment::codeSegment_init;
-use codeSegment::translateEvmCodeSegment;
+use std::codeSegment::codeSegment_init;
+use std::codeSegment::translateEvmCodeSegment;
 
 use contractTemplates::getArbInfoCode;
 use contractTemplates::getArbInfoAddress;
