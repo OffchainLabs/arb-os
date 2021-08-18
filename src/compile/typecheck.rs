@@ -1365,54 +1365,20 @@ pub fn typecheck_function(
 ) -> Result<TypeCheckedFunc, CompileError> {
     let mut hm = HashMap::new();
 
-    if func.ret_type != Type::Void {
-        if func.code.len() == 0 {
-            return Err(CompileError::new_type_error(
-                format!(
-                    "Func {} never returns",
-                    Color::red(string_table.name_from_id(func.id))
-                ),
-                func.debug_info.location.into_iter().collect(),
-            ));
-        }
-        if let Some(stat) = func.code.last() {
-            match &stat.kind {
-                StatementKind::Return(_) => {}
-                _ => {
-                    return Err(CompileError::new_type_error(
-                        format!(
-                            "Func {}'s last statement is not a return",
-                            Color::red(string_table.name_from_id(func.id)),
-                        ),
-                        func.debug_info
-                            .location
-                            .into_iter()
-                            .chain(stat.debug_info.location.into_iter())
-                            .collect(),
-                    ))
-                }
-            }
-        }
+    if let Some(location_option) = undefinable_ids.get(&func.id) {
+        return Err(CompileError::new_type_error(
+            format!(
+                "Func {} has the same name as another top-level symbol",
+                Color::red(string_table.name_from_id(func.id)),
+            ),
+            location_option
+                .iter()
+                .chain(func.debug_info.location.iter())
+                .cloned()
+                .collect(),
+        ));
     }
-
-    if !func.properties.closure {
-        // closure names are checked earlier
-
-        if let Some(location_option) = undefinable_ids.get(&func.id) {
-            return Err(CompileError::new_type_error(
-                format!(
-                    "Func {} has the same name as another top-level symbol",
-                    Color::red(string_table.name_from_id(func.id)),
-                ),
-                location_option
-                    .iter()
-                    .chain(func.debug_info.location.iter())
-                    .cloned()
-                    .collect(),
-            ));
-        }
-        undefinable_ids.insert(func.id, func.debug_info.location);
-    }
+    undefinable_ids.insert(func.id, func.debug_info.location);
 
     for arg in func.args.iter() {
         arg.tipe.get_representation(type_tree).map_err(|_| {
@@ -1443,7 +1409,7 @@ pub fn typecheck_function(
 
     let mut inner_type_table = type_table.clone();
     inner_type_table.extend(hm);
-    let tc_stats = typecheck_statement_sequence(
+    let mut tc_stats = typecheck_statement_sequence(
         &func.code,
         &func.ret_type,
         &inner_type_table,
@@ -1455,6 +1421,45 @@ pub fn typecheck_function(
         closures,
         &mut vec![],
     )?;
+
+    if func.ret_type == Type::Void {
+        if tc_stats.last().cloned().map(|s| s.kind) != Some(TypeCheckedStatementKind::ReturnVoid())
+        {
+            tc_stats.push(TypeCheckedStatement {
+                kind: TypeCheckedStatementKind::ReturnVoid(),
+                debug_info: func.debug_info,
+            });
+        }
+    } else {
+        if func.code.len() == 0 {
+            return Err(CompileError::new_type_error(
+                format!(
+                    "Func {} never returns",
+                    Color::red(string_table.name_from_id(func.id))
+                ),
+                func.debug_info.locs(),
+            ));
+        }
+        if let Some(stat) = func.code.last() {
+            match &stat.kind {
+                StatementKind::Return(_) => {}
+                _ => {
+                    return Err(CompileError::new_type_error(
+                        format!(
+                            "Func {}'s last statement is not a return",
+                            Color::red(string_table.name_from_id(func.id)),
+                        ),
+                        func.debug_info
+                            .location
+                            .into_iter()
+                            .chain(stat.debug_info.location.into_iter())
+                            .collect(),
+                    ))
+                }
+            }
+        }
+    }
+
     Ok(TypeCheckedFunc {
         name: func.name.clone(),
         id: func.id,

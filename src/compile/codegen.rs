@@ -29,25 +29,13 @@ use std::{cmp::max, collections::HashMap};
 /// Each func gets a unique, hashed label id, after which local labels are assigned. This ensures
 /// two labels are the same iff they point to the same destination.
 pub fn mavm_codegen_func(
-    mut func: TypeCheckedFunc,
+    func: TypeCheckedFunc,
     string_table: &StringTable,
     globals: &HashMap<StringId, GlobalVar>,
     func_labels: &HashMap<StringId, Label>,
     issues: &mut Vec<CompileError>,
     release_build: bool,
 ) -> Result<Vec<Instruction>, CompileError> {
-    if func.ret_type == Type::Void
-        && func.code.last().cloned().map(|s| s.kind) != Some(TypeCheckedStatementKind::ReturnVoid())
-    {
-        func.code.push(TypeCheckedStatement {
-            kind: TypeCheckedStatementKind::ReturnVoid(),
-            debug_info: {
-                let mut debug_info = DebugInfo::default();
-                debug_info.attributes.codegen_print = func.debug_info.attributes.codegen_print;
-                debug_info
-            },
-        });
-    }
     let mut code = vec![];
     let debug_info = func.debug_info;
 

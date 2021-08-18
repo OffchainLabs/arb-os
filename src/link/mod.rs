@@ -231,7 +231,7 @@ pub fn link(
 
         let uniques = prog.code.iter().flat_map(|insn| insn.get_uniques());
 
-        let mut usages = HashMap::new();
+        let mut usages = BTreeMap::new();
         for unique in uniques {
             *usages.entry(unique).or_insert(0) += 1;
         }
