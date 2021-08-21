@@ -393,7 +393,7 @@ pub fn postlink_compile(
         }
     }
     let (code_2, jump_table) =
-        striplabels::fix_nonforward_labels(&program.code, program.globals.len() - 1);
+        striplabels::fix_backward_labels(&program.code, program.globals.len() - 1);
     consider_debug_printing(&code_2, did_print, "after fix_backward_labels");
 
     let code_3 = xformcode::fix_tuple_size(&code_2, program.globals.len())?;

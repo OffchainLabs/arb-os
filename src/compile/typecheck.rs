@@ -1050,16 +1050,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
     }
     fn is_view(&mut self, type_tree: &TypeTree) -> bool {
         match &mut self.kind {
-            TypeCheckedExprKind::FunctionCall(func, args, _, _) => {
-                let func_type = func
-                    .get_type()
-                    .get_representation(type_tree)
-                    .expect("Type tree inconsistency");
-
-                let prop = match func_type {
-                    Type::Func(prop, ..) => prop,
-                    _ => panic!("Internal error: func call has non function type {:?}", func),
-                };
+            TypeCheckedExprKind::FunctionCall(func, args, _, prop) => {
                 prop.view
                     || func.is_view(type_tree)
                     || args.iter_mut().any(|expr| expr.is_view(type_tree))
@@ -1077,16 +1068,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
     }
     fn is_write(&mut self, type_tree: &TypeTree) -> bool {
         match &mut self.kind {
-            TypeCheckedExprKind::FunctionCall(func, args, _, _) => {
-                let func_type = func
-                    .get_type()
-                    .get_representation(type_tree)
-                    .expect("Type tree inconsistency");
-
-                let prop = match func_type {
-                    Type::Func(prop, ..) => prop,
-                    _ => panic!("Internal error: func call has non function type {:?}", func),
-                };
+            TypeCheckedExprKind::FunctionCall(func, args, _, prop) => {
                 prop.write
                     || func.is_write(type_tree)
                     || args.iter_mut().any(|expr| expr.is_write(type_tree))
@@ -1124,7 +1106,13 @@ impl TypeCheckedExpr {
             arg_types.push(arg.get_type());
         }
 
-        let call_type = Type::Func(FuncProperties::pure(), arg_types, Box::new(ret.clone()));
+        let nargs = args.len();
+        let nouts = match ret {
+            Type::Void => 0,
+            _ => 1,
+        };
+        let prop = FuncProperties::pure(nargs, nouts);
+        let call_type = Type::Func(prop, arg_types, Box::new(ret.clone()));
 
         TypeCheckedExpr::new(
             TypeCheckedExprKind::FunctionCall(
@@ -1139,7 +1127,7 @@ impl TypeCheckedExpr {
                 )),
                 args.into_iter().cloned().collect(),
                 call_type,
-                FuncProperties::pure(),
+                prop,
             ),
             debug_info,
         )
@@ -3831,22 +3819,6 @@ fn typecheck_binary_op(
                 loc.into_iter().collect(),
             )),
         },
-        BinaryOp::_LogicalAnd | BinaryOp::LogicalOr => match (subtype1, subtype2) {
-            (Type::Bool, Type::Bool) => Ok(TypeCheckedExprKind::Binary(
-                op,
-                Box::new(tcs1),
-                Box::new(tcs2),
-                Type::Bool,
-            )),
-            (subtype1, subtype2) => Err(CompileError::new_type_error(
-                format!(
-                    "invalid argument types to binary logical operator: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
-                ),
-                loc.into_iter().collect(),
-            )),
-        },
         BinaryOp::Hash => match (subtype1, subtype2) {
             (Type::Bytes32, Type::Bytes32) => Ok(TypeCheckedExprKind::Binary(
                 op,
@@ -4117,40 +4089,6 @@ fn typecheck_binary_op_const(
                 Err(CompileError::new_type_error(
                     format!(
                         "invalid argument types to binary op: \"{}\" and \"{}\"",
-                        t1.display(),
-                        t2.display()
-                    ),
-                    loc.into_iter().collect(),
-                ))
-            }
-        }
-        BinaryOp::_LogicalAnd => {
-            if (t1 == Type::Bool) && (t2 == Type::Bool) {
-                Ok(TypeCheckedExprKind::Const(
-                    Value::Int(Uint256::from_bool(!val1.is_zero() && !val2.is_zero())),
-                    Type::Bool,
-                ))
-            } else {
-                Err(CompileError::new_type_error(
-                    format!(
-                        "invalid argument types to logical and: \"{}\" and \"{}\"",
-                        t1.display(),
-                        t2.display()
-                    ),
-                    loc.into_iter().collect(),
-                ))
-            }
-        }
-        BinaryOp::LogicalOr => {
-            if (t1 == Type::Bool) && (t2 == Type::Bool) {
-                Ok(TypeCheckedExprKind::Const(
-                    Value::Int(Uint256::from_bool(!val1.is_zero() || !val2.is_zero())),
-                    Type::Bool,
-                ))
-            } else {
-                Err(CompileError::new_type_error(
-                    format!(
-                        "invalid argument types to logical or: \"{}\" and \"{}\"",
                         t1.display(),
                         t2.display()
                     ),

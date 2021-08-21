@@ -35,7 +35,7 @@ pub fn mavm_codegen_func(
     func_labels: &HashMap<StringId, Label>,
     issues: &mut Vec<CompileError>,
     release_build: bool,
-) -> Result<Vec<Instruction>, CompileError> {
+) -> Result<(Vec<Instruction>, LabelGenerator), CompileError> {
     let mut code = vec![];
     let debug_info = func.debug_info;
 
@@ -74,12 +74,14 @@ pub fn mavm_codegen_func(
         locals.insert(*capture, next_slot);
     }
 
+    let mut label_gen = LabelGenerator::new(unique_id + 1);
+
     let (mut space_for_locals, _slot_map) = mavm_codegen_statements(
         func.code,
         &mut code,
         locals.len(),
         &locals,
-        &mut LabelGenerator::new(unique_id + 1),
+        &mut label_gen,
         string_table,
         func_labels,
         globals,
@@ -115,7 +117,7 @@ pub fn mavm_codegen_func(
         }
     }
 
-    Ok(code)
+    Ok((code, label_gen))
 }
 
 fn mavm_codegen_code_block(
@@ -496,7 +498,7 @@ fn mavm_codegen_statement(
             }
 
             let call_type = Type::Func(
-                FuncProperties::pure(),
+                FuncProperties::pure(1, 0),
                 vec![Type::Tuple(vec![Type::Bool, Type::Any])],
                 Box::new(Type::Void),
             );
@@ -512,7 +514,7 @@ fn mavm_codegen_statement(
                     }),
                     vec![expr.clone()],
                     call_type,
-                    FuncProperties::pure(),
+                    FuncProperties::pure(1, 0),
                 ),
                 debug_info: DebugInfo::from(loc),
             };
@@ -709,14 +711,15 @@ fn mavm_codegen_expr(
         }
         TypeCheckedExprKind::UnaryOp(op, tce, _) => {
             let exp_locals = expr!(tce, 0)?;
-            let (maybe_opcode, maybe_imm) = match op {
-                UnaryOp::Minus => (Some(Opcode::UnaryMinus), None),
-                UnaryOp::BitwiseNeg => (Some(Opcode::AVMOpcode(AVMOpcode::BitwiseNeg)), None),
-                UnaryOp::Not => (Some(Opcode::AVMOpcode(AVMOpcode::IsZero)), None),
-                UnaryOp::Hash => (Some(Opcode::AVMOpcode(AVMOpcode::Hash)), None),
-                UnaryOp::ToUint => (None, None),
-                UnaryOp::ToInt => (None, None),
-                UnaryOp::ToBytes32 => (None, None),
+            code.push(match op {
+                UnaryOp::BitwiseNeg => opcode!(BitwiseNeg),
+                UnaryOp::Not => opcode!(IsZero),
+                UnaryOp::Hash => opcode!(Hash),
+                UnaryOp::Len => Instruction::from_opcode_imm(
+                    Opcode::TupleGet(3),
+                    Value::Int(Uint256::zero()),
+                    debug,
+                ),
                 UnaryOp::ToAddress => {
                     let mask = Uint256::from_usize(2)
                         .exp(&Uint256::from_usize(160))
@@ -727,16 +730,13 @@ fn mavm_codegen_expr(
                                 loc,
                             )
                         })?;
-                    (
-                        Some(Opcode::AVMOpcode(AVMOpcode::BitwiseAnd)),
-                        Some(Value::Int(mask)),
-                    )
+                    opcode!(BitwiseAnd, Value::Int(mask))
                 }
-                UnaryOp::Len => (Some(Opcode::TupleGet(3)), Some(Value::Int(Uint256::zero()))),
-            };
-            if let Some(opcode) = maybe_opcode {
-                code.push(Instruction::new(opcode, maybe_imm, debug));
-            }
+                UnaryOp::Minus => {
+                    opcode!(Sub, Value::from(0))
+                }
+                UnaryOp::ToUint | UnaryOp::ToInt | UnaryOp::ToBytes32 => opcode!(Noop),
+            });
             Ok(max(num_locals, exp_locals))
         }
         TypeCheckedExprKind::Variant(inner) => {
@@ -777,8 +777,6 @@ fn mavm_codegen_expr(
                 BinaryOp::ShiftLeft => Opcode::AVMOpcode(AVMOpcode::ShiftLeft),
                 BinaryOp::ShiftRight => Opcode::AVMOpcode(AVMOpcode::ShiftRight),
                 BinaryOp::BitwiseXor => Opcode::AVMOpcode(AVMOpcode::BitwiseXor),
-                BinaryOp::_LogicalAnd => Opcode::LogicalAnd,
-                BinaryOp::LogicalOr => Opcode::LogicalOr,
                 BinaryOp::Hash => Opcode::AVMOpcode(AVMOpcode::EthHash2),
             };
             code.push(Instruction::from_opcode(opcode, debug));
@@ -1111,7 +1109,7 @@ fn mavm_codegen_expr(
         }
         TypeCheckedExprKind::NewArray(sz_expr, base_type, array_type) => {
             let call_type = Type::Func(
-                FuncProperties::pure(),
+                FuncProperties::pure(2, 1),
                 vec![Type::Uint, Type::Any],
                 Box::new(array_type.clone()),
             );
@@ -1133,7 +1131,7 @@ fn mavm_codegen_expr(
                         ),
                     ],
                     call_type,
-                    FuncProperties::pure(),
+                    FuncProperties::pure(2, 1),
                 ),
                 debug_info: DebugInfo::from(loc),
             };
@@ -1493,7 +1491,11 @@ fn codegen_fixed_array_mod(
             Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), debug_info)
         };
         ($opcode:ident, $immediate:expr) => {
-            Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::$opcode), $immediate, debug_info)
+            Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::$opcode),
+                $immediate,
+                debug_info,
+            )
         };
     }
 

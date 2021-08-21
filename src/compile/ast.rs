@@ -12,6 +12,7 @@ use crate::mavm::{Instruction, LabelId, Value};
 use crate::pos::{BytePos, Location};
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
+use derivative::Derivative;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
@@ -1368,8 +1369,11 @@ impl Func {
         for arg in args.iter() {
             arg_types.push(arg.tipe.clone());
         }
-        let prop = FuncProperties::new(view, write, closure, public);
+        let nargs = args.len();
+        let nouts = ret_type.iter().count();
         let ret_type = ret_type.unwrap_or(Type::Void);
+        let returns = ret_type != Type::Every;
+        let prop = FuncProperties::new(view, write, closure, public, returns, nargs, nouts);
         Func {
             name,
             id,
@@ -1388,13 +1392,24 @@ impl Func {
 }
 
 /// The properties of a function or closure.
-#[derive(Debug, Clone, Copy, Eq, Serialize, Deserialize, Hash)]
+#[derive(Debug, Clone, Copy, Eq, Serialize, Deserialize, Derivative)]
+#[derivative(Hash)]
 pub struct FuncProperties {
     pub view: bool,
     pub write: bool,
     pub closure: bool,
     #[serde(default)]
+    #[derivative(Hash = "ignore")]
     pub public: bool,
+    #[serde(default)]
+    #[derivative(Hash = "ignore")]
+    pub returns: bool,
+    #[serde(default)]
+    #[derivative(Hash = "ignore")]
+    pub nargs: usize,
+    #[serde(default)]
+    #[derivative(Hash = "ignore")]
+    pub nouts: usize,
 }
 
 /// We only want equality when comparing types, for which only purity makes sense
@@ -1405,17 +1420,28 @@ impl PartialEq for FuncProperties {
 }
 
 impl FuncProperties {
-    pub fn new(view: bool, write: bool, closure: bool, public: bool) -> Self {
+    pub fn new(
+        view: bool,
+        write: bool,
+        closure: bool,
+        public: bool,
+        returns: bool,
+        nargs: usize,
+        nouts: usize,
+    ) -> Self {
         FuncProperties {
             view,
             write,
             closure,
             public,
+            returns,
+            nargs,
+            nouts,
         }
     }
 
-    pub fn pure() -> Self {
-        Self::new(false, false, false, false)
+    pub fn pure(nargs: usize, nouts: usize) -> Self {
+        Self::new(false, false, false, false, true, nargs, nouts)
     }
 
     pub fn purity(&self) -> (bool, bool) {
@@ -1686,8 +1712,6 @@ pub enum BinaryOp {
     BitwiseXor,
     ShiftLeft,
     ShiftRight,
-    _LogicalAnd,
-    LogicalOr,
     Hash,
     GetBuffer8,
     GetBuffer64,

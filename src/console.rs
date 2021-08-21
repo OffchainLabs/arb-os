@@ -4,6 +4,7 @@
 
 #![allow(dead_code)]
 
+use regex::Regex;
 use std::fmt;
 
 pub struct Color;
@@ -17,6 +18,12 @@ impl Color {
     pub const RESET: &'static str = "\x1b[0;0m";
 
     pub const LAVENDER: &'static str = "\x1b[38;5;183;1m";
+    pub const MINT: &'static str = "\x1b[38;5;48;1m";
+
+    pub fn uncolored<S: std::convert::AsRef<str>>(text: S) -> String {
+        let re = Regex::new("\x1b\\[([0-9]+;)*[0-9]+m").unwrap();
+        re.replace_all(text.as_ref(), "").to_string()
+    }
 
     pub fn color<S: fmt::Display>(color: &str, text: S) -> String {
         format!("{}{}{}", color, text, Color::RESET)
@@ -47,8 +54,13 @@ impl Color {
         Color::color(Color::GREY, text)
     }
 
-    /// Colors text lavender.
+    /// Colors text lavender. Often used for human-readable values.
     pub fn lavender<S: fmt::Display>(text: S) -> String {
         Color::color(Color::LAVENDER, text)
+    }
+
+    /// Colors text mint. Often used for meta-markup in the optimizer.
+    pub fn mint<S: fmt::Display>(text: S) -> String {
+        Color::color(Color::MINT, text)
     }
 }

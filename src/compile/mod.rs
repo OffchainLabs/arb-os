@@ -26,7 +26,7 @@ use std::io::{self, Read};
 use std::path::Path;
 use typecheck::TypeCheckedFunc;
 
-pub use ast::{DebugInfo, GlobalVar, StructField, TopLevelDecl, Type, TypeTree};
+pub use ast::{DebugInfo, FuncProperties, GlobalVar, StructField, TopLevelDecl, Type, TypeTree};
 pub use source::Lines;
 use std::str::FromStr;
 pub use typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNode};
@@ -36,6 +36,7 @@ mod codegen;
 pub mod miniconstants;
 mod source;
 mod typecheck;
+mod translate;
 lalrpop_mod!(mini);
 
 /// Command line options for compile subcommand.
@@ -203,8 +204,8 @@ impl CompileStruct {
 
         if error_system.warnings.len() > 0 && error_system.warnings_are_errors {
             error_system.errors.push(CompileError::new(
-                String::from("Compile Error"),
-                String::from("Found warning with -w on"),
+                "Compile Error",
+                "Found warning with -w on",
                 vec![],
             ));
             Err(error_system)
@@ -296,7 +297,7 @@ impl TypeCheckedModule {
 
             if let Some(prior) = imports.get(&id) {
                 flow_warnings.push(CompileError::new_warning(
-                    String::from("Compile warning"),
+                    "Compile Warning",
                     format!(
                         "use statement {} is a duplicate",
                         Color::color(error_system.warn_color, &import.name)
@@ -336,7 +337,7 @@ impl TypeCheckedModule {
 
         for (_id, import) in imports {
             flow_warnings.push(CompileError::new_warning(
-                String::from("Compile warning"),
+                "Compile Warning",
                 format!(
                     "use statement {} is unnecessary",
                     Color::color(error_system.warn_color, import.name)
@@ -493,7 +494,7 @@ pub fn compile_from_file(
             library,
             file_name.to_str().ok_or_else(|| {
                 CompileError::new(
-                    String::from("Compile error"),
+                    "Compile error",
                     format!("File name {:?} must be UTF-8", file_name),
                     vec![],
                 )
@@ -508,7 +509,7 @@ pub fn compile_from_file(
         )
     } else {
         Err(CompileError::new(
-            String::from("Compile error"),
+            "Compile error",
             format!(
                 "Could not parse {} as valid path",
                 Color::red(path.display())
@@ -673,7 +674,7 @@ fn create_program_tree(
         } + ".mini";
         let mut file = File::open(folder.join(name.clone())).map_err(|why| {
             CompileError::new(
-                String::from("Compile error"),
+                "Compile error",
                 format!("Can not open {}/{}: {:?}", folder.display(), name, why),
                 vec![],
             )
@@ -682,7 +683,7 @@ fn create_program_tree(
         let mut source = String::new();
         file.read_to_string(&mut source).map_err(|why| {
             CompileError::new(
-                String::from("Compile error"),
+                "Compile error",
                 format!("Can not read {}/{}: {:?}", folder.display(), name, why),
                 vec![],
             )
@@ -764,7 +765,7 @@ fn resolve_imports(
                 (named_type, imp_func)
             } else {
                 return Err(CompileError::new(
-                    String::from("Internal error"),
+                    "Internal error",
                     format!(
                         "Can not find target file for import \"{}::{}\"",
                         import.path.get(0).cloned().unwrap_or_else(String::new),
@@ -777,7 +778,7 @@ fn resolve_imports(
             // Modifies origin module to include import
             let origin_module = modules.get_mut(name).ok_or_else(|| {
                 CompileError::new(
-                    String::from("Internal error"),
+                    "Internal error",
                     format!(
                         "Can not find originating file for import {}::{}",
                         Color::red(import.path.get(0).map(String::as_str).unwrap_or_default()),
@@ -791,7 +792,7 @@ fn resolve_imports(
                 Some(string_id) => string_id,
                 None => {
                     return Err(CompileError::new(
-                        format!("Internal error"),
+                        "Internal error",
                         format!("Import {} has no string id", import.name),
                         import.loc(),
                     ))
@@ -826,7 +827,7 @@ fn resolve_imports(
                 }
             } else {
                 error_system.warnings.push(CompileError::new_warning(
-                    String::from("Compile warning"),
+                    "Compile Warning",
                     format!(
                         "import \"{}::{}\" does not correspond to a type or function",
                         import.path.get(0).cloned().unwrap_or_else(String::new),
@@ -992,7 +993,7 @@ fn check_global_constants(
     for (constant, _) in global_constants {
         if !constant.starts_with('_') {
             error_system.warnings.push(CompileError::new_warning(
-                String::from("Compile warning"),
+                "Compile Warning",
                 format!(
                     "global constant {}{}{} is never used",
                     error_system.warn_color,
@@ -1064,7 +1065,7 @@ fn codegen_programs(
                 let func_name = func.name.clone();
                 let debug_info = func.debug_info;
 
-                let code = codegen::mavm_codegen_func(
+                let (code, label_gen) = codegen::mavm_codegen_func(
                     func,
                     &string_table,
                     &globals,
@@ -1072,6 +1073,11 @@ fn codegen_programs(
                     &mut codegen_issues,
                     release_build,
                 )?;
+
+                //let graph = optimize::make_basic_graph(code);
+                //let code = optimize::flatten_basic_graph(graph);
+
+                //let code = translate::expand_calls(code, &mut label_gen);
 
                 let source = Some(SourceFileMap::new(
                     code.len(),
@@ -1178,7 +1184,7 @@ pub fn parse_from_source(
                 vec![lines.location(BytePos::from(offset), file_id).unwrap()],
             ),
             ParseError::InvalidToken { location } => CompileError::new(
-                String::from("Compile error"),
+                "Compile error",
                 format!("found invalid token"),
                 lines
                     .location(location.into(), file_id)
@@ -1206,7 +1212,7 @@ pub fn parse_from_source(
     for (constant, loc) in local_constants {
         if !used_constants.contains(&constant) {
             error_system.warnings.push(CompileError::new_warning(
-                String::from("Compile warning"),
+                "Compile Warning",
                 format!(
                     "Constant {}{}{} is never used",
                     error_system.warn_color,

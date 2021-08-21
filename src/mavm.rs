@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::compile::{DebugInfo, TypeTree};
+use crate::compile::{DebugInfo, FuncProperties, TypeTree};
 use crate::console::Color;
 use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
@@ -135,6 +135,15 @@ impl Instruction<AVMOpcode> {
             u._push_byte(0u8);
         }
     }
+
+    pub fn pretty_print(&self, highlight: &str) -> String {
+        let label_color = Color::PINK;
+        let op = Opcode::AVMOpcode(self.opcode).pretty_print(label_color);
+        match &self.immediate {
+            Some(value) => format!("{} {}", op, value.pretty_print(highlight)),
+            None => op,
+        }
+    }
 }
 
 impl Instruction {
@@ -144,9 +153,9 @@ impl Instruction {
     pub fn is_write(&self, type_tree: &TypeTree) -> bool {
         self.opcode.is_write(type_tree)
     }
-    pub fn get_label(&self) -> Option<&Label> {
+    pub fn get_label(&self) -> Option<Label> {
         match &self.opcode {
-            Opcode::Label(label) => Some(label),
+            Opcode::Label(label) => Some(*label),
             _ => None,
         }
     }
@@ -827,23 +836,20 @@ impl fmt::Display for Value {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub enum Opcode {
-    GetLocal,
-    SetLocal,
-    MakeFrame(usize, usize, bool, bool),
-    Label(Label),
-    PushExternal(usize), // push codeptr of external function -- index in imported_funcs
-    TupleGet(usize),     // arg is size of anysize_tuple
-    TupleSet(usize),     // arg is size of anysize_tuple
-    ArrayGet,
-    UncheckedFixedArrayGet(usize), // arg is size of array
-    GetGlobalVar(usize),
-    SetGlobalVar(usize),
-    Return,
-    UnaryMinus,
-    Len,
-    LogicalAnd,
-    LogicalOr,
-    AVMOpcode(AVMOpcode),
+    MakeFrame(usize, usize, bool, bool), // make a func frame: args, space, closure, returns
+    FuncCall(FuncProperties),            // make a function call: nargs, nouts, and view/write-props
+    Capture(LabelId),                    // create a callable closure capture
+    GetLocal,                            // get a local variable within a func frame
+    SetLocal,                            // set a local variable within a func frame
+    TupleGet(usize),                     // arg is size of anysize_tuple
+    TupleSet(usize),                     // arg is size of anysize_tuple
+    GetGlobalVar(usize),                 // gets a global variable at a global index
+    SetGlobalVar(usize),                 // sets a global variable at a global index
+    BackwardLabelTarget(usize),          // sets up a backward label as indexed by the jump table
+    UncheckedFixedArrayGet(usize),       // arg is size of array
+    Return,                              // return from a func, popping the frame
+    Label(Label),                        // a location in code
+    AVMOpcode(AVMOpcode),                // a non-virtual, AVM opcode
 }
 
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, Eq, PartialEq, Hash)]
@@ -950,6 +956,7 @@ impl Opcode {
             | Opcode::AVMOpcode(AVMOpcode::Cjump)
             | Opcode::AVMOpcode(AVMOpcode::AuxPop)
             | Opcode::AVMOpcode(AVMOpcode::AuxPush) => true,
+            Opcode::FuncCall(prop) => prop.view,
             _ => false,
         }
     }
@@ -969,6 +976,7 @@ impl Opcode {
             | Opcode::AVMOpcode(AVMOpcode::Cjump)
             | Opcode::AVMOpcode(AVMOpcode::AuxPop)
             | Opcode::AVMOpcode(AVMOpcode::AuxPush) => true,
+            Opcode::FuncCall(prop) => prop.write,
             _ => false,
         }
     }
@@ -982,6 +990,24 @@ impl Opcode {
             Opcode::SetGlobalVar(id) => format!("SetGlobal {}", Color::pink(id)),
             Opcode::GetGlobalVar(id) => format!("GetGlobal {}", Color::pink(id)),
             Opcode::Label(label) => Value::Label(*label).pretty_print(label_color),
+            Opcode::Capture(id) => format!("Capture λ_{}", id % 256),
+            Opcode::FuncCall(prop) => format!(
+                "FuncCall {}{}{} {}{}",
+                Color::mint(match prop.view {
+                    true => "view ",
+                    false => "",
+                }),
+                Color::mint(match prop.write {
+                    true => "write ",
+                    false => "",
+                }),
+                Color::mint(prop.nargs),
+                Color::mint(prop.nouts),
+                match prop.returns {
+                    true => "".to_string(),
+                    false => Color::mint(" noreturn"),
+                }
+            ),
             _ => format!("{}", self.to_name()),
         }
     }
@@ -1008,7 +1034,6 @@ impl Opcode {
             "dup2" => Opcode::AVMOpcode(AVMOpcode::Dup2),
             "swap1" => Opcode::AVMOpcode(AVMOpcode::Swap1),
             "swap2" => Opcode::AVMOpcode(AVMOpcode::Swap2),
-            "unaryminus" => Opcode::UnaryMinus,
             "bitwiseneg" => Opcode::AVMOpcode(AVMOpcode::BitwiseNeg),
             "hash" => Opcode::AVMOpcode(AVMOpcode::Hash),
             "ethhash2" => Opcode::AVMOpcode(AVMOpcode::EthHash2),
@@ -1039,8 +1064,6 @@ impl Opcode {
             "bitwiseand" => Opcode::AVMOpcode(AVMOpcode::BitwiseAnd),
             "bitwiseor" => Opcode::AVMOpcode(AVMOpcode::BitwiseOr),
             "bitwisexor" => Opcode::AVMOpcode(AVMOpcode::BitwiseXor),
-            "logicaland" => Opcode::LogicalAnd,
-            "logicalor" => Opcode::LogicalOr,
             "inbox" => Opcode::AVMOpcode(AVMOpcode::Inbox),
             "inboxpeek" => Opcode::AVMOpcode(AVMOpcode::InboxPeek),
             "jump" => Opcode::AVMOpcode(AVMOpcode::Jump),
@@ -1075,16 +1098,11 @@ impl Opcode {
             Opcode::GetGlobalVar(_) => "GetGlobal",
             Opcode::SetGlobalVar(_) => "SetGlobal",
             Opcode::Label(_) => "Label",
-            Opcode::PushExternal(_) => "PushExternal",
             Opcode::TupleGet(_) => "TupleGet",
             Opcode::TupleSet(_) => "TupleSet",
-            Opcode::ArrayGet => "ArrayGet",
             Opcode::UncheckedFixedArrayGet(_) => "UncheckedFixedArrayGet",
             Opcode::Return => "return",
-            Opcode::UnaryMinus => "unaryminus",
-            Opcode::LogicalAnd => "logicaland",
-            Opcode::LogicalOr => "logicalor",
-            Opcode::Len => "len",
+            Opcode::FuncCall(_) => "FuncCall",
             _ => "to_name() not implemented",
         }
     }

@@ -297,15 +297,23 @@ Type: Type = {
     "option<" <t1:Type> ">" => Type::Option(Box::new(t1)),
     "every" => Type::Every,
     "union<" <t1:CommaedTypes> ">" => Type::Union(t1),
-    <q: Qualifier*> "func" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => {
+    <q: Qualifier*> "func" <a: CommaedTypesInParens> <r: Return?> => {
         let view = q.contains(&"view");
         let write = q.contains(&"write");
-        Type::Func(FuncProperties::new(view, write, false, false), a, Box::new(r.unwrap_or(Type::Void)))
+        let returns = r != Some(Type::Every);
+        let nargs = a.len();
+        let nouts = r.iter().count();
+        let prop = FuncProperties::new(view, write, false, false, returns, nargs, nouts);
+        Type::Func(prop, a, Box::new(r.unwrap_or(Type::Void)))
     },
-    <q: Qualifier*> "closure" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => {
+    <q: Qualifier*> "closure" <a: CommaedTypesInParens> <r: Return?> => {
         let view = q.contains(&"view");
         let write = q.contains(&"write");
-        Type::Func(FuncProperties::new(view, write, true, false), a, Box::new(r.unwrap_or(Type::Void)))
+        let returns = r != Some(Type::Every);
+        let nargs = a.len();
+        let nouts = r.iter().count();
+        let prop = FuncProperties::new(view, write, false, false, returns, nargs, nouts);
+        Type::Func(prop, a, Box::new(r.unwrap_or(Type::Void)))
     },
     Ident => Type::Nominal(current_path.to_owned(), <>),
 };

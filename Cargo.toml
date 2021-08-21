@@ -39,6 +39,7 @@ rustc-hex = "2.1.0"
 toml = "0.5.8"
 rayon = "1.5.1"
 petgraph = "0.6.0"
+derivative = "2.0.0"
 
 [features]
 sparse_buffers = []
