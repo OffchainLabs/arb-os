@@ -406,9 +406,8 @@ fn mavm_codegen_statement(
                 }
             };
             let exp_locals = expr!(expr);
-            code.push(Instruction::from_opcode_imm(
-                Opcode::SetLocal,
-                Value::Int(Uint256::from_usize(*slot_num)),
+            code.push(Instruction::from_opcode(
+                Opcode::SetLocal(*slot_num),
                 debug,
             ));
             Ok((exp_locals, HashMap::new()))
@@ -424,14 +423,13 @@ fn mavm_codegen_statement(
             Ok((exp_locals, HashMap::new()))
         }
         TypeCheckedStatementKind::While(cond, body) => {
-            let slot_num = Value::Int(Uint256::from_usize(num_locals));
+            let slot_num = num_locals;
             num_locals += 1;
             let top_label = label_gen.next();
             let cond_label = label_gen.next();
             code.push(opcode!(Noop, Value::Label(top_label)));
-            code.push(Instruction::from_opcode_imm(
-                Opcode::SetLocal,
-                slot_num.clone(),
+            code.push(Instruction::from_opcode(
+                Opcode::SetLocal(slot_num),
                 debug,
             ));
             code.push(opcode!(Jump, Value::Label(cond_label)));
@@ -453,9 +451,8 @@ fn mavm_codegen_statement(
             num_locals = nl;
             code.push(Instruction::from_opcode(Opcode::Label(cond_label), debug));
             let cond_locals = expr!(cond);
-            code.push(Instruction::from_opcode_imm(
-                Opcode::GetLocal,
-                slot_num,
+            code.push(Instruction::from_opcode(
+                Opcode::GetLocal(slot_num),
                 debug,
             ));
             code.push(opcode!(Cjump));
@@ -542,18 +539,16 @@ fn mavm_codegen_tuple_pattern(
         MatchPatternKind::Bind(name) => {
             let mut bindings = HashMap::new();
             bindings.insert(*name, local_slot_num_base);
-            code.push(Instruction::from_opcode_imm(
-                Opcode::SetLocal,
-                Value::Int(Uint256::from_usize(local_slot_num_base)),
+            code.push(Instruction::from_opcode(
+                Opcode::SetLocal(local_slot_num_base),
                 debug_info,
             ));
             Ok((1, bindings, HashSet::new()))
         }
         MatchPatternKind::Assign(id) => {
             if let Some(val) = locals.get(id) {
-                code.push(Instruction::from_opcode_imm(
-                    Opcode::SetLocal,
-                    Value::Int(Uint256::from_usize(*val)),
+                code.push(Instruction::from_opcode(
+                    Opcode::SetLocal(*val),
                     debug_info,
                 ))
             } else {
@@ -825,9 +820,8 @@ fn mavm_codegen_expr(
         }
         TypeCheckedExprKind::LocalVariableRef(name, _) => match locals.get(name) {
             Some(n) => {
-                code.push(Instruction::from_opcode_imm(
-                    Opcode::GetLocal,
-                    Value::Int(Uint256::from_usize(*n)),
+                code.push(Instruction::from_opcode(
+                    Opcode::GetLocal(*n),
                     debug,
                 ));
                 Ok(num_locals)
@@ -878,9 +872,8 @@ fn mavm_codegen_expr(
             } else {
                 for capture in captures {
                     match locals.get(capture) {
-                        Some(slot) => code.push(Instruction::from_opcode_imm(
-                            Opcode::GetLocal,
-                            Value::Int(Uint256::from_usize(*slot)),
+                        Some(slot) => code.push(Instruction::from_opcode(
+                            Opcode::GetLocal(*slot),
                             debug,
                         )),
                         None => {
@@ -1306,9 +1299,8 @@ fn mavm_codegen_expr(
             code.push(opcode!(IsZero));
             code.push(opcode!(Cjump, Value::Label(after_label)));
             code.push(opcode!(Tget, Value::Int(Uint256::from_usize(1))));
-            code.push(Instruction::from_opcode_imm(
-                Opcode::SetLocal,
-                Value::Int(Uint256::from_usize(slot_num)),
+            code.push(Instruction::from_opcode(
+                Opcode::SetLocal(slot_num),
                 debug,
             ));
             let mut total_locals = mavm_codegen_code_block(
@@ -1357,14 +1349,13 @@ fn mavm_codegen_expr(
             Ok(total_locals)
         }
         TypeCheckedExprKind::Loop(body) => {
-            let slot_num = Value::Int(Uint256::from_usize(num_locals));
+            let slot_num = num_locals;
             let top_label = label_gen.next();
             let bottom_label = label_gen.next();
             scopes.push(("_".to_string(), bottom_label, Some(Type::Tuple(vec![]))));
             code.push(opcode!(Noop, Value::Label(top_label)));
-            code.push(Instruction::from_opcode_imm(
-                Opcode::SetLocal,
-                slot_num.clone(),
+            code.push(Instruction::from_opcode(
+                Opcode::SetLocal(slot_num),
                 debug,
             ));
             code.push(Instruction::from_opcode(Opcode::Label(top_label), debug));
@@ -1383,9 +1374,8 @@ fn mavm_codegen_expr(
                 release_build,
             )?;
             scopes.pop();
-            code.push(Instruction::from_opcode_imm(
-                Opcode::GetLocal,
-                slot_num,
+            code.push(Instruction::from_opcode(
+                Opcode::GetLocal(slot_num),
                 debug,
             ));
             code.push(opcode!(Jump));

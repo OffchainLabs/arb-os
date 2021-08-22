@@ -839,8 +839,8 @@ pub enum Opcode {
     MakeFrame(usize, usize, bool, bool), // make a func frame: args, space, closure, returns
     FuncCall(FuncProperties),            // make a function call: nargs, nouts, and view/write-props
     Capture(LabelId),                    // create a callable closure capture
-    GetLocal,                            // get a local variable within a func frame
-    SetLocal,                            // set a local variable within a func frame
+    GetLocal(usize),                     // get a local variable within a func frame
+    SetLocal(usize),                     // set a local variable within a func frame
     TupleGet(usize),                     // arg is size of anysize_tuple
     TupleSet(usize),                     // arg is size of anysize_tuple
     GetGlobalVar(usize),                 // gets a global variable at a global index
@@ -1093,8 +1093,8 @@ impl Opcode {
     pub fn to_name(&self) -> &str {
         match self {
             Opcode::AVMOpcode(avm) => avm.to_name(),
-            Opcode::GetLocal => "GetLocal",
-            Opcode::SetLocal => "SetLocal",
+            Opcode::GetLocal(_) => "GetLocal",
+            Opcode::SetLocal(_) => "SetLocal",
             Opcode::GetGlobalVar(_) => "GetGlobal",
             Opcode::SetGlobalVar(_) => "SetGlobal",
             Opcode::Label(_) => "Label",

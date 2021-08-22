@@ -1077,7 +1077,6 @@ fn codegen_programs(
 
                 let mut graph = BasicGraph::new(code);
 
-                graph.ssa();
                 graph.color();
 
                 let code = translate::expand_calls(graph.flatten(), &mut label_gen);

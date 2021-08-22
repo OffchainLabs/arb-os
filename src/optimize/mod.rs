@@ -206,12 +206,6 @@ impl BasicGraph {
         println!("complete: {}\n", self.complete);
     }
 
-    /// Converts a `BasicGraph` into single Single Static Assignment form, in which
-    /// every local variable is assigned to exactly once.
-    pub fn ssa(&mut self) {
-        let nodes: Vec<_> = self.graph.node_indices().rev().collect();
-    }
-
     pub fn color(&mut self) {
         if self.cyclic {
             // loops are rare and algos analyzing them must track stack
@@ -228,8 +222,8 @@ impl BasicGraph {
 
             for curr in code.iter().rev() {
                 match curr.opcode {
-                    Opcode::SetLocal => {}
-                    Opcode::GetLocal => {}
+                    Opcode::SetLocal(var) => {}
+                    Opcode::GetLocal(var) => {}
                     _ => {}
                 }
             }

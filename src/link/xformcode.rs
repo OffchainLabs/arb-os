@@ -108,49 +108,11 @@ pub fn fix_tuple_size(
                     ));
                 }
             }
-            Opcode::SetLocal => {
-                if let Some(index) = &insn.immediate {
-                    match index.to_usize() {
-                        Some(iu) => {
-                            locals_tree.write_code(true, iu, &mut code_out, debug_info)?;
-                        }
-                        None => {
-                            return Err(CompileError::new(
-                                String::from("Compile error: fix_tuple_size"),
-                                "index too large".to_string(),
-                                debug_info.location.into_iter().collect(),
-                            ))
-                        }
-                    }
-                } else {
-                    return Err(CompileError::new(
-                        String::from("Compile error: fix_tuple_size"),
-                        "SetLocal without immediate arg".to_string(),
-                        debug_info.location.into_iter().collect(),
-                    ));
-                }
+            Opcode::SetLocal(offset) => {
+                locals_tree.write_code(true, offset, &mut code_out, debug_info)?;
             }
-            Opcode::GetLocal => {
-                if let Some(index) = &insn.immediate {
-                    match index.to_usize() {
-                        Some(iu) => {
-                            locals_tree.read_code(true, iu, &mut code_out, debug_info)?;
-                        }
-                        None => {
-                            return Err(CompileError::new(
-                                String::from("Compile error: fix_tuple_size"),
-                                "index too large".to_string(),
-                                debug_info.location.into_iter().collect(),
-                            ))
-                        }
-                    }
-                } else {
-                    return Err(CompileError::new(
-                        String::from("Compile error: fix_tuple_size"),
-                        "GetLocal without immediate arg".to_string(),
-                        debug_info.location.into_iter().collect(),
-                    ));
-                }
+            Opcode::GetLocal(offset) => {
+                locals_tree.read_code(true, offset, &mut code_out, debug_info)?;
             }
             Opcode::SetGlobalVar(idx) => {
                 code_out.push(opcode!(Rpush));
