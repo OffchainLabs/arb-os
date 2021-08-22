@@ -907,22 +907,26 @@ impure func payForTxAndL1Gas(
 
     // pay for network fee; if insufficient funds, pay as much as we can then return false
     if ( ! {
-        let txPrice = fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, basePriceTx);
-        let calldataUnitPrice = fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, basePriceCalldataUnit);
+        let totalCost = fixedPoint_mulByUintTrunc(feeConfig.baseFeeMultiplier, basePriceTx);
+        let networkPrice = fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, totalCost);
+
+        let totalUnitPrice = fixedPoint_mulByUintTrunc(feeConfig.baseFeeMultiplier, basePriceCalldataUnit);
+        let networkUnitPrice = fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, totalUnitPrice);
+
         let (fullyPaid, ufs, weiPaid) = tryToPayForL1Gas(
             payer,
             address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
-            txPrice,
-            calldataUnits * calldataUnitPrice,
+            networkPrice,
+            calldataUnits * networkUnitPrice,
             feeStats,
             paymentLimitWei,
             feeStats.noFeeGasEstimationMode,
         );
         feeStats = ufs with {
             price: ufs.price with {
-                tx: txPrice + feeStats.price.tx
+                tx: networkPrice + feeStats.price.tx
             } with {
-                calldataUnit: calldataUnitPrice + feeStats.price.calldataUnit
+                calldataUnit: networkUnitPrice + feeStats.price.calldataUnit
             }
         };
         totalWeiPaid = totalWeiPaid + weiPaid;
