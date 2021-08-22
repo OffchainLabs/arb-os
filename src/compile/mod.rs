@@ -7,6 +7,7 @@
 use crate::console::Color;
 use crate::link::{link, postlink_compile, Import, LinkedProgram};
 use crate::mavm::{Instruction, Label, LabelId};
+use crate::optimize::BasicGraph;
 use crate::pos::{BytePos, Location};
 use crate::stringtable::{StringId, StringTable};
 use ast::Func;
@@ -35,8 +36,8 @@ mod ast;
 mod codegen;
 pub mod miniconstants;
 mod source;
-mod typecheck;
 mod translate;
+mod typecheck;
 lalrpop_mod!(mini);
 
 /// Command line options for compile subcommand.
@@ -1065,7 +1066,7 @@ fn codegen_programs(
                 let func_name = func.name.clone();
                 let debug_info = func.debug_info;
 
-                let (code, label_gen) = codegen::mavm_codegen_func(
+                let (code, mut label_gen) = codegen::mavm_codegen_func(
                     func,
                     &string_table,
                     &globals,
@@ -1074,10 +1075,12 @@ fn codegen_programs(
                     release_build,
                 )?;
 
-                //let graph = optimize::make_basic_graph(code);
-                //let code = optimize::flatten_basic_graph(graph);
+                let mut graph = BasicGraph::new(code);
 
-                //let code = translate::expand_calls(code, &mut label_gen);
+                graph.ssa();
+                graph.color();
+
+                let code = translate::expand_calls(graph.flatten(), &mut label_gen);
 
                 let source = Some(SourceFileMap::new(
                     code.len(),
@@ -1448,7 +1451,10 @@ impl SourceFileMap {
         if offset < self.end {
             return self.offsets[self.offsets.len() - 1].1.clone();
         }
-        panic!("SourceFileMap: bounds check error");
+        panic!(
+            "SourceFileMap: bounds check error for offset {} in {}",
+            offset, self.end
+        );
     }
 }
 

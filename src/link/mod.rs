@@ -394,13 +394,13 @@ pub fn postlink_compile(
     }
     let (code_2, jump_table) =
         striplabels::fix_backward_labels(&program.code, program.globals.len() - 1);
-    consider_debug_printing(&code_2, did_print, "after fix_backward_labels");
+    //consider_debug_printing(&code_2, did_print, "after fix_backward_labels");
 
     let code_3 = xformcode::fix_tuple_size(&code_2, program.globals.len())?;
-    consider_debug_printing(&code_3, did_print, "after fix_tuple_size");
+    //consider_debug_printing(&code_3, did_print, "after fix_tuple_size");
 
     let code_4 = optimize::peephole(&code_3);
-    consider_debug_printing(&code_4, did_print, "after peephole optimization");
+    //consider_debug_printing(&code_4, did_print, "after peephole optimization");
 
     let (mut code_5, jump_table_final) = striplabels::strip_labels(code_4, &jump_table)?;
     let jump_table_len = jump_table_final.len();
@@ -426,7 +426,7 @@ pub fn postlink_compile(
         println!("============ after strip_labels =============");
         println!("static: {}", jump_table_value);
         for (idx, insn) in code_final.iter().enumerate() {
-            println!("{:04}  {}", idx, insn);
+            println!("{:04}  {}", idx, insn.pretty_print(Color::PINK));
         }
         println!("============ after full compile/link =============");
     }

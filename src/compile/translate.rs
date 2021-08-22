@@ -1,4 +1,3 @@
-
 use crate::mavm::{AVMOpcode, Instruction, LabelGenerator, Opcode, Value};
 
 pub fn expand_calls(code: Vec<Instruction>, label_gen: &mut LabelGenerator) -> Vec<Instruction> {
@@ -30,19 +29,22 @@ pub fn expand_calls(code: Vec<Instruction>, label_gen: &mut LabelGenerator) -> V
                 }
 
                 // check whether we're calling on a codepoint or closure tuple
-                out.push(opcode!(Dup0));                                // return ? ?
-                out.push(opcode!(Type));                                // return ? type
-                out.push(opcode!(Equal, Value::from(1)));               // return ? (1 for codepoint)
+                out.push(opcode!(Dup0)); // return ? ?
+                out.push(opcode!(Type)); // return ? type
+                out.push(opcode!(Equal, Value::from(1))); // return ? (1 for codepoint)
                 out.push(opcode!(Cjump, Value::Label(codepoint_call))); // return ?
 
                 // not a codepoint, let's unpack
-                out.push(opcode!(Dup0));                 // return (closure, frame) (closure, frame)
+                out.push(opcode!(Dup0)); // return (closure, frame) (closure, frame)
                 out.push(opcode!(Tget, Value::from(1))); // return (closure, frame) frame
-                out.push(opcode!(Swap2));                // frame (closure, frame) return
-                out.push(opcode!(Swap1));                // frame return (closure, frame)
+                out.push(opcode!(Swap2)); // frame (closure, frame) return
+                out.push(opcode!(Swap1)); // frame return (closure, frame)
                 out.push(opcode!(Tget, Value::from(0))); // frame return closure
 
-                out.push(Instruction::from_opcode(Opcode::Label(codepoint_call), debug));
+                out.push(Instruction::from_opcode(
+                    Opcode::Label(codepoint_call),
+                    debug,
+                ));
                 out.push(opcode!(Jump));
                 out.push(Instruction::from_opcode(Opcode::Label(return_label), debug));
             }

@@ -1,0 +1,12 @@
+
+
+write func main() {
+    asm(tests().1) { log };
+}
+
+func tests() -> string {
+    
+
+    
+    return "";
+}

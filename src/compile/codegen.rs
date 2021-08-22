@@ -978,44 +978,15 @@ fn mavm_codegen_expr(
             code.push(opcode!(Noop, val.clone()));
             Ok(num_locals)
         }
-        TypeCheckedExprKind::FunctionCall(fexpr, args, func_type, _) => {
-            let n_args = args.len();
-            let ret_label = label_gen.next();
+        TypeCheckedExprKind::FunctionCall(fexpr, args, _, prop) => {
+            let nargs = args.len();
             let mut args_locals = 0;
-            for i in 0..n_args {
-                let arg_locals = expr!(&args[n_args - 1 - i], i)?;
+            for i in 0..nargs {
+                let arg_locals = expr!(&args[nargs - 1 - i], i)?;
                 args_locals = max(args_locals, arg_locals);
             }
-            // this is the thing that pushes the address to the stack
-            if &Type::Every != func_type {
-                code.push(opcode!(Noop, Value::Label(ret_label)));
-            }
-            let fexpr_locals = expr!(fexpr, n_args + 1)?;
-
-            // could be a closure, so let's check for the right interface
-            //   func vs (closure, frame)
-
-            let codepoint_call = label_gen.next();
-
-            // check whether we're calling on a codepoint or closure tuple
-            code.push(opcode!(Dup0));
-            code.push(opcode!(Type));
-            code.push(opcode!(Equal, Value::from(1))); // 1 for codepoint
-            code.push(opcode!(Cjump, Value::Label(codepoint_call)));
-
-            // not a codepoint, let's unpack
-            code.push(opcode!(Dup0)); // return (closure, frame) (closure, frame)
-            code.push(opcode!(Tget, Value::from(1))); // return (closure, frame) frame
-            code.push(opcode!(Swap2)); // frame (closure, frame) return
-            code.push(opcode!(Swap1)); // frame return (closure, frame)
-            code.push(opcode!(Tget, Value::from(0))); // frame return closure
-
-            code.push(Instruction::from_opcode(
-                Opcode::Label(codepoint_call),
-                debug,
-            ));
-            code.push(opcode!(Jump));
-            code.push(Instruction::from_opcode(Opcode::Label(ret_label), debug));
+            let fexpr_locals = expr!(fexpr, nargs + 1)?;
+            code.push(Instruction::from_opcode(Opcode::FuncCall(*prop), debug));
             Ok((max(num_locals, max(fexpr_locals, args_locals))))
         }
         TypeCheckedExprKind::CodeBlock(block) => mavm_codegen_code_block(

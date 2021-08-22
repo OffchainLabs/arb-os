@@ -31,6 +31,7 @@ mod link;
 mod mavm;
 #[cfg(test)]
 mod minitests;
+mod optimize;
 pub mod pos;
 mod run;
 mod stringtable;
