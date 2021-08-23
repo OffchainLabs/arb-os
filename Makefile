@@ -72,6 +72,12 @@ $(STDDIR)/rlpbench3.mexe: $(BUILTINMAOS) $(STDDIR)/rlpbench3.mini $(STDLIB)
 $(STDDIR)/rlpbench4.mexe: $(BUILTINMAOS) $(STDDIR)/rlpbench4.mini $(STDLIB)
 	$(CARGORUN) compile $(STDDIR)/rlpbench4.mini $(STDLIB) -o $(STDDIR)/rlpbench4.mexe $(COMPILEFLAGS) -t
 
+$(STDDIR)/rlpbench5.mexe: $(BUILTINMAOS) $(STDDIR)/rlpbench5.mini $(STDLIB)
+	$(CARGORUN) compile $(STDDIR)/rlpbench5.mini $(STDLIB) -o $(STDDIR)/rlpbench5.mexe $(COMPILEFLAGS) -t
+
+$(STDDIR)/wasm-run.mexe: $(BUILTINMAOS) $(STDDIR)/wasm-run.mini $(STDLIB)
+	$(CARGORUN) compile $(STDDIR)/wasm-run.mini -o $(STDDIR)/wasm-run.mexe $(COMPILEFLAGS) -t
+
 $(STDDIR)/codebuffer.mexe: $(BUILTINMAOS) $(STDDIR)/codebuffer.mini $(STDLIB)
 	$(CARGORUN) compile $(STDDIR)/codebuffer.mini $(STDLIB) -o $(STDDIR)/codebuffer.mexe
 

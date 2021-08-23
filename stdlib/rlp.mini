@@ -336,11 +336,11 @@ public func rlp_encodeMessageInfo(
 
     let empty = newbuffer();
     let res = asm(tx,0,empty,wasm_prog) (uint, buffer) { runwasm };
-    debug(res);
+    // debug(res);
 
     // debug((seqNum, gasPrice, gasLimit, to, value, data, v, r, s));
-    debug(rlp_encodeMessageInfo_old(seqNum, gasPrice, gasLimit, to, value, data, v, r, s));
-    debug(res);
+    // debug(rlp_encodeMessageInfo_old(seqNum, gasPrice, gasLimit, to, value, data, v, r, s));
+    // debug(res);
 
     return bytearray_wrap(res.1, res.0);
 
