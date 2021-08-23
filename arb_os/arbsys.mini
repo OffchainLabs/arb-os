@@ -15,6 +15,7 @@ use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallStack_callHitError;
 use evmCallStack::evmCallStack_addStorageCharge;
 use evmCallStack::evmCallStack_inRetryable;
+use evmCallStack::evmCallStack_getRealL1Caller;
 use evmCallStack::evmCallStack_addToCurrentStorageDelta;
 
 use evmCallStack::evmCallFrame_getCalldata;
@@ -25,6 +26,7 @@ use evmCallStack::evmCallFrame_getCaller;
 
 use evmOps::evmOp_log4;
 use evmOps::evmOp_return;
+use evmOps::evmOp_revert_knownPc;
 use evmOps::evmOp_revert_knownCodePc;
 use evmOps::evmOp_sload;
 use evmOps::evmOp_sstore;
@@ -51,6 +53,7 @@ use std::bytestream::bytestream_bytesReadSoFar;
 use inbox::inbox_currentArbBlockNumber;
 use inbox::inbox_currentEthBlockNumber;
 use inbox::inbox_currentTimestamp;
+use inbox::mapL1SenderAddress;
 
 use output::queueMessageForSend;
 
@@ -96,6 +99,10 @@ public impure func arbsys_txcall() {
             arbsys_getStorageAt(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbSys_isTopLevelCall) {
             arbsys_isTopLevelCall(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbSys_getL1CallerInfo) {
+            arbsys_getL1CallerInfo(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbSys_mapL1ContractAddressToL2) {
+            arbsys_mapL1ContractAddressToL2(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbSys), 1, 0, 0);
@@ -446,6 +453,45 @@ impure func arbsys_isTopLevelCall(_topFrame: EvmCallFrame, calldata: ByteArray) 
         evmOp_return(0, 32);
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 71, 0, 0);
+    }
+}
+
+// function getL1CallerInfo() external view returns (bool, address);
+impure func arbsys_getL1CallerInfo(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(80, 0, 0);
+    }
+    let (b, s) = xif let Some(l1Addr) = evmCallStack_getRealL1Caller(1) {
+        (true, l1Addr)
+    } else {
+        (false, address(0))
+    };
+    let mem = bytearray_set256(
+        bytearray_set256(bytearray_new(0), 0, xif (b) { 1 } else { 0 }),
+        32,
+        uint(s),
+    );
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 64);
+    } else {
+        evmOp_revert_knownPc(81, 0, 0);
+    }
+}
+
+impure func arbsys_mapL1ContractAddressToL2(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(90, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let mem = bytearray_set256(
+        bytearray_new(0),
+        0,
+        uint(mapL1SenderAddress(addr)),
+    );
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownPc(91, 0, 0);
     }
 }
 

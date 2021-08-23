@@ -4,8 +4,17 @@
 
 use accounts::accounts_notifyParamsChanged;
 
+use inbox::mapL1SenderAddress;
+
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsForall;
+
+use std::addressSet::SetOfAddresses;
+use std::addressSet::setOfAddresses_emptySet;
+use std::addressSet::setOfAddresses_add;
+use std::addressSet::setOfAddresses_remove;
+use std::addressSet::setOfAddresses_contains;
+use std::addressSet::setOfAddresses_serialize;
 
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
@@ -46,6 +55,7 @@ public impure func chainParams_create(which: uint, value: uint) {
 
 public impure func chainParams_init() {
     globalChainParameters = chainParams_getDefaults();
+    chainOwners = setOfAddresses_emptySet();   // initially, only address 0 can act as the chain owner
 }
 
 public func chainParams_getDefaults() -> map<uint, uint> {
@@ -63,7 +73,6 @@ public func chainParams_getDefaults() -> map<uint, uint> {
         with { [const::Atom_Param_ChallengePeriodEthBlocks] = const::Default_Param_ChallengePeriodEthBlocks }
         with { [const::Atom_Param_SpeedLimitPerSecond] = const::Default_Param_SpeedLimitPerSecond }
         with { [const::Atom_Param_SecondsPerSend] = const::Default_Param_SecondsPerSend }
-        with { [const::Atom_Param_ChainOwner] = const::Default_Param_ChainOwner }
         with { [const::Atom_Param_L1GasPerL1CalldataUnit] = const::Default_Param_L1GasPerL1CalldataUnit }
         with { [const::Atom_Param_L1GasPerStorage] = const::Default_Param_L1GasPerStorage }
         with { [const::Atom_Param_ArbGasDivisor] = const::Default_Param_ArbGasDivisor }
@@ -83,6 +92,7 @@ public func chainParams_getDefaults() -> map<uint, uint> {
 }
 
 public impure func chainParams_gotParamsMessage(data: ByteArray) {
+    debug(1);
     let stream = bytestream_new(data);
     loop {
         let paramId = xif let Some(res) = bytestream_get256(stream) {
@@ -100,6 +110,7 @@ public impure func chainParams_gotParamsMessage(data: ByteArray) {
         } else {
             panic   // should never have an id without a matching value
         };
+        debug((2, paramId, value));
         chainParams_set(paramId, value);
     }
 }
@@ -111,10 +122,6 @@ public impure func notifyParamsChanged() {
 
 public impure func chainParams_chainId() -> uint {
     return chainParams_getOrDie(const::Atom_Param_ChainID);
-}
-
-public impure func chainParams_getOwner() -> address {
-    return address(chainParams_getOrDie(const::Atom_Param_ChainOwner));
 }
 
 public impure func chainParams_getDefaultAggregator() -> address {
@@ -147,3 +154,29 @@ func sapClosure(key: uint, value: uint, ba: ByteArray) -> ByteArray {
         value,
     );
 }
+
+var chainOwners: SetOfAddresses;
+
+public impure func addChainOwner(newOwner: address) {
+    chainOwners = setOfAddresses_add(chainOwners, newOwner);
+}
+
+public impure func removeChainOwner(ownerToRemove: address) {
+    chainOwners = setOfAddresses_remove(chainOwners, ownerToRemove);
+}
+
+public impure func serializedListOfChainOwners() -> ByteArray {
+    return xif let Some(ba) = setOfAddresses_serialize(chainOwners) {
+        ba
+    } else {
+        panic
+    };
+}
+
+public impure func hasChainOwnerPrivileges(addr: address) -> bool {
+    return setOfAddresses_contains(chainOwners, addr)
+        || (addr == address(0))
+        || (addr == mapL1SenderAddress(address(0)));
+}
+
+

@@ -30,7 +30,7 @@ pub fn _evm_test_bls_registry(log_to: Option<&Path>, debug: bool) {
     let arb_bls = ArbBLS::new(&wallet, debug);
 
     assert!(arb_bls
-        .get_public_key(&mut machine, my_addr.clone())
+        .get_public_key(&mut machine, remap_l1_sender_address(my_addr.clone()))
         .is_err());
 
     let expected = [
@@ -46,13 +46,15 @@ pub fn _evm_test_bls_registry(log_to: Option<&Path>, debug: bool) {
             expected[1].clone(),
             expected[2].clone(),
             expected[3].clone(),
+            false,
         )
         .is_ok());
 
-    let (res0, res1, res2, res3) = match arb_bls.get_public_key(&mut machine, my_addr.clone()) {
-        Ok(res) => res,
-        Err(_) => panic!(),
-    };
+    let (res0, res1, res2, res3) =
+        match arb_bls.get_public_key(&mut machine, remap_l1_sender_address(my_addr.clone())) {
+            Ok(res) => res,
+            Err(_) => panic!(),
+        };
     assert_eq!(res0, expected[0]);
     assert_eq!(res1, expected[1]);
     assert_eq!(res2, expected[2]);
@@ -490,9 +492,9 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
     let alice_arb_bls = ArbBLS::new(&alice_wallet, debug);
     let bob_arb_bls = ArbBLS::new(&bob_wallet, debug);
     let a4 = alice_public_key._to_four_uints();
-    alice_arb_bls.register(&mut machine, a4.0, a4.1, a4.2, a4.3)?;
+    alice_arb_bls.register(&mut machine, a4.0, a4.1, a4.2, a4.3, true)?;
     let b4 = bob_public_key._to_four_uints();
-    bob_arb_bls.register(&mut machine, b4.0, b4.1, b4.2, b4.3)?;
+    bob_arb_bls.register(&mut machine, b4.0, b4.1, b4.2, b4.3, true)?;
 
     let (alice_compressed_tx, alice_hash_to_sign) =
         machine.runtime_env._make_compressed_tx_for_bls(
