@@ -1493,7 +1493,11 @@ fn codegen_fixed_array_mod(
             Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), debug_info)
         };
         ($opcode:ident, $immediate:expr) => {
-            Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::$opcode), $immediate, debug_info)
+            Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::$opcode),
+                $immediate,
+                debug_info,
+            )
         };
     }
 
