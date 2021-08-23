@@ -63,6 +63,7 @@ impl From<Option<Location>> for DebugInfo {
 #[derive(Debug, Clone)]
 pub enum TopLevelDecl {
     TypeDecl(TypeDecl),
+    GenericTypeDecl(GenericTypeDecl),
     FuncDecl(Func),
     GenericFuncDecl(GenericFunc),
     VarDecl(GlobalVarDecl),
@@ -79,6 +80,22 @@ pub struct TypeDecl {
 
 pub fn new_type_decl(name: StringId, tipe: Type) -> TypeDecl {
     TypeDecl { name, tipe }
+}
+
+///Type Declaration, contains the StringId corresponding to the type name, and the underlying Type.
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct GenericTypeDecl {
+    pub name: StringId,
+    pub vars: BTreeMap<StringId, Type>,
+    pub tipe: Type,
+}
+
+pub fn new_generic_type_decl(
+    name: StringId,
+    vars: BTreeMap<StringId, Type>,
+    tipe: Type,
+) -> GenericTypeDecl {
+    GenericTypeDecl { name, vars, tipe }
 }
 
 ///A type in the mini language.
@@ -989,7 +1006,10 @@ impl Type {
             }
         }
     }
-    fn resolve(&self, type_args: &BTreeMap<StringId, Type>) -> Result<Type, CompileError> {
+    pub(crate) fn resolve(
+        &self,
+        type_args: &BTreeMap<StringId, Type>,
+    ) -> Result<Type, CompileError> {
         let mut elf = self.clone();
         let mut has_error = false;
         elf.recursive_apply(

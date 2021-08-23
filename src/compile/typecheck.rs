@@ -9,7 +9,7 @@ use super::ast::{
     GlobalVarDecl, MatchPattern, MatchPatternKind, Statement, StatementKind, StructField,
     TopLevelDecl, TrinaryOp, Type, TypeTree, UnaryOp,
 };
-use crate::compile::ast::{FieldInitializer, GenericFunc};
+use crate::compile::ast::{FieldInitializer, GenericFunc, GenericTypeDecl};
 use crate::compile::{CompileError, ErrorSystem, InliningHeuristic};
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
@@ -1137,6 +1137,7 @@ pub fn sort_top_level_decls(
     Vec<Import>,
     BTreeMap<StringId, Func>,
     HashMap<usize, Type>,
+    HashMap<usize, GenericTypeDecl>,
     Vec<GlobalVarDecl>,
     HashMap<usize, Type>,
     BTreeMap<StringId, GenericFunc>,
@@ -1152,6 +1153,7 @@ pub fn sort_top_level_decls(
     let mut funcs = BTreeMap::new();
     let mut generic_funcs = BTreeMap::new();
     let mut named_types = HashMap::new();
+    let mut generic_types = HashMap::new();
     let mut func_table = HashMap::new();
     let mut global_vars = Vec::new();
 
@@ -1170,6 +1172,9 @@ pub fn sort_top_level_decls(
             TopLevelDecl::TypeDecl(td) => {
                 named_types.insert(td.name, td.tipe.clone());
             }
+            TopLevelDecl::GenericTypeDecl(td) => {
+                generic_types.insert(td.name, td.clone());
+            }
             TopLevelDecl::VarDecl(vd) => {
                 global_vars.push(vd.clone());
             }
@@ -1180,6 +1185,7 @@ pub fn sort_top_level_decls(
         imports,
         funcs,
         named_types,
+        generic_types,
         global_vars,
         func_table,
         generic_funcs,
@@ -1192,6 +1198,7 @@ pub fn typecheck_top_level_decls(
     funcs: BTreeMap<StringId, Func>,
     generic_funcs: BTreeMap<StringId, GenericFunc>,
     named_types: &HashMap<usize, Type>,
+    generic_types: &HashMap<usize, GenericTypeDecl>,
     mut global_vars: Vec<GlobalVarDecl>,
     imports: &Vec<Import>,
     string_table: StringTable,
@@ -1213,6 +1220,11 @@ pub fn typecheck_top_level_decls(
     let mut exported_funcs = Vec::new();
 
     let type_table: HashMap<_, _> = named_types.clone().into_iter().collect();
+    for (_, tipe) in generic_types {
+        let reso = tipe.tipe.resolve(&tipe.vars)?;
+        println!("generic resolved: {}", reso.display());
+    }
+    let _ = generic_types.clone().into_iter().collect::<HashMap<_, _>>();
 
     let mut resolved_global_vars_map = HashMap::new();
     for (name, (tipe, slot_num)) in global_vars_map {

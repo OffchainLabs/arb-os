@@ -25,7 +25,7 @@ use std::io::{self, Read};
 use std::path::Path;
 use typecheck::TypeCheckedFunc;
 
-use crate::compile::ast::GenericFunc;
+use crate::compile::ast::{GenericFunc, GenericTypeDecl};
 pub use ast::{DebugInfo, GlobalVarDecl, StructField, TopLevelDecl, Type, TypeTree};
 pub use source::Lines;
 use std::str::FromStr;
@@ -94,6 +94,7 @@ struct Module {
     generic_funcs: BTreeMap<StringId, GenericFunc>,
     ///Map from `StringId`s in this file to the `Type`s they represent.
     named_types: HashMap<StringId, Type>,
+    generic_types: HashMap<StringId, GenericTypeDecl>,
     ///List of constants used in this file.
     constants: HashSet<String>,
     ///List of global variables defined within this file.
@@ -232,6 +233,7 @@ impl Module {
         funcs: BTreeMap<StringId, Func>,
         generic_funcs: BTreeMap<StringId, GenericFunc>,
         named_types: HashMap<usize, Type>,
+        generic_types: HashMap<usize, GenericTypeDecl>,
         constants: HashSet<String>,
         global_vars: Vec<GlobalVarDecl>,
         imports: Vec<Import>,
@@ -245,6 +247,7 @@ impl Module {
             funcs,
             generic_funcs,
             named_types,
+            generic_types,
             constants,
             global_vars,
             imports,
@@ -808,7 +811,7 @@ fn create_program_tree(
 
         let mut string_table = StringTable::new();
         let mut used_constants = HashSet::new();
-        let (imports, funcs, named_types, global_vars, hm, generic_funcs) =
+        let (imports, funcs, named_types, generic_types, global_vars, hm, generic_funcs) =
             typecheck::sort_top_level_decls(
                 &parse_from_source(
                     source,
@@ -831,6 +834,7 @@ fn create_program_tree(
                 funcs,
                 generic_funcs,
                 named_types,
+                generic_types,
                 used_constants,
                 global_vars,
                 imports,
@@ -947,6 +951,7 @@ fn typecheck_programs(
                  funcs,
                  generic_funcs,
                  named_types,
+                 generic_types,
                  constants,
                  global_vars,
                  imports,
@@ -962,6 +967,7 @@ fn typecheck_programs(
                         funcs,
                         generic_funcs,
                         &named_types,
+                        &generic_types,
                         global_vars,
                         &imports,
                         string_table,
