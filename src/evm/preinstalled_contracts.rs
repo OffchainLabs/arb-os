@@ -1434,7 +1434,7 @@ pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), et
 
 #[test]
 fn _test_upgrade_arbos_to_different_version() {
-    //_test_upgrade_arbos_over_itself_impl().unwrap();
+    _test_upgrade_arbos_over_itself_impl().unwrap();
 }
 
 fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
