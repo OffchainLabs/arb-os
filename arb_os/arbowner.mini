@@ -35,6 +35,10 @@ use evmOps::evmOp_revert_knownCodePc;
 use evmOps::evmOp_revertIfStatic;
 use evmOps::doCreationOpcode;
 
+use inbox::addressRemapExceptions_set;
+use inbox::isL1MappingException;
+use inbox::serializeAllRemapExceptions;
+
 use pluggables::ModuleFunction;
 use pluggables::installPluggable;
 use pluggables::bindContractAddressToPluggable;
@@ -141,8 +145,17 @@ public impure func arbowner_txcall() {
             arbowner_removeChainOwner(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_isChainOwner) {
             arbowner_isChainOwner(topFrame, calldata);
-         } elseif (funcCode == const::funcCode_ArbOwner_getAllChainOwners) {
-                arbowner_getAllChainOwners(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_getAllChainOwners) {
+            arbowner_getAllChainOwners(topFrame, calldata);
+
+        } elseif (funcCode == const::funcCode_ArbOwner_addMappingException) {
+            arbowner_addMappingException(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_removeMappingException) {
+            arbowner_removeMappingException(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_isMappingException) {
+            arbowner_isMappingException(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_getAllMappingExceptions) {
+            arbowner_getAllMappingExceptions(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
@@ -670,5 +683,86 @@ impure func arbowner_getAllChainOwners(_topFrame: EvmCallFrame, calldata: ByteAr
         evmOp_return(0, bytearray_size(mem));
     } else {
         evmOp_revert_knownPc(221, 0, 0);
+    }
+}
+
+//  function addMappingException(uint from, uint to) external;
+impure func arbowner_addMappingException(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownPc(230, 0, 0);
+    }
+    let from = bytearray_get256(calldata, 4);
+    let to = bytearray_get256(calldata, 36);
+    addressRemapExceptions_set(
+        xif(from == const::WildcardForAddress) { None<address> } else { Some(address(from)) },
+        xif(to == const::WildcardForAddress) { None<address> } else { Some(address(to)) },
+        true,
+    );
+    evmOp_return(0, 0);
+}
+
+//  function removeMappingException(uint from, uint to) external;
+impure func arbowner_removeMappingException(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownPc(240, 0, 0);
+    }
+    let from = bytearray_get256(calldata, 4);
+    let to = bytearray_get256(calldata, 36);
+    addressRemapExceptions_set(
+        xif(from == const::WildcardForAddress) { None<address> } else { Some(address(from)) },
+        xif(to == const::WildcardForAddress) { None<address> } else { Some(address(to)) },
+        false,
+    );
+    evmOp_return(0, 0);
+}
+
+//  function isMappingException(uint from, uint to) external view returns(bool);
+impure func arbowner_isMappingException(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownPc(240, 0, 0);
+    }
+    let from = bytearray_get256(calldata, 4);
+    let to = bytearray_get256(calldata, 36);
+    let result = isL1MappingException(
+        xif(from == const::WildcardForAddress) { None<address> } else { Some(address(from)) },
+        xif(to == const::WildcardForAddress) { None<address> } else { Some(address(to)) },
+    );
+    let mem = bytearray_new(0);
+    if (result) {
+        mem = bytearray_set256(mem, 0, 1);
+    }
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownPc(241, 0, 0);
+    }
+}
+
+//  function getAllMappingExceptions() external view returns (bytes memory);
+impure func arbowner_getAllMappingExceptions(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(250, 0, 0);
+    }
+
+    let serialized = serializeAllRemapExceptions();
+    let mem = bytearray_copy(
+        serialized,
+        0,
+        bytearray_set256(
+            bytearray_set256(
+                bytearray_new(0),
+                0,
+                32,
+            ),
+            32,
+            bytearray_size(serialized),
+        ),
+        64,
+        bytearray_size(serialized),  // don't need to round up, because already a multiple of 32
+    );
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, bytearray_size(mem));
+    } else {
+        evmOp_revert_knownPc(251, 0, 0);
     }
 }

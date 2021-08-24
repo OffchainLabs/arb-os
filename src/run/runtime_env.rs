@@ -102,10 +102,16 @@ impl RuntimeEnvironment {
 
     fn get_params_bytes(owner: Option<Uint256>, chain_id: u64) -> Vec<u8> {
         let mut buf = Vec::new();
-        let params_to_set = vec![
-            ("ChainOwner", owner.clone().unwrap_or(Uint256::zero())),
-            ("ChainID", Uint256::from_u64(chain_id)),
-        ];
+        let params_to_set = if let Some(the_owner) = owner {
+            vec![
+                ("ChainOwner", the_owner),
+                ("ChainID", Uint256::from_u64(chain_id)),
+            ]
+        } else {
+            vec![
+                ("ChainID", Uint256::from_u64(chain_id)),
+            ]
+        };
         for (name, val) in params_to_set {
             buf.extend(&keccak256(name.as_bytes()));
             buf.extend(val.to_bytes_be());

@@ -110,10 +110,10 @@ public impure func chainParams_gotParamsMessage(data: ByteArray) {
         } else {
             panic   // should never have an id without a matching value
         };
-        
-        asm((paramId, value, "param".1),) { debugprint };
-        
+
         if (paramId == const::ChainOwnerKeccak) {
+            // special-case this, for backward compatibility
+            // use of this is deprecated, and it will be removed in a future ArbOS upgrade
             addChainOwner(address(value));
         } else {
             chainParams_set(paramId, value);

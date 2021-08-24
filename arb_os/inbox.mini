@@ -15,7 +15,9 @@ use std::queue::queuestack_get;
 use std::addressSet::AddressPairSet;
 use std::addressSet::addressPairSet_new;
 use std::addressSet::addressPairSet_lookup_options;
+use std::addressSet::addressPairSet_lookup_strict;
 use std::addressSet::addressPairSet_set;
+use std::addressSet::addressPairSet_serialize;
 
 use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
@@ -598,13 +600,14 @@ public impure func mapL1SenderAddress(callerAddr: address, maybeCallee: option<a
     };
 }
 
-public func _inverseMapL1SenderAddress(callerAddr: address) -> address {
-    return address(uint(callerAddr) - const::L1ToL2MapConstant);  // deliberately allow underflow, address(.) will truncate
+public impure func isL1MappingException(from: option<address>, to: option<address>) -> bool {
+    return addressPairSet_lookup_strict(addressRemapExceptions, from, to);
 }
 
-public impure func _addressRemapExceptions_set(sender: option<address>, dest: option<address>, value: bool) {
+public impure func addressRemapExceptions_set(sender: option<address>, dest: option<address>, value: bool) {
     addressRemapExceptions = addressPairSet_set(addressRemapExceptions, sender, dest, value);
 }
 
-
-
+public impure func serializeAllRemapExceptions() -> ByteArray {
+    return addressPairSet_serialize(addressRemapExceptions);
+}
