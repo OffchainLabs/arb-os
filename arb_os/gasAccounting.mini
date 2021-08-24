@@ -739,7 +739,10 @@ public impure func getNextRequestFromCongestionAuction() -> (
         };
     }
 
-    return xif ((tx.incomingRequest.sender != address(0)) && (tx.incomingRequest.sender != mapL1SenderAddress(address(0))) && feesEnabled() && (! tx.incomingRequest.adminMode)) {
+    return xif (   (tx.incomingRequest.sender != address(0))
+                && (tx.incomingRequest.sender != mapL1SenderAddress(address(0), None<address>))
+                && feesEnabled()
+                && (! tx.incomingRequest.adminMode)) {
         if let Some(txSeqNum) = tx.seqNum {
             let expectedSeqNum = account_getNextSeqNum(accountStore_get(getGlobalAccountStore(), tx.caller));
 

@@ -135,8 +135,6 @@ public impure func arbowner_txcall() {
             arbowner_getAllFairGasPriceSenders(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_bindAddressToPluggable) {
             arbowner_bindAddressToPluggable(topFrame, calldata);
-        } elseif (funcCode == const::funcCode_ArbOwner_bindAddressToPluggable) {
-            arbowner_bindAddressToPluggable(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_addChainOwner) {
             arbowner_addChainOwner(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_removeChainOwner) {
@@ -475,22 +473,17 @@ impure func arbowner_allowOnlyOwnerToSend(_topFrame: EvmCallFrame, calldata: Byt
 
 // function isAllowedSender(address addr) external view returns(bool);
 impure func arbowner_isAllowedSender(_topFrame: EvmCallFrame, calldata: ByteArray) {
-    debug(1);
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(210, 0, 0);
     }
-    debug(2);
     let mem = bytearray_set256(
         bytearray_new(0),
         0,
         uint(allowedSenders_contains(address(bytearray_get256(calldata, 4))))
     );
-    debug(3);
     if (evmCallStack_setTopFrameMemory(mem)) {
-        debug(4);
         evmOp_return(0, 32);
     } else {
-        debug(5);
         evmOp_revert_knownPc(211, 0, 0);
     }
 }

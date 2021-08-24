@@ -74,7 +74,7 @@ impure func arbosTest_installAccount(topFrame: EvmCallFrame, calldata: ByteArray
     // Verify that this has been called by address zero.
     // This ensures that this method can only be called (1) in testing, or (2) by the EthBridge.
     let caller = evmCallFrame_getCaller(topFrame);
-    if ((caller != address(0)) && (caller != mapL1SenderAddress(address(0)))) {
+    if ((caller != address(0)) && (caller != mapL1SenderAddress(address(0), None<address>))) {
         evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 10, 0, 0);
     }
 
@@ -124,7 +124,7 @@ impure func arbosTest_installAccount(topFrame: EvmCallFrame, calldata: ByteArray
 impure func arbosTest_getMarshalledStorage(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> bytes
     // Return the marshalled storage for the contract at addr. Revert if no contract at that address.
     let caller = evmCallFrame_getCaller(topFrame);
-    if ( (caller != address(0)) && (caller != mapL1SenderAddress(address(0))) ){
+    if ( (caller != address(0)) && (caller != mapL1SenderAddress(address(0), None<address>)) ){
         evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 20, 0, 0);
     }
 

@@ -209,7 +209,7 @@ public func set_chainOwners_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> SetOf
                 empty,
                 address(oldOwner),
             ),
-            mapL1SenderAddress(address(oldOwner)),
+            address(uint(oldOwner) + const::L1ToL2MapConstant),  // don't call standard function (it relies on not-yet-initialized data)
         )
     } else {
         empty

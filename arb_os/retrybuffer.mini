@@ -169,7 +169,7 @@ impure func retryBuffer_insertNew(
     calldata: ByteArray,
     l1Message: IncomingRequest,
 ) -> (RetryBuffer, uint) {
-    let updatedSender = mapL1SenderAddress(originalSender);
+    let updatedSender = mapL1SenderAddress(originalSender, Some(destination));
     let newTx = struct {
         txId: uint(hash(bytes32(txId), bytes32(0))),
         sender: updatedSender,

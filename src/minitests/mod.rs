@@ -580,7 +580,9 @@ fn balance_after_memory_usage(usage: u64) -> Uint256 {
         .unwrap();
 
     let arbinfo = _ArbInfo::_new(false);
-    let balance = arbinfo._get_balance(&mut machine, &remap_l1_sender_address(my_addr)).unwrap();
+    let balance = arbinfo
+        ._get_balance(&mut machine, &remap_l1_sender_address(my_addr))
+        .unwrap();
     machine.write_coverage("balance_after_memory_usage".to_string());
     balance
 }
