@@ -26,6 +26,8 @@ use std::bytestream::bytestream_get256;
 
 use gasAccounting::gasAccounting_notifyParamsChanged;
 
+const ChainOwnerKeccak = 0x1567aa7175e04611d194275bb504cc64e920959dd01df9d86ab047367aa4c534;
+
 
 var globalChainParameters: map<uint, uint>;
 
@@ -109,7 +111,13 @@ public impure func chainParams_gotParamsMessage(data: ByteArray) {
         } else {
             panic   // should never have an id without a matching value
         };
-        chainParams_set(paramId, value);
+        if (paramId == const::ChainOwnerKeccak) {
+            // special-case this, for backward compatibility
+            // use of this is deprecated, and it will be removed in a future ArbOS upgrade
+            addChainOwner(address(value));
+        } else {
+            chainParams_set(paramId, value);
+        }
     }
 }
 
