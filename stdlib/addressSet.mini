@@ -19,7 +19,6 @@ use std::storageMap::storageMap_set;
 use std::storageMap::storageMap_size;
 use std::storageMap::storageMap_serializeListOfNonzeros;
 
-const WildcardForAddress = 1461501637330902918203684832716283019655932542976;  // 2**20
 
 type SetOfAddresses = struct {
     contents: StorageMap,
@@ -126,6 +125,19 @@ public func addressPairSet_lookup_options(
         xif let Some(a1) = addr1 { a1 } else { address(const::WildcardForAddress) },
         xif let Some(a2) = addr2 { a2 } else { address(const::WildcardForAddress) },
     );
+}
+
+public func addressPairSet_lookup_strict(   // look for specific match (i.e., specific addr doesn't match wildcard)
+    aps: AddressPairSet,
+    addr1: option<address>,
+    addr2: option<address>,
+) -> bool {
+    return aps.contents[
+        (
+            xif let Some(a1) = addr1 { uint(a1) } else { const::WildcardForAddress },
+            xif let Some(a2) = addr2 { uint(a2) } else { const::WildcardForAddress },
+        )
+    ] == Some(true);
 }
 
 public func addressPairSet_serialize(aps: AddressPairSet) -> ByteArray {

@@ -54,6 +54,12 @@ interface ArbOwner {
     function isChainOwner(address addr) external view returns(bool);
     function getAllChainOwners() external view returns(bytes memory);
 
+    // Manage exceptions to L1->L2 address remapping
+    function addMappingException(uint from, uint to) external;
+    function removeMappingException(uint from, uint to) external;
+    function isMappingException(uint from, uint to) external view returns(bool);
+    function getAllMappingExceptions() external view returns (bytes memory);
+
     function getTotalOfEthBalances() external view returns(uint);
 }
 

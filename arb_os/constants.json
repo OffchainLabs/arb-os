@@ -191,7 +191,8 @@
     "BLSSignatureDomainBase": "73a92f91d473214defd5ffa91d036007eb2e6487fffaa551835e988fb24aaa2b",
     "HashOfEmptyCode": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
     "L1ToL2MapConstant": "1111000000000000000000000000000000001111",
-    "MaxArraySize": "10000000000000000"
+    "MaxArraySize": "10000000000000000",
+    "WildcardForAddress": "010000000000000000000000000000000000000000"
   },
   "contract_folder": "contracts/artifacts/arbos/builtin",
   "contract": [
