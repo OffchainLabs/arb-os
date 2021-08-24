@@ -486,7 +486,7 @@ impure func arbsys_mapL1ContractAddressToL2(_topFrame: EvmCallFrame, calldata: B
     let mem = bytearray_set256(
         bytearray_new(0),
         0,
-        uint(mapL1SenderAddress(addr)),
+        uint(mapL1SenderAddress(addr, None<address>)),
     );
     if (evmCallStack_setTopFrameMemory(mem)) {
         evmOp_return(0, 32);

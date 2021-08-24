@@ -116,6 +116,18 @@ public func addressPairSet_lookup(aps: AddressPairSet, addr1: address, addr2: ad
         || (cont[(uint(addr1), uint(addr2))] == Some(true));
 }
 
+public func addressPairSet_lookup_options(
+    aps: AddressPairSet,
+    addr1: option<address>,
+    addr2: option<address>,
+) -> bool {
+    return addressPairSet_lookup(
+        aps,
+        xif let Some(a1) = addr1 { a1 } else { address(const::WildcardForAddress) },
+        xif let Some(a2) = addr2 { a2 } else { address(const::WildcardForAddress) },
+    );
+}
+
 public func addressPairSet_serialize(aps: AddressPairSet) -> ByteArray {
     let rawResult = builtin_kvsForall(
         unsafecast<Kvs>(aps.contents),
