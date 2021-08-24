@@ -20,7 +20,21 @@ use std::fmt::Formatter;
 
 ///This is a map of the types at a given location, with the Vec<String> representing the module path
 ///and the usize representing the stringID of the type at that location.
-pub type TypeTree = HashMap<(Vec<String>, usize), (Type, String)>;
+#[derive(Clone, Serialize, Deserialize, Default)]
+pub struct TypeTree {
+    pub nominals: HashMap<(Vec<String>, usize), (Type, String)>,
+}
+
+impl TypeTree {
+    pub fn get(&self, path: &(Vec<String>, usize)) -> Option<&(Type, String)> {
+        self.nominals.get(path)
+    }
+    pub fn new(nominals: HashMap<(Vec<String>, usize), (Type, String)>) -> Self {
+        TypeTree {
+            nominals
+        }
+    }
+}
 
 ///Debugging info serialized into mini executables, currently only contains a location.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -803,7 +817,7 @@ impl Type {
     }
 
     pub fn display(&self) -> String {
-        self.display_indented(0, "::", None, false, &TypeTree::new())
+        self.display_indented(0, "::", None, false, &TypeTree::default())
             .0
     }
 

@@ -913,6 +913,8 @@ fn resolve_imports(
 
 ///Constructor for `TypeTree`
 fn create_type_tree(program_tree: &HashMap<Vec<String>, Module>) -> TypeTree {
+    TypeTree {
+        nominals:
     program_tree
         .iter()
         .map(|(path, program)| {
@@ -935,6 +937,7 @@ fn create_type_tree(program_tree: &HashMap<Vec<String>, Module>) -> TypeTree {
         })
         .flatten()
         .collect()
+    }
 }
 
 fn typecheck_programs(

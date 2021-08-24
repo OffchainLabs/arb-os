@@ -34,7 +34,7 @@ pub struct SerializableTypeTree {
 impl SerializableTypeTree {
     pub fn from_type_tree(tree: TypeTree) -> Self {
         let mut inner = BTreeMap::new();
-        for ((path, id), tipe) in tree.into_iter() {
+        for ((path, id), tipe) in tree.nominals.into_iter() {
             inner.insert(format!("{}, {}", comma_list(&path), id), tipe);
         }
         Self { inner }
@@ -50,7 +50,7 @@ impl SerializableTypeTree {
                 .expect("failed to parse");
             type_tree.insert((x, id), tipe);
         }
-        type_tree
+        TypeTree::new(type_tree)
     }
 }
 
