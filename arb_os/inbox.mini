@@ -12,6 +12,11 @@ use std::queue::queuestack_new;
 use std::queue::queuestack_push;
 use std::queue::queuestack_get;
 
+use std::addressSet::AddressPairSet;
+use std::addressSet::addressPairSet_new;
+use std::addressSet::addressPairSet_lookup;
+use std::addressSet::addressPairSet_set;
+
 use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
 use accounts::accountStore_get;
@@ -83,6 +88,7 @@ public impure func inbox_init() {
         txQ: txRequestQueue_new(),
         batchQ: incomingRequestQueueStack_new()
     };
+    addressRemapExceptions = addressPairSet_new();
 }
 
 public impure func emitGenesisBlockReceipt() {
@@ -301,8 +307,6 @@ func hashIncomingRequest(req: IncomingRequest) -> bytes32 {
 }
 
 public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
-    let msg = unsafecast<IncomingRequest>(());   // value will be re-initialized before use
-    
     return xloop {
         if let Some(res) = txRequestQueue_get(globalInputQueue.txQ) {
             let (newQ, tx) = res;
@@ -311,15 +315,15 @@ public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
             };
             return unsafecast<TxRequestData>(tx);
         }
-        if let Some(res) = incomingRequestQueueStack_get(globalInputQueue.batchQ) {
+        let msg = xif let Some(res) = incomingRequestQueueStack_get(globalInputQueue.batchQ) {
             let (newQ, umsg) = res;
             globalInputQueue = globalInputQueue with {
                 batchQ: newQ
             };
-            msg = umsg;
+            umsg
         } else {
-            msg = inbox_get();
-        }
+            inbox_get()
+        };
 
         if let Some(batch) = messageBatch_tryNew(msg) {
             // it's a batch message, so unpack its components and queue them
@@ -357,8 +361,8 @@ public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
                     setGlobalAccountStore(
                         accountStore_set(
                             gAcctStore,
-                            msg.sender,
-                            account_addToEthBalance(accountStore_get(gAcctStore, msg.sender), callvalue)
+                            mapL1SenderAddress(msg.sender),
+                            account_addToEthBalance(accountStore_get(gAcctStore, mapL1SenderAddress(msg.sender)), callvalue)
                         )
                     );
                     if let Some(txRequest) = translateUnsignedTx(msg) {
@@ -372,8 +376,8 @@ public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
                     setGlobalAccountStore(
                         accountStore_set(
                             gAcctStore,
-                            msg.sender,
-                            account_addToEthBalance(accountStore_get(gAcctStore, msg.sender), callvalue)
+                            mapL1SenderAddress(msg.sender),
+                            account_addToEthBalance(accountStore_get(gAcctStore, mapL1SenderAddress(msg.sender)), callvalue)
                         )
                     );
                     if let Some(txRequest) = translateUnsignedTx(msg) {
@@ -475,21 +479,23 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
             ))
         };
     }
+    let updatedSender = mapL1SenderAddress(request.sender);
     return Some(
         struct {
             maxGas: maxGas,
             gasPrice: gasPrice,
             seqNum: seqNum,
-            caller: request.sender,
+            caller: updatedSender,
             calleeAddr: address(destAddrAsUint),
-            gasPayer: request.sender,
+            gasPayer: updatedSender,
             value: value,
             calldata: calldata,
             nonMutating: (subtype == const::L2MessageType_nonmutatingCall),
             isConstructor: (destAddrAsUint == 0),
-            incomingRequest: request,
+            incomingRequest: request with { sender: updatedSender },
             feeStats: txFeeStats_zero(),
             fromRetryable: None<RetryableTx>,
+            originalCaller: request.sender,
         }
     );
 }
@@ -557,6 +563,28 @@ func txRequestQueue_get(q: TxRequestQueue) -> option<(TxRequestQueue, TxRequestD
     return Some((struct{ q: uq }, unsafecast<TxRequestData>(item)));
 }
 
+
+var addressRemapExceptions: AddressPairSet;
+
+public func mapL1SenderAddress(addr: address) -> address {
+    return address(uint(addr) + const::L1ToL2MapConstant);  // deliberately allow overflow, address(.) will truncate
+}
+
+public func _inverseMapL1SenderAddress(addr: address) -> address {
+    return address(uint(addr) - const::L1ToL2MapConstant);  // deliberately allow underflow, address(.) will truncate
+}
+
+public impure func _inverseMapL1SenderAddressIfException(txSender: address, txDest: address) -> address {
+    return xif (addressPairSet_lookup(addressRemapExceptions, txSender, txDest)) {
+        _inverseMapL1SenderAddress(txSender)
+    } else {
+        txSender
+    };
+}
+
+public impure func _addressRemapExceptions_set(sender: option<address>, dest: option<address>, value: bool) {
+    addressRemapExceptions = addressPairSet_set(addressRemapExceptions, sender, dest, value);
+}
 
 
 

@@ -4,7 +4,13 @@
 
 // This implements a set-of-addresses data structure.
 
+use core::kvs::Kvs;
+use core::kvs::builtin_kvsForall;
+
 use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_set256;
 
 use std::storageMap::StorageMap;
 use std::storageMap::storageMap_new;
@@ -13,6 +19,7 @@ use std::storageMap::storageMap_set;
 use std::storageMap::storageMap_size;
 use std::storageMap::storageMap_serializeListOfNonzeros;
 
+const WildcardForAddress = 1461501637330902918203684832716283019655932542976;  // 2**20
 
 type SetOfAddresses = struct {
     contents: StorageMap,
@@ -68,3 +75,71 @@ public func setOfAddresses_serialize(sa: SetOfAddresses) -> option<ByteArray> {
         Some(storageMap_serializeListOfNonzeros(sa.contents))
     };
 }
+
+
+type AddressPairSet = struct {
+    contents: map<(uint, uint), bool>,
+}
+
+public func addressPairSet_new() -> AddressPairSet {
+    return struct { contents: newmap<(uint, uint), bool> };
+}
+
+public func addressPairSet_set(
+    aps: AddressPairSet,
+    first: option<address>,
+    second: option<address>,
+    newValue: bool,
+) -> AddressPairSet {
+    let addr1 = xif let Some(a1) = first {
+        uint(a1)
+    } else {
+        const::WildcardForAddress
+    };
+    let addr2 = xif let Some(a2) = second {
+        uint(a2)
+    } else {
+        const::WildcardForAddress
+    };
+
+    //assert(((addr1 != const::WildcardForAddress) || (addr2 != const::WildcardForAddress), ()));
+
+    return aps with {
+        contents: aps.contents with { [(addr1, addr2)] = newValue }
+    };
+}
+
+public func addressPairSet_lookup(aps: AddressPairSet, addr1: address, addr2: address) -> bool {
+    let cont = aps.contents;
+    return (cont[(uint(addr1), const::WildcardForAddress)] == Some(true))
+        || (cont[(const::WildcardForAddress, uint(addr2))] == Some(true))
+        || (cont[(uint(addr1), uint(addr2))] == Some(true));
+}
+
+public func addressPairSet_serialize(aps: AddressPairSet) -> ByteArray {
+    let rawResult = builtin_kvsForall(
+        unsafecast<Kvs>(aps.contents),
+        unsafecast<func(any, any, any) -> any>(apss_closure),
+        bytearray_new(0),
+    );
+    return unsafecast<ByteArray>(rawResult);
+}
+
+func apss_closure(key:(uint, uint), value: uint, state: ByteArray) -> ByteArray {
+    return xif (value == 0) {
+        state
+    } else {
+        let sz = bytearray_size(state);
+        bytearray_set256(
+            bytearray_set256(state, sz, key.0),
+            sz+32,
+            key.1
+        )
+    };
+}
+
+
+
+
+
+

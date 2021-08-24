@@ -227,6 +227,7 @@ public impure func emitTxReceipt(
     gasUsage: option<GasUsage>,
     feeStats: TxFeeStats,
     emitTracingInfo: bool,
+    originalSender: address,
 ) {
     arbStatistics_addTxReceipt();
 
@@ -274,6 +275,7 @@ public impure func emitTxReceipt(
             numEvmLogs,
         ),
         feeStats,
+        originalSender,
     ),) { log };
 }
 

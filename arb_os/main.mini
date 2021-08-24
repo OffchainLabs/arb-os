@@ -130,6 +130,7 @@ public impure func mainRunLoop() {
                     None<GasUsage>,
                     request.feeStats,
                     false,      // don't emit tracing info because the tx was bogus
+                    request.originalCaller,
                 );
             }
         } else {
@@ -151,6 +152,7 @@ public impure func mainRunLoop() {
                 None<GasUsage>,
                 request.feeStats,
                 true,
+                request.originalCaller,
             );
         }
     }

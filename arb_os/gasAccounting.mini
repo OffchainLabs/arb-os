@@ -24,11 +24,13 @@ use accounts::account_setBaseTxFeeL1Gas;
 use arbstatistics::arbStatistics_addToStorage;
 use arbstatistics::arbStatistics_addToGasUsed;
 
-use chainParameters::chainParams_get;
 use chainParameters::chainParams_getOrDie;
+use chainParameters::hasChainOwnerPrivileges;
 
 use evmCallStack::evmCallStack_getAccountInCurrentContext;
 use evmCallStack::evmCallStack_setAccountInCurrentContext;
+
+use inbox::mapL1SenderAddress;
 
 use messages::TxRequestData;
 
@@ -337,6 +339,81 @@ public impure func gasAccounting_addToGasPool(delta: uint) {
         }
     };
 }
+
+/*public impure func gasAccounting_setFeesEnabled(enabled: bool) {
+    gasAccountingInfo = gasAccountingInfo with {
+        feeConfig: gasAccountingInfo.feeConfig with { enabled: enabled }
+    };
+    let (gasPrices, retryablePrices) = setPrices(
+        gasAccountingInfo.feeConfig,
+        gasAccountingInfo.pricingParams,
+        gasAccountingInfo.congestionState,
+        gasAccountingInfo.retryablePrices,
+    );
+    gasAccountingInfo = gasAccountingInfo with {
+        currentPrices: gasPrices
+    } with {
+        retryablePrices: retryablePrices
+    };
+    if (enabled) {
+        gasAccountingInfo = gasAccountingInfo with {
+            congestionState: initCongestionState(false)
+        };
+    }
+}*/
+
+/*public impure func gasAccounting_setChargingParams(
+    l1GasPerL1CalldataUnit: uint,
+    l1GasPerStorage: uint,
+    arbGasDivisor: uint,
+    netFeeRecipient: address,
+    congestionFeeRecipient: address,
+) {
+    gasAccountingInfo = gasAccountingInfo with {
+        pricingParams: struct {
+            l1GasPerL1CalldataUnit: l1GasPerL1CalldataUnit,
+            l1GasPerStorage: l1GasPerStorage,
+            arbGasDivisor: arbGasDivisor,
+        }
+    } with {
+        feeConfig: gasAccountingInfo.feeConfig with {
+            forNetwork: netFeeRecipient
+        } with {
+            forCongestion: congestionFeeRecipient
+        }
+    };
+    gasAccounting_postInitMessage();
+}*/
+
+/*public impure func gasAccounting_postInitMessage() {   // this runs after we have received the init message, or similar
+    let speedLimitPerSecond = chainParams_speedLimitPerSecond();
+    setGasAccountingParamsFromSpeedLimit(speedLimitPerSecond);
+    if (gasAccountingInfo.congestionState.gasPool > int(gasAccountingParams.GasPoolMax)) {
+        // max sure gas pool isn't above its max
+        gasAccountingInfo = gasAccountingInfo with {
+            congestionState: gasAccountingInfo.congestionState with {
+                gasPool: int(gasAccountingParams.GasPoolMax)
+            }
+        };
+    }
+}*/
+
+/*public impure func gasAccounting_getFeeRecipients() -> (address, address) {
+    return (
+        gasAccountingInfo.feeConfig.forNetwork,
+        gasAccountingInfo.feeConfig.forCongestion,
+    );
+}*/
+
+/*public impure func gasAccounting_setFeeRecipients(forNetwork: address, forCongestion: address) {
+    gasAccountingInfo = gasAccountingInfo with {
+        feeConfig: gasAccountingInfo.feeConfig with {
+            forNetwork: forNetwork
+        } with {
+            forCongestion: forCongestion
+        }
+    };
+}*/
 
 public impure func getAddressForReserveFundsDeposit() -> address {
     return address(chainParams_getOrDie(const::Atom_Param_CongestionFeeRecipient));
@@ -662,7 +739,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
         };
     }
 
-    return xif ((tx.incomingRequest.sender != address(0)) && feesEnabled() && (! tx.incomingRequest.adminMode)) {
+    return xif ((tx.incomingRequest.sender != address(0)) && (tx.incomingRequest.sender != mapL1SenderAddress(address(0))) && feesEnabled() && (! tx.incomingRequest.adminMode)) {
         if let Some(txSeqNum) = tx.seqNum {
             let expectedSeqNum = account_getNextSeqNum(accountStore_get(getGlobalAccountStore(), tx.caller));
 
@@ -1194,8 +1271,7 @@ public impure func allowedSenders_allowNone() {
 
 public impure func allowedSenders_contains(addr: address) -> bool {
     return setOfAddresses_contains(gasAccountingInfo.allowedSenders, addr)
-        || (addr == address(0))
-        || (Some(uint(addr)) == chainParams_get(const::Atom_Param_ChainOwner));
+        || hasChainOwnerPrivileges(addr);
 }
 
 public impure func allowedSenders_add(addr: address) {

@@ -7,9 +7,11 @@ use accounts::account_getAggregatorToPayAsOption;
 use accounts::account_getFeeCollector;
 use accounts::account_setFeeCollector;
 
+use arbowner::revertIfNotOwner;
+
 use chainParameters::chainParams_getDefaultAggregator;
 use chainParameters::chainParams_setDefaultAggregator;
-use chainParameters::chainParams_getOwner;
+use chainParameters::hasChainOwnerPrivileges;
 
 use evmCallStack::EvmCallFrame;
 use evmCallStack::evmCallStack_topFrame;
@@ -128,8 +130,8 @@ impure func arbaggregator_setDefaultAggregator(topFrame: EvmCallFrame, calldata:
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(40, 0, 0);
     }
-    if ((caller != address(0)) && (caller != chainParams_getOwner()) && (caller != chainParams_getDefaultAggregator())) {
-        evmOp_revert_knownPc(41, 0, 0);
+    if (caller != chainParams_getDefaultAggregator()) {
+        revertIfNotOwner(caller);
     }
     let newDefaultAgg = address(bytearray_get256(calldata, 4));
     chainParams_setDefaultAggregator(newDefaultAgg);
@@ -162,8 +164,8 @@ impure func arbaggregator_setFeeCollector(topFrame: EvmCallFrame, calldata: Byte
     let aggAcct = evmCallStack_getAccountInCurrentContext(aggregator);
     let oldCollector = account_getFeeCollector(aggAcct);
 
-    if ((caller != address(0)) && (caller != chainParams_getOwner()) && (caller != oldCollector)) {
-        evmOp_revert_knownPc(61, 0, 0);
+    if (caller != oldCollector) {
+        revertIfNotOwner(caller);
     }
     evmCallStack_setAccountInCurrentContext(aggregator, account_setFeeCollector(aggAcct, newCollector));
 
@@ -191,7 +193,7 @@ impure func arbaggregator_setTxBaseFee(topFrame: EvmCallFrame, calldata: ByteArr
     let aggregator = address(bytearray_get256(calldata, 4));
     let fee = bytearray_get256(calldata, 36);
 
-    if ((caller != aggregator) && (caller != chainParams_getOwner()) && (caller != address(0))) {
+    if ((caller != aggregator) && !hasChainOwnerPrivileges(caller)) {
         evmOp_revert_knownPc(81, 0, 0);
     }
 

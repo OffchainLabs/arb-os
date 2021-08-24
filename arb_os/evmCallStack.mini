@@ -90,6 +90,7 @@ use inbox::inbox_currentTimestamp;
 
 use retrybuffer::RetryBuffer;
 use retrybuffer::RetryableTx;
+use retrybuffer::retryableTx_getOriginalSender;
 
 use tracing::evmTracer_clear;
 use tracing::evmTracer_pushCall;
@@ -148,6 +149,7 @@ var globalCurrentTxRequest: TxRequestData;  // request that launched the top-lev
 type IncomingRequestAndLogs = struct {
     req: IncomingRequest,
     evmLogs: EvmLogs,
+    originalSender: address,
 }
 
 var globalCurrentRetryableRequest: option<IncomingRequestAndLogs>;  // describes the retryable request we're currently doing, if any
@@ -354,6 +356,7 @@ public impure func initEvmCallStack(
                     if let Some(uas) = deferredPayments_apply(getGlobalAccountStore(), payments) {
                         setGlobalAccountStore(uas);
                     }
+                    debug((997, request.caller));
                     evmTracer_pushReturnRevert(const::TxResultCode_insufficientBalance, bytearray_new(0), 0);
                     emitTxReceipt(
                         request.incomingRequest,
@@ -363,6 +366,7 @@ public impure func initEvmCallStack(
                         Some(gasUsage),
                         feeStats,
                         true,
+                        request.originalCaller,
                     );
                 } else {
                     // unknown error type
@@ -375,6 +379,7 @@ public impure func initEvmCallStack(
                         None<GasUsage>,
                         request.feeStats,
                         true,
+                        request.originalCaller,
                     );
                 }
                 evmCallStack_callHitError(1);
@@ -390,6 +395,7 @@ public impure func initEvmCallStack(
                 None<GasUsage>,
                 request.feeStats,
                 true,
+                request.originalCaller,
             );
             evmCallStack_callHitError(2);
         }
@@ -432,10 +438,12 @@ public impure func initEvmCallStack(
                     None<GasUsage>,
                     request.feeStats,
                     true,
+                    request.originalCaller,
                 );
                 emptyAvmStack();
                 cleanAvmAuxStackAndCall(mainRunLoop, true);  // should never return
             } else {
+                debug((999, request.caller));
                 // insufficient balance error
                 evmTracer_pushReturnRevert(const::TxResultCode_insufficientBalance, bytearray_new(0), 0);
                 emitTxReceipt(
@@ -446,6 +454,7 @@ public impure func initEvmCallStack(
                     None<GasUsage>,
                     request.feeStats,
                     true,
+                    request.originalCaller,
                 );
                 evmCallStack_callHitError(3);
             }
@@ -460,6 +469,7 @@ public impure func initEvmCallStack(
                 None<GasUsage>,
                 request.feeStats,
                 true,
+                request.originalCaller,
             );
             emptyAvmStack();
             cleanAvmAuxStackAndCall(mainRunLoop, true);  // should never return
@@ -604,11 +614,13 @@ public impure func initEvmCallStackForConstructor(
                 None<GasUsage>,
                 request.feeStats,
                 true,
+                request.originalCaller,
             );
             evmCallStack_callHitError(15);
         }
     } else {
         // caller doesn't have the funds to provide callvalue
+        debug(998);
         evmTracer_pushReturnRevert(const::TxResultCode_insufficientBalance, bytearray_new(0), 0);
         emitTxReceipt(
             request.incomingRequest,
@@ -618,6 +630,7 @@ public impure func initEvmCallStackForConstructor(
             None<GasUsage>,
             request.feeStats,
             true,
+            request.originalCaller,
         );
         evmCallStack_callHitError(4);  // should never return
         panic;
@@ -923,6 +936,7 @@ public impure func evmCallStack_returnFromCall(
                             Some(gasUsage),
                             feeStats,
                             true,
+                            globalCurrentTxRequest.originalCaller,
                         );
                         evmCallStack_callHitError(5);  // should never return
                         panic;
@@ -970,6 +984,7 @@ public impure func evmCallStack_returnFromCall(
                         Some(gasUsage),
                         feeStats,
                         true,
+                        globalCurrentTxRequest.originalCaller,
                     );
 
                     // increment global contract count
@@ -988,6 +1003,7 @@ public impure func evmCallStack_returnFromCall(
                                 None<GasUsage>,
                                 txFeeStats_zero(),
                                 false,
+                                globalCurrentTxRequest.originalCaller,
                             );
                             returnData = bytearray_new(0);   // outer tx should have no returndata
                             globalCurrentRetryableRequest = None<IncomingRequestAndLogs>;
@@ -1041,6 +1057,7 @@ public impure func evmCallStack_returnFromCall(
                         Some(gasUsage),
                         feeStats,
                         true,
+                        globalCurrentTxRequest.originalCaller,
                     );
                 }
             } else {
@@ -1058,6 +1075,7 @@ public impure func evmCallStack_returnFromCall(
                     Some(gasUsage),
                     feeStats,
                     true,
+                    globalCurrentTxRequest.originalCaller,
                 );
                 if let Some(uas) = deferredPayments_apply(getGlobalAccountStore(), deferredPayments) {
                     setGlobalAccountStore(uas);
@@ -1085,6 +1103,7 @@ public impure func evmCallStack_returnFromCall(
                 Some(gasUsage),
                 feeStats,
                 true,
+                globalCurrentTxRequest.originalCaller,
             );
         }
 
@@ -1126,6 +1145,7 @@ public impure func evmCallStack_callRetryableTxAndReturn(rtx: RetryableTx) -> (b
                 timestamp: inbox_currentTimestamp()
             },
             evmLogs: evmlogs_empty(),
+            originalSender: retryableTx_getOriginalSender(rtx),
         });
 
         let retCode = evmOp_callAndReturn(
@@ -1456,6 +1476,27 @@ public impure func _evmCallStack_transferEthInCurrentContext(from: address, to: 
         setGlobalAccountStore(accountStore_transferEthBalance(getGlobalAccountStore(), from, to, amount)?);
     }
     return Some(());
+}
+
+public impure func evmCallStack_getRealL1Caller(levelsToSubtract: uint) -> option<address> {
+    // if the currently running call was called directly from L1 (or is the top level of a retryable),
+    //      return Some(originalL1CallerAddress)
+    // else
+    //      return None
+
+    let stackDepth = evmCallStack_stackDepth();
+    return xif (stackDepth == 1+levelsToSubtract) {
+        // top-level call from L1
+        Some(globalCurrentTxRequest.originalCaller)
+    } elseif (stackDepth == 2+levelsToSubtract) {
+        xif let Some(gcrr) = globalCurrentRetryableRequest {
+            Some(gcrr.originalSender)
+        } else {
+            None<address>
+        }
+    } else {
+        None<address>
+    };
 }
 
 public impure func evmCallStack_changeNumAccounts(delta: int) {
