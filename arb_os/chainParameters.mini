@@ -92,7 +92,6 @@ public func chainParams_getDefaults() -> map<uint, uint> {
 }
 
 public impure func chainParams_gotParamsMessage(data: ByteArray) {
-    debug(1);
     let stream = bytestream_new(data);
     loop {
         let paramId = xif let Some(res) = bytestream_get256(stream) {
@@ -110,7 +109,6 @@ public impure func chainParams_gotParamsMessage(data: ByteArray) {
         } else {
             panic   // should never have an id without a matching value
         };
-        debug((2, paramId, value));
         chainParams_set(paramId, value);
     }
 }

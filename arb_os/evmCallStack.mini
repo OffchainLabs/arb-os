@@ -356,7 +356,6 @@ public impure func initEvmCallStack(
                     if let Some(uas) = deferredPayments_apply(getGlobalAccountStore(), payments) {
                         setGlobalAccountStore(uas);
                     }
-                    debug((997, request.caller));
                     evmTracer_pushReturnRevert(const::TxResultCode_insufficientBalance, bytearray_new(0), 0);
                     emitTxReceipt(
                         request.incomingRequest,
@@ -443,7 +442,6 @@ public impure func initEvmCallStack(
                 emptyAvmStack();
                 cleanAvmAuxStackAndCall(mainRunLoop, true);  // should never return
             } else {
-                debug((999, request.caller));
                 // insufficient balance error
                 evmTracer_pushReturnRevert(const::TxResultCode_insufficientBalance, bytearray_new(0), 0);
                 emitTxReceipt(
@@ -620,7 +618,6 @@ public impure func initEvmCallStackForConstructor(
         }
     } else {
         // caller doesn't have the funds to provide callvalue
-        debug(998);
         evmTracer_pushReturnRevert(const::TxResultCode_insufficientBalance, bytearray_new(0), 0);
         emitTxReceipt(
             request.incomingRequest,

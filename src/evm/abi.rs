@@ -721,8 +721,8 @@ impl<'a> ArbSys<'a> {
             let return_data = receipts[0].get_return_data();
             Ok((
                 Uint256::from_bytes(&return_data[0..32]) != Uint256::zero(),
-                Uint256::from_bytes(&return_data[32..64])
-               ))
+                Uint256::from_bytes(&return_data[32..64]),
+            ))
         } else {
             Err(ethabi::Error::from("reverted"))
         }
