@@ -53,7 +53,7 @@ use std::bytestream::bytestream_bytesReadSoFar;
 use inbox::inbox_currentArbBlockNumber;
 use inbox::inbox_currentEthBlockNumber;
 use inbox::inbox_currentTimestamp;
-use inbox::mapL1SenderAddress;
+use inbox::mapL1SenderAddress_fromPrecompile;
 
 use output::queueMessageForSend;
 
@@ -99,8 +99,8 @@ public impure func arbsys_txcall() {
             arbsys_getStorageAt(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbSys_isTopLevelCall) {
             arbsys_isTopLevelCall(topFrame, calldata);
-        } elseif (funcCode == const::funcCode_ArbSys_getL1CallerInfo) {
-            arbsys_getL1CallerInfo(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbSys_getL1CallerAddressInfo) {
+            arbsys_getL1CallerAddressInfo(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbSys_mapL1ContractAddressToL2) {
             arbsys_mapL1ContractAddressToL2(topFrame, calldata);
         } else {
@@ -456,8 +456,8 @@ impure func arbsys_isTopLevelCall(_topFrame: EvmCallFrame, calldata: ByteArray) 
     }
 }
 
-// function getL1CallerInfo() external view returns (bool, address);
-impure func arbsys_getL1CallerInfo(_topFrame: EvmCallFrame, calldata: ByteArray) {
+// function getL1CallerAddressInfo() external view returns (bool, address);
+impure func arbsys_getL1CallerAddressInfo(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(80, 0, 0);
     }
@@ -479,14 +479,16 @@ impure func arbsys_getL1CallerInfo(_topFrame: EvmCallFrame, calldata: ByteArray)
 }
 
 impure func arbsys_mapL1ContractAddressToL2(_topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 36) {
+    if (bytearray_size(calldata) != 4 + 3*32) {
         evmOp_revert_knownPc(90, 0, 0);
     }
-    let addr = address(bytearray_get256(calldata, 4));
+    let sender = address(bytearray_get256(calldata, 4));
+    let dest = address(bytearray_get256(calldata, 36));
+    let useExceptionList = (bytearray_get256(calldata, 68) != 0);
     let mem = bytearray_set256(
         bytearray_new(0),
         0,
-        uint(mapL1SenderAddress(addr, None<address>)),
+        uint(mapL1SenderAddress_fromPrecompile(sender, dest, useExceptionList)),
     );
     if (evmCallStack_setTopFrameMemory(mem)) {
         evmOp_return(0, 32);

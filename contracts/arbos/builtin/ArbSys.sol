@@ -57,16 +57,19 @@ interface ArbSys {
     function isTopLevelCall() external view returns (bool);
 
     /**
-     * @notice check if the caller was called directly by an unsigned tx from L1
-     * @return (true, addr) if the caller was called directly by an unsigned tx from address addr at L1, (false, address(0)) otherwise
+     * @notice check if the caller (of this caller of this) is a rewritten L1 contract address
+     * @return (true, addr) if the caller's address was rewritten and was originally addr, or (false, address(0)) otherwise
      */
-    function getL1CallerInfo() external view returns (bool, address);
+    function getL1CallerAddressInfo() external view returns (bool, address);
 
     /**
      * @notice map L1 contract address to L2 sender address
-     * @return L2 sender address that would be generated if L1 contract at addr submitted an unsigned tx to Arbitrum
+     * @param sender sender address
+     * @param dest destination address
+     * @param useExceptionList if true, sender will be unchanged if the (sender, dest) matches the exception list
+     * @return rewritten sender address
      */
-    function mapL1ContractAddressToL2(address addr) external pure returns(address);
+    function mapL1ContractAddressToL2(address sender, address dest, bool useExceptionList) external pure returns(address);
 
     event L2ToL1Transaction(address caller, address indexed destination, uint indexed uniqueId,
                             uint indexed batchNumber, uint indexInBatch,
