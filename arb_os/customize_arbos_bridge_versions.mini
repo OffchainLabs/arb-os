@@ -19,7 +19,6 @@ use evmCallStack::IncomingRequestAndLogs;
 
 use inbox::TxRequestQueue;
 use inbox::IncomingRequestQueueStack;
-use inbox::mapL1SenderAddress;
 
 use messages::TxRequestData;
 
