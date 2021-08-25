@@ -1381,7 +1381,7 @@ fn test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys_orig_binding.arbos_version(&mut machine)?,
-        Uint256::from_u64(35),
+        Uint256::from_u64(37),
     );
 
     arbowner.give_ownership(&mut machine, my_addr, true)?;
@@ -1390,9 +1390,14 @@ fn test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let _previous_upgrade_hash =
         try_upgrade(&arbowner, &mut machine, &mexe_path, None, false)?.unwrap();
 
+    println!("Upgrade worked");
     let wallet2 = machine.runtime_env.new_wallet();
+    println!("New wallet");
     let arbsys = ArbSys::new(&wallet2, false);
+    println!("New arbsys");
+
     let arbos_version = arbsys.arbos_version(&mut machine)?;
+    println!("arbsys version");
     assert_eq!(
         arbos_version,
         *init_constant_table(Some(Path::new("arb_os/constants.json")))
@@ -1417,19 +1422,23 @@ fn try_upgrade(
     let uploader = CodeUploader::_new_from_file(mexe_path);
     arbowner.start_code_upload(machine, None, with_check)?;
 
+    println!("Started upload");
     let mut accum = vec![];
     for buf in uploader.instructions {
         accum.extend(buf);
         if (accum.len() > 3000) {
             arbowner.continue_code_upload(machine, accum)?;
+            println!("Continued upload");
             accum = vec![];
         }
     }
     if (accum.len() > 0) {
         arbowner.continue_code_upload(machine, accum)?;
+        println!("Continued upload 2");
     }
 
     let expected_code_hash = arbowner.get_uploaded_code_hash(machine)?;
+    println!("Got hash");
     Ok(
         if arbowner.finish_code_upload_as_arbos_upgrade(
             machine,

@@ -102,7 +102,7 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
     } elseif (kind == 2) { // empty buffer
         Some((stream, newbuffer()))
     } elseif (kind == 3) {
-        let buf = #include "rlp-nohash.wasm";
+        let (ln,buf) = #include "rlp-nohash.wasm";
         Some((stream, buf))
     } elseif (kind == 10) {   // 0-tuple
         Some((stream, ()))

@@ -50,7 +50,7 @@ public func set_globalBlockReceiptData_onUpgrade(oldGlobals: GlobalsBeforeUpgrad
         data: old.data,
         statsThisBlock: old.statsThisBlock,
         statsAllTime: old.statsAllTime,
-        lastArbBlockNum: old.lastBlockNum,
-        nextSendTimestamp: old.nextSendTime,
+        lastArbBlockNum: old.lastArbBlockNum,
+        nextSendTimestamp: old.nextSendTimestamp,
     };
 }
