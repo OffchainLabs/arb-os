@@ -224,7 +224,7 @@ fn run_test(
         (Some(Value::Buffer(buf)), None) => (buf.clone(), Some(0)),
         (Some(Value::Int(err)), _) => {
             println!("{:?}", err);
-            if err == Uint256::from_signed_string("-1").unwrap() {
+            if err == Uint256::from_string_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap() {
                 (prev_memory.clone(), None)
             } else {
                 (prev_memory.clone(), Some(0))
