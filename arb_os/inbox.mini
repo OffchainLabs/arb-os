@@ -599,22 +599,24 @@ var addressRemapExceptions: AddressPairSet;
 public impure func mapL1SenderAddress(callerAddr: address, maybeCallee: option<address>) -> address {
     return xif (addressPairSet_lookup_options(addressRemapExceptions, Some(callerAddr), maybeCallee)) {
         callerAddr
+    } elseif (uint(callerAddr) == 0) {
+        // zero maps to zero
+        callerAddr
     } else {
-        xif (uint(callerAddr) == 0) {
-            // zero maps to zero
-            callerAddr
-        } else {
-            // deliberately allow overflow, address(.) will truncate
-            address(uint(callerAddr) + const::L1ToL2MapConstant)
-        }
+        // deliberately allow overflow, address(.) will truncate
+        address(uint(callerAddr) + const::L1ToL2MapConstant)
     };
 }
 
 public impure func mapL1SenderAddress_fromPrecompile(caller: address, dest: address, useExceptionList: bool) -> address {
     return xif (useExceptionList && addressPairSet_lookup(addressRemapExceptions, caller, dest)) {
         caller
+    } elseif (uint(caller) == 0) {
+        // zero maps to zero
+        caller
     } else {
-        address(uint(caller) + const::L1ToL2MapConstant)  // deliberately allow overflow, address(.) will truncate
+        // deliberately allow overflow, address(.) will truncate
+        address(uint(caller) + const::L1ToL2MapConstant)
     };
 }
 
