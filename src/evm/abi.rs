@@ -674,39 +674,13 @@ impl<'a> ArbSys<'a> {
     }
 
     #[cfg(test)]
-    pub fn map_l1_contract_address_to_l2(
-        &self,
-        machine: &mut Machine,
-        addr: Uint256,
-    ) -> Result<Uint256, ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
-            "mapL1ContractAddressToL2",
-            &[ethabi::Token::Address(addr.to_h160())],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if (receipts.len() != 1) {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
-        } else {
-            Err(ethabi::Error::from("reverted"))
-        }
-    }
-
-    #[cfg(test)]
-    pub fn _get_l1_caller_info(
+    pub fn _get_l1_caller_address_info(
         &self,
         machine: &mut Machine,
     ) -> Result<(bool, Uint256), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
             self.my_address.clone(),
-            "getL1CallerInfo",
+            "getL1CallerAddressInfo",
             &[],
             machine,
             Uint256::zero(),
@@ -723,6 +697,38 @@ impl<'a> ArbSys<'a> {
                 Uint256::from_bytes(&return_data[0..32]) != Uint256::zero(),
                 Uint256::from_bytes(&return_data[32..64]),
             ))
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    #[cfg(test)]
+    pub fn map_l1_contract_address_to_l2(
+        &self,
+        machine: &mut Machine,
+        sender: Uint256,
+        dest: Uint256,
+        use_exceptions_list: bool,
+    ) -> Result<Uint256, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "mapL1ContractAddressToL2",
+            &[
+                ethabi::Token::Address(sender.to_h160()),
+                ethabi::Token::Address(dest.to_h160()),
+                ethabi::Token::Bool(use_exceptions_list),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
         } else {
             Err(ethabi::Error::from("reverted"))
         }
