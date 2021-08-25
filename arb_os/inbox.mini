@@ -120,7 +120,10 @@ public impure func inbox_get() -> IncomingRequest {
             inboxHashAccumulator: hash(globalInbox.inboxHashAccumulator, ebMsgHash)
         };
 
-        if (ebMsg.kind == const::L1MessageType_setChainParameters) {
+        //TODO: Here we check for two message types, for compatibility.
+        //      This is only needed in the first ArbOS upgrade version after the type-code was remapped.
+        //      In future versions, where all test code sends the non-legacy type code, we can just use the new type code.
+        if ((ebMsg.kind == const::L1MessageType_setChainParameters) || (ebMsg.kind == const::L1MessageType_setChainParameters_v36_and_below) ){
             if (ebMsg.sender == address(0)) {
                 chainParams_gotParamsMessage(ebMsg.msgData);
             }   // ignore this message if it didn't come from chain owner
@@ -596,22 +599,24 @@ var addressRemapExceptions: AddressPairSet;
 public impure func mapL1SenderAddress(callerAddr: address, maybeCallee: option<address>) -> address {
     return xif (addressPairSet_lookup_options(addressRemapExceptions, Some(callerAddr), maybeCallee)) {
         callerAddr
+    } elseif (uint(callerAddr) == 0) {
+        // zero maps to zero
+        callerAddr
     } else {
-        xif (uint(callerAddr) == 0) {
-            // zero maps to zero
-            callerAddr
-        } else {
-            // deliberately allow overflow, address(.) will truncate
-            address(uint(callerAddr) + const::L1ToL2MapConstant)
-        }
+        // deliberately allow overflow, address(.) will truncate
+        address(uint(callerAddr) + const::L1ToL2MapConstant)
     };
 }
 
 public impure func mapL1SenderAddress_fromPrecompile(caller: address, dest: address, useExceptionList: bool) -> address {
     return xif (useExceptionList && addressPairSet_lookup(addressRemapExceptions, caller, dest)) {
         caller
+    } elseif (uint(caller) == 0) {
+        // zero maps to zero
+        caller
     } else {
-        address(uint(caller) + const::L1ToL2MapConstant)  // deliberately allow overflow, address(.) will truncate
+        // deliberately allow overflow, address(.) will truncate
+        address(uint(caller) + const::L1ToL2MapConstant)
     };
 }
 

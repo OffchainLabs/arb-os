@@ -148,7 +148,7 @@
     "L1MessageType_L2FundedByL1": 7,
     "L1MessageType_endOfBlock": 6,
     "L1MessageType_rollupProtocolEvent": 8,
-    "_L1MessageType_setChainParameters_v36_and_below": 4,
+    "L1MessageType_setChainParameters_v36_and_below": 4,
     "L1MessageType_setChainParameters": 11,
     "L1MessageType_submitRetryableTx": 9,
     "L2MessageType_batch": 3,
