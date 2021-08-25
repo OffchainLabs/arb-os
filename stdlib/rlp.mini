@@ -313,14 +313,15 @@ public func rlp_encodeList(
 
 var wasm_prog : any;
 
-public impure func rlp_init() {
-    let buf = #include "rlp-nohash.wasm";
-    let ln = 17804;
-    let compiled = asm(ln, buf,) any { compilewasm };
+public write func rlp_init() {
+    let (ln, buf) = #include "rlp-nohash.wasm";
+    debug(ln);
+    debug(buf);
+    let compiled = asm(ln/2, buf,) any { compilewasm };
     wasm_prog = compiled;
 }
 
-public func rlp_encodeMessageInfo(
+public view func rlp_encodeMessageInfo(
     seqNum: uint,
     gasPrice: uint,
     gasLimit: uint,

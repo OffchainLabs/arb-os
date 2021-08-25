@@ -39,7 +39,7 @@ type SignedTx = struct {
     s: uint
 };
 
-write func main(kind: uint, value: any) {
+write view func main(kind: uint, value: any) {
     rlp_init();
     if (kind == 0) {
         let ui = unsafecast<uint>(value);
@@ -106,7 +106,7 @@ write func main(kind: uint, value: any) {
     testRlpHasher();
 }
 
-func testRlpHasher() {
+view func testRlpHasher() {
     let seqNum = 0;
     let gasPrice = 31;
     let gasLimit = uint(hash(0));
