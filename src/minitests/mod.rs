@@ -766,7 +766,10 @@ fn test_l1_sender_rewrite() {
     let test_cases = vec![
         ("0", "0"),
         ("81759a874b3", "1111000000000000000000000000081759a885c4"),
-        ("ffffffffffffffffffffffffffffffffffffffff", "1111000000000000000000000000000000001110"),
+        (
+            "ffffffffffffffffffffffffffffffffffffffff",
+            "1111000000000000000000000000000000001110",
+        ),
     ];
     for (pre, post) in test_cases {
         let pre = Uint256::from_string_hex(pre).unwrap();
