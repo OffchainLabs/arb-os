@@ -597,7 +597,13 @@ public impure func mapL1SenderAddress(callerAddr: address, maybeCallee: option<a
     return xif (addressPairSet_lookup_options(addressRemapExceptions, Some(callerAddr), maybeCallee)) {
         callerAddr
     } else {
-        address(uint(callerAddr) + const::L1ToL2MapConstant)  // deliberately allow overflow, address(.) will truncate
+        xif (uint(callerAddr) == 0) {
+            // zero maps to zero
+            callerAddr
+        } else {
+            // deliberately allow overflow, address(.) will truncate
+            address(uint(callerAddr) + const::L1ToL2MapConstant)
+        }
     };
 }
 

@@ -30,8 +30,6 @@ use chainParameters::hasChainOwnerPrivileges;
 use evmCallStack::evmCallStack_getAccountInCurrentContext;
 use evmCallStack::evmCallStack_setAccountInCurrentContext;
 
-use inbox::mapL1SenderAddress;
-
 use messages::TxRequestData;
 
 use std::fixedpoint::FixedPoint;
@@ -740,7 +738,6 @@ public impure func getNextRequestFromCongestionAuction() -> (
     }
 
     return xif (   (tx.incomingRequest.sender != address(0))
-                && (tx.incomingRequest.sender != mapL1SenderAddress(address(0), None<address>))
                 && feesEnabled()
                 && (! tx.incomingRequest.adminMode)) {
         if let Some(txSeqNum) = tx.seqNum {

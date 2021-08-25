@@ -4,8 +4,6 @@
 
 use accounts::accounts_notifyParamsChanged;
 
-use inbox::mapL1SenderAddress;
-
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsForall;
 
@@ -180,7 +178,5 @@ public impure func serializedListOfChainOwners() -> ByteArray {
 }
 
 public impure func hasChainOwnerPrivileges(addr: address) -> bool {
-    return setOfAddresses_contains(chainOwners, addr)
-        || (addr == address(0))
-        || (addr == mapL1SenderAddress(address(0), None<address>));
+    return setOfAddresses_contains(chainOwners, addr) || (addr == address(0));
 }
