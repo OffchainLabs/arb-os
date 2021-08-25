@@ -89,12 +89,7 @@ public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade
         with { [const::Atom_Param_L1GasPerL1CalldataUnit] = oldGlobals.gasAccountingInfo.pricingParams.l1GasPerL1CalldataUnit }
         with { [const::Atom_Param_L1GasPerStorage] = oldGlobals.gasAccountingInfo.pricingParams.l1GasPerStorage }
         with { [const::Atom_Param_ArbGasDivisor] = oldGlobals.gasAccountingInfo.pricingParams.arbGasDivisor }
-        with {
-            [const::Atom_Param_NetworkFeeShareNumerator] = {
-                let bfm = oldGlobals.gasAccountingInfo.feeConfig.networkFeeRate;
-                bfm.val - bfm.shiftFactor
-            }
-        }
+        with { [const::Atom_Param_NetworkFeeShareNumerator] = oldGlobals.gasAccountingInfo.feeConfig.networkFeeRate.val }
         with { [const::Atom_Param_NetworkFeeShareDenominator] = oldGlobals.gasAccountingInfo.feeConfig.networkFeeRate.shiftFactor }
         with { [const::Atom_Param_GasPoolMax] = oldGlobals.gasAccountingParams.GasPoolMax }
         with { [const::Atom_Param_TxGasLimit] = oldGlobals.gasAccountingParams.TxGasLimit }
