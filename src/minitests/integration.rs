@@ -7,15 +7,18 @@ use std::sync::Arc;
 
 fn compile_run_cycle(input: String) -> Machine {
     let mut compile = CompileStruct::default();
-    compile.input = vec![input];
+    compile.input = vec![input.clone()];
     compile.test_mode = true;
     compile.consts_file = Some(format!("arb_os/constants.json"));
+
     let mexe = match compile.invoke() {
         Ok((mexe, _error_system)) => mexe,
         Err(_error_system) => panic!("failed to compile"),
     };
     let mut machine = Machine::new(mexe, RuntimeEnvironment::new(None));
-    run(&mut machine, vec![], false).unwrap();
+    machine.start_coverage();
+    run(&mut machine, vec![], false, None).unwrap();
+    machine.write_coverage(input.replace("/", "-").replace(".mini", ""));
     machine
 }
 
@@ -179,7 +182,8 @@ fn test_error_system() {
             &[19],
             &[20],
             &[32],
-            &[45],
+            &[51],
+            &[51],
             &[51],
             &[51],
             &[53],
@@ -202,6 +206,7 @@ fn test_error_system() {
             &[116],
             &[102, 104, 119],
             &[122],
+            &[122],
             &[127],
             &[135],
             &[147],
@@ -213,11 +218,14 @@ fn test_error_system() {
             &[190],
             &[190],
             &[193],
+            &[193],
+            &[193],
             &[194],
             &[196],
             &[197],
+            &[197],
         ],
-        &[&[7], &[45], &[105], &[187]],
+        &[&[7], &[45], &[46], &[46], &[105], &[187]],
     );
 
     // check directory callgraph warnings
@@ -235,5 +243,13 @@ fn test_error_system() {
             &[26],
         ],
         &[],
+    );
+
+    // check that replicas aren't allowed
+    check_issues(
+        "minitests/replicas.mini",
+        vec!["replicas".to_string()].into_iter().collect(),
+        &[],
+        &[&[2, 6]],
     );
 }

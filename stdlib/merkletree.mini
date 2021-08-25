@@ -59,7 +59,7 @@ public func merkleizeFromQueue(queue: Queue) -> (any, bytes32) {
 
 type MerkleTreeBuilder = struct {
     contents: Queue,
-}
+};
 
 public func merkleTreeBuilder_new() -> MerkleTreeBuilder {
     return struct { contents: queue_new() };

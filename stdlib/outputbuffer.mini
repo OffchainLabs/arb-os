@@ -5,7 +5,7 @@
 type OutputBuffer = struct {
     buf: buffer,
     size: uint,
-}
+};
 
 public func outputBuffer_new() -> OutputBuffer {
     return struct {

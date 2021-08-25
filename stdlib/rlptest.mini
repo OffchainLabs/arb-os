@@ -37,9 +37,9 @@ type SignedTx = struct {
     v: uint,
     r: uint,
     s: uint
-}
+};
 
-impure func main(kind: uint, value: any) {
+write func main(kind: uint, value: any) {
     rlp_init();
     if (kind == 0) {
         let ui = unsafecast<uint>(value);

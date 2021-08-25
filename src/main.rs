@@ -28,6 +28,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 mod compile;
+mod console;
 mod contracttemplates;
 mod evm;
 mod gen_code;
@@ -42,15 +43,17 @@ mod uint256;
 mod upload;
 mod wasm;
 
-///Command line options for run subcommand.
+/// Command line options for run subcommand.
 #[derive(Clap, Debug)]
 struct RunStruct {
     input: String,
     #[clap(short, long)]
     debug: bool,
+    #[clap(short, long)]
+    coverage: Option<String>,
 }
 
-///Command line options for EvmDebug subcommand.
+/// Command line options for EvmDebug subcommand.
 #[derive(Clap, Debug)]
 struct EvmDebug {
     #[clap(short, long)]
@@ -59,7 +62,7 @@ struct EvmDebug {
     profiler: bool,
 }
 
-///Command line options for replay subcommand.
+/// Command line options for replay subcommand.
 #[derive(Clap, Debug)]
 struct Replay {
     input: String,
@@ -71,7 +74,7 @@ struct Replay {
     trace: Option<String>,
 }
 
-///Command line options for profiler subcommand.
+/// Command line options for profiler subcommand.
 #[derive(Clap, Debug)]
 struct Profiler {
     input: String,
@@ -79,7 +82,7 @@ struct Profiler {
     mode: ProfilerMode,
 }
 
-///Command line options for reformat subcommand.
+/// Command line options for reformat subcommand.
 #[derive(Clap, Debug)]
 struct Reformat {
     input: String,
@@ -88,7 +91,7 @@ struct Reformat {
     format: Option<String>,
 }
 
-///Command line options for evm-tests subcommand.
+/// Command line options for evm-tests subcommand.
 #[derive(Clap, Debug)]
 struct EvmTests {
     input: Vec<String>,
@@ -148,7 +151,7 @@ struct MakeParametersList {
     pub consts_file: Option<String>,
 }
 
-///Main enum for command line arguments.
+/// Main enum for command line arguments.
 #[derive(Clap, Debug)]
 enum Args {
     Compile(CompileStruct),
@@ -205,7 +208,7 @@ fn run_test(
         // file_name_chart: BTreeMap::new(),
     };
     let mut machine = Machine::new(program, env);
-    machine.start_at_zero();
+    machine.start_at_zero(false);
     if debug {
         machine.debug(Some(CodePt::new_internal(code_len - 1)))
     } else {
@@ -281,7 +284,7 @@ fn run_debug(code_0: Vec<Instruction>, table: Vec<(usize, usize)>) {
     let mut machine = Machine::new(program, env);
     /*
     for i in 0..100 {
-        machine.start_at_zero();
+        machine.start_at_zero(false);
         machine.run(Some(CodePt::new_internal(code_len - 1)));
     }*/
     let mut table_aux = vec![0; table.len()];
@@ -289,7 +292,7 @@ fn run_debug(code_0: Vec<Instruction>, table: Vec<(usize, usize)>) {
         table_aux[*i] = code_0.len() - *loc;
     }
     let buf = get_file(&"/home/sami/arb-os/wasm-tests/test-buffer.wasm".to_string());
-    machine.start_at_zero();
+    machine.start_at_zero(false);
     machine.stack.push_usize(buf.len()); // io len
     machine.stack.push(Value::new_buffer(buf)); // io buffer
     machine.stack.push(wasm::make_table_internal(&table_aux)); // call table
@@ -469,10 +472,10 @@ fn main() -> Result<(), CompileError> {
             let mut machine = Machine::new(program, env);
             /*
             for i in 0..100 {
-                machine.start_at_zero();
+                machine.start_at_zero(false);
                 machine.run(Some(CodePt::new_internal(code_len - 1)));
             }*/
-            machine.start_at_zero();
+            machine.start_at_zero(false);
             let used = if fname.debug {
                 machine.debug(Some(CodePt::new_internal(code_len - 1)))
             } else {
@@ -581,7 +584,12 @@ fn main() -> Result<(), CompileError> {
                 .build_global()
                 .expect("failed to initialize rayon thread pool");
 
-            let mut output = get_output(compile.output.clone()).unwrap();
+            let mut output = match compile.output {
+                Some(ref path) => File::create(path)
+                    .map(|f| Box::new(f) as Box<dyn io::Write>)
+                    .unwrap(),
+                None => Box::new(io::sink()),
+            };
 
             let error_system = match compile.invoke() {
                 Ok((program, error_system)) => {
@@ -609,7 +617,7 @@ fn main() -> Result<(), CompileError> {
             let filename = run.input;
             let debug = run.debug;
             let path = Path::new(&filename);
-            match run_from_file(path, Vec::new(), debug) {
+            match run_from_file(path, Vec::new(), run.coverage, debug) {
                 Ok(logs) => {
                     println!("Logs: {:?}", logs);
                 }
@@ -780,7 +788,7 @@ fn main() -> Result<(), CompileError> {
     Ok(())
 }
 
-///Creates a `dyn Write` from an optional filename, if a filename is specified, creates a file
+/// Creates a `dyn Write` from an optional filename, if a filename is specified, creates a file
 /// handle, otherwise gives stdout.
 fn get_output(output_filename: Option<String>) -> Result<Box<dyn io::Write>, io::Error> {
     match output_filename {

@@ -17,8 +17,8 @@ use blockhash::blockhash_init;
 
 use chainParameters::chainParams_init;
 
-use codeSegment::codeSegment_init;
-use codeSegment::translateEvmCodeSegment;
+use std::codeSegment::codeSegment_init;
+use std::codeSegment::translateEvmCodeSegment;
 
 use contractTemplates::getArbInfoCode;
 use contractTemplates::getArbInfoAddress;
@@ -53,15 +53,15 @@ use bridge_arbos_versions::remapGlobalsForUpgrade;
 
 // The compiler will always put __fixedLocationGlobal in slot 0 of the AVM Register,
 //     so we can rely on it not moving across upgrades.
-var __fixedLocationGlobal: impure func(uint);    // points to EVM op dispatch function
+var __fixedLocationGlobal: view write func(uint);    // points to EVM op dispatch function
 
-impure func main(oldGlobals: GlobalsBeforeUpgrade) {
+view write func main(oldGlobals: GlobalsBeforeUpgrade) {
     if (unsafecast<any>(oldGlobals) != ()) {
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
 
         let (newGlobals, _oldArbosVersion) = remapGlobalsForUpgrade(oldGlobals);
 
-        asm(newGlobals,) { rset };
+        asm(newGlobals) { rset };
 
         // now re-do the initializations that set up pointers into the ArbOS code
         errorHandler_init();
@@ -100,12 +100,10 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         emitGenesisBlockReceipt();
     }
 
-    // initialize any customizations here
-
     mainRunLoop();
 }
 
-impure func initializePreinstalls(isUpgrade: bool) -> option<()> {
+view write func initializePreinstalls(isUpgrade: bool) -> option<()> {
     let acctStore = safeGetGlobalAccountStore();
 
     let code = bytearray_unmarshalBytes(getArbInfoCode())?;

@@ -9,31 +9,31 @@ use std::bytestream::bytestream_getByte;
 use std::rlp::rlp_decodeUint;
 
 
-type AvmCodePoint = impure func()
+type AvmCodePoint = view write func();
 
 type AvmCodeBuilder = struct {
     requireSafe: bool,
     code: AvmCodePoint,
     size: uint,
     codeMap: map<uint, AvmCodePoint>,
-}
+};
 
-public impure func pushInstruction(opcode: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
+public view write func pushInstruction(opcode: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
     // Push an instruction onto the beginning of a code segment, and return the resulting CodePoint.
     return asm(opcode, restOfCode) AvmCodePoint { pushinsn };
 }
 
-public impure func pushInstructionImm(opcode: uint, val: any, restOfCode: AvmCodePoint) -> AvmCodePoint {
+public view write func pushInstructionImm(opcode: uint, val: any, restOfCode: AvmCodePoint) -> AvmCodePoint {
     // Push an instruction (with immediate value) onto the beginning of a code segment, and return the resulting CodePoint.
     return asm(opcode, val, restOfCode) AvmCodePoint { pushinsnimm };
 }
 
-public impure func pushValue(val: any, restOfCode: AvmCodePoint) -> AvmCodePoint {
+public view write func pushValue(val: any, restOfCode: AvmCodePoint) -> AvmCodePoint {
     // Push a noop (with immediate value) onto the beginning of a code segment, and return the resulting CodePoint.
     return asm(const::AVM_nop, val, restOfCode) AvmCodePoint { pushinsnimm };
 }
 
-public impure func avmCodeBuilder_new(requireSafe: bool) -> AvmCodeBuilder {
+public view func avmCodeBuilder_new(requireSafe: bool) -> AvmCodeBuilder {
     let code = asm() AvmCodePoint { errcodept };
     return struct {
         requireSafe: requireSafe,
@@ -43,28 +43,25 @@ public impure func avmCodeBuilder_new(requireSafe: bool) -> AvmCodeBuilder {
     };
 }
 
-public impure func avmCodeBuilder_append(builder: AvmCodeBuilder, stream: ByteStream) -> option<AvmCodeBuilder> {
+public view write func avmCodeBuilder_append(builder: AvmCodeBuilder, stream: ByteStream) -> option<AvmCodeBuilder> {
     let requireSafe = builder.requireSafe;
     let code = builder.code;
     let size = builder.size;
     let codeMap = builder.codeMap;
 
     while( ! bytestream_atEof(stream) ) {
-        let (ustr, insn) = bytestream_getByte(stream)?;
+        let (*stream, insn) = bytestream_getByte(stream)?;
         if ( requireSafe && !isSafeInstruction(insn) ) {
             return None;
         }
-        stream = ustr;
-        let (ustr, hasImm) = bytestream_getByte(stream)?;
-        stream = ustr;
+        let (*stream, hasImm) = bytestream_getByte(stream)?;
         if (hasImm == 0) {
             code = pushInstruction(insn, code);
         } else {
-            let (ustr, val) = unmarshalValue(stream, codeMap)?;
-            stream = ustr;
+            let (*stream, val) = unmarshalValue(stream, codeMap)?;
             code = pushInstructionImm(insn, val, code);
         }
-        codeMap = codeMap with { [size] = code };
+        set codeMap[size] = code;
         size = size+1;
     }
 
@@ -91,36 +88,35 @@ func isSafeInstruction(insn: uint) -> bool {
 }
 
 func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> option<(ByteStream, any)> {
-    let (ustr, kind) = bytestream_getByte(stream)?;
-    stream = ustr;
+    let (*stream, kind) = bytestream_getByte(stream)?;
     return xif (kind == 0) {  // integer
-        let (ustr, val) = rlp_decodeUint(stream)?;
-        Some((ustr, val))
+        let (*stream, val) = rlp_decodeUint(stream)?;
+        Some((stream, val))
     } elseif (kind == 1) { // codepoint
-        let (ustr, idx) = rlp_decodeUint(stream)?;
+        let (*stream, idx) = rlp_decodeUint(stream)?;
         xif let Some(codePt) = codeMap[idx] {
-            Some((ustr, codePt))
+            Some((stream, codePt))
         } else {
             None<(ByteStream, any)>
         }
     } elseif (kind == 2) { // empty buffer
-        Some((ustr, newbuffer()))
+        Some((stream, newbuffer()))
     } elseif (kind == 3) {
         let buf = #include "rlp-nohash.wasm";
-        Some((ustr, buf))
+        Some((stream, buf))
     } elseif (kind == 10) {   // 0-tuple
         Some((stream, ()))
     } elseif (kind == 11) {   // 1-tuple
         let val = unsafecast<[1]any>(None<any>);
-        let (ustr, x) = unmarshalValue(stream, codeMap)?;
-        Some((ustr, val with { [0] = x }))
+        let (*stream, x) = unmarshalValue(stream, codeMap)?;
+        set val[0] = x;
+        Some((stream, val))
     } elseif (kind == 12) {   // 2-tuple
         let val = unsafecast<[2]any>((0,0));
         let i = 0;
         while (i < 2) {
-            let (ustr, x) = unmarshalValue(stream, codeMap)?;
-            stream = ustr;
-            val = val with { [i] = x };
+            let (*stream, x) = unmarshalValue(stream, codeMap)?;
+            set val[i] = x;
             i = i+1;
         }
         Some((stream, val))
@@ -128,9 +124,8 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
         let val = unsafecast<[3]any>((0,0,0));
         let i = 0;
         while (i < 3) {
-            let (ustr, x) = unmarshalValue(stream, codeMap)?;
-            stream = ustr;
-            val = val with { [i] = x };
+            let (*stream, x) = unmarshalValue(stream, codeMap)?;
+            set val[i] = x;
             i = i+1;
         }
         Some((stream, val))
@@ -138,9 +133,8 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
         let val = unsafecast<[4]any>((0,0,0,0));
         let i = 0;
         while (i < 4) {
-            let (ustr, x) = unmarshalValue(stream, codeMap)?;
-            stream = ustr;
-            val = val with { [i] = x };
+            let (*stream, x) = unmarshalValue(stream, codeMap)?;
+            set val[i] = x;
             i = i+1;
         }
         Some((stream, val))
@@ -148,9 +142,8 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
         let val = unsafecast<[5]any>((0,0,0,0,0));
         let i = 0;
         while (i < 5) {
-            let (ustr, x) = unmarshalValue(stream, codeMap)?;
-            stream = ustr;
-            val = val with { [i] = x };
+            let (*stream, x) = unmarshalValue(stream, codeMap)?;
+            set val[i] = x;
             i = i+1;
         }
         Some((stream, val))
@@ -158,9 +151,8 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
         let val = unsafecast<[6]any>((0,0,0,0,0,0));
         let i = 0;
         while (i < 6) {
-            let (ustr, x) = unmarshalValue(stream, codeMap)?;
-            stream = ustr;
-            val = val with { [i] = x };
+            let (*stream, x) = unmarshalValue(stream, codeMap)?;
+            set val[i] = x;
             i = i+1;
         }
         Some((stream, val))
@@ -168,9 +160,8 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
         let val = unsafecast<[7]any>((0,0,0,0,0,0,0));
         let i = 0;
         while (i < 7) {
-            let (ustr, x) = unmarshalValue(stream, codeMap)?;
-            stream = ustr;
-            val = val with { [i] = x };
+            let (*stream, x) = unmarshalValue(stream, codeMap)?;
+            set val[i] = x;
             i = i+1;
         }
         Some((stream, val))
@@ -178,9 +169,8 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
         let val = unsafecast<[8]any>((0,0,0,0,0,0,0,0));
         let i = 0;
         while (i < 8) {
-            let (ustr, x) = unmarshalValue(stream, codeMap)?;
-            stream = ustr;
-            val = val with { [i] = x };
+            let (*stream, x) = unmarshalValue(stream, codeMap)?;
+            set val[i] = x;
             i = i+1;
         }
         Some((stream, val))

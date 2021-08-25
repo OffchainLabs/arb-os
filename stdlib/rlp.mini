@@ -43,7 +43,7 @@ type SignedTx = struct {
     v: uint,
     r: uint,
     s: uint
-}
+};
 
 func rlp_uintSize(val: uint) -> uint {
     return xif (val <= 0x7f) {

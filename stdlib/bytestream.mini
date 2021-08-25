@@ -16,7 +16,7 @@ type ByteStream = struct {
     capacity: uint,
     slice: uint,
     currentOffset: uint,
-}
+};
 
 public func bytestream_new(contents: ByteArray) -> ByteStream {
     return struct {
