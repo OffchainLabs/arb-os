@@ -22,7 +22,7 @@ COMPILEFLAGS = -c "arb_os/constants.json" -i "none"
 COMPILEFLAGSNOINLINE = -c "arb_os/constants.json"
 EXTRACOMPILEFLAGSFORARBOS = -m
 
-all: $(ARBOSCONTRACTS) $(TESTFILES) $(TESTCONTRACTS) $(TEMPLATES) $(UPGRADEFILES) arbos upgrade test
+all: $(ARBOSCONTRACTS) $(TESTFILES) $(TESTCONTRACTS) $(TEMPLATES) $(UPGRADEFILES) arbos upgrade paramslist test
 arbos: $(ARBOSDIR)/arbos.mexe
 upgrade: $(ARBOSDIR)/upgrade.json
 contracts: $(TESTCONTRACTS) $(ARBOSCONTRACTS)
@@ -126,6 +126,11 @@ $(TESTCONTRACTSPURE): $(TCSRCDIR)
 $(ARBOSCONTRACTS): $(ACSRCDIR)
 	(cd contracts; yarn install; yarn build)
 
+paramslist: parameters.json
+
+parameters.json: compiler $(ARBOSDIR)/constants.json
+	$(CARGORUN) make-parameters-list -c $(ARBOSDIR)/constants.json >parameters.json
+
 compiler:
 	cargo build --release
 
@@ -138,12 +143,12 @@ test:
 coverage: alltests.cov
 
 alltests.cov: compiler contracts
-	cd coverage && grep avmcodebuilder test_upgrade_arbos_to_different_version.cov > avmcodebuilder.cov
-	rm coverage/test_upgrade_arbos_to_different_version.cov
+	-cd coverage && grep avmcodebuilder test_upgrade_arbos_to_different_version.cov > avmcodebuilder.cov
+	-rm coverage/test_upgrade_arbos_to_different_version.cov
 	cat coverage/*.cov | sort -r | uniq | sort | uniq -f 1 | sort -k2,2 -k3,3n | grep -v test | grep -v Test > coverage/alltests.cov
 	./coverage/mini-coverage.sh ./coverage/alltests.cov > lcov-mini.info
 
-evmtest: $(ARBOS)
+evmtest: compiler $(ARBOS)
 	$(CARGORUN) evm-tests
 
 evmtestlogs: compiler $(ARBOS)
@@ -156,11 +161,14 @@ testlogs: compiler $(TEMPLATES) $(ARBOS)
 	mkdir testlogs
 	$(CARGORUN) make-test-logs >/dev/null
 
-evmdebug: all
+evmdebug: compiler all
 	$(CARGORUN) evm-debug
 
 benchmark: compiler $(TEMPLATES) $(ARBOS)
 	$(CARGORUN) make-benchmarks
+
+./target/release/mini: src/* src/*/*
+	cargo build --release
 
 clean:
 	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe $(UPGRADETESTDIR)/*.mexe $(ARBOSDIR)/arbos.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/upgrade.json minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini *.cov coverage/*.cov lcov.info lcov-mini.info

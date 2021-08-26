@@ -4,6 +4,7 @@
 
 #![allow(unused_parens)]
 
+use crate::compile::miniconstants::make_parameters_list;
 use crate::compile::CompileStruct;
 use crate::link::LinkedProgram;
 use crate::upload::CodeUploader;
@@ -106,6 +107,12 @@ struct SerializeUpgrade {
     input: String,
 }
 
+#[derive(Clap, Debug)]
+struct MakeParametersList {
+    #[clap(short, long)]
+    pub consts_file: Option<String>,
+}
+
 ///Main enum for command line arguments.
 #[derive(Clap, Debug)]
 enum Args {
@@ -121,6 +128,7 @@ enum Args {
     EvmTests(EvmTests),
     GenUpgradeCode(GenUpgrade),
     SerializeUpgrade(SerializeUpgrade),
+    MakeParametersList(MakeParametersList),
 }
 
 fn main() -> Result<(), CompileError> {
@@ -306,6 +314,19 @@ fn main() -> Result<(), CompileError> {
         Args::SerializeUpgrade(up) => {
             let the_json = CodeUploader::_new_from_file(Path::new(&up.input))._to_json();
             print!("{}", the_json.unwrap());
+            print_time = false;
+        }
+        Args::MakeParametersList(clist) => {
+            let constants_map =
+                make_parameters_list(clist.consts_file.as_ref().map(|s| Path::new(s))).unwrap();
+            match serde_json::to_string(&constants_map) {
+                Ok(s) => {
+                    println!("{}", s);
+                }
+                Err(e) => {
+                    panic!("{}", e);
+                }
+            }
             print_time = false;
         }
     }

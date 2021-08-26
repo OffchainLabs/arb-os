@@ -12,10 +12,12 @@ use accounts::accountStore_upgradeContractFromEvmCode;
 use accounts::account_checkAndIncrSeqNum;
 
 use arbstatistics::arbStatistics_init;
+use arbowner::arbowner_init;
 
 use blockhash::blockhash_init;
 
 use chainParameters::chainParams_init;
+use chainParameters::notifyParamsChanged;
 
 use codeSegment::codeSegment_init;
 use codeSegment::translateEvmCodeSegment;
@@ -80,14 +82,16 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         if (initializePreinstalls(true) == None<()>) {
             panic;   // don't try to run without preinstalls and precompiles
         }
+
+        notifyParamsChanged();   // call this in case parameters changed during upgrade
     } else {
         // this is a clean start, not an upgrade
         errorHandler_init();
+        chainParams_init();
         arbStatistics_init();
 
         pluggables_init();
         codeSegment_init();
-        chainParams_init();
         output_init();
         decompression_init();
         inbox_init();
@@ -97,6 +101,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         __fixedLocationGlobal = dispatchForEvmOp;
         blockhash_init();
         accountStore_init();
+        arbowner_init();
         txReceipts_init();
         if (initializePreinstalls(false) == None<()>) {
             panic;   // don't try to run without preinstalls and precompiles

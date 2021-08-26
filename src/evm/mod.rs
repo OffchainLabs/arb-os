@@ -18,7 +18,7 @@ pub use benchmarks::make_benchmarks;
 pub use evmtest::run_evm_tests;
 use std::option::Option::None;
 
-mod abi;
+pub mod abi;
 mod benchmarks;
 #[cfg(test)]
 mod bls;
@@ -208,6 +208,64 @@ pub fn _evm_tx_with_deposit(
 
     machine.write_coverage("test_tx_with_deposit".to_string());
     Ok(true)
+}
+
+pub fn _evm_block_num_consistency_test(debug: bool) -> Result<(), ethabi::Error> {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+
+    let my_addr = Uint256::from_usize(1025);
+
+    let mut bn_contract = AbiForContract::new_from_file(&test_contract_path("BlockNum"))?;
+    if bn_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, debug)
+        .is_err()
+    {
+        panic!("failed to deploy BlockNum contract");
+    }
+
+    let (logs, sends) = bn_contract.call_function(
+        my_addr.clone(),
+        "getBlock",
+        &[],
+        &mut machine,
+        Uint256::zero(),
+        debug,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    assert!(logs[0].succeeded());
+    let get_block_result = Uint256::from_bytes(&logs[0].get_return_data());
+
+    let (logs, sends) = bn_contract.call_function(
+        my_addr.clone(),
+        "setBlock",
+        &[],
+        &mut machine,
+        Uint256::zero(),
+        debug,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    assert!(logs[0].succeeded());
+
+    let (logs, sends) = bn_contract.call_function(
+        my_addr.clone(),
+        "currBlock",
+        &[],
+        &mut machine,
+        Uint256::zero(),
+        debug,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    assert!(logs[0].succeeded());
+    let curr_block_result = Uint256::from_bytes(&logs[0].get_return_data());
+
+    assert_eq!(get_block_result, curr_block_result);
+
+    machine.write_coverage("_evm_block_num_consistency_test".to_string());
+    Ok(())
 }
 
 pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
@@ -746,7 +804,7 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
     let sequencer_addr = Uint256::from_usize(1337);
-    let mut rt_env = RuntimeEnvironment::_new_options(Uint256::from_usize(1111));
+    let mut rt_env = RuntimeEnvironment::_new_options();
 
     let wallet = rt_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -875,7 +933,7 @@ pub fn _evm_xcontract_call_sequencer_slow_path(
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
     let sequencer_addr = Uint256::from_usize(1337);
-    let mut rt_env = RuntimeEnvironment::_new_options(Uint256::from_usize(1111));
+    let mut rt_env = RuntimeEnvironment::_new_options();
 
     let wallet = rt_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1124,7 +1182,7 @@ pub fn _evm_xcontract_call_sequencer_reordering(
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
     let sequencer_addr = Uint256::from_usize(1337);
-    let mut rt_env = RuntimeEnvironment::_new_options(Uint256::from_usize(1111));
+    let mut rt_env = RuntimeEnvironment::_new_options();
 
     let wallet = rt_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());

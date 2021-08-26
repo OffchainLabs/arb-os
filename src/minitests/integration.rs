@@ -14,10 +14,7 @@ fn compile_run_cycle(input: String) -> Machine {
         Ok((mexe, _error_system)) => mexe,
         Err(_error_system) => panic!("failed to compile"),
     };
-    let mut machine = Machine::new(
-        mexe,
-        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
-    );
+    let mut machine = Machine::new(mexe, RuntimeEnvironment::new(None));
     machine.start_coverage();
     run(&mut machine, vec![], false, None).unwrap();
     machine.write_coverage(input.replace("/", "-").replace(".mini", ""));
