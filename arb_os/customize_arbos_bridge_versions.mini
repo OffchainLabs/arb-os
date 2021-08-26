@@ -15,7 +15,8 @@ use evmCallStack::EvmCallFrame;
 use gasAccounting::GasAccountingInfo;
 
 use std::fixedpoint::fixedPoint_zero;
-use std::fixedpoint::fixedPoint_minusOne;
+use std::fixedpoint::fixedPoint_plusOne;
+use std::fixedpoint::fixedPoint_div;
 
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsForall;
@@ -27,15 +28,17 @@ public func set_globalCallStack_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> 
 
 public func set_gasAccountingInfo_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> GasAccountingInfo {
     let old = oldGlobals.gasAccountingInfo;
+    let baseFeeMultiplier = fixedPoint_plusOne(old.feeConfig.networkFeeRate);
+    let shareForNetFee = xif let Some(success) = fixedPoint_div(old.feeConfig.networkFeeRate, baseFeeMultiplier) {
+        success
+    } else {
+        fixedPoint_zero()
+    };
     return struct {
         txState: old.txState,
         feeConfig: struct {
-            baseFeeMultiplier: old.feeConfig.networkFeeRate,
-            shareForNetFee: xif let Some(sfnf) = fixedPoint_minusOne(old.feeConfig.networkFeeRate) {
-                sfnf
-            } else {
-                fixedPoint_zero()
-            },
+            baseFeeMultiplier: baseFeeMultiplier,
+            shareForNetFee: shareForNetFee,
         },
         currentPrices: old.currentPrices,
         gasRemainingThisBlock: old.gasRemainingThisBlock,
