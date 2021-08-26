@@ -179,28 +179,28 @@ StatementKind: StatementKind = {
     <lno: @L> "set" <i:Ident> <s: SubData+> "=" <e: Expr> ";" => {
 
         // This routine manually derives a series of nested with-statements to build an interior assignment.
-        
+
         let debug_info = DebugInfo::from(file_info.location(BytePos::from(lno), filename));
-        
+
         // the withs we assign at the end
         let mut withs = Expr {
             kind: ExprKind::VariableRef(i),
             debug_info: debug_info,
         };
-        
+
         // the intereior site we expand to right-derive the next step, taking the form
         //   a with { expr }
         //   a with { a.b with { expr } }
         //   a with { a.b with { a.b.c with { expr } }         and so on
         let mut build = &mut withs;
-        
+
         // a nested set of sub-value identifier ops that lets us build up nodes for those like a.b.c by going through
         // each of those for a, a.b, a.b.c, etc
         let mut nest = Expr {
             kind: ExprKind::VariableRef(i),
             debug_info: debug_info,
         };
-        
+
         for inner in s {
             match inner {
                 SubData::ArrayOrMap(index) => {
@@ -236,7 +236,7 @@ StatementKind: StatementKind = {
                 }
             }
         }
-        
+
         StatementKind::Assign(i, withs)
     }
 }
@@ -285,6 +285,7 @@ Type: Type = {
 	"every" => Type::Every,
 	"union<" <t1:CommaedTypes> ">" => Type::Union(t1),
 	"*" <Ident> => Type::Variable(current_path.to_owned(), <>),
+	<i: Ident> "<" <t1: CommaedTypes> ">" => Type::Generic(i, t1),
 	Ident => Type::Nominal(current_path.to_owned(), <>),
 };
 

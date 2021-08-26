@@ -914,29 +914,28 @@ fn resolve_imports(
 ///Constructor for `TypeTree`
 fn create_type_tree(program_tree: &HashMap<Vec<String>, Module>) -> TypeTree {
     TypeTree {
-        nominals:
-    program_tree
-        .iter()
-        .map(|(path, program)| {
-            program
-                .named_types
-                .iter()
-                .map(|(id, tipe)| {
-                    (
-                        (path.clone(), *id),
+        nominals: program_tree
+            .iter()
+            .map(|(path, program)| {
+                program
+                    .named_types
+                    .iter()
+                    .map(|(id, tipe)| {
                         (
-                            tipe.clone(),
-                            program_tree
-                                .get(path)
-                                .map(|module| module.string_table.name_from_id(*id).clone())
-                                .unwrap(),
-                        ),
-                    )
-                })
-                .collect::<Vec<_>>()
-        })
-        .flatten()
-        .collect()
+                            (path.clone(), *id),
+                            (
+                                tipe.clone(),
+                                program_tree
+                                    .get(path)
+                                    .map(|module| module.string_table.name_from_id(*id).clone())
+                                    .unwrap(),
+                            ),
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .flatten()
+            .collect(),
     }
 }
 

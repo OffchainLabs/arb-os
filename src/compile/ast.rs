@@ -30,9 +30,7 @@ impl TypeTree {
         self.nominals.get(path)
     }
     pub fn new(nominals: HashMap<(Vec<String>, usize), (Type, String)>) -> Self {
-        TypeTree {
-            nominals
-        }
+        TypeTree { nominals }
     }
 }
 
@@ -127,6 +125,7 @@ pub enum Type {
     FixedArray(Box<Type>, usize),
     Struct(Vec<StructField>),
     Nominal(Vec<String>, StringId),
+    Generic(StringId, Vec<Type>),
     Func(bool, Vec<Type>, Box<Type>),
     Map(Box<Type>, Box<Type>),
     Any,
@@ -149,6 +148,7 @@ impl AbstractSyntaxTree for Type {
             | Type::Any
             | Type::Every
             | Type::Nominal(_, _)
+            | Type::Generic(_, _)
             | Type::Variable(_, _) => vec![],
             Type::Tuple(types) | Type::Union(types) => {
                 types.iter_mut().map(|t| TypeCheckedNode::Type(t)).collect()
@@ -305,6 +305,18 @@ impl Type {
                     false
                 }
             }
+            Type::Generic(id, args) => {
+                if let Type::Generic(id2, args2) = rhs {
+                    id == id2
+                        && args.len() == args2.len()
+                        && args.iter().zip(args2.iter()).all(|(left, right)| {
+                            left.assignable(right, type_tree, seen.clone())
+                                && right.assignable(left, type_tree, seen.clone())
+                        })
+                } else {
+                    false
+                }
+            }
             Type::Func(_, args, ret) => {
                 if let Type::Func(_, args2, ret2) = rhs {
                     //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
@@ -409,6 +421,18 @@ impl Type {
                     false
                 }
             }
+            Type::Generic(id, args) => {
+                if let Type::Generic(id2, args2) = rhs {
+                    id == id2
+                        && args.len() == args2.len()
+                        && args.iter().zip(args2.iter()).all(|(left, right)| {
+                            left.assignable(right, type_tree, seen.clone())
+                                && right.assignable(left, type_tree, seen.clone())
+                        })
+                } else {
+                    false
+                }
+            }
             Type::Func(is_impure, args, ret) => {
                 if let Type::Func(is_impure2, args2, ret2) = rhs {
                     //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
@@ -507,6 +531,18 @@ impl Type {
                     } else {
                         true
                     }
+                } else {
+                    false
+                }
+            }
+            Type::Generic(id, args) => {
+                if let Type::Generic(id2, args2) = rhs {
+                    id == id2
+                        && args.len() == args2.len()
+                        && args.iter().zip(args2.iter()).all(|(left, right)| {
+                            left.assignable(right, type_tree, seen.clone())
+                                && right.assignable(left, type_tree, seen.clone())
+                        })
                 } else {
                     false
                 }
@@ -642,6 +678,25 @@ impl Type {
                     (Err(_), Err(_)) => {
                         Some(TypeMismatch::UnresolvedBoth(self.clone(), rhs.clone()))
                     }
+                }
+            }
+            Type::Generic(id, types) => {
+                if let Type::Generic(rid, rtypes) = rhs {
+                    if id != rid {
+                        Some(TypeMismatch::GenericName(*id, *rid))
+                    } else if types.len() != rtypes.len() {
+                        Some(TypeMismatch::GenericLength(types.len(), rtypes.len()))
+                    } else {
+                        types.iter().zip(rtypes.iter()).enumerate().find_map(
+                            |(index, (left, right))| {
+                                left.first_mismatch(right, type_tree, seen.clone()).map(
+                                    |mismatch| TypeMismatch::GenericVar(index, Box::new(mismatch)),
+                                )
+                            },
+                        )
+                    }
+                } else {
+                    Some(TypeMismatch::Type(self.clone(), rhs.clone()))
                 }
             }
             Type::Func(is_impure, args, ret) => {
@@ -807,7 +862,9 @@ impl Type {
                 }
                 (value_from_field_list(vals), is_safe)
             }
-            Type::Map(_, _) | Type::Func(_, _, _) | Type::Nominal(_, _) => (Value::none(), false),
+            Type::Map(_, _) | Type::Func(_, _, _) | Type::Nominal(_, _) | Type::Generic(_, _) => {
+                (Value::none(), false)
+            }
             Type::Any => (Value::none(), true),
             Type::Every => (Value::none(), false),
             Type::Variable(_, _) => panic!("Tried to get the default value of a type variable"),
@@ -936,6 +993,7 @@ impl Type {
                 ));
                 (out, type_set)
             }
+            Type::Generic(_, _) => ("fix me".to_string(), type_set),
             Type::Variable(_, _) => ("type variable".to_string(), type_set),
             Type::Func(impure, args, ret) => {
                 let mut out = String::new();
@@ -1233,6 +1291,9 @@ pub enum TypeMismatch {
     Union(usize, Box<TypeMismatch>),
     UnionLength(usize, usize),
     Purity,
+    GenericName(StringId, StringId),
+    GenericVar(usize, Box<TypeMismatch>),
+    GenericLength(usize, usize),
 }
 
 impl fmt::Display for TypeMismatch {
@@ -1293,6 +1354,16 @@ impl fmt::Display for TypeMismatch {
                     left, right
                 ),
                 TypeMismatch::Purity => format!("assigning impure function to pure function"),
+                TypeMismatch::GenericName(left, right) => format!(
+                    "differently named generics left id: {} right id: {}",
+                    left, right
+                ),
+                TypeMismatch::GenericVar(index, mismatch) =>
+                    format!("in generic variable {}: {}", index + 1, mismatch),
+                TypeMismatch::GenericLength(left, right) => format!(
+                    "left generics arg list has {} arguments but right has {}",
+                    left, right
+                ),
             }
         )
     }
