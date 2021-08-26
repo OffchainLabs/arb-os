@@ -231,7 +231,14 @@ public view write func retryBuffer_getTxKeepalivePrice(rbuf: RetryBuffer, txId: 
 // Keep txId alive longer, if it exists.
 // Returns Some((updatedRetryBuffer, newExpiryTime)) if success.
 // Returns None if txId doesn't exist, or if its expiry is already >= 2 lifetimes in the future.
-public view write func retryBuffer_keepalive(rbuf: RetryBuffer, txId: uint) -> option<(RetryBuffer, uint)> {
+public view write func retryBuffer_keepalive(
+    rbuf: RetryBuffer,
+    txId: uint,
+    valuePaid: uint,  // callvalue that was paid for this -- fail if it's not exact
+) -> option<(RetryBuffer, uint)> {
+    if (valuePaid != (retryBuffer_getTxKeepalivePrice(rbuf, txId)?).0) {
+        return None<(RetryBuffer, uint)>;
+    }
     rbuf = retryBuffer_trimTwo(rbuf);
     let rtx = retryBuffer_get(rbuf, txId)?;
     let newExpiryTime = rtx.expiryTime + rbuf.txLifetimeSeconds;
