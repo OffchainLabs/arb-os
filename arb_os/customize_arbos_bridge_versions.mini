@@ -14,44 +14,40 @@ use evmCallStack::EvmCallFrame;
 
 use gasAccounting::GasAccountingInfo;
 
-use std::fixedpoint::fixedPoint_new;
-
-use std::addressSet::setOfAddresses_all;
+use std::fixedpoint::fixedPoint_zero;
+use std::fixedpoint::fixedPoint_plusOne;
+use std::fixedpoint::fixedPoint_div;
 
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsForall;
+
 
 public func set_globalCallStack_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
     return None<EvmCallFrame>;
 }
 
 public func set_gasAccountingInfo_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> GasAccountingInfo {
-    let oldInfo = oldGlobals.gasAccountingInfo;
-    let oldPP = oldInfo.pricingParams;
+    let old = oldGlobals.gasAccountingInfo;
+    let baseFeeMultiplier = fixedPoint_plusOne(old.feeConfig.networkFeeRate);
+    let shareForNetFee = xif let Some(success) = fixedPoint_div(old.feeConfig.networkFeeRate, baseFeeMultiplier) {
+        success
+    } else {
+        fixedPoint_zero()
+    };
     return struct {
-        txState: oldInfo.txState,
+        txState: old.txState,
         feeConfig: struct {
-            baseFeeMultiplier: oldInfo.feeConfig.baseFeeMultiplier,
-            shareForNetFee: oldInfo.feeConfig.shareForNetFee,
+            baseFeeMultiplier: baseFeeMultiplier,
+            shareForNetFee: shareForNetFee,
         },
-        currentPrices: struct {
-            perL1CalldataUnit: oldInfo.currentPrices.perL1CalldataUnit,
-            perStorageCell: oldInfo.currentPrices.perStorageCell,
-            perArbGasBase: oldInfo.currentPrices.perArbGasBase,
-            perArbGasCongestion: oldInfo.currentPrices.perArbGasCongestion,
-            perArbGasTotal: oldInfo.currentPrices.perArbGasTotal,
-        },
-        gasRemainingThisBlock: oldInfo.gasRemainingThisBlock,
-        congestionState: oldInfo.congestionState,
-        speedLimitPerSecond: oldInfo.speedLimitPerSecond,
-        pricingParams: struct {
-            l1GasPerL1CalldataUnit: oldPP.l1GasPerL1CalldataUnit,
-            l1GasPerStorage: oldPP.l1GasPerStorage,
-            arbGasDivisor: oldPP.arbGasDivisor,
-        },
-        gasAllocatedToThisBlock: oldInfo.gasAllocatedToThisBlock,
-        retryablePrices: oldInfo.retryablePrices,
-        allowedSenders: oldInfo.allowedSenders,
+        currentPrices: old.currentPrices,
+        gasRemainingThisBlock: old.gasRemainingThisBlock,
+        congestionState: old.congestionState,
+        speedLimitPerSecond: old.speedLimitPerSecond,
+        pricingParams: old.pricingParams,
+        gasAllocatedToThisBlock: old.gasAllocatedToThisBlock,
+        retryablePrices: old.retryablePrices,
+        allowedSenders: old.allowedSenders,
     };
 }
 
@@ -96,13 +92,8 @@ public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade
         with { [const::Atom_Param_L1GasPerL1CalldataUnit] = oldGlobals.gasAccountingInfo.pricingParams.l1GasPerL1CalldataUnit }
         with { [const::Atom_Param_L1GasPerStorage] = oldGlobals.gasAccountingInfo.pricingParams.l1GasPerStorage }
         with { [const::Atom_Param_ArbGasDivisor] = oldGlobals.gasAccountingInfo.pricingParams.arbGasDivisor }
-        with {
-            [const::Atom_Param_NetworkFeeShareNumerator] = {
-                let bfm = oldGlobals.gasAccountingInfo.feeConfig.baseFeeMultiplier;
-                bfm.val - bfm.shiftFactor
-            }
-        }
-        with { [const::Atom_Param_NetworkFeeShareDenominator] = oldGlobals.gasAccountingInfo.feeConfig.baseFeeMultiplier.shiftFactor }
+        with { [const::Atom_Param_NetworkFeeShareNumerator] = oldGlobals.gasAccountingInfo.feeConfig.networkFeeRate.val }
+        with { [const::Atom_Param_NetworkFeeShareDenominator] = oldGlobals.gasAccountingInfo.feeConfig.networkFeeRate.shiftFactor }
         with { [const::Atom_Param_GasPoolMax] = oldGlobals.gasAccountingParams.GasPoolMax }
         with { [const::Atom_Param_TxGasLimit] = oldGlobals.gasAccountingParams.TxGasLimit }
         with { [const::Atom_Param_RetryablePriceBase] = const::Default_Param_RetryablePriceBase }
@@ -114,81 +105,4 @@ public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade
         with { [const::Atom_Param_RetryableTxLifetimeSeconds] = const::Default_Param_RetryableTxLifetimeSeconds }
         with { [const::Atom_Param_ArbitrumNonZeroBalanceCallStipend] = const::Default_Param_ArbitrumNonZeroBalanceCallStipend }
     ;
-}
-
-public func set_globalAccountStore_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> AccountStore {
-    let oldGAS = oldGlobals.globalAccountStore;
-    let acctsRemapResult = builtin_kvsForall(
-        unsafecast<Kvs>(oldGAS.accounts),
-        unsafecast<func(any, any, any) -> any>(acctRemapClosure),
-        newmap<address, Account>,
-    );
-    return struct {
-        accounts: unsafecast<map<address, Account>>(acctsRemapResult),
-        retryBuffer: oldGAS.retryBuffer,
-        numContracts: oldGAS.numContracts,
-        codeRefTable: oldGAS.codeRefTable,
-        escrowStore: oldGAS.escrowStore,
-    };
-}
-
-func acctRemapClosure(_addr: address, oldAcct: before__accounts_Account, state: map<address, Account>) -> map<address, Account> {
-    let acct = struct {
-        addr: oldAcct.addr,
-        blsKey: oldAcct.blsKey,
-        nextSeqNum: oldAcct.nextSeqNum,
-        ethBalance: oldAcct.ethBalance,
-        contractInfo: oldAcct.contractInfo,
-        aggregatorInfo: xif let Some(aggInfo) = oldAcct.aggregatorInfo {
-            Some(
-                struct {
-                    decompressionState: aggInfo.decompressionState,
-                    feeCollector: aggInfo.feeCollector,
-                    baseTxFeeL1Gas: const::Default_Param_DefaultBaseTxFeeL1Gas,
-                }
-            )
-        } else {
-            None<AggregatorInfo>
-        },
-        aggregatorToPay: oldAcct.aggregatorToPay,
-    };
-    return state with {
-        [acct.addr] = acct
-    };
-}
-
-public func set_gasAccountingInfo_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> GasAccountingInfo {
-    let old = input_globals.gasAccountingInfo;
-    return struct {
-        txState: old.txState,
-        feeConfig: struct {
-            baseFeeMultiplier: old.feeConfig.baseFeeMultiplier,
-            shareForNetFee: fixedPoint_new(
-                old.feeConfig.baseFeeMultiplier.val,
-                old.feeConfig.baseFeeMultiplier.shiftFactor - old.feeConfig.baseFeeMultiplier.val
-            ),
-        },
-        currentPrices: struct {
-            perL1CalldataUnit: old.currentPrices.perL1CalldataUnit,
-            perStorageCell: old.currentPrices.perStorageCell,
-            perArbGasBase: old.currentPrices.perArbGasBase,
-            perArbGasCongestion: old.currentPrices.perArbGasCongestion,
-            perArbGasTotal: old.currentPrices.perArbGasTotal,
-        },
-        gasRemainingThisBlock: old.gasRemainingThisBlock,
-        congestionState: old.congestionState,
-        speedLimitPerSecond: old.speedLimitPerSecond,
-        pricingParams: struct {
-            l1GasPerL1CalldataUnit: old.pricingParams.l1GasPerL1CalldataUnit,
-            l1GasPerStorage: old.pricingParams.l1GasPerStorage,
-            arbGasDivisor: old.pricingParams.arbGasDivisor,
-        },
-        gasAllocatedToThisBlock: old.gasAllocatedToThisBlock,
-        retryablePrices: old.retryablePrices,
-        allowedSenders: setOfAddresses_all(),
-    };
-}
-
-public func set_globalCallStack_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
-    return None<EvmCallFrame>;
 }
