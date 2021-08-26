@@ -12,6 +12,7 @@ use std::hash::{Hash, Hasher};
 use std::io::Read;
 use std::option::Option::None;
 use std::path::Path;
+use crate::minitests::verify_chain_parameter_set;
 
 pub struct ArbOwner<'a> {
     pub contract_abi: AbiForContract,
@@ -30,6 +31,85 @@ impl<'a> ArbOwner<'a> {
             wallet,
             my_address: Uint256::from_bytes(wallet.address().as_bytes()),
             debug,
+        }
+    }
+
+    pub fn get_chain_parameter(
+        &self,
+        machine: &mut Machine,
+        param_name: &str,
+        force_owner: bool, // force the message to come from address zero, which is an owner
+    ) -> Result<Uint256, ethabi::Error> {
+        let param_id = param_id_from_name(param_name);
+        let (receipts, _sends) = self.contract_abi.call_function_from_contract(
+            if force_owner {
+                Uint256::zero()
+            } else {
+                Uint256::from_u64(42894528) // any old address
+            },
+            "getChainParameter",
+            &[
+                ethabi::Token::Uint(param_id.to_u256()),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
+        } else {
+            Err(ethabi::Error::from(format!(
+                "tx failed: {}",
+                receipts[0]._get_return_code_text()
+            )))
+        }
+    }
+
+    pub fn serialize_all_parameters(
+        &self,
+        machine: &mut Machine,
+        force_owner: bool, // force the message to come from address zero, which is an owner
+    ) -> Result<Vec<(Uint256, Uint256)>, ethabi::Error> {
+        let (receipts, _) = self.contract_abi.call_function_from_contract(
+            if force_owner {
+                Uint256::zero()
+            } else {
+                Uint256::from_u64(42894528) // any old address
+            },
+            "serializeAllParameters",
+            &[
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            let mut params = vec![];
+            let mut offset = 64;   // offset is for ABI stuff before the data
+            let data = receipts[0].get_return_data();
+            while offset < data.len() {
+                params.push((
+                    Uint256::from_bytes(&data[offset..offset+32]),
+                    Uint256::from_bytes(&data[offset+32..offset+64])
+                    ));
+                offset += 64;
+            }
+            Ok(params)
+        } else {
+            Err(ethabi::Error::from(format!(
+                "tx failed: {}",
+                receipts[0]._get_return_code_text()
+            )))
         }
     }
 
@@ -1402,6 +1482,8 @@ fn test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     );
     let arbos_version_orig = arbsys_orig_binding.arbos_version(&mut machine)?;
     assert_eq!(arbos_version, arbos_version_orig);
+
+    verify_chain_parameter_set(&mut machine);
 
     machine.write_coverage("test_upgrade_arbos_to_different_version".to_string());
     Ok(())

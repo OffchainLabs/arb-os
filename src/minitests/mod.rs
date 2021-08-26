@@ -2,7 +2,9 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
+use crate::compile::miniconstants::make_parameters_list;
 use crate::console::Color;
+use crate::evm::preinstalled_contracts::ArbOwner;
 use crate::evm::{test_contract_path2, AbiForContract};
 use crate::mavm::{Buffer, Value};
 use crate::run::{_bytestack_from_bytes, load_from_file, run, run_from_file, Machine};
@@ -579,4 +581,30 @@ fn test_gasleft_with_delegatecall() {
     assert!(gasleft_before > gasleft_after);
 
     machine.write_coverage("test_gasleft_with_delegatecall".to_string());
+}
+
+#[test]
+fn test_chain_parameters_exist() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+    verify_chain_parameter_set(&mut machine);
+
+    machine.write_coverage("test_chain_parameters_exist".to_string());
+
+}
+
+#[cfg(test)]
+pub fn verify_chain_parameter_set(machine: &mut Machine) {
+    let wallet = machine.runtime_env.new_wallet();
+    let arbowner = ArbOwner::new(&wallet, false);
+
+    let parameters_list = make_parameters_list(Some(Path::new("arb_os/constants.json"))).unwrap();
+    for (param_id, _) in &parameters_list {
+        assert!(arbowner
+            .get_chain_parameter(machine, &*param_id, true)
+            .is_ok());
+    }
+
+    let serialized_params = arbowner.serialize_all_parameters(machine,true).unwrap();
+    assert_eq!(serialized_params.len(), parameters_list.len());
 }
