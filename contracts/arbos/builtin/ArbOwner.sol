@@ -34,9 +34,9 @@ interface ArbOwner {
     function bindAddressToPluggable(address addr, uint pluggableId) external;
 
     // Get and set chain parameters
-    function getChainParameter(uint which) external view returns(uint);
-    function setChainParameter(uint which, uint value) external;     // reverts if param doesn't already exist
-    function createChainParameter(uint which, uint value) external;  // sets param, even if it didn't already exist
+    function getChainParameter(bytes32 which) external view returns(uint);
+    function setChainParameter(bytes32 which, uint value) external;     // reverts if param doesn't already exist
+    function createChainParameter(bytes32 which, uint value) external;  // sets param, even if it didn't already exist
     function serializeAllParameters() external view returns(bytes memory);
 
     // Manage the set of allowed senders

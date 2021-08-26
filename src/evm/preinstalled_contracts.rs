@@ -92,7 +92,7 @@ impl<'a> _ArbOwner<'a> {
             },
             "setChainParameter",
             &[
-                ethabi::Token::Uint(param_id.to_u256()),
+                ethabi::Token::FixedBytes(param_id.to_bytes_be()),
                 ethabi::Token::Uint(value.to_u256()),
             ],
             machine,
@@ -128,7 +128,7 @@ impl<'a> _ArbOwner<'a> {
                 Uint256::from_u64(980509782534089) // any old address
             },
             "getChainParameter",
-            &[ethabi::Token::Uint(param_id.to_u256())],
+            &[ethabi::Token::FixedBytes(param_id.to_bytes_be())],
             machine,
             Uint256::zero(),
             false,
