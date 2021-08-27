@@ -487,6 +487,10 @@ public func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)> {
         Some((bs, firstByte))
     } else {
         let length = firstByte - 0x80;
+        if (length > 32) {
+            // result would overflow a uint, so return failure
+            return None<(ByteStream, uint)>;
+        }
         let ret = 0;
         let i = 0;
         while (i < length) {
