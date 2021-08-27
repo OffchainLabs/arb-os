@@ -698,20 +698,23 @@ fn test_tx_origin() {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero(true);
 
-    let mut blocknum_contract = AbiForContract::new_from_file(&test_contract_path("BlockNum")).unwrap();
+    let mut blocknum_contract =
+        AbiForContract::new_from_file(&test_contract_path("BlockNum")).unwrap();
     let _ = blocknum_contract.deploy(&[], &mut machine, Uint256::zero(), None, false);
 
     let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add")).unwrap();
     let _ = add_contract.deploy(&[], &mut machine, Uint256::zero(), None, false);
 
-    let (receipts, _) = add_contract.call_function(
-        Uint256::from_u64(13958134),
-        "requireMyCallerIsOrigin",
-        &[ethabi::Token::Address(blocknum_contract.address.to_h160())],
-        &mut machine,
-        Uint256::zero(),
-        false,
-    ).unwrap();
+    let (receipts, _) = add_contract
+        .call_function(
+            Uint256::from_u64(13958134),
+            "requireMyCallerIsOrigin",
+            &[ethabi::Token::Address(blocknum_contract.address.to_h160())],
+            &mut machine,
+            Uint256::zero(),
+            false,
+        )
+        .unwrap();
     assert_eq!(receipts.len(), 1);
     assert!(receipts[0].succeeded());
 
@@ -723,22 +726,31 @@ fn test_blocknum_timestamp() {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero(true);
 
-    let mut blocknum_contract = AbiForContract::new_from_file(&test_contract_path("BlockNum")).unwrap();
+    let mut blocknum_contract =
+        AbiForContract::new_from_file(&test_contract_path("BlockNum")).unwrap();
     let _ = blocknum_contract.deploy(&[], &mut machine, Uint256::zero(), None, false);
 
-    let (receipts, _) = blocknum_contract.call_function(
-        Uint256::from_u64(13958134),
-        "getBlockNumTimestamp",
-        &[],
-        &mut machine,
-        Uint256::zero(),
-        false,
-    ).unwrap();
+    let (receipts, _) = blocknum_contract
+        .call_function(
+            Uint256::from_u64(13958134),
+            "getBlockNumTimestamp",
+            &[],
+            &mut machine,
+            Uint256::zero(),
+            false,
+        )
+        .unwrap();
     assert_eq!(receipts.len(), 1);
     assert!(receipts[0].succeeded());
     let data = receipts[0].get_return_data();
-    assert_eq!(machine.runtime_env.current_block_num, Uint256::from_bytes(&data[0..32]));
-    assert_eq!(machine.runtime_env.current_timestamp, Uint256::from_bytes(&data[32..64]));
+    assert_eq!(
+        machine.runtime_env.current_block_num,
+        Uint256::from_bytes(&data[0..32])
+    );
+    assert_eq!(
+        machine.runtime_env.current_timestamp,
+        Uint256::from_bytes(&data[32..64])
+    );
 
     machine.write_coverage("test_blocknum_timestamp".to_string());
 }
