@@ -93,7 +93,7 @@ TypeDecl: TypeDecl = {
 }
 
 GenericTypeDecl: GenericTypeDecl = {
-	"type" <Ident> "<" <CommaedGenericTypeArgs> ">" "=" <Type> => new_generic_type_decl(<>),
+	"type" <Ident> "<" <CommaedGenericTypeArgs> ">" "=" <GenericType> => new_generic_type_decl(<>),
 }
 
 FuncDecl: Func = {
@@ -102,12 +102,17 @@ FuncDecl: Func = {
 }
 
 GenericFuncDecl: GenericFunc = {
-    <lno: @L> <attribs: ("#[" <Attributes> "]")?> <p: "public"?> <imp: "impure"?> "func<>" <i:Ident> "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> =>
+    <lno: @L> <attribs: ("#[" <Attributes> "]")?> <p: "public"?> <imp: "impure"?> "func<>" <i:Ident> "(" <fa:GenericFuncArgs> ")" <t: (GenericReturn)?> <cb:CodeBlock> =>
             GenericFunc::new(i, imp.is_some(), fa, t.unwrap_or(Type::Void), cb, p.is_some(), DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default())),
 }
 
 Return: Type = {
     "->" <Type> => <>,
+    "noreturn" => Type::Every,
+}
+
+GenericReturn: Type = {
+    "->" <GenericType> => <>,
     "noreturn" => Type::Every,
 }
 
@@ -265,12 +270,7 @@ StructField: StructField = {
 }
 
 Type: Type = {
-	"uint" => Type::Uint,
-	"int" => Type::Int,
-	"bool" => Type::Bool,
-	"buffer" => Type::Buffer,
-	"bytes32" => Type::Bytes32,
-	"address" => Type::EthAddress,
+	<PrimitiveType> => <>,
 	"struct" "{" <StructFields> "}" => Type::Struct(<>),
 	<CommaedTypesInParens> => Type::Tuple(<>),
 	"[" "]" <Type> => Type::Array(Box::new(<>)),
@@ -280,14 +280,40 @@ Type: Type = {
 	),
 	"map" "<" <t1:Type> "," <t2:Type> ","? ">" => Type::Map(Box::new(t1), Box::new(t2)),
 	<i: "impure"?> "func" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => Type::Func(i.is_some(), a, Box::new(r.unwrap_or(Type::Void))),
-	"any" => Type::Any,
 	"option<" <t1:Type> ">" => Type::Option(Box::new(t1)),
-	"every" => Type::Every,
+	"union<" <t1:CommaedTypes> ">" => Type::Union(t1),
+	<i: Ident> "<" <t1: CommaedTypes> ">" => Type::Generic(i, t1),
+	Ident => Type::Nominal(current_path.to_owned(), <>),
+};
+
+GenericType: Type = {
+	<PrimitiveType> => <>,
+	"struct" "{" <StructFields> "}" => Type::Struct(<>),
+	<CommaedTypesInParens> => Type::Tuple(<>),
+	"[" "]" <GenericType> => Type::Array(Box::new(<>)),
+	"[" <s:UnsignedInteger> "]" <t:Type> => Type::FixedArray(
+		Box::new(t),
+		s.to_usize().unwrap(),
+	),
+	"map" "<" <t1:Type> "," <t2:Type> ","? ">" => Type::Map(Box::new(t1), Box::new(t2)),
+	<i: "impure"?> "func" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => Type::Func(i.is_some(), a, Box::new(r.unwrap_or(Type::Void))),
+	"option<" <t1:Type> ">" => Type::Option(Box::new(t1)),
 	"union<" <t1:CommaedTypes> ">" => Type::Union(t1),
 	"*" <Ident> => Type::Variable(current_path.to_owned(), <>),
 	<i: Ident> "<" <t1: CommaedTypes> ">" => Type::Generic(i, t1),
 	Ident => Type::Nominal(current_path.to_owned(), <>),
 };
+
+PrimitiveType: Type = {
+	"uint" => Type::Uint,
+	"int" => Type::Int,
+	"bool" => Type::Bool,
+	"buffer" => Type::Buffer,
+	"bytes32" => Type::Bytes32,
+	"address" => Type::EthAddress,
+	"any" => Type::Any,
+	"every" => Type::Every,
+}
 
 CommaedTypesInParens: Vec<Type> = {
 	"(" ")" => vec![],
@@ -308,8 +334,16 @@ CommaedGenericTypeArgs: BTreeMap<StringId, Type> = {
     }
 }
 
+GenericFuncArgs: Vec<FuncArg> = {
+	<mut a: (<AltGenericFuncArg> ",")*> <b: AltGenericFuncArg?> => {if let Some(c) = b {a.push(c)};a},
+}
+
 GenericFuncArg: (StringId, Type) = {
 	<lno: @L> <i:Ident> ":" <t:Type> => (i, t),
+}
+
+AltGenericFuncArg: FuncArg = {
+	<lno: @L> <i:Ident> ":" <t:GenericType> => new_func_arg(i, t, DebugInfo::from(file_info.location(BytePos::from(lno), filename))),
 }
 
 Ident: StringId = {
