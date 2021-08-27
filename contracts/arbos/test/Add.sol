@@ -2,6 +2,7 @@ pragma solidity >=0.4.21 <0.7.0;
 
 import "./Fibonacci.sol";
 import "../builtin/ArbSys.sol";
+import "./BlockNum.sol";
 
 
 contract Add {
@@ -44,5 +45,9 @@ contract Add {
     function payTo(address addr) public payable {
         (bool success,) = addr.call{ value: msg.value }("");
         require(success);
+    }
+
+    function requireMyCallerIsOrigin(address blockNumAddr) public {
+        require(msg.sender == BlockNum(blockNumAddr).getOrigin());
     }
 }
