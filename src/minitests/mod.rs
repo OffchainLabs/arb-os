@@ -692,3 +692,102 @@ fn test_gas_estimation(use_preferred_aggregator: bool) {
     }
     machine.write_coverage("test_gas_estimation".to_string());
 }
+
+#[test]
+fn test_selfdestruct_in_constructor() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+
+    let mut victim_contract =
+        AbiForContract::new_from_file(&test_contract_path("SelfDestructor")).unwrap();
+    let _ = victim_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .unwrap();
+
+    let arbinfo = _ArbInfo::_new(false);
+    assert!(
+        arbinfo
+            ._get_code(&mut machine, &victim_contract.address)
+            .unwrap()
+            .len()
+            > 0
+    );
+
+    let mut actor_contract =
+        AbiForContract::new_from_file(&test_contract_path("ConstructorSD")).unwrap();
+    let _ = actor_contract
+        .deploy(
+            &[
+                ethabi::Token::Address(victim_contract.address.to_h160()),
+                ethabi::Token::Address(Uint256::zero().to_h160()),
+            ],
+            &mut machine,
+            Uint256::zero(),
+            None,
+            false,
+        )
+        .unwrap();
+
+    assert_eq!(
+        arbinfo
+            ._get_code(&mut machine, &victim_contract.address)
+            .unwrap()
+            .len(),
+        0
+    );
+
+    machine.write_coverage("test_selfdestruct_in_constructor".to_string());
+}
+
+#[test]
+fn test_selfdestruct() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+
+    let mut victim_contract =
+        AbiForContract::new_from_file(&test_contract_path("SelfDestructor")).unwrap();
+    let _ = victim_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .unwrap();
+
+    let arbinfo = _ArbInfo::_new(false);
+    assert!(
+        arbinfo
+            ._get_code(&mut machine, &victim_contract.address)
+            .unwrap()
+            .len()
+            > 0
+    );
+
+    let mut actor_contract =
+        AbiForContract::new_from_file(&test_contract_path("Destroyer")).unwrap();
+    let _ = actor_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .unwrap();
+
+    let (receipts, _) = actor_contract
+        .call_function(
+            Uint256::from_u64(132098125),
+            "destroy",
+            &[
+                ethabi::Token::Address(victim_contract.address.to_h160()),
+                ethabi::Token::Address(Uint256::zero().to_h160()),
+            ],
+            &mut machine,
+            Uint256::zero(),
+            false,
+        )
+        .unwrap();
+    assert_eq!(receipts.len(), 1);
+    assert!(receipts[0].succeeded());
+
+    assert_eq!(
+        arbinfo
+            ._get_code(&mut machine, &victim_contract.address)
+            .unwrap()
+            .len(),
+        0
+    );
+
+    machine.write_coverage("test_selfdestruct".to_string());
+}
