@@ -723,7 +723,7 @@ pub struct Machine {
     pub code: CodeStore,
     static_val: Value,
     pub register: Value,
-    err_codepoint: CodePt,
+    pub err_codepoint: CodePt,
     arb_gas_remaining: Uint256,
     pub runtime_env: RuntimeEnvironment,
     file_info_chart: BTreeMap<u64, FileInfo>,

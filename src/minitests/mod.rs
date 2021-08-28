@@ -536,7 +536,9 @@ pub fn test_malformed_upgrade() {
         opcode!(PushInsn, Value::from(AVMOpcode::Log.to_number())), //  ensuring the old globals (1937)
         opcode!(PushInsn, Value::from(AVMOpcode::Rget.to_number())), // was restored by the protector
         opcode!(ErrSet),
-        opcode!(Rset, Value::Int(Uint256::from_usize(1937))), // will induce an error during the upgrade
+        opcode!(ErrPush),
+        opcode!(Log),
+        opcode!(Rset, Value::from(1937_usize)), // will induce an error during the upgrade
         opcode!(Jump, Value::CodePoint(CodePt::Internal(0))),
     ];
 
@@ -548,10 +550,15 @@ pub fn test_malformed_upgrade() {
     machine.start_coverage();
     machine.run(None);
 
+    // ensure globals are restored
+    assert_eq!(machine.runtime_env.logs[1], Value::from(1937_usize));
+
+    // ensure error handler is restored
     assert_eq!(
         machine.runtime_env.logs[0],
-        Value::Int(Uint256::from_usize(1937))
+        Value::CodePoint(machine.err_codepoint)
     );
+
     machine.write_coverage("test_malformed_upgrade".to_string());
 }
 
