@@ -71,7 +71,7 @@ public impure func errorHandler() {
     panic;
 }
 
-public impure func errorHandler_protect(oldGlobals: any) {
+public impure func errorHandler_setUpgradeProtector(oldGlobals: any) {
 
     // At this point in time, the old globals only exist on the stack.
     // The register has been set to include the shape of the new globals + the new segment's jump table,
