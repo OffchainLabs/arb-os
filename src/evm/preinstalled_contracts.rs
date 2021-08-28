@@ -55,6 +55,36 @@ impl _ArbInfo {
             Err(ethabi::Error::from("reverted"))
         }
     }
+
+    pub fn _get_code(
+        &self,
+        machine: &mut Machine,
+        addr: &Uint256,
+    ) -> Result<Vec<u8>, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::from_u64(1112),
+            "getCode",
+            &[ethabi::Token::Address(addr.to_h160())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            let return_vals =
+                ethabi::decode(&[ethabi::ParamType::Bytes], &receipts[0].get_return_data())?;
+            match return_vals[0].clone() {
+                ethabi::Token::Bytes(b) => Ok(b),
+                _ => panic!(),
+            }
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
 }
 
 pub struct _ArbOwner {

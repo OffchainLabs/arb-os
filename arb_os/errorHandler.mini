@@ -70,3 +70,26 @@ public impure func errorHandler() {
     //NOTREACHED
     panic;
 }
+
+public impure func errorHandler_protect(oldGlobals: any) {
+
+    // At this point in time, the old globals only exist on the stack.
+    // The register has been set to include the shape of the new globals + the new segment's jump table,
+    // which is needed to ensure any backward jumps go to the right codepoints.
+
+    // In order to ensure that an error while upgrading doesn't cause us to lose the old state forever,
+    // we set up a temporary upgrade-only error handler that restores the global state and jumps
+    // back to the old ArbOS, which can then revert the upgrade transaction.
+
+    // Get the old ArbOS error handler
+    let protector = asm() func() { errpush };
+
+    // After this is run, switch back to the error handler being the old one
+    protector = asm(const::AVM_errset, protector, protector,) func() { pushinsnimm };
+
+    // Before handling the error, revert to the old globals
+    protector = asm(const::AVM_rset, oldGlobals, protector,) func() { pushinsnimm };
+
+    // Set the upgrade error handler
+    asm(protector,) { errset };
+}

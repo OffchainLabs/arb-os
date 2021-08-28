@@ -1068,6 +1068,7 @@ impl Opcode {
             "jump" => Opcode::AVMOpcode(AVMOpcode::Jump),
             "log" => Opcode::AVMOpcode(AVMOpcode::Log),
             "send" => Opcode::AVMOpcode(AVMOpcode::Send),
+            "errpush" => Opcode::AVMOpcode(AVMOpcode::ErrPush),
             "errcodept" => Opcode::AVMOpcode(AVMOpcode::ErrCodePoint),
             "pushinsn" => Opcode::AVMOpcode(AVMOpcode::PushInsn),
             "pushinsnimm" => Opcode::AVMOpcode(AVMOpcode::PushInsnImm),
