@@ -2,10 +2,15 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
+use crate::compile::DebugInfo;
 use crate::evm::preinstalled_contracts::{_ArbAggregator, _ArbOwner};
 use crate::evm::{preinstalled_contracts::_ArbInfo, test_contract_path, AbiForContract};
-use crate::mavm::Value;
-use crate::run::{_bytestack_from_bytes, load_from_file, run, run_from_file, Machine};
+use crate::mavm::{AVMOpcode, CodePt, Instruction, Value};
+use crate::run::RuntimeEnvironment;
+use crate::run::{
+    _bytestack_from_bytes, load_from_file, load_from_file_and_env_ret_file_info_table, run,
+    run_from_file, Machine, MachineState,
+};
 use crate::uint256::Uint256;
 use ethers_signers::Signer;
 use num_bigint::{BigUint, RandBigInt};
@@ -503,6 +508,51 @@ fn small_upgrade_auto_remap() {
         Value::Int(Uint256::from_u64(42))
     );
     machine.write_coverage("small_upgrade_auto_remap".to_string());
+}
+
+#[test]
+pub fn test_malformed_upgrade() {
+    macro_rules! opcode {
+        ($opcode:ident) => {
+            Instruction::from_opcode(AVMOpcode::$opcode, DebugInfo::default())
+        };
+        ($opcode:ident, $immediate:expr) => {
+            Instruction::from_opcode_imm(AVMOpcode::$opcode, $immediate, DebugInfo::default())
+        };
+    }
+
+    let (mut machine, _) = load_from_file_and_env_ret_file_info_table(
+        Path::new("arb_os/arbos-upgrade.mexe"),
+        RuntimeEnvironment::default(),
+    );
+
+    // Create a segment that will make the register's state incompatible with the upgrade,
+    // then load the machine. An error should jump to this error handler, which will reveal
+    // whether errorHandler_protect() restored the state of the globals.
+
+    let mut prelude = vec![
+        opcode!(ErrCodePoint),
+        opcode!(PushInsn, Value::from(AVMOpcode::Halt.to_number())), // Log the state of the register,
+        opcode!(PushInsn, Value::from(AVMOpcode::Log.to_number())), //  ensuring the old globals (1937)
+        opcode!(PushInsn, Value::from(AVMOpcode::Rget.to_number())), // was restored by the protector
+        opcode!(ErrSet),
+        opcode!(Rset, Value::Int(Uint256::from_usize(1937))), // will induce an error during the upgrade
+        opcode!(Jump, Value::CodePoint(CodePt::Internal(0))),
+    ];
+
+    prelude.reverse(); // the rust emulator requires this
+
+    machine.state = MachineState::Running(CodePt::InSegment(1, prelude.len() - 1));
+    machine.code.segments.push(prelude);
+
+    machine.start_coverage();
+    machine.run(None);
+
+    assert_eq!(
+        machine.runtime_env.logs[0],
+        Value::Int(Uint256::from_usize(1937))
+    );
+    machine.write_coverage("test_malformed_upgrade".to_string());
 }
 
 #[test]

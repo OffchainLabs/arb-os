@@ -261,7 +261,7 @@ impl MachineState {
 ///Holds AVM bytecode in a list of segments, the runtime is held on segment 0.
 #[derive(Debug)]
 pub struct CodeStore {
-    segments: Vec<Vec<Instruction<AVMOpcode>>>,
+    pub segments: Vec<Vec<Instruction<AVMOpcode>>>,
 }
 
 impl CodeStore {
