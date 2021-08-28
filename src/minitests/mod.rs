@@ -2,8 +2,10 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
+use crate::compile::miniconstants::init_constant_table;
 use crate::compile::DebugInfo;
-use crate::evm::preinstalled_contracts::{_ArbAggregator, _ArbOwner};
+use crate::evm::abi::ArbSys;
+use crate::evm::preinstalled_contracts::{_ArbAggregator, _ArbOwner, _try_upgrade};
 use crate::evm::{preinstalled_contracts::_ArbInfo, test_contract_path, AbiForContract};
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Value};
 use crate::run::RuntimeEnvironment;
@@ -12,6 +14,7 @@ use crate::run::{
     run_from_file, Machine, MachineState,
 };
 use crate::uint256::Uint256;
+use crate::upload::CodeUploader;
 use ethers_signers::Signer;
 use num_bigint::{BigUint, RandBigInt};
 use rlp::RlpStream;
@@ -465,7 +468,6 @@ fn reinterpret_register() {
 
 #[test]
 fn small_upgrade() {
-    use crate::upload::CodeUploader;
     let mut machine = load_from_file(Path::new("upgradetests/upgrade1_old.mexe"));
     let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade1_new.mexe"));
     let code_bytes = uploader._to_flat_vec();
@@ -489,8 +491,6 @@ fn small_upgrade() {
 
 #[test]
 fn small_upgrade_auto_remap() {
-    use crate::upload::CodeUploader;
-
     let mut machine = load_from_file(Path::new("upgradetests/upgrade2_old.mexe"));
     let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade2_new.mexe"));
     let code_bytes = uploader._to_flat_vec();
@@ -528,7 +528,7 @@ pub fn test_malformed_upgrade() {
 
     // Create a segment that will make the register's state incompatible with the upgrade,
     // then load the machine. An error should jump to this error handler, which will reveal
-    // whether errorHandler_protect() restored the state of the globals.
+    // whether errorHandler_setUpgradeProtector() restored the state of the globals.
 
     let mut prelude = vec![
         opcode!(ErrCodePoint),
@@ -560,6 +560,50 @@ pub fn test_malformed_upgrade() {
     );
 
     machine.write_coverage("test_malformed_upgrade".to_string());
+}
+
+#[test]
+pub fn test_if_still_upgradable() -> Result<(), ethabi::Error> {
+    let mut machine = load_from_file(Path::new("arb_os/arbos-upgrade.mexe"));
+    machine.start_at_zero(true);
+
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
+    if add_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .is_err()
+    {
+        panic!("failed to deploy Add contract");
+    }
+
+    let arbowner = _ArbOwner::_new(&wallet, false);
+    let arbsys = ArbSys::new(&wallet, false);
+    assert_eq!(
+        arbsys._arbos_version(&mut machine)?,
+        *init_constant_table(Some(Path::new("arb_os/constants.json")))
+            .unwrap()
+            .get("ArbosVersionNumber")
+            .unwrap()
+    );
+    arbowner._give_ownership(&mut machine, my_addr, true)?;
+
+    let log_value = Value::new_tuple(vec![Value::from(1937_usize)]);
+
+    let mut uploader = CodeUploader::_new(1);
+    uploader._serialize_one(&Instruction::from_opcode_imm(
+        AVMOpcode::Log,
+        log_value.clone(),
+        DebugInfo::default(),
+    ));
+
+    _try_upgrade(&arbowner, &mut machine, uploader, None)?;
+
+    assert_eq!(machine.runtime_env.logs.last(), Some(&log_value));
+
+    machine.write_coverage("test_if_still_upgradable".to_string());
+    Ok(())
 }
 
 #[test]
