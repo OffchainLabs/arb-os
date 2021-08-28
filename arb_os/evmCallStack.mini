@@ -849,7 +849,8 @@ public impure func evmCallStack_returnFromCall(
                 with { runningAsAccount: accountStore_get(topFrame.accountStore, newTopFrame.runningAs) }
                 with { storageDelta: topFrame.storageDelta }
                 with { evmLogs: topFrame.evmLogs }
-                with { sendQueue: topFrame.sendQueue };
+                with { sendQueue: topFrame.sendQueue }
+                with { selfDestructQueue: topFrame.selfDestructQueue };
         }
 
         // set up returnInfo in caller's frame
@@ -954,6 +955,17 @@ public impure func evmCallStack_returnFromCall(
                     );
                     if let Some(uas) = deferredPayments_apply(acctStore, deferredPayments) {
                         acctStore = uas;
+                    }
+                    // Commit the self-destruct events that were requested during the call.
+                    let sdq = topFrame.selfDestructQueue;
+                    while( ! queue_isEmpty(sdq) ) {
+                        let (q, item) = queue_get(sdq)?;
+                        sdq = q;
+                        let victim = unsafecast<address>(item);
+                        acctStore = accountStore_changeNumContracts(
+                            accountStore_destroyAccount(acctStore, victim),
+                            -1s,
+                        );
                     }
                     setGlobalAccountStore(acctStore);
 
