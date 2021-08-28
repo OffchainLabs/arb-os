@@ -203,9 +203,9 @@ impl _ArbOwner {
         machine: &mut Machine,
         new_owner: Uint256,
         force_owner: bool,
-        pre_version38_behavior: bool,
+        pre_version39_behavior: bool,
     ) -> Result<(), ethabi::Error> {
-        if pre_version38_behavior {
+        if pre_version39_behavior {
             self._set_chain_parameter(machine, "ChainOwner", new_owner, force_owner)
         } else {
             let (receipts, _sends) = self.contract_abi.call_function(
@@ -1638,7 +1638,8 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     arbowner._add_chain_owner(&mut machine, my_addr.clone(), true, true)?;
 
     let mexe_path = Path::new("arb_os/arbos-upgrade.mexe");
-    let _previous_upgrade_hash = _try_upgrade(&arbowner, &mut machine, &mexe_path, None)?.unwrap();
+    let uploader = CodeUploader::_new_from_file(mexe_path);
+    let _previous_upgrade_hash = _try_upgrade(&arbowner, &mut machine, uploader, None)?.unwrap();
 
     let wallet2 = machine.runtime_env.new_wallet();
     let arbsys = ArbSys::new(&wallet2, false);
@@ -1657,13 +1658,12 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     Ok(())
 }
 
-fn _try_upgrade(
+pub fn _try_upgrade(
     arbowner: &_ArbOwner,
     machine: &mut Machine,
-    mexe_path: &Path,
+    uploader: CodeUploader,
     previous_upgrade_hash: Option<Uint256>,
 ) -> Result<Option<Uint256>, ethabi::Error> {
-    let uploader = CodeUploader::_new_from_file(mexe_path);
     arbowner._start_code_upload(machine)?;
 
     let mut accum = vec![];
