@@ -29,6 +29,7 @@ use contractTemplates::getArbInfoStorage;
 use decompression::decompression_init;
 
 use errorHandler::errorHandler_init;
+use errorHandler::errorHandler_protect;
 
 use evmCallStack::evmCallStack_init;
 
@@ -68,6 +69,9 @@ var __fixedLocationGlobal: impure func(uint);    // points to EVM op dispatch fu
 impure func main(oldGlobals: GlobalsBeforeUpgrade) {
     if (unsafecast<any>(oldGlobals) != ()) {
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
+
+        // create an upgrade-only error handler that saves and restores the contents of the register
+        errorHandler_protect(oldGlobals);
 
         let (newGlobals, _oldArbosVersion) = remapGlobalsForUpgrade(oldGlobals);
 
