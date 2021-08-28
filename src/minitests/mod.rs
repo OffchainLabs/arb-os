@@ -693,7 +693,6 @@ fn test_gas_estimation(use_preferred_aggregator: bool) {
     machine.write_coverage("test_gas_estimation".to_string());
 }
 
-
 #[test]
 fn test_selfdestruct_in_constructor() {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
