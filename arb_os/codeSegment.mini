@@ -427,6 +427,8 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
                             code = pushEvmInsnCall(const::EvmOp_callcode, code);
                         } elseif (opcode == 0xf3) { // RETURN
                             code = pushEvmInsnCall(const::EvmOp_return, code);
+                        } else {
+                            invalidInstruction = true;
                         }
                     } else {
                         if (opcode < 0xfc) {
