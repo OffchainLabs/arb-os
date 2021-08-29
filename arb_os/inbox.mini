@@ -14,7 +14,6 @@ use std::queue::queuestack_get;
 
 use std::addressSet::AddressPairSet;
 use std::addressSet::addressPairSet_new;
-use std::addressSet::addressPairSet_lookup;
 use std::addressSet::addressPairSet_lookup_options;
 use std::addressSet::addressPairSet_lookup_strict;
 use std::addressSet::addressPairSet_set;
@@ -30,6 +29,7 @@ use blockhash::blockhash_submitHash;
 
 use chainParameters::chainParams_gotParamsMessage;
 use chainParameters::chainParams_chainId;
+use chainParameters::chainParams_getOrDie;
 
 use gasAccounting::updateL1GasPriceEstimate;
 use gasAccounting::txFeeStats_zero;
@@ -597,7 +597,9 @@ func txRequestQueue_get(q: TxRequestQueue) -> option<(TxRequestQueue, TxRequestD
 var addressRemapExceptions: AddressPairSet;
 
 public impure func mapL1SenderAddress(callerAddr: address, maybeCallee: option<address>) -> address {
-    return xif (addressPairSet_lookup_options(addressRemapExceptions, Some(callerAddr), maybeCallee)) {
+    return xif (chainParams_getOrDie(const::Atom_Param_EnableL1ContractAddressAliasing) == 0) {
+        callerAddr
+    } elseif (addressPairSet_lookup_options(addressRemapExceptions, Some(callerAddr), maybeCallee)) {
         callerAddr
     } elseif (uint(callerAddr) == 0) {
         // zero maps to zero
@@ -605,18 +607,6 @@ public impure func mapL1SenderAddress(callerAddr: address, maybeCallee: option<a
     } else {
         // deliberately allow overflow, address(.) will truncate
         address(uint(callerAddr) + const::L1ToL2MapConstant)
-    };
-}
-
-public impure func mapL1SenderAddress_fromPrecompile(caller: address, dest: address, useExceptionList: bool) -> address {
-    return xif (useExceptionList && addressPairSet_lookup(addressRemapExceptions, caller, dest)) {
-        caller
-    } elseif (uint(caller) == 0) {
-        // zero maps to zero
-        caller
-    } else {
-        // deliberately allow overflow, address(.) will truncate
-        address(uint(caller) + const::L1ToL2MapConstant)
     };
 }
 

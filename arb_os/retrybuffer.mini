@@ -296,6 +296,7 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
     if (creditBack == address(0)) { creditBack = sender; }
 
     let originalSender = sender;
+    sender = mapL1SenderAddress(sender, Some(destination));
 
     let rbuffer = retryBuffer_trimTwo(getGlobalAccountStore().retryBuffer);
     let acctStore = getGlobalAccountStore() with { retryBuffer: rbuffer };
