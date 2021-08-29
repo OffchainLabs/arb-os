@@ -325,6 +325,7 @@ public func biguint_subtract(x: []uint, y: []uint) -> option<[]uint> {
                 set ret[i] = uint(t);
                 carry = int(0);
             } else {
+                // intentional overflow
                 set ret[i] = uint(t)+mulDigit(1);
                 carry = -int(1);
             }

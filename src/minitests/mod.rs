@@ -6,7 +6,21 @@ use crate::console::Color;
 use crate::evm::{test_contract_path2, AbiForContract};
 use crate::mavm::{Buffer, Value};
 use crate::run::{_bytestack_from_bytes, load_from_file, run, run_from_file, Machine};
+use crate::compile::miniconstants::init_constant_table;
+use crate::compile::DebugInfo;
+use crate::evm::abi::ArbSys;
+use crate::evm::preinstalled_contracts::{_ArbAggregator, _ArbOwner, _try_upgrade};
+use crate::evm::{preinstalled_contracts::_ArbInfo, test_contract_path, AbiForContract};
+use crate::mavm::{AVMOpcode, CodePt, Instruction, Value};
+use crate::run::runtime_env::remap_l1_sender_address;
+use crate::run::RuntimeEnvironment;
+use crate::run::{
+    _bytestack_from_bytes, load_from_file, load_from_file_and_env_ret_file_info_table, run,
+    run_from_file, Machine, MachineState,
+};
 use crate::uint256::Uint256;
+use crate::upload::CodeUploader;
+use ethers_signers::Signer;
 use num_bigint::{BigUint, RandBigInt};
 use rlp::RlpStream;
 use std::convert::TryInto;
@@ -40,11 +54,11 @@ fn test_from_file_with_args_and_return(
     }
 }
 
-fn test_from_file(path: &Path, ret: Value) {
+fn test_from_file(path: &Path) {
     test_from_file_with_args_and_return(
         path,
         vec![],
-        ret,
+        Value::Int(Uint256::zero()),
         Some({
             let mut file = path.to_str().unwrap().to_string();
             let length = file.len();
@@ -72,6 +86,11 @@ fn test_arraytest() {
 #[test]
 fn test_kvstest() {
     test_for_error_string(Path::new("builtin/kvstest.mexe"));
+}
+
+#[test]
+fn test_address_set() {
+    test_from_file(Path::new("stdlib/addressSetTest.mexe"));
 }
 
 #[test]
@@ -253,6 +272,11 @@ fn test_closures() {
 #[test]
 fn test_direct_deploy_add() {
     crate::evm::evm_direct_deploy_add(None, false);
+}
+
+#[test]
+fn test_extcodesize_of_constructor() {
+    crate::evm::evm_test_extcodesize_of_constructor(None);
 }
 
 #[test]
@@ -491,7 +515,6 @@ fn reinterpret_register() {
 
 #[test]
 fn small_upgrade() {
-    use crate::upload::CodeUploader;
     let mut machine = load_from_file(Path::new("upgradetests/upgrade1_old.mexe"));
     let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade1_new.mexe"));
     let code_bytes = uploader._to_flat_vec();
@@ -515,8 +538,6 @@ fn small_upgrade() {
 
 #[test]
 fn small_upgrade_auto_remap() {
-    use crate::upload::CodeUploader;
-
     let mut machine = load_from_file(Path::new("upgradetests/upgrade2_old.mexe"));
     let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade2_new.mexe"));
     let code_bytes = uploader._to_flat_vec();
@@ -579,4 +600,469 @@ fn test_gasleft_with_delegatecall() {
     assert!(gasleft_before > gasleft_after);
 
     machine.write_coverage("test_gasleft_with_delegatecall".to_string());
+}
+
+pub fn test_malformed_upgrade() {
+    macro_rules! opcode {
+        ($opcode:ident) => {
+            Instruction::from_opcode(AVMOpcode::$opcode, DebugInfo::default())
+        };
+        ($opcode:ident, $immediate:expr) => {
+            Instruction::from_opcode_imm(AVMOpcode::$opcode, $immediate, DebugInfo::default())
+        };
+    }
+
+    let (mut machine, _) = load_from_file_and_env_ret_file_info_table(
+        Path::new("arb_os/arbos-upgrade.mexe"),
+        RuntimeEnvironment::default(),
+    );
+
+    // Create a segment that will make the register's state incompatible with the upgrade,
+    // then load the machine. An error should jump to this error handler, which will reveal
+    // whether errorHandler_setUpgradeProtector() restored the state of the globals.
+
+    let mut prelude = vec![
+        opcode!(ErrCodePoint),
+        opcode!(PushInsn, Value::from(AVMOpcode::Halt.to_number())), // Log the state of the register,
+        opcode!(PushInsn, Value::from(AVMOpcode::Log.to_number())), //  ensuring the old globals (1937)
+        opcode!(PushInsn, Value::from(AVMOpcode::Rget.to_number())), // was restored by the protector
+        opcode!(ErrSet),
+        opcode!(ErrPush),
+        opcode!(Log),
+        opcode!(Rset, Value::from(1937_usize)), // will induce an error during the upgrade
+        opcode!(Jump, Value::CodePoint(CodePt::Internal(0))),
+    ];
+
+    prelude.reverse(); // the rust emulator requires this
+
+    machine.state = MachineState::Running(CodePt::InSegment(1, prelude.len() - 1));
+    machine.code.segments.push(prelude);
+
+    machine.start_coverage();
+    machine.run(None);
+
+    // ensure globals are restored
+    assert_eq!(machine.runtime_env.logs[1], Value::from(1937_usize));
+
+    // ensure error handler is restored
+    assert_eq!(
+        machine.runtime_env.logs[0],
+        Value::CodePoint(machine.err_codepoint)
+    );
+
+    machine.write_coverage("test_malformed_upgrade".to_string());
+}
+
+#[test]
+pub fn test_if_still_upgradable() -> Result<(), ethabi::Error> {
+    let mut machine = load_from_file(Path::new("arb_os/arbos-upgrade.mexe"));
+    machine.start_at_zero(true);
+
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
+    if add_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .is_err()
+    {
+        panic!("failed to deploy Add contract");
+    }
+
+    let arbowner = _ArbOwner::_new(&wallet, false);
+    let arbsys = ArbSys::new(&wallet, false);
+    assert_eq!(
+        arbsys._arbos_version(&mut machine)?,
+        *init_constant_table(Some(Path::new("arb_os/constants.json")))
+            .unwrap()
+            .get("ArbosVersionNumber")
+            .unwrap()
+    );
+    arbowner._add_chain_owner(&mut machine, remap_l1_sender_address(my_addr), true, false)?;
+
+    let log_value = Value::new_tuple(vec![Value::from(1937_usize)]);
+
+    let mut uploader = CodeUploader::_new(1);
+    uploader._serialize_one(&Instruction::from_opcode_imm(
+        AVMOpcode::Log,
+        log_value.clone(),
+        DebugInfo::default(),
+    ));
+
+    _try_upgrade(&arbowner, &mut machine, uploader, None)?;
+
+    assert_eq!(machine.runtime_env.logs.last(), Some(&log_value));
+
+    machine.write_coverage("test_if_still_upgradable".to_string());
+    Ok(())
+}
+
+#[test]
+pub fn evm_test_memory_charges() {
+    let small_memory_balance = balance_after_memory_usage(1000);
+    let large_memory_balance = balance_after_memory_usage(1500);
+    assert!(large_memory_balance < small_memory_balance);
+}
+
+#[cfg(test)]
+fn balance_after_memory_usage(usage: u64) -> Uint256 {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let contract = match AbiForContract::new_from_file(&test_contract_path("MemoryUsage")) {
+        Ok(mut contract) => {
+            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, false);
+            if let Ok(contract_addr) = result {
+                assert_ne!(contract_addr, Uint256::zero());
+                contract
+            } else {
+                panic!("deploy failed");
+            }
+        }
+        Err(e) => {
+            panic!("error loading contract: {:?}", e);
+        }
+    };
+
+    machine.runtime_env.insert_eth_deposit_message(
+        contract.address.clone(),
+        contract.address.clone(),
+        Uint256::_from_eth(100),
+        false,
+    );
+    machine.runtime_env.insert_eth_deposit_message(
+        my_addr.clone(),
+        my_addr.clone(),
+        Uint256::_from_eth(100),
+        true,
+    );
+    let _ = machine.run(None);
+
+    let arbowner = _ArbOwner::_new(&wallet, false);
+    arbowner
+        ._set_fees_enabled(&mut machine, true, true)
+        .unwrap();
+
+    let (receipts, _) = contract
+        .call_function(
+            my_addr.clone(),
+            "test",
+            &[ethabi::Token::Uint(Uint256::from_u64(usage).to_u256())],
+            &mut machine,
+            Uint256::zero(),
+            false,
+        )
+        .unwrap();
+    assert_eq!(receipts.len(), 1);
+    assert!(receipts[0].succeeded());
+
+    arbowner
+        ._set_fees_enabled(&mut machine, false, true)
+        .unwrap();
+
+    let arbinfo = _ArbInfo::_new(false);
+    let balance = arbinfo
+        ._get_balance(&mut machine, &remap_l1_sender_address(my_addr))
+        .unwrap();
+    machine.write_coverage("balance_after_memory_usage".to_string());
+    balance
+}
+
+#[test]
+fn test_gas_estimation_non_preferred_aggregator() {
+    test_gas_estimation(false);
+}
+
+#[test]
+fn test_gas_estimation_preferred_aggregator() {
+    test_gas_estimation(true);
+}
+
+#[cfg(test)]
+fn test_gas_estimation(use_preferred_aggregator: bool) {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let aggregator = Uint256::from_u64(341348);
+
+    machine.runtime_env.insert_eth_deposit_message(
+        Uint256::zero(),
+        my_addr.clone(),
+        Uint256::_from_eth(10000),
+        false,
+    );
+    machine.runtime_env.insert_eth_deposit_message(
+        Uint256::zero(),
+        aggregator.clone(),
+        Uint256::_from_eth(10000),
+        false,
+    );
+    let _ = machine.run(None);
+
+    let contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
+        Ok(mut contract) => {
+            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, false);
+            if let Ok(contract_addr) = result {
+                assert_ne!(contract_addr, Uint256::zero());
+                contract
+            } else {
+                panic!("deploy failed");
+            }
+        }
+        Err(e) => {
+            panic!("error loading contract: {:?}", e);
+        }
+    };
+
+    if use_preferred_aggregator {
+        let arbaggregator = _ArbAggregator::_new(false);
+        arbaggregator
+            ._set_default_aggregator(&mut machine, aggregator.clone(), None)
+            .unwrap();
+    }
+
+    let arbowner = _ArbOwner::_new(&wallet, false);
+    arbowner
+        ._set_fees_enabled(&mut machine, true, true)
+        .unwrap();
+
+    machine
+        .runtime_env
+        ._advance_time(Uint256::one(), None, true);
+    let _ = machine.run(None);
+
+    let (gas_estimate, estimate_fee_stats) = contract
+        .estimate_gas_for_function_call(
+            "add",
+            &[
+                ethabi::Token::Uint(Uint256::from_u64(1).to_u256()),
+                ethabi::Token::Uint(Uint256::from_u64(1).to_u256()),
+            ],
+            &mut machine,
+            Uint256::zero(),
+            aggregator.clone(),
+            &wallet,
+            false,
+        )
+        .unwrap();
+
+    for i in 0..4 {
+        assert_eq!(
+            estimate_fee_stats[0][i].mul(&estimate_fee_stats[1][i]),
+            estimate_fee_stats[2][i]
+        );
+    }
+
+    let mut batch = machine.runtime_env.new_batch();
+    let _txid = contract
+        ._add_function_call_to_compressed_batch(
+            &mut batch,
+            "add",
+            &[
+                ethabi::Token::Uint(Uint256::from_u64(1).to_u256()),
+                ethabi::Token::Uint(Uint256::from_u64(1).to_u256()),
+            ],
+            &mut machine,
+            Uint256::zero(),
+            &wallet,
+            Some(gas_estimate.add(&Uint256::from_u64(500))),
+        )
+        .unwrap();
+
+    let num_receipts_before = machine.runtime_env.get_all_receipt_logs().len();
+
+    machine
+        .runtime_env
+        .insert_batch_message(aggregator, &*batch);
+    let _ = machine.run(None);
+
+    let receipts = machine.runtime_env.get_all_receipt_logs();
+    assert_eq!(receipts.len(), num_receipts_before + 1);
+    let receipt = receipts[num_receipts_before].clone();
+    assert!(receipt.succeeded());
+    let fee_stats = receipt._get_fee_stats();
+    for i in 0..4 {
+        assert_eq!(fee_stats[0][i].mul(&fee_stats[1][i]), fee_stats[2][i]);
+    }
+    machine.write_coverage("test_gas_estimation".to_string());
+}
+
+#[test]
+fn test_selfdestruct_in_constructor() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+
+    let mut victim_contract =
+        AbiForContract::new_from_file(&test_contract_path("SelfDestructor")).unwrap();
+    let _ = victim_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .unwrap();
+
+    let arbinfo = _ArbInfo::_new(false);
+    assert!(
+        arbinfo
+            ._get_code(&mut machine, &victim_contract.address)
+            .unwrap()
+            .len()
+            > 0
+    );
+
+    let mut actor_contract =
+        AbiForContract::new_from_file(&test_contract_path("ConstructorSD")).unwrap();
+    let _ = actor_contract
+        .deploy(
+            &[
+                ethabi::Token::Address(victim_contract.address.to_h160()),
+                ethabi::Token::Address(Uint256::zero().to_h160()),
+            ],
+            &mut machine,
+            Uint256::zero(),
+            None,
+            false,
+        )
+        .unwrap();
+
+    assert_eq!(
+        arbinfo
+            ._get_code(&mut machine, &victim_contract.address)
+            .unwrap()
+            .len(),
+        0
+    );
+
+    machine.write_coverage("test_selfdestruct_in_constructor".to_string());
+}
+
+#[test]
+fn test_selfdestruct() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+
+    let mut victim_contract =
+        AbiForContract::new_from_file(&test_contract_path("SelfDestructor")).unwrap();
+    let _ = victim_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .unwrap();
+
+    let arbinfo = _ArbInfo::_new(false);
+    assert!(
+        arbinfo
+            ._get_code(&mut machine, &victim_contract.address)
+            .unwrap()
+            .len()
+            > 0
+    );
+
+    let mut actor_contract =
+        AbiForContract::new_from_file(&test_contract_path("Destroyer")).unwrap();
+    let _ = actor_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .unwrap();
+
+    let (receipts, _) = actor_contract
+        .call_function(
+            Uint256::from_u64(132098125),
+            "destroy",
+            &[
+                ethabi::Token::Address(victim_contract.address.to_h160()),
+                ethabi::Token::Address(Uint256::zero().to_h160()),
+            ],
+            &mut machine,
+            Uint256::zero(),
+            false,
+        )
+        .unwrap();
+    assert_eq!(receipts.len(), 1);
+    assert!(receipts[0].succeeded());
+
+    assert_eq!(
+        arbinfo
+            ._get_code(&mut machine, &victim_contract.address)
+            .unwrap()
+            .len(),
+        0
+    );
+
+    machine.write_coverage("test_selfdestruct".to_string());
+}
+
+#[test]
+fn test_l1_sender_rewrite() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+
+    let my_addr = Uint256::from_u64(80293481);
+
+    let mut contract = AbiForContract::new_from_file(&test_contract_path("BlockNum")).unwrap();
+    if let Err(receipt) = contract.deploy(&[], &mut machine, Uint256::zero(), None, false) {
+        if !receipt.unwrap().succeeded() {
+            panic!("unexpected failure deploying BlockNum contract");
+        }
+    }
+
+    let (receipts, _) = contract
+        .call_function(
+            my_addr.clone(),
+            "getSender",
+            &[],
+            &mut machine,
+            Uint256::zero(),
+            false,
+        )
+        .unwrap();
+
+    assert_eq!(receipts.len(), 1);
+    let receipt = receipts[0].clone();
+    assert!(receipt.succeeded());
+    let return_val = Uint256::from_bytes(&receipt.get_return_data());
+    assert_eq!(return_val, remap_l1_sender_address(my_addr.clone()));
+
+    let wallet = machine.runtime_env.new_wallet();
+    let arbsys = ArbSys::new(&wallet, false);
+    assert_eq!(
+        arbsys
+            .map_l1_sender_contract_address_to_l2_alias(
+                &mut machine,
+                my_addr.clone(),
+                my_addr.clone()
+            )
+            .unwrap(),
+        remap_l1_sender_address(my_addr.clone())
+    );
+
+    let (receipts, _) = contract
+        .call_function(
+            my_addr.clone(),
+            "getL1CallerInfo",
+            &[],
+            &mut machine,
+            Uint256::zero(),
+            false,
+        )
+        .unwrap();
+    assert_eq!(receipts.len(), 1);
+    let return_data = receipts[0].get_return_data();
+    assert_eq!(Uint256::from_bytes(&return_data[0..32]), Uint256::one());
+    assert_eq!(Uint256::from_bytes(&return_data[32..64]), my_addr);
+
+    let test_cases = vec![
+        ("0", "0"),
+        ("81759a874b3", "1111000000000000000000000000081759a885c4"),
+        (
+            "ffffffffffffffffffffffffffffffffffffffff",
+            "1111000000000000000000000000000000001110",
+        ),
+    ];
+    for (pre, post) in test_cases {
+        let pre = Uint256::from_string_hex(pre).unwrap();
+        let post = Uint256::from_string_hex(post).unwrap();
+        let res = arbsys
+            .map_l1_sender_contract_address_to_l2_alias(&mut machine, pre.clone(), Uint256::one())
+            .unwrap();
+        assert_eq!(res, post);
+    }
 }

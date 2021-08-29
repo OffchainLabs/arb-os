@@ -124,7 +124,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v1
-        
+
       - name: Install dependencies
         run: |
           sudo add-apt-repository -y ppa:longsleep/golang-backports
@@ -138,6 +138,7 @@ jobs:
           #   git clone -b v6.11.4 https://github.com/facebook/rocksdb
           #   cd rocksdb && make shared_lib && sudo make install
           #
+          curl -sSL "https://github.com/gotestyourself/gotestsum/releases/download/v1.7.0/gotestsum_1.7.0_linux_amd64.tar.gz" | sudo tar -xz -C /usr/local/bin gotestsum
 
       - name: Clone Arbitrum
         run: |
@@ -147,6 +148,8 @@ jobs:
       - name: Copy over this branch's ArbOS
         run: |
           rm -r arbitrum/packages/arb-os/*
+          # We'd need `make testlogs` to generate these files
+          #   cp -r testlogs/* arbitrum/packages/arb-avm-cpp/tests/arbos-cases/
           mv * arbitrum/packages/arb-os/ || true
 
       - name: Build Arbitrum
@@ -158,14 +161,14 @@ jobs:
 
       - name: Test Node's C++ Database
         run: |
-          ./arbitrum/packages/arb-avm-cpp/debug/bin/avm_tests
-
-      - name: Test Node's RPC
-        run: |
-          cd arbitrum/packages/arb-rpc-node/
-          go test ./...
+          ./arbitrum/packages/arb-avm-cpp/build/bin/avm_tests
 
       - name: Test Node's Core
         run: |
           cd arbitrum/packages/arb-node-core/
-          go test ./...
+          gotestsum --format testname | tee issues | grep FAIL
+
+      - name: Test Node's RPC
+        run: |
+          cd arbitrum/packages/arb-rpc-node/
+          gotestsum --format testname | tee issues | grep FAIL

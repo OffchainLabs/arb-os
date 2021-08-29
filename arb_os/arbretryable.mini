@@ -18,6 +18,7 @@ use evmCallStack::setRetryBufferInCurrentContext;
 use evmOps::evmOp_log2;
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
+use evmOps::evmOp_revertIfStatic;
 
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
@@ -71,6 +72,7 @@ public view write func arbretryable_txcall() {
 
 // function redeem(bytes32 txId) external;
 view write func arbRetryable_redeem(topFrame: EvmCallFrame, calldata: ByteArray) {
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(10, 0, 0);
     }
@@ -156,6 +158,7 @@ view write func arbRetryable_getKeepalivePrice(_topFrame: EvmCallFrame, calldata
 
 // function keepalive(bytes32 ticketId) external payable returns(uint);
 view write func arbRetryable_keepalive(topFrame: EvmCallFrame, calldata: ByteArray) {
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(50, 0, 0);
     }
@@ -205,6 +208,7 @@ view write func arbRetryable_getBeneficiary(_topFrame: EvmCallFrame, calldata: B
 
 // function cancel(bytes32 ticketId) external;
 view write func arbRetryable_cancel(topFrame: EvmCallFrame, calldata: ByteArray) {
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(70, 0, 0);
     }

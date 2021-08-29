@@ -103,6 +103,7 @@ fn run_one_test(
                 logfiles_path,
                 raw_filename,
             );
+            machine.write_coverage(raw_filename.to_string());
 
             match &v["post"] {
                 serde_json::Value::Null => {

@@ -12,7 +12,7 @@ ACBUILDDIR = $(ARTIFACTDIR)/builtin
 ARBOS = $(ARBOSDIR)/arbos.mexe
 
 TEMPLATES = $(ARBOSDIR)/contractTemplates.mini
-TESTFILES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/biguinttest.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe $(STDDIR)/sha256test.mexe $(STDDIR)/ripemd160test.mexe $(STDDIR)/fixedpointtest.mexe $(STDDIR)/blstest.mexe $(STDDIR)/expandingIntArrayTest.mexe minitests/codeloadtest.mexe minitests/simple-closure.mexe minitests/closure.mexe
+TESTFILES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/biguinttest.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe $(STDDIR)/sha256test.mexe $(STDDIR)/ripemd160test.mexe minitests/codeloadtest.mexe $(STDDIR)/fixedpointtest.mexe $(STDDIR)/blstest.mexe $(STDDIR)/addressSetTest.mexe $(STDDIR)/expandingIntArrayTest.mexe minitests/codeloadtest.mexe minitests/simple-closure.mexe minitests/closure.mexe
 TESTCONTRACTSPURE = $(TCBUILDDIR)/Add.sol/Add.json $(TCBUILDDIR)/Fibonacci.sol/Fibonacci.json $(TCBUILDDIR)/PaymentChannel.sol/PaymentChannel.json $(TCBUILDDIR)/Underfunded.sol/Underfunded.json $(TCBUILDDIR)/ReverterFactory.sol/ReverterFactory.json $(TCBUILDDIR)/Callback.sol/Callback.json
 TESTCONTRACTS = $(ACBUILDDIR)/ArbSys.sol/ArbSys.json $(TESTCONTRACTSPURE)
 UPGRADEFILES = $(UPGRADETESTDIR)/regcopy_old.mexe $(UPGRADETESTDIR)/regcopy_new.mexe $(UPGRADETESTDIR)/upgrade1_old.mexe $(UPGRADETESTDIR)/upgrade1_new.mexe $(UPGRADETESTDIR)/upgrade2_new.mexe
@@ -35,6 +35,9 @@ $(BUILTINDIR)/kvstest.mexe: compiler $(BUILTINDIR)/kvstest.mini $(BUILTINDIR)/kv
 
 $(STDDIR)/queuetest.mexe: compiler $(STDDIR)/queuetest.mini
 	$(CARGORUN) compile $(STDDIR)/queuetest.mini -o $(STDDIR)/queuetest.mexe $(COMPILEFLAGS) -t
+
+$(STDDIR)/addressSetTest.mexe: compiler $(STDDIR)/addressSetTest.mini $(STDDIR)/addressSet.mini $(STDDIR)/storageMap.mini
+	$(CARGORUN) compile $(STDDIR)/addressSetTest.mini -o $(STDDIR)/addressSetTest.mexe $(COMPILEFLAGS) -t
 
 $(BUILTINDIR)/arraytest.mexe: compiler $(BUILTINDIR)/arraytest.mini
 	$(CARGORUN) compile $(BUILTINDIR)/arraytest.mini -o $(BUILTINDIR)/arraytest.mexe $(COMPILEFLAGS) -t
@@ -159,9 +162,15 @@ alltests.cov: compiler contracts
 	cat coverage/*.cov | sort -r | uniq | sort | uniq -f 1 | sort -k2,2 -k3,3n | grep -v test | grep -v Test > coverage/alltests.cov
 	./coverage/mini-coverage.sh ./coverage/alltests.cov > lcov-mini.info
 
-evmtest: compiler $(ARBOS)
+coverage: alltests.cov
 
-evmtest: $(ARBOS)
+alltests.cov: compiler contracts
+	cd coverage && grep avmcodebuilder test_upgrade_arbos_to_different_version.cov > avmcodebuilder.cov
+	rm coverage/test_upgrade_arbos_to_different_version.cov
+	cat coverage/*.cov | sort -r | uniq | sort | uniq -f 1 | sort -k2,2 -k3,3n | grep -v test | grep -v Test > coverage/alltests.cov
+	./coverage/mini-coverage.sh ./coverage/alltests.cov > lcov-mini.info
+
+evmtest: compiler $(ARBOS)
 	$(CARGORUN) evm-tests
 
 evmtestlogs: compiler $(ARBOS)
@@ -184,5 +193,5 @@ benchmark: compiler $(TEMPLATES) $(ARBOS)
 	cargo build --release
 
 clean:
-	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe *.cov coverage/*.cov $(BUILTINDIR)/*.cov $(STDDIR)/*.cov $(UPGRADETESTDIR)/*.mexe $(ARBOSDIR)/arbos.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/upgrade.json minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini lcov.info lcov-mini.info
+	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe $(BUILTINDIR)/*.cov $(STDDIR)/*.cov $(UPGRADETESTDIR)/*.mexe $(ARBOSDIR)/arbos.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/upgrade.json minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini *.cov coverage/*.cov $(BUILTINDIR)/*.cov $(STDDIR)/*.cov lcov.info lcov-mini.info
 	rm -rf contracts/artifacts contracts/cache

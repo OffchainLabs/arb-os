@@ -37,6 +37,7 @@ use gasAccounting::feesEnabled;
 use inbox::IncomingRequest;
 use inbox::GasEstimationParams;
 use inbox::inbox_currentTimestamp;
+use inbox::mapL1SenderAddress;
 
 use messages::TxRequestData;
 
@@ -76,6 +77,7 @@ type RetryableTx = struct {
     calldata: ByteArray,
     expiryTime: uint,             // timestamp when the retryable becomes eligible for removal, if nobody does a keepalive
     l1Message: IncomingRequest,   // deemed incoming message, for use in the tx receipt
+    originalSender: address,
 };
 
 // RetryQueueItem records the fact that we want to check, at a given time, whether a given RetryableTx has expired.
@@ -170,7 +172,7 @@ func retryBuffer_insert(rbuf: RetryBuffer, rtx: RetryableTx) -> RetryBuffer {
 view func retryBuffer_insertNew(
     rbuf: RetryBuffer,
     txId: uint,
-    sender: address,
+    originalSender: address,
     destination: address,
     callvalue: uint,
     callvalueEscrowKey: uint,
@@ -178,9 +180,10 @@ view func retryBuffer_insertNew(
     calldata: ByteArray,
     l1Message: IncomingRequest,
 ) -> (RetryBuffer, uint) {
+    let updatedSender = mapL1SenderAddress(originalSender, Some(destination));
     let newTx = struct {
         txId: uint(hash(bytes32(txId), bytes32(0))),
-        sender: sender,
+        sender: updatedSender,
         destination: destination,
         callvalue: callvalue,
         callvalueEscrowKey: callvalueEscrowKey,
@@ -191,7 +194,7 @@ view func retryBuffer_insertNew(
            l1Message.arbBlockNumber,
            l1Message.ethBlockNumber,
            l1Message.timestamp,
-           sender,
+           originalSender,
            uint(hash(bytes32(l1Message.requestId), bytes32(0))),
            0,    // maxGas will be filled in when ticket is redeemed
            0,    // gasPrice will be filled in when ticket is redeemed
@@ -199,6 +202,7 @@ view func retryBuffer_insertNew(
            callvalue,
            calldata,
         ),
+        originalSender: originalSender,
     };
 
     return (retryBuffer_insert(rbuf, newTx), newTx.txId);
@@ -281,6 +285,10 @@ public view write func retryBuffer_delete(rbuf: RetryBuffer, txId: uint, withRef
     };
 }
 
+public func retryableTx_getOriginalSender(rtx: RetryableTx) -> address {
+    return rtx.originalSender;
+}
+
 // Process a newly submitted retryable.
 // This must be called outside of a transaction.
 public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequestData> {
@@ -298,6 +306,9 @@ public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequ
     let calldata = bytearray_extract(req.msgData, 9*32, calldataSize);
 
     if (creditBack == address(0)) { creditBack = sender; }
+
+    let originalSender = sender;
+    sender = mapL1SenderAddress(sender, Some(destination));
 
     let acctStore = safeGetGlobalAccountStore();
     set acctStore.retryBuffer = retryBuffer_trimTwo(acctStore.retryBuffer);
@@ -357,7 +368,7 @@ public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequ
                    const::eventTopic_ArbRetryableTx_TicketCreated,
                    txId,
                ),
-           );
+            );
             emitTxReceipt(
                 req,
                 const::TxResultCode_success,
@@ -366,6 +377,7 @@ public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequ
                 None<GasUsage>,
                 feeStats,
                 true,
+                originalSender,
             );
 
             xif (    (maxGasForImmediate > 0)
@@ -419,6 +431,7 @@ public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequ
                         incomingRequest: autoRedeemIncoming,
                         feeStats: txFeeStats_zero(),
                         fromRetryable: Some(rtx),
+                        originalCaller: originalSender,
                     };
 
                     xif (tryAutoRedeem) {
@@ -432,6 +445,7 @@ public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequ
                             None<GasUsage>,
                             txFeeStats_zero(),
                             false,
+                            originalSender,
                         );
                         None<TxRequestData>
                     }
@@ -450,6 +464,7 @@ public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequ
                 None<GasUsage>,
                 feeStats,
                 true,
+                originalSender,
             );
             None<TxRequestData>
         }
@@ -457,12 +472,13 @@ public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequ
         // submission cost was higher than the maximum allowed by the request
         emitTxReceipt(
             req,
-            const::TxResultCode_noGasFunds,
+            const::TxResultCode_insufficientGasFunds,
             None<ByteArray>,
             None<EvmLogs>,
             None<GasUsage>,
             feeStats,
             true,
+            originalSender,
         );
         None<TxRequestData>
     };

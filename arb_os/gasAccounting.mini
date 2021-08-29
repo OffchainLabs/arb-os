@@ -18,13 +18,14 @@ use accounts::accountStore_transferEthBalance;
 use accounts::account_getEthBalance;
 use accounts::account_getNextSeqNum;
 use accounts::account_getAggregatorToPay;
+use accounts::account_getFeeCollector;
 use accounts::account_setBaseTxFeeL1Gas;
 
 use arbstatistics::arbStatistics_addToStorage;
 use arbstatistics::arbStatistics_addToGasUsed;
 
-use chainParameters::chainParams_get;
 use chainParameters::chainParams_getOrDie;
+use chainParameters::hasChainOwnerPrivileges;
 
 use evmCallStack::evmCallStack_getAccountInCurrentContext;
 use evmCallStack::evmCallStack_setAccountInCurrentContext;
@@ -372,9 +373,23 @@ public view func getAddressForReserveFundsDeposit() -> address {
     return address(chainParams_getOrDie(const::Atom_Param_CongestionFeeRecipient));
 }
 
-public view func gasAccounting_summaryToPublish() -> any {
+public impure func gasAccounting_addToGasPool(delta: uint) {
+    gasAccountingInfo = gasAccountingInfo with {
+        congestionState: gasAccountingInfo.congestionState with {
+            gasPool: gasAccountingInfo.congestionState.gasPool + int(delta)
+        }
+    };
+}
+
+public impure func getAddressForReserveFundsDeposit() -> address {
+    return address(chainParams_getOrDie(const::Atom_Param_CongestionFeeRecipient));
+}
+
+public impure func gasAccounting_summaryToPublish() -> (uint, uint, uint, uint, uint, int) {
     // get summary of gas prices and pool at present, for inclusion in block summary log
     let prices = gasAccountingInfo.currentPrices;
+
+    // Note: this struct is exposed to the node software, please note any modifications in your PRs
     return (
         prices.perL1CalldataUnit,
         prices.perStorageCell,
@@ -435,7 +450,7 @@ public view write func gasAccounting_startTxCharges(
             const::EscrowStoreID_txGas,
             address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
         );
-        return (const::TxResultCode_noGasFunds, acctStore);
+        return (const::TxResultCode_insufficientGasFunds, acctStore);
     }
 
     let gasUsedByOS = ((~0) - getGas()) / gasAccountingInfo.pricingParams.arbGasDivisor;
@@ -654,11 +669,18 @@ public view write func gasAccounting_prepareTx(tx: TxRequestData) -> (
     uint,             // error code, or const::TxResultCode_success if no error
     TxRequestData,
 ) {
+    let tx = inbox_getNextUnpackedRequest();
+    if ( (!allowedSenders_contains(tx.caller)) && (!tx.incomingRequest.adminMode) ) {
+        return (const::TxResultCode_senderNotPermitted, tx);
+    }
+
     if (tx.incomingRequest.arbBlockNumber > gasAccountingInfo.congestionState.lastArbBlockNumSeen) {
         gasAccounting_startNewBlock(tx.incomingRequest.arbBlockNumber, tx.incomingRequest.timestamp);
     }
 
-    return xif ((tx.incomingRequest.sender != address(0)) && feesEnabled() && (! tx.incomingRequest.adminMode)) {
+    return xif (   (tx.incomingRequest.sender != address(0))
+                && feesEnabled()
+                && (! tx.incomingRequest.adminMode)) {
         if let Some(txSeqNum) = tx.seqNum {
             // don't charge the user if sequence number is wrong
             let expectedSeqNum = account_getNextSeqNum(accountStore_get(safeGetGlobalAccountStore(), tx.caller));
@@ -716,7 +738,7 @@ public view write func gasAccounting_prepareTx(tx: TxRequestData) -> (
             // sender didn't have enough gas funds
             // we took all of the funds to make a partial payment to the aggregator
             // now fail the tx
-            return (const::TxResultCode_noGasFunds, tx);
+            return (const::TxResultCode_insufficientGasFunds, tx);
         }
 
         // compute the number of ArbGas units corresponding to the aggregator fee, and deduct them from the tx
@@ -811,18 +833,28 @@ view write func payForTxAndL1Gas(
 
     // pay for network fee; if insufficient funds, pay as much as we can then return false
     if ( ! {
-        let txPrice = fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, basePriceTx);
-        let calldataUnitPrice = fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, basePriceCalldataUnit);
+        let totalCost = fixedPoint_mulByUintTrunc(feeConfig.baseFeeMultiplier, basePriceTx);
+        let networkPrice = fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, totalCost);
+
+        let totalUnitPrice = fixedPoint_mulByUintTrunc(feeConfig.baseFeeMultiplier, basePriceCalldataUnit);
+        let networkUnitPrice = fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, totalUnitPrice);
+
         let (fullyPaid, ufs, weiPaid) = tryToPayForL1Gas(
             payer,
             address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
-            txPrice,
+            networkPrice,
             safeMul(calldataUnits, calldataUnitPrice),
             feeStats,
             paymentLimitWei,
             feeStats.noFeeGasEstimationMode,
         );
-        feeStats = ufs;
+        feeStats = ufs with {
+            price: ufs.price with {
+                tx: networkPrice + feeStats.price.tx
+            } with {
+                calldataUnit: networkUnitPrice + feeStats.price.calldataUnit
+            }
+        };
         totalWeiPaid = totalWeiPaid + weiPaid;
         fullyPaid
     }) {
@@ -835,11 +867,13 @@ view write func payForTxAndL1Gas(
     }
 
     if let Some(aggregator) = aggregatorToPay {
-        // pay aggregator; if insufficient funds, pay as much as we can then return false
+        // pay aggregator's fee collector; if insufficient funds, pay as much as we can then return false
+        let feeCollector = account_getFeeCollector(evmCallStack_getAccountInCurrentContext(aggregator));
+        
         if ( ! {
             let (fullyPaid, *feeStats, weiPaid) = tryToPayForL1Gas(
                 payer,
-                aggregator,
+                feeCollector,
                 basePriceTx,
                 safeMul(calldataUnits, basePriceCalldataUnit),
                 feeStats,
@@ -909,6 +943,7 @@ view write func tryToPayForL1Gas(
     } else {
         // this should never happen, because we reduced totalDue to fit within payer's funds
         // so just do something safe
+        debug(660);
         (
             totalDue == 0,
             feeStats,
@@ -1123,8 +1158,7 @@ public view write func allowedSenders_allowNone() {
 
 public view func allowedSenders_contains(addr: address) -> bool {
     return setOfAddresses_contains(gasAccountingInfo.allowedSenders, addr)
-        || (addr == address(0))
-        || (Some(uint(addr)) == chainParams_get(const::Atom_Param_ChainOwner));
+        || hasChainOwnerPrivileges(addr);
 }
 
 public view write func allowedSenders_add(addr: address) {

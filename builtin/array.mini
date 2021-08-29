@@ -25,6 +25,9 @@ type array = struct {
 };
 
 public func builtin_arrayNew(sz: uint, base_val: any) -> array {
+    if (sz > const::MaxArraySize) {
+        panic;
+    }
 	let chunk = 1;
 	while (8*chunk < sz) {
 		chunk = 8*chunk;

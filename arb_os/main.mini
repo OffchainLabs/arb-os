@@ -16,6 +16,7 @@ use arbowner::arbowner_init;
 use blockhash::blockhash_init;
 
 use chainParameters::chainParams_init;
+use chainParameters::notifyParamsChanged;
 
 use std::codeSegment::codeSegment_init;
 use std::codeSegment::translateEvmCodeSegment;
@@ -27,6 +28,7 @@ use contractTemplates::getArbInfoStorage;
 use decompression::decompression_init;
 
 use errorHandler::errorHandler_init;
+use errorHandler::errorHandler_setUpgradeProtector;
 
 use evmCallStack::evmCallStack_init;
 
@@ -58,6 +60,9 @@ view write func main(oldGlobals: GlobalsBeforeUpgrade) {
     if (unsafecast<any>(oldGlobals) != ()) {
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
 
+        // create an upgrade-only error handler that saves and restores the contents of the register
+        errorHandler_setUpgradeProtector(oldGlobals);
+
         let (newGlobals, _oldArbosVersion) = remapGlobalsForUpgrade(oldGlobals);
 
         asm(newGlobals) { rset };
@@ -71,6 +76,8 @@ view write func main(oldGlobals: GlobalsBeforeUpgrade) {
         if (initializePreinstalls(true) == None<()>) {
             error;   // don't try to run without preinstalls and precompiles
         }
+
+        notifyParamsChanged();   // call this in case parameters changed during upgrade
     } else {
         // this is a clean start, not an upgrade
         errorHandler_init();
@@ -86,7 +93,6 @@ view write func main(oldGlobals: GlobalsBeforeUpgrade) {
         evmOps_init();
         __fixedLocationGlobal = dispatchForEvmOp;
         blockhash_init();
-        inbox_init();
         accountStore_init();
         arbowner_init();
         txReceipts_init();
@@ -99,6 +105,48 @@ view write func main(oldGlobals: GlobalsBeforeUpgrade) {
     }
 
     mainRunLoop();
+}
+
+public impure func mainRunLoop_save() {
+    loop {
+        let (resultCode, request) = getNextRequestFromCongestionAuction();
+        if (resultCode == const::TxResultCode_success) {
+            if (handleL2Request(request) == None<()>) {
+                // reject for message format error
+                emitTxReceipt(
+                    request.incomingRequest,
+                    const::TxResultCode_formatError,
+                    None<ByteArray>,
+                    None<EvmLogs>,
+                    None<GasUsage>,
+                    request.feeStats,
+                    false,      // don't emit tracing info because the tx was bogus
+                    request.originalCaller,
+                );
+            }
+        } else {
+            // before emitting a failure receipt, try to increment caller's sequence number
+            if ( (resultCode != const::TxResultCode_sequenceNumberTooLow) && (resultCode != const::TxResultCode_sequenceNumberTooHigh) ) {
+                if let Some(seqNum) = request.seqNum {
+                    let gAcctStore = getGlobalAccountStore();
+                    if let Some(acct) = account_checkAndIncrSeqNum(accountStore_get(gAcctStore, request.caller), seqNum) {
+                        setGlobalAccountStore(accountStore_set(gAcctStore, request.caller, acct));
+                    }
+                }
+            }
+
+            emitTxReceipt(
+                request.incomingRequest,
+                resultCode,
+                None<ByteArray>,
+                None<EvmLogs>,
+                None<GasUsage>,
+                request.feeStats,
+                true,
+                request.originalCaller,
+            );
+        }
+    }
 }
 
 view write func initializePreinstalls(isUpgrade: bool) -> option<()> {

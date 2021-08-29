@@ -1847,7 +1847,7 @@ fn typecheck_statement<'a>(
                                     "mismatched types in assignment statement {}",
                                     var_type
                                         .mismatch_string(&tc_expr.get_type(), type_tree)
-                                        .expect("Did not find type mismatch")
+                                        .unwrap_or("Did not find type mismatch".parse().unwrap())
                                 ),
                                 debug_info.location.into_iter().collect(),
                             ))

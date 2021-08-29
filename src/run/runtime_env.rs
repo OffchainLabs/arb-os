@@ -102,10 +102,14 @@ impl RuntimeEnvironment {
 
     fn get_params_bytes(owner: Option<Uint256>, chain_id: u64) -> Vec<u8> {
         let mut buf = Vec::new();
-        let params_to_set = vec![
-            ("ChainOwner", owner.clone().unwrap_or(Uint256::zero())),
-            ("ChainID", Uint256::from_u64(chain_id)),
-        ];
+        let params_to_set = if let Some(the_owner) = owner {
+            vec![
+                ("ChainOwner", the_owner),
+                ("ChainID", Uint256::from_u64(chain_id)),
+            ]
+        } else {
+            vec![("ChainID", Uint256::from_u64(chain_id))]
+        };
         for (name, val) in params_to_set {
             buf.extend(&keccak256(name.as_bytes()));
             buf.extend(val.to_bytes_be());
@@ -125,7 +129,7 @@ impl RuntimeEnvironment {
             .current_timestamp
             .add(&delta_timestamp.unwrap_or(Uint256::from_u64(13).mul(&delta_blocks)));
         if send_heartbeat_message {
-            self.insert_l2_message(Uint256::zero(), &[6u8], false);
+            self.insert_l2_message(Uint256::zero(), &[6u8]);
         }
     }
 
@@ -215,20 +219,9 @@ impl RuntimeEnvironment {
         Uint256::_from_gwei(2)
     }
 
-    pub fn insert_l2_message(
-        &mut self,
-        sender_addr: Uint256,
-        msg: &[u8],
-        is_buddy_deploy: bool,
-    ) -> Uint256 {
-        let default_id = self.insert_l1_message(
-            if is_buddy_deploy { 5 } else { 3 },
-            sender_addr.clone(),
-            msg,
-            None,
-            None,
-        );
-        if !is_buddy_deploy && (msg[0] == 0) {
+    pub fn insert_l2_message(&mut self, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
+        let default_id = self.insert_l1_message(3, sender_addr.clone(), msg, None, None);
+        if msg[0] == 0 {
             Uint256::avm_hash2(
                 &sender_addr,
                 &Uint256::avm_hash2(
@@ -239,6 +232,11 @@ impl RuntimeEnvironment {
         } else {
             default_id
         }
+    }
+
+    #[cfg(test)]
+    pub fn insert_l2_message_for_gas_estimation(&mut self, sender_addr: Uint256, msg: &[u8]) {
+        let _ = self.insert_l1_message(10u8, sender_addr, msg, None, None);
     }
 
     pub fn insert_l2_message_with_deposit(&mut self, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
@@ -270,7 +268,7 @@ impl RuntimeEnvironment {
         with_deposit: bool,
     ) -> Uint256 {
         let mut buf = vec![0u8];
-        let seq_num = self.get_and_incr_seq_num(&sender_addr.clone());
+        let seq_num = self.get_seq_num(&sender_addr.clone(), true);
         buf.extend(max_gas.to_bytes_be());
         buf.extend(gas_price_bid.unwrap_or(self.get_gas_price()).to_bytes_be());
         buf.extend(seq_num.to_bytes_be());
@@ -281,8 +279,37 @@ impl RuntimeEnvironment {
         if with_deposit {
             self.insert_l2_message_with_deposit(sender_addr.clone(), &buf)
         } else {
-            self.insert_l2_message(sender_addr.clone(), &buf, false)
+            self.insert_l2_message(sender_addr.clone(), &buf)
         }
+    }
+
+    #[cfg(test)]
+    pub fn insert_gas_estimation_message(
+        &mut self,
+        max_gas: Uint256,
+        gas_price_bid: Uint256,
+        to_addr: Uint256,
+        value: Uint256,
+        data: &[u8],
+        aggregator: Uint256,
+        wallet: &Wallet,
+    ) {
+        let mut buf = vec![3u8];
+        buf.extend(aggregator.to_bytes_be());
+        buf.extend(max_gas.clone().to_bytes_be());
+
+        let _ = self._append_compressed_and_signed_tx_message_to_batch(
+            &mut buf,
+            max_gas,
+            gas_price_bid,
+            to_addr,
+            value,
+            Vec::from(data),
+            wallet,
+            true,
+        );
+
+        self.insert_l2_message_for_gas_estimation(aggregator, &buf)
     }
 
     pub fn insert_tx_message_from_contract(
@@ -305,7 +332,7 @@ impl RuntimeEnvironment {
         if with_deposit {
             self.insert_l2_message_with_deposit(sender_addr.clone(), &buf)
         } else {
-            self.insert_l2_message(sender_addr.clone(), &buf, false)
+            self.insert_l2_message(sender_addr.clone(), &buf)
         }
     }
 
@@ -346,10 +373,11 @@ impl RuntimeEnvironment {
         value: Uint256,
         calldata: &[u8],
         wallet: &Wallet,
+        is_gas_estimation: bool,
     ) -> (Vec<u8>, Vec<u8>) {
         let sender = Uint256::from_bytes(wallet.address().as_bytes());
         let mut result = vec![7u8, 0xffu8];
-        let seq_num = self.get_and_incr_seq_num(&sender);
+        let seq_num = self.get_seq_num(&sender, !is_gas_estimation);
         let gas_price = gas_price.unwrap_or(self.get_gas_price());
         result.extend(seq_num.rlp_encode());
         result.extend(gas_price.rlp_encode());
@@ -375,6 +403,7 @@ impl RuntimeEnvironment {
         (result, keccak256(tx.rlp().as_ref()).to_vec())
     }
 
+    /*
     pub fn _make_compressed_tx_for_bls(
         &mut self,
         sender: &Uint256,
@@ -389,7 +418,8 @@ impl RuntimeEnvironment {
         let gas_price = gas_price.unwrap_or(self.get_gas_price());
 
         let mut buf = vec![0xffu8];
-        let seq_num = self.get_and_incr_seq_num(&sender);
+        let seq_num = self.get_seq_num(&sender);
+
         buf.extend(seq_num.rlp_encode());
         buf.extend(gas_price.rlp_encode());
         buf.extend(gas_limit.rlp_encode());
@@ -415,6 +445,7 @@ impl RuntimeEnvironment {
                 .to_vec(),
         )
     }
+     */
 
     pub fn _insert_bls_batch(
         &mut self,
@@ -432,7 +463,7 @@ impl RuntimeEnvironment {
             buf.extend(msgs[i].clone());
         }
 
-        self.insert_l2_message(batch_sender.clone(), &buf, false);
+        self.insert_l2_message(batch_sender.clone(), &buf);
     }
 
     pub fn _append_compressed_and_signed_tx_message_to_batch(
@@ -444,6 +475,7 @@ impl RuntimeEnvironment {
         value: Uint256,
         calldata: Vec<u8>,
         wallet: &Wallet,
+        is_gas_estimation: bool,
     ) -> Vec<u8> {
         let (msg, tx_id_bytes) = self.make_compressed_and_signed_l2_message(
             gas_price_bid,
@@ -452,6 +484,7 @@ impl RuntimeEnvironment {
             value,
             &calldata,
             wallet,
+            is_gas_estimation,
         );
         let msg_size: u64 = msg.len().try_into().unwrap();
         let rlp_encoded_len = Uint256::from_u64(msg_size).rlp_encode();
@@ -461,7 +494,7 @@ impl RuntimeEnvironment {
     }
 
     pub fn insert_batch_message(&mut self, sender_addr: Uint256, batch: &[u8]) {
-        self.insert_l2_message(sender_addr, batch, false);
+        self.insert_l2_message(sender_addr, batch);
     }
 
     pub fn _insert_nonmutating_call_message(
@@ -477,7 +510,7 @@ impl RuntimeEnvironment {
         buf.extend(to_addr.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr, &buf, false);
+        self.insert_l2_message(sender_addr, &buf);
     }
 
     pub fn insert_eth_deposit_message(
@@ -485,25 +518,36 @@ impl RuntimeEnvironment {
         sender_addr: Uint256,
         payee: Uint256,
         amount: Uint256,
+        adjust_payee_address: bool,
     ) {
         self.insert_tx_message_from_contract(
             sender_addr,
             Uint256::from_u64(100_000_000),
-            None,
-            payee,
+            Uint256::zero(),
+            {
+                let x = if adjust_payee_address {
+                    remap_l1_sender_address(payee)
+                } else {
+                    payee
+                };
+                println!("eth deposit to {}", x);
+                x
+            },
             amount,
             &[],
             true,
         );
     }
 
-    pub fn get_and_incr_seq_num(&mut self, addr: &Uint256) -> Uint256 {
+    pub fn get_seq_num(&mut self, addr: &Uint256, do_increment: bool) -> Uint256 {
         let cur_seq_num = match self.caller_seq_nums.get(&addr) {
             Some(sn) => sn.clone(),
             None => Uint256::zero(),
         };
-        self.caller_seq_nums
-            .insert(addr.clone(), cur_seq_num.add(&Uint256::one()));
+        if do_increment {
+            self.caller_seq_nums
+                .insert(addr.clone(), cur_seq_num.add(&Uint256::one()));
+        }
         cur_seq_num
     }
 
@@ -608,6 +652,22 @@ fn get_send_contents(log: Value) -> Option<Vec<u8>> {
     } else {
         None
     }
+}
+
+pub fn remap_l1_sender_address(addr: Uint256) -> Uint256 {
+    addr.add(&Uint256::from_string_hex("1111000000000000000000000000000000001111").unwrap())
+        .modulo(&Uint256::one().shift_left(160))
+        .unwrap()
+}
+
+pub fn _inverse_remap_l1_sender_address(addr: Uint256) -> Uint256 {
+    let two_to_the_160 = Uint256::one().shift_left(160);
+
+    addr.add(&two_to_the_160)
+        .sub(&Uint256::from_string_hex("1111000000000000000000000000000000001111").unwrap())
+        .unwrap()
+        .modulo(&two_to_the_160)
+        .unwrap()
 }
 
 // TxCompressor assumes that all client traffic uses it.

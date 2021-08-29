@@ -7,9 +7,11 @@ use accounts::account_getAggregatorToPayAsOption;
 use accounts::account_getFeeCollector;
 use accounts::account_setFeeCollector;
 
+use arbowner::revertIfNotOwner;
+
 use chainParameters::chainParams_getDefaultAggregator;
 use chainParameters::chainParams_setDefaultAggregator;
-use chainParameters::chainParams_getOwner;
+use chainParameters::hasChainOwnerPrivileges;
 
 use evmCallStack::EvmCallFrame;
 use evmCallStack::evmCallStack_topFrame;
@@ -22,6 +24,7 @@ use evmCallStack::evmCallStack_setAccountInCurrentContext;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
+use evmOps::evmOp_revertIfStatic;
 
 use gasAccounting::gasAccounting_getTxBaseFeeL1Gas;
 use gasAccounting::gasAccounting_setTxBaseFeeL1Gas;
@@ -90,6 +93,7 @@ view write func arbaggregator_getPreferredAggregator(_topFrame: EvmCallFrame, ca
 
 // function setPreferredAggregator(address prefAgg) external;
 view write func arbaggregator_setPreferredAggregator(topFrame: EvmCallFrame, calldata: ByteArray) {
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(20, 0, 0);
     }
@@ -125,12 +129,13 @@ view write func arbaggregator_getDefaultAggregator(_topFrame: EvmCallFrame, call
 
 // function setDefaultAggregator(address newDefault) external;
 view write func arbaggregator_setDefaultAggregator(topFrame: EvmCallFrame, calldata: ByteArray) { // (address)
+    evmOp_revertIfStatic();
     let caller = evmCallFrame_getCaller(topFrame);
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(40, 0, 0);
     }
-    if ((caller != address(0)) && (caller != chainParams_getOwner()) && (caller != chainParams_getDefaultAggregator())) {
-        evmOp_revert_knownPc(41, 0, 0);
+    if (caller != chainParams_getDefaultAggregator()) {
+        revertIfNotOwner(caller);
     }
     let newDefaultAgg = address(bytearray_get256(calldata, 4));
     chainParams_setDefaultAggregator(newDefaultAgg);
@@ -153,7 +158,8 @@ view write func arbaggregator_getFeeCollector(_topFrame: EvmCallFrame, calldata:
 }
 
 // function setFeeCollector(address aggregator, address newFeeCollector) external;
-view write func arbaggregator_setFeeCollector(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, address)
+view write func arbaggregator_setFeeCollector(topFrame: EvmCallFrame, calldata: ByteArray) {
+    evmOp_revertIfStatic();
     let caller = evmCallFrame_getCaller(topFrame);
     if (bytearray_size(calldata) != 68) {
         evmOp_revert_knownPc(60, 0, 0);
@@ -164,8 +170,8 @@ view write func arbaggregator_setFeeCollector(topFrame: EvmCallFrame, calldata: 
     let aggAcct = evmCallStack_getAccountInCurrentContext(aggregator);
     let oldCollector = account_getFeeCollector(aggAcct);
 
-    if ((caller != address(0)) && (caller != chainParams_getOwner()) && (caller != oldCollector)) {
-        evmOp_revert_knownPc(61, 0, 0);
+    if (caller != oldCollector) {
+        revertIfNotOwner(caller);
     }
     evmCallStack_setAccountInCurrentContext(aggregator, account_setFeeCollector(aggAcct, newCollector));
 
@@ -195,7 +201,7 @@ view write func arbaggregator_setTxBaseFee(topFrame: EvmCallFrame, calldata: Byt
     let aggregator = address(bytearray_get256(calldata, 4));
     let fee = bytearray_get256(calldata, 36);
 
-    if ((caller != aggregator) && (caller != chainParams_getOwner()) && (caller != address(0))) {
+    if ((caller != aggregator) && !hasChainOwnerPrivileges(caller)) {
         evmOp_revert_knownPc(81, 0, 0);
     }
 

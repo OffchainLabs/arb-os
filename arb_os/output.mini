@@ -200,6 +200,7 @@ public view write func emitTxReceipt(
     gasUsage: option<GasUsage>,
     feeStats: TxFeeStats,
     emitTracingInfo: bool,
+    originalSender: address,
 ) {
     arbStatistics_addTxReceipt();
 
@@ -248,7 +249,8 @@ public view write func emitTxReceipt(
             numEvmLogs,
         ),
         feeStats,
-    )) { log };
+        originalSender,
+    ),) { log };
 }
 
 // The globalOutbox queues a sequence of outgoing messages that ArbOS wants to emit as sends.

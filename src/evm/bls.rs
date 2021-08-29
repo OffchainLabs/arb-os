@@ -3,13 +3,9 @@
  */
 
 use crate::compile::miniconstants::init_constant_table;
-use crate::evm::abi::AbiForContract;
-use crate::evm::{test_contract_path, ArbBLS};
-use crate::run::{load_from_file, load_from_file_and_env, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
-use ethers_signers::Signer;
 use num_bigint::BigUint;
 use num_bigint::RandBigInt;
 use num_bigint::ToBigUint;
@@ -18,6 +14,7 @@ use parity_bn::{AffineG1, AffineG2, Fq, Fr, Group, G1, G2};
 use std::cmp::Ordering;
 use std::path::Path;
 
+/*
 #[test]
 fn test_bls_registry() {
     evm_test_bls_registry(None, false);
@@ -33,7 +30,7 @@ pub fn evm_test_bls_registry(log_to: Option<&Path>, debug: bool) {
     let arb_bls = ArbBLS::new(&wallet, debug);
 
     assert!(arb_bls
-        .get_public_key(&mut machine, my_addr.clone())
+        .get_public_key(&mut machine, remap_l1_sender_address(my_addr.clone()))
         .is_err());
 
     let expected = [
@@ -49,13 +46,15 @@ pub fn evm_test_bls_registry(log_to: Option<&Path>, debug: bool) {
             expected[1].clone(),
             expected[2].clone(),
             expected[3].clone(),
+            false,
         )
         .is_ok());
 
-    let (res0, res1, res2, res3) = match arb_bls.get_public_key(&mut machine, my_addr.clone()) {
-        Ok(res) => res,
-        Err(_) => panic!(),
-    };
+    let (res0, res1, res2, res3) =
+        match arb_bls.get_public_key(&mut machine, remap_l1_sender_address(my_addr.clone())) {
+            Ok(res) => res,
+            Err(_) => panic!(),
+        };
     assert_eq!(res0, expected[0]);
     assert_eq!(res1, expected[1]);
     assert_eq!(res2, expected[2]);
@@ -71,6 +70,7 @@ pub fn evm_test_bls_registry(log_to: Option<&Path>, debug: bool) {
 
     machine.write_coverage("evm_test_bls_registry".to_string());
 }
+*/
 
 fn to_32_bytes_be(bi: &BigUint) -> Vec<u8> {
     let bytes = bi.to_bytes_be();
@@ -435,117 +435,4 @@ impl BLSAggregateSignature {
         self.g1p.y().to_big_endian(&mut out[32..64]).unwrap();
         out
     }
-}
-
-#[test]
-pub fn test_bls_signed_batch() {
-    evm_test_bls_signed_batch(None, false).unwrap();
-}
-
-pub fn evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
-    let mut rt_env = RuntimeEnvironment::default();
-
-    let alice_wallet = rt_env.new_wallet();
-    let alice_addr = Uint256::from_bytes(alice_wallet.address().as_bytes());
-    let bob_wallet = rt_env.new_wallet();
-    let bob_addr = Uint256::from_bytes(bob_wallet.address().as_bytes());
-
-    let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
-    machine.start_at_zero(true);
-
-    let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
-    if add_contract
-        .deploy(&[], &mut machine, Uint256::zero(), None, debug)
-        .is_err()
-    {
-        panic!("failed to deploy Add contract");
-    }
-
-    // generate and register BLS keys for Alice and Bob
-    let (alice_public_key, alice_private_key) = generate_bls_key_pair();
-    let (bob_public_key, bob_private_key) = generate_bls_key_pair();
-    let alice_arb_bls = ArbBLS::new(&alice_wallet, debug);
-    let bob_arb_bls = ArbBLS::new(&bob_wallet, debug);
-    let a4 = alice_public_key.to_four_uints();
-    alice_arb_bls.register(&mut machine, a4.0, a4.1, a4.2, a4.3)?;
-    let b4 = bob_public_key.to_four_uints();
-    bob_arb_bls.register(&mut machine, b4.0, b4.1, b4.2, b4.3)?;
-
-    let (alice_compressed_tx, alice_hash_to_sign) =
-        machine.runtime_env._make_compressed_tx_for_bls(
-            &alice_addr,
-            None,
-            Uint256::from_u64(100000000),
-            add_contract.address.clone(),
-            Uint256::zero(),
-            &add_contract.generate_calldata_for_function(
-                "add",
-                &[
-                    ethabi::Token::Uint(Uint256::one().to_u256()),
-                    ethabi::Token::Uint(Uint256::one().to_u256()),
-                ],
-            )?,
-        );
-    let (bob_compressed_tx, bob_hash_to_sign) = machine.runtime_env._make_compressed_tx_for_bls(
-        &bob_addr,
-        None,
-        Uint256::from_u64(100000000),
-        add_contract.address.clone(),
-        Uint256::zero(),
-        &add_contract.generate_calldata_for_function(
-            "add",
-            &[
-                ethabi::Token::Uint(Uint256::from_u64(27).to_u256()),
-                ethabi::Token::Uint(Uint256::from_u64(96).to_u256()),
-            ],
-        )?,
-    );
-
-    let alice_sig = alice_private_key.sign_message(alice_addr.clone(), &alice_hash_to_sign);
-    let bob_sig = bob_private_key.sign_message(bob_addr.clone(), &bob_hash_to_sign);
-
-    let aggregated_sig = BLSAggregateSignature::new(vec![alice_sig, bob_sig]);
-
-    let _arbgas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    };
-
-    machine.runtime_env._insert_bls_batch(
-        &[&alice_addr, &bob_addr],
-        &[alice_compressed_tx, bob_compressed_tx],
-        &aggregated_sig.to_bytes(),
-        &Uint256::from_u64(1749),
-    );
-
-    let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
-    let _arbgas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    };
-    let logs = machine.runtime_env.get_all_receipt_logs();
-    assert_eq!(logs.len(), num_logs_before + 2);
-    assert!(logs[logs.len() - 2].succeeded());
-    assert!(logs[logs.len() - 1].succeeded());
-    assert_eq!(
-        Uint256::from_bytes(&logs[logs.len() - 2].get_return_data()),
-        Uint256::from_u64(2)
-    );
-    assert_eq!(
-        Uint256::from_bytes(&logs[logs.len() - 1].get_return_data()),
-        Uint256::from_u64(27 + 96)
-    );
-
-    if let Some(path) = log_to {
-        machine
-            .runtime_env
-            .recorder
-            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
-            .unwrap();
-    }
-
-    machine.write_coverage("evm_test_bls_signed_batch".to_string());
-    Ok(())
 }

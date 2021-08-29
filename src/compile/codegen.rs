@@ -16,6 +16,9 @@ use crate::compile::{CompileError, ErrorSystem, FileInfo};
 use crate::console::Color;
 use crate::link::{TupleTree, TUPLE_SIZE};
 use crate::mavm::{AVMOpcode, Buffer, Instruction, Label, LabelGenerator, Opcode, Value};
+use crate::link::{ImportedFunc, TupleTree, TUPLE_SIZE};
+use crate::mavm::{AVMOpcode, Buffer, Instruction, Label, LabelGenerator, Opcode, Value};
+use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use std::collections::{BTreeMap, HashSet};
@@ -877,12 +880,19 @@ fn mavm_codegen_expr<'a>(
             Ok((label_gen, code, num_locals))
         }
         TypeCheckedExprKind::Quote(bytes) => {
-            code.push(opcode!(
+            code.push(create!(
                 Noop,
                 Value::new_tuple(vec![
-                    Value::Int(Uint256::from_usize(2 * bytes.len())),
+                    Value::Int(Uint256::from_usize(bytes.len())),
                     Value::Buffer(Buffer::from_bytes(bytes.clone())),
                 ])
+            ));
+            Ok((label_gen, code, num_locals))
+        }
+        TypeCheckedExprKind::Panic => {
+            code.push(Instruction::from_opcode(
+                Opcode::AVMOpcode(AVMOpcode::Panic),
+                debug,
             ));
             Ok((label_gen, code, num_locals))
         }

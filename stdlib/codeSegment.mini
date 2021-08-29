@@ -449,6 +449,8 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
                             code = pushEvmInsnCall(const::EvmOp_callcode, code);
                         } elseif (opcode == 0xf3) { // RETURN
                             code = pushEvmInsnCall(const::EvmOp_return, code);
+                        } else {
+                            invalidInstruction = true;
                         }
                     } else {
                         if (opcode < 0xfc) {
@@ -495,12 +497,62 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
                 pcTable = stack_push(pcTable, (insn.pc, hash(code)));
             }
 
+            // uncomment the next three lines to check for non-integers on the stack between all EVM instructions
+            // let (newCode, newEvmJumpTable) = validateStackAtRuntime(code, insn.pc, evmJumpTable);
+            // code = newCode;
+            // evmJumpTable = newEvmJumpTable;
+
             // uncomment the following line, to get a debugprint before every EVM instruction
             // code = pushInstructionImm(const::AVM_debugprint, (30000, insn.pc, insn.opcode), code);
         } else {
             return (code, evmJumpTable, pcTable);
         }
     };
+}
+
+impure func _validateStackAtRuntime(origCode: AvmCodePoint, pc: uint, jumpTable: map<uint, AvmCodePoint>) -> (AvmCodePoint, map<uint, AvmCodePoint>) {
+    let baseSpecialPc = (asm(250, 1) uint { shl }) + pc*16;
+    let l1 = baseSpecialPc + 1;
+    let l2 = baseSpecialPc + 2;
+    let l3 = baseSpecialPc + 3;
+    let code = origCode;
+    code = pushInstruction(0x73, code); // error
+    code = pushInstruction(0x90, code); // debugprint
+    code = pushInstructionImm(0x51, 1, code); // tset
+    code = pushValue((7000, 0), code);
+    jumpTable = jumpTable with { [l3] = code };
+    code = pushInstructionImm(const::AVM_jump, origCode, code);
+    code = pushInstruction(const::AVM_pop, code);
+    code = pushInstruction(const::AVM_cjump, code);
+    code = pushEvmInsnCall(const::EvmOp_getjumpaddr, code);
+    code = pushValue(l2, code);
+    code = pushInstructionImm(0x14, 0, code); // eq
+    code = pushInstruction(0x21, code); // type
+    code = pushInstruction(const::AVM_dup0, code);
+    code = pushInstruction(const::AVM_auxpop, code);
+    jumpTable = jumpTable with { [l2] = code };
+    code = pushInstruction(const::AVM_cjump, code);
+    code = pushEvmInsnCall(const::EvmOp_getjumpaddr, code);
+    code = pushValue(l1, code);
+    code = pushInstruction(0x15, code); // iszero
+    code = pushInstruction(0x36, code); // stackempty
+    code = pushInstruction(const::AVM_auxpush, code);
+    if (false) {
+        code = pushInstruction(0x19, code); // not
+        code = pushInstruction(0x19, code); // not
+    } elseif (true) {
+        code = pushInstruction(const::AVM_cjump, code);
+        code = pushEvmInsnCall(const::EvmOp_getjumpaddr, code);
+        code = pushValue(l3, code);
+        code = pushInstruction(0x21, code); // type
+        code = pushInstruction(const::AVM_dup0, code);
+    }
+    jumpTable = jumpTable with { [l1] = code };
+    code = pushInstructionImm(const::AVM_auxpush, (), code);
+    code = pushInstructionImm(const::AVM_cjump, origCode, code);
+    code = pushInstruction(0x36, code); // stackempty
+
+    return (code, jumpTable);
 }
 
 public view write func translateEvmCodeSegment(
