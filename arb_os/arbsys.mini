@@ -15,7 +15,7 @@ use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallStack_callHitError;
 use evmCallStack::evmCallStack_addStorageCharge;
 use evmCallStack::evmCallStack_inRetryable;
-use evmCallStack::evmCallStack_getRealL1Caller;
+use evmCallStack::evmCallStack_getRealCallerInfo;
 use evmCallStack::evmCallStack_addToCurrentStorageDelta;
 
 use evmCallStack::evmCallFrame_getCalldata;
@@ -99,10 +99,12 @@ public impure func arbsys_txcall() {
             arbsys_getStorageAt(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbSys_isTopLevelCall) {
             arbsys_isTopLevelCall(topFrame, calldata);
-        } elseif (funcCode == const::funcCode_ArbSys_getL1CallerAddressInfo) {
-            arbsys_getL1CallerAddressInfo(topFrame, calldata);
-        } elseif (funcCode == const::funcCode_ArbSys_mapL1ContractAddressToL2) {
-            arbsys_mapL1ContractAddressToL2(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbSys_wasMyCallersAddressAliased) {
+            arbsys_wasMyCallersAddressAliased(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbSys_myCallersAddressWithoutAliasing) {
+            arbsys_myCallersAddressWithoutAliasing(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbSys_mapL1SenderContractAddressToL2Alias) {
+            arbsys_mapL1SenderContractAddressToL2Alias(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbSys), 1, 0, 0);
@@ -456,29 +458,43 @@ impure func arbsys_isTopLevelCall(_topFrame: EvmCallFrame, calldata: ByteArray) 
     }
 }
 
-// function getL1CallerAddressInfo() external view returns (bool, address);
-impure func arbsys_getL1CallerAddressInfo(_topFrame: EvmCallFrame, calldata: ByteArray) {
+// function wasMyCallersAddressAliased() external view returns (bool);
+impure func arbsys_wasMyCallersAddressAliased(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(80, 0, 0);
     }
-    let (b, s) = xif let Some(l1Addr) = evmCallStack_getRealL1Caller(1) {
-        (true, l1Addr)
+    if let Some(res) = evmCallStack_getRealCallerInfo(1) {
+        let (_, b) = res;
+        let mem = bytearray_set256(bytearray_new(0), 0, xif (b) { 1 } else { 0 });
+        if (evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_return(0, 32);
+        } else {
+            evmOp_revert_knownPc(81, 0, 0);
+        }
     } else {
-        (false, address(0))
-    };
-    let mem = bytearray_set256(
-        bytearray_set256(bytearray_new(0), 0, xif (b) { 1 } else { 0 }),
-        32,
-        uint(s),
-    );
-    if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, 64);
-    } else {
-        evmOp_revert_knownPc(81, 0, 0);
+        evmOp_revert_knownPc(82, 0, 0);
     }
 }
 
-impure func arbsys_mapL1ContractAddressToL2(_topFrame: EvmCallFrame, calldata: ByteArray) {
+// function myCallersAddressWithoutAliasing() external view returns (address);
+impure func arbsys_myCallersAddressWithoutAliasing(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(85, 0, 0);
+    }
+    if let Some(res) = evmCallStack_getRealCallerInfo(1) {
+        let (addr, _) = res;
+        let mem = bytearray_set256(bytearray_new(0), 0, uint(addr));
+        if (evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_return(0, 32);
+        } else {
+            evmOp_revert_knownPc(86, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownPc(87, 0, 0);
+    }
+}
+
+impure func arbsys_mapL1SenderContractAddressToL2Alias(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4 + 2*32) {
         evmOp_revert_knownPc(90, 0, 0);
     }

@@ -703,7 +703,7 @@ impl<'a> ArbSys<'a> {
     }
 
     #[cfg(test)]
-    pub fn map_l1_contract_address_to_l2(
+    pub fn map_l1_sender_contract_address_to_l2_alias(
         &self,
         machine: &mut Machine,
         sender: Uint256,
@@ -711,7 +711,7 @@ impl<'a> ArbSys<'a> {
     ) -> Result<Uint256, ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
             self.my_address.clone(),
-            "mapL1ContractAddressToL2",
+            "mapL1SenderContractAddressToL2Alias",
             &[
                 ethabi::Token::Address(sender.to_h160()),
                 ethabi::Token::Address(dest.to_h160()),

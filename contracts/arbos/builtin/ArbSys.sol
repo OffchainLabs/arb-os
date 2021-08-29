@@ -57,18 +57,24 @@ interface ArbSys {
     function isTopLevelCall() external view returns (bool);
 
     /**
-     * @notice check if the caller (of this caller of this) is a rewritten L1 contract address
-     * @return (true, addr) if the caller's address was rewritten and was originally addr, or (false, address(0)) otherwise
+     * @notice check if the caller (of this caller of this) is an aliased L1 contract address
+     * @return true iff the caller's address is an alias for an L1 contract address
      */
-    function getL1CallerAddressInfo() external view returns (bool, address);
+    function wasMyCallersAddressAliased() external view returns (bool);
 
     /**
-     * @notice map L1 contract address to L2 sender address
+     * @notice return the address of the caller (of this caller of this), without applying L1 contract address aliasing
+     * @return address of the caller's caller, without applying L1 contract address aliasing
+     */
+    function myCallersAddressWithoutAliasing() external view returns (address);
+
+    /**
+     * @notice map L1 sender contract address to its L2 alias
      * @param sender sender address
      * @param dest destination address
-     * @return rewritten sender address
+     * @return aliased sender address
      */
-    function mapL1ContractAddressToL2(address sender, address dest) external pure returns(address);
+    function mapL1SenderContractAddressToL2Alias(address sender, address dest) external pure returns(address);
 
     event L2ToL1Transaction(address caller, address indexed destination, uint indexed uniqueId,
                             uint indexed batchNumber, uint indexInBatch,

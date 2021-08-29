@@ -19,6 +19,9 @@ contract BlockNum {
     }
 
     function getL1CallerInfo() public view returns (bool, address) {
-        return ArbSys(address(100)).getL1CallerAddressInfo();
+        return (
+            ArbSys(address(100)).wasMyCallersAddressAliased(),
+            ArbSys(address(100)).myCallersAddressWithoutAliasing()
+        );
     }
 }

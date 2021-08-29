@@ -1487,25 +1487,29 @@ public impure func _evmCallStack_transferEthInCurrentContext(from: address, to: 
     return Some(());
 }
 
-public impure func evmCallStack_getRealL1Caller(levelsToSubtract: uint) -> option<address> {
-    // if the currently running call was called directly from L1 (or is the top level of a retryable),
-    //      return Some(originalL1CallerAddress)
-    // else
-    //      return None
+public impure func evmCallStack_getRealCallerInfo(levelsToSubtract: uint) -> option<(address, bool)> {
+    // ignoring the top <levelsToSubtract> levels of the EVM call stack,
+    //     return (the sender's address without L1 contract address aliasing applied, whether it was aliased
 
     let stackDepth = evmCallStack_stackDepth();
-    return xif (stackDepth == 1+levelsToSubtract) {
+    if (stackDepth == 1+levelsToSubtract) {
         // top-level call from L1
-        Some(globalCurrentTxRequest.originalCaller)
+        return Some((
+            globalCurrentTxRequest.originalCaller,
+            (globalCurrentTxRequest.caller != globalCurrentTxRequest.originalCaller)
+        ));
     } elseif (stackDepth == 2+levelsToSubtract) {
-        xif let Some(gcrr) = globalCurrentRetryableRequest {
-            Some(gcrr.originalSender)
-        } else {
-            None<address>
+        if let Some(gcrr) = globalCurrentRetryableRequest {
+            return Some((gcrr.originalSender, (gcrr.req.sender != gcrr.originalSender)));
         }
-    } else {
-        None<address>
-    };
+    }
+
+    let frame = globalCallStack?;
+    while (levelsToSubtract > 0) {
+        frame = frame.parent?;
+        levelsToSubtract = levelsToSubtract - 1;
+    }
+    return Some((frame.caller, false));
 }
 
 public impure func evmCallStack_changeNumAccounts(delta: int) {
