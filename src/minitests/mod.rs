@@ -940,7 +940,7 @@ fn test_l1_sender_rewrite() {
     let arbsys = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys
-            .map_l1_contract_address_to_l2(&mut machine, my_addr.clone(), my_addr.clone(), false)
+            .map_l1_contract_address_to_l2(&mut machine, my_addr.clone(), my_addr.clone())
             .unwrap(),
         remap_l1_sender_address(my_addr.clone())
     );
@@ -972,7 +972,7 @@ fn test_l1_sender_rewrite() {
         let pre = Uint256::from_string_hex(pre).unwrap();
         let post = Uint256::from_string_hex(post).unwrap();
         let res = arbsys
-            .map_l1_contract_address_to_l2(&mut machine, pre.clone(), Uint256::one(), false)
+            .map_l1_contract_address_to_l2(&mut machine, pre.clone(), Uint256::one())
             .unwrap();
         assert_eq!(res, post);
     }

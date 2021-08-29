@@ -708,7 +708,6 @@ impl<'a> ArbSys<'a> {
         machine: &mut Machine,
         sender: Uint256,
         dest: Uint256,
-        use_exceptions_list: bool,
     ) -> Result<Uint256, ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
             self.my_address.clone(),
@@ -716,7 +715,6 @@ impl<'a> ArbSys<'a> {
             &[
                 ethabi::Token::Address(sender.to_h160()),
                 ethabi::Token::Address(dest.to_h160()),
-                ethabi::Token::Bool(use_exceptions_list),
             ],
             machine,
             Uint256::zero(),

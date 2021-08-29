@@ -53,7 +53,7 @@ use std::bytestream::bytestream_bytesReadSoFar;
 use inbox::inbox_currentArbBlockNumber;
 use inbox::inbox_currentEthBlockNumber;
 use inbox::inbox_currentTimestamp;
-use inbox::mapL1SenderAddress_fromPrecompile;
+use inbox::mapL1SenderAddress;
 
 use output::queueMessageForSend;
 
@@ -479,16 +479,15 @@ impure func arbsys_getL1CallerAddressInfo(_topFrame: EvmCallFrame, calldata: Byt
 }
 
 impure func arbsys_mapL1ContractAddressToL2(_topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 4 + 3*32) {
+    if (bytearray_size(calldata) != 4 + 2*32) {
         evmOp_revert_knownPc(90, 0, 0);
     }
     let sender = address(bytearray_get256(calldata, 4));
     let dest = address(bytearray_get256(calldata, 36));
-    let useExceptionList = (bytearray_get256(calldata, 68) != 0);
     let mem = bytearray_set256(
         bytearray_new(0),
         0,
-        uint(mapL1SenderAddress_fromPrecompile(sender, dest, useExceptionList)),
+        uint(mapL1SenderAddress(sender, Some(dest))),
     );
     if (evmCallStack_setTopFrameMemory(mem)) {
         evmOp_return(0, 32);

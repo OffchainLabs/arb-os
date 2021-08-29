@@ -66,10 +66,9 @@ interface ArbSys {
      * @notice map L1 contract address to L2 sender address
      * @param sender sender address
      * @param dest destination address
-     * @param useExceptionList if true, sender will be unchanged if the (sender, dest) matches the exception list
      * @return rewritten sender address
      */
-    function mapL1ContractAddressToL2(address sender, address dest, bool useExceptionList) external pure returns(address);
+    function mapL1ContractAddressToL2(address sender, address dest) external pure returns(address);
 
     event L2ToL1Transaction(address caller, address indexed destination, uint indexed uniqueId,
                             uint indexed batchNumber, uint indexInBatch,
