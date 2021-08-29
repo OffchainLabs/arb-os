@@ -940,7 +940,11 @@ fn test_l1_sender_rewrite() {
     let arbsys = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys
-            .map_l1_sender_contract_address_to_l2_alias(&mut machine, my_addr.clone(), my_addr.clone())
+            .map_l1_sender_contract_address_to_l2_alias(
+                &mut machine,
+                my_addr.clone(),
+                my_addr.clone()
+            )
             .unwrap(),
         remap_l1_sender_address(my_addr.clone())
     );
