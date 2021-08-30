@@ -40,14 +40,14 @@ public view func chainParams_getOrDie(which: uint) -> uint {
     };
 }
 
-public impure func chainParams_set(which: uint, value: uint) {
+public view write func chainParams_set(which: uint, value: uint) {
     if (globalChainParameters[which] == None<uint>) {
-        panic;
+        error;
     }
     chainParams_create(which, value);
 }
 
-public impure func chainParams_create(which: uint, value: uint) {
+public view write func chainParams_create(which: uint, value: uint) {
     set globalChainParameters[which] = value;
     notifyParamsChanged();
 }
@@ -106,7 +106,7 @@ public view write func chainParams_gotParamsMessage(data: ByteArray) {
             let (*stream, val) = res;
             val
         } else {
-            panic   // should never have an id without a matching value
+            error   // should never have an id without a matching value
         };
 
         if (paramId == const::ChainOwnerKeccak) {
@@ -161,22 +161,22 @@ func sapClosure(key: uint, value: uint, ba: ByteArray) -> ByteArray {
 
 var chainOwners: SetOfAddresses;
 
-public impure func addChainOwner(newOwner: address) {
+public view write func addChainOwner(newOwner: address) {
     chainOwners = setOfAddresses_add(chainOwners, newOwner);
 }
 
-public impure func removeChainOwner(ownerToRemove: address) {
+public view write func removeChainOwner(ownerToRemove: address) {
     chainOwners = setOfAddresses_remove(chainOwners, ownerToRemove);
 }
 
-public impure func serializedListOfChainOwners() -> ByteArray {
+public view func serializedListOfChainOwners() -> ByteArray {
     return xif let Some(ba) = setOfAddresses_serialize(chainOwners) {
         ba
     } else {
-        panic
+        error
     };
 }
 
-public impure func hasChainOwnerPrivileges(addr: address) -> bool {
+public view func hasChainOwnerPrivileges(addr: address) -> bool {
     return setOfAddresses_contains(chainOwners, addr) || (addr == address(0));
 }

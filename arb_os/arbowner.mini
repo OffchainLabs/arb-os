@@ -45,6 +45,10 @@ use gasAccounting::allowedSenders_serialize;
 use gasAccounting::getAddressForReserveFundsDeposit;
 use gasAccounting::setL1GasPriceEstimate;
 
+use inbox::addressRemapExceptions_set;
+use inbox::isL1MappingException;
+use inbox::serializeAllRemapExceptions;
+
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
@@ -155,7 +159,7 @@ public view write func arbowner_txcall() {
     }
 }
 
-public impure func revertIfNotOwner(addr: address) {
+public view write func revertIfNotOwner(addr: address) {
     if ( ! hasChainOwnerPrivileges(addr)){
         evmOp_revert_knownPc(6666666, 0, 0);
     }
@@ -299,7 +303,7 @@ view write func arbowner_setChainParameter(_topFrame: EvmCallFrame, calldata: By
     evmOp_return(0, 0);
 }
 
-impure func arbowner_createChainParameter(_topFrame: EvmCallFrame, calldata: ByteArray) { // (uint, uint)
+view write func arbowner_createChainParameter(_topFrame: EvmCallFrame, calldata: ByteArray) { // (uint, uint)
     evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 68) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 85, 0, 0);
@@ -551,39 +555,8 @@ view write func arbowner_getLastUpgradeHash(_topFrame: EvmCallFrame, calldata: B
     }
 }
 
-// function getAllFairGasPriceSenders() external view returns(bytes memory);
-impure func arbowner_getAllFairGasPriceSenders(_topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 4) {
-        evmOp_revert_knownPc(180, 0, 0);
-    }
-    if let Some(serialized) = getSerializedFairGasPriceSenders() {
-        let mem = bytearray_copy(
-            serialized,
-            0,
-            bytearray_set256(
-                bytearray_set256(
-                    bytearray_new(0),
-                    0,
-                    32,
-                ),
-                32,
-                bytearray_size(serialized),
-            ),
-            64,
-            bytearray_size(serialized),  // don't need to round up, because already a multiple of 32
-        );
-        if (evmCallStack_setTopFrameMemory(mem)) {
-            evmOp_return(0, bytearray_size(mem));
-        } else {
-            evmOp_revert_knownPc(181, 0, 0);
-        }
-    } else {
-        evmOp_revert_knownPc(182, 0, 0);
-    }
-}
-
 // function addChainOwner(address newOwner) external;
-impure func arbowner_addChainOwner(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_addChainOwner(_topFrame: EvmCallFrame, calldata: ByteArray) {
     evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(190, 0, 0);
@@ -594,7 +567,7 @@ impure func arbowner_addChainOwner(_topFrame: EvmCallFrame, calldata: ByteArray)
 }
 
 // function removeChainOwner(address ownerToRemove) external;
-impure func arbowner_removeChainOwner(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_removeChainOwner(_topFrame: EvmCallFrame, calldata: ByteArray) {
     evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(200, 0, 0);
@@ -609,7 +582,7 @@ impure func arbowner_removeChainOwner(_topFrame: EvmCallFrame, calldata: ByteArr
 }
 
 // function isChainOwner(address addr) external view returns(bool);
-impure func arbowner_isChainOwner(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_isChainOwner(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(210, 0, 0);
     }
@@ -627,7 +600,7 @@ impure func arbowner_isChainOwner(_topFrame: EvmCallFrame, calldata: ByteArray) 
 }
 
 // function getAllChainOwners() external view returns(bytes memory);
-impure func arbowner_getAllChainOwners(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_getAllChainOwners(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(220, 0, 0);
     }
@@ -655,7 +628,7 @@ impure func arbowner_getAllChainOwners(_topFrame: EvmCallFrame, calldata: ByteAr
 }
 
 //  function addMappingException(uint from, uint to) external;
-impure func arbowner_addMappingException(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_addMappingException(_topFrame: EvmCallFrame, calldata: ByteArray) {
     evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 68) {
         evmOp_revert_knownPc(230, 0, 0);
@@ -671,7 +644,7 @@ impure func arbowner_addMappingException(_topFrame: EvmCallFrame, calldata: Byte
 }
 
 //  function removeMappingException(uint from, uint to) external;
-impure func arbowner_removeMappingException(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_removeMappingException(_topFrame: EvmCallFrame, calldata: ByteArray) {
     evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 68) {
         evmOp_revert_knownPc(240, 0, 0);
@@ -687,7 +660,7 @@ impure func arbowner_removeMappingException(_topFrame: EvmCallFrame, calldata: B
 }
 
 //  function isMappingException(uint from, uint to) external view returns(bool);
-impure func arbowner_isMappingException(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_isMappingException(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 68) {
         evmOp_revert_knownPc(240, 0, 0);
     }
@@ -709,7 +682,7 @@ impure func arbowner_isMappingException(_topFrame: EvmCallFrame, calldata: ByteA
 }
 
 //  function getAllMappingExceptions() external view returns (bytes memory);
-impure func arbowner_getAllMappingExceptions(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write func arbowner_getAllMappingExceptions(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(250, 0, 0);
     }

@@ -672,7 +672,7 @@ pub fn test_if_still_upgradable() -> Result<(), ethabi::Error> {
     let arbowner = _ArbOwner::_new(&wallet, false);
     let arbsys = ArbSys::new(&wallet, false);
     assert_eq!(
-        arbsys._arbos_version(&mut machine)?,
+        arbsys.arbos_version(&mut machine)?,
         *init_constant_table(Some(Path::new("arb_os/constants.json")))
             .unwrap()
             .get("ArbosVersionNumber")

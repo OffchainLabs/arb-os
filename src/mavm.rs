@@ -854,10 +854,8 @@ impl From<usize> for Value {
     }
 }
 
-impl From<usize> for Value {
-    fn from(v: usize) -> Self {
-        Self::Int(Uint256::from_usize(v))
-    }
+impl From<u64> for Value {
+    fn from(v: u64) -> Self { Self::Int(Uint256::from_u64(v)) }
 }
 
 impl From<u8> for Value {

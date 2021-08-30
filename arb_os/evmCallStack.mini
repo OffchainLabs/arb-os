@@ -213,7 +213,7 @@ public view func evmCallStack_inRetryable() -> bool {
     return (globalCallStack != None<EvmCallFrame>) && (globalCurrentRetryableRequest != None<IncomingRequestAndLogs>);
 }
 
-public impure func evmCallStack_inStaticCall() -> bool {
+public view func evmCallStack_inStaticCall() -> bool {
     return xif let Some(topFrame) = globalCallStack {
         topFrame.static
     } else {
@@ -221,7 +221,7 @@ public impure func evmCallStack_inStaticCall() -> bool {
     };
 }
 
-public impure func evmCallStack_stackInfo() -> (uint, (address, address), (address, address)) {
+public view func evmCallStack_stackInfo() -> (uint, (address, address), (address, address)) {
     return xif let Some(topFrame) = globalCallStack {
         let sndRunningAs = address(0);
         let sndRunningCodeFrom = address(0);
@@ -1404,7 +1404,7 @@ public func evmCallFrame_constructorIsOnStackForAddress(frame: EvmCallFrame, add
     };
 }
 
-public impure func evmCallStack_touchMemoryOffset(offset: uint) {
+public view write func evmCallStack_touchMemoryOffset(offset: uint) {
     if let Some(topFrame) = globalCallStack {
         let prev = topFrame.maxMemoryOffsetTouched;
         if (offset > prev) {
@@ -1413,13 +1413,14 @@ public impure func evmCallStack_touchMemoryOffset(offset: uint) {
             globalCallStack = Some(topFrame with { maxMemoryOffsetTouched: offset });
 
             // deduct the gas difference from current gas remaining, but add it back to the gas pool because it's not computation
-            let gas = asm() uint { getgas } / const::Charging_ArbGasPerAvmGas;
+            let gasFactor = chainParams_getOrDie(const::Atom_Param_AvmGasPerArbGas);
+            let gas = getGas() / gasFactor;
             if (delta < gas) {
                 gasAccounting_addToGasPool(delta);
-                asm(const::Charging_ArbGasPerAvmGas * (gas - delta),) { setgas };
+                setGas(gasFactor * (gas - delta));
             } else {
                 gasAccounting_addToGasPool(gas);
-                asm(1,) { setgas };      // ensure we'll run out of gas immediately
+                setGas(1);      // ensure we'll run out of gas immediately
             }
         }
     }
@@ -1499,7 +1500,7 @@ public view write func _evmCallStack_transferEthInCurrentContext(from: address, 
     return Some(());
 }
 
-public impure func evmCallStack_getRealCallerInfo(levelsToSubtract: uint) -> option<(address, bool)> {
+public view func evmCallStack_getRealCallerInfo(levelsToSubtract: uint) -> option<(address, bool)> {
     // ignoring the top <levelsToSubtract> levels of the EVM call stack,
     //     return (the sender's address without L1 contract address aliasing applied, whether it was aliased
 
@@ -1524,7 +1525,7 @@ public impure func evmCallStack_getRealCallerInfo(levelsToSubtract: uint) -> opt
     return Some((frame.caller, false));
 }
 
-public impure func evmCallStack_changeNumAccounts(delta: int) {
+public view write func evmCallStack_changeNumAccounts(delta: int) {
     if let Some(topFrame) = globalCallStack {
         set topFrame.accountStore = accountStore_changeNumContracts(topFrame.accountStore, delta);
         globalCallStack = Some(topFrame);
@@ -1612,7 +1613,7 @@ public view write func evmCallStack_setTopFrameStorageCell(offset: uint, value: 
     return Some(());
 }
 
-public impure func evmCallStack_addToCurrentStorageDelta(delta: int) -> option<()> {
+public view write func evmCallStack_addToCurrentStorageDelta(delta: int) -> option<()> {
     let topFrame = globalCallStack?;
     topFrame = topFrame with {
         storageDelta: topFrame.storageDelta + delta

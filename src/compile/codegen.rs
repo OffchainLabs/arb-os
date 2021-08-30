@@ -16,9 +16,6 @@ use crate::compile::{CompileError, ErrorSystem, FileInfo};
 use crate::console::Color;
 use crate::link::{TupleTree, TUPLE_SIZE};
 use crate::mavm::{AVMOpcode, Buffer, Instruction, Label, LabelGenerator, Opcode, Value};
-use crate::link::{ImportedFunc, TupleTree, TUPLE_SIZE};
-use crate::mavm::{AVMOpcode, Buffer, Instruction, Label, LabelGenerator, Opcode, Value};
-use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use std::collections::{BTreeMap, HashSet};
@@ -880,7 +877,7 @@ fn mavm_codegen_expr<'a>(
             Ok((label_gen, code, num_locals))
         }
         TypeCheckedExprKind::Quote(bytes) => {
-            code.push(create!(
+            code.push(opcode!(
                 Noop,
                 Value::new_tuple(vec![
                     Value::Int(Uint256::from_usize(bytes.len())),
@@ -889,9 +886,9 @@ fn mavm_codegen_expr<'a>(
             ));
             Ok((label_gen, code, num_locals))
         }
-        TypeCheckedExprKind::Panic => {
+        TypeCheckedExprKind::Error => {
             code.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::Panic),
+                Opcode::AVMOpcode(AVMOpcode::Error),
                 debug,
             ));
             Ok((label_gen, code, num_locals))
@@ -1126,7 +1123,7 @@ fn mavm_codegen_expr<'a>(
                 let container = Value::new_tuple(vec![label, Value::none()]);
 
                 code.push(opcode!(Noop, container));
-                code.push(opcode!(Tset, Value::from(1)));
+                code.push(opcode!(Tset, Value::from(1u64)));
             }
 
             Ok((label_gen, code, num_locals))
@@ -1209,15 +1206,15 @@ fn mavm_codegen_expr<'a>(
             // check whether we're calling on a codepoint or closure tuple
             c.push(opcode!(Dup0));
             c.push(opcode!(Type));
-            c.push(opcode!(Equal, Value::from(1))); // 1 for codepoint
+            c.push(opcode!(Equal, Value::from(1u64))); // 1 for codepoint
             c.push(opcode!(Cjump, Value::Label(codepoint_call)));
 
             // not a codepoint, let's unpack
             c.push(opcode!(Dup0)); // return (closure, frame) (closure, frame)
-            c.push(opcode!(Tget, Value::from(1))); // return (closure, frame) frame
+            c.push(opcode!(Tget, Value::from(1u64))); // return (closure, frame) frame
             c.push(opcode!(Swap2)); // frame (closure, frame) return
             c.push(opcode!(Swap1)); // frame return (closure, frame)
-            c.push(opcode!(Tget, Value::from(0))); // frame return closure
+            c.push(opcode!(Tget, Value::from(0u64))); // frame return closure
 
             c.push(Instruction::from_opcode(
                 Opcode::Label(codepoint_call),

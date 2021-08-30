@@ -510,7 +510,7 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
     };
 }
 
-impure func _validateStackAtRuntime(origCode: AvmCodePoint, pc: uint, jumpTable: map<uint, AvmCodePoint>) -> (AvmCodePoint, map<uint, AvmCodePoint>) {
+view write func _validateStackAtRuntime(origCode: AvmCodePoint, pc: uint, jumpTable: map<uint, AvmCodePoint>) -> (AvmCodePoint, map<uint, AvmCodePoint>) {
     let baseSpecialPc = (asm(250, 1) uint { shl }) + pc*16;
     let l1 = baseSpecialPc + 1;
     let l2 = baseSpecialPc + 2;

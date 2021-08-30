@@ -105,7 +105,7 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
     } elseif (kind == 2) { // empty buffer
         Some((stream, newbuffer()))
     } elseif (kind == 2) {    // empty buffer
-        Some((ustr, newbuffer()))
+        Some((stream, newbuffer()))
     } elseif (kind == 3) {    // non-empty buffer
         let (*stream, size) = rlp_decodeUint(stream)?;
         let (*stream, ba) = bytestream_getN(stream, size)?;

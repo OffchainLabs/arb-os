@@ -107,7 +107,8 @@ view write func main(oldGlobals: GlobalsBeforeUpgrade) {
     mainRunLoop();
 }
 
-public impure func mainRunLoop_save() {
+/*
+public func mainRunLoop_save() {
     loop {
         let (resultCode, request) = getNextRequestFromCongestionAuction();
         if (resultCode == const::TxResultCode_success) {
@@ -148,6 +149,7 @@ public impure func mainRunLoop_save() {
         }
     }
 }
+*/
 
 view write func initializePreinstalls(isUpgrade: bool) -> option<()> {
     let acctStore = safeGetGlobalAccountStore();

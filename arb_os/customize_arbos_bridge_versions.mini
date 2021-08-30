@@ -4,44 +4,10 @@
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 
-use accounts::AccountStore;
-
-use evmCallStack::EvmCallFrame;
-use evmCallStack::IncomingRequestAndLogs;
-
-use output::PerBlockReceiptData;
-use output::OutputStatistics;
+use std::addressSet::AddressPairSet;
+use std::addressSet::addressPairSet_new;
 
 
-public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> map<uint, uint> {
-    return oldGlobals.globalChainParameters
-        with { [const::Atom_Param_GasPriceOracle] = const::Default_Param_GasPriceOracle }
-        with { [const::Atom_Param_AvmGasPerArbGas] = const::Default_Param_AvmGasPerArbGas }
-    ;
-}
-
-public func set_globalCallStack_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
-    return None<EvmCallFrame>;
-}
-
-public func set_globalCurrentRetryableRequest_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<IncomingRequestAndLogs> {
-    return None<IncomingRequestAndLogs>;
-}
-
-public func set_globalBlockReceiptData_onUpgrade(oldGlobals: GlobalsBeforeUpgrade
-) -> struct {
-    data: PerBlockReceiptData,
-    statsThisBlock: OutputStatistics,
-    statsAllTime: OutputStatistics,
-    lastArbBlockNum: uint,
-    nextSendTimestamp: uint,
-} {
-    let old = oldGlobals.globalBlockReceiptData;
-    return struct {
-        data: old.data,
-        statsThisBlock: old.statsThisBlock,
-        statsAllTime: old.statsAllTime,
-        lastArbBlockNum: old.lastBlockNum,
-        nextSendTimestamp: old.nextSendTime,
-    };
+public func set_addressRemapExceptions_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> AddressPairSet {
+    return addressPairSet_new();
 }

@@ -3,9 +3,9 @@
  */
 
 use crate::evm::abi::FunctionTable;
-use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys};
 use crate::evm::abi::{ArbAddressTable, ArbFunctionTable, ArbSys};
-use crate::evm::preinstalled_contracts::{ArbosTest, _ArbInfo};
+use crate::evm::preinstalled_contracts::_ArbInfo;
+use crate::evm::live_code::ArbosTest;
 use crate::run::{load_from_file, load_from_file_and_env, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use ethers_signers::Signer;
@@ -25,7 +25,6 @@ mod benchmarks;
 mod bls;
 mod evmtest;
 mod live_code;
-#[cfg(test)]
 pub mod preinstalled_contracts;
 
 #[derive(Clone)]
@@ -1481,7 +1480,7 @@ fn _evm_ecpairing_precompile_test_one(calldata: &str, result: bool, debug: bool)
     let tx_id = machine.runtime_env.insert_tx_message(
         my_addr,
         Uint256::from_u64(1000000000),
-        Uint256::zero(),
+        None,
         Uint256::from_u64(8), // ecpairing precompile
         Uint256::from_u64(0),
         &calldata,
@@ -1517,7 +1516,7 @@ pub fn _evm_eval_ripemd160(log_to: Option<&Path>, debug: bool) {
     let tx_id = machine.runtime_env.insert_tx_message(
         my_addr,
         Uint256::from_u64(1000000000),
-        Uint256::zero(),
+        None,
         Uint256::from_u64(3), // ripemd160 precompile
         Uint256::from_u64(0),
         &vec![0x61u8],
@@ -1591,7 +1590,7 @@ fn _evm_bad_receipt_revert_test_impl() {
     let txid = machine.runtime_env.insert_tx_message(
         my_addr,
         Uint256::zero(),
-        Uint256::zero(),
+        None,
         add_contract.address,
         Uint256::one(),
         &[],
@@ -1621,7 +1620,7 @@ pub fn _test_constructor_recursion() -> Result<(), ethabi::Error> {
 
     let my_addr = Uint256::from_usize(1025);
 
-    let mut ccontract = AbiForContract::new_from_file(&_test_contract_path2(
+    let mut ccontract = AbiForContract::new_from_file(&test_contract_path2(
         "ReverterFactory",
         "ConstructorCallback2",
     ))?;

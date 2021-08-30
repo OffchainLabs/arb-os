@@ -5,6 +5,6 @@ import "./SelfDestructor.sol";
 
 contract ConstructorSD {
     constructor(address victim, address payable beneficiary) public {
-        SelfDestructor(victim).suicide(beneficiary);
+        SelfDestructor(victim).die(beneficiary);
     }
 }

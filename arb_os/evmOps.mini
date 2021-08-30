@@ -1034,7 +1034,7 @@ public view write func evmOp_revert_knownPc(evmPc: uint, memOffset: uint, memNby
     evmOp_revert_knownCodePc(codeAddr, evmPc, memOffset, memNbytes);
 }
 
-public impure func evmOp_revertIfStatic() {
+public view write func evmOp_revertIfStatic() {
     if (evmCallStack_inStaticCall()) {
         evmOp_revert_knownPc(0xffffffffb, 0, 0);
     }

@@ -57,6 +57,7 @@ use std::stack::stack_new;
 use std::stack::stack_push;
 use std::stack::stack_pop;
 
+use inbox::inbox_getNextUnpackedRequest;
 use inbox::inbox_currentArbBlockNumber;
 use inbox::inbox_currentTimestamp;
 
@@ -373,7 +374,7 @@ public view func getAddressForReserveFundsDeposit() -> address {
     return address(chainParams_getOrDie(const::Atom_Param_CongestionFeeRecipient));
 }
 
-public impure func gasAccounting_addToGasPool(delta: uint) {
+public view write func gasAccounting_addToGasPool(delta: uint) {
     gasAccountingInfo = gasAccountingInfo with {
         congestionState: gasAccountingInfo.congestionState with {
             gasPool: gasAccountingInfo.congestionState.gasPool + int(delta)
@@ -381,11 +382,7 @@ public impure func gasAccounting_addToGasPool(delta: uint) {
     };
 }
 
-public impure func getAddressForReserveFundsDeposit() -> address {
-    return address(chainParams_getOrDie(const::Atom_Param_CongestionFeeRecipient));
-}
-
-public impure func gasAccounting_summaryToPublish() -> (uint, uint, uint, uint, uint, int) {
+public view func gasAccounting_summaryToPublish() -> (uint, uint, uint, uint, uint, int) {
     // get summary of gas prices and pool at present, for inclusion in block summary log
     let prices = gasAccountingInfo.currentPrices;
 
@@ -663,13 +660,12 @@ public view write func gasAccounting_startNewBlock(arbBlockNumber: uint, timesta
     set gasAccountingInfo.gasAllocatedToThisBlock = gasForThisBlock;
 }
 
-// gasAccounting_prepareTx does gas acocunting, to prepare a tx for execution. For each request, this
+// gasAccounting_prepareTx does gas accounting, to prepare a tx for execution. For each request, this
 //     determines (a) whether to approve the request for execution, and (b) what gas price the request will pay.
 public view write func gasAccounting_prepareTx(tx: TxRequestData) -> (
     uint,             // error code, or const::TxResultCode_success if no error
     TxRequestData,
 ) {
-    let tx = inbox_getNextUnpackedRequest();
     if ( (!allowedSenders_contains(tx.caller)) && (!tx.incomingRequest.adminMode) ) {
         return (const::TxResultCode_senderNotPermitted, tx);
     }
@@ -843,7 +839,7 @@ view write func payForTxAndL1Gas(
             payer,
             address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
             networkPrice,
-            safeMul(calldataUnits, calldataUnitPrice),
+            safeMul(calldataUnits, networkUnitPrice),
             feeStats,
             paymentLimitWei,
             feeStats.noFeeGasEstimationMode,

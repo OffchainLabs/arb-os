@@ -235,7 +235,7 @@
     "L1GasPriceEstimateWeightDenominator": 50,
     "RetryableTxLifetimeSeconds": 604800,
     "ArbitrumNonZeroBalanceCallStipend": 200,
-    "GasPriceOracle": 0
+    "GasPriceOracle": 0,
     "EnableL1ContractAddressAliasing": 1
   },
   "parameters_hex": { }

@@ -523,7 +523,7 @@ impl RuntimeEnvironment {
         self.insert_tx_message_from_contract(
             sender_addr,
             Uint256::from_u64(100_000_000),
-            Uint256::zero(),
+            None,
             {
                 let x = if adjust_payee_address {
                     remap_l1_sender_address(payee)

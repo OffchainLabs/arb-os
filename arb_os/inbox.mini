@@ -345,17 +345,10 @@ public view write func mainRunLoop() {
                         moreToDo = false;
                     }
                 }
-                set globalInputQueue.batchQ = incomingRequestQueueStack_push(globalInputQueue.batchQ, queue);
-            } elseif (    (msg.kind == const::L1MessageType_L2 || msg.kind == const::L1MessageType_L2ForGasEstimation)
-                       && (bytearray_getByte(msg.msgData, 0) == const::L2MessageType_blsBatch) ) {
-               if let Some(updatedQ) = decompressAndVerifyBLSSignedTxBatch(
-                    msg.msgData,
-                    msg,
-                    unsafecast<Queue>(globalInputQueue.txQ)
-                ) {
-                    set globalInputQueue.txQ = unsafecast<TxRequestQueue>(updatedQ);
-                }
-                // else BLS batch was bad, so ignore it
+                globalInputQueue = globalInputQueue with {
+                    batchQ: incomingRequestQueueStack_push(globalInputQueue.batchQ, queue)
+                };
+                // set globalInputQueue.batchQ = incomingRequestQueueStack_push(globalInputQueue.batchQ, queue);
             } else {
                 handleUnpackedMessage(msg);
             }
@@ -363,7 +356,7 @@ public view write func mainRunLoop() {
     }
 }
 
-public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
+public view write func inbox_getNextUnpackedRequest() -> TxRequestData {
     return xloop {
         if let Some(res) = txRequestQueue_get(globalInputQueue.txQ) {
             let (newQ, tx) = res;
@@ -486,16 +479,6 @@ public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
                         return txRequest;
                     }
                     // else signature was invalid, ignore msg and execute loop again to get another
-//                } elseif (firstByte == const::L2MessageType_blsBatch) {
-//                    BLS batch message type disabled because it's not used
-//                    if let Some(updatedQ) = decompressAndVerifyBLSSignedTxBatch(
-//                        msg.msgData,
-//                        msg,
-//                        unsafecast<Queue>(globalInputQueue.txQ)
-//                    ) {
-//                        globalInputQueue = globalInputQueue with { txQ: unsafecast<TxRequestQueue>(updatedQ) };
-//                    }
-//                    // else BLS batch was bad, so ignore it
                 } else {
                     // subtype must be unsigned EOA, unsigned contract, or nonmutating
                     if let Some(txRequest) = translateUnsignedTx(msg) {
@@ -503,22 +486,11 @@ public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
                     }
                     // else request was malformatted, ignore it and execute loop again to get another
                 }
-                set globalInputQueue.batchQ = incomingRequestQueueStack_push(globalInputQueue.batchQ, queue);
-            } elseif (    (msg.kind == const::L1MessageType_L2 || msg.kind == const::L1MessageType_L2ForGasEstimation)
-                       && (bytearray_getByte(msg.msgData, 0) == const::L2MessageType_blsBatch) ) {
-               if let Some(updatedQ) = decompressAndVerifyBLSSignedTxBatch(
-                    msg.msgData,
-                    msg,
-                    unsafecast<Queue>(globalInputQueue.txQ)
-                ) {
-                    set globalInputQueue.txQ = unsafecast<TxRequestQueue>(updatedQ);
-                }
-                // else BLS batch was bad, so ignore it
             } else {
                 handleUnpackedMessage(msg);
             }
         }
-    }
+    };
 }
 
 view write func handleUnpackedMessage(msg: IncomingRequest) {
@@ -622,6 +594,7 @@ view write func handleArrivingTx(tx: TxRequestData) {
                 None<GasUsage>,
                 request.feeStats,
                 false,      // don't emit tracing info because the tx was bogus
+                tx.originalCaller,
             );
         }
     } else {
@@ -643,6 +616,7 @@ view write func handleArrivingTx(tx: TxRequestData) {
             None<GasUsage>,
             request.feeStats,
             true,
+            request.originalCaller,
         );
     }
 }
@@ -757,7 +731,7 @@ func txRequestQueue_get(q: TxRequestQueue) -> option<(TxRequestQueue, TxRequestD
 
 var addressRemapExceptions: AddressPairSet;
 
-public impure func mapL1SenderAddress(callerAddr: address, maybeCallee: option<address>) -> address {
+public view func mapL1SenderAddress(callerAddr: address, maybeCallee: option<address>) -> address {
     return xif (chainParams_getOrDie(const::Atom_Param_EnableL1ContractAddressAliasing) == 0) {
         callerAddr
     } elseif (addressPairSet_lookup_options(addressRemapExceptions, Some(callerAddr), maybeCallee)) {
@@ -771,14 +745,14 @@ public impure func mapL1SenderAddress(callerAddr: address, maybeCallee: option<a
     };
 }
 
-public impure func isL1MappingException(from: option<address>, to: option<address>) -> bool {
+public view func isL1MappingException(from: option<address>, to: option<address>) -> bool {
     return addressPairSet_lookup_strict(addressRemapExceptions, from, to);
 }
 
-public impure func addressRemapExceptions_set(sender: option<address>, dest: option<address>, value: bool) {
+public view write func addressRemapExceptions_set(sender: option<address>, dest: option<address>, value: bool) {
     addressRemapExceptions = addressPairSet_set(addressRemapExceptions, sender, dest, value);
 }
 
-public impure func serializeAllRemapExceptions() -> ByteArray {
+public view func serializeAllRemapExceptions() -> ByteArray {
     return addressPairSet_serialize(addressRemapExceptions);
 }

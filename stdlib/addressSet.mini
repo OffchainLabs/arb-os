@@ -78,7 +78,7 @@ public func setOfAddresses_serialize(sa: SetOfAddresses) -> option<ByteArray> {
 
 type AddressPairSet = struct {
     contents: map<(uint, uint), bool>,
-}
+};
 
 public func addressPairSet_new() -> AddressPairSet {
     return struct { contents: newmap<(uint, uint), bool> };

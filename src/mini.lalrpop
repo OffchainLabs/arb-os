@@ -38,13 +38,6 @@ match {
     _
 }
 
-match {
-    r"\s*" => { },                                                                 // Skip whitespace
-    r"/\*(([^*/]|\n)|(\*+([^*/]|\n)|/([^*/]|\n)*|/\*([^*/]|\n)*))*\**\*/" => { },  // Skip multi-line comments
-    r"//[^\n\r]*[\n\r]*" => { },                                                   // Skip single-line comments
-    _
-}
-
 pub Decls: Vec<TopLevelDecl> = {
 	<a: ("#![" <Attributes> "]")?><mut i:HeadDecl*> <mut n:BodyDecl+> => {
         i.append(&mut n);

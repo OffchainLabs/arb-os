@@ -6,6 +6,8 @@ use chainParameters::chainParams_get;
 use chainParameters::chainParams_getOrDie;
 use accounts::account_getAggregatorToPay;
 
+use chainParameters::hasChainOwnerPrivileges;
+
 use evmCallStack::EvmCallFrame;
 use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallStack_callHitError;
@@ -164,7 +166,7 @@ view write func arbgasinfo_setL1GasPriceEstimate(topFrame: EvmCallFrame, calldat
     } else {
         address(0)
     };
-    if ((caller != address(0)) && (caller != address(chainParams_getOrDie(const::Atom_Param_ChainOwner))) && (caller != oracle)) {
+    if ( (! hasChainOwnerPrivileges(caller)) && (caller != oracle)) {
         evmOp_revert_knownPc(50, 0, 0);
     }
     if (bytearray_size(calldata) != 36) {

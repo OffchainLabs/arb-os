@@ -58,6 +58,9 @@ type TxRequestData = struct {
     calldata: ByteArray,
     nonMutating: bool,
     isConstructor: bool,
+    incomingRequest: IncomingRequest,
+    feeStats: TxFeeStats,
+    fromRetryable: option<RetryableTx>,
     originalCaller: address,
 };
 

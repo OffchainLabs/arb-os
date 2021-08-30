@@ -84,7 +84,7 @@ public view write func errorHandler() {
     error;
 }
 
-public impure func errorHandler_setUpgradeProtector(oldGlobals: any) {
+public view write func errorHandler_setUpgradeProtector(oldGlobals: any) {
 
     // At this point in time, the old globals only exist on the stack.
     // The register has been set to include the shape of the new globals + the new segment's jump table,
