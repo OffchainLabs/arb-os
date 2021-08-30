@@ -4,35 +4,55 @@
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 
-use accounts::AccountStore;
-
 use evmCallStack::EvmCallFrame;
 use evmCallStack::IncomingRequestAndLogs;
-
-use messages::TxRequestData;
 
 use output::PerBlockReceiptData;
 use output::OutputStatistics;
 
-public func set_globalBlockReceiptData_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> struct {
-    data: PerBlockReceiptData,
-    statsThisBlock: OutputStatistics,
-    statsAllTime: OutputStatistics,
-    lastArbBlockNum: uint,
-    nextSendTimestamp: uint,
-} {
-    let old = oldGlobals.globalBlockReceiptData;
-    return unsafecast<every>(old);
+use core::kvs::Kvs;
+use core::kvs::builtin_kvsDelete;
+
+
+const ParamID_ArbGasDivisor = 0xe2ecb0e6e225b20377928a5eb4dd604b1e1e07a2eee4d2bca7459b4355105cbe;
+
+public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> map<uint, uint> {
+    let params = oldGlobals.globalChainParameters;
+    set params[const::Atom_Param_AvmGasPerArbGas] = xif let Some(val) = params[const::ParamID_ArbGasDivisor] {
+        val
+    } else {
+        const::Default_Param_AvmGasPerArbGas
+    };
+    params = unsafecast<map<uint, uint> >(builtin_kvsDelete(
+        unsafecast<Kvs>(params),
+        const::ParamID_ArbGasDivisor,
+    ));
+    set params[const::Atom_Param_GasPriceOracle] = const::Default_Param_GasPriceOracle;
+
+    return params;
 }
+
+public func set_globalBlockReceiptData_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> struct {
+     data: PerBlockReceiptData,
+     statsThisBlock: OutputStatistics,
+     statsAllTime: OutputStatistics,
+     lastArbBlockNum: uint,
+     nextSendTimestamp: uint,
+ } {
+     let old = oldGlobals.globalBlockReceiptData;
+     return struct {
+        data: old.data,
+        statsThisBlock: old.statsThisBlock,
+        statsAllTime: old.statsAllTime,
+        lastArbBlockNum: old.lastBlockNum,
+        nextSendTimestamp: old.nextSendTime,
+     };
+ }
 
 public func set_globalCallStack_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
     return None<EvmCallFrame>;
 }
 
 public func set_globalCurrentRetryableRequest_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<IncomingRequestAndLogs> {
-    return None<IncomingRequestAndLogs>;
-}
-
-public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> map<uint, uint> {
-    return oldGlobals.globalChainParameters;
+     return None<IncomingRequestAndLogs>;
 }

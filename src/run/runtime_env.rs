@@ -32,6 +32,7 @@ pub struct RuntimeEnvironment {
     charging_policy: Option<(Uint256, Uint256, Uint256)>,
     num_wallets: u64,
     chain_init_message: Vec<u8>,
+    pub force_zero_gas_price: bool,
 }
 
 impl RuntimeEnvironment {
@@ -84,6 +85,7 @@ impl RuntimeEnvironment {
             charging_policy: charging_policy.clone(),
             num_wallets: 0,
             chain_init_message: RuntimeEnvironment::get_params_bytes(owner, chain_id),
+            force_zero_gas_price: false,
         };
 
         ret.send_chain_init_message();
@@ -216,7 +218,11 @@ impl RuntimeEnvironment {
     }
 
     pub fn get_gas_price(&self) -> Uint256 {
-        Uint256::_from_gwei(2)
+        if self.force_zero_gas_price {
+            Uint256::zero()
+        } else {
+            Uint256::_from_gwei(2)
+        }
     }
 
     pub fn insert_l2_message(&mut self, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
@@ -655,9 +661,13 @@ fn get_send_contents(log: Value) -> Option<Vec<u8>> {
 }
 
 pub fn remap_l1_sender_address(addr: Uint256) -> Uint256 {
-    addr.add(&Uint256::from_string_hex("1111000000000000000000000000000000001111").unwrap())
-        .modulo(&Uint256::one().shift_left(160))
-        .unwrap()
+    if addr.is_zero() {
+        addr
+    } else {
+        addr.add(&Uint256::from_string_hex("1111000000000000000000000000000000001111").unwrap())
+            .modulo(&Uint256::one().shift_left(160))
+            .unwrap()
+    }
 }
 
 pub fn _inverse_remap_l1_sender_address(addr: Uint256) -> Uint256 {

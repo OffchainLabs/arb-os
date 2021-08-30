@@ -1616,6 +1616,7 @@ fn _test_upgrade_arbos_to_different_version() {
 fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos_before.mexe"));
     machine.start_at_zero(true);
+    machine.runtime_env.force_zero_gas_price = true;
     let _ = machine.run(None);
 
     let wallet = machine.runtime_env.new_wallet();
@@ -1634,14 +1635,17 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys_orig_binding.arbos_version(&mut machine)?,
-        Uint256::from_u64(39),
+        Uint256::from_u64(40),
     );
 
-    arbowner._add_chain_owner(&mut machine, my_addr.clone(), true, true)?;
+    arbowner._add_chain_owner(&mut machine, my_addr.clone(), true, false)?;
+    arbowner._add_chain_owner(&mut machine, remap_l1_sender_address(my_addr.clone()), true, false)?;
 
     let mexe_path = Path::new("arb_os/arbos-upgrade.mexe");
     let uploader = CodeUploader::_new_from_file(mexe_path);
     let _previous_upgrade_hash = _try_upgrade(&arbowner, &mut machine, uploader, None)?.unwrap();
+
+    machine.runtime_env.force_zero_gas_price = false;
 
     let wallet2 = machine.runtime_env.new_wallet();
     let arbsys = ArbSys::new(&wallet2, false);
@@ -1653,6 +1657,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
             .get("ArbosVersionNumber")
             .unwrap()
     );
+
     let arbos_version_orig = arbsys_orig_binding.arbos_version(&mut machine)?;
     assert_eq!(arbos_version, arbos_version_orig);
 
