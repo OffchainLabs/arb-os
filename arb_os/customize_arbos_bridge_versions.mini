@@ -56,3 +56,6 @@ public func set_globalCallStack_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> 
 public func set_globalCurrentRetryableRequest_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<IncomingRequestAndLogs> {
      return None<IncomingRequestAndLogs>;
 }
+
+func _dummy() -> uint { return 0; }
+
