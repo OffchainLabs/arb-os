@@ -335,21 +335,8 @@ public view write func evmOp_extcodecopy(addrAsUint: uint, memAddr: uint, codeOf
     let addr = address(addrAsUint);     // truncates if necessary
     if let Some(topFrame) = evmCallStack_topFrame() {
         let memory = evmCallFrame_getMemory(topFrame);
-        let updatedMemory = xif let Some(code) = account_getCode(
-            evmCallFrame_getAccount(topFrame, addr)
-        ) {
-            // if this would read beyond end of code,
-            //       bytearray_copy will zero-fill the rest of the target memory region,
-            //       which is the desired behavior
-            bytearray_copy(
-                code,
-                codeOffset,
-                memory,
-                memAddr,
-                nbytes
-            )
-        } else {
-            // code doesn't exist, so zero-fill the target memory region
+        let updatedMemory = xif (evmCallFrame_constructorIsOnStackForAddress(topFrame, addr)) {
+            // constructor doesn't have code, so zero-fill the target memory region
             bytearray_copy(
                 bytearray_new(0),
                 0,
@@ -357,6 +344,30 @@ public view write func evmOp_extcodecopy(addrAsUint: uint, memAddr: uint, codeOf
                 memAddr,
                 nbytes
             )
+        } else {
+            xif let Some(code) = account_getCode(
+                evmCallFrame_getAccount(topFrame, addr)
+            ) {
+                // if this would read beyond end of code,
+                //       bytearray_copy will zero-fill the rest of the target memory region,
+                //       which is the desired behavior
+                bytearray_copy(
+                    code,
+                    codeOffset,
+                    memory,
+                    memAddr,
+                    nbytes
+                )
+            } else {
+                // code doesn't exist, so zero-fill the target memory region
+                bytearray_copy(
+                    bytearray_new(0),
+                    0,
+                    memory,
+                    memAddr,
+                    nbytes
+                )
+            }
         };
         if (evmCallStack_setTopFrameMemory(updatedMemory)) {
             return;

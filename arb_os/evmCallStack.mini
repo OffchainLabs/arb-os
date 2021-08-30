@@ -383,7 +383,7 @@ public view write func initEvmCallStack(
             evmCallStack_callHitError(2);
         }
     } else {
-        // call is to an EOA, so treat it as a simple eth transfer
+        // call is to an address with no contract, so treat it as a simple eth transfer
 
         if (request.seqNum != None<uint>) {
             // this call carries a sequence number, which has already been checked
