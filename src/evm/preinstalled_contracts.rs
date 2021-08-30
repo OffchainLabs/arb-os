@@ -1639,7 +1639,12 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     );
 
     arbowner._add_chain_owner(&mut machine, my_addr.clone(), true, false)?;
-    arbowner._add_chain_owner(&mut machine, remap_l1_sender_address(my_addr.clone()), true, false)?;
+    arbowner._add_chain_owner(
+        &mut machine,
+        remap_l1_sender_address(my_addr.clone()),
+        true,
+        false,
+    )?;
 
     let mexe_path = Path::new("arb_os/arbos-upgrade.mexe");
     let uploader = CodeUploader::_new_from_file(mexe_path);
