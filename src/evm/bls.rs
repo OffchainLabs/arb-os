@@ -2,6 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved
  */
 
+/*
 use crate::compile::miniconstants::init_constant_table;
 use crate::uint256::Uint256;
 use crypto::digest::Digest;
@@ -14,7 +15,7 @@ use parity_bn::{AffineG1, AffineG2, Fq, Fr, Group, G1, G2};
 use std::cmp::Ordering;
 use std::path::Path;
 
-/*
+
 #[test]
 fn test_bls_registry() {
     evm_test_bls_registry(None, false);
@@ -70,7 +71,6 @@ pub fn evm_test_bls_registry(log_to: Option<&Path>, debug: bool) {
 
     machine.write_coverage("evm_test_bls_registry".to_string());
 }
-*/
 
 fn to_32_bytes_be(bi: &BigUint) -> Vec<u8> {
     let bytes = bi.to_bytes_be();
@@ -436,3 +436,4 @@ impl BLSAggregateSignature {
         out
     }
 }
+ */

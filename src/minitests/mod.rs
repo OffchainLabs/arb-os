@@ -7,10 +7,10 @@ use crate::compile::DebugInfo;
 use crate::console::Color;
 use crate::evm::abi::ArbSys;
 use crate::evm::preinstalled_contracts::{_ArbAggregator, _ArbOwner, _try_upgrade};
-use crate::evm::{preinstalled_contracts::_ArbInfo, test_contract_path, AbiForContract};
 use crate::evm::test_contract_path2;
+use crate::evm::{preinstalled_contracts::_ArbInfo, test_contract_path, AbiForContract};
+use crate::mavm::Buffer;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Value};
-use crate::mavm::{Buffer};
 use crate::run::runtime_env::remap_l1_sender_address;
 use crate::run::RuntimeEnvironment;
 use crate::run::{_bytestack_from_bytes, load_from_file, run, run_from_file, Machine};
@@ -388,9 +388,7 @@ pub fn test_crosscontract_call_using_batch() {
 
 #[test]
 pub fn test_crosscontract_call_using_compressed_batch() {
-    match crate::evm::evm_xcontract_call_using_batch(
-        None, false, false,
-    ) {
+    match crate::evm::evm_xcontract_call_using_batch(None, false, false) {
         Ok(result) => assert_eq!(result, true),
         Err(e) => panic!("error {}", e),
     }
@@ -594,6 +592,7 @@ fn test_gasleft_with_delegatecall() {
     machine.write_coverage("test_gasleft_with_delegatecall".to_string());
 }
 
+#[test]
 pub fn test_malformed_upgrade() {
     macro_rules! opcode {
         ($opcode:ident) => {

@@ -1613,7 +1613,7 @@ public view write func evmCallStack_setTopFrameStorageCell(offset: uint, value: 
     return Some(());
 }
 
-public view write func evmCallStack_addToCurrentStorageDelta(delta: int) -> option<()> {
+public view write func _evmCallStack_addToCurrentStorageDelta(delta: int) -> option<()> {
     let topFrame = globalCallStack?;
     topFrame = topFrame with {
         storageDelta: topFrame.storageDelta + delta

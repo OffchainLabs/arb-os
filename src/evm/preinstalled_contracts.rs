@@ -1,5 +1,7 @@
 use super::*;
 use crate::compile::miniconstants::init_constant_table;
+#[cfg(test)]
+use crate::evm::live_code::ArbosTest;
 use crate::run::runtime_env::{_inverse_remap_l1_sender_address, remap_l1_sender_address};
 use crate::run::{load_from_file, Machine, RuntimeEnvironment};
 use crate::uint256::Uint256;

@@ -5,7 +5,6 @@
 use crate::evm::abi::FunctionTable;
 use crate::evm::abi::{ArbAddressTable, ArbFunctionTable, ArbSys};
 use crate::evm::preinstalled_contracts::_ArbInfo;
-use crate::evm::live_code::ArbosTest;
 use crate::run::{load_from_file, load_from_file_and_env, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use ethers_signers::Signer;
@@ -14,6 +13,8 @@ use std::hash::{Hash, Hasher};
 use std::path::Path;
 
 use crate::compile::miniconstants::init_constant_table;
+#[cfg(test)]
+use crate::evm::live_code::ArbosTest;
 pub use abi::{builtin_contract_path, contract_path, AbiForContract};
 pub use benchmarks::make_benchmarks;
 pub use evmtest::run_evm_tests;

@@ -57,7 +57,6 @@ use std::stack::stack_new;
 use std::stack::stack_push;
 use std::stack::stack_pop;
 
-use inbox::inbox_getNextUnpackedRequest;
 use inbox::inbox_currentArbBlockNumber;
 use inbox::inbox_currentTimestamp;
 

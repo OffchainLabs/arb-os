@@ -29,11 +29,7 @@ use std::keccak::keccak256;
 
 use std::rlp::rlp_encodeUint;
 
-use std::queue::Queue;
-use std::queue::queue_put;
-
 use accounts::safeGetGlobalAccountStore;
-use accounts::getGlobalAccountStore;
 use accounts::accountStore_get;
 use accounts::account_getNextSeqNum;
 use accounts::account_getAggregatorDecompressionState;

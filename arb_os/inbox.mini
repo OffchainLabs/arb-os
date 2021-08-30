@@ -22,7 +22,6 @@ use std::addressSet::addressPairSet_serialize;
 use accounts::safeGetGlobalAccountStore;
 use accounts::safeSetGlobalAccountStore;
 use accounts::getGlobalAccountStore;
-use accounts::setGlobalAccountStore;
 use accounts::accountStore_get;
 use accounts::accountStore_set;
 use accounts::account_addToEthBalance;
@@ -356,6 +355,7 @@ public view write func mainRunLoop() {
     }
 }
 
+/*
 public view write func inbox_getNextUnpackedRequest() -> TxRequestData {
     return xloop {
         if let Some(res) = txRequestQueue_get(globalInputQueue.txQ) {
@@ -492,6 +492,7 @@ public view write func inbox_getNextUnpackedRequest() -> TxRequestData {
         }
     };
 }
+*/
 
 view write func handleUnpackedMessage(msg: IncomingRequest) {
     if (msg.kind == const::L1MessageType_L2FundedByL1) {

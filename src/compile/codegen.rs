@@ -887,13 +887,6 @@ fn mavm_codegen_expr<'a>(
             Ok((label_gen, code, num_locals))
         }
         TypeCheckedExprKind::Error => {
-            code.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::Error),
-                debug,
-            ));
-            Ok((label_gen, code, num_locals))
-        }
-        TypeCheckedExprKind::Error => {
             code.push(opcode!(Error));
             Ok((label_gen, code, num_locals))
         }
