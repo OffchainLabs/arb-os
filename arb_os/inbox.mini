@@ -14,7 +14,6 @@ use std::queue::queuestack_get;
 
 use std::addressSet::AddressPairSet;
 use std::addressSet::addressPairSet_new;
-use std::addressSet::addressPairSet_lookup;
 use std::addressSet::addressPairSet_lookup_options;
 use std::addressSet::addressPairSet_lookup_strict;
 use std::addressSet::addressPairSet_set;
@@ -30,6 +29,7 @@ use blockhash::blockhash_submitHash;
 
 use chainParameters::chainParams_gotParamsMessage;
 use chainParameters::chainParams_chainId;
+use chainParameters::chainParams_getOrDie;
 
 use gasAccounting::updateL1GasPriceEstimate;
 use gasAccounting::txFeeStats_zero;
@@ -120,7 +120,10 @@ public impure func inbox_get() -> IncomingRequest {
             inboxHashAccumulator: hash(globalInbox.inboxHashAccumulator, ebMsgHash)
         };
 
-        if (ebMsg.kind == const::L1MessageType_setChainParameters) {
+        //TODO: Here we check for two message types, for compatibility.
+        //      This is only needed in the first ArbOS upgrade version after the type-code was remapped.
+        //      In future versions, where all test code sends the non-legacy type code, we can just use the new type code.
+        if ((ebMsg.kind == const::L1MessageType_setChainParameters) || (ebMsg.kind == const::L1MessageType_setChainParameters_v36_and_below) ){
             if (ebMsg.sender == address(0)) {
                 chainParams_gotParamsMessage(ebMsg.msgData);
             }   // ignore this message if it didn't come from chain owner
@@ -594,18 +597,16 @@ func txRequestQueue_get(q: TxRequestQueue) -> option<(TxRequestQueue, TxRequestD
 var addressRemapExceptions: AddressPairSet;
 
 public impure func mapL1SenderAddress(callerAddr: address, maybeCallee: option<address>) -> address {
-    return xif (addressPairSet_lookup_options(addressRemapExceptions, Some(callerAddr), maybeCallee)) {
+    return xif (chainParams_getOrDie(const::Atom_Param_EnableL1ContractAddressAliasing) == 0) {
+        callerAddr
+    } elseif (addressPairSet_lookup_options(addressRemapExceptions, Some(callerAddr), maybeCallee)) {
+        callerAddr
+    } elseif (uint(callerAddr) == 0) {
+        // zero maps to zero
         callerAddr
     } else {
-        address(uint(callerAddr) + const::L1ToL2MapConstant)  // deliberately allow overflow, address(.) will truncate
-    };
-}
-
-public impure func mapL1SenderAddress_fromPrecompile(caller: address, dest: address, useExceptionList: bool) -> address {
-    return xif (useExceptionList && addressPairSet_lookup(addressRemapExceptions, caller, dest)) {
-        caller
-    } else {
-        address(uint(caller) + const::L1ToL2MapConstant)  // deliberately allow overflow, address(.) will truncate
+        // deliberately allow overflow, address(.) will truncate
+        address(uint(callerAddr) + const::L1ToL2MapConstant)
     };
 }
 

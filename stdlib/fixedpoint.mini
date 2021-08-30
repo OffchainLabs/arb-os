@@ -62,6 +62,14 @@ public func fixedPoint_plusOne(x: FixedPoint) -> FixedPoint {
     return x with { val: x.val + x.shiftFactor };
 }
 
+public func fixedPoint_minusOne(x: FixedPoint) -> option<FixedPoint> {
+    return xif (x.val >= x.shiftFactor) {
+        Some(fixedPoint_new(x.val - x.shiftFactor, x.shiftFactor))
+    } else {
+        None<FixedPoint>
+    };
+}
+
 public func fixedPoint_sub(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {
     return xif (x.shiftFactor == y.shiftFactor) {
         Some(x with { val: x.val - y.val })

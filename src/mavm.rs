@@ -846,6 +846,18 @@ impl Value {
     }
 }
 
+impl From<usize> for Value {
+    fn from(v: usize) -> Self {
+        Self::Int(Uint256::from_usize(v))
+    }
+}
+
+impl From<u8> for Value {
+    fn from(v: u8) -> Self {
+        Self::Int(Uint256::from_usize(v.into()))
+    }
+}
+
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -1068,6 +1080,7 @@ impl Opcode {
             "jump" => Opcode::AVMOpcode(AVMOpcode::Jump),
             "log" => Opcode::AVMOpcode(AVMOpcode::Log),
             "send" => Opcode::AVMOpcode(AVMOpcode::Send),
+            "errpush" => Opcode::AVMOpcode(AVMOpcode::ErrPush),
             "errcodept" => Opcode::AVMOpcode(AVMOpcode::ErrCodePoint),
             "pushinsn" => Opcode::AVMOpcode(AVMOpcode::PushInsn),
             "pushinsnimm" => Opcode::AVMOpcode(AVMOpcode::PushInsnImm),

@@ -4,8 +4,6 @@
 
 use accounts::accounts_notifyParamsChanged;
 
-use inbox::mapL1SenderAddress;
-
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsForall;
 
@@ -27,7 +25,6 @@ use std::bytestream::bytestream_get256;
 use gasAccounting::gasAccounting_notifyParamsChanged;
 
 const ChainOwnerKeccak = 0x1567aa7175e04611d194275bb504cc64e920959dd01df9d86ab047367aa4c534;
-
 
 var globalChainParameters: map<uint, uint>;
 
@@ -90,6 +87,7 @@ public func chainParams_getDefaults() -> map<uint, uint> {
         with { [const::Atom_Param_L1GasPriceEstimateWeightDenominator] = const::Default_Param_L1GasPriceEstimateWeightDenominator }
         with { [const::Atom_Param_RetryableTxLifetimeSeconds] = const::Default_Param_RetryableTxLifetimeSeconds }
         with { [const::Atom_Param_ArbitrumNonZeroBalanceCallStipend] = const::Default_Param_ArbitrumNonZeroBalanceCallStipend }
+        with { [const::Atom_Param_EnableL1ContractAddressAliasing] = const::Default_Param_EnableL1ContractAddressAliasing }
     ;
 }
 
@@ -111,6 +109,7 @@ public impure func chainParams_gotParamsMessage(data: ByteArray) {
         } else {
             panic   // should never have an id without a matching value
         };
+
         if (paramId == const::ChainOwnerKeccak) {
             // special-case this, for backward compatibility
             // use of this is deprecated, and it will be removed in a future ArbOS upgrade
@@ -180,9 +179,5 @@ public impure func serializedListOfChainOwners() -> ByteArray {
 }
 
 public impure func hasChainOwnerPrivileges(addr: address) -> bool {
-    return setOfAddresses_contains(chainOwners, addr)
-        || (addr == address(0))
-        || (addr == mapL1SenderAddress(address(0), None<address>));
+    return setOfAddresses_contains(chainOwners, addr) || (addr == address(0));
 }
-
-

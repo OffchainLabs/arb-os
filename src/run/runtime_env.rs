@@ -108,9 +108,7 @@ impl RuntimeEnvironment {
                 ("ChainID", Uint256::from_u64(chain_id)),
             ]
         } else {
-            vec![
-                ("ChainID", Uint256::from_u64(chain_id)),
-            ]
+            vec![("ChainID", Uint256::from_u64(chain_id))]
         };
         for (name, val) in params_to_set {
             buf.extend(&keccak256(name.as_bytes()));

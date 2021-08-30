@@ -33,7 +33,11 @@ use std::addressSet::addressPairSet_new;
 use std::queue::queue_map;
 
 use core::kvs::Kvs;
+use core::kvs::builtin_kvsDelete;
 use core::kvs::builtin_kvsForall;
+
+const constKeyForChainOwner = 0x1567aa7175e04611d194275bb504cc64e920959dd01df9d86ab047367aa4c534;
+
 
 public func set_globalCallStack_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
     return None<EvmCallFrame>;
@@ -43,16 +47,24 @@ public func set_globalCurrentTxRequest_onUpgrade(_oldGlobals: GlobalsBeforeUpgra
     return unsafecast<TxRequestData>(());   // safe because globalCurrentTxRequest will be written before used
 }
 
+public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> map<uint, uint> {
+    let params = oldGlobals.globalChainParameters;
+
+    params = unsafecast<map<uint, uint> >(builtin_kvsDelete(
+        unsafecast<Kvs>(params),
+        const::constKeyForChainOwner,
+    ));
+
+    params = params with { [const::Atom_Param_EnableL1ContractAddressAliasing] = 0 };  // start with this disabled on upgrade
+
+    return params;
+}
+
 public func set_globalAccountStore_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> AccountStore {
     let oldGAS = oldGlobals.globalAccountStore;
-    let acctsRemapResult = builtin_kvsForall(
-        unsafecast<Kvs>(oldGAS.accounts),
-        unsafecast<func(any, any, any) -> any>(acctRemapClosure),
-        newmap<address, Account>,
-    );
     return struct {
-        accounts: unsafecast<map<address, Account>>(acctsRemapResult),
-        retryBuffer: struct {
+        accounts: oldGAS.accounts,
+        retryBuffer: struct {    // reformat retryables but don't rewrite their sender
             byTxId: {
                 let m = newmap<uint, RetryableTx>;
                 unsafecast<map<uint, RetryableTx> >(
@@ -90,31 +102,6 @@ func urbClosure(
             l1Message: value.l1Message,
             originalSender: value.sender,
         }
-    };
-}
-
-func acctRemapClosure(_addr: address, oldAcct: before__accounts_Account, state: map<address, Account>) -> map<address, Account> {
-    let acct = struct {
-        addr: oldAcct.addr,
-        blsKey: oldAcct.blsKey,
-        nextSeqNum: oldAcct.nextSeqNum,
-        ethBalance: oldAcct.ethBalance,
-        contractInfo: oldAcct.contractInfo,
-        aggregatorInfo: xif let Some(aggInfo) = oldAcct.aggregatorInfo {
-            Some(
-                struct {
-                    decompressionState: aggInfo.decompressionState,
-                    feeCollector: aggInfo.feeCollector,
-                    baseTxFeeL1Gas: const::Default_Param_DefaultBaseTxFeeL1Gas,
-                }
-            )
-        } else {
-            None<AggregatorInfo>
-        },
-        aggregatorToPay: oldAcct.aggregatorToPay,
-    };
-    return state with {
-        [acct.addr] = acct
     };
 }
 
@@ -200,9 +187,13 @@ func sgiqouClosure(
 }
 
 public func set_chainOwners_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> SetOfAddresses {
+    // Change the chain owner from a chain parameter (a singleton address) to a set of addresses
+    // For safety, include both the original and L1-contract-address-aliased version of the current owner as owners
+    // This can't introduce new vulnerability because the alias can only be used by the old owner's L1 address.
+    // We don't call the usual aliasing code here, because that code relies on globals that aren't initialized yet.
+
     let empty = setOfAddresses_emptySet();
-    let constKeyForChainOwner = 0x1567aa7175e04611d194275bb504cc64e920959dd01df9d86ab047367aa4c534;
-    return xif let Some(oldOwner) = oldGlobals.globalChainParameters[constKeyForChainOwner] {
+    return xif let Some(oldOwner) = oldGlobals.globalChainParameters[const::constKeyForChainOwner] {
         setOfAddresses_add(
             setOfAddresses_add(
                 empty,
