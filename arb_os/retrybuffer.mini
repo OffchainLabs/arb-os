@@ -297,6 +297,7 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
 
     let originalSender = sender;
     sender = mapL1SenderAddress(sender, Some(destination));
+    req = req with { sender: sender };
 
     let rbuffer = retryBuffer_trimTwo(getGlobalAccountStore().retryBuffer);
     let acctStore = getGlobalAccountStore() with { retryBuffer: rbuffer };
@@ -338,7 +339,7 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
             let (rbuf, txId) = retryBuffer_insertNew(
                 accountStore_getRetryBuffer(acctStore),
                 req.requestId,
-                sender,
+                originalSender,
                 destination,
                 callvalue,
                 escrowKey,
