@@ -214,7 +214,7 @@ impl AbiForContract {
 
         machine.runtime_env.insert_gas_estimation_message(
             Uint256::from_usize(10_000_000),
-            Uint256::zero(),
+            None,
             self.address.clone(),
             payment,
             &calldata,

@@ -2,22 +2,19 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::console::Color;
-use crate::evm::{test_contract_path2, AbiForContract};
-use crate::mavm::{Buffer, Value};
-use crate::run::{_bytestack_from_bytes, load_from_file, run, run_from_file, Machine};
 use crate::compile::miniconstants::init_constant_table;
 use crate::compile::DebugInfo;
+use crate::console::Color;
 use crate::evm::abi::ArbSys;
 use crate::evm::preinstalled_contracts::{_ArbAggregator, _ArbOwner, _try_upgrade};
 use crate::evm::{preinstalled_contracts::_ArbInfo, test_contract_path, AbiForContract};
+use crate::evm::test_contract_path2;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Value};
+use crate::mavm::{Buffer};
 use crate::run::runtime_env::remap_l1_sender_address;
 use crate::run::RuntimeEnvironment;
-use crate::run::{
-    _bytestack_from_bytes, load_from_file, load_from_file_and_env_ret_file_info_table, run,
-    run_from_file, Machine, MachineState,
-};
+use crate::run::{_bytestack_from_bytes, load_from_file, run, run_from_file, Machine};
+use crate::run::{load_from_file_and_env_ret_file_info_table, MachineState};
 use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
 use ethers_signers::Signer;
@@ -54,11 +51,11 @@ fn test_from_file_with_args_and_return(
     }
 }
 
-fn test_from_file(path: &Path) {
+fn test_from_file(path: &Path, expected_return: Value) {
     test_from_file_with_args_and_return(
         path,
         vec![],
-        Value::Int(Uint256::zero()),
+        expected_return,
         Some({
             let mut file = path.to_str().unwrap().to_string();
             let length = file.len();
@@ -90,7 +87,7 @@ fn test_kvstest() {
 
 #[test]
 fn test_address_set() {
-    test_from_file(Path::new("stdlib/addressSetTest.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/addressSetTest.mexe"));
 }
 
 #[test]
@@ -286,12 +283,12 @@ fn test_sha256_precompile() {
 
 #[test]
 fn test_ecpairing_precompile() {
-    crate::evm::preinstalled_contracts::evm_ecpairing_precompile(None, false);
+    crate::evm::evm_ecpairing_precompile(None, false);
 }
 
 #[test]
 fn test_ripemd160_precompile() {
-    crate::evm::preinstalled_contracts::evm_eval_ripemd160(None, false);
+    crate::evm::evm_eval_ripemd160(None, false);
 }
 
 /*  Disabled this test because the format it uses is no longer supported. Aggregator testing
@@ -308,13 +305,8 @@ fn test_direct_deploy_and_call_add() {
 }
 
 #[test]
-fn evm_tests() {
-    assert!(crate::evm::preinstalled_contracts::evm_tests().is_ok());
-}
-
-#[test]
 fn test_call_from_contract() {
-    let _log = crate::evm::preinstalled_contracts::evm_test_contract_call(None, false);
+    let _log = crate::evm::evm_test_contract_call(None, false);
 }
 
 #[test]
@@ -324,12 +316,12 @@ fn test_direct_deploy_and_compressed_call_add() {
 
 #[test]
 fn test_payment_in_constructor() {
-    crate::evm::preinstalled_contracts::evm_test_payment_in_constructor(None, false);
+    crate::evm::evm_test_payment_in_constructor(None, false);
 }
 
 #[test]
 fn test_block_num_consistency() {
-    let _ = crate::evm::preinstalled_contracts::evm_block_num_consistency_test(false).unwrap();
+    let _ = crate::evm::evm_block_num_consistency_test(false).unwrap();
 }
 
 #[test]
@@ -354,17 +346,17 @@ fn test_function_table_access() {
 
 #[test]
 fn test_l2_to_l1_call() {
-    crate::evm::preinstalled_contracts::evm_test_callback(None, false).unwrap();
+    crate::evm::evm_test_callback(None, false).unwrap();
 }
 
 #[test]
 fn test_evm_add_code() {
-    crate::evm::preinstalled_contracts::basic_evm_add_test(None, false).unwrap();
+    crate::evm::basic_evm_add_test(None, false).unwrap();
 }
 
 #[test]
 pub fn test_tx_with_deposit() {
-    match crate::evm::preinstalled_contracts::evm_tx_with_deposit(None, false, false) {
+    match crate::evm::evm_tx_with_deposit(None, false, false) {
         Ok(result) => assert_eq!(result, true),
         Err(e) => panic!("error {}", e),
     }
@@ -395,8 +387,8 @@ pub fn test_crosscontract_call_using_batch() {
 }
 
 #[test]
-pub fn _test_crosscontract_call_using_compressed_batch() {
-    match crate::evm::preinstalled_contracts::evm_xcontract_call_using_compressed_batch(
+pub fn test_crosscontract_call_using_compressed_batch() {
+    match crate::evm::evm_xcontract_call_using_batch(
         None, false, false,
     ) {
         Ok(result) => assert_eq!(result, true),
@@ -411,7 +403,7 @@ fn test_payment_to_empty_address() {
 
 #[test]
 fn test_underfunded_nested_call() {
-    assert!(crate::evm::preinstalled_contracts::underfunded_nested_call_test(None, false).is_ok());
+    assert!(crate::evm::underfunded_nested_call_test(None, false).is_ok());
 }
 
 fn test_call_to_precompile5(
@@ -625,7 +617,7 @@ pub fn test_malformed_upgrade() {
         opcode!(ErrCodePoint),
         opcode!(PushInsn, Value::from(AVMOpcode::Halt.to_number())), // Log the state of the register,
         opcode!(PushInsn, Value::from(AVMOpcode::Log.to_number())), //  ensuring the old globals (1937)
-        opcode!(PushInsn, Value::from(AVMOpcode::Rget.to_number())), // was restored by the protector
+        opcode!(PushInsn, Value::from(AVMOpcode::Rpush.to_number())), // was restored by the protector
         opcode!(ErrSet),
         opcode!(ErrPush),
         opcode!(Log),

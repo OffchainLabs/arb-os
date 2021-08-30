@@ -287,7 +287,7 @@ impl RuntimeEnvironment {
     pub fn insert_gas_estimation_message(
         &mut self,
         max_gas: Uint256,
-        gas_price_bid: Uint256,
+        gas_price_bid: Option<Uint256>,
         to_addr: Uint256,
         value: Uint256,
         data: &[u8],
