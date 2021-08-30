@@ -42,6 +42,9 @@ use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
 
+use std::safeMath::safeAdd;
+use std::safeMath::safeMul;
+
 use inbox::inbox_currentArbBlockNumber;
 use inbox::inbox_currentEthBlockNumber;
 use inbox::inbox_currentTimestamp;
@@ -169,6 +172,10 @@ view write func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) {
     evmOp_revertIfStatic();
     let destAddr = address(bytearray_get256(calldata, 4));
     let nbytes = bytearray_get256(calldata, 4+2*32);
+    let expectedCalldataSize = safeAdd(4 + 3*32, safeMul(32, safeAdd(nbytes, 31) / 32));
+    if (bytearray_size(calldata) != expectedCalldataSize) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 224, 0, 0);
+    }
     let innerCalldata = bytearray_extract(calldata, 4+3*32, nbytes);
 
     let caller = evmCallFrame_getCaller(topFrame);

@@ -57,6 +57,8 @@ use std::queue::queue_new;
 use std::queue::queue_put;
 use std::queue::queue_get;
 
+use std::safeMath::safeMul;
+
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsDelete;
 
@@ -380,15 +382,13 @@ public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequ
                 originalSender,
             );
 
-            xif (    (maxGasForImmediate > 0)
-                  &&  ( (gasPriceForImmediate > 0) || !feesEnabled())
-                  && (maxGasForImmediate*gasPriceForImmediate >= gasPriceForImmediate)) { // the last check avoids overflow
+            xif ( (maxGasForImmediate > 0) && ( (gasPriceForImmediate > 0) || !feesEnabled())) {
                 xif let Some(rtx) =  retryBuffer_get(accountStore_getRetryBuffer(acctStore), txId) {
                     let tryAutoRedeem = xif let Some(uaStore) = accountStore_transferEthBalance(
                         acctStore,
                         sender,
                         creditBack,
-                        maxGasForImmediate * gasPriceForImmediate,
+                        safeMul(maxGasForImmediate, gasPriceForImmediate),
                     ) {
                         acctStore = uaStore;
                         true
