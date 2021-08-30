@@ -1607,11 +1607,12 @@ pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), et
 }
 
 #[test]
-fn _test_upgrade_arbos_to_different_version() {
-    _test_upgrade_arbos_over_itself_impl().unwrap();
+fn test_upgrade_arbos_to_different_version() {
+    test_upgrade_arbos_over_itself_impl().unwrap();
 }
 
-fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
+#[cfg(test)]
+fn test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos_before.mexe"));
     machine.start_at_zero(true);
     let _ = machine.run(None);
@@ -1632,10 +1633,16 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys_orig_binding._arbos_version(&mut machine)?,
-        Uint256::from_u64(39),
+        Uint256::from_u64(40),
     );
 
-    arbowner._add_chain_owner(&mut machine, my_addr.clone(), true, true)?;
+    arbowner._add_chain_owner(&mut machine, my_addr.clone(), true, false)?;
+    arbowner._add_chain_owner(
+        &mut machine,
+        remap_l1_sender_address(my_addr.clone()),
+        true,
+        false,
+    )?;
 
     let mexe_path = Path::new("arb_os/arbos-upgrade.mexe");
     let uploader = CodeUploader::_new_from_file(mexe_path);
