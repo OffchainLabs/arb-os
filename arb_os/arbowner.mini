@@ -7,11 +7,14 @@ use accounts::getGlobalAccountStore;
 use accounts::account_getBalance;
 use accounts::accountStore_forall;
 
-use chainParameters::chainParams_getOwner;
 use chainParameters::chainParams_get;
 use chainParameters::chainParams_set;
 use chainParameters::chainParams_create;
 use chainParameters::chainParams_serializeAllParams;
+use chainParameters::addChainOwner;
+use chainParameters::removeChainOwner;
+use chainParameters::hasChainOwnerPrivileges;
+use chainParameters::serializedListOfChainOwners;
 
 use evmCallStack::EvmCallFrame;
 use evmCallStack::evmCallStack_topFrame;
@@ -31,6 +34,10 @@ use evmOps::evmOp_revert_knownPc;
 use evmOps::evmOp_revert_knownCodePc;
 use evmOps::evmOp_revertIfStatic;
 use evmOps::doCreationOpcode;
+
+use inbox::addressRemapExceptions_set;
+use inbox::isL1MappingException;
+use inbox::serializeAllRemapExceptions;
 
 use pluggables::ModuleFunction;
 use pluggables::installPluggable;
@@ -79,9 +86,7 @@ public impure func arbowner_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
         // make sure the caller is either address zero or the chain's owner
         let caller = evmCallFrame_getCaller(topFrame);
-        if ( (caller != address(0)) && (caller != chainParams_getOwner()) ) {
-            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 0, 0, 0);
-        }
+        revertIfNotOwner(caller);
 
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) < 4) {
@@ -134,6 +139,23 @@ public impure func arbowner_txcall() {
             arbowner_getAllFairGasPriceSenders(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbOwner_bindAddressToPluggable) {
             arbowner_bindAddressToPluggable(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_addChainOwner) {
+            arbowner_addChainOwner(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_removeChainOwner) {
+            arbowner_removeChainOwner(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_isChainOwner) {
+            arbowner_isChainOwner(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_getAllChainOwners) {
+            arbowner_getAllChainOwners(topFrame, calldata);
+
+        } elseif (funcCode == const::funcCode_ArbOwner_addMappingException) {
+            arbowner_addMappingException(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_removeMappingException) {
+            arbowner_removeMappingException(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_isMappingException) {
+            arbowner_isMappingException(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbOwner_getAllMappingExceptions) {
+            arbowner_getAllMappingExceptions(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
@@ -141,6 +163,12 @@ public impure func arbowner_txcall() {
     } else {
         // this shouldn't happen -- should always be called in an EVM tx
         evmCallStack_callHitError(22);
+    }
+}
+
+public impure func revertIfNotOwner(addr: address) {
+    if ( ! hasChainOwnerPrivileges(addr)){
+        evmOp_revert_knownPc(6666666, 0, 0);
     }
 }
 
@@ -588,8 +616,153 @@ impure func arbowner_getAllFairGasPriceSenders(_topFrame: EvmCallFrame, calldata
     }
 }
 
+// function addChainOwner(address newOwner) external;
+impure func arbowner_addChainOwner(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(190, 0, 0);
+    }
+    let newOwner = address(bytearray_get256(calldata, 4));
+    addChainOwner(newOwner);
+    evmOp_return(0, 0);
+}
 
+// function removeChainOwner(address ownerToRemove) external;
+impure func arbowner_removeChainOwner(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(200, 0, 0);
+    }
+    let ownerToRemove = address(bytearray_get256(calldata, 4));
+    if (hasChainOwnerPrivileges(ownerToRemove)) {
+        removeChainOwner(ownerToRemove);
+        evmOp_return(0, 0);
+    } else {
+        evmOp_revert_knownPc(201, 0, 0);
+    }
+}
 
+// function isChainOwner(address addr) external view returns(bool);
+impure func arbowner_isChainOwner(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(210, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let mem = bytearray_set256(
+        bytearray_new(0),
+        0,
+        xif (hasChainOwnerPrivileges(addr)) { 1 } else { 0 },
+    );
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownPc(211, 0, 0);
+    }
+}
 
+// function getAllChainOwners() external view returns(bytes memory);
+impure func arbowner_getAllChainOwners(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(220, 0, 0);
+    }
+    let serialized = serializedListOfChainOwners();
+    let mem = bytearray_copy(
+        serialized,
+        0,
+        bytearray_set256(
+            bytearray_set256(
+                bytearray_new(0),
+                0,
+                32,
+            ),
+            32,
+            bytearray_size(serialized),
+        ),
+        64,
+        bytearray_size(serialized),  // don't need to round up, because already a multiple of 32
+    );
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, bytearray_size(mem));
+    } else {
+        evmOp_revert_knownPc(221, 0, 0);
+    }
+}
 
+//  function addMappingException(uint from, uint to) external;
+impure func arbowner_addMappingException(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownPc(230, 0, 0);
+    }
+    let from = bytearray_get256(calldata, 4);
+    let to = bytearray_get256(calldata, 36);
+    addressRemapExceptions_set(
+        xif(from == const::WildcardForAddress) { None<address> } else { Some(address(from)) },
+        xif(to == const::WildcardForAddress) { None<address> } else { Some(address(to)) },
+        true,
+    );
+    evmOp_return(0, 0);
+}
 
+//  function removeMappingException(uint from, uint to) external;
+impure func arbowner_removeMappingException(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownPc(240, 0, 0);
+    }
+    let from = bytearray_get256(calldata, 4);
+    let to = bytearray_get256(calldata, 36);
+    addressRemapExceptions_set(
+        xif(from == const::WildcardForAddress) { None<address> } else { Some(address(from)) },
+        xif(to == const::WildcardForAddress) { None<address> } else { Some(address(to)) },
+        false,
+    );
+    evmOp_return(0, 0);
+}
+
+//  function isMappingException(uint from, uint to) external view returns(bool);
+impure func arbowner_isMappingException(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownPc(240, 0, 0);
+    }
+    let from = bytearray_get256(calldata, 4);
+    let to = bytearray_get256(calldata, 36);
+    let result = isL1MappingException(
+        xif(from == const::WildcardForAddress) { None<address> } else { Some(address(from)) },
+        xif(to == const::WildcardForAddress) { None<address> } else { Some(address(to)) },
+    );
+    let mem = bytearray_new(0);
+    if (result) {
+        mem = bytearray_set256(mem, 0, 1);
+    }
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownPc(241, 0, 0);
+    }
+}
+
+//  function getAllMappingExceptions() external view returns (bytes memory);
+impure func arbowner_getAllMappingExceptions(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(250, 0, 0);
+    }
+
+    let serialized = serializeAllRemapExceptions();
+    let mem = bytearray_copy(
+        serialized,
+        0,
+        bytearray_set256(
+            bytearray_set256(
+                bytearray_new(0),
+                0,
+                32,
+            ),
+            32,
+            bytearray_size(serialized),
+        ),
+        64,
+        bytearray_size(serialized),  // don't need to round up, because already a multiple of 32
+    );
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, bytearray_size(mem));
+    } else {
+        evmOp_revert_knownPc(251, 0, 0);
+    }
+}

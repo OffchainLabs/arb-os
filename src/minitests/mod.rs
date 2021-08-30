@@ -8,6 +8,7 @@ use crate::evm::abi::ArbSys;
 use crate::evm::preinstalled_contracts::{_ArbAggregator, _ArbOwner, _try_upgrade};
 use crate::evm::{preinstalled_contracts::_ArbInfo, test_contract_path, AbiForContract};
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Value};
+use crate::run::runtime_env::remap_l1_sender_address;
 use crate::run::RuntimeEnvironment;
 use crate::run::{
     _bytestack_from_bytes, load_from_file, load_from_file_and_env_ret_file_info_table, run,
@@ -63,6 +64,11 @@ fn test_arraytest() {
 #[test]
 fn test_kvstest() {
     test_from_file(Path::new("builtin/kvstest.mexe"));
+}
+
+#[test]
+fn test_address_set() {
+    test_from_file(Path::new("stdlib/addressSetTest.mexe"));
 }
 
 #[test]
@@ -587,7 +593,7 @@ pub fn test_if_still_upgradable() -> Result<(), ethabi::Error> {
             .get("ArbosVersionNumber")
             .unwrap()
     );
-    arbowner._give_ownership(&mut machine, my_addr, true)?;
+    arbowner._add_chain_owner(&mut machine, remap_l1_sender_address(my_addr), true, false)?;
 
     let log_value = Value::new_tuple(vec![Value::from(1937_usize)]);
 
@@ -639,11 +645,13 @@ fn balance_after_memory_usage(usage: u64) -> Uint256 {
         contract.address.clone(),
         contract.address.clone(),
         Uint256::_from_eth(100),
+        false,
     );
     machine.runtime_env.insert_eth_deposit_message(
         my_addr.clone(),
         my_addr.clone(),
         Uint256::_from_eth(100),
+        true,
     );
     let _ = machine.run(None);
 
@@ -670,7 +678,9 @@ fn balance_after_memory_usage(usage: u64) -> Uint256 {
         .unwrap();
 
     let arbinfo = _ArbInfo::_new(false);
-    let balance = arbinfo._get_balance(&mut machine, &my_addr).unwrap();
+    let balance = arbinfo
+        ._get_balance(&mut machine, &remap_l1_sender_address(my_addr))
+        .unwrap();
     machine.write_coverage("balance_after_memory_usage".to_string());
     balance
 }
@@ -698,11 +708,13 @@ fn test_gas_estimation(use_preferred_aggregator: bool) {
         Uint256::zero(),
         my_addr.clone(),
         Uint256::_from_eth(10000),
+        false,
     );
     machine.runtime_env.insert_eth_deposit_message(
         Uint256::zero(),
         aggregator.clone(),
         Uint256::_from_eth(10000),
+        false,
     );
     let _ = machine.run(None);
 
@@ -891,4 +903,81 @@ fn test_selfdestruct() {
     );
 
     machine.write_coverage("test_selfdestruct".to_string());
+}
+
+#[test]
+fn test_l1_sender_rewrite() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+
+    let my_addr = Uint256::from_u64(80293481);
+
+    let mut contract = AbiForContract::new_from_file(&test_contract_path("BlockNum")).unwrap();
+    if let Err(receipt) = contract.deploy(&[], &mut machine, Uint256::zero(), None, false) {
+        if !receipt.unwrap().succeeded() {
+            panic!("unexpected failure deploying BlockNum contract");
+        }
+    }
+
+    let (receipts, _) = contract
+        .call_function(
+            my_addr.clone(),
+            "getSender",
+            &[],
+            &mut machine,
+            Uint256::zero(),
+            false,
+        )
+        .unwrap();
+
+    assert_eq!(receipts.len(), 1);
+    let receipt = receipts[0].clone();
+    assert!(receipt.succeeded());
+    let return_val = Uint256::from_bytes(&receipt.get_return_data());
+    assert_eq!(return_val, remap_l1_sender_address(my_addr.clone()));
+
+    let wallet = machine.runtime_env.new_wallet();
+    let arbsys = ArbSys::new(&wallet, false);
+    assert_eq!(
+        arbsys
+            .map_l1_sender_contract_address_to_l2_alias(
+                &mut machine,
+                my_addr.clone(),
+                my_addr.clone()
+            )
+            .unwrap(),
+        remap_l1_sender_address(my_addr.clone())
+    );
+
+    let (receipts, _) = contract
+        .call_function(
+            my_addr.clone(),
+            "getL1CallerInfo",
+            &[],
+            &mut machine,
+            Uint256::zero(),
+            false,
+        )
+        .unwrap();
+    assert_eq!(receipts.len(), 1);
+    let return_data = receipts[0].get_return_data();
+    assert_eq!(Uint256::from_bytes(&return_data[0..32]), Uint256::one());
+    assert_eq!(Uint256::from_bytes(&return_data[32..64]), my_addr);
+
+    let test_cases = vec![
+        ("0", "0"),
+        ("81759a874b3", "1111000000000000000000000000081759a885c4"),
+        (
+            "ffffffffffffffffffffffffffffffffffffffff",
+            "1111000000000000000000000000000000001110",
+        ),
+    ];
+    for (pre, post) in test_cases {
+        let pre = Uint256::from_string_hex(pre).unwrap();
+        let post = Uint256::from_string_hex(post).unwrap();
+        let res = arbsys
+            .map_l1_sender_contract_address_to_l2_alias(&mut machine, pre.clone(), Uint256::one())
+            .unwrap();
+        assert_eq!(res, post);
+    }
 }

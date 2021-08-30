@@ -371,6 +371,7 @@ impure func decompressTx(
             incomingRequest: unsafecast<IncomingRequest>(0),  // caller will fill this in
             feeStats: txFeeStats_zero(),
             fromRetryable: None<RetryableTx>,
+            originalCaller: sender,
         }
     ));
 }

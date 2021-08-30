@@ -1,5 +1,5 @@
 {
-  "arbos_version": 39,
+  "arbos_version": 40,
   "integer": {
     "AVMSendType_batch": 0,
     "AVM_add": 1,
@@ -148,7 +148,7 @@
     "L1MessageType_L2FundedByL1": 7,
     "L1MessageType_endOfBlock": 6,
     "L1MessageType_rollupProtocolEvent": 8,
-    "_L1MessageType_setChainParameters_v36_and_below": 4,
+    "L1MessageType_setChainParameters_v36_and_below": 4,
     "L1MessageType_setChainParameters": 11,
     "L1MessageType_submitRetryableTx": 9,
     "L2MessageType_batch": 3,
@@ -191,7 +191,9 @@
   "hex": {
     "BLSSignatureDomainBase": "73a92f91d473214defd5ffa91d036007eb2e6487fffaa551835e988fb24aaa2b",
     "HashOfEmptyCode": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
-    "MaxArraySize": "10000000000000000"
+    "L1ToL2MapConstant": "1111000000000000000000000000000000001111",
+    "MaxArraySize": "10000000000000000",
+    "WildcardForAddress": "010000000000000000000000000000000000000000"
   },
   "contract_folder": "contracts/artifacts/arbos/builtin",
   "contract": [
@@ -217,7 +219,6 @@
     "ChallengePeriodEthBlocks": 45818,
     "SpeedLimitPerSecond": 400000,
     "SecondsPerSend": 1800,
-    "ChainOwner": 0,
     "L1GasPerL1CalldataUnit": 1,
     "L1GasPerStorage": 2000,
     "ArbGasDivisor": 100,
@@ -232,7 +233,8 @@
     "L1GasPriceEstimateWeightNumerator": 1,
     "L1GasPriceEstimateWeightDenominator": 50,
     "RetryableTxLifetimeSeconds": 604800,
-    "ArbitrumNonZeroBalanceCallStipend": 200
+    "ArbitrumNonZeroBalanceCallStipend": 200,
+    "EnableL1ContractAddressAliasing": 1
   },
   "parameters_hex": { }
 }

@@ -34,6 +34,7 @@ use gasAccounting::getRetryableTxPrice;
 use inbox::IncomingRequest;
 use inbox::GasEstimationParams;
 use inbox::inbox_currentTimestamp;
+use inbox::mapL1SenderAddress;
 
 use messages::TxRequestData;
 
@@ -73,6 +74,7 @@ type RetryableTx = struct {
     calldata: ByteArray,
     expiryTime: uint,
     l1Message: IncomingRequest,
+    originalSender: address,
 }
 
 type RetryQueueItem = struct {
@@ -159,7 +161,7 @@ func retryBuffer_insert(rbuf: RetryBuffer, rtx: RetryableTx) -> RetryBuffer {
 impure func retryBuffer_insertNew(
     rbuf: RetryBuffer,
     txId: uint,
-    sender: address,
+    originalSender: address,
     destination: address,
     callvalue: uint,
     callvalueEscrowKey: uint,
@@ -167,9 +169,10 @@ impure func retryBuffer_insertNew(
     calldata: ByteArray,
     l1Message: IncomingRequest,
 ) -> (RetryBuffer, uint) {
+    let updatedSender = mapL1SenderAddress(originalSender, Some(destination));
     let newTx = struct {
         txId: uint(hash(bytes32(txId), bytes32(0))),
-        sender: sender,
+        sender: updatedSender,
         destination: destination,
         callvalue: callvalue,
         callvalueEscrowKey: callvalueEscrowKey,
@@ -180,7 +183,7 @@ impure func retryBuffer_insertNew(
            l1Message.arbBlockNumber,
            l1Message.ethBlockNumber,
            l1Message.timestamp,
-           sender,
+           originalSender,
            uint(hash(bytes32(l1Message.requestId), bytes32(0))),
            0,    // maxGas will be filled in when ticket is redeemed
            0,    // gasPrice will be filled in when ticket is redeemed
@@ -188,6 +191,7 @@ impure func retryBuffer_insertNew(
            callvalue,
            calldata,
         ),
+        originalSender: originalSender,
     };
 
     return (retryBuffer_insert(rbuf, newTx), newTx.txId);
@@ -270,6 +274,10 @@ public impure func retryBuffer_delete(rbuf: RetryBuffer, txId: uint, withRefund:
     };
 }
 
+public func retryableTx_getOriginalSender(rtx: RetryableTx) -> address {
+    return rtx.originalSender;
+}
+
 public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestData> {
     // This must be called outside of a transaction.
 
@@ -286,6 +294,9 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
     let calldata = bytearray_extract(req.msgData, 9*32, calldataSize);
 
     if (creditBack == address(0)) { creditBack = sender; }
+
+    let originalSender = sender;
+    sender = mapL1SenderAddress(sender, Some(destination));
 
     let rbuffer = retryBuffer_trimTwo(getGlobalAccountStore().retryBuffer);
     let acctStore = getGlobalAccountStore() with { retryBuffer: rbuffer };
@@ -345,7 +356,7 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
                    const::eventTopic_ArbRetryableTx_TicketCreated,
                    txId,
                ),
-           );
+            );
             emitTxReceipt(
                 req,
                 const::TxResultCode_success,
@@ -354,6 +365,7 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
                 None<GasUsage>,
                 feeStats,
                 true,
+                originalSender,
             );
 
             xif (    (maxGasForImmediate > 0)
@@ -407,6 +419,7 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
                         incomingRequest: autoRedeemIncoming,
                         feeStats: txFeeStats_zero(),
                         fromRetryable: Some(rtx),
+                        originalCaller: originalSender,
                     };
 
                     xif (tryAutoRedeem) {
@@ -420,6 +433,7 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
                             None<GasUsage>,
                             txFeeStats_zero(),
                             false,
+                            originalSender,
                         );
                         None<TxRequestData>
                     }
@@ -438,6 +452,7 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
                 None<GasUsage>,
                 feeStats,
                 true,
+                originalSender,
             );
             None<TxRequestData>
         }
@@ -451,6 +466,7 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
             None<GasUsage>,
             feeStats,
             true,
+            originalSender,
         );
         None<TxRequestData>
     };

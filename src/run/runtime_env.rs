@@ -102,10 +102,14 @@ impl RuntimeEnvironment {
 
     fn get_params_bytes(owner: Option<Uint256>, chain_id: u64) -> Vec<u8> {
         let mut buf = Vec::new();
-        let params_to_set = vec![
-            ("ChainOwner", owner.clone().unwrap_or(Uint256::zero())),
-            ("ChainID", Uint256::from_u64(chain_id)),
-        ];
+        let params_to_set = if let Some(the_owner) = owner {
+            vec![
+                ("ChainOwner", the_owner),
+                ("ChainID", Uint256::from_u64(chain_id)),
+            ]
+        } else {
+            vec![("ChainID", Uint256::from_u64(chain_id))]
+        };
         for (name, val) in params_to_set {
             buf.extend(&keccak256(name.as_bytes()));
             buf.extend(val.to_bytes_be());
@@ -398,6 +402,7 @@ impl RuntimeEnvironment {
         (result, keccak256(tx.rlp().as_ref()).to_vec())
     }
 
+    /*
     pub fn _make_compressed_tx_for_bls(
         &mut self,
         sender: &Uint256,
@@ -411,7 +416,8 @@ impl RuntimeEnvironment {
         let mut result = self.compressor.compress_address(sender.clone());
 
         let mut buf = vec![0xffu8];
-        let seq_num = self.get_seq_num(&sender, true);
+        let seq_num = self.get_seq_num(&sender);
+
         buf.extend(seq_num.rlp_encode());
         buf.extend(gas_price.rlp_encode());
         buf.extend(gas_limit.rlp_encode());
@@ -437,6 +443,7 @@ impl RuntimeEnvironment {
                 .to_vec(),
         )
     }
+     */
 
     pub fn _insert_bls_batch(
         &mut self,
@@ -509,12 +516,21 @@ impl RuntimeEnvironment {
         sender_addr: Uint256,
         payee: Uint256,
         amount: Uint256,
+        adjust_payee_address: bool,
     ) {
         self.insert_tx_message_from_contract(
             sender_addr,
             Uint256::from_u64(100_000_000),
             Uint256::zero(),
-            payee,
+            {
+                let x = if adjust_payee_address {
+                    remap_l1_sender_address(payee)
+                } else {
+                    payee
+                };
+                println!("eth deposit to {}", x);
+                x
+            },
             amount,
             &[],
             true,
@@ -634,6 +650,22 @@ fn get_send_contents(log: Value) -> Option<Vec<u8>> {
     } else {
         None
     }
+}
+
+pub fn remap_l1_sender_address(addr: Uint256) -> Uint256 {
+    addr.add(&Uint256::from_string_hex("1111000000000000000000000000000000001111").unwrap())
+        .modulo(&Uint256::one().shift_left(160))
+        .unwrap()
+}
+
+pub fn _inverse_remap_l1_sender_address(addr: Uint256) -> Uint256 {
+    let two_to_the_160 = Uint256::one().shift_left(160);
+
+    addr.add(&two_to_the_160)
+        .sub(&Uint256::from_string_hex("1111000000000000000000000000000000001111").unwrap())
+        .unwrap()
+        .modulo(&two_to_the_160)
+        .unwrap()
 }
 
 // TxCompressor assumes that all client traffic uses it.

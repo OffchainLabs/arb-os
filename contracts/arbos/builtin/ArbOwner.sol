@@ -48,6 +48,18 @@ interface ArbOwner {
     function removeAllowedSender(address addr) external;
     function getAllAllowedSenders() external view returns(bytes memory);  // reverts if all or nearly all senders are allowed
 
+    // Manage the set of chain owners
+    function addChainOwner(address newOwner) external;
+    function removeChainOwner(address ownerToRemove) external;    // revert if ownerToRemove is not an owner
+    function isChainOwner(address addr) external view returns(bool);
+    function getAllChainOwners() external view returns(bytes memory);
+
+    // Manage exceptions to L1->L2 address remapping
+    function addMappingException(uint from, uint to) external;
+    function removeMappingException(uint from, uint to) external;
+    function isMappingException(uint from, uint to) external view returns(bool);
+    function getAllMappingExceptions() external view returns (bytes memory);
+
     function getTotalOfEthBalances() external view returns(uint);
 }
 

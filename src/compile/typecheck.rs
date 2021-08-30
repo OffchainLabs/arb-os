@@ -1646,7 +1646,7 @@ fn typecheck_statement<'a>(
                                     "mismatched types in assignment statement {}",
                                     var_type
                                         .mismatch_string(&tc_expr.get_type(), type_tree)
-                                        .expect("Did not find type mismatch")
+                                        .unwrap_or("Did not find type mismatch".parse().unwrap())
                                 ),
                                 debug_info.location.into_iter().collect(),
                             ))
@@ -2136,7 +2136,9 @@ fn typecheck_expr(
                                             "wrong argument type in function call, {}",
                                             resolved_arg_type
                                                 .mismatch_string(&tc_args[i].get_type(), type_tree)
-                                                .expect("Did not find a mismatch")
+                                                .unwrap_or(
+                                                    "Did not find a mismatch".parse().unwrap()
+                                                )
                                         ),
                                         loc.into_iter().collect(),
                                     ));

@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 mod blake2b;
 mod emulator;
 mod ripemd160port;
-mod runtime_env;
+pub mod runtime_env;
 
 pub fn run_from_file(
     path: &Path,
