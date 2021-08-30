@@ -107,50 +107,6 @@ view write func main(oldGlobals: GlobalsBeforeUpgrade) {
     mainRunLoop();
 }
 
-/*
-public func mainRunLoop_save() {
-    loop {
-        let (resultCode, request) = getNextRequestFromCongestionAuction();
-        if (resultCode == const::TxResultCode_success) {
-            if (handleL2Request(request) == None<()>) {
-                // reject for message format error
-                emitTxReceipt(
-                    request.incomingRequest,
-                    const::TxResultCode_formatError,
-                    None<ByteArray>,
-                    None<EvmLogs>,
-                    None<GasUsage>,
-                    request.feeStats,
-                    false,      // don't emit tracing info because the tx was bogus
-                    request.originalCaller,
-                );
-            }
-        } else {
-            // before emitting a failure receipt, try to increment caller's sequence number
-            if ( (resultCode != const::TxResultCode_sequenceNumberTooLow) && (resultCode != const::TxResultCode_sequenceNumberTooHigh) ) {
-                if let Some(seqNum) = request.seqNum {
-                    let gAcctStore = getGlobalAccountStore();
-                    if let Some(acct) = account_checkAndIncrSeqNum(accountStore_get(gAcctStore, request.caller), seqNum) {
-                        setGlobalAccountStore(accountStore_set(gAcctStore, request.caller, acct));
-                    }
-                }
-            }
-
-            emitTxReceipt(
-                request.incomingRequest,
-                resultCode,
-                None<ByteArray>,
-                None<EvmLogs>,
-                None<GasUsage>,
-                request.feeStats,
-                true,
-                request.originalCaller,
-            );
-        }
-    }
-}
-*/
-
 view write func initializePreinstalls(isUpgrade: bool) -> option<()> {
     let acctStore = safeGetGlobalAccountStore();
 
