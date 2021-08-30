@@ -324,7 +324,8 @@ impl AbiForContract {
         ))
     }
 
-    pub fn _call_function_with_deposit(
+    #[cfg(test)]
+    pub fn call_function_with_deposit(
         &self,
         sender_addr: Uint256,
         func_name: &str,

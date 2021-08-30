@@ -170,7 +170,7 @@ pub fn evm_tx_with_deposit(
         panic!("failed to deploy PaymentChannel contract");
     }
 
-    let (logs, sends) = pc_contract._call_function_with_deposit(
+    let (logs, sends) = pc_contract.call_function_with_deposit(
         my_addr.clone(),
         "deposit",
         &[],
@@ -1390,6 +1390,7 @@ pub fn evm_payment_to_empty_address(log_to: Option<&Path>, debug: bool) {
     let receipts = machine.runtime_env.get_all_receipt_logs();
     assert_eq!(receipts.len(), 2);
     assert_eq!(receipts[1].get_request_id(), tx_id);
+    assert_eq!(receipts[1].get_return_code(), Uint256::zero());
     assert!(receipts[1].succeeded());
 
     if let Some(path) = log_to {
