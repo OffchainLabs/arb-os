@@ -14,23 +14,6 @@ use messages::TxRequestData;
 use output::PerBlockReceiptData;
 use output::OutputStatistics;
 
-use std::addressSet::AddressPairSet;
-use std::addressSet::addressPairSet_new;
-
-
-public func set_addressRemapExceptions_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> AddressPairSet {
-    return addressPairSet_new();
-}
-
-public func set_chainOwners_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> SetOfAddresses {
-    return oldGlobals.chainOwners;
-}
-
-public func set_globalAccountStore_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> AccountStore {
-    let old = oldGlobals.globalAccountStore;
-    return old;
-}
-
 public func set_globalBlockReceiptData_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> struct {
     data: PerBlockReceiptData,
     statsThisBlock: OutputStatistics,
@@ -39,13 +22,7 @@ public func set_globalBlockReceiptData_onUpgrade(oldGlobals: GlobalsBeforeUpgrad
     nextSendTimestamp: uint,
 } {
     let old = oldGlobals.globalBlockReceiptData;
-    return struct {
-        data: old.data,
-        statsThisBlock: old.statsThisBlock,
-        statsAllTime: old.statsAllTime,
-        lastArbBlockNum: old.lastArbBlockNum,
-        nextSendTimestamp: old.nextSendTimestamp,
-    };
+    return unsafecast<every>(old);
 }
 
 public func set_globalCallStack_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
@@ -54,20 +31,6 @@ public func set_globalCallStack_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> 
 
 public func set_globalCurrentRetryableRequest_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<IncomingRequestAndLogs> {
     return None<IncomingRequestAndLogs>;
-}
-
-public func set_globalCurrentTxRequest_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> TxRequestData {
-    return unsafecast<TxRequestData>(0);   // safe, because the global will be rewritten before used
-}
-
-public func set_globalInputQueue_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> struct {
-    txQ: TxRequestQueue,
-    batchQ: IncomingRequestQueueStack,
-} {
-    return struct {
-        txQ: old.globalInputQueue.txQ,
-        batchQ: old.globalInputQueue.batchQ,
-    };
 }
 
 public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> map<uint, uint> {
