@@ -20,6 +20,7 @@ use evmCallStack::evmCallFrame_getCaller;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownCodePc;
+use evmOps::evmOp_revertIfStatic;
 
 use accounts::account_setBlsKey;
 use accounts::account_getBlsKey;
@@ -57,6 +58,7 @@ func getFuncCode(ba: ByteArray) -> uint {
 }
 
 view write func arbBLS_register(topFrame: EvmCallFrame, calldata: ByteArray) {
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 4+32*4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbBLS), 170, 0, 0);
     }
