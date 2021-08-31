@@ -357,11 +357,11 @@ view write func arbowner_deployContract(topFrame: EvmCallFrame, calldata: ByteAr
     if (evmCallStack_changeRunningAs(deemedSender) == None<()>) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 163, 0, 0);
     }
-    let deployAddr = doCreationOpcode(callvalue, constructorData, deployAddress);
+    deployAddress = doCreationOpcode(callvalue, constructorData, deployAddress);
     if (evmCallStack_changeRunningAs(address(const::Address_ArbOwner)) == None<()>) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 164, 0, 0);
     }
-    if (deployAddr == address(0)) {
+    if (deployAddress == address(0)) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 165, 0, 0);
     }
 

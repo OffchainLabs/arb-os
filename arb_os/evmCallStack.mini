@@ -1433,6 +1433,7 @@ public view write func evmCallStack_changeRunningAs(newRunningAsAddr: address) -
     );
     set topFrame.runningAs = newRunningAsAddr;
     set topFrame.runningAsAccount = accountStore_get(topFrame.accountStore, topFrame.runningAs);
+    globalCallStack = Some(topFrame);
     return Some(());
 }
 
