@@ -994,7 +994,7 @@ impl Type {
                 (out, type_set)
             }
             Type::Generic(_, _) => ("fix me".to_string(), type_set),
-            Type::Variable(_, _) => ("type variable".to_string(), type_set),
+            Type::Variable(path, id) => (format!("Type variable: {} {:?}", id, path), type_set),
             Type::Func(impure, args, ret) => {
                 let mut out = String::new();
                 if *impure {
@@ -1084,6 +1084,15 @@ impl Type {
     ) -> Result<Type, CompileError> {
         let mut elf = self.clone();
         let mut has_error = false;
+        if let Type::Variable(_, id) = self {
+            return type_args.get(id).cloned().ok_or_else(|| {
+                CompileError::new(
+                    format!("failed to resolve variable"),
+                    format!("failed to resolve"),
+                    vec![],
+                )
+            });
+        }
         elf.recursive_apply(
             |val, _a, b| {
                 match val {
@@ -1252,6 +1261,9 @@ impl PartialEq for Type {
             (Type::Nominal(p1, id1), Type::Nominal(p2, id2)) => (p1, id1) == (p2, id2),
             (Type::Option(x), Type::Option(y)) => *x == *y,
             (Type::Union(x), Type::Union(y)) => type_vectors_equal(x, y),
+            (Type::Variable(rpath, rid), Type::Variable(lpath, lid)) => {
+                rpath == lpath && rid == lid
+            }
             (_, _) => false,
         }
     }

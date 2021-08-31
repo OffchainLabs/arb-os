@@ -269,6 +269,14 @@ StructField: StructField = {
 	<i: Ident> ":" <t: Type> => StructField::new(stringtable.name_from_id(i).to_string(), t),
 }
 
+GenericStructFields: Vec<StructField> = {
+	<mut a: (<GenericStructField> ",")*> <b: GenericStructField> ","? => {a.push(b);a},
+}
+
+GenericStructField: StructField = {
+	<i: Ident> ":" <t: GenericType> => StructField::new(stringtable.name_from_id(i).to_string(), t),
+}
+
 Type: Type = {
 	<PrimitiveType> => <>,
 	"struct" "{" <StructFields> "}" => Type::Struct(<>),
@@ -288,19 +296,19 @@ Type: Type = {
 
 GenericType: Type = {
 	<PrimitiveType> => <>,
-	"struct" "{" <StructFields> "}" => Type::Struct(<>),
-	<CommaedTypesInParens> => Type::Tuple(<>),
+	"struct" "{" <GenericStructFields> "}" => Type::Struct(<>),
+	<CommaedGenericTypesInParens> => Type::Tuple(<>),
 	"[" "]" <GenericType> => Type::Array(Box::new(<>)),
-	"[" <s:UnsignedInteger> "]" <t:Type> => Type::FixedArray(
+	"[" <s:UnsignedInteger> "]" <t:GenericType> => Type::FixedArray(
 		Box::new(t),
 		s.to_usize().unwrap(),
 	),
-	"map" "<" <t1:Type> "," <t2:Type> ","? ">" => Type::Map(Box::new(t1), Box::new(t2)),
-	<i: "impure"?> "func" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => Type::Func(i.is_some(), a, Box::new(r.unwrap_or(Type::Void))),
-	"option<" <t1:Type> ">" => Type::Option(Box::new(t1)),
-	"union<" <t1:CommaedTypes> ">" => Type::Union(t1),
+	"map" "<" <t1:GenericType> "," <t2:GenericType> ","? ">" => Type::Map(Box::new(t1), Box::new(t2)),
+	<i: "impure"?> "func" <a: CommaedGenericTypesInParens> <r: ("->" <GenericType>)?> => Type::Func(i.is_some(), a, Box::new(r.unwrap_or(Type::Void))),
+	"option<" <t1:GenericType> ">" => Type::Option(Box::new(t1)),
+	"union<" <t1:CommaedGenericTypes> ">" => Type::Union(t1),
 	"*" <Ident> => Type::Variable(current_path.to_owned(), <>),
-	<i: Ident> "<" <t1: CommaedTypes> ">" => Type::Generic(i, t1),
+	<i: Ident> "<" <t1: CommaedGenericTypes> ">" => Type::Generic(i, t1),
 	Ident => Type::Nominal(current_path.to_owned(), <>),
 };
 
@@ -322,6 +330,18 @@ CommaedTypesInParens: Vec<Type> = {
 
 CommaedTypes: Vec<Type> = {
 	<mut t: (<Type> ",")*> <e: (Type)> ","? => {
+        t.push(e);
+        t
+    },
+};
+
+CommaedGenericTypesInParens: Vec<Type> = {
+	"(" ")" => vec![],
+	"(" <CommaedGenericTypes> ")" => <>,
+}
+
+CommaedGenericTypes: Vec<Type> = {
+	<mut t: (<GenericType> ",")*> <e: (GenericType)> ","? => {
         t.push(e);
         t
     },

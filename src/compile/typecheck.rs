@@ -1662,7 +1662,7 @@ fn typecheck_statement<'a>(
             } else {
                 Err(CompileError::new_type_error(
                     format!(
-                        "return statement has wrong type, {}",
+                        "return statement has whrong type, {}",
                         return_type
                             .mismatch_string(&tc_expr.get_type(), type_tree)
                             .unwrap_or("failed to resolve type name".to_string())
