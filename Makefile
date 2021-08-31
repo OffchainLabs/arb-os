@@ -78,7 +78,7 @@ minitests/%.mexe: minitests/%.mini minitests/*.mini stdlib/*.mini builtin/*.mini
 upgradetests/%.mexe: upgradetests/%.mini upgradetests/*.mini stdlib/*.mini builtin/*.mini $(consts) .make/tools
 	$(compile) -c $(consts) $< -o $@ -t
 
-arb_os/arbos.mexe: arb_os/*.mini stdlib/*.mini builtin/*.mini $(consts) .make/tools
+arb_os/arbos.mexe: arb_os/*.mini arb_os/bridge_arbos_versions.mini stdlib/*.mini builtin/*.mini $(consts) .make/tools
 	$(compile) arb_os -o $@ -m
 
 parameters.json: arb_os/constants.json .make/tools
