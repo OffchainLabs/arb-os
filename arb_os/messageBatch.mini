@@ -101,9 +101,10 @@ public func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, Me
                 request
             },
             {
-                set batch.stream = stream;
-                set batch.numSoFar = batch.numSoFar + 1;
-                batch
+                let tmpBatch = batch;
+                set tmpBatch.stream = stream;
+                set tmpBatch.numSoFar = tmpBatch.numSoFar + 1;
+                tmpBatch
             }
         ))
     } else {
