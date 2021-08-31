@@ -196,6 +196,9 @@ public func accountStore_destroyAccount(acctStore: AccountStore, addrToDestroy: 
             acctStore,
             keccak256(contractInfo.code, 0, bytearray_size(contractInfo.code))
         );
+        if (acctStore.numContracts > 0) {
+            set acctStore.numContracts = acctStore.numContracts-1;
+        }
     }
     return accountStore_set(acctStore, addrToDestroy, pristineAccount(addrToDestroy));
 }

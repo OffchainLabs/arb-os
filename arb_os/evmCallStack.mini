@@ -981,10 +981,7 @@ public view write func evmCallStack_returnFromCall(
                         let (q, item) = queue_get(sdq)?;
                         sdq = q;
                         let victim = unsafecast<address>(item);
-                        acctStore = accountStore_changeNumContracts(
-                            accountStore_destroyAccount(acctStore, victim),
-                            -1s,
-                        );
+                        acctStore = accountStore_destroyAccount(acctStore, victim);
                     }
                     setGlobalAccountStore(acctStore);
 
@@ -1053,10 +1050,7 @@ public view write func evmCallStack_returnFromCall(
                             let (q, item) = queue_get(sdq)?;
                             sdq = q;
                             let victim = unsafecast<address>(item);
-                            acctStore = accountStore_changeNumContracts(
-                                accountStore_destroyAccount(acctStore, victim),
-                                -1s,
-                            );
+                            acctStore = accountStore_destroyAccount(acctStore, victim);
                         }
 
                         // emit queued sends
