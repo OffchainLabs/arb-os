@@ -537,7 +537,7 @@ public func _accountStore_getEscrowBalance(acctStore: AccountStore, key: uint) -
     return storageMap_get(acctStore.escrowStore.escrowedValues, key);
 }
 
-public func _accountStore_sumOfAllEscrowBalances(acctStore: AccountStore) -> uint {
+public func accountStore_sumOfAllEscrowBalances(acctStore: AccountStore) -> uint {
     return unsafecast<uint>(
         storageMap_forall(
             acctStore.escrowStore.escrowedValues,

@@ -5,6 +5,7 @@
 use accounts::Account;
 use accounts::account_getBalance;
 use accounts::accountStore_forall;
+use accounts::accountStore_sumOfAllEscrowBalances;
 
 use chainParameters::chainParams_get;
 use chainParameters::chainParams_set;
@@ -320,11 +321,13 @@ view write func arbowner_getTotalOfEthBalances(_topFrame: EvmCallFrame, calldata
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 150, 0, 0);
     }
+    let acctStore = evmCallStack_getAccountStoreInCurrentContext();
     let total = unsafecast<uint>(accountStore_forall(
-        evmCallStack_getAccountStoreInCurrentContext(),
+        acctStore,
         unsafecast<func(Account, any) -> any>(totalEthClosure),
         0
     ));
+    total = total + accountStore_sumOfAllEscrowBalances(acctStore);
     if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, total))) {
         evmOp_return(0, 32);
     } else {
