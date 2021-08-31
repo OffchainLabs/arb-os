@@ -18,6 +18,7 @@ use std::storageMap::storageMap_new;
 use std::storageMap::storageMap_size;
 use std::storageMap::storageMap_get;
 use std::storageMap::storageMap_set;
+use std::storageMap::storageMap_forall;
 
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsSize;
@@ -534,6 +535,18 @@ public func accountStore_newEscrow(acctStore: AccountStore, payer: address, amou
 
 public func _accountStore_getEscrowBalance(acctStore: AccountStore, key: uint) -> uint {
     return storageMap_get(acctStore.escrowStore.escrowedValues, key);
+}
+
+public func _accountStore_sumOfAllEscrowBalances(acctStore: AccountStore) -> uint {
+    return unsafecast<uint>(
+        storageMap_forall(
+            acctStore.escrowStore.escrowedValues,
+            _closure(_k: uint, v: uint, state: any) -> any {
+                return unsafecast<uint>(state) + v;
+            },
+            0,
+        )
+    );
 }
 
 // Transfer funds into an existing escrow box
