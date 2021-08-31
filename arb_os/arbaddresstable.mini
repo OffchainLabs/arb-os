@@ -165,6 +165,7 @@ view write func arbAddressTable_lookupIndex(_topFrame: EvmCallFrame, calldata: B
 view write func arbAddressTable_decompress(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (bytes buf, uint offset) -> (address, uint)
     // read a compressed address from buf at offset, return (resulting address, updated offset)
     // revert if buf is too short
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) < 4+4*32) {
         evmOp_revert_knownCodePc(address(const::Address_ArbAddressTable), 160, 0, 0);
     }
