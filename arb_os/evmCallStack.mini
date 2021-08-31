@@ -1424,6 +1424,18 @@ public view func evmCallStack_runningCodeFromAccount() -> option<Account> {
     return Some(evmCallFrame_runningCodeFromAccount(globalCallStack?));
 }
 
+public view write func evmCallStack_changeRunningAs(newRunningAsAddr: address) -> option<()> {
+    let topFrame = globalCallStack?;
+    set topFrame.accountStore = accountStore_set(
+        topFrame.accountStore,
+        topFrame.runningAs,
+        topFrame.runningAsAccount,
+    );
+    set topFrame.runningAs = newRunningAsAddr;
+    set topFrame.runningAsAccount = accountStore_get(topFrame.accountStore, topFrame.runningAs);
+    return Some(());
+}
+
 public view func evmCallStack_getTopFrameReturnData() -> option<ByteArray> {
     return Some(((globalCallStack?).returnInfo?).data);
 }

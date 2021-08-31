@@ -26,6 +26,7 @@ use evmCallStack::evmCallStack_stackDepth;
 use evmCallStack::evmCallStack_returnFromCall;
 use evmCallStack::evmCallStack_transferEthFromCurrent;
 use evmCallStack::evmCallStack_getAccountStoreInCurrentContext;
+use evmCallStack::evmCallStack_changeRunningAs;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
@@ -353,14 +354,21 @@ view write func arbowner_deployContract(topFrame: EvmCallFrame, calldata: ByteAr
 
     let deployAddress = address(keccakOfRlpEncodedUintPair(uint(deemedSender), deemedNonce));
 
-    if (doCreationOpcode(callvalue, constructorData, deployAddress) == address(0)) {
+    if (evmCallStack_changeRunningAs(deemedSender) == None<()>) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 163, 0, 0);
+    }
+    let deployAddr = doCreationOpcode(callvalue, constructorData, deployAddress);
+    if (evmCallStack_changeRunningAs(address(const::Address_ArbOwner)) == None<()>) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 164, 0, 0);
+    }
+    if (deployAddr == address(0)) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 165, 0, 0);
     }
 
     if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, uint(deployAddress)))) {
         evmOp_return(0, 32);
     } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 164, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 166, 0, 0);
     }
 }
 
