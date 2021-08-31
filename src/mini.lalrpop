@@ -462,12 +462,15 @@ Expr12: Expr = {
 	<lno: @L> "weakcast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::WeakCast(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> "unioncast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::UnionCast(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
     
-    <qualifiers: (<Qualifier>)*> <lno: @L> "closure" "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> => {
+    <qualifiers: (<Qualifier>)*> <lno: @L> <u: ClosureUsage> "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> => {
         let view = qualifiers.contains(&"view");
         let write = qualifiers.contains(&"write");
         let debug = DebugInfo::here(file_info, lno, filename);
         
-        let name = format!("closure #{}", closures.len() + 1);
+        let name = match u {
+            true => format!("closure #{}", closures.len() + 1),
+            false => format!("_closure #{}", closures.len() + 1),
+        };
         let id = stringtable.get(name.clone());
         let closure = Func::new(name, id, false, view, write, true, fa, t, cb, BTreeSet::new(), 0, debug);
         
@@ -476,6 +479,11 @@ Expr12: Expr = {
         Expr::new(ExprKind::Closure(closure), debug)
     },
 	Expr13,
+}
+
+ClosureUsage: bool = {
+    "closure" => true,
+    "_closure" => false,
 }
 
 Expr13: Expr = {
