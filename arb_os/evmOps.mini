@@ -1054,7 +1054,8 @@ public view write func evmOp_revertIfStatic() {
 public view write func evmOp_return(memOffset: uint, memNbytes: uint) {
     if(memNbytes > 0) {
         evmCallStack_touchMemoryOffset(safeAdd(memOffset, memNbytes));
-    }    let _ = evmCallStack_returnFromCall(const::TxResultCode_success, memOffset, memNbytes, None<view write func()>);
+    }
+    let _ = evmCallStack_returnFromCall(const::TxResultCode_success, memOffset, memNbytes, None<view write func()>);
 
     evm_runtimePanic(29);
 }
