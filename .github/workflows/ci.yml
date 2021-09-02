@@ -98,7 +98,7 @@ jobs:
           sudo npm install -g yarn && cd contracts && yarn install
 
       - name: Make and test ArbOS
-        run: make clean && make
+        run: make clean && make -j compile_options="-w"
 
       - name: Check if ArbOS changed
         run: git update-index --refresh && git diff-index HEAD --

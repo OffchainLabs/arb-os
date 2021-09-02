@@ -14,7 +14,7 @@ looptest_mexes = $(patsubst %,looptest/%.mexe, $(looptest_outputs))
 
 test_mexes = $(builtin_mexes) $(stdlib_mexes) $(minitest_mexes) $(upgrade_mexes) $(looptest_mexes)
 
-compile = ./target/release/mini compile
+compile = ./target/release/mini compile $(compile_options)
 upgrade = ./target/release/mini gen-upgrade-code
 run     = ./target/release/mini
 
@@ -78,7 +78,7 @@ minitests/%.mexe: minitests/%.mini minitests/*.mini stdlib/*.mini builtin/*.mini
 upgradetests/%.mexe: upgradetests/%.mini upgradetests/*.mini stdlib/*.mini builtin/*.mini $(consts) .make/tools
 	$(compile) -c $(consts) $< -o $@ -t
 
-arb_os/arbos.mexe: arb_os/*.mini arb_os/bridge_arbos_versions.mini stdlib/*.mini builtin/*.mini $(consts) .make/tools
+arb_os/arbos.mexe: arb_os/*.mini arb_os/bridge_arbos_versions.mini arb_os/contractTemplates.mini stdlib/*.mini builtin/*.mini $(consts) .make/tools
 	$(compile) arb_os -o $@ -m
 
 parameters.json: arb_os/constants.json .make/tools
@@ -93,6 +93,9 @@ evm-test-logs: arb_os/arbos.mexe .make/tools
 	rm -rf evm-test-logs
 	mkdir -p evm-test-logs
 	$(run) evm-tests --savelogs
+
+arb_os/contractTemplates.mini: .make/tools
+	$(run) make-templates
 
 
 # Upgrade tests
@@ -114,8 +117,7 @@ looptest/upgrade2_old.mexe: looptest/upgrade2_old.mini stdlib/*.mini builtin/*.m
 
 
 # ArbOS upgrade
-
-arbos_source_all = $(wildcard arb_os/*.mini) $(consts) stdlib/*.mini builtin/*.mini
+arbos_source_all = $(wildcard arb_os/*.mini) $(consts) stdlib/*.mini builtin/*.mini arb_os/contractTemplates.mini
 arbos_source_no_bridge = $(filter-out arb_os/bridge_arbos_versions.mini, $(arbos_source_all))
 
 arb_os/upgrade.json: arb_os/arbos-upgrade.mexe .make/tools
