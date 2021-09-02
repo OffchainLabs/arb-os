@@ -19,7 +19,7 @@ upgrade = ./target/release/mini gen-upgrade-code
 run     = ./target/release/mini
 
 consts = arb_os/constants.json
-
+done = "\e[38;5;161;1mdone!\e[0;0m\n"
 
 # user targets
 
@@ -28,31 +28,31 @@ consts = arb_os/constants.json
 	@touch .make/all
 
 arbos: arb_os/arbos.mexe
-	@printf "\e[38;5;161;1mdone!\e[0;0m\n"
+	@printf $(done)
 
 upgrade: arb_os/arbos-upgrade.mexe arb_os/upgrade.json
-	@printf "\e[38;5;161;1mdone!\e[0;0m\n"
+	@printf $(done)
 
 contracts: .make/solidity
-	@printf "\e[38;5;161;1mdone!\e[0;0m\n"
+	@printf $(done)
 
 paramslist: parameters.json
-	@printf "\e[38;5;161;1mdone!\e[0;0m\n"
+	@printf $(done)
 
 evmtest: arb_os/arbos.mexe .make/tools
 	$(run) evm-tests
 
 evmlogs: evm-test-logs
-	@printf "\e[38;5;161;1mdone!\e[0;0m\n"
+	@printf $(done)
 
 evmdebug: arb_os/arbos.mexe .make/tools
 	$(run) evm-debug
 
 replay: replayTests
-	@printf "\e[38;5;161;1mdone!\e[0;0m\n"
+	@printf $(done)
 
-coverage: always coverage/lcov-mini.info
-	@printf "\e[38;5;161;1mdone!\e[0;0m\n"
+coverage: always lcov-mini.info
+	@printf $(done)
 
 benchmark: arb_os/arbos.mexe .make/tools
 	$(run) make-benchmarks
@@ -62,6 +62,9 @@ test: .make/test
 
 push: .make/fmt | replayTests .make/test
 	@printf "\e[38;5;161;1mReady for push!\e[0;0m\n"
+
+cli: .make/all replayTests | lcov-mini.info
+	@printf "Made cli products\n"
 
 clean:
 	@rm -f {builtin,stdlib,upgradetests,minitests,looptest}/*.mexe arb_os/{arbos,arbos-upgrade}.mexe
@@ -171,7 +174,7 @@ arb_os/arbos-upgrade-base.mexe: $(arbos_source_no_bridge) .make/tools
 cov_files = $(wildcard coverage/*.cov)
 cov_files_no_upgrade = $(filter-out coverage/test_upgrade_arbos_to_different_version.cov, $(cov_files))
 
-coverage/lcov-mini.info: coverage/alltests.all ./coverage/mini-coverage.sh
+lcov-mini.info: coverage/alltests.all ./coverage/mini-coverage.sh
 	./coverage/mini-coverage.sh $< > $@
 
 coverage/alltests.all: coverage/avmcodebuilder.partial $(cov_files_no_upgrade)
