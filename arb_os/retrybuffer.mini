@@ -57,6 +57,7 @@ use std::queue::queue_new;
 use std::queue::queue_put;
 use std::queue::queue_get;
 
+use std::safeMath::safeAdd;
 use std::safeMath::safeMul;
 
 use core::kvs::Kvs;
@@ -329,7 +330,7 @@ public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequ
     let (submissionFee, subFeeRecipient, feeStats) = getFeesForRetryableTx(calldataSize);
 
     let ret = xif (submissionFee <= maxSubmissionCost) {
-        let totalDue = callvalue + maxSubmissionCost;
+        let totalDue = safeAdd(callvalue, maxSubmissionCost);
 
         xif let Some(res) = accountStore_newEscrow(acctStore, sender, totalDue) {
             let (*acctStore, escrowKey) = res;

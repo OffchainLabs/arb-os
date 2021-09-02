@@ -60,11 +60,11 @@ benchmark: arb_os/arbos.mexe .make/tools
 test: .make/test
 	cargo test --release
 
-push: .make/fmt | replayTests .make/test
+push: .make/push
 	@printf "\e[38;5;161;1mReady for push!\e[0;0m\n"
 
-cli: .make/all replayTests | lcov-mini.info
-	@printf "Made cli products\n"
+ci: .make/all replayTests lcov-mini.info
+	@printf "Made ci products\n"
 
 clean:
 	@rm -f {builtin,stdlib,upgradetests,minitests,looptest}/*.mexe arb_os/{arbos,arbos-upgrade}.mexe
@@ -156,6 +156,10 @@ arb_os/arbos-upgrade-base.mexe: $(arbos_source_no_bridge) .make/tools
 	cargo fmt
 	@touch .make/fmt
 
+.make/push: .make/fmt
+	make $(MAKEFLAGS) compile_options="$(compile_options)" replayTests .make/test
+	@touch .make/push
+
 .make/compiler: src/*.rs src/*/*.rs Cargo.* .make/install
 	cargo build --release
 	@touch .make/compiler
@@ -177,12 +181,13 @@ cov_files_no_upgrade = $(filter-out coverage/test_upgrade_arbos_to_different_ver
 lcov-mini.info: coverage/alltests.all ./coverage/mini-coverage.sh
 	./coverage/mini-coverage.sh $< > $@
 
-coverage/alltests.all: coverage/avmcodebuilder.partial $(cov_files_no_upgrade)
+coverage/alltests.all: coverage/avmcodebuilder.partial $(cov_files_no_upgrade) .make/test
 	cat $^ | sort -r | uniq | sort | uniq -f 1 | sort -k2,2 -k3,3n | grep -v test | grep -v Test > $@
 
 coverage/avmcodebuilder.partial: coverage/test_upgrade_arbos_to_different_version.cov
 	grep avmcodebuilder $< > $@
 
+coverage/test_upgrade_arbos_to_different_version.cov: .make/test
 
 # Makefile settings
 
