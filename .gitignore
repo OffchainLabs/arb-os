@@ -18,7 +18,6 @@ arb_os/contractTemplates.mini
 .idea
 evm-tests/.travis.yml
 evm-test-logs/*
-**.cov
 **.bkp
 **~
 lcov.info
@@ -35,6 +34,12 @@ arb_os/save_bridge_for_debugging.mini
 flamegraph.svg
 perf.data
 
+# coverage files
+**.all
+**.cov
+**.partial
+
 # auto-generated files
+.make/
 arb_os/bridge_arbos_versions.mini
 arb_os/arbos-upgrade-base.mexe

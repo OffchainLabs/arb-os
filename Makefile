@@ -51,11 +51,17 @@ evmdebug: arb_os/arbos.mexe .make/tools
 replay: replayTests
 	@printf "\e[38;5;161;1mdone!\e[0;0m\n"
 
-benchmark: compiler $(TEMPLATES) $(ARBOS)
+coverage: always coverage/lcov-mini.info
+	@printf "\e[38;5;161;1mdone!\e[0;0m\n"
+
+benchmark: arb_os/arbos.mexe .make/tools
 	$(run) make-benchmarks
 
-test: always .make/test
+test: .make/test
 	cargo test --release
+
+push: .make/fmt | replayTests .make/test
+	@printf "\e[38;5;161;1mReady for push!\e[0;0m\n"
 
 clean:
 	@rm -f {builtin,stdlib,upgradetests,minitests,looptest}/*.mexe arb_os/{arbos,arbos-upgrade}.mexe
@@ -137,35 +143,42 @@ arb_os/arbos-upgrade-base.mexe: $(arbos_source_no_bridge) .make/tools
 # strategic rules to minimize dependency building
 
 .make/tools: .make/solidity .make/compiler .make/install
-	touch .make/tools
+	@touch .make/tools
 
 .make/test: arb_os/arbos.mexe $(test_mexes) arb_os/arbos-upgrade.mexe arb_os/upgrade.json
 	cargo test --release
 	@touch .make/test
 
+.make/fmt: src/*.rs src/*/*.rs Cargo.* .make/install
+	cargo fmt
+	@touch .make/fmt
+
 .make/compiler: src/*.rs src/*/*.rs Cargo.* .make/install
 	cargo build --release
-	touch .make/compiler
+	@touch .make/compiler
 
 .make/solidity: contracts/arbos/*/*.sol .make/install
 	yarn --cwd contracts build
-	touch .make/solidity
+	@touch .make/solidity
 
 .make/install:
 	mkdir -p .make
 	yarn --cwd contracts install
-	touch .make/install
+	@touch .make/install
 
 
 # CLI tooling
+cov_files = $(wildcard coverage/*.cov)
+cov_files_no_upgrade = $(filter-out coverage/test_upgrade_arbos_to_different_version.cov, $(cov_files))
 
-coverage: alltests.cov
+coverage/lcov-mini.info: coverage/alltests.all ./coverage/mini-coverage.sh
+	./coverage/mini-coverage.sh $< > $@
 
-alltests.cov: compiler contracts
-	cd coverage && grep avmcodebuilder test_upgrade_arbos_to_different_version.cov > avmcodebuilder.cov
-	rm coverage/test_upgrade_arbos_to_different_version.cov
-	cat coverage/*.cov | sort -r | uniq | sort | uniq -f 1 | sort -k2,2 -k3,3n | grep -v test | grep -v Test > coverage/alltests.cov
-	./coverage/mini-coverage.sh ./coverage/alltests.cov > lcov-mini.info
+coverage/alltests.all: coverage/avmcodebuilder.partial $(cov_files_no_upgrade)
+	cat $^ | sort -r | uniq | sort | uniq -f 1 | sort -k2,2 -k3,3n | grep -v test | grep -v Test > $@
+
+coverage/avmcodebuilder.partial: coverage/test_upgrade_arbos_to_different_version.cov
+	grep avmcodebuilder $< > $@
 
 
 # Makefile settings
