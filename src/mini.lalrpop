@@ -102,8 +102,8 @@ FuncDecl: Func = {
 }
 
 GenericFuncDecl: GenericFunc = {
-    <lno: @L> <attribs: ("#[" <Attributes> "]")?> <p: "public"?> <imp: "impure"?> "func<>" <i:Ident> "(" <fa:GenericFuncArgs> ")" <t: (GenericReturn)?> <cb:CodeBlock> =>
-            GenericFunc::new(i, imp.is_some(), fa, t.unwrap_or(Type::Void), cb, p.is_some(), DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default())),
+    <lno: @L> <attribs: ("#[" <Attributes> "]")?> <p: "public"?> <imp: "impure"?> "func<" <vars: CommaedIdents> ">" <i:Ident> "(" <fa:GenericFuncArgs> ")" <t: (GenericReturn)?> <cb:CodeBlock> =>
+            GenericFunc::new(i, vars, imp.is_some(), fa, t.unwrap_or(Type::Void), cb, p.is_some(), DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default())),
 }
 
 Return: Type = {
@@ -368,6 +368,13 @@ AltGenericFuncArg: FuncArg = {
 
 Ident: StringId = {
 	IdentString => stringtable.get(<>),
+};
+
+CommaedIdents: Vec<StringId> = {
+	<mut t: (<Ident> ",")*> <e: (Ident)> ","? => {
+        t.push(e);
+        t
+    },
 };
 
 Expr: Expr = {

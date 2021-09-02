@@ -1221,8 +1221,8 @@ pub fn typecheck_top_level_decls(
 
     let type_table: HashMap<_, _> = named_types.clone().into_iter().collect();
     for (_, tipe) in generic_types {
-        let reso = tipe.tipe.resolve(&tipe.vars)?;
-        println!("generic resolved: {}", reso.display());
+        println!("{:?}", tipe.vars);
+        tipe.tipe.consistent_over_args(&tipe.vars)?;
     }
     let _ = generic_types.clone().into_iter().collect::<HashMap<_, _>>();
 

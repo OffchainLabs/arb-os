@@ -14,9 +14,11 @@ use crate::pos::Location;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 use std::fmt::Formatter;
+use std::rc::Rc;
 
 ///This is a map of the types at a given location, with the Vec<String> representing the module path
 ///and the usize representing the stringID of the type at that location.
@@ -148,9 +150,8 @@ impl AbstractSyntaxTree for Type {
             | Type::Any
             | Type::Every
             | Type::Nominal(_, _)
-            | Type::Generic(_, _)
             | Type::Variable(_, _) => vec![],
-            Type::Tuple(types) | Type::Union(types) => {
+            Type::Tuple(types) | Type::Union(types) | Type::Generic(_, types) => {
                 types.iter_mut().map(|t| TypeCheckedNode::Type(t)).collect()
             }
             Type::Array(tipe) | Type::FixedArray(tipe, _) | Type::Option(tipe) => {
@@ -1083,7 +1084,7 @@ impl Type {
         type_args: &BTreeMap<StringId, Type>,
     ) -> Result<Type, CompileError> {
         let mut elf = self.clone();
-        let mut has_error = false;
+        let mut has_error = Rc::new(RefCell::new(false));
         if let Type::Variable(_, id) = self {
             return type_args.get(id).cloned().ok_or_else(|| {
                 CompileError::new(
@@ -1100,7 +1101,7 @@ impl Type {
                         Type::Variable(_, id) => match type_args.get(id) {
                             Some(inner) => **t = inner.clone(),
                             None => {
-                                *b = true;
+                                *b.borrow_mut() = true;
                             }
                         },
                         _ => {}
@@ -1112,7 +1113,7 @@ impl Type {
             &(),
             &mut has_error,
         );
-        if has_error {
+        if *has_error.borrow_mut() {
             return Err(CompileError::new(
                 "generics error".to_string(),
                 format!("Failed to resolve type variable"),
@@ -1120,6 +1121,51 @@ impl Type {
             ));
         }
         Ok(elf)
+    }
+
+    pub fn consistent_over_args(
+        &self,
+        type_args: &BTreeMap<StringId, Type>,
+    ) -> Result<(), CompileError> {
+        let mut elf = self.clone();
+        let mut has_error = Rc::new(RefCell::new(false));
+        if let Type::Variable(_, id) = self {
+            return type_args.get(id).map(|_| ()).ok_or_else(|| {
+                CompileError::new(
+                    format!("Variable args mitchmatch"),
+                    format!("failed consistency check"),
+                    vec![],
+                )
+            });
+        }
+
+        elf.recursive_apply(
+            |val, _a, b| {
+                match val {
+                    TypeCheckedNode::Type(t) => match t {
+                        Type::Variable(_, id) => match type_args.get(id) {
+                            Some(_) => {}
+                            None => {
+                                *b.borrow_mut() = true;
+                            }
+                        },
+                        _ => {}
+                    },
+                    _ => {}
+                }
+                true
+            },
+            &(),
+            &mut has_error,
+        );
+        if *has_error.borrow_mut() {
+            return Err(CompileError::new(
+                "generics error".to_string(),
+                format!("Type failed consistency check"),
+                vec![],
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -1454,7 +1500,7 @@ pub struct Func<T = Statement> {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GenericFunc<T = Statement> {
     pub name: StringId,
-    pub type_variables: Vec<(StringId, Type)>,
+    pub type_variables: Vec<StringId>,
     pub args: Vec<FuncArg>,
     pub ret_type: Type,
     pub code: Vec<T>,
@@ -1499,6 +1545,7 @@ impl Func {
 impl GenericFunc {
     pub fn new(
         name: StringId,
+        type_variables: Vec<StringId>,
         is_impure: bool,
         args: Vec<FuncArg>,
         ret_type: Type,
@@ -1513,7 +1560,7 @@ impl GenericFunc {
         }
         GenericFunc {
             name,
-            type_variables: vec![],
+            type_variables,
             args: args_vec,
             ret_type: ret_type.clone(),
             code,
