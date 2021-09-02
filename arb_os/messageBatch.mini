@@ -11,6 +11,7 @@ use std::bytestream::bytestream_get256;
 use std::bytestream::bytestream_skipBytes;
 use std::bytestream::bytestream_bytesReadSoFar;
 use std::bytestream::bytestream_getCalldataUnits;
+use std::bytestream::bytestream_atEof;
 
 use chainParameters::chainParams_getDefaultAggregator;
 
@@ -23,6 +24,7 @@ use std::rlp::rlp_decodeUint;
 type MessageBatch = struct {
     template: IncomingRequest,
     stream: ByteStream,
+    nested: bool,
     numSoFar: uint,
 };
 
@@ -54,6 +56,7 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
             )
         };
 
+        let nested = msg.provenance.parentRequestId != 0;
         Some(
             struct {
                 template: {
@@ -70,6 +73,7 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
                     msg
                 },
                 stream: stream,
+                nested: nested,
                 numSoFar: 0,
             }
         )
@@ -100,7 +104,12 @@ public view func messageBatch_get(batch: MessageBatch) -> option<(IncomingReques
                         bytestream_bytesReadSoFar(stream) - bytestream_bytesReadSoFar(streamBeforeCalldata),
                     ),
                 });
-                if (l2MsgLength == 0 && request.sender == chainParams_getDefaultAggregator()) {
+                if (
+                    l2MsgLength == 0 // The aggregator is signaling an end of block
+                        && request.sender == chainParams_getDefaultAggregator() // They are the default aggregator
+                        && !batch.nested // This isn't a nested batch
+                        && bytestream_atEof(stream) // This is the end of the batch
+                ) {
                     set request.kind = const::L1MessageType_endOfBlock;
                 }
                 request
