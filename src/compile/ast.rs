@@ -1115,8 +1115,8 @@ impl Type {
         );
         if *has_error.borrow_mut() {
             return Err(CompileError::new(
-                "generics error".to_string(),
-                format!("Failed to resolve type variable"),
+                "Type Error".to_string(),
+                format!("Failed to resolve type variable in: {}", self.display()),
                 vec![],
             ));
         }
@@ -1160,8 +1160,8 @@ impl Type {
         );
         if *has_error.borrow_mut() {
             return Err(CompileError::new(
-                "generics error".to_string(),
-                format!("Type failed consistency check"),
+                "Type Error".to_string(),
+                format!("Type \"{}\" failed consistency check", self.display()),
                 vec![],
             ));
         }
