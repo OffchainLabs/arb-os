@@ -93,6 +93,8 @@
     "EVMNonZeroBalanceCallStipend": 2300,
     "EVMWriteL1GasCost": 5000,
     "EscrowStoreID_txGas": 0,
+    "EvmCodeFormatVersion_legacy": 0,
+    "EvmCodeFormatVersion_current": 0,
     "EvmOpcode_jumpdest": 91,
     "EvmOpcode_push1": 96,
     "EvmOpcode_push32": 127,

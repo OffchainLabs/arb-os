@@ -49,7 +49,8 @@ type AccountStore = struct {
 //      inaccurate.
 type CodeRef = struct {
     refCount: uint,
-    code: ByteArray,                         // EVM code
+    evmCodeFormatVersion: uint,                  // version of the EVM code format to use
+    code: ByteArray,                             // EVM code
     evmJumpTable: map<uint, view write func()>,  // maps each valid EVM jump destination to the corresponding AVM codepoint
     startCodePoint: view write func(),           // entry point for the translated AVM code
 };
@@ -70,7 +71,8 @@ type Account = struct {
 };
 
 type AccountContractInfo = struct {
-    code: ByteArray,                         // deployed EVM code for the contract
+    evmCodeFormatVersion: uint,                  // EVM code format version when this contract was deployed
+    code: ByteArray,                             // deployed EVM code for the contract
     evmJumpTable: map<uint, view write func()>,  // maps each valid EVM jump destination to the corresponding AVM codepoint
     startCodePoint: view write func(),           // entry point for the translated AVM code
     storage: StorageMap,
@@ -371,10 +373,11 @@ public view write func accountStore_createAccountFromEvmCode(
         evmCallStack_addStorageCharge( (bytearray_size(code) + 31) / 32 );
         set oldAcct.nextSeqNum = 1;
         set oldAcct.contractInfo = Some(struct {
-           code: code,
-           evmJumpTable: evmJumpTable,
-           startCodePoint: initCodePt,
-           storage: storageMap,
+            evmCodeFormatVersion: const::EvmCodeFormatVersion_current,
+            code: code,
+            evmJumpTable: evmJumpTable,
+            startCodePoint: initCodePt,
+            storage: storageMap,
         });
         Some(accountStore_set(store, newAddr, oldAcct))
     } else {
@@ -394,6 +397,7 @@ public func accountStore_upgradeContractFromEvmCode(
     let oldAcct = accountStore_get(store, addr);
     let contractAdded = false;
     set oldAcct.contractInfo = Some(struct {
+        evmCodeFormatVersion: const::EvmCodeFormatVersion_current,
         code: code,
         evmJumpTable: evmJumpTable,
         startCodePoint: initCodePt,
@@ -424,14 +428,16 @@ public func accountStore_createBuiltinContract(
     // set up fake code for the contract
     // if Arbitrum style, must give it nonzero size because callers check if size is zero to see if contract exists
     // otherwise it's an Ethereum precompile which is specified to have null bytearray as its code
-    let fakeCode = bytearray_new(0);
-    if (isArbitrumStyle) {
+    let fakeCode = xif (isArbitrumStyle) {
         // fake code is a single EVM INVALID instruction
-        fakeCode = bytearray_setByte(fakeCode, 0, 0xfe);
-    }
+        bytearray_setByte(bytearray_new(0), 0, 0xfe)
+    } else {
+        bytearray_new(0)
+    };
 
     return xif (account_isEmpty(oldAcct) || !isUpgrade) {
         set oldAcct.contractInfo = Some(struct {
+            evmCodeFormatVersion: const::EvmCodeFormatVersion_current,
             code: fakeCode,
             evmJumpTable: newmap<uint, view write func()>,
             startCodePoint: entryPoint,
@@ -648,6 +654,7 @@ public func account_setContractInfo(
 
     return acct with { contractInfo: Some(
         struct {
+            evmCodeFormatVersion: const::EvmCodeFormatVersion_current,
             code: code,
             evmJumpTable: evmJumpTable,
             startCodePoint: startCodePoint,
@@ -701,6 +708,7 @@ func asfaClosure(_: any, acct: Account, wrappedState: asfa_wrappedState) -> asfa
 // Return the attributes of the resulting CodeRef
 public view write func accountStore_createOrAddCodeRef(
     acctStore: AccountStore,
+    evmCodeFormatVersion: uint,
     code: ByteArray
 ) -> option<(
     AccountStore,
@@ -709,9 +717,10 @@ public view write func accountStore_createOrAddCodeRef(
     bool,
 )> {
     let codeHash = keccak256(code, 0, bytearray_size(code));
-    return xif let Some(codeRef) = acctStore.codeRefTable[codeHash] {
+    let index = bytes32(uint(codeHash) + evmCodeFormatVersion);   // overflow is OK
+    return xif let Some(codeRef) = acctStore.codeRefTable[index] {
         Some((
-            accountStore_addCodeRef(acctStore, codeHash)?,
+            accountStore_addCodeRef(acctStore, index)?,
             codeRef.startCodePoint,
             codeRef.evmJumpTable,
             false,
@@ -719,7 +728,7 @@ public view write func accountStore_createOrAddCodeRef(
     } else {
         let (startCodePoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(code), false);
         Some((
-            accountStore_createCodeRef(acctStore, code, evmJumpTable, startCodePoint),
+            accountStore_createCodeRef(acctStore, evmCodeFormatVersion, code, evmJumpTable, startCodePoint),
             unsafecast<view write func()>(startCodePoint),
             unsafecast<map<uint, view write func()> >(evmJumpTable),
             true,
@@ -728,23 +737,26 @@ public view write func accountStore_createOrAddCodeRef(
 }
 
 // increment the reference count of a CodeRef
-public func accountStore_addCodeRef(acctStore: AccountStore, codeHash: bytes32) -> option<AccountStore> {
+func accountStore_addCodeRef(acctStore: AccountStore, index: bytes32) -> option<AccountStore> {
     // returns None if coderef doesn't exist
 
-    let codeRef = acctStore.codeRefTable[codeHash]?;
-    set acctStore.codeRefTable[codeHash] = codeRef with { refCount: codeRef.refCount + 1 };
+    let codeRef = acctStore.codeRefTable[index]?;
+    set acctStore.codeRefTable[index] = codeRef with { refCount: codeRef.refCount + 1 };
     return Some(acctStore);
 }
 
-public func accountStore_createCodeRef(
+func accountStore_createCodeRef(
     acctStore: AccountStore,
+    evmCodeFormatVersion: uint,
     code: ByteArray,
     evmJumpTable: map<uint, view write func()>,
     startCodePoint: view write func(),
 ) -> AccountStore {
     let codeHash = keccak256(code, 0, bytearray_size(code));
-    set acctStore.codeRefTable[codeHash] = struct {
+    let index = bytes32(uint(codeHash) + evmCodeFormatVersion);  // overflow is OK
+    set acctStore.codeRefTable[index] = struct {
         refCount: 1,
+        evmCodeFormatVersion: evmCodeFormatVersion,
         code: code,
         evmJumpTable: evmJumpTable,
         startCodePoint: startCodePoint,
@@ -754,14 +766,14 @@ public func accountStore_createCodeRef(
 
 // Decrement the reference count of a CodeRef, and remove it if ref count is now zero.
 // If the CodeRef doesn't exist, do nothing.
-public func accountStore_dropCodeRef(acctStore: AccountStore, codeHash: bytes32) -> AccountStore {
-    if let Some(codeRef) = acctStore.codeRefTable[codeHash] {
+func accountStore_dropCodeRef(acctStore: AccountStore, index: bytes32) -> AccountStore {
+    if let Some(codeRef) = acctStore.codeRefTable[index] {
         if (codeRef.refCount == 1) {
             set acctStore.codeRefTable = unsafecast<map<bytes32, CodeRef> >(
-                builtin_kvsDelete(unsafecast<Kvs>(acctStore.codeRefTable), uint(codeHash))
+                builtin_kvsDelete(unsafecast<Kvs>(acctStore.codeRefTable), uint(index))
             );
         } else {
-            set acctStore.codeRefTable[codeHash] = codeRef with { refCount: codeRef.refCount - 1 };
+            set acctStore.codeRefTable[index] = codeRef with { refCount: codeRef.refCount - 1 };
         }
     }
     return acctStore;

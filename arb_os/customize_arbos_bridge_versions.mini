@@ -3,14 +3,22 @@
 //
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
+use bridge_arbos_versions::before__accounts_Account;
+use bridge_arbos_versions::before__accounts_CodeRef;
 
 use accounts::AccountStore;
+use accounts::Account;
+use accounts::AccountContractInfo;
+use accounts::CodeRef;
 
 use evmCallStack::EvmCallFrame;
 use evmCallStack::IncomingRequestAndLogs;
 
 use output::PerBlockReceiptData;
 use output::OutputStatistics;
+
+use core::kvs::Kvs;
+use core::kvs::builtin_kvsForall;
 
 
 public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> map<uint, uint> {
@@ -43,5 +51,63 @@ public func set_globalBlockReceiptData_onUpgrade(oldGlobals: GlobalsBeforeUpgrad
         statsAllTime: old.statsAllTime,
         lastArbBlockNum: old.lastBlockNum,
         nextSendTimestamp: old.nextSendTime,
+    };
+}
+
+public func set_globalAccountStore_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> AccountStore {
+    let old = oldGlobals.globalAccountStore;
+    return struct {
+        accounts: unsafecast<map<address, Account> >(
+            builtin_kvsForall(
+                unsafecast<Kvs>(old.accounts),
+                closure(_k: any, rawAcct: any, rawState: any) -> any {
+                    let acct = unsafecast<before__accounts_Account>(rawAcct);
+                    let state = unsafecast<map<address, Account> >(rawState);
+                    set state[acct.addr] = struct {
+                        addr: acct.addr,
+                        blsKey: acct.blsKey,
+                        nextSeqNum: acct.nextSeqNum,
+                        ethBalance: acct.ethBalance,
+                        contractInfo: xif let Some(ci) = acct.contractInfo {
+                            Some(struct {
+                                evmCodeFormatVersion: const::EvmCodeFormatVersion_legacy,
+                                code: ci.code,
+                                evmJumpTable: ci.evmJumpTable,
+                                startCodePoint: ci.startCodePoint,
+                                storage: ci.storage,
+                            })
+                        } else {
+                            None<AccountContractInfo>
+                        },
+                        aggregatorInfo: acct.aggregatorInfo,
+                        aggregatorToPay: acct.aggregatorToPay,
+                    };
+                    return state;
+                },
+                newmap<address, Account>,
+            )
+        ),
+        retryBuffer: old.retryBuffer,
+        numContracts: old.numContracts,
+        codeRefTable: unsafecast<map<bytes32, CodeRef> >(
+            builtin_kvsForall(
+                unsafecast<Kvs>(old.codeRefTable),
+                closure(rawIndex: any, rawCodeRef: any, rawState: any) -> any {
+                    let index = unsafecast<bytes32>(rawIndex);
+                    let oldCodeRef = unsafecast<before__accounts_CodeRef>(rawCodeRef);
+                    let state = unsafecast<map<bytes32, CodeRef> >(rawState);
+                    set state[index] = struct {
+                        refCount: oldCodeRef.refCount,
+                        evmCodeFormatVersion: const::EvmCodeFormatVersion_legacy,
+                        code: oldCodeRef.code,
+                        evmJumpTable: oldCodeRef.evmJumpTable,
+                        startCodePoint: oldCodeRef.startCodePoint,
+                    };
+                    return state;
+                },
+                newmap<bytes32, CodeRef>
+            )
+        ),
+        escrowStore: old.escrowStore,
     };
 }

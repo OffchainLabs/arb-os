@@ -873,7 +873,11 @@ public view write func evmCallStack_returnFromCall(
             let (entryPoint, evmJumpTable) = xif (globalCurrentTxRequest.isConstructor) {
                 // the call was a constructor, so we need to install the resulting EVM code as the new contract's deploy code
                 let _ = gasAccounting_resumeTxCharges(leftoverGas);
-                let (uAcctStore, ep, ejt, created) = accountStore_createOrAddCodeRef(topFrame.accountStore, returnData)?;
+                let (uAcctStore, ep, ejt, created) = accountStore_createOrAddCodeRef(
+                    topFrame.accountStore,
+                    const::EvmCodeFormatVersion_current,
+                    returnData
+                )?;
                 globalCallStack = Some(topFrame with { accountStore: uAcctStore });
                 if (created) {
                     evmCallStack_addStorageCharge( (bytearray_size(returnData) + 31) / 32 );
