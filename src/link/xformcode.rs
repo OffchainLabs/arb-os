@@ -239,7 +239,7 @@ pub fn make_named_tuple(globals: &Vec<GlobalVar>) -> Value {
         globals
             .iter()
             .map(|g| Value::from(g.name.as_ref()))
-            .collect()
+            .collect(),
     )
 }
 
