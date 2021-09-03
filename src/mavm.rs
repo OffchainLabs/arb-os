@@ -214,7 +214,7 @@ impl CodePt {
                 u._push_bytes(&Uint256::from_usize(u._translate_pc(*pc)).rlp_encode());
             }
             _ => {
-                panic!();
+                panic!("Tried to upload bad codepoint");
             }
         }
     }
@@ -753,6 +753,30 @@ impl Value {
         uniques
     }
 
+    /// Surgically replace value potentially nested within a tuple with others.
+    /// |with| should return true when a value is to be replaced.
+    /// |when| makes the value substitution.
+    /// The application order allows a substituted value to itself be replaced.
+    pub fn replace<With, When>(self, with: &mut With, when: &mut When) -> Self
+    where
+        With: FnMut(Value) -> Value,
+        When: FnMut(&Value) -> bool,
+    {
+        let mut current = match when(&self) {
+            true => with(self),
+            false => self,
+        };
+        if let Value::Tuple(ref mut contents) = current {
+            let items = contents
+                .to_vec()
+                .into_iter()
+                .map(|val| val.replace(with, when))
+                .collect();
+            *contents = Arc::new(items);
+        }
+        current
+    }
+
     pub fn pretty_print(&self, highlight: &str) -> String {
         match self {
             Value::Int(i) => Color::color(highlight, i),
@@ -1063,6 +1087,7 @@ impl Opcode {
             "setgas" => Opcode::AVMOpcode(AVMOpcode::SetGas),
             "pushgas" => Opcode::AVMOpcode(AVMOpcode::PushGas),
             "errset" => Opcode::AVMOpcode(AVMOpcode::ErrSet),
+            "errpush" => Opcode::AVMOpcode(AVMOpcode::ErrPush),
             "sideload" => Opcode::AVMOpcode(AVMOpcode::Sideload),
             "ecrecover" => Opcode::AVMOpcode(AVMOpcode::EcRecover),
             "ecadd" => Opcode::AVMOpcode(AVMOpcode::EcAdd),

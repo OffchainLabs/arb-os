@@ -7,7 +7,7 @@
 use crate::compile::typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNode};
 use crate::compile::{path_display, CompileError, Lines};
 use crate::console::Color;
-use crate::link::Import;
+use crate::link::{Import, TupleTree};
 use crate::mavm::{CodePt, Instruction, LabelId, Value};
 use crate::pos::{BytePos, Location};
 use crate::stringtable::StringId;
@@ -770,12 +770,13 @@ impl Type {
             Type::Tuple(types) => {
                 Value::new_tuple(types.iter().map(|v| v.default_value(type_tree)).collect())
             }
-            Type::Struct(fields) => Value::new_tuple(
-                fields
+            Type::Struct(fields) => {
+                let field_values = fields
                     .iter()
                     .map(|f| f.tipe.default_value(type_tree))
-                    .collect(),
-            ),
+                    .collect();
+                TupleTree::fold_into_tuple(field_values)
+            }
             Type::Func(..) => {
                 // the error codepoint
                 Value::CodePoint(CodePt::Null)
@@ -786,9 +787,9 @@ impl Type {
                 Value::from(0), // set size to 0
             ]),
             Type::Array(t) => {
-                let fixed = Type::FixedArray(t.clone(), 0).default_value(type_tree);
+                let fixed = Type::FixedArray(t.clone(), 1).default_value(type_tree);
                 Value::new_tuple(vec![
-                    Value::from(0), // size
+                    Value::from(1), // size
                     Value::from(1), // topstep
                     fixed,          // array.mini builtin_arrayNew() unsafe casts this
                 ])

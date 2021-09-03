@@ -180,20 +180,6 @@ impl Import {
     }
 }
 
-fn hardcode_jump_table_into_register(
-    code: &mut Vec<Instruction>,
-    jump_table: &Value,
-    test_mode: bool,
-) {
-    let offset = if test_mode { 1 } else { 2 };
-    let old_imm = code[offset].clone().immediate.unwrap();
-    code[offset] = Instruction::from_opcode_imm(
-        code[offset].opcode,
-        old_imm.replace_last_none(jump_table),
-        code[offset].debug_info,
-    );
-}
-
 pub type ProgGraph = DiGraph<CompiledProgram, usize>;
 
 /// Creates a graph of the `CompiledProgram`s and then combines them into a single
@@ -258,7 +244,7 @@ pub fn link(
             ),
             Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Rset),
-                xformcode::make_uninitialized_tuple(globals.len()),
+                Value::none(), // gets hardcoded later
                 debug_info,
             ),
         ]
@@ -272,7 +258,7 @@ pub fn link(
             ),
             Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Rset),
-                xformcode::make_uninitialized_tuple(globals.len()),
+                Value::none(), // gets hardcoded later
                 debug_info,
             ),
         ]
@@ -391,22 +377,28 @@ pub fn postlink_compile(
             }
         }
     }
-    let (code_2, jump_table) =
+    let (code, jump_table) =
         striplabels::fix_nonforward_labels(&program.code, program.globals.len() - 1);
-    consider_debug_printing(&code_2, did_print, "after fix_backward_labels");
+    consider_debug_printing(&code, did_print, "after fix_backward_labels");
 
-    let code_3 = xformcode::fix_tuple_size(&code_2, program.globals.len())?;
-    consider_debug_printing(&code_3, did_print, "after fix_tuple_size");
+    let code = xformcode::fix_tuple_size(&code, program.globals.len())?;
+    consider_debug_printing(&code, did_print, "after fix_tuple_size");
 
-    let code_4 = optimize::peephole(&code_3);
-    consider_debug_printing(&code_4, did_print, "after peephole optimization");
+    let code = optimize::peephole(&code);
+    consider_debug_printing(&code, did_print, "after peephole optimization");
 
-    let (mut code_5, jump_table_final) = striplabels::strip_labels(code_4, &jump_table)?;
+    let (mut code, jump_table_final) = striplabels::strip_labels(code, &jump_table)?;
     let jump_table_len = jump_table_final.len();
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
 
-    hardcode_jump_table_into_register(&mut code_5, &jump_table_value, test_mode);
-    let code_final: Vec<_> = code_5
+    // hardcode globals & set error codepoints
+    let globals =
+        xformcode::make_globals_tuple(&program.globals, &jump_table_value, &program.type_tree);
+    let write_offset = if test_mode { 1 } else { 2 };
+    code[write_offset].immediate = Some(globals.clone());
+    code = xformcode::set_error_codepoints(code);
+
+    let code_final: Vec<_> = code
         .into_iter()
         .map(|insn| {
             if let Opcode::AVMOpcode(inner) = insn.opcode {
@@ -434,18 +426,19 @@ pub fn postlink_compile(
         let globals_shape = xformcode::make_uninitialized_tuple(program.globals.len());
         let globals_index = xformcode::make_numbered_tuple(program.globals.len());
         let globals_names = xformcode::make_named_tuple(&program.globals);
-        let globals_tuple = xformcode::make_globals_tuple(&program.globals, &program.type_tree);
 
-        //let globals_text = make_globals_tuple(&program.globals);
         println!("\nGlobal Vars {}\n", program.globals.len());
         println!("shape {}\n", globals_shape.pretty_print(Color::PINK));
         println!("names {}\n", globals_names.pretty_print(Color::MINT));
-        println!("index {}\n", globals_index.pretty_print(Color::MINT));
+        println!("index {}\n\n", globals_index.pretty_print(Color::MINT));
+        println!("Globals Tuple\n{}\n", globals.pretty_print(Color::GREY));
+
         println!(
-            "\nDefault Globals Tuple\n{}\n",
-            globals_tuple.pretty_print(Color::GREY)
+            "Globals Tuple Debug\n{}\n",
+            xformcode::make_globals_tuple_debug(&program.globals, &program.type_tree)
+                .replace_last_none(&jump_table_value)
+                .pretty_print(Color::GREY)
         );
-        println!();
 
         let jump_shape = xformcode::make_uninitialized_tuple(jump_table_len);
         println!(
