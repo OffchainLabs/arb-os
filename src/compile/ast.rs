@@ -753,9 +753,7 @@ impl Type {
             })
     }
 
-    /// Returns a tuple containing `Type`s default value and a `bool` representing whether use of
-    /// that default is type-safe.
-    // TODO: have this resolve nominal types
+    /// Returns the default value for the type
     pub fn default_value(&self, type_tree: &TypeTree) -> Value {
         match self {
             Type::Any => Value::none(),

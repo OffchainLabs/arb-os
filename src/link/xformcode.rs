@@ -227,6 +227,7 @@ pub fn make_uninitialized_tuple(size: usize) -> Value {
     TupleTree::new(size, false).make_empty()
 }
 
+/// Creates a globals tuple with the globals' access offsets in the slots.
 pub fn make_numbered_tuple(size: usize) -> Value {
     //TupleTree::new(size, false).make_value((0..size).into_iter().map(Value::from).collect())
     let mut sequence: Vec<_> = (0..(size - 1)).into_iter().map(Value::from).collect();
@@ -234,6 +235,7 @@ pub fn make_numbered_tuple(size: usize) -> Value {
     TupleTree::fold_into_tuple(sequence)
 }
 
+/// Creates a globals tuple with the globals' names in the slots.
 pub fn make_named_tuple(globals: &Vec<GlobalVar>) -> Value {
     TupleTree::fold_into_tuple(
         globals
@@ -243,6 +245,7 @@ pub fn make_named_tuple(globals: &Vec<GlobalVar>) -> Value {
     )
 }
 
+/// Creates a globals tuple with default values. The jump table is inserted at the end.
 pub fn make_globals_tuple(
     globals: &Vec<GlobalVar>,
     jump_table: &Value,
@@ -250,38 +253,27 @@ pub fn make_globals_tuple(
 ) -> Value {
     let mut values: Vec<_> = globals
         .iter()
-        //.map(|g| g.tipe.default_value(type_tree))
-        .enumerate()
-        .map(|(index, g)| {
-            if index != 6      // gasAccountingInfo
-             //&& index != 8   // evmOpJumpTable
-             && index != 10
-            // globalCurrentTxRequest
-            {
-                g.tipe.default_value(type_tree)
-            } else {
-                Value::none()
-            }
-        })
+        .map(|g| g.tipe.default_value(type_tree))
         .collect();
     values[globals.len() - 1] = jump_table.clone();
     TupleTree::fold_into_tuple(values)
 }
 
+/// Creates a globals tuple with (global-name, default-value) pairs
 pub fn make_globals_tuple_debug(globals: &Vec<GlobalVar>, type_tree: &TypeTree) -> Value {
-    TupleTree::new(globals.len(), false).make_value(
-        globals
-            .iter()
-            .map(|g| {
-                Value::new_tuple(vec![
-                    Value::from(g.name.as_ref()),
-                    g.tipe.default_value(type_tree),
-                ])
-            })
-            .collect(),
-    )
+    let values = globals
+        .iter()
+        .map(|g| {
+            Value::new_tuple(vec![
+                Value::from(g.name.as_ref()),
+                g.tipe.default_value(type_tree),
+            ])
+        })
+        .collect();
+    TupleTree::fold_into_tuple(values)
 }
 
+/// Replaces all instances of CodePt::Null with the error codepoint.
 pub fn set_error_codepoints(mut code: Vec<Instruction>) -> Vec<Instruction> {
     let error_codepoint = Value::CodePoint(CodePt::Internal(code.len() - 1));
 
@@ -358,6 +350,7 @@ impl TupleTree {
         val
     }
 
+    /// Takes a list of values and folds them up into a nested, 8-ary tuple.
     pub fn fold_into_tuple(values: Vec<Value>) -> Value {
         TupleTree::new(values.len(), false).make_value(values)
     }
