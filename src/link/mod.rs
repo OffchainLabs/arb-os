@@ -22,11 +22,10 @@ use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io;
 use std::io::Write;
-use xformcode::make_uninitialized_tuple;
 
 use crate::compile::miniconstants::init_constant_table;
 use std::path::Path;
-pub use xformcode::{value_from_field_list, TupleTree, TUPLE_SIZE};
+pub use xformcode::{TupleTree, TUPLE_SIZE};
 
 mod optimize;
 mod striplabels;
@@ -259,7 +258,7 @@ pub fn link(
             ),
             Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Rset),
-                make_uninitialized_tuple(globals.len()),
+                xformcode::make_uninitialized_tuple(globals.len()),
                 debug_info,
             ),
         ]
@@ -273,7 +272,7 @@ pub fn link(
             ),
             Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Rset),
-                make_uninitialized_tuple(globals.len()),
+                xformcode::make_uninitialized_tuple(globals.len()),
                 debug_info,
             ),
         ]
@@ -432,13 +431,23 @@ pub fn postlink_compile(
     }
 
     if debug {
-        let globals_shape = make_uninitialized_tuple(program.globals.len());
+        let globals_shape = xformcode::make_uninitialized_tuple(program.globals.len());
+        let globals_index = xformcode::make_numbered_tuple(program.globals.len());
+        let globals_names = xformcode::make_named_tuple(&program.globals);
+        let globals_tuple = xformcode::make_globals_tuple(&program.globals, &program.type_tree);
+
+        //let globals_text = make_globals_tuple(&program.globals);
+        println!("\nGlobal Vars {}\n", program.globals.len());
+        println!("shape {}\n", globals_shape.pretty_print(Color::PINK));
+        println!("names {}\n", globals_names.pretty_print(Color::MINT));
+        println!("index {}\n", globals_index.pretty_print(Color::MINT));
         println!(
-            "\nGlobal Vars {}\n{}\n",
-            program.globals.len(),
-            globals_shape.pretty_print(Color::PINK)
+            "\nDefault Globals Tuple\n{}\n",
+            globals_tuple.pretty_print(Color::GREY)
         );
-        let jump_shape = make_uninitialized_tuple(jump_table_len);
+        println!();
+
+        let jump_shape = xformcode::make_uninitialized_tuple(jump_table_len);
         println!(
             "Jump Table {}\n{}\n",
             jump_table_len,

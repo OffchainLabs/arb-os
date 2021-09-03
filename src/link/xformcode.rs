@@ -4,7 +4,7 @@
 
 //! Provides utilities for dealing with nested tuples and conversion from large flat tuples to nested tuples
 
-use crate::compile::{CompileError, DebugInfo};
+use crate::compile::{CompileError, DebugInfo, GlobalVar, TypeTree};
 use crate::console::Color;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
 use crate::uint256::Uint256;
@@ -225,6 +225,28 @@ pub fn jump_table_to_value(jump_table: Vec<CodePt>) -> Value {
 /// Generates a `Value` that is a nested tuple with size total leaf values, all leaf values are null.
 pub fn make_uninitialized_tuple(size: usize) -> Value {
     TupleTree::new(size, false).make_empty()
+}
+
+pub fn make_numbered_tuple(size: usize) -> Value {
+    TupleTree::new(size, false).make_value((0..size).into_iter().map(Value::from).collect())
+}
+
+pub fn make_named_tuple(globals: &Vec<GlobalVar>) -> Value {
+    TupleTree::new(globals.len(), false).make_value(
+        globals
+            .iter()
+            .map(|g| Value::from(g.name.as_ref()))
+            .collect(),
+    )
+}
+
+pub fn make_globals_tuple(globals: &Vec<GlobalVar>, type_tree: &TypeTree) -> Value {
+    TupleTree::new(globals.len(), false).make_value(
+        globals
+            .iter()
+            .map(|g| g.tipe.default_value(type_tree))
+            .collect(),
+    )
 }
 
 /// Represents tuple structure of mini value.
@@ -467,10 +489,4 @@ impl TupleTree {
             Ok(())
         }
     }
-}
-
-/// Generates a `TupleTree` of size equal to the length of lis, and fills its leaf nodes with the
-/// `Value`s in lis.
-pub fn value_from_field_list(lis: Vec<Value>) -> Value {
-    TupleTree::new(lis.len(), false).make_value(lis)
 }

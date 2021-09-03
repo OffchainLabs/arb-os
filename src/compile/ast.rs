@@ -7,8 +7,8 @@
 use crate::compile::typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNode};
 use crate::compile::{path_display, CompileError, Lines};
 use crate::console::Color;
-use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
-use crate::mavm::{Instruction, LabelId, Value};
+use crate::link::Import;
+use crate::mavm::{CodePt, Instruction, LabelId, Value};
 use crate::pos::{BytePos, Location};
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
@@ -756,59 +756,67 @@ impl Type {
     /// Returns a tuple containing `Type`s default value and a `bool` representing whether use of
     /// that default is type-safe.
     // TODO: have this resolve nominal types
-    pub fn default_value(&self) -> (Value, bool) {
+    pub fn default_value(&self, type_tree: &TypeTree) -> Value {
         match self {
-            Type::Void => (Value::none(), false),
-            Type::Buffer => (Value::new_buffer(vec![]), true),
+            Type::Any => Value::none(),
+            Type::Buffer => Value::new_buffer(vec![]),
             Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress | Type::Bool => {
-                (Value::Int(Uint256::zero()), true)
+                Value::from(0)
             }
-            Type::Tuple(tvec) => {
-                let mut default_tup = Vec::new();
-                let mut is_safe = true;
-                for t in tvec {
-                    let (def, safe) = t.default_value();
-                    default_tup.push(def);
-                    is_safe = is_safe && safe;
-                }
-                (Value::new_tuple(default_tup), is_safe)
+            Type::Union(types) => {
+                // the first's default has to be right by definition
+                types[0].default_value(type_tree)
             }
+            Type::Tuple(types) => {
+                Value::new_tuple(types.iter().map(|v| v.default_value(type_tree)).collect())
+            }
+            Type::Struct(fields) => Value::new_tuple(
+                fields
+                    .iter()
+                    .map(|f| f.tipe.default_value(type_tree))
+                    .collect(),
+            ),
+            Type::Func(..) => {
+                // the error codepoint
+                Value::CodePoint(CodePt::Null)
+            }
+            Type::Option(_) => Value::new_tuple(vec![Value::Int(Uint256::zero())]),
+            Type::Map(_, _) => Value::new_tuple(vec![
+                Value::from(0), // kvs.mini builtin_kvsNew() unsafe casts on 0
+                Value::from(0), // set size to 0
+            ]),
             Type::Array(t) => {
-                let (def, safe) = t.default_value();
-                (
+                let fixed = Type::FixedArray(t.clone(), 0).default_value(type_tree);
+                Value::new_tuple(vec![
+                    Value::from(0), // size
+                    Value::from(1), // topstep
+                    fixed,          // array.mini builtin_arrayNew() unsafe casts this
+                ])
+            }
+            Type::FixedArray(t, size) => {
+                // emulate array.mini builtin_arrayNew()
+                fn emulated_builtin(size: usize, mut base: Value) -> Value {
+                    let mut chunk = 1;
+                    while (8 * chunk < size) {
+                        chunk = 8 * chunk;
+                        base = Value::new_tuple(vec![base; 8]);
+                    }
                     Value::new_tuple(vec![
-                        Value::Int(Uint256::one()),
-                        Value::Int(Uint256::one()),
-                        Value::new_tuple(vec![def]),
-                    ]),
-                    safe,
-                )
-            }
-            Type::FixedArray(t, sz) => {
-                let (default_val, safe) = t.default_value();
-                let mut val = Value::new_tuple(vec![default_val; 8]);
-                let mut chunk_size = 1;
-                while chunk_size * TUPLE_SIZE < *sz {
-                    val = Value::new_tuple(vec![val; 8]);
-                    chunk_size *= 8;
+                        Value::from(size),  // size
+                        Value::from(chunk), // topstep
+                        Value::new_tuple(vec![base; 8]),
+                    ])
                 }
-                (val, safe)
+                emulated_builtin(*size, t.default_value(type_tree))
             }
-            Type::Struct(fields) => {
-                let mut vals = Vec::new();
-                let mut is_safe = true;
-                for field in fields {
-                    let (val, safe) = field.tipe.default_value();
-                    vals.push(val);
-                    is_safe = is_safe && safe;
-                }
-                (value_from_field_list(vals), is_safe)
-            }
-            Type::Map(_, _) | Type::Func(_, _, _) | Type::Nominal(_, _) => (Value::none(), false),
-            Type::Any => (Value::none(), true),
-            Type::Every => (Value::none(), false),
-            Type::Option(_) => (Value::new_tuple(vec![Value::Int(Uint256::zero())]), true),
-            Type::Union(_) => (Value::none(), false),
+            Type::Nominal(_, _) => self
+                .get_representation(type_tree)
+                .expect("nominal doesn't exist")
+                .default_value(type_tree),
+            x => panic!(
+                "Tried to get the default value for type {}",
+                x.print(type_tree)
+            ),
         }
     }
 

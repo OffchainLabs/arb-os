@@ -8,7 +8,7 @@ use super::ast::{BinaryOp, FuncProperties, GlobalVar, TrinaryOp, Type, UnaryOp};
 use super::typecheck::{
     TypeCheckedExpr, TypeCheckedFunc, TypeCheckedMatchPattern, TypeCheckedStatement,
 };
-use crate::compile::ast::{DebugInfo, MatchPatternKind};
+use crate::compile::ast::{DebugInfo, MatchPatternKind, TypeTree};
 use crate::compile::typecheck::{
     TypeCheckedCodeBlock, TypeCheckedExprKind, TypeCheckedStatementKind,
 };
@@ -688,7 +688,7 @@ fn mavm_codegen_expr(
             code.push(opcode!(
                 Noop,
                 Value::new_tuple(vec![
-                    Value::Int(Uint256::from_usize(2 * bytes.len())),
+                    Value::Int(Uint256::from_usize(bytes.len())),
                     Value::Buffer(Buffer::from_bytes(bytes.clone())),
                 ])
             ));
@@ -1115,7 +1115,7 @@ fn mavm_codegen_expr(
                 vec![Type::Uint, Type::Any],
                 Box::new(array_type.clone()),
             );
-            let (default_val, _is_safe) = base_type.default_value();
+            let default_val = base_type.default_value(&TypeTree::default());
             let the_expr = TypeCheckedExpr {
                 kind: TypeCheckedExprKind::FunctionCall(
                     Box::new(TypeCheckedExpr::new(

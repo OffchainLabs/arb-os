@@ -756,7 +756,10 @@ impl Value {
     pub fn pretty_print(&self, highlight: &str) -> String {
         match self {
             Value::Int(i) => Color::color(highlight, i),
-            Value::CodePoint(pc) => Color::color(highlight, pc),
+            Value::CodePoint(pc) => match pc {
+                CodePt::Null => Color::maroon("Err"),
+                _ => Color::color(highlight, pc),
+            },
             Value::Label(label) => match label {
                 Label::Func(id) => Color::color(highlight, format!("func_{}", id % 256)),
                 Label::Closure(id) => Color::color(highlight, format!("λ_{}", id % 256)),
@@ -796,6 +799,12 @@ impl Value {
 impl From<usize> for Value {
     fn from(v: usize) -> Self {
         Self::Int(Uint256::from_usize(v))
+    }
+}
+
+impl From<&str> for Value {
+    fn from(v: &str) -> Self {
+        Self::Buffer(Buffer::from_bytes(v.as_bytes().to_vec()))
     }
 }
 
