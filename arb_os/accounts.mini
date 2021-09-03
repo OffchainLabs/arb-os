@@ -512,25 +512,28 @@ public func accountStore_transferEthBalance(
 // Allocate a new escrow box, and transfer amount into it from the account of payer
 // Return None if payer has insufficient funds
 public func accountStore_newEscrow(acctStore: AccountStore, payer: address, amount: uint) -> option<(AccountStore, uint)> {
-    return xif (amount == 0) {
-        Some((acctStore, const::EscrowStoreID_txGas))
+    let key = acctStore.escrowStore.nextKey;
+    let updatedEscrowedValues = xif (amount == 0) {
+        // in this case we're allocating a new escrow box, which holds zero funds
+        // this is not a waste of space in escrowedValues because a zero value doesn't consume space in a StorageMap
+        acctStore.escrowStore.escrowedValues
     } else {
         acctStore = accountStore_set(
             acctStore,
             payer,
             account_deductFromEthBalance(accountStore_get(acctStore, payer), amount)?,
         );
-        let key = acctStore.escrowStore.nextKey;
-        Some((
-            acctStore with {
-                escrowStore: struct {
-                    nextKey: key + 1,
-                    escrowedValues: storageMap_set(acctStore.escrowStore.escrowedValues, key, amount),
-                }
-            },
-            key
-        ))
+        storageMap_set(acctStore.escrowStore.escrowedValues, key, amount)
     };
+    return Some((
+        acctStore with {
+            escrowStore: struct {
+                nextKey: key + 1,
+                escrowedValues: updatedEscrowedValues,
+            }
+        },
+        key
+    ));
 }
 
 public func _accountStore_getEscrowBalance(acctStore: AccountStore, key: uint) -> uint {
