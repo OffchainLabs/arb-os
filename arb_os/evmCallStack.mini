@@ -57,6 +57,7 @@ use std::queue::queue_isEmpty;
 use std::queue::queue_get;
 use std::queue::queue_put;
 
+use std::safeMath::safeAdd;
 use std::safeMath::safeMul;
 
 use std::stack::stack_new;
@@ -658,7 +659,7 @@ public view write func evmCallStack_doCall(
             // Add a stipend, charged to the caller, if non-zero value is transferred.
             // This is needed because Ethereum provides a stipend, and some application code depends on that.
             // The size of our stipend was chosen experimentally, to make sure a call that will run on Ethereum will run here.
-            gas = gas + chainParams_getOrDie(const::Atom_Param_ArbitrumNonZeroBalanceCallStipend);
+            gas = safeAdd(gas, chainParams_getOrDie(const::Atom_Param_ArbitrumNonZeroBalanceCallStipend));
         }
         if (gas > 63*availableGas/64) {
             gas = 63*availableGas/64;  // per EVM spec, don't give the callee more than 63/64 of the caller's gas
