@@ -366,7 +366,6 @@ public view write func initEvmCallStack(
                         request.originalCaller,
                     );
                 }
-                evmCallStack_callHitError(1);
             }
         } else {
             // can't pay for gas error
@@ -381,7 +380,6 @@ public view write func initEvmCallStack(
                 true,
                 request.originalCaller,
             );
-            evmCallStack_callHitError(2);
         }
     } else {
         // call is to an address with no contract, so treat it as a simple eth transfer
@@ -425,9 +423,6 @@ public view write func initEvmCallStack(
                     true,
                     request.originalCaller,
                 );
-                emptyAvmStack();
-                cleanAvmAuxStackAndCall(mainRunLoop, true);
-                //NOTREACHED
             } else {
                 // insufficient balance error
                 evmTracer_pushReturnRevert(const::TxResultCode_insufficientBalance, bytearray_new(0), 0);
@@ -441,7 +436,6 @@ public view write func initEvmCallStack(
                     true,
                     request.originalCaller,
                 );
-                evmCallStack_callHitError(3);
             }
         } else {
             // tx is transfer of 0 Eth, so just report success
@@ -456,11 +450,15 @@ public view write func initEvmCallStack(
                 true,
                 request.originalCaller,
             );
-            emptyAvmStack();
-            cleanAvmAuxStackAndCall(mainRunLoop, true);
-            //NOTREACHED
         }
     }
+
+    // We should only reach this point if there was an error that prevented starting a tx.
+    // A tx receipt with appropriate failure code should have been emitted.
+    // Now clean up and return to the main run loop.
+    emptyAvmStack();
+    cleanAvmAuxStackAndCall(mainRunLoop, true);
+    //NOTREACHED
 }
 
 public view write func initEvmCallStackForConstructor(
@@ -602,7 +600,6 @@ public view write func initEvmCallStackForConstructor(
                 true,
                 request.originalCaller,
             );
-            evmCallStack_callHitError(15);
         }
     } else {
         // caller doesn't have the funds to provide callvalue
@@ -617,9 +614,15 @@ public view write func initEvmCallStackForConstructor(
             true,
             request.originalCaller,
         );
-        evmCallStack_callHitError(4);  // should never return
         error;
     }
+
+    // We should only reach this point if there was an error that prevented starting a tx.
+    // A tx receipt with appropriate failure code should have been emitted.
+    // Now clean up and return to the main run loop.
+    emptyAvmStack();
+    cleanAvmAuxStackAndCall(mainRunLoop, true);
+    //NOTREACHED
 }
 
 // Make a tx call from within another tx
