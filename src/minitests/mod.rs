@@ -517,8 +517,8 @@ fn small_upgrade() {
 fn small_upgrade_auto_remap() {
     use crate::upload::CodeUploader;
 
-    let mut machine = load_from_file(Path::new("upgradetests/upgrade2_old.mexe"));
-    let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade2_new.mexe"));
+    let mut machine = load_from_file(Path::new("looptest/upgrade2_old.mexe"));
+    let uploader = CodeUploader::_new_from_file(Path::new("looptest/upgrade2_new.mexe"));
     let code_bytes = uploader._to_flat_vec();
     let msg = Value::new_tuple(vec![
         Value::Int(Uint256::from_usize(code_bytes.len())),
