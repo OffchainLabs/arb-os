@@ -3,11 +3,11 @@
  */
 
 use crate::console::Color;
-use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
+use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
 use petgraph::algo::is_cyclic_directed;
-use petgraph::graph::{DiGraph, EdgeIndex, EdgeReference, NodeIndex};
+use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::stable_graph::StableGraph;
-use petgraph::visit::{Dfs, DfsPostOrder, EdgeRef};
+use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 use std::collections::HashMap;
 
@@ -213,7 +213,7 @@ impl BasicGraph {
             return;
         }
 
-        let mut lifetimes: DiGraph<usize, ()> = DiGraph::new(); // the actual values (line #)
+        let mut _lifetimes: DiGraph<usize, ()> = DiGraph::new(); // the actual values (line #)
 
         let nodes: Vec<_> = self.graph.node_indices().rev().collect();
 
@@ -222,8 +222,8 @@ impl BasicGraph {
 
             for curr in code.iter().rev() {
                 match curr.opcode {
-                    Opcode::SetLocal(var) => {}
-                    Opcode::GetLocal(var) => {}
+                    Opcode::SetLocal(_var) => {}
+                    Opcode::GetLocal(_var) => {}
                     _ => {}
                 }
             }
