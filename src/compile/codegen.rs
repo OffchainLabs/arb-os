@@ -27,6 +27,7 @@ struct Codegen<'a> {
     code: &'a mut Vec<Instruction>,
     label_gen: &'a mut LabelGenerator,
     string_table: &'a StringTable,
+    /// Associates each imported function with a unique label
     func_labels: &'a HashMap<StringId, Label>,
     globals: &'a HashMap<StringId, GlobalVar>,
     issues: &'a mut Vec<CompileError>,
@@ -150,14 +151,14 @@ fn codegen_statements(
     cgen: &mut Codegen,
     mut num_locals: usize,          // num locals that have been allocated
     locals: &HashMap<usize, usize>, // lookup local variable slot number by name
-    prepushed_vals: usize,
+    stack_items: usize,
 ) -> Result<(usize, HashMap<StringId, usize>), CompileError> {
     let mut bindings = HashMap::new();
     for statement in statements {
         let mut new_locals = locals.clone();
         new_locals.extend(bindings.clone());
         let (statement_locals, statement_bindings) =
-            codegen_statement(statement, cgen, num_locals, &new_locals, prepushed_vals)?;
+            codegen_statement(statement, cgen, num_locals, &new_locals, stack_items)?;
         num_locals = max(statement_locals, num_locals);
         for (id, bind) in statement_bindings {
             bindings.insert(id, bind);
@@ -178,11 +179,11 @@ fn codegen_statement(
     cgen: &mut Codegen,
     mut num_locals: usize,          // num locals that have been allocated
     locals: &HashMap<usize, usize>, // lookup local variable slot number by name
-    prepushed_vals: usize,
+    stack_items: usize,
 ) -> Result<(usize, HashMap<StringId, usize>), CompileError> {
     macro_rules! expr {
         ($expr:expr) => {
-            codegen_expr(&$expr, cgen, num_locals, &locals, prepushed_vals)?
+            codegen_expr(&$expr, cgen, num_locals, &locals, stack_items)?
         };
     }
 
@@ -206,9 +207,9 @@ fn codegen_statement(
         }
         TypeCheckedStatementKind::Return(expr) => {
             let exp_locals = expr!(expr);
-            if prepushed_vals > 0 {
+            if stack_items > 0 {
                 cgen.code.push(opcode!(AuxPush));
-                for _ in 0..prepushed_vals {
+                for _ in 0..stack_items {
                     cgen.code.push(opcode!(Pop));
                 }
                 cgen.code.push(opcode!(AuxPop));
@@ -281,8 +282,7 @@ fn codegen_statement(
             cgen.code.push(opcode!(Jump, Value::Label(cond_label)));
             cgen.code
                 .push(Instruction::from_opcode(Opcode::Label(top_label), debug));
-            let (nl, _) =
-                codegen_statements(body.to_vec(), cgen, num_locals, locals, prepushed_vals)?;
+            let (nl, _) = codegen_statements(body.to_vec(), cgen, num_locals, locals, stack_items)?;
             num_locals = nl;
             cgen.code
                 .push(Instruction::from_opcode(Opcode::Label(cond_label), debug));
@@ -301,7 +301,7 @@ fn codegen_statement(
                     cgen,
                     num_locals,
                     locals,
-                    prepushed_vals + i,
+                    stack_items + i,
                 )?;
                 exp_locals = max(exp_locals, e_locals);
             }
@@ -354,17 +354,17 @@ fn codegen_code_block(
     cgen: &mut Codegen,
     num_locals: usize,
     locals: &HashMap<usize, usize>,
-    prepushed_vals: usize,
+    stack_items: usize,
     _debug_info: DebugInfo,
 ) -> Result<usize, CompileError> {
     let (nl, block_locals) =
-        codegen_statements(block.body.clone(), cgen, num_locals, locals, prepushed_vals)?;
+        codegen_statements(block.body.clone(), cgen, num_locals, locals, stack_items)?;
     if let Some(ret_expr) = &block.ret_expr {
         let mut new_locals = locals.clone();
         new_locals.extend(block_locals);
-        let prepushed_vals_expr = codegen_expr(ret_expr, cgen, nl, &new_locals, prepushed_vals)
+        let stack_items_expr = codegen_expr(ret_expr, cgen, nl, &new_locals, stack_items)
             .map(|exp_locals| (max(num_locals, max(exp_locals, nl))))?;
-        Ok(prepushed_vals_expr)
+        Ok(stack_items_expr)
     } else {
         Ok(max(num_locals, nl))
     }
@@ -465,7 +465,7 @@ fn codegen_tuple_pattern(
 /// at any previous point in the callframe, locals is the table of local variable names to slot
 /// numbers, string_table is used to get builtins, func_labels maps `stringId`s for imported func
 /// to their associated labels, globals maps `stringID`s to their associated slot numbers,
-/// and prepushed_vals indicates the number of items on the stack at the start of the call,
+/// and stack_items indicates the number of items on the stack at the start of the call,
 /// which is needed for early returns.
 ///
 /// If successful this function returns a tuple containing a mutable reference to the generated code,
@@ -475,14 +475,14 @@ fn codegen_expr(
     cgen: &mut Codegen,
     num_locals: usize,
     locals: &HashMap<usize, usize>,
-    prepushed_vals: usize,
+    stack_items: usize,
 ) -> Result<usize, CompileError> {
     macro_rules! expr {
         ($expr:expr) => {
             expr!($expr, 0)
         };
         ($expr:expr, $prepushed:expr) => {
-            codegen_expr($expr, cgen, num_locals, locals, prepushed_vals + $prepushed)
+            codegen_expr($expr, cgen, num_locals, locals, stack_items + $prepushed)
         };
     }
 
@@ -812,7 +812,7 @@ fn codegen_expr(
             Ok((max(num_locals, max(fexpr_locals, args_locals))))
         }
         TypeCheckedExprKind::CodeBlock(block) => {
-            codegen_code_block(block, cgen, num_locals, locals, prepushed_vals, debug)
+            codegen_code_block(block, cgen, num_locals, locals, stack_items, debug)
         }
         TypeCheckedExprKind::StructInitializer(fields, _) => {
             let fields_len = fields.len();
@@ -983,7 +983,7 @@ fn codegen_expr(
             num_locals,
             locals,
             debug,
-            prepushed_vals,
+            stack_items,
         ),
         TypeCheckedExprKind::MapMod(map, key, val, t) => {
             expr!(&TypeCheckedExpr::builtin(
@@ -1029,9 +1029,9 @@ fn codegen_expr(
             cgen.code.push(opcode!(Tget, Value::Int(Uint256::zero())));
             cgen.code.push(opcode!(Cjump, Value::Label(extract)));
             // We use the auxstack here to temporarily store the return value while we clear the temp values on the stack
-            if prepushed_vals > 0 {
+            if stack_items > 0 {
                 cgen.code.push(opcode!(AuxPush));
-                for _ in 0..prepushed_vals {
+                for _ in 0..stack_items {
                     cgen.code.push(opcode!(Pop));
                 }
                 cgen.code.push(opcode!(AuxPop));
@@ -1050,7 +1050,7 @@ fn codegen_expr(
             cgen.code.push(opcode!(IsZero));
             cgen.code.push(opcode!(Cjump, Value::Label(after_label)));
             let block_locals =
-                codegen_code_block(block, cgen, num_locals, locals, prepushed_vals, debug)?;
+                codegen_code_block(block, cgen, num_locals, locals, stack_items, debug)?;
             if else_block.is_some() {
                 cgen.code.push(opcode!(Jump, Value::Label(end_label)));
             }
@@ -1058,7 +1058,7 @@ fn codegen_expr(
                 .push(Instruction::from_opcode(Opcode::Label(after_label), debug));
             let else_locals = if let Some(block) = else_block {
                 let else_locals =
-                    codegen_code_block(block, cgen, num_locals, locals, prepushed_vals, debug)?;
+                    codegen_code_block(block, cgen, num_locals, locals, stack_items, debug)?;
                 else_locals
             } else {
                 0
@@ -1072,7 +1072,7 @@ fn codegen_expr(
             let slot_num = num_locals;
             let mut new_locals = locals.clone();
             new_locals.insert(*name, slot_num);
-            let exp_locals = codegen_expr(expr, cgen, num_locals, &locals, prepushed_vals)?;
+            let exp_locals = codegen_expr(expr, cgen, num_locals, &locals, stack_items)?;
             cgen.code.push(opcode!(Dup0));
             cgen.code
                 .push(opcode!(Tget, Value::Int(Uint256::from_usize(0))));
@@ -1087,7 +1087,7 @@ fn codegen_expr(
                 cgen,
                 num_locals + 1,
                 &new_locals,
-                prepushed_vals,
+                stack_items,
                 debug,
             )?;
             total_locals = max(total_locals, exp_locals);
@@ -1098,14 +1098,8 @@ fn codegen_expr(
                 .push(Instruction::from_opcode(Opcode::Label(after_label), debug));
             cgen.code.push(opcode!(Pop));
             if let Some(else_block) = else_block {
-                let else_locals = codegen_code_block(
-                    &else_block,
-                    cgen,
-                    num_locals,
-                    &locals,
-                    prepushed_vals,
-                    debug,
-                )?;
+                let else_locals =
+                    codegen_code_block(&else_block, cgen, num_locals, &locals, stack_items, debug)?;
                 total_locals = max(total_locals, else_locals);
             }
             cgen.code.push(Instruction::from_opcode(
@@ -1124,7 +1118,7 @@ fn codegen_expr(
             cgen.code
                 .push(Instruction::from_opcode(Opcode::Label(top_label), debug));
             let (nl, _) =
-                codegen_statements(body.to_vec(), cgen, num_locals + 1, locals, prepushed_vals)?;
+                codegen_statements(body.to_vec(), cgen, num_locals + 1, locals, stack_items)?;
             cgen.code
                 .push(Instruction::from_opcode(Opcode::GetLocal(slot_num), debug));
             cgen.code.push(opcode!(Jump));
@@ -1145,11 +1139,11 @@ fn codegen_fixed_array_mod(
     num_locals: usize,
     locals: &HashMap<usize, usize>,
     debug_info: DebugInfo,
-    prepushed_vals: usize,
+    stack_items: usize,
 ) -> Result<usize, CompileError> {
-    let val_locals = codegen_expr(val_expr, cgen, num_locals, locals, prepushed_vals)?;
-    let arr_locals = codegen_expr(arr_expr, cgen, num_locals, locals, prepushed_vals + 1)?;
-    let idx_locals = codegen_expr(idx_expr, cgen, num_locals, locals, prepushed_vals + 2)?;
+    let val_locals = codegen_expr(val_expr, cgen, num_locals, locals, stack_items)?;
+    let arr_locals = codegen_expr(arr_expr, cgen, num_locals, locals, stack_items + 1)?;
+    let idx_locals = codegen_expr(idx_expr, cgen, num_locals, locals, stack_items + 2)?;
 
     macro_rules! opcode {
         ($opcode:ident) => {
