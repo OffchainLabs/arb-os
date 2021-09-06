@@ -105,7 +105,7 @@ struct WasmTest {
     input: Vec<String>,
     #[clap(short, long)]
     param: Option<String>,
-    #[clap(short, long)]
+    #[clap(long)]
     param_file: Option<String>,
     #[clap(short, long)]
     debug: bool,
@@ -125,7 +125,7 @@ struct WasmRun {
     input: Vec<String>,
     #[clap(short, long)]
     param: Option<String>,
-    #[clap(short, long)]
+    #[clap(long)]
     param_file: Option<String>,
     #[clap(short, long)]
     debug: bool,

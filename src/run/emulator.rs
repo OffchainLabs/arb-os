@@ -2374,7 +2374,7 @@ impl Machine {
                             vec.push(buf.read_byte(i as u128));
                         }
                         let init = process_wasm(&vec);
-                        let (code_vec, _) = crate::wasm::resolve_labels(init.clone());
+                        let (code_vec, _) = crate::wasm::resolve_labels(&init);
                         let code_vec = crate::wasm::clear_labels(code_vec);
                         let mut labels = vec![];
                         let mut code_pt = self.code.create_segment();
