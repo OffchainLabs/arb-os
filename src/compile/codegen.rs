@@ -18,24 +18,36 @@ use crate::link::{TupleTree, TUPLE_SIZE};
 use crate::mavm::{AVMOpcode, Buffer, Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
-use std::collections::HashSet;
-use std::{cmp::max, collections::HashMap};
+use std::collections::{HashMap, HashSet};
 
 type SlotNum = usize;
 
 struct Codegen<'a> {
+    /// The code being generated
     code: &'a mut Vec<Instruction>,
+    /// A source of unique labels
     label_gen: &'a mut LabelGenerator,
+    /// 
     string_table: &'a StringTable,
     /// Associates each imported function with a unique label
     func_labels: &'a HashMap<StringId, Label>,
+    /// Maps names to globals
     globals: &'a HashMap<StringId, GlobalVar>,
+    /// 
     issues: &'a mut Vec<CompileError>,
     release_build: bool,
 
     locals: HashMap<StringId, SlotNum>,
     aliases: HashMap<SlotNum, Vec<SlotNum>>,
     next_slot: SlotNum,
+}
+
+impl Codegen<'_> {
+    fn next_slot(&mut self) -> SlotNum {
+        let next = self.next_slot;
+        self.next_slot += 1;
+        next
+    }
 }
 
 /// This generates code for individual mini functions.
@@ -101,13 +113,14 @@ pub fn mavm_codegen_func(
         globals,
         issues,
         release_build,
-        locals: HashMap::new(),
+        locals: locals.clone(),
         aliases: HashMap::new(),
-        next_slot: 0,
+        next_slot: locals.len(),
     };
 
-    let (mut space_for_locals, _slot_map) =
-        codegen_statements(func.code, &mut codegen, locals.len(), &locals, 0)?;
+    let _ = codegen_statements(func.code, &mut codegen, &locals, 0)?;
+
+    let mut space_for_locals = codegen.next_slot + 512;
 
     match func.tipe {
         Type::Func(_prop, _, ret) => {
@@ -149,22 +162,19 @@ pub fn mavm_codegen_func(
 fn codegen_statements(
     statements: Vec<TypeCheckedStatement>, // statements to codegen
     cgen: &mut Codegen,
-    mut num_locals: usize,          // num locals that have been allocated
     locals: &HashMap<usize, usize>, // lookup local variable slot number by name
     stack_items: usize,
-) -> Result<(usize, HashMap<StringId, usize>), CompileError> {
+) -> Result<HashMap<StringId, usize>, CompileError> {
     let mut bindings = HashMap::new();
     for statement in statements {
         let mut new_locals = locals.clone();
         new_locals.extend(bindings.clone());
-        let (statement_locals, statement_bindings) =
-            codegen_statement(statement, cgen, num_locals, &new_locals, stack_items)?;
-        num_locals = max(statement_locals, num_locals);
+        let statement_bindings = codegen_statement(statement, cgen, &new_locals, stack_items)?;
         for (id, bind) in statement_bindings {
             bindings.insert(id, bind);
         }
     }
-    Ok((num_locals, bindings))
+    Ok(bindings)
 }
 
 /// Generates code for the provided statement. code represents the code generated previously,
@@ -177,13 +187,12 @@ fn codegen_statements(
 fn codegen_statement(
     statement: TypeCheckedStatement, // statement to codegen
     cgen: &mut Codegen,
-    mut num_locals: usize,          // num locals that have been allocated
     locals: &HashMap<usize, usize>, // lookup local variable slot number by name
     stack_items: usize,
-) -> Result<(usize, HashMap<StringId, usize>), CompileError> {
+) -> Result<HashMap<StringId, usize>, CompileError> {
     macro_rules! expr {
         ($expr:expr) => {
-            codegen_expr(&$expr, cgen, num_locals, &locals, stack_items)?
+            codegen_expr(&$expr, cgen, &locals, stack_items)?
         };
     }
 
@@ -203,10 +212,10 @@ fn codegen_statement(
         TypeCheckedStatementKind::ReturnVoid() => {
             cgen.code
                 .push(Instruction::from_opcode(Opcode::Return, debug));
-            Ok((0, HashMap::new()))
+            Ok(HashMap::new())
         }
         TypeCheckedStatementKind::Return(expr) => {
-            let exp_locals = expr!(expr);
+            expr!(expr);
             if stack_items > 0 {
                 cgen.code.push(opcode!(AuxPush));
                 for _ in 0..stack_items {
@@ -216,13 +225,13 @@ fn codegen_statement(
             }
             cgen.code
                 .push(Instruction::from_opcode(Opcode::Return, debug));
-            Ok((exp_locals, HashMap::new()))
+            Ok(HashMap::new())
         }
         TypeCheckedStatementKind::Break(..) => {
             panic!("Encountered a break node")
         }
         TypeCheckedStatementKind::Expression(expr) => {
-            let exp_locals = expr!(expr);
+            expr!(expr);
             if !(expr.get_type() == Type::Void || expr.get_type() == Type::Every) {
                 cgen.code.push(opcode!(Pop));
                 if expr.get_type() != Type::Tuple(vec![]) {
@@ -236,15 +245,12 @@ fn codegen_statement(
                     ));
                 }
             }
-            Ok((exp_locals, HashMap::new()))
+            Ok(HashMap::new())
         }
         TypeCheckedStatementKind::Let(pat, expr) => {
-            let exp_locals = expr!(expr);
-            let (new_locals, bindings, _assignments) =
-                codegen_tuple_pattern(cgen, &pat, num_locals, locals, debug)?;
-            num_locals += new_locals;
-            num_locals = max(num_locals, exp_locals);
-            Ok((num_locals, bindings))
+            expr!(expr);
+            let (bindings, _assignments) = codegen_tuple_pattern(cgen, &pat, locals, debug)?;
+            Ok(bindings)
         }
         TypeCheckedStatementKind::AssignLocal(name, expr) => {
             let slot_num = match locals.get(name) {
@@ -256,24 +262,23 @@ fn codegen_statement(
                     ))
                 }
             };
-            let exp_locals = expr!(expr);
+            expr!(expr);
             cgen.code
                 .push(Instruction::from_opcode(Opcode::SetLocal(*slot_num), debug));
-            Ok((exp_locals, HashMap::new()))
+            Ok(HashMap::new())
         }
         TypeCheckedStatementKind::AssignGlobal(id, expr) => {
-            let exp_locals = expr!(expr);
+            expr!(expr);
             let global = cgen.globals.get(id).expect("No global exists for stringID");
             let offset = global.offset.unwrap();
             cgen.code.push(Instruction::from_opcode(
                 Opcode::SetGlobalVar(offset),
                 debug,
             ));
-            Ok((exp_locals, HashMap::new()))
+            Ok(HashMap::new())
         }
         TypeCheckedStatementKind::While(cond, body) => {
-            let slot_num = num_locals;
-            num_locals += 1;
+            let slot_num = cgen.next_slot();
             let top_label = cgen.label_gen.next();
             let cond_label = cgen.label_gen.next();
             cgen.code.push(opcode!(Noop, Value::Label(top_label)));
@@ -282,43 +287,34 @@ fn codegen_statement(
             cgen.code.push(opcode!(Jump, Value::Label(cond_label)));
             cgen.code
                 .push(Instruction::from_opcode(Opcode::Label(top_label), debug));
-            let (nl, _) = codegen_statements(body.to_vec(), cgen, num_locals, locals, stack_items)?;
-            num_locals = nl;
+            let _ = codegen_statements(body.to_vec(), cgen, locals, stack_items)?;
             cgen.code
                 .push(Instruction::from_opcode(Opcode::Label(cond_label), debug));
-            let cond_locals = expr!(cond);
+            expr!(cond);
             cgen.code
                 .push(Instruction::from_opcode(Opcode::GetLocal(slot_num), debug));
             cgen.code.push(opcode!(Cjump));
-            Ok((max(cond_locals, num_locals), HashMap::new()))
+            Ok(HashMap::new())
         }
         TypeCheckedStatementKind::Asm(insns, args) => {
             let n_args = args.len();
-            let mut exp_locals = 0;
             for i in 0..n_args {
-                let e_locals = codegen_expr(
-                    &args[n_args - 1 - i],
-                    cgen,
-                    num_locals,
-                    locals,
-                    stack_items + i,
-                )?;
-                exp_locals = max(exp_locals, e_locals);
+                codegen_expr(&args[n_args - 1 - i], cgen, locals, stack_items + i)?;
             }
             for insn in insns {
                 cgen.code.push(insn.clone());
             }
-            Ok((exp_locals, HashMap::new()))
+            Ok(HashMap::new())
         }
         TypeCheckedStatementKind::DebugPrint(expr) => {
-            let exp_locals = expr!(expr);
+            expr!(expr);
             cgen.code.push(opcode!(DebugPrint));
-            Ok((exp_locals, HashMap::new()))
+            Ok(HashMap::new())
         }
         TypeCheckedStatementKind::Assert(expr) => {
             if cgen.release_build {
                 // Release builds don't include asserts
-                return Ok((0, HashMap::new()));
+                return Ok(HashMap::new());
             }
 
             let call_type = Type::Func(
@@ -343,8 +339,8 @@ fn codegen_statement(
                 debug_info: DebugInfo::from(loc),
             };
 
-            let exp_locals = expr!(assert_call);
-            Ok((exp_locals, HashMap::new()))
+            expr!(assert_call);
+            Ok(HashMap::new())
         }
     }
 }
@@ -352,22 +348,16 @@ fn codegen_statement(
 fn codegen_code_block(
     block: &TypeCheckedCodeBlock,
     cgen: &mut Codegen,
-    num_locals: usize,
     locals: &HashMap<usize, usize>,
     stack_items: usize,
-    _debug_info: DebugInfo,
-) -> Result<usize, CompileError> {
-    let (nl, block_locals) =
-        codegen_statements(block.body.clone(), cgen, num_locals, locals, stack_items)?;
+) -> Result<(), CompileError> {
+    let block_locals = codegen_statements(block.body.clone(), cgen, locals, stack_items)?;
     if let Some(ret_expr) = &block.ret_expr {
         let mut new_locals = locals.clone();
         new_locals.extend(block_locals);
-        let stack_items_expr = codegen_expr(ret_expr, cgen, nl, &new_locals, stack_items)
-            .map(|exp_locals| (max(num_locals, max(exp_locals, nl))))?;
-        Ok(stack_items_expr)
-    } else {
-        Ok(max(num_locals, nl))
+        codegen_expr(ret_expr, cgen, &new_locals, stack_items)?;
     }
+    Ok(())
 }
 
 /// Generates code for assigning the contents of a tuple on the top of the stack to a sequential set
@@ -377,19 +367,18 @@ fn codegen_code_block(
 fn codegen_tuple_pattern(
     cgen: &mut Codegen,
     pattern: &TypeCheckedMatchPattern,
-    local_slot_num_base: usize,
     locals: &HashMap<usize, usize>,
     debug_info: DebugInfo,
-) -> Result<(usize, HashMap<usize, usize>, HashSet<usize>), CompileError> {
+) -> Result<(HashMap<usize, usize>, HashSet<usize>), CompileError> {
     match &pattern.kind {
         MatchPatternKind::Bind(name) => {
+            let slot = cgen.next_slot();
+
             let mut bindings = HashMap::new();
-            bindings.insert(*name, local_slot_num_base);
-            cgen.code.push(Instruction::from_opcode(
-                Opcode::SetLocal(local_slot_num_base),
-                debug_info,
-            ));
-            Ok((1, bindings, HashSet::new()))
+            bindings.insert(*name, slot);
+            cgen.code
+                .push(Instruction::from_opcode(Opcode::SetLocal(slot), debug_info));
+            Ok((bindings, HashSet::new()))
         }
         MatchPatternKind::Assign(id) => {
             if let Some(val) = locals.get(id) {
@@ -414,10 +403,9 @@ fn codegen_tuple_pattern(
             }
             let mut assignments = HashSet::new();
             assignments.insert(*id);
-            Ok((0, HashMap::new(), assignments))
+            Ok((HashMap::new(), assignments))
         }
         MatchPatternKind::Tuple(sub_pats) => {
-            let mut num_bindings = 0;
             let mut bindings = HashMap::new();
             let mut assignments = HashSet::new();
             let pat_size = sub_pats.len();
@@ -433,14 +421,8 @@ fn codegen_tuple_pattern(
                     Value::Int(Uint256::from_usize(i)),
                     debug_info,
                 ));
-                let (num_new_bindings, new_bindings, new_assignments) = codegen_tuple_pattern(
-                    cgen,
-                    pat,
-                    local_slot_num_base + num_bindings,
-                    locals,
-                    debug_info,
-                )?;
-                num_bindings += num_new_bindings;
+                let (new_bindings, new_assignments) =
+                    codegen_tuple_pattern(cgen, pat, locals, debug_info)?;
                 bindings.extend(new_bindings);
                 for name in new_assignments {
                     if !assignments.insert(name) {
@@ -454,7 +436,7 @@ fn codegen_tuple_pattern(
                     }
                 }
             }
-            Ok((num_bindings, bindings, assignments))
+            Ok((bindings, assignments))
         }
     }
 }
@@ -473,16 +455,15 @@ fn codegen_tuple_pattern(
 fn codegen_expr(
     expr: &TypeCheckedExpr,
     cgen: &mut Codegen,
-    num_locals: usize,
     locals: &HashMap<usize, usize>,
     stack_items: usize,
-) -> Result<usize, CompileError> {
+) -> Result<(), CompileError> {
     macro_rules! expr {
         ($expr:expr) => {
             expr!($expr, 0)
         };
         ($expr:expr, $prepushed:expr) => {
-            codegen_expr($expr, cgen, num_locals, locals, stack_items + $prepushed)
+            codegen_expr($expr, cgen, locals, stack_items + $prepushed)
         };
     }
 
@@ -503,7 +484,7 @@ fn codegen_expr(
     match &expr.kind {
         TypeCheckedExprKind::NewBuffer => {
             cgen.code.push(opcode!(NewBuffer));
-            Ok(num_locals)
+            Ok(())
         }
         TypeCheckedExprKind::Quote(bytes) => {
             cgen.code.push(opcode!(
@@ -513,23 +494,23 @@ fn codegen_expr(
                     Value::Buffer(Buffer::from_bytes(bytes.clone())),
                 ])
             ));
-            Ok(num_locals)
+            Ok(())
         }
         TypeCheckedExprKind::Error => {
             cgen.code.push(opcode!(Error));
-            Ok(num_locals)
+            Ok(())
         }
         TypeCheckedExprKind::GetGas => {
             cgen.code.push(opcode!(PushGas));
-            Ok(num_locals)
+            Ok(())
         }
         TypeCheckedExprKind::SetGas(tce) => {
-            let exp_locals = expr!(tce, 0)?;
+            expr!(tce, 0)?;
             cgen.code.push(opcode!(SetGas));
-            Ok(max(num_locals, exp_locals))
+            Ok(())
         }
         TypeCheckedExprKind::UnaryOp(op, tce, _) => {
-            let exp_locals = expr!(tce, 0)?;
+            expr!(tce, 0)?;
             cgen.code.push(match op {
                 UnaryOp::BitwiseNeg => opcode!(BitwiseNeg),
                 UnaryOp::Not => opcode!(IsZero),
@@ -556,21 +537,21 @@ fn codegen_expr(
                 }
                 UnaryOp::ToUint | UnaryOp::ToInt | UnaryOp::ToBytes32 => opcode!(Noop),
             });
-            Ok(max(num_locals, exp_locals))
+            Ok(())
         }
         TypeCheckedExprKind::Variant(inner) => {
-            let exp_locals = expr!(inner, 0)?;
+            expr!(inner, 0)?;
             cgen.code.push(opcode!(
                 Noop,
                 Value::new_tuple(vec![Value::Int(Uint256::from_usize(1)), Value::none()])
             ));
             cgen.code
                 .push(opcode!(Tset, Value::Int(Uint256::from_u64(1))));
-            Ok((max(num_locals, exp_locals)))
+            Ok(())
         }
         TypeCheckedExprKind::Binary(op, tce1, tce2, _) => {
-            let left_locals = expr!(tce2, 0)?;
-            let right_locals = expr!(tce1, 1)?;
+            expr!(tce2, 0)?;
+            expr!(tce1, 1)?;
             let opcode = match op {
                 BinaryOp::GetBuffer8 => Opcode::AVMOpcode(AVMOpcode::GetBuffer8),
                 BinaryOp::GetBuffer64 => Opcode::AVMOpcode(AVMOpcode::GetBuffer64),
@@ -608,48 +589,48 @@ fn codegen_expr(
                 | BinaryOp::SGreaterEq => cgen.code.push(opcode!(IsZero)),
                 _ => {}
             }
-            Ok(max(num_locals, max(left_locals, right_locals)))
+            Ok(())
         }
         TypeCheckedExprKind::Trinary(op, tce1, tce2, tce3, _) => {
-            let locals3 = expr!(tce3, 0)?;
-            let locals2 = expr!(tce2, 1)?;
-            let locals1 = expr!(tce1, 2)?;
+            expr!(tce3, 0)?;
+            expr!(tce2, 1)?;
+            expr!(tce1, 2)?;
             let opcode = match op {
                 TrinaryOp::SetBuffer8 => Opcode::AVMOpcode(AVMOpcode::SetBuffer8),
                 TrinaryOp::SetBuffer64 => Opcode::AVMOpcode(AVMOpcode::SetBuffer64),
                 TrinaryOp::SetBuffer256 => Opcode::AVMOpcode(AVMOpcode::SetBuffer256),
             };
             cgen.code.push(Instruction::from_opcode(opcode, debug));
-            Ok(max(num_locals, max(locals1, max(locals2, locals3))))
+            Ok(())
         }
         TypeCheckedExprKind::ShortcutOr(tce1, tce2) => {
-            let left_locals = expr!(tce1, 0)?;
+            expr!(tce1, 0)?;
             let lab = cgen.label_gen.next();
             cgen.code.push(opcode!(Dup0));
             cgen.code.push(opcode!(Cjump, Value::Label(lab)));
             cgen.code.push(opcode!(Pop));
-            let right_locals = expr!(tce2, 0)?;
+            expr!(tce2, 0)?;
             cgen.code
                 .push(Instruction::from_opcode(Opcode::Label(lab), debug));
-            Ok((max(num_locals, max(left_locals, right_locals))))
+            Ok(())
         }
         TypeCheckedExprKind::ShortcutAnd(tce1, tce2) => {
-            let left_locals = expr!(tce1, 0)?;
+            expr!(tce1, 0)?;
             let lab = cgen.label_gen.next();
             cgen.code.push(opcode!(Dup0));
             cgen.code.push(opcode!(IsZero));
             cgen.code.push(opcode!(Cjump, Value::Label(lab)));
             cgen.code.push(opcode!(Pop));
-            let right_locals = expr!(tce2, 0)?;
+            expr!(tce2, 0)?;
             cgen.code
                 .push(Instruction::from_opcode(Opcode::Label(lab), debug));
-            Ok((max(num_locals, max(left_locals, right_locals))))
+            Ok(())
         }
         TypeCheckedExprKind::LocalVariableRef(name, _) => match locals.get(name) {
             Some(n) => {
                 cgen.code
                     .push(Instruction::from_opcode(Opcode::GetLocal(*n), debug));
-                Ok(num_locals)
+                Ok(())
             }
             None => {
                 println!("local: {:?}", *name);
@@ -728,7 +709,7 @@ fn codegen_expr(
                 cgen.code.push(opcode!(Tset, Value::from(1)));
             }
 
-            Ok(num_locals)
+            Ok(())
         }
         TypeCheckedExprKind::GlobalVariableRef(id, _) => {
             let global = match cgen.globals.get(id) {
@@ -750,7 +731,7 @@ fn codegen_expr(
                 Opcode::GetGlobalVar(offset),
                 debug,
             ));
-            Ok(num_locals)
+            Ok(())
         }
         TypeCheckedExprKind::FuncRef(name, _) => {
             let the_label = match cgen.func_labels.get(name) {
@@ -763,7 +744,7 @@ fn codegen_expr(
                 }
             };
             cgen.code.push(opcode!(Noop, Value::Label(the_label)));
-            Ok(num_locals)
+            Ok(())
         }
         TypeCheckedExprKind::TupleRef(tce, idx, _) => {
             let tce_type = tce.get_type();
@@ -778,49 +759,45 @@ fn codegen_expr(
                     loc,
                 ));
             };
-            let exp_locals = expr!(tce, 0)?;
+            expr!(tce, 0)?;
             cgen.code.push(Instruction::from_opcode_imm(
                 Opcode::TupleGet(tuple_size),
                 Value::Int(idx.clone()),
                 debug,
             ));
-            Ok(max(num_locals, exp_locals))
+            Ok(())
         }
         TypeCheckedExprKind::DotRef(tce, slot_num, s_size, _) => {
-            let exp_locals = expr!(tce, 0)?;
+            expr!(tce, 0)?;
             cgen.code.push(Instruction::from_opcode_imm(
                 Opcode::TupleGet(*s_size),
                 Value::Int(Uint256::from_usize(*slot_num)),
                 debug,
             ));
-            Ok(max(num_locals, exp_locals))
+            Ok(())
         }
         TypeCheckedExprKind::Const(val, _) => {
             cgen.code.push(opcode!(Noop, val.clone()));
-            Ok(num_locals)
+            Ok(())
         }
         TypeCheckedExprKind::FunctionCall(fexpr, args, _, prop) => {
             let nargs = args.len();
-            let mut args_locals = 0;
             for i in 0..nargs {
-                let arg_locals = expr!(&args[nargs - 1 - i], i)?;
-                args_locals = max(args_locals, arg_locals);
+                expr!(&args[nargs - 1 - i], i)?;
             }
-            let fexpr_locals = expr!(fexpr, nargs + 1)?;
+            expr!(fexpr, nargs + 1)?;
             cgen.code
                 .push(Instruction::from_opcode(Opcode::FuncCall(*prop), debug));
-            Ok((max(num_locals, max(fexpr_locals, args_locals))))
+            Ok(())
         }
         TypeCheckedExprKind::CodeBlock(block) => {
-            codegen_code_block(block, cgen, num_locals, locals, stack_items, debug)
+            codegen_code_block(block, cgen, locals, stack_items)
         }
         TypeCheckedExprKind::StructInitializer(fields, _) => {
             let fields_len = fields.len();
-            let mut struct_locals = 0;
             for i in 0..fields_len {
                 let field = &fields[fields_len - 1 - i];
-                let field_locals = expr!(&field.value, i)?;
-                struct_locals = max(struct_locals, field_locals);
+                expr!(&field.value, i)?;
             }
             let empty_vec = TupleTree::new(fields_len, false).make_empty();
             cgen.code.push(opcode!(Noop, empty_vec));
@@ -831,15 +808,13 @@ fn codegen_expr(
                     debug,
                 ));
             }
-            Ok(max(num_locals, struct_locals))
+            Ok(())
         }
         TypeCheckedExprKind::Tuple(fields, _) => {
             let fields_len = fields.len();
-            let mut tuple_locals = 0;
             for i in 0..fields_len {
                 let field = &fields[fields_len - 1 - i];
-                let field_locals = expr!(&field, i)?;
-                tuple_locals = max(field_locals, tuple_locals);
+                expr!(&field, i)?;
             }
             let empty_vec = vec![Value::none(); fields_len];
             cgen.code.push(opcode!(Noop, Value::new_tuple(empty_vec)));
@@ -850,7 +825,7 @@ fn codegen_expr(
                     debug,
                 ));
             }
-            Ok(max(num_locals, tuple_locals))
+            Ok(())
         }
         TypeCheckedExprKind::ArrayRef(expr1, expr2, t) => {
             expr!(&TypeCheckedExpr::builtin(
@@ -862,8 +837,8 @@ fn codegen_expr(
             ))
         }
         TypeCheckedExprKind::FixedArrayRef(expr1, expr2, size, _) => {
-            let exp1_locals = expr!(expr1)?;
-            let exp2_locals = expr!(expr2, 1)?;
+            expr!(expr1)?;
+            expr!(expr2, 1)?;
             if *size != 8 {
                 //TODO: also skip check if size is larger power of 8
                 let cont_label = cgen.label_gen.next();
@@ -879,7 +854,7 @@ fn codegen_expr(
                 Opcode::UncheckedFixedArrayGet(*size),
                 debug,
             ));
-            Ok(max(num_locals, max(exp1_locals, exp2_locals)))
+            Ok(())
         }
         TypeCheckedExprKind::MapRef(map_expr, key_expr, t) => {
             expr!(&TypeCheckedExpr::builtin(
@@ -921,11 +896,9 @@ fn codegen_expr(
             expr!(&the_expr, 0)
         }
         TypeCheckedExprKind::NewFixedArray(sz, bo_expr, _) => {
-            let mut expr_locals = 0;
             match bo_expr {
                 Some(expr) => {
-                    let some_locals = expr!(expr, 0)?;
-                    expr_locals = some_locals;
+                    expr!(expr, 0)?;
                     for _i in 0..7 {
                         cgen.code.push(opcode!(Dup0));
                     }
@@ -954,7 +927,7 @@ fn codegen_expr(
                 }
                 tuple_size *= 8;
             }
-            Ok(max(num_locals, expr_locals))
+            Ok(())
         }
         TypeCheckedExprKind::NewMap(t) => {
             expr!(&TypeCheckedExpr::builtin(
@@ -974,17 +947,9 @@ fn codegen_expr(
                 DebugInfo::from(loc)
             ))
         }
-        TypeCheckedExprKind::FixedArrayMod(arr, index, val, size, _) => codegen_fixed_array_mod(
-            arr,
-            index,
-            val,
-            *size,
-            cgen,
-            num_locals,
-            locals,
-            debug,
-            stack_items,
-        ),
+        TypeCheckedExprKind::FixedArrayMod(arr, index, val, size, _) => {
+            codegen_fixed_array_mod(arr, index, val, *size, cgen, locals, debug, stack_items)
+        }
         TypeCheckedExprKind::MapMod(map, key, val, t) => {
             expr!(&TypeCheckedExpr::builtin(
                 "builtin_kvsSet",
@@ -995,8 +960,8 @@ fn codegen_expr(
             ))
         }
         TypeCheckedExprKind::StructMod(struc, index, val, t) => {
-            let val_locals = expr!(val, 0)?;
-            let struc_locals = expr!(struc, 1)?;
+            expr!(val, 0)?;
+            expr!(struc, 1)?;
             if let Type::Struct(v) = t {
                 let struct_len = v.len();
                 cgen.code.push(Instruction::from_opcode_imm(
@@ -1007,23 +972,21 @@ fn codegen_expr(
             } else {
                 panic!("impossible value in TypeCheckedExpr::StructMod");
             }
-            Ok(max(num_locals, max(val_locals, struc_locals)))
+            Ok(())
         }
         TypeCheckedExprKind::Cast(expr, _) => expr!(expr, 0),
         TypeCheckedExprKind::Asm(_, insns, args) => {
             let n_args = args.len();
-            let mut args_locals = 0;
             for i in 0..n_args {
-                let arg_locals = expr!(&args[n_args - 1 - i], i)?;
-                args_locals = max(args_locals, arg_locals);
+                expr!(&args[n_args - 1 - i], i)?;
             }
             for insn in insns {
                 cgen.code.push(insn.clone());
             }
-            Ok(max(num_locals, args_locals))
+            Ok(())
         }
         TypeCheckedExprKind::Try(exp, _) => {
-            let exp_locals = expr!(exp, 0)?;
+            expr!(exp, 0)?;
             let extract = cgen.label_gen.next();
             cgen.code.push(opcode!(Dup0));
             cgen.code.push(opcode!(Tget, Value::Int(Uint256::zero())));
@@ -1041,38 +1004,33 @@ fn codegen_expr(
             cgen.code
                 .push(Instruction::from_opcode(Opcode::Label(extract), debug));
             cgen.code.push(opcode!(Tget, Value::Int(Uint256::one())));
-            Ok(max(num_locals, exp_locals))
+            Ok(())
         }
         TypeCheckedExprKind::If(cond, block, else_block, _) => {
-            let cond_locals = expr!(cond, 0)?;
+            expr!(cond, 0)?;
             let after_label = cgen.label_gen.next();
             let end_label = cgen.label_gen.next();
             cgen.code.push(opcode!(IsZero));
             cgen.code.push(opcode!(Cjump, Value::Label(after_label)));
-            let block_locals =
-                codegen_code_block(block, cgen, num_locals, locals, stack_items, debug)?;
+            codegen_code_block(block, cgen, locals, stack_items)?;
             if else_block.is_some() {
                 cgen.code.push(opcode!(Jump, Value::Label(end_label)));
             }
             cgen.code
                 .push(Instruction::from_opcode(Opcode::Label(after_label), debug));
-            let else_locals = if let Some(block) = else_block {
-                let else_locals =
-                    codegen_code_block(block, cgen, num_locals, locals, stack_items, debug)?;
-                else_locals
-            } else {
-                0
-            };
+            if let Some(block) = else_block {
+                codegen_code_block(block, cgen, locals, stack_items)?;
+            }
             cgen.code
                 .push(Instruction::from_opcode(Opcode::Label(end_label), debug));
-            Ok(max(cond_locals, max(block_locals, else_locals)))
+            Ok(())
         }
         TypeCheckedExprKind::IfLet(name, expr, block, else_block, _) => {
             let after_label = cgen.label_gen.next();
-            let slot_num = num_locals;
+            let slot_num = cgen.next_slot();
             let mut new_locals = locals.clone();
             new_locals.insert(*name, slot_num);
-            let exp_locals = codegen_expr(expr, cgen, num_locals, &locals, stack_items)?;
+            codegen_expr(expr, cgen, &locals, stack_items)?;
             cgen.code.push(opcode!(Dup0));
             cgen.code
                 .push(opcode!(Tget, Value::Int(Uint256::from_usize(0))));
@@ -1082,15 +1040,7 @@ fn codegen_expr(
                 .push(opcode!(Tget, Value::Int(Uint256::from_usize(1))));
             cgen.code
                 .push(Instruction::from_opcode(Opcode::SetLocal(slot_num), debug));
-            let mut total_locals = codegen_code_block(
-                &block,
-                cgen,
-                num_locals + 1,
-                &new_locals,
-                stack_items,
-                debug,
-            )?;
-            total_locals = max(total_locals, exp_locals);
+            codegen_code_block(&block, cgen, &new_locals, stack_items)?;
 
             let outside_label = cgen.label_gen.next();
             cgen.code.push(opcode!(Jump, Value::Label(outside_label)));
@@ -1098,33 +1048,27 @@ fn codegen_expr(
                 .push(Instruction::from_opcode(Opcode::Label(after_label), debug));
             cgen.code.push(opcode!(Pop));
             if let Some(else_block) = else_block {
-                let else_locals =
-                    codegen_code_block(&else_block, cgen, num_locals, &locals, stack_items, debug)?;
-                total_locals = max(total_locals, else_locals);
+                codegen_code_block(&else_block, cgen, &locals, stack_items)?;
             }
             cgen.code.push(Instruction::from_opcode(
                 Opcode::Label(outside_label),
                 debug,
             ));
-            Ok(total_locals)
+            Ok(())
         }
         TypeCheckedExprKind::Loop(body) => {
-            let slot_num = num_locals;
+            let slot_num = cgen.next_slot();
             let top_label = cgen.label_gen.next();
-            let bottom_label = cgen.label_gen.next();
             cgen.code.push(opcode!(Noop, Value::Label(top_label)));
             cgen.code
                 .push(Instruction::from_opcode(Opcode::SetLocal(slot_num), debug));
             cgen.code
                 .push(Instruction::from_opcode(Opcode::Label(top_label), debug));
-            let (nl, _) =
-                codegen_statements(body.to_vec(), cgen, num_locals + 1, locals, stack_items)?;
+            let _ = codegen_statements(body.to_vec(), cgen, locals, stack_items)?;
             cgen.code
                 .push(Instruction::from_opcode(Opcode::GetLocal(slot_num), debug));
             cgen.code.push(opcode!(Jump));
-            cgen.code
-                .push(Instruction::from_opcode(Opcode::Label(bottom_label), debug));
-            Ok(max(num_locals + 1, nl))
+            Ok(())
         }
     }
 }
@@ -1136,14 +1080,13 @@ fn codegen_fixed_array_mod(
     val_expr: &TypeCheckedExpr,
     size: usize,
     cgen: &mut Codegen,
-    num_locals: usize,
     locals: &HashMap<usize, usize>,
     debug_info: DebugInfo,
     stack_items: usize,
-) -> Result<usize, CompileError> {
-    let val_locals = codegen_expr(val_expr, cgen, num_locals, locals, stack_items)?;
-    let arr_locals = codegen_expr(arr_expr, cgen, num_locals, locals, stack_items + 1)?;
-    let idx_locals = codegen_expr(idx_expr, cgen, num_locals, locals, stack_items + 2)?;
+) -> Result<(), CompileError> {
+    codegen_expr(val_expr, cgen, locals, stack_items)?;
+    codegen_expr(arr_expr, cgen, locals, stack_items + 1)?;
+    codegen_expr(idx_expr, cgen, locals, stack_items + 2)?;
 
     macro_rules! opcode {
         ($opcode:ident) => {
@@ -1171,9 +1114,8 @@ fn codegen_fixed_array_mod(
             debug_info,
         ));
     }
-    let exp_locals = max(val_locals, max(arr_locals, idx_locals));
-    codegen_fixed_array_mod_2(val_expr, cgen, size, num_locals, locals, debug_info)
-        .map(|num_locals| max(num_locals, exp_locals))
+
+    codegen_fixed_array_mod_2(val_expr, cgen, size, locals, debug_info)
 }
 
 /// Used by codegen_fixed_array_mod, you should not call this directly.
@@ -1181,10 +1123,9 @@ fn codegen_fixed_array_mod_2(
     val_expr: &TypeCheckedExpr,
     cgen: &mut Codegen,
     size: usize,
-    num_locals: usize,
     locals: &HashMap<usize, usize>,
     debug_info: DebugInfo,
-) -> Result<usize, CompileError> {
+) -> Result<(), CompileError> {
     macro_rules! opcode {
         ($opcode:ident) => {
             Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), debug_info)
@@ -1201,7 +1142,7 @@ fn codegen_fixed_array_mod_2(
     if size <= 8 {
         // stack: idx tuple val
         cgen.code.push(opcode!(Tset));
-        Ok(num_locals)
+        Ok(())
     } else {
         let tuple_size = Value::Int(Uint256::from_usize(TUPLE_SIZE));
         // stack: idx tupletree val
@@ -1229,11 +1170,10 @@ fn codegen_fixed_array_mod_2(
 
         // stack: subidx subtupletree val; aux: slot tupletree
 
-        let inner_locals = codegen_fixed_array_mod_2(
+        codegen_fixed_array_mod_2(
             val_expr,
             cgen,
             (size + (TUPLE_SIZE - 1)) / TUPLE_SIZE,
-            num_locals,
             locals,
             debug_info,
         )?;
@@ -1246,6 +1186,6 @@ fn codegen_fixed_array_mod_2(
         // stack: slot tupletree newsubtupletree
         cgen.code.push(opcode!(Tset));
 
-        Ok(max(num_locals, inner_locals))
+        Ok(())
     }
 }
