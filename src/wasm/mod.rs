@@ -319,6 +319,20 @@ fn generate_store(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize,
     res.push(simple_op(AVMOpcode::Pop));
 }
 
+// do a bound check for memory address at top of stack
+fn bound_check(res: &mut Vec<Instruction>) {
+    // address
+    get_memory(res);
+    res.push(get64_from_buffer(0));
+    res.push(immed_op(
+        AVMOpcode::Mul,
+        Value::Int(Uint256::from_usize(1 << 16)),
+    ));
+    res.push(simple_op(AVMOpcode::GreaterThan));
+    res.push(simple_op(AVMOpcode::IsZero));
+    cjump(res, 1);
+}
+
 fn generate_load(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize, num: usize) {
     res.push(simple_op(AVMOpcode::Dup0));
     res.push(immed_op(
@@ -2403,10 +2417,17 @@ fn process_wasm_inner(
             init.push(immed_op(AVMOpcode::Tget, int_from_usize(5))); // tuple, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(1)); // idx, tuple, buffer
-                                             // init.push(simple_op(AVMOpcode::DebugPrint));
+            // init.push(simple_op(AVMOpcode::DebugPrint));
             init.push(simple_op(AVMOpcode::Tget)); // int, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(0)); // address, int, buffer
+            // implement bounds checking here
+            init.push(simple_op(AVMOpcode::Dup0)); // address, address, int, buffer
+            init.push(immed_op(
+                AVMOpcode::Add,
+                Value::Int(Uint256::from_usize(31)),
+            )); // address, address, int, buffer
+            bound_check(init); // address, int, buffer
             init.push(immed_op(
                 AVMOpcode::Add,
                 Value::Int(Uint256::from_usize(memory_offset)),
@@ -2427,6 +2448,13 @@ fn process_wasm_inner(
             init.push(simple_op(AVMOpcode::Tget)); // int, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(0)); // address, int, buffer
+            // implement bounds checking here
+            init.push(simple_op(AVMOpcode::Dup0)); // address, address, int, buffer
+            init.push(immed_op(
+                AVMOpcode::Add,
+                Value::Int(Uint256::from_usize(31)),
+            )); // address, address, int, buffer
+            bound_check(init); // address, int, buffer
             init.push(immed_op(
                 AVMOpcode::Add,
                 Value::Int(Uint256::from_usize(memory_offset)),

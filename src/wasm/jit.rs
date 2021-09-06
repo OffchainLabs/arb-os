@@ -17,7 +17,10 @@ fn int_from_u32(a: u32) -> Value {
 pub fn get_answer(answer: wasmtime::TypedFunc<(), (i32)>) -> i32 {
     match answer.call(()) {
         Ok(result) => result as i32,
-        Err(_) => 0,
+        Err(_) => {
+            println!("Wasm error");
+            0
+        }
     }
 }
 
@@ -78,6 +81,20 @@ fn get_tuple2_buffer(v: Value, idx: usize, idx2: usize, len: usize) -> Vec<u8> {
     buffer_bytes(get_tuple(get_tuple(v, idx), idx2), len)
 }
 
+/*
+fn in_range(memory: wasmtime::Memory, ptr: u32, sz: u32) -> bool {
+    let msz = memory.data_size();
+    msz >= (ptr+sz) as usize
+}
+
+fn safe_write(memory: wasmtime::Memory, ptr: u32, tmp: &[u8]) -> bool {
+    let msz = memory.data_size();
+    if msz >= (ptr+sz) as usize {
+        memory.write(ptr as usize, &tmp).expect("cannot write memory");
+    }
+}
+*/
+
 impl JitWasm {
     pub fn new(buffer: &[u8]) -> Self {
         use std::cell::RefCell;
@@ -137,9 +154,15 @@ impl JitWasm {
             None => println!("warning, no memory"),
             Some(memory) => {
                 let mut tmp = vec![0; 32];
-                memory
-                    .read(ptr as usize, &mut tmp)
-                    .expect("cannot read memory");
+                let sz = memory.data_size();
+                let ptr = ptr as usize;
+                if sz > ptr+32 { 
+                    memory.read(ptr, &mut tmp).expect("cannot read memory");
+                } else if ptr > sz  {
+                } else {
+                    let num = sz-ptr;
+                    memory.read(ptr, &mut tmp[0..num]).expect("cannot read memory");
+                }
                 let v = Value::Int(Uint256::from_bytes(&tmp));
                 // println!("{:?} {}", tmp, v);
                 immed3.replace_with(|_| v);
@@ -183,9 +206,9 @@ impl JitWasm {
             match &*memory_cell5.borrow() {
                 Some(memory) => {
                     println!("tuple bytes {:?}", tmp);
-                    memory
-                        .write(ptr as usize, &tmp)
-                        .expect("cannot write memory");
+                    // if range not good, write byte by byte
+                    // safe_write(memory, ptr, &tmp)
+                    memory.write(ptr as usize, &tmp).expect("cannot write memory");
                 }
                 _ => println!("warning, no memory"),
             }
@@ -197,9 +220,7 @@ impl JitWasm {
             match &*memory_cell6.borrow() {
                 Some(memory) => {
                     println!("tuple2bytes {:?}", tmp);
-                    memory
-                        .write(ptr as usize, &tmp)
-                        .expect("cannot write memory");
+                    memory.write(ptr as usize, &tmp).expect("cannot write memory");
                 }
                 _ => println!("warning, no memory"),
             }
@@ -214,9 +235,7 @@ impl JitWasm {
                 match &*memory_cell7.borrow() {
                     Some(memory) => {
                         println!("tuple2 buffer {:?}", tmp);
-                        memory
-                            .write(ptr as usize, &tmp)
-                            .expect("cannot write memory");
+                        memory.write(ptr as usize, &tmp).expect("cannot write memory");
                     }
                     _ => println!("warning, no memory"),
                 }
