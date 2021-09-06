@@ -44,3 +44,8 @@ perf.data
 .make/
 arb_os/bridge_arbos_versions.mini
 arb_os/arbos-upgrade-base.mexe
+
+# Local work
+ed/
+emily/
+rachel/
