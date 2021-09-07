@@ -18,6 +18,8 @@ compile = ./target/release/mini compile $(compile_options)
 upgrade = ./target/release/mini gen-upgrade-code
 run     = ./target/release/mini
 
+mini_files = */*.mini
+
 consts = arb_os/constants.json
 done = "\e[38;5;161;1mdone!\e[0;0m\n"
 
@@ -152,7 +154,7 @@ arb_os/arbos-upgrade-base.mexe: $(arbos_source_no_bridge) .make/tools
 	cargo test --release
 	@touch .make/test
 
-.make/fmt: src/*.rs src/*/*.rs Cargo.* .make/install
+.make/fmt: src/*.rs src/*/*.rs Cargo.* .make/install $(mini_files)
 	cargo fmt
 	@touch .make/fmt
 
