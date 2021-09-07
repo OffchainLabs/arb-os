@@ -30,7 +30,6 @@ use evmCallStack::snapshotAuxStack;
 use evmCallStack::evmCallStack_changeNumAccounts;
 use evmCallStack::evmCallStack_getAccountStoreInCurrentContext;
 use evmCallStack::evmCallStack_setAccountStoreInCurrentContext;
-use evmCallStack::evmCallStack_currentFrameStorageDelta;
 use evmCallStack::evmCallStack_inStaticCall;
 use evmCallStack::evmCallStack_touchMemoryOffset;
 
@@ -66,7 +65,6 @@ use inbox::inbox_currentEthBlockNumber;
 
 use gasAccounting::getArbGasPrice;
 use gasAccounting::getCurrentBlockGasLimit;
-use gasAccounting::gasAccounting_getStoragePriceInArbGas;
 
 use tracing::evmTracer_pushCreate;
 use tracing::evmTracer_pushCreate2;
@@ -734,24 +732,10 @@ public view write func evmOp_log4(
     error;
 }
 
-public view write func evmOp_gas() -> uint {
+public view func evmOp_gas() -> uint {
     let avmGasPerArbGas = chainParams_getOrDie(const::Atom_Param_AvmGasPerArbGas);
     let gasLeft = (getGas() + (avmGasPerArbGas - 1)) / avmGasPerArbGas;
-    let storageDelta = evmCallStack_currentFrameStorageDelta();
-    let gasNeededForStorage = xif (storageDelta > int(0)) {
-        uint(storageDelta) * gasAccounting_getStoragePriceInArbGas()
-    } else {
-        0
-    };
-    return xif (gasLeft > gasNeededForStorage) {
-        gasLeft - gasNeededForStorage
-    } else {
-        // no gas remaining, once we account for storage, so make the tx run out of gas now
-        setGas(1);
-        evmOp_revert(0, 0);
-        //NOTREACHED
-        0
-    };
+    return gasLeft;
 }
 
 #[noinline, ] public view write func evmOp_callAndReturn(
