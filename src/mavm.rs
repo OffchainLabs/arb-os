@@ -12,24 +12,18 @@ use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::{collections::HashMap, fmt, sync::Arc};
 
+/// A label who's value is the same across ArbOS versions
 pub type LabelId = u64;
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Label {
-    Func(LabelId),    // these are the same,
-    Closure(LabelId), // it's just for printing & debug purposes
-    Anon(usize),
-    Evm(usize), // program counter in EVM contract
+    Func(LabelId),    // A function uniquely identified by module & name
+    Closure(LabelId), // A closure uniquely identified by module & name
+    Anon(LabelId),    // An anonymous label identified by func/closure + count
+    Evm(usize),       // program counter in EVM contract
 }
 
 impl Label {
-    pub fn relocate(self, int_offset: usize, func_offset: usize) -> (Self, usize) {
-        match self {
-            Label::Anon(pc) => (Label::Anon(pc + int_offset), func_offset),
-            _ => (self, func_offset),
-        }
-    }
-
     pub fn avm_hash(&self) -> Value {
         match self {
             Label::Func(id) | Label::Closure(id) => Value::avm_hash2(
@@ -38,7 +32,7 @@ impl Label {
             ),
             Label::Anon(n) => Value::avm_hash2(
                 &Value::Int(Uint256::from_usize(5)),
-                &Value::Int(Uint256::from_usize(*n)),
+                &Value::Int(Uint256::from_usize(*n as usize)),
             ),
             Label::Evm(_) => {
                 panic!("tried to avm_hash an EVM label");
@@ -60,21 +54,22 @@ impl fmt::Display for Label {
 
 #[derive(Default)]
 pub struct LabelGenerator {
-    next: usize,
+    current: LabelId,
 }
 
 impl LabelGenerator {
-    pub fn new() -> Self {
-        LabelGenerator { next: 0 }
+    /// Creates a new label generator that will hand out labels starting at some value.
+    /// In practice, this means giving the generator a unique func id, so that local labels
+    /// are always unique regardless of the function they are in.
+    pub fn new(current: LabelId) -> Self {
+        LabelGenerator { current }
     }
 
-    pub fn next(self) -> (Label, Self) {
-        (
-            Label::Anon(self.next),
-            LabelGenerator {
-                next: self.next + 1,
-            },
-        )
+    /// Hands out a new label, advancing the generator
+    pub fn next(&mut self) -> Label {
+        let next = Label::Anon(self.current);
+        self.current += 1;
+        next
     }
 }
 
@@ -156,40 +151,15 @@ impl Instruction {
         }
     }
 
-    pub fn relocate(
-        self,
-        int_offset: usize,
-        func_offset: usize,
-        globals_offset: usize,
-    ) -> (Self, usize) {
-        let mut max_func_offset = func_offset;
-        let opcode = match self.opcode {
-            Opcode::PushExternal(off) => Opcode::PushExternal(off),
-            Opcode::Label(label) => {
-                let (new_label, new_func_offset) = label.relocate(int_offset, func_offset);
-                if max_func_offset < new_func_offset {
-                    max_func_offset = new_func_offset;
-                }
-                Opcode::Label(new_label)
-            }
-            Opcode::GetGlobalVar(idx) => Opcode::GetGlobalVar(idx + globals_offset),
-            Opcode::SetGlobalVar(idx) => Opcode::SetGlobalVar(idx + globals_offset),
-            _ => self.opcode,
-        };
-        let imm = match self.immediate {
-            Some(imm) => {
-                let (new_imm, new_func_offset) = imm.relocate(int_offset, func_offset);
-                if max_func_offset < new_func_offset {
-                    max_func_offset = new_func_offset;
-                }
-                Some(new_imm)
-            }
-            None => None,
-        };
-        (
-            Instruction::new(opcode, imm, self.debug_info),
-            max_func_offset,
-        )
+    pub fn get_uniques(&self) -> Vec<LabelId> {
+        let mut uniques = vec![];
+        if let Opcode::Label(Label::Func(id) | Label::Closure(id)) = self.opcode {
+            uniques.push(id);
+        }
+        if let Some(value) = &self.immediate {
+            uniques.extend(value.get_uniques());
+        }
+        uniques
     }
 
     pub fn pretty_print(&self, highlight: &str) -> String {
@@ -261,19 +231,6 @@ impl CodePt {
             }
             CodePt::External(_) => None,
             CodePt::Null => None,
-        }
-    }
-
-    pub fn relocate(self, int_offset: usize) -> Self {
-        match self {
-            CodePt::Internal(pc) => CodePt::Internal(pc + int_offset),
-            CodePt::External(off) => CodePt::External(off),
-            CodePt::InSegment(_, _) => {
-                panic!("tried to relocate/link code at runtime");
-            }
-            CodePt::Null => {
-                panic!("tried to relocate/link null codepoint");
-            }
         }
     }
 
@@ -737,30 +694,6 @@ impl Value {
         }
     }
 
-    pub fn relocate(self, int_offset: usize, func_offset: usize) -> (Self, usize) {
-        match self {
-            Value::Int(_) => (self, 0),
-            Value::Buffer(_) => (self, 0),
-            Value::Tuple(v) => {
-                let mut rel_v = Vec::new();
-                let mut max_func_offset = 0;
-                for val in &*v {
-                    let (new_val, new_func_offset) = val.clone().relocate(int_offset, func_offset);
-                    rel_v.push(new_val);
-                    if (max_func_offset < new_func_offset) {
-                        max_func_offset = new_func_offset;
-                    }
-                }
-                (Value::new_tuple(rel_v), max_func_offset)
-            }
-            Value::CodePoint(cpt) => (Value::CodePoint(cpt.relocate(int_offset)), 0),
-            Value::Label(label) => {
-                let (new_label, new_func_offset) = label.relocate(int_offset, func_offset);
-                (Value::Label(new_label), new_func_offset)
-            }
-        }
-    }
-
     /// Converts `Value` to usize if possible, otherwise returns `None`.
     pub fn to_usize(&self) -> Option<usize> {
         match self {
@@ -806,11 +739,30 @@ impl Value {
         }
     }
 
+    pub fn get_uniques(&self) -> Vec<LabelId> {
+        let mut uniques = vec![];
+        match self {
+            Value::Label(Label::Func(id) | Label::Closure(id)) => uniques.push(*id),
+            Value::Tuple(tup) => {
+                for child in &**tup {
+                    uniques.extend(child.get_uniques());
+                }
+            }
+            _ => {}
+        }
+        uniques
+    }
+
     pub fn pretty_print(&self, highlight: &str) -> String {
         match self {
             Value::Int(i) => Color::color(highlight, i),
             Value::CodePoint(pc) => Color::color(highlight, pc),
-            Value::Label(label) => Color::color(highlight, label),
+            Value::Label(label) => match label {
+                Label::Func(id) => Color::color(highlight, format!("func_{}", id % 256)),
+                Label::Closure(id) => Color::color(highlight, format!("λ_{}", id % 256)),
+                Label::Anon(id) => Color::color(highlight, format!("label_{}", id % 256)),
+                _ => Color::color(highlight, label),
+            },
             Value::Buffer(buf) => {
                 let mut text = String::from_utf8_lossy(&hex::decode(buf.hex_encode()).unwrap())
                     .chars()
@@ -1027,6 +979,8 @@ impl Opcode {
                 true => format!("MakeFrame<{}, {}, {}>", nargs, space, return_address),
                 false => format!("MakeFrame({}, {}, {})", nargs, space, return_address),
             },
+            Opcode::SetGlobalVar(id) => format!("SetGlobal {}", Color::pink(id)),
+            Opcode::GetGlobalVar(id) => format!("GetGlobal {}", Color::pink(id)),
             Opcode::Label(label) => Value::Label(*label).pretty_print(label_color),
             _ => format!("{}", self.to_name()),
         }

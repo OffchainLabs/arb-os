@@ -8,7 +8,7 @@ use crate::compile::typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNod
 use crate::compile::{path_display, CompileError, Lines};
 use crate::console::Color;
 use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
-use crate::mavm::{Instruction, Label, LabelId, Value};
+use crate::mavm::{Instruction, LabelId, Value};
 use crate::pos::{BytePos, Location};
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
@@ -16,7 +16,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::fmt::Formatter;
-use std::sync::Arc;
 
 /// This is a map of the types at a given location, with the Vec<String> representing the module path
 /// and the usize representing the `StringId` of the type at that location.
@@ -76,7 +75,7 @@ impl From<Option<Location>> for DebugInfo {
 pub enum TopLevelDecl {
     TypeDecl(TypeDecl),
     FuncDecl(Func),
-    VarDecl(GlobalVarDecl),
+    VarDecl(GlobalVar),
     UseDecl(Import),
     ConstDecl,
 }
@@ -1306,29 +1305,26 @@ pub fn new_func_arg(name: StringId, tipe: Type, debug_info: DebugInfo) -> FuncAr
 
 /// Represents a declaration of a global mini variable.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GlobalVarDecl {
-    pub name_id: StringId,
+pub struct GlobalVar {
+    #[serde(alias = "name_id")]
+    pub id: StringId,
     pub name: String,
     pub tipe: Type,
-    pub location: Option<Location>,
+    pub offset: Option<usize>,
+    #[serde(default)]
+    pub debug_info: DebugInfo,
 }
 
-impl GlobalVarDecl {
-    pub fn new(name_id: StringId, name: String, tipe: Type, location: Option<Location>) -> Self {
-        GlobalVarDecl {
-            name_id,
+impl GlobalVar {
+    pub fn new(id: StringId, name: String, tipe: Type, debug_info: DebugInfo) -> Self {
+        Self {
+            id,
             name,
             tipe,
-            location,
+            offset: None,
+            debug_info,
         }
     }
-}
-
-/// Represents whether the FuncDecl that contains it is public or private.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub enum FuncDeclKind {
-    Public,
-    Private,
 }
 
 /// Represents a top level function declaration.  The view, write, args, and ret_type fields are
@@ -1347,8 +1343,6 @@ pub struct Func<T = Statement> {
     pub frame_size: usize,
     /// A global id unique to this function used for building jump labels
     pub unique_id: Option<LabelId>,
-    /// Associates `StringId`s in this func's context with the global label scheme
-    pub func_labels: Arc<HashMap<StringId, Label>>,
     /// Additional properties like viewness that this func has
     pub properties: FuncProperties,
     pub debug_info: DebugInfo,
@@ -1374,7 +1368,7 @@ impl Func {
         for arg in args.iter() {
             arg_types.push(arg.tipe.clone());
         }
-        let prop = FuncProperties::new(view, write, closure);
+        let prop = FuncProperties::new(view, write, closure, public);
         let ret_type = ret_type.unwrap_or(Type::Void);
         Func {
             name,
@@ -1387,33 +1381,41 @@ impl Func {
             captures,
             frame_size,
             unique_id: None,
-            func_labels: Arc::new(HashMap::new()),
             properties: prop,
             debug_info,
         }
     }
 }
 
-/// Keeps track of compiler enforced properties, currently only tracks purity, may be extended to
-/// keep track of potential to throw or other properties.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Hash)]
+/// The properties of a function or closure.
+#[derive(Debug, Clone, Copy, Eq, Serialize, Deserialize, Hash)]
 pub struct FuncProperties {
     pub view: bool,
     pub write: bool,
     pub closure: bool,
+    #[serde(default)]
+    pub public: bool,
+}
+
+/// We only want equality when comparing types, for which only purity makes sense
+impl PartialEq for FuncProperties {
+    fn eq(&self, other: &Self) -> bool {
+        self.purity() == other.purity()
+    }
 }
 
 impl FuncProperties {
-    pub fn new(view: bool, write: bool, closure: bool) -> Self {
+    pub fn new(view: bool, write: bool, closure: bool, public: bool) -> Self {
         FuncProperties {
             view,
             write,
             closure,
+            public,
         }
     }
 
     pub fn pure() -> Self {
-        Self::new(false, false, false)
+        Self::new(false, false, false, false)
     }
 
     pub fn purity(&self) -> (bool, bool) {

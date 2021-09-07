@@ -1,13 +1,13 @@
 
 var global: uint;
 
-type Produce = closure(uint, uint) -> (uint, buffer);
+type Produce = closure(uint, uint) -> string;
 
 view write func main() {
 	asm(tests().1) { log };
 }
 
-view write func tests() -> (uint, buffer) {
+view write func tests() -> string {
 
     let lambda = capture_2();
 
@@ -35,7 +35,7 @@ func capture_2() -> Produce {
     let a = 32;
     let b = (64, 128, "Closures are so cool!");
 
-    let lambda = closure(arg1: uint, arg2: uint) -> (uint, buffer) {
+    let lambda = closure(arg1: uint, arg2: uint) -> string {
         
         let sum = arg1 + a;
         let mul = arg2 * b.0 + b.1;
@@ -60,7 +60,7 @@ func capture_2() -> Produce {
 
 func capture_1(sum: uint) -> Produce {
     
-    return closure(arg1: uint, arg2: uint) -> (uint, buffer) {
+    return closure(arg1: uint, arg2: uint) -> string {
         if (arg1 + arg2 == sum) {
             return "Capture count doesn't matter!";
         }
@@ -68,7 +68,7 @@ func capture_1(sum: uint) -> Produce {
     };
 }
 
-view write func test_global_capture() -> (uint, buffer) {
+view write func test_global_capture() -> string {
     
     global = 2;
     
