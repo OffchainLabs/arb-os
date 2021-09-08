@@ -13,7 +13,7 @@ type Sha256Hasher = struct {
     buf: [2]uint,
     offset: uint,
     totalSizeBits: uint,
-}
+};
 
 public func sha256hasher_new() -> Sha256Hasher {
     return struct {

@@ -15,7 +15,7 @@ type Ripemd160Hasher = struct {
     buf: [2]uint,
     offset: uint,
     totalSizeBytes: uint,
-}
+};
 
 public func ripemd160hasher_new() -> Ripemd160Hasher {
     return struct {

@@ -8,7 +8,7 @@ use std::rlp::SignedTx;
 use chainParameters::chainParams_chainId;
 
 
-public impure func recoverSigner(tx: SignedTx) -> option<address> {
+public view func recoverSigner(tx: SignedTx) -> option<address> {
     let rlpHashForSig = xif ( (tx.v == 27) || (tx.v == 28) ) {
         rlp_encodeAndHashMessageInfoForSignature(tx, None<uint>)  // non-EIP155 signature
     } else {

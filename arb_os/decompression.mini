@@ -71,19 +71,19 @@ type IndexedAddressTable = struct {
     byIndex: ExpandingIntArray,
     byAddress: map<address, uint>,
     size: uint
-}
+};
 
 var globalIndexedAddressTable: IndexedAddressTable;
 
-public impure func decompression_init() {
+public write func decompression_init() {
     globalIndexedAddressTable = addressTable_new();
 }
 
-public impure func getGlobalAddressTable() -> IndexedAddressTable {
+public view func getGlobalAddressTable() -> IndexedAddressTable {
     return globalIndexedAddressTable;
 }
 
-public impure func setGlobalAddressTable(gat: IndexedAddressTable) {
+public write func setGlobalAddressTable(gat: IndexedAddressTable) {
     globalIndexedAddressTable = gat;
 }
 
@@ -135,7 +135,7 @@ public func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: addre
     };
 }
 
-public impure func decompressAddress(
+public view write func decompressAddress(
     stream: ByteStream,
 ) -> option<(ByteStream, address)> {
     // Returns None if insufficient data in stream
@@ -175,7 +175,7 @@ public func decompressTokenAmount(stream: ByteStream) -> option<(ByteStream, uin
     });
 }
 
-public impure func decompressAndVerifyEcdsaSignedTx(
+public view write func decompressAndVerifyEcdsaSignedTx(
     ba: ByteArray,
     originalRequest: IncomingRequest
 ) -> option<TxRequestData> {
@@ -288,7 +288,7 @@ public impure func decompressAndVerifyEcdsaSignedTx(
     );
 }
 
-public impure func decompressAndVerifyBLSSignedTxBatch(
+public view write func decompressAndVerifyBLSSignedTxBatch(
     ba: ByteArray,
     originalRequest: IncomingRequest,
     queueToFill: Queue,
@@ -370,7 +370,7 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
     return Some(queueToFill);
 }
 
-impure func decompressTx(
+view write func decompressTx(
     stream: ByteStream,
     maybeSender: option<address>,   // tx sender, or None if the caller doesn't know the sender yet
 ) -> option<(ByteStream, TxRequestData)> {
@@ -460,13 +460,13 @@ type FunctionTableEntry = struct {
     callDataPrefix: any,    //FIXME: really a ByteArray, but compiler previously didn't allow array of imported type
     maxGas: uint,
     payable: bool,
-}
+};
 
-type FunctionTable = []FunctionTableEntry
+type FunctionTable = []FunctionTableEntry;
 
 type AggregatorDecompressionState = struct {
     functionTable: FunctionTable,
-}
+};
 
 public func parseAggregatorFunctionTable(
     contents: ByteArray
@@ -499,12 +499,12 @@ public func parseAggregatorFunctionTable(
     return Some(struct { functionTable: ret });
 }
 
-public impure func functionTableSize(addr: address) -> option<uint> {
+public view func functionTableSize(addr: address) -> option<uint> {
     let funcTable = (account_getAggregatorDecompressionState(evmCallStack_getAccount(addr)?)?).functionTable;
     return Some(len(funcTable));
 }
 
-public impure func getFromFunctionTable(addr: address, index: uint) -> option<(uint, bool, uint)> {
+public view func getFromFunctionTable(addr: address, index: uint) -> option<(uint, bool, uint)> {
     let funcTable = (account_getAggregatorDecompressionState(evmCallStack_getAccount(addr)?)?).functionTable;
     return xif (index < len(funcTable)) {
         let tableEntry = funcTable[index];

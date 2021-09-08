@@ -2,8 +2,8 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::compile::DebugInfo;
-use crate::stringtable::StringId;
+use crate::compile::{DebugInfo, TypeTree};
+use crate::console::Color;
 use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
 use ethers_core::utils::keccak256;
@@ -12,42 +12,27 @@ use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::{collections::HashMap, fmt, sync::Arc};
 
+/// A label who's value is the same across ArbOS versions
+pub type LabelId = u64;
+
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Label {
-    Func(StringId),
-    Anon(usize),
-    External(usize), // slot in imported funcs list
-    Evm(usize),      // program counter in EVM contract
+    Func(LabelId),    // A function uniquely identified by module & name
+    Closure(LabelId), // A closure uniquely identified by module & name
+    Anon(LabelId),    // An anonymous label identified by func/closure + count
+    Evm(usize),       // program counter in EVM contract
 }
 
 impl Label {
-    pub fn relocate(
-        self,
-        int_offset: usize,
-        ext_offset: usize,
-        func_offset: usize,
-    ) -> (Self, usize) {
-        match self {
-            Label::Func(sid) => (Label::Func(sid + func_offset), sid + func_offset),
-            Label::Anon(pc) => (Label::Anon(pc + int_offset), func_offset),
-            Label::External(slot) => (Label::External(slot + ext_offset), func_offset),
-            Label::Evm(_) => (self, func_offset),
-        }
-    }
-
     pub fn avm_hash(&self) -> Value {
         match self {
-            Label::Func(sid) => Value::avm_hash2(
+            Label::Func(id) | Label::Closure(id) => Value::avm_hash2(
                 &Value::Int(Uint256::from_usize(4)),
-                &Value::Int(Uint256::from_usize(*sid)),
+                &Value::Int(Uint256::from_u64(*id)),
             ),
             Label::Anon(n) => Value::avm_hash2(
                 &Value::Int(Uint256::from_usize(5)),
-                &Value::Int(Uint256::from_usize(*n)),
-            ),
-            Label::External(n) => Value::avm_hash2(
-                &Value::Int(Uint256::from_usize(6)),
-                &Value::Int(Uint256::from_usize(*n)),
+                &Value::Int(Uint256::from_usize(*n as usize)),
             ),
             Label::Evm(_) => {
                 panic!("tried to avm_hash an EVM label");
@@ -60,8 +45,8 @@ impl fmt::Display for Label {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Label::Func(sid) => write!(f, "function_{}", sid),
+            Label::Closure(sid) => write!(f, "closure_{}", sid),
             Label::Anon(n) => write!(f, "label_{}", n),
-            Label::External(slot) => write!(f, "external_{}", slot),
             Label::Evm(pc) => write!(f, "EvmPC({})", pc),
         }
     }
@@ -69,21 +54,22 @@ impl fmt::Display for Label {
 
 #[derive(Default)]
 pub struct LabelGenerator {
-    next: usize,
+    current: LabelId,
 }
 
 impl LabelGenerator {
-    pub fn new() -> Self {
-        LabelGenerator { next: 0 }
+    /// Creates a new label generator that will hand out labels starting at some value.
+    /// In practice, this means giving the generator a unique func id, so that local labels
+    /// are always unique regardless of the function they are in.
+    pub fn new(current: LabelId) -> Self {
+        LabelGenerator { current }
     }
 
-    pub fn next(self) -> (Label, Self) {
-        (
-            Label::Anon(self.next),
-            LabelGenerator {
-                next: self.next + 1,
-            },
-        )
+    /// Hands out a new label, advancing the generator
+    pub fn next(&mut self) -> Label {
+        let next = Label::Anon(self.current);
+        self.current += 1;
+        next
     }
 }
 
@@ -137,17 +123,6 @@ impl<T> Instruction<T> {
             None => Ok(self),
         }
     }
-
-    pub fn xlate_labels(self, xlate_map: &HashMap<Label, &Label>) -> Self {
-        match self.immediate {
-            Some(val) => Instruction::from_opcode_imm(
-                self.opcode,
-                val.xlate_labels(xlate_map),
-                self.debug_info,
-            ),
-            None => self,
-        }
-    }
 }
 
 impl Instruction<AVMOpcode> {
@@ -163,8 +138,11 @@ impl Instruction<AVMOpcode> {
 }
 
 impl Instruction {
-    pub fn is_pure(&self) -> bool {
-        self.opcode.is_pure()
+    pub fn is_view(&self, type_tree: &TypeTree) -> bool {
+        self.opcode.is_view(type_tree)
+    }
+    pub fn is_write(&self, type_tree: &TypeTree) -> bool {
+        self.opcode.is_write(type_tree)
     }
     pub fn get_label(&self) -> Option<&Label> {
         match &self.opcode {
@@ -173,42 +151,27 @@ impl Instruction {
         }
     }
 
-    pub fn relocate(
-        self,
-        int_offset: usize,
-        ext_offset: usize,
-        func_offset: usize,
-        globals_offset: usize,
-    ) -> (Self, usize) {
-        let mut max_func_offset = func_offset;
-        let opcode = match self.opcode {
-            Opcode::PushExternal(off) => Opcode::PushExternal(off + ext_offset),
-            Opcode::Label(label) => {
-                let (new_label, new_func_offset) =
-                    label.relocate(int_offset, ext_offset, func_offset);
-                if max_func_offset < new_func_offset {
-                    max_func_offset = new_func_offset;
-                }
-                Opcode::Label(new_label)
-            }
-            Opcode::GetGlobalVar(idx) => Opcode::GetGlobalVar(idx + globals_offset),
-            Opcode::SetGlobalVar(idx) => Opcode::SetGlobalVar(idx + globals_offset),
-            _ => self.opcode,
-        };
-        let imm = match self.immediate {
-            Some(imm) => {
-                let (new_imm, new_func_offset) = imm.relocate(int_offset, ext_offset, func_offset);
-                if max_func_offset < new_func_offset {
-                    max_func_offset = new_func_offset;
-                }
-                Some(new_imm)
-            }
-            None => None,
-        };
-        (
-            Instruction::new(opcode, imm, self.debug_info),
-            max_func_offset,
-        )
+    pub fn get_uniques(&self) -> Vec<LabelId> {
+        let mut uniques = vec![];
+        if let Opcode::Label(Label::Func(id) | Label::Closure(id)) = self.opcode {
+            uniques.push(id);
+        }
+        if let Some(value) = &self.immediate {
+            uniques.extend(value.get_uniques());
+        }
+        uniques
+    }
+
+    pub fn pretty_print(&self, highlight: &str) -> String {
+        let label_color = Color::PINK;
+        match &self.immediate {
+            Some(value) => format!(
+                "{} {}",
+                self.opcode.pretty_print(label_color),
+                value.pretty_print(highlight)
+            ),
+            None => format!("{}", self.opcode.pretty_print(label_color)),
+        }
     }
 }
 
@@ -218,7 +181,10 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.immediate {
-            Some(v) => write!(f, "[{}]\n        {}", v, self.opcode),
+            Some(value) => match value {
+                Value::Tuple(_) => write!(f, "[{}]\n        {}", value, self.opcode),
+                _ => write!(f, "{} {}", self.opcode, value),
+            },
             None => write!(f, "{}", self.opcode),
         }
     }
@@ -235,10 +201,6 @@ pub enum CodePt {
 impl CodePt {
     pub fn new_internal(pc: usize) -> Self {
         CodePt::Internal(pc)
-    }
-
-    pub fn new_external(name: StringId) -> Self {
-        CodePt::External(name)
     }
 
     pub fn new_in_segment(seg_num: usize, offset: usize) -> Self {
@@ -269,19 +231,6 @@ impl CodePt {
             }
             CodePt::External(_) => None,
             CodePt::Null => None,
-        }
-    }
-
-    pub fn relocate(self, int_offset: usize, ext_offset: usize) -> Self {
-        match self {
-            CodePt::Internal(pc) => CodePt::Internal(pc + int_offset),
-            CodePt::External(off) => CodePt::External(off + ext_offset),
-            CodePt::InSegment(_, _) => {
-                panic!("tried to relocate/link code at runtime");
-            }
-            CodePt::Null => {
-                panic!("tried to relocate/link null codepoint");
-            }
         }
     }
 
@@ -644,12 +593,12 @@ pub enum Value {
 }
 
 impl Value {
-    ///Returns a value containing no data, a zero sized tuple.
+    /// Returns a value containing no data, a zero sized tuple.
     pub fn none() -> Self {
         Value::Tuple(Arc::new(vec![]))
     }
 
-    ///Creates a single tuple `Value` from a `Vec<Value>`
+    /// Creates a single tuple `Value` from a `Vec<Value>`
     pub fn new_tuple(v: Vec<Value>) -> Self {
         Value::Tuple(Arc::new(v))
     }
@@ -745,55 +694,7 @@ impl Value {
         }
     }
 
-    pub fn relocate(
-        self,
-        int_offset: usize,
-        ext_offset: usize,
-        func_offset: usize,
-    ) -> (Self, usize) {
-        match self {
-            Value::Int(_) => (self, 0),
-            Value::Buffer(_) => (self, 0),
-            Value::Tuple(v) => {
-                let mut rel_v = Vec::new();
-                let mut max_func_offset = 0;
-                for val in &*v {
-                    let (new_val, new_func_offset) =
-                        val.clone().relocate(int_offset, ext_offset, func_offset);
-                    rel_v.push(new_val);
-                    if (max_func_offset < new_func_offset) {
-                        max_func_offset = new_func_offset;
-                    }
-                }
-                (Value::new_tuple(rel_v), max_func_offset)
-            }
-            Value::CodePoint(cpt) => (Value::CodePoint(cpt.relocate(int_offset, ext_offset)), 0),
-            Value::Label(label) => {
-                let (new_label, new_func_offset) =
-                    label.relocate(int_offset, ext_offset, func_offset);
-                (Value::Label(new_label), new_func_offset)
-            }
-        }
-    }
-
-    pub fn xlate_labels(self, label_map: &HashMap<Label, &Label>) -> Self {
-        match self {
-            Value::Int(_) | Value::CodePoint(_) | Value::Buffer(_) => self,
-            Value::Tuple(v) => {
-                let mut newv = Vec::new();
-                for val in &*v {
-                    newv.push(val.clone().xlate_labels(label_map));
-                }
-                Value::new_tuple(newv)
-            }
-            Value::Label(label) => match label_map.get(&label) {
-                Some(label2) => Value::Label(**label2),
-                None => self,
-            },
-        }
-    }
-
-    ///Converts `Value` to usize if possible, otherwise returns `None`.
+    /// Converts `Value` to usize if possible, otherwise returns `None`.
     pub fn to_usize(&self) -> Option<usize> {
         match self {
             Value::Int(i) => i.to_usize(),
@@ -837,15 +738,72 @@ impl Value {
             panic!();
         }
     }
+
+    pub fn get_uniques(&self) -> Vec<LabelId> {
+        let mut uniques = vec![];
+        match self {
+            Value::Label(Label::Func(id) | Label::Closure(id)) => uniques.push(*id),
+            Value::Tuple(tup) => {
+                for child in &**tup {
+                    uniques.extend(child.get_uniques());
+                }
+            }
+            _ => {}
+        }
+        uniques
+    }
+
+    pub fn pretty_print(&self, highlight: &str) -> String {
+        match self {
+            Value::Int(i) => Color::color(highlight, i),
+            Value::CodePoint(pc) => Color::color(highlight, pc),
+            Value::Label(label) => match label {
+                Label::Func(id) => Color::color(highlight, format!("func_{}", id % 256)),
+                Label::Closure(id) => Color::color(highlight, format!("λ_{}", id % 256)),
+                Label::Anon(id) => Color::color(highlight, format!("label_{}", id % 256)),
+                _ => Color::color(highlight, label),
+            },
+            Value::Buffer(buf) => {
+                let mut text = String::from_utf8_lossy(&hex::decode(buf.hex_encode()).unwrap())
+                    .chars()
+                    .filter(|c| !c.is_ascii_control())
+                    .collect::<String>();
+                text.truncate(100);
+                Color::lavender(format!("\"{}\"", text))
+            }
+            Value::Tuple(tup) => match tup.is_empty() {
+                true => Color::grey("_"),
+                false => {
+                    let mut s = Color::color(highlight, "(");
+                    for (i, value) in tup.iter().enumerate() {
+                        let child = value.pretty_print(highlight);
+                        match i == 0 {
+                            true => {
+                                s = format!("{}{}", s, child);
+                            }
+                            false => {
+                                s = format!("{}{} {}", s, Color::grey(","), child);
+                            }
+                        }
+                    }
+                    format!("{}{}", s, Color::color(highlight, ")"))
+                }
+            },
+        }
+    }
+}
+
+impl From<usize> for Value {
+    fn from(v: usize) -> Self {
+        Self::Int(Uint256::from_usize(v))
+    }
 }
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Int(i) => i.fmt(f),
-            Value::Buffer(buf) => {
-                write!(f, "Buffer({})", buf.hex_encode())
-            }
+            Value::Buffer(buf) => write!(f, "Buffer({})", buf.hex_encode()),
             Value::CodePoint(pc) => write!(f, "CodePoint({})", pc),
             Value::Label(label) => write!(f, "Label({})", label),
             Value::Tuple(tup) => {
@@ -871,7 +829,7 @@ impl fmt::Display for Value {
 pub enum Opcode {
     GetLocal,
     SetLocal,
-    MakeFrame(usize, usize, bool),
+    MakeFrame(usize, usize, bool, bool),
     Label(Label),
     PushExternal(usize), // push codeptr of external function -- index in imported_funcs
     TupleGet(usize),     // arg is size of anysize_tuple
@@ -977,27 +935,54 @@ pub enum AVMOpcode {
 }
 
 impl Opcode {
-    pub fn is_pure(&self) -> bool {
+    pub fn is_view(&self, _: &TypeTree) -> bool {
+        match self {
+            Opcode::AVMOpcode(AVMOpcode::Inbox)
+            | Opcode::AVMOpcode(AVMOpcode::InboxPeek)
+            | Opcode::AVMOpcode(AVMOpcode::Rpush)
+            | Opcode::AVMOpcode(AVMOpcode::PushInsn)
+            | Opcode::AVMOpcode(AVMOpcode::PushInsnImm)
+            | Opcode::AVMOpcode(AVMOpcode::ErrCodePoint)
+            | Opcode::AVMOpcode(AVMOpcode::ErrPush)
+            | Opcode::AVMOpcode(AVMOpcode::PushGas)
+            | Opcode::AVMOpcode(AVMOpcode::Sideload)
+            | Opcode::AVMOpcode(AVMOpcode::Jump)
+            | Opcode::AVMOpcode(AVMOpcode::Cjump)
+            | Opcode::AVMOpcode(AVMOpcode::AuxPop)
+            | Opcode::AVMOpcode(AVMOpcode::AuxPush) => true,
+            _ => false,
+        }
+    }
+    pub fn is_write(&self, _: &TypeTree) -> bool {
         match self {
             Opcode::AVMOpcode(AVMOpcode::Log)
             | Opcode::AVMOpcode(AVMOpcode::Inbox)
             | Opcode::AVMOpcode(AVMOpcode::InboxPeek)
             | Opcode::AVMOpcode(AVMOpcode::Send)
             | Opcode::AVMOpcode(AVMOpcode::Rset)
-            | Opcode::AVMOpcode(AVMOpcode::Rpush)
             | Opcode::AVMOpcode(AVMOpcode::PushInsn)
             | Opcode::AVMOpcode(AVMOpcode::PushInsnImm)
-            | Opcode::AVMOpcode(AVMOpcode::ErrCodePoint)
             | Opcode::AVMOpcode(AVMOpcode::ErrSet)
-            | Opcode::AVMOpcode(AVMOpcode::ErrPush)
             | Opcode::AVMOpcode(AVMOpcode::SetGas)
-            | Opcode::AVMOpcode(AVMOpcode::PushGas)
+            | Opcode::AVMOpcode(AVMOpcode::Sideload)    // this is special-cased, so we can't reorder these
             | Opcode::AVMOpcode(AVMOpcode::Jump)
             | Opcode::AVMOpcode(AVMOpcode::Cjump)
             | Opcode::AVMOpcode(AVMOpcode::AuxPop)
-            | Opcode::AVMOpcode(AVMOpcode::AuxPush)
-            | Opcode::AVMOpcode(AVMOpcode::Sideload) => false,
-            _ => true,
+            | Opcode::AVMOpcode(AVMOpcode::AuxPush) => true,
+            _ => false,
+        }
+    }
+
+    pub fn pretty_print(&self, label_color: &str) -> String {
+        match self {
+            Opcode::MakeFrame(nargs, space, prebuilt, return_address) => match prebuilt {
+                true => format!("MakeFrame<{}, {}, {}>", nargs, space, return_address),
+                false => format!("MakeFrame({}, {}, {})", nargs, space, return_address),
+            },
+            Opcode::SetGlobalVar(id) => format!("SetGlobal {}", Color::pink(id)),
+            Opcode::GetGlobalVar(id) => format!("GetGlobal {}", Color::pink(id)),
+            Opcode::Label(label) => Value::Label(*label).pretty_print(label_color),
+            _ => format!("{}", self.to_name()),
         }
     }
 }
@@ -1085,10 +1070,22 @@ impl Opcode {
     pub fn to_name(&self) -> &str {
         match self {
             Opcode::AVMOpcode(avm) => avm.to_name(),
+            Opcode::GetLocal => "GetLocal",
+            Opcode::SetLocal => "SetLocal",
+            Opcode::GetGlobalVar(_) => "GetGlobal",
+            Opcode::SetGlobalVar(_) => "SetGlobal",
+            Opcode::Label(_) => "Label",
+            Opcode::PushExternal(_) => "PushExternal",
+            Opcode::TupleGet(_) => "TupleGet",
+            Opcode::TupleSet(_) => "TupleSet",
+            Opcode::ArrayGet => "ArrayGet",
+            Opcode::UncheckedFixedArrayGet(_) => "UncheckedFixedArrayGet",
+            Opcode::Return => "return",
             Opcode::UnaryMinus => "unaryminus",
             Opcode::LogicalAnd => "logicaland",
             Opcode::LogicalOr => "logicalor",
-            _ => "Unknown",
+            Opcode::Len => "len",
+            _ => "to_name() not implemented",
         }
     }
 }
@@ -1378,7 +1375,9 @@ fn test_consistent_opcode_numbers() {
 impl fmt::Display for Opcode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Opcode::MakeFrame(s1, s2, ret) => write!(f, "MakeFrame({}, {}, {})", s1, s2, ret),
+            Opcode::MakeFrame(s1, s2, pre, ret) => {
+                write!(f, "MakeFrame({}, {}, {}, {})", s1, s2, pre, ret)
+            }
             Opcode::Label(label) => label.fmt(f),
             _ => write!(f, "{}", self.to_name()),
         }

@@ -70,7 +70,7 @@ type Inbox = struct {
     atStartOfBlock: bool,           // true iff we should start a new Arbitrum block when the next message arrives
     inboxHashAccumulator: bytes32,  // hash accumulator covering all inbox messages so far
     pendingMessage: option<IncomingRequest>,  // message being held until sideloads have had a chance to be processed
-}
+};
 
 var globalInbox: Inbox;
 var globalInputQueue: struct {
@@ -78,7 +78,7 @@ var globalInputQueue: struct {
     batchQ: IncomingRequestQueueStack,
 };
 
-public impure func inbox_init() {
+public write func inbox_init() {
     globalInbox = struct {
         queue: incomingRequestQueue_new(),
         arbBlockNum: 0,
@@ -94,13 +94,13 @@ public impure func inbox_init() {
     };
 }
 
-public impure func emitGenesisBlockReceipt() {
+public view write func emitGenesisBlockReceipt() {
     outputStats_endOfBlock(globalInbox.arbBlockNum, globalInbox.ethBlockNum, globalInbox.timestamp);
     blockhash_submitHash(globalInbox.ethBlockNum, globalInbox.inboxHashAccumulator);
     set globalInbox.arbBlockNum = globalInbox.arbBlockNum + 1;
 }
 
-public impure func inbox_get() -> IncomingRequest {
+public view write func inbox_get() -> IncomingRequest {
     // Get the next message, in order of arrival.
     // If no messages have arrived, this will block until one arrives.
     // This is a loop because some events don't generate a message that we can return,
@@ -131,7 +131,7 @@ public impure func inbox_get() -> IncomingRequest {
 }
 
 // translate a newly arrived message from the incoming format into the format we'll use internally
-impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, fromSideload: bool) -> IncomingRequest {
+view write func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, fromSideload: bool) -> IncomingRequest {
     if (! fromSideload) {
         updateL1GasPriceEstimate(newMsgRaw.sender, newMsgRaw.gasPriceL1);
     }
@@ -164,7 +164,7 @@ impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, fromSide
     };
 }
 
-#[noinline, ] impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
+#[noinline, ] view write func getFromL1Inbox(inbox: Inbox) -> Inbox {
     // Get a message from the L1 inbox, and append it to the inbox.
     // Automatically generate an end-of-block message if that is needed.
     // If there are no messages available in the L1 inbox, this blocks until one is available
@@ -226,15 +226,15 @@ impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, fromSide
     return inbox;
 }
 
-public impure func inbox_currentTimestamp() -> uint {
+public view func inbox_currentTimestamp() -> uint {
     return globalInbox.timestamp;
 }
 
-public impure func inbox_currentArbBlockNumber() -> uint {
+public view func inbox_currentArbBlockNumber() -> uint {
     return globalInbox.arbBlockNum;
 }
 
-public impure func inbox_currentEthBlockNumber() -> uint {
+public view func inbox_currentEthBlockNumber() -> uint {
     return globalInbox.ethBlockNum;
 }
 
@@ -247,7 +247,7 @@ type IncomingRequestFromInbox = struct {
     gasPriceL1: uint,         // L1 gas price paid by this tx
     msgSize: uint,            // size of payload message
     msgData: buffer,          // payload message data
-}
+};
 
 type IncomingRequest = struct {
     kind: uint,               // type of message
@@ -261,24 +261,24 @@ type IncomingRequest = struct {
     aggregator: option<AggregatorInfo>,
     adminMode: bool,          // true iff this is a sideloaded message inserted for private execution by a node
     gasEstimationParams: option<GasEstimationParams>,  // used if this is a gas estimation message
-}
+};
 
 type GasEstimationParams = struct {
     computeGasLimit: uint,
     ignoreGasPrice: bool,
     ignoreMaxGas: bool,
-}
+};
 
 type RequestProvenance = struct {
     l1SeqNum: uint,
     parentRequestId: uint,
     indexInParent: uint,
-}
+};
 
 type AggregatorInfo = struct {
     aggregator: option<address>,
     calldataUnits: uint,
-}
+};
 
 func hashIncomingRequest(req: IncomingRequest) -> bytes32 {  // a convenient hash over some fields of a request
     return hash(
@@ -302,7 +302,7 @@ func hashIncomingRequest(req: IncomingRequest) -> bytes32 {  // a convenient has
     );
 }
 
-public impure func mainRunLoop() {
+public view write func mainRunLoop() {
     loop {
         if let Some(res) = txRequestQueue_get(globalInputQueue.txQ) {   // consume from txQ first
             let (newQ, tx) = res;
@@ -351,7 +351,7 @@ public impure func mainRunLoop() {
     }
 }
 
-impure func handleUnpackedMessage(msg: IncomingRequest) {
+view write func handleUnpackedMessage(msg: IncomingRequest) {
     if (msg.kind == const::L1MessageType_L2FundedByL1) {
         // record the calldata usage, so it can be reported in tx receipt
         set msg.aggregator = Some(struct {
@@ -434,7 +434,7 @@ impure func handleUnpackedMessage(msg: IncomingRequest) {
     }
 }
 
-impure func handleArrivingTx(tx: TxRequestData) {
+view write func handleArrivingTx(tx: TxRequestData) {
     let (resultCode, request) = xif (allowedSenders_contains(tx.caller) || tx.incomingRequest.adminMode) {
         gasAccounting_prepareTx(tx)
     } else {
@@ -477,7 +477,7 @@ impure func handleArrivingTx(tx: TxRequestData) {
     }
 }
 
-impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
+view func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
     let inStream = bytestream_new(request.msgData);
     let (*inStream, subtype) = bytestream_getByte(inStream)?;
     let (*inStream, maxGas) = bytestream_get256(inStream)?;
@@ -524,7 +524,7 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
 
 type IncomingRequestQueue = struct {
     q: Queue,
-}
+};
 
 func incomingRequestQueue_new() -> IncomingRequestQueue {
     return struct { q: queue_new() };
@@ -553,7 +553,7 @@ func incomingRequestQueue_put(q: IncomingRequestQueue, req: IncomingRequest) -> 
 
 type IncomingRequestQueueStack = struct {
     qs: QueueStack,
-}
+};
 
 func incomingRequestQueueStack_new() -> IncomingRequestQueueStack {
     return struct { qs: queuestack_new() };
@@ -571,7 +571,7 @@ func incomingRequestQueueStack_push(qs: IncomingRequestQueueStack, q: IncomingRe
 
 type TxRequestQueue = struct {
     q: Queue,
-}
+};
 
 func txRequestQueue_new() -> TxRequestQueue {
     return struct { q: queue_new() };

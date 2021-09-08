@@ -1,8 +1,9 @@
 //
-// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
 //
 
 
+use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVar, Type, CodeBlock, StructField, FuncArg, FuncProperties, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant, OptionConst, FieldInitializer, new_func_arg, new_type_decl};
 use crate::compile::ast::{TopLevelDecl, TypeDecl, GenericTypeDecl, Func, GlobalVarDecl, Type, CodeBlock, GenericFunc,
 StructField, FuncArg, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant,
 OptionConst, FieldInitializer, new_func_arg, new_type_decl, new_generic_type_decl};
@@ -13,13 +14,24 @@ use crate::link::Import;
 use crate::pos::{BytePos, Location};
 use crate::mavm::{Value, Instruction, Opcode};
 use crate::uint256::Uint256;
-use std::collections::{HashMap, HashSet, BTreeMap};
+use crate::console::Color;
+use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
+use regex::Regex;
 
-
-grammar(stringtable: &mut StringTable, file_info: &Lines, filename: u64, current_path: &[String], constants: &mut HashMap<String, Uint256>, local_constants: &mut HashMap<String, Location>, used_constants: &mut HashSet<String>, error_system: &mut ErrorSystem);
+grammar(
+    stringtable: &mut StringTable,                      // map of ids to strings
+    file_info: &Lines,                                  // the lines of source code
+    filename: u64,                                      // filename hash
+    current_path: &[String],                            // path to what's being parsed
+    constants: &mut HashMap<String, Uint256>,           // all constants (local *and* global)
+    local_constants: &mut HashMap<String, Location>,    // constants created
+    used_constants: &mut HashSet<String>,               // constants used
+    closures: &mut BTreeMap<StringId, Func>,            // closures found
+    error_system: &mut ErrorSystem,                     // mechanism for delaying errors
+);
 
 extern {
-    type Error = String;
+    type Error = CompileError;
 }
 
 match {
@@ -89,7 +101,7 @@ BodyDecl: TopLevelDecl = {
 }
 
 TypeDecl: TypeDecl = {
-	"type" <Ident> "=" <Type> => new_type_decl(<>),
+    "type" <Ident> "=" <Type> ";" => new_type_decl(<>),
 }
 
 GenericTypeDecl: GenericTypeDecl = {
@@ -97,8 +109,15 @@ GenericTypeDecl: GenericTypeDecl = {
 }
 
 FuncDecl: Func = {
-	<lno: @L> <attribs: ("#[" <Attributes> "]")?> <p: "public"?> <imp: "impure"?> "func" <i:Ident> "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> =>
-	        Func::new(i, imp.is_some(), fa, t.unwrap_or(Type::Void), cb, p.is_some(), DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default())),
+	<attribs: ("#[" <Attributes> "]")?> <qualifiers: (<Qualifier>)*> "func" <lno: @L> <i:Ident> "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> => {
+        let public = qualifiers.contains(&"public");
+        let view = qualifiers.contains(&"view");
+        let write = qualifiers.contains(&"write");
+        let debug = DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default());
+        let name = stringtable.name_from_id(i).clone();
+
+	    Func::new(name, i, public, view, write, false, fa, t, cb, BTreeSet::new(), 0, debug)
+    }
 }
 
 GenericFuncDecl: GenericFunc = {
@@ -124,8 +143,14 @@ FuncArg: FuncArg = {
 	<lno: @L> <i:Ident> ":" <t:Type> => new_func_arg(i, t, DebugInfo::from(file_info.location(BytePos::from(lno), filename))),
 }
 
-GlobalVarDecl: GlobalVarDecl = {
-	<lno: @L> "var" <i:Ident> ":" <t:Type> ";" => GlobalVarDecl::new(i, stringtable.name_from_id(i).clone(), t, file_info.location(BytePos::from(lno),filename)),
+GlobalVarDecl: GlobalVar = {
+    <attribs: ("#[" <Attributes> "]")?> "var" <lno: @L> <i:Ident> ":" <t:Type> ";" => {
+        let mut debug_info = DebugInfo::here(file_info, lno, filename);
+        debug_info.attributes = attribs.unwrap_or_default();
+        GlobalVar::new(
+            i, stringtable.name_from_id(i).clone(), t, debug_info
+        )
+    },
 }
 
 CodeBlock: Vec<Statement> = {
@@ -141,7 +166,7 @@ Statement: Statement = {
 }
 
 Attributes: Attributes = {
-    <lno: @L> <names: (<IdentString> ",")*> <last: IdentString?> =>? {
+    <lno: @L> <names: (<IdentString> ",")*> <last: IdentString?> => {
         let mut attribs = Attributes::default();
         for name in names.into_iter().chain(last.into_iter()) {
             match name.as_ref() {
@@ -162,7 +187,9 @@ Attributes: Attributes = {
                     )
                 ),
             }
-        }; Ok(attribs) },
+        };
+        attribs
+    },
 }
 
 StatementKind: StatementKind = {
@@ -279,19 +306,30 @@ GenericStructField: StructField = {
 
 Type: Type = {
 	<PrimitiveType> => <>,
-	"struct" "{" <StructFields> "}" => Type::Struct(<>),
-	<CommaedTypesInParens> => Type::Tuple(<>),
-	"[" "]" <Type> => Type::Array(Box::new(<>)),
-	"[" <s:UnsignedInteger> "]" <t:Type> => Type::FixedArray(
-		Box::new(t),
-		s.to_usize().unwrap(),
-	),
-	"map" "<" <t1:Type> "," <t2:Type> ","? ">" => Type::Map(Box::new(t1), Box::new(t2)),
-	<i: "impure"?> "func" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => Type::Func(i.is_some(), a, Box::new(r.unwrap_or(Type::Void))),
-	"option<" <t1:Type> ">" => Type::Option(Box::new(t1)),
-	"union<" <t1:CommaedTypes> ">" => Type::Union(t1),
-	<i: Ident> "<" <t1: CommaedTypes> ">" => Type::Generic(i, t1),
-	Ident => Type::Nominal(current_path.to_owned(), <>),
+    "struct" "{" <StructFields> "}" => Type::Struct(<>),
+    <CommaedTypesInParens> => Type::Tuple(<>),
+    "[" "]" <Type> => Type::Array(Box::new(<>)),
+    "[" <s:UnsignedInteger> "]" <t:Type> => Type::FixedArray(
+	Box::new(t),
+	s.to_usize().unwrap(),
+    ),
+    "map" "<" <t1:Type> "," <t2:Type> ","? ">" => Type::Map(Box::new(t1), Box::new(t2)),
+    "string" => Type::Tuple(vec![Type::Uint, Type::Buffer]),
+    "any" => Type::Any,
+    "option<" <t1:Type> ">" => Type::Option(Box::new(t1)),
+    "every" => Type::Every,
+    "union<" <t1:CommaedTypes> ">" => Type::Union(t1),
+    <q: Qualifier*> "func" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => {
+        let view = q.contains(&"view");
+        let write = q.contains(&"write");
+        Type::Func(FuncProperties::new(view, write, false, false), a, Box::new(r.unwrap_or(Type::Void)))
+    },
+    <q: Qualifier*> "closure" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => {
+        let view = q.contains(&"view");
+        let write = q.contains(&"write");
+        Type::Func(FuncProperties::new(view, write, true, false), a, Box::new(r.unwrap_or(Type::Void)))
+    },
+    Ident => Type::Nominal(current_path.to_owned(), <>),
 };
 
 GenericType: Type = {
@@ -521,6 +559,20 @@ Expr12: Expr = {
 	<lno: @L> "covariantcast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::CovariantCast(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> "weakcast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::WeakCast(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> "unioncast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::UnionCast(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+
+    <qualifiers: (<Qualifier>)*> <lno: @L> "closure" "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> => {
+        let view = qualifiers.contains(&"view");
+        let write = qualifiers.contains(&"write");
+        let debug = DebugInfo::here(file_info, lno, filename);
+
+        let name = format!("closure #{}", closures.len() + 1);
+        let id = stringtable.get(name.clone());
+        let closure = Func::new(name, id, false, view, write, true, fa, t, cb, BTreeSet::new(), 0, debug);
+
+	    closures.insert(id, closure.clone());
+
+        Expr::new(ExprKind::Closure(closure), debug)
+    },
 	Expr13,
 }
 
@@ -535,6 +587,7 @@ Expr13: Expr = {
         <lno: @L> "getGas" "(" ")" => Expr { kind: ExprKind::GetGas, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
         <lno: @L> "setGas" "(" <e:Expr> ")" => Expr { kind: ExprKind::SetGas(Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> <i: Ident> => Expr { kind: ExprKind::VariableRef(i), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+    <lno: @L> <q: QuoteString> => Expr::lno(ExprKind::Quote(q), file_info, lno, filename),
 }
 
 Const: Constant = {
@@ -577,12 +630,47 @@ AsmVal: Value = {
 	"(" <mut l: (<AsmVal> ",")*> <v: AsmVal> ","? ")" => Value::new_tuple({l.push(v);l}),
 }
 
+Qualifier: &'input str = {
+    "view" => <>,
+    "write" => <>,
+    "public" => <>,
+};
+
 IdentStr: &'input str = {
 	r"[a-zA-Z_][a-zA-Z_01-9]*" => <>,
 };
 
 IdentString: String = {
 	r"[a-zA-Z_][a-zA-Z_01-9]*" => <>.to_string(),
+};
+
+QuoteString: Vec<u8> = {
+    <lno: @L> <q: r#"s?"[a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~-]*""#> => {
+        let re = Regex::new(r#"s?"(0x)?[a-fA-F0-9]+""#).unwrap();
+        if re.is_match(q) {
+            error_system.warnings.push(
+                CompileError::new_warning(
+                    String::from("Parser warning"),
+                    format!(
+                        "String {} looks like hex but will be treated as a string",
+                        Color::color(error_system.warn_color, &q),
+                    ),
+                    file_info.location(BytePos::from(lno) + BytePos::from(1), filename).into_iter().collect()
+                )
+            );
+        }
+        let re = Regex::new(r#"s?"([a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~-]*)""#).unwrap();
+        let string = re.captures(q).unwrap().get(1).map_or(String::new(), |m| m.as_str().to_string());
+        string.as_bytes().to_vec()
+    },
+    <lno: @L> <q: r#"h"(0x)?[a-fA-F0-9]*""#> => {
+        let re = Regex::new(r#"h"(0x)?([a-fA-F0-9]*)""#).unwrap();
+        let mut string = re.captures(q).unwrap().get(2).map_or(String::new(), |m| m.as_str().to_string());
+        if string.len() % 2 == 1 {
+            string = "0".to_owned() + &string;
+        }
+        hex::decode(string).unwrap()
+    },
 };
 
 UnsignedInteger: Uint256 = {

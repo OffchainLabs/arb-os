@@ -13,7 +13,7 @@ use std::safeMath::safeMul;
 type FixedPoint = struct {
     val: uint,
     shiftFactor: uint,
-}
+};
 
 public func fixedPoint_new(val: uint, shiftFactor: uint) -> FixedPoint {
     return struct {
