@@ -314,8 +314,10 @@ public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequ
     sender = mapL1SenderAddress(sender, Some(destination));
     req = req with { sender: sender };
 
+    // We double fetch the global account store as retrybuffer_trimTwo modifies it via retrybuffer_delete
+    let newRetryBuffer = retryBuffer_trimTwo(safeGetGlobalAccountStore().retryBuffer);
     let acctStore = safeGetGlobalAccountStore();
-    set acctStore.retryBuffer = retryBuffer_trimTwo(acctStore.retryBuffer);
+    set acctStore.retryBuffer = newRetryBuffer;
 
     // deposited funds from L1 go into the sender's account
     if (deposit > 0) {
