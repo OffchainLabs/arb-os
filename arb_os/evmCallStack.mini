@@ -181,8 +181,8 @@ public view write func setRetryBufferInCurrentContext(rbuf: RetryBuffer) {
     }
 }
 
-public view func evmCallStack_isEmpty() -> bool {                                                 
-    return globalCallStack == None<EvmCallFrame>;                                                   
+public view func evmCallStack_isEmpty() -> bool {
+    return globalCallStack == None<EvmCallFrame>;
 }
 
 public view func evmCallStack_currentTxRequestGasBid() -> uint {

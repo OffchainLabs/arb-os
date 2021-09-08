@@ -357,6 +357,13 @@ view write func arbowner_deployContract(topFrame: EvmCallFrame, calldata: ByteAr
 
     let deployAddress = address(keccakOfRlpEncodedUintPair(uint(deemedSender), deemedNonce));
 
+    // The current account is supposed to pay for callvalue of the call, but after we change runningAs below,
+    //     the callvalue will be taken from deemedSender. So we transfer the callvalue from the current account
+    //     to deemedSender here, to compensate.
+    if (evmCallStack_transferEthFromCurrent(deemedSender, callvalue) == None<()>) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 162, 0, 0);
+    }
+
     if (evmCallStack_changeRunningAs(deemedSender) == None<()>) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 163, 0, 0);
     }
