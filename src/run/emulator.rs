@@ -1941,7 +1941,11 @@ impl Machine {
                             self.incr_pc();
                             Ok(true)
                         } else {
-                            Err(ExecutionError::new("too many steps in Blake2f", &self.state, None))
+                            Err(ExecutionError::new(
+                                "too many steps in Blake2f",
+                                &self.state,
+                                None,
+                            ))
                         }
                     }
                     AVMOpcode::Inbox => {
