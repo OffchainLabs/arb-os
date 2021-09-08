@@ -11,7 +11,7 @@ use crate::compile::{path_display, CompileError};
 use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
 use crate::mavm::{Instruction, Value};
 use crate::pos::Location;
-use crate::stringtable::StringId;
+use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -875,7 +875,12 @@ impl Type {
     }
 
     pub fn display(&self) -> String {
-        self.display_indented(0, "::", None, false, &TypeTree::default())
+        self.display_indented(0, "::", None, false, &TypeTree::default(), &StringTable::new())
+            .0
+    }
+
+    pub fn display_blue(&self, type_tree: &TypeTree, generic_types: &StringTable) -> String {
+        self.display_indented(0, "::", None, false, type_tree, generic_types)
             .0
     }
 
@@ -886,7 +891,7 @@ impl Type {
         include_pathname: bool,
         type_tree: &TypeTree,
     ) -> (String, HashSet<(Type, String)>) {
-        self.display_indented(0, separator, prefix, include_pathname, type_tree)
+        self.display_indented(0, separator, prefix, include_pathname, type_tree, &StringTable::new())
     }
 
     fn display_indented(
@@ -896,6 +901,7 @@ impl Type {
         prefix: Option<&str>,
         include_pathname: bool,
         type_tree: &TypeTree,
+        generic_funcs: &StringTable,
     ) -> (String, HashSet<(Type, String)>) {
         let mut type_set = HashSet::new();
         match self {
@@ -916,6 +922,7 @@ impl Type {
                         prefix,
                         include_pathname,
                         type_tree,
+                        &generic_funcs,
                     );
                     out.push_str(&(displayed + ", "));
                     type_set.extend(subtypes);
@@ -930,6 +937,7 @@ impl Type {
                     prefix,
                     include_pathname,
                     type_tree,
+                    generic_funcs,
                 );
                 (format!("[]{}", displayed), subtypes)
             }
@@ -940,6 +948,7 @@ impl Type {
                     prefix,
                     include_pathname,
                     type_tree,
+                    generic_funcs,
                 );
                 (format!("[{}]{}", size, displayed), subtypes)
             }
@@ -956,6 +965,7 @@ impl Type {
                         prefix,
                         include_pathname,
                         type_tree,
+                        generic_funcs,
                     );
                     out.push_str(&format!("    {}: {},\n", field.name, displayed));
                     for _ in 0..indent_level {
@@ -994,8 +1004,23 @@ impl Type {
                 ));
                 (out, type_set)
             }
-            Type::Generic(_, _) => ("fix me".to_string(), type_set),
-            Type::Variable(path, id) => (format!("Type variable: {} {:?}", id, path), type_set),
+            Type::Generic(id, targs) => {
+                let arg_displays = targs.iter().map(|tipe| tipe.display_indented(
+                    indent_level,
+                    separator,
+                    prefix,
+                    include_pathname,
+                    type_tree,
+                    generic_funcs
+                )).collect::<Vec<_>>();
+                let mut arg_display = String::new();
+                let mut args_subtypes = HashSet::new();
+                for (name, subtypes) in arg_displays {
+                    arg_display.push_str(&name);
+                    args_subtypes.extend(subtypes)
+                }
+                (format!("{}<{}>", generic_funcs.name_from_id(*id), arg_display), type_set)},
+            Type::Variable(_, id) => (format!("{}", generic_funcs.name_from_id(*id)), type_set),
             Type::Func(impure, args, ret) => {
                 let mut out = String::new();
                 if *impure {
@@ -1009,6 +1034,7 @@ impl Type {
                         prefix,
                         include_pathname,
                         type_tree,
+                        generic_funcs,
                     );
                     out.push_str(&(displayed + ", "));
                     type_set.extend(subtypes)
@@ -1021,6 +1047,7 @@ impl Type {
                         prefix,
                         include_pathname,
                         type_tree,
+                        generic_funcs,
                     );
                     out.push_str(" -> ");
                     out.push_str(&displayed);
@@ -1035,6 +1062,7 @@ impl Type {
                     prefix,
                     include_pathname,
                     type_tree,
+                    generic_funcs
                 );
                 type_set.extend(key_subtypes);
                 let (val_display, val_subtypes) = val.display_indented(
@@ -1043,6 +1071,7 @@ impl Type {
                     prefix,
                     include_pathname,
                     type_tree,
+                    generic_funcs
                 );
                 type_set.extend(val_subtypes);
                 (format!("map<{},{}>", key_display, val_display), type_set)
@@ -1056,6 +1085,7 @@ impl Type {
                     prefix,
                     include_pathname,
                     type_tree,
+                    generic_funcs,
                 );
                 (format!("option<{}> ", display), subtypes)
             }
@@ -1069,6 +1099,7 @@ impl Type {
                         prefix,
                         include_pathname,
                         type_tree,
+                        generic_funcs,
                     );
                     s.push_str(&name);
                     s.push_str(", ");
@@ -1126,6 +1157,7 @@ impl Type {
     pub fn consistent_over_args(
         &self,
         type_args: &BTreeMap<StringId, Type>,
+        type_tree: &TypeTree, generic_types: &StringTable
     ) -> Result<(), CompileError> {
         let mut elf = self.clone();
         let mut has_error = Rc::new(RefCell::new(false));
@@ -1161,7 +1193,7 @@ impl Type {
         if *has_error.borrow_mut() {
             return Err(CompileError::new(
                 "Type Error".to_string(),
-                format!("Type \"{}\" failed consistency check", self.display()),
+                format!("Type \"{}\" failed consistency check", self.display_blue(type_tree, generic_types)),
                 vec![],
             ));
         }

@@ -1222,7 +1222,7 @@ pub fn typecheck_top_level_decls(
     let type_table: HashMap<_, _> = named_types.clone().into_iter().collect();
     for (_, tipe) in generic_types {
         println!("{:?}", tipe.vars);
-        tipe.tipe.consistent_over_args(&tipe.vars)?;
+        tipe.tipe.consistent_over_args(&tipe.vars, type_tree, &string_table)?;
     }
     let _ = generic_types.clone().into_iter().collect::<HashMap<_, _>>();
 
@@ -1509,6 +1509,8 @@ pub fn typecheck_generic_function(
                     .collect(),
             ));
         }
+        let map = fd.type_variables.iter().map(|var| (*var, Type::Void)).collect();
+        arg.tipe.consistent_over_args(&map, type_tree, string_table)?;
         hm.insert(arg.name, arg.tipe.clone());
     }
     let mut inner_type_table = type_table.clone();
