@@ -1189,6 +1189,43 @@ impl TypeCheckedExpr {
             TypeCheckedExprKind::Loop(..) => Type::Every,
         }
     }
+
+    /// Extracts the type returned from the expression.
+    pub fn get_type_mut(&mut self) -> Option<&mut Type> {
+        Some(match &mut self.kind {
+            TypeCheckedExprKind::UnaryOp(_, _, t) => t,
+            TypeCheckedExprKind::Binary(_, _, _, t) => t,
+            TypeCheckedExprKind::Trinary(_, _, _, _, t) => t,
+            TypeCheckedExprKind::LocalVariableRef(.., t) => t,
+            TypeCheckedExprKind::GlobalVariableRef(.., t) => t,
+            TypeCheckedExprKind::FuncRef(.., t) => t,
+            TypeCheckedExprKind::TupleRef(.., t) => t,
+            TypeCheckedExprKind::DotRef(.., t) => t,
+            TypeCheckedExprKind::Const(.., t) => t,
+            TypeCheckedExprKind::FunctionCall(.., t, _) => t,
+            TypeCheckedExprKind::StructInitializer(.., t) => t,
+            TypeCheckedExprKind::ArrayRef(.., t) => t,
+            TypeCheckedExprKind::FixedArrayRef(.., t) => t,
+            TypeCheckedExprKind::MapRef(.., t) => t,
+            TypeCheckedExprKind::ClosureLoad(.., t) => t,
+            TypeCheckedExprKind::Tuple(.., t) => t,
+            TypeCheckedExprKind::NewArray(.., t) => t,
+            TypeCheckedExprKind::NewFixedArray(.., t) => t,
+            TypeCheckedExprKind::NewMap(t) => t,
+            TypeCheckedExprKind::ArrayMod(.., t) => t,
+            TypeCheckedExprKind::FixedArrayMod(.., t) => t,
+            TypeCheckedExprKind::MapMod(.., t) => t,
+            TypeCheckedExprKind::StructMod(.., t) => t,
+            TypeCheckedExprKind::Cast(.., t) => t,
+            TypeCheckedExprKind::Asm(t, ..) => t,
+            TypeCheckedExprKind::Try(.., t) => t,
+            TypeCheckedExprKind::If(.., t) => t,
+            TypeCheckedExprKind::IfLet(.., t) => t,
+            TypeCheckedExprKind::Variant(sub) => return sub.get_type_mut(), // be careful with these,
+            TypeCheckedExprKind::CodeBlock(block) => return block.get_type_mut(), // they are to options
+            _ => return None,
+        })
+    }
 }
 
 type TypeCheckedFieldInitializer = FieldInitializer<TypeCheckedExpr>;
@@ -1607,12 +1644,11 @@ fn typecheck_statement<'a>(
             } else {
                 Err(CompileError::new_type_error(
                     format!(
-                        "return statement has wrong type, {}",
-                        return_type
-                            .mismatch_string(&tc_expr.get_type(), type_tree)
-                            .unwrap_or("failed to resolve type name".to_string())
+                        "return statement has wrong type:\nencountered {}\ninstead of  {}",
+                        Color::red(tc_expr.get_type().print(type_tree)),
+                        Color::red(return_type.print(type_tree)),
                     ),
-                    debug_info.location.into_iter().collect(),
+                    debug_info.locs(),
                 ))
             }
         }
@@ -2197,22 +2233,26 @@ fn typecheck_expr(
                     scopes,
                 )?)))
             }
-            ExprKind::VariableRef(id) => match func_table.get(id) {
-                Some(t) => Ok(TypeCheckedExprKind::FuncRef(*id, (*t).clone())),
-                None => match type_table.get(id) {
-                    Some(t) => Ok(TypeCheckedExprKind::LocalVariableRef(*id, (*t).clone())),
-                    None => match global_vars.get(id) {
-                        Some(tipe) => Ok(TypeCheckedExprKind::GlobalVariableRef(*id, tipe.clone())),
-                        None => Err(CompileError::new_type_error(
-                            format!(
-                                "reference to unrecognized identifier {}",
-                                Color::red(string_table.name_from_id(*id))
-                            ),
-                            loc.into_iter().collect(),
-                        )),
-                    },
-                },
-            },
+            ExprKind::VariableRef(id) => {
+                if let Some(tipe) = func_table.get(id) {
+                    let tipe = tipe.get_representation(type_tree)?;
+                    Ok(TypeCheckedExprKind::FuncRef(*id, tipe))
+                } else if let Some(tipe) = type_table.get(id) {
+                    let tipe = tipe.get_representation(type_tree)?;
+                    Ok(TypeCheckedExprKind::LocalVariableRef(*id, tipe))
+                } else if let Some(tipe) = global_vars.get(id) {
+                    let tipe = tipe.get_representation(type_tree)?;
+                    Ok(TypeCheckedExprKind::GlobalVariableRef(*id, tipe))
+                } else {
+                    Err(CompileError::new_type_error(
+                        format!(
+                            "reference to unrecognized identifier {}",
+                            Color::red(string_table.name_from_id(*id))
+                        ),
+                        loc.into_iter().collect(),
+                    ))
+                }
+            }
             ExprKind::TupleRef(tref, idx) => {
                 let tc_sub = typecheck_expr(
                     &*tref,
@@ -2243,10 +2283,10 @@ fn typecheck_expr(
                 } else {
                     Err(CompileError::new_type_error(
                         format!(
-                            "tuple field access to non-tuple value of type \"{}\"",
-                            tc_sub.get_type().display()
+                            "tuple field access to non-tuple value of type {}",
+                            Color::red(tc_sub.get_type().print(type_tree))
                         ),
-                        loc.into_iter().collect(),
+                        debug_info.locs(),
                     ))
                 }
             }
@@ -2308,9 +2348,9 @@ fn typecheck_expr(
                 Constant::Option(o) => TypeCheckedExprKind::Const(o.value(), o.type_of()),
                 Constant::Null => TypeCheckedExprKind::Const(Value::none(), Type::Any),
             }),
-            ExprKind::FunctionCall(fexpr, args) => {
-                let tc_fexpr = typecheck_expr(
-                    fexpr,
+            ExprKind::FunctionCall(expr, args, spec) => {
+                let mut expr = typecheck_expr(
+                    expr,
                     type_table,
                     global_vars,
                     func_table,
@@ -2321,7 +2361,23 @@ fn typecheck_expr(
                     closures,
                     scopes,
                 )?;
-                match tc_fexpr.get_type().get_representation(type_tree)? {
+
+                let old_type = expr.get_type().get_representation(type_tree)?;
+
+                match expr.get_type_mut() {
+                    Some(tipe) => *tipe = tipe.get_representation(type_tree)?.make_specific(spec),
+                    None => {
+                        return Err(CompileError::new_type_error(
+                            format!(
+                                "tried to call a {}, which is not a function",
+                                Color::red(old_type.print(type_tree)),
+                            ),
+                            debug_info.locs(),
+                        ));
+                    }
+                }
+
+                match expr.get_type().get_representation(type_tree)? {
                     Type::Func(prop, arg_types, ret_type) => {
                         if args.len() == arg_types.len() {
                             let mut tc_args = Vec::new();
@@ -2339,7 +2395,9 @@ fn typecheck_expr(
                                     scopes,
                                 )?;
                                 tc_args.push(tc_arg);
+
                                 let resolved_arg_type = arg_types[i].clone();
+
                                 if !resolved_arg_type.assignable(
                                     &tc_args[i].get_type().get_representation(type_tree)?,
                                     type_tree,
@@ -2347,17 +2405,16 @@ fn typecheck_expr(
                                 ) {
                                     return Err(CompileError::new_type_error(
                                         format!(
-                                            "wrong argument type in function call, {}",
-                                            resolved_arg_type
-                                                .mismatch_string(&tc_args[i].get_type(), type_tree)
-                                                .unwrap_or("Compiler could not identify a specific mismatch".to_string())
+                                            "func arg has wrong type:\nencountered {}\ninstead of  {}",
+                                            Color::red(resolved_arg_type.print(type_tree)),
+                                            Color::red(&tc_args[i].get_type().print(type_tree)),
                                         ),
-                                        loc.into_iter().collect(),
+                                        debug_info.locs(),
                                     ));
                                 }
                             }
                             Ok(TypeCheckedExprKind::FunctionCall(
-                                Box::new(tc_fexpr),
+                                Box::new(expr),
                                 tc_args,
                                 *ret_type,
                                 prop,
@@ -2371,10 +2428,10 @@ fn typecheck_expr(
                     }
                     _ => Err(CompileError::new_type_error(
                         format!(
-                            "function call to non-function value of type \"{}\"",
-                            tc_fexpr.get_type().get_representation(type_tree)?.display()
+                            "tried to call a {}, which is not a function",
+                            Color::red(old_type.print(type_tree))
                         ),
-                        loc.into_iter().collect(),
+                        debug_info.locs(),
                     )),
                 }
             }
@@ -3590,9 +3647,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to binary op: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to binary op: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree)),
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3612,9 +3669,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to divide: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to divide: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree)),
                 ),
                 loc.into_iter().collect(),
             )),
@@ -4240,6 +4297,12 @@ impl TypeCheckedCodeBlock {
             .clone()
             .map(|r| r.get_type())
             .unwrap_or(Type::Void)
+    }
+    pub fn get_type_mut(&mut self) -> Option<&mut Type> {
+        match &mut self.ret_expr {
+            Some(expr) => expr.get_type_mut(),
+            None => None,
+        }
     }
 }
 

@@ -1,0 +1,26 @@
+
+
+type tupfunc<I> = func(I) -> (I, I);
+
+write func main() {
+    asm(tests().1) { log };
+}
+
+func tests() -> string {
+
+    let lambda = make_lambda::<string>();
+
+    if (lambda("duplicate") != ("duplicate", "duplicate")) {
+        return "Generics don't work with closures";
+    }
+
+    return "";
+}
+
+func make_lambda<T>() -> tupfunc<T> {
+    let lambda = closure(input: T) -> (T, T) {
+        return (input, input);
+    };
+    return lambda;
+}
+

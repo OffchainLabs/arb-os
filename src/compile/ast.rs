@@ -105,13 +105,14 @@ pub enum Type {
     Array(Box<Type>),
     FixedArray(Box<Type>, usize),
     Struct(Vec<StructField>),
-    Nominal(Vec<String>, StringId),
     Func(FuncProperties, Vec<Type>, Box<Type>),
     Map(Box<Type>, Box<Type>),
     Any,
     Every,
     Option(Box<Type>),
     Union(Vec<Type>),
+    Nominal(Vec<String>, StringId, Vec<Type>),
+    Generic(usize),
 }
 
 impl AbstractSyntaxTree for Type {
@@ -126,7 +127,8 @@ impl AbstractSyntaxTree for Type {
             | Type::Buffer
             | Type::Any
             | Type::Every
-            | Type::Nominal(_, _) => vec![],
+            | Type::Generic(..)
+            | Type::Nominal(_, _, _) => vec![],
             Type::Tuple(types) | Type::Union(types) => {
                 types.iter_mut().map(|t| TypeCheckedNode::Type(t)).collect()
             }
@@ -163,7 +165,7 @@ impl Type {
     /// `type_tree`.
     pub fn get_representation(&self, type_tree: &TypeTree) -> Result<Self, CompileError> {
         let mut base_type = self.clone();
-        while let Type::Nominal(path, id) = base_type.clone() {
+        while let Type::Nominal(path, id, spec) = base_type.clone() {
             base_type = type_tree
                 .get(&(path.clone(), id))
                 .cloned()
@@ -171,7 +173,8 @@ impl Type {
                     format!("No type at {:?}, {}", path, id),
                     vec![],
                 ))?
-                .0;
+                .0
+                .make_specific(&spec);
         }
         Ok(base_type)
     }
@@ -179,7 +182,7 @@ impl Type {
     /// Finds all nominal sub-types present under a type
     pub fn find_nominals(&self) -> Vec<usize> {
         match self {
-            Type::Nominal(_, id) => {
+            Type::Nominal(_, id, _) => {
                 vec![*id]
             }
             Type::Array(tipe) | Type::FixedArray(tipe, ..) | Type::Option(tipe) => {
@@ -214,6 +217,68 @@ impl Type {
             }
             _ => vec![],
         }
+    }
+
+    /// Surgically replace types potentially nested within others.
+    /// |via| makes the type substitution.
+    /// The application order allows a substituted type to itself be replaced.
+    pub fn replace<Via>(&mut self, via: &mut Via)
+    where
+        Via: FnMut(&mut Self),
+    {
+        match self {
+            Self::Tuple(ref mut contents)
+            | Self::Union(ref mut contents)
+            | Self::Nominal(_, _, ref mut contents) => {
+                contents.iter_mut().for_each(|val| val.replace(via));
+            }
+            Self::Option(ref mut inner)
+            | Self::Array(ref mut inner)
+            | Self::FixedArray(ref mut inner, _) => via(inner),
+            Self::Map(ref mut key, ref mut value) => {
+                key.replace(via);
+                value.replace(via);
+            }
+            Self::Func(_, ref mut args, ref mut ret) => {
+                args.iter_mut().for_each(|val| val.replace(via));
+                ret.replace(via);
+            }
+            Self::Struct(ref mut fields) => {
+                fields.iter_mut().for_each(|field| field.tipe.replace(via));
+            }
+            _ => {}
+        }
+        via(self);
+    }
+
+    /// Makes a specific version of this type, where the nominals listed are specialized.
+    pub fn make_specific(&self, specialization: &Vec<Type>) -> Self {
+        let mut tipe = self.clone();
+        tipe.replace(&mut |tipe| {
+            if let Type::Generic(slot) = tipe {
+                *tipe = specialization[*slot].clone();
+            }
+        });
+        tipe
+    }
+
+    /// Makes a generic version of this type, where the nominals listed are generalized.
+    pub fn make_generic(&self, generalization: &Vec<StringId>) -> Self {
+        let slots = generalization
+            .into_iter()
+            .enumerate()
+            .map(|(index, id)| (*id, index))
+            .collect::<HashMap<_, _>>();
+
+        let mut tipe = self.clone();
+        tipe.replace(&mut |tipe| {
+            if let Type::Nominal(_, id, _) = tipe {
+                if let Some(slot) = slots.get(&id) {
+                    *tipe = Type::Generic(*slot);
+                }
+            }
+        });
+        tipe
     }
 
     /// If self is a Struct, and name is the StringID of a field of self, then returns Some(n), where
@@ -276,7 +341,7 @@ impl Type {
                     false
                 }
             }
-            Type::Nominal(_, _) => {
+            Type::Nominal(_, _, _) => {
                 if let (Ok(left), Ok(right)) = (
                     self.get_representation(type_tree),
                     rhs.get_representation(type_tree),
@@ -325,6 +390,7 @@ impl Type {
                     false
                 }
             }
+            Type::Generic(..) => panic!("tried to covariant cast a generic"),
         }
     }
 
@@ -380,7 +446,7 @@ impl Type {
                     false
                 }
             }
-            Type::Nominal(_, _) => {
+            Type::Nominal(_, _, _) => {
                 if let (Ok(left), Ok(right)) = (
                     self.get_representation(type_tree),
                     rhs.get_representation(type_tree),
@@ -434,6 +500,7 @@ impl Type {
                     false
                 }
             }
+            Type::Generic(..) => panic!("tried to cast a generic"),
         }
     }
 
@@ -485,7 +552,7 @@ impl Type {
                     false
                 }
             }
-            Type::Nominal(_, _) => {
+            Type::Nominal(_, _, _) => {
                 if let (Ok(left), Ok(right)) = (
                     self.get_representation(type_tree),
                     rhs.get_representation(type_tree),
@@ -539,6 +606,13 @@ impl Type {
                     false
                 }
             }
+            Type::Generic(slot) => {
+                if let Ok(Type::Generic(slot2)) = rhs.get_representation(type_tree) {
+                    *slot == slot2
+                } else {
+                    false
+                }
+            }
         }
     }
 
@@ -573,6 +647,12 @@ impl Type {
                     Some(TypeMismatch::Type(self.clone(), rhs.clone()))
                 }
             }
+            Type::Generic(slot) => match rhs {
+                Type::Generic(slot2) if slot == slot2 => {
+                    Some(TypeMismatch::Type(self.clone(), rhs.clone()))
+                }
+                _ => None,
+            },
             Type::Tuple(tvec) => {
                 if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
                     for (index, (left, right)) in tvec.iter().zip(tvec2.iter()).enumerate() {
@@ -616,7 +696,7 @@ impl Type {
                     Some(TypeMismatch::Type(self.clone(), rhs.clone()))
                 }
             }
-            Type::Nominal(_, _) => {
+            Type::Nominal(_, _, _) => {
                 match (
                     self.get_representation(type_tree),
                     rhs.get_representation(type_tree),
@@ -804,11 +884,14 @@ impl Type {
                 }
                 (value_from_field_list(vals), is_safe)
             }
-            Type::Map(_, _) | Type::Func(_, _, _) | Type::Nominal(_, _) => (Value::none(), false),
+            Type::Map(_, _) | Type::Func(_, _, _) | Type::Nominal(_, _, _) => {
+                (Value::none(), false)
+            }
             Type::Any => (Value::none(), true),
             Type::Every => (Value::none(), false),
             Type::Option(_) => (Value::new_tuple(vec![Value::Int(Uint256::zero())]), true),
             Type::Union(_) => (Value::none(), false),
+            Type::Generic(..) => panic!("Generics don't have default values"),
         }
     }
 
@@ -848,6 +931,7 @@ impl Type {
             Type::Bytes32 => ("bytes32".to_string(), type_set),
             Type::EthAddress => ("address".to_string(), type_set),
             Type::Buffer => ("buffer".to_string(), type_set),
+            Type::Generic(id) => (format!("generic {}", id), type_set),
             Type::Tuple(subtypes) => {
                 let mut out = "(".to_string();
                 for s in subtypes {
@@ -908,9 +992,9 @@ impl Type {
                 out.push('}');
                 (out, type_set)
             }
-            Type::Nominal(path, id) => {
+            Type::Nominal(path, id, spec) => {
                 let out = format!(
-                    "{}{}{}",
+                    "{}{}{}{}",
                     prefix.unwrap_or(""),
                     if include_pathname {
                         path.iter()
@@ -925,7 +1009,29 @@ impl Type {
                         .unwrap_or(format!(
                             "Failed to resolve type name: {}",
                             path_display(path)
-                        ))
+                        )),
+                    match spec.len() {
+                        0 => format!(""),
+                        _ => {
+                            let mut out = format!("<");
+                            for s in spec {
+                                let (displayed, subtypes) = s.display_indented(
+                                    indent_level,
+                                    separator,
+                                    prefix,
+                                    include_pathname,
+                                    type_tree,
+                                );
+                                out.push_str(&(displayed + ", "));
+                                type_set.extend(subtypes);
+                            }
+                            out.push_str(&format!(
+                                "> := {}",
+                                self.get_representation(type_tree).unwrap().print(type_tree)
+                            ));
+                            out
+                        }
+                    }
                 );
                 type_set.insert((
                     self.clone(),
@@ -1159,7 +1265,9 @@ impl PartialEq for Type {
             (Type::Func(p1, a1, r1), Type::Func(p2, a2, r2)) => {
                 (p1 == p2) && type_vectors_equal(&a1, &a2) && (*r1 == *r2)
             }
-            (Type::Nominal(p1, id1), Type::Nominal(p2, id2)) => (p1, id1) == (p2, id2),
+            (Type::Nominal(p1, id1, s1), Type::Nominal(p2, id2, s2)) => {
+                (p1, id1, s1) == (p2, id2, s2)
+            }
             (Type::Option(x), Type::Option(y)) => *x == *y,
             (Type::Union(x), Type::Union(y)) => type_vectors_equal(x, y),
             (_, _) => false,
@@ -1583,7 +1691,7 @@ pub enum ExprKind {
     DotRef(Box<Expr>, String),
     Constant(Constant),
     OptionInitializer(Box<Expr>),
-    FunctionCall(Box<Expr>, Vec<Expr>),
+    FunctionCall(Box<Expr>, Vec<Expr>, Vec<Type>),
     CodeBlock(CodeBlock),
     ArrayOrMapRef(Box<Expr>, Box<Expr>),
     StructInitializer(Vec<FieldInitializer>),

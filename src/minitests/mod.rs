@@ -251,6 +251,13 @@ fn test_closures() {
 }
 
 #[test]
+fn test_generics() {
+    test_for_error_string(Path::new("minitests/generics/basic.mexe"));
+    test_for_error_string(Path::new("minitests/generics/func.mexe"));
+    test_for_error_string(Path::new("minitests/generics/simple.mexe"));
+}
+
+#[test]
 fn test_direct_deploy_add() {
     crate::evm::evm_direct_deploy_add(None, false);
 }

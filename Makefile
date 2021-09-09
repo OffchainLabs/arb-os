@@ -1,6 +1,6 @@
 
 # Add your new mexe here
-minitest_outputs = codeloadtest simple-closure closure
+minitest_outputs = codeloadtest simple-closure closure generics/basic.mini generics/simple.mini generics/func.mini
 upgrade_outputs = regcopy_new regcopy_old upgrade1_new upgrade1_old
 looptest_outputs = upgrade2_new upgrade2_old
 builtin_outputs = arraytest globaltest kvstest maptest
@@ -12,6 +12,7 @@ minitest_mexes = $(patsubst %,minitests/%.mexe, $(minitest_outputs))
 upgrade_mexes = $(patsubst %,upgradetests/%.mexe, $(upgrade_outputs))
 looptest_mexes = $(patsubst %,looptest/%.mexe, $(looptest_outputs))
 
+libs_mexes = $(builtin_mexes) $(stdlib_mexes) $(minitest_mexes)
 test_mexes = $(builtin_mexes) $(stdlib_mexes) $(minitest_mexes) $(upgrade_mexes) $(looptest_mexes)
 
 compile = ./target/release/mini compile $(compile_options)
@@ -31,6 +32,10 @@ arbos: arb_os/arbos.mexe
 	@printf $(done)
 
 upgrade: arb_os/arbos-upgrade.mexe arb_os/upgrade.json
+	@printf $(done)
+
+libs: .make/libs
+	cargo test --release
 	@printf $(done)
 
 contracts: .make/solidity
@@ -68,6 +73,7 @@ ci: .make/all replayTests lcov-mini.info
 
 clean:
 	@rm -f {builtin,stdlib,upgradetests,minitests,looptest}/*.mexe arb_os/{arbos,arbos-upgrade}.mexe
+	@rm -f minitests/generics/*.mexe
 	@rm -f arbos/{upgrade.json,contractTemplates.mini}
 	@rm -rf contracts/artifacts contracts/cache
 	@rm -f */*.cov lcov.info lcov-mini.info .make/*
@@ -152,6 +158,11 @@ arb_os/arbos-upgrade-base.mexe: $(arbos_source_no_bridge) .make/tools
 	cargo test --release
 	@touch .make/test
 
+.make/libs: $(libs_mexes)
+	cargo test --release -- test_arraytest test_xif_else test_closures test_codeblocks test_basic test_codeload test_globaltest test_map test_kvstest test_fixedpoint test_error_system test_queuetest test_keccak test_pqtest test_storage_map test_expanding_int_array test_bytearray test_biguint test_rlp
+	exit 1
+	@touch .make/libs
+
 .make/fmt: src/*.rs src/*/*.rs Cargo.* .make/install
 	cargo fmt
 	@touch .make/fmt
@@ -160,7 +171,7 @@ arb_os/arbos-upgrade-base.mexe: $(arbos_source_no_bridge) .make/tools
 	make $(MAKEFLAGS) compile_options="$(compile_options)" replayTests .make/test
 	@touch .make/push
 
-.make/compiler: src/*.rs src/*/*.rs Cargo.* .make/install
+.make/compiler: src/*.rs src/*/*.rs src/*.lalrpop Cargo.* .make/install
 	cargo build --release
 	@touch .make/compiler
 

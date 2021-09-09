@@ -1,0 +1,31 @@
+
+
+type simple<T, W> = (T, T, W, string, W);           // (p0, p0, p1, string, p1)
+
+write func main() {
+    asm(tests().1) { log };
+}
+
+func tests() -> string {
+
+    let generic = load(5);
+
+    if (count::<uint, bool>(generic) != first::<uint, bool>(generic)) {
+        return "Generics don't work";
+    }
+
+    return "";
+}
+
+func load(arg: uint) -> simple<uint, bool> {
+    return (arg, 0, true, "I <3 Generics", false);
+}
+
+func count<A, B>(input: simple<A, B>) -> uint {
+    let _ = input;
+    return len(input);
+}
+
+func first<A, B>(input: simple<A, B>) -> A {
+    return input.0;
+}

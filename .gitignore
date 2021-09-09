@@ -13,6 +13,7 @@ stdlib/*.mao
 stdlib/*.mexe
 minitests/*.mao
 minitests/*.mexe
+minitests/*/*.mexe
 testlogs/*
 arb_os/contractTemplates.mini
 .idea

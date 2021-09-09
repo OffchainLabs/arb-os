@@ -38,6 +38,13 @@ match {
     _
 }
 
+Comma<T>: Vec<T> = {
+    <mut vec:(<T> ",")*> <last: T?> => {
+        vec.extend(last.into_iter());
+        vec
+    }
+};
+
 pub Decls: Vec<TopLevelDecl> = {
 	<a: ("#![" <Attributes> "]")?><mut i:HeadDecl*> <mut n:BodyDecl+> => {
         i.append(&mut n);
@@ -96,18 +103,44 @@ BodyDecl: TopLevelDecl = {
 }
 
 TypeDecl: TypeDecl = {
-    "type" <Ident> "=" <Type> ";" => new_type_decl(<>),
+    "type" <i: Ident> <g: Generalization?> "=" <t: Type> ";" => {
+        let names: Vec<_> = g.into_iter().flatten().collect();
+        /*if names.len() > 0 {
+            println!("WITH {:?}", names.clone());
+            println!("TYPE {:?}", t);
+            println!("INTO {:?}", t.make_generic(&names));
+        }*/
+        new_type_decl(i, t.make_generic(&names))
+    }
 }
 
 FuncDecl: Func = {
-	<attribs: ("#[" <Attributes> "]")?> <qualifiers: (<Qualifier>)*> "func" <lno: @L> <i:Ident> "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> => {
+    <attribs: ("#[" <Attributes> "]")?> <qualifiers: (<Qualifier>)*> "func" <lno: @L> <i:Ident> <g: Generalization?> "(" <mut args:FuncArgs> ")" <mut ret: (Return)?> <cb:CodeBlock> => {
         let public = qualifiers.contains(&"public");
         let view = qualifiers.contains(&"view");
         let write = qualifiers.contains(&"write");
         let debug = DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default());
         let name = stringtable.name_from_id(i).clone();
         
-	    Func::new(name, i, public, view, write, false, fa, t, cb, BTreeSet::new(), 0, debug)
+        let names: Vec<_> = g.into_iter().flatten().collect();
+
+        if names.len() > 0 {
+            println!("WITH {:?}", names.clone());
+            println!("RETURN {:?}", ret);
+            println!("ARGS {:?}", args);
+        }
+        
+        args.iter_mut().for_each(|arg| arg.tipe = arg.tipe.make_generic(&names));
+        if let Some(ref mut tipe) = ret {
+            *tipe = tipe.make_generic(&names);
+        }
+
+        if names.len() > 0 {
+            println!("RETURN {:?}", ret);
+            println!("ARGS {:?}", args);
+        }
+        
+	Func::new(name, i, public, view, write, false, args, ret, cb, BTreeSet::new(), 0, debug)
     }
 }
 
@@ -307,8 +340,18 @@ Type: Type = {
         let write = q.contains(&"write");
         Type::Func(FuncProperties::new(view, write, true, false), a, Box::new(r.unwrap_or(Type::Void)))
     },
-    Ident => Type::Nominal(current_path.to_owned(), <>),
+    <i: Ident> <g: Specialization?> => {
+        Type::Nominal(current_path.to_owned(), i, g.into_iter().flatten().collect())
+    }
 };
+
+Generalization: Vec<StringId> = {
+    "<" <c: Comma<Ident>> ">" => c,
+}
+
+Specialization: Vec<Type> = {
+    "<" <c: Comma<Type>> ">" => c,
+}
 
 CommaedTypesInParens: Vec<Type> = {
 	"(" ")" => vec![],
@@ -411,8 +454,14 @@ Expr10: Expr = {
 Expr11: Expr = {
     <lno: @L> <c: Const> => Expr { kind: ExprKind::Constant(c), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
     <lno: @L> "Some(" <e: Expr> ")" => Expr { kind: ExprKind::OptionInitializer(Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
-    <lno: @L> <f: Expr11> "(" <e: Expr> ")" => Expr { kind: ExprKind::FunctionCall(Box::new(f), vec![e]), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
-    <lno: @L> <f: Expr11> "(" <c: CommaedExprs?> ")" => Expr { kind: ExprKind::FunctionCall(Box::new(f), c.unwrap_or(vec![])), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+    <lno: @L> <callable: Expr11> <s:("::" <Specialization>)?> "(" <e: Expr> ")" => {
+        let spec = s.into_iter().flatten().collect();
+        Expr::lno(ExprKind::FunctionCall(Box::new(callable), vec![e], spec), file_info, lno, filename)
+    },
+    <lno: @L> <callable: Expr11> <s:("::" <Specialization>)?> "(" <c: CommaedExprs?> ")" => {
+        let spec = s.into_iter().flatten().collect();
+        Expr::lno(ExprKind::FunctionCall(Box::new(callable), c.unwrap_or(vec![]), spec), file_info, lno, filename)
+    },
     <lno: @L> <e1:Expr11> "[" <e2:Expr> "]" => Expr {
         kind: ExprKind::ArrayOrMapRef(Box::new(e1), Box::new(e2)),
         debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))
