@@ -183,7 +183,7 @@ impure func retryBuffer_insertNew(
            l1Message.arbBlockNumber,
            l1Message.ethBlockNumber,
            l1Message.timestamp,
-           originalSender,
+           updatedSender,
            uint(hash(bytes32(l1Message.requestId), bytes32(0))),
            0,    // maxGas will be filled in when ticket is redeemed
            0,    // gasPrice will be filled in when ticket is redeemed
@@ -297,6 +297,7 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
 
     let originalSender = sender;
     sender = mapL1SenderAddress(sender, Some(destination));
+    req = req with { sender: sender };
 
     let rbuffer = retryBuffer_trimTwo(getGlobalAccountStore().retryBuffer);
     let acctStore = getGlobalAccountStore() with { retryBuffer: rbuffer };
@@ -338,7 +339,7 @@ public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestD
             let (rbuf, txId) = retryBuffer_insertNew(
                 accountStore_getRetryBuffer(acctStore),
                 req.requestId,
-                sender,
+                originalSender,
                 destination,
                 callvalue,
                 escrowKey,
