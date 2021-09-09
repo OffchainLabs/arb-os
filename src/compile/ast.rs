@@ -5,7 +5,7 @@
 //! Contains types and utilities for constructing the mini AST
 
 use crate::compile::typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNode};
-use crate::compile::{path_display, CompileError, ErrorSystem, Lines};
+use crate::compile::{path_display, CompileError, Lines};
 use crate::console::Color;
 use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
 use crate::mavm::{Instruction, LabelId, Value};
@@ -1216,7 +1216,7 @@ impl Type {
     }
 }
 
-/// Checks generic parameter names for duplicates.
+/// Checks generic parameter names for those that may be duplicates or unused.
 pub fn check_generic_parameters(
     params: Vec<(StringId, DebugInfo)>,
     string_table: &StringTable,
@@ -1234,6 +1234,7 @@ pub fn check_generic_parameters(
             ));
         }
     }
+
     Ok(params.into_iter().map(|(name, _)| name).collect())
 }
 
@@ -1377,6 +1378,8 @@ impl PartialEq for Type {
             }
             (Type::Option(x), Type::Option(y)) => *x == *y,
             (Type::Union(x), Type::Union(y)) => type_vectors_equal(x, y),
+            (Type::Generic(x), Type::Generic(y)) => *x == *y,
+            (Type::ColoredAny(x), Type::ColoredAny(y)) => *x == *y,
             (_, _) => false,
         }
     }

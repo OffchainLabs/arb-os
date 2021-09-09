@@ -781,10 +781,8 @@ impl TypeCheckedFunc {
                 flowcheck_warnings.push(CompileError::new_warning(
                     String::from("Compile warning"),
                     format!(
-                        "value {}{}{} is assigned but never used",
-                        error_system.warn_color,
-                        string_table.name_from_id(id.clone()),
-                        CompileError::RESET,
+                        "value {} is assigned but never used",
+                        Color::color(error_system.warn_color, string_table.name_from_id(id)),
                     ),
                     vec![loc],
                 ));
@@ -1630,7 +1628,7 @@ fn typecheck_statement<'a>(
                 Err(CompileError::new_type_error(
                     format!(
                         "Tried to return without type in function that returns {}",
-                        &func.ret_type.display()
+                        Color::red(&func.ret_type.print(type_tree))
                     ),
                     debug_info.location.into_iter().collect(),
                 ))
@@ -1713,7 +1711,7 @@ fn typecheck_statement<'a>(
                                     )
                                     .expect("Did not find type mismatch")
                             ),
-                            debug_info.location.into_iter().collect(),
+                            debug_info.locs(),
                         ));
                     } else {
                         *t = te
@@ -1790,7 +1788,7 @@ fn typecheck_statement<'a>(
                 MatchPatternKind::Assign(_) => unimplemented!(),
                 MatchPatternKind::Tuple(pats) => {
                     let (tc_pats, bindings) =
-                        typecheck_patvec(tce_type.clone(), pats.to_vec(), debug_info.location)?;
+                        typecheck_patvec(tce_type.clone(), pats.to_vec(), type_tree, debug_info)?;
                     (
                         TypeCheckedStatementKind::Let(
                             TypeCheckedMatchPattern::new_tuple(tc_pats, pat.debug_info, tce_type),
@@ -1900,7 +1898,7 @@ fn typecheck_statement<'a>(
                 _ => Err(CompileError::new_type_error(
                     format!(
                         "while condition must be bool, found {}",
-                        tc_cond.get_type().display()
+                        Color::red(tc_cond.get_type().print(type_tree))
                     ),
                     debug_info.location.into_iter().collect(),
                 )),
@@ -1962,7 +1960,7 @@ fn typecheck_statement<'a>(
                 _ => Err(CompileError::new_type_error(
                     format!(
                         "assert condition must be of type (bool, any), found {}",
-                        tce.get_type().display()
+                        Color::red(tce.get_type().print(type_tree))
                     ),
                     debug_info.location.into_iter().collect(),
                 )),
@@ -1988,7 +1986,8 @@ fn typecheck_statement<'a>(
 fn typecheck_patvec(
     rhs_type: Type,
     patterns: Vec<MatchPattern>,
-    location: Option<Location>,
+    type_tree: &TypeTree,
+    debug: DebugInfo,
 ) -> Result<(Vec<TypeCheckedMatchPattern>, Vec<(StringId, Type)>), CompileError> {
     if let Type::Tuple(tvec) = rhs_type {
         if tvec.len() == patterns.len() {
@@ -1998,7 +1997,7 @@ fn typecheck_patvec(
                 if *rhs_type == Type::Void {
                     return Err(CompileError::new_type_error(
                         "attempted to assign void in tuple binding".to_string(),
-                        location.into_iter().collect(),
+                        debug.locs(),
                     ));
                 }
                 let pat = &patterns[i];
@@ -2022,7 +2021,7 @@ fn typecheck_patvec(
                         //TODO: implement this properly
                         return Err(CompileError::new_type_error(
                             "nested pattern not yet supported in let".to_string(),
-                            location.into_iter().collect(),
+                            debug.locs(),
                         ));
                     }
                 }
@@ -2031,16 +2030,16 @@ fn typecheck_patvec(
         } else {
             Err(CompileError::new_type_error(
                 "tuple-match let must receive tuple of equal size".to_string(),
-                location.into_iter().collect(),
+                debug.locs(),
             ))
         }
     } else {
         Err(CompileError::new_type_error(
             format!(
-                "tuple-match let must receive tuple value, found \"{}\"",
-                rhs_type.display()
+                "tuple-match let must receive tuple value, found {}",
+                Color::red(rhs_type.print(type_tree))
             ),
-            location.into_iter().collect(),
+            debug.locs(),
         ))
     }
 }
@@ -2180,9 +2179,9 @@ fn typecheck_expr(
                 if (tc_sub1.get_type(), tc_sub2.get_type()) != (Type::Bool, Type::Bool) {
                     return Err(CompileError::new_type_error(
                         format!(
-                            "operands to logical or must be boolean, got \"{}\" and \"{}\"",
-                            tc_sub1.get_type().display(),
-                            tc_sub2.get_type().display(),
+                            "operands to logical or must be boolean, got {} and {}",
+                            Color::red(tc_sub1.get_type().print(type_tree)),
+                            Color::red(tc_sub2.get_type().print(type_tree)),
                         ),
                         loc.into_iter().collect(),
                     ));
@@ -2220,9 +2219,9 @@ fn typecheck_expr(
                 if (tc_sub1.get_type(), tc_sub2.get_type()) != (Type::Bool, Type::Bool) {
                     return Err(CompileError::new_type_error(
                         format!(
-                            "operands to logical and must be boolean, got \"{}\" and \"{}\"",
-                            tc_sub1.get_type().display(),
-                            tc_sub2.get_type().display()
+                            "operands to logical and must be boolean, got {} and {}",
+                            Color::red(tc_sub1.get_type().print(type_tree)),
+                            Color::red(tc_sub2.get_type().print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     ));
@@ -2345,8 +2344,8 @@ fn typecheck_expr(
                 } else {
                     Err(CompileError::new_type_error(
                         format!(
-                            "struct field access to non-struct value of type \"{}\"",
-                            tc_sub.get_type().display()
+                            "struct field access to non-struct value of type {}",
+                            Color::red(tc_sub.get_type().print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     ))
@@ -2379,9 +2378,10 @@ fn typecheck_expr(
                 let num_generic_params = old_type.num_generics();
 
                 if spec.len() != num_generic_params {
-                    return Err(CompileError::new_type_error(
+                    return Err(CompileError::new(
+                        "Generics error",
                         format!(
-                            "Func has {} generic args but {} were passed",
+                            "Func has {} generic args but was passed {}",
                             Color::red(num_generic_params),
                             Color::red(spec.len()),
                         ),
@@ -2643,8 +2643,8 @@ fn typecheck_expr(
                         } else {
                             Err(CompileError::new_type_error(
                                 format!(
-                                    "array index must be Uint, found \"{}\"",
-                                    tc_idx.get_type().display()
+                                    "array index must be Uint, found {}",
+                                    Color::red(tc_idx.get_type().print(type_tree))
                                 ),
                                 loc.into_iter().collect(),
                             ))
@@ -2661,8 +2661,8 @@ fn typecheck_expr(
                         } else {
                             Err(CompileError::new_type_error(
                                 format!(
-                                    "fixedarray index must be uint, found \"{}\"",
-                                    tc_idx.get_type().display()
+                                    "fixedarray index must be uint, found {}",
+                                    Color::red(tc_idx.get_type().print(type_tree))
                                 ),
                                 loc.into_iter().collect(),
                             ))
@@ -2688,8 +2688,8 @@ fn typecheck_expr(
                     }
                     _ => Err(CompileError::new_type_error(
                         format!(
-                            "fixedarray lookup in non-array type \"{}\"",
-                            tc_arr.get_type().rep(type_tree)?.display()
+                            "fixedarray lookup in non-array type {}",
+                            Color::red(tc_arr.get_type().rep(type_tree)?.print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     )),
@@ -2767,8 +2767,8 @@ fn typecheck_expr(
                     Err(CompileError::new_type_error(
                         format!(
                             "Type {} is not a member of type union: {}",
-                            tc_type.display(),
-                            Type::Union(types.clone()).display()
+                            Color::red(tc_type.print(type_tree)),
+                            Color::red(Type::Union(types.clone()).print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     ))
@@ -2865,8 +2865,8 @@ fn typecheck_expr(
                             if tc_index.get_type() != Type::Uint {
                                 Err(CompileError::new_type_error(
                                     format!(
-                                        "array modifier requires uint index, found \"{}\"",
-                                        tc_index.get_type().display()
+                                        "array modifier requires uint index, found {}",
+                                        Color::red(tc_index.get_type().print(type_tree))
                                     ),
                                     loc.into_iter().collect(),
                                 ))
@@ -2893,8 +2893,8 @@ fn typecheck_expr(
                         if tc_index.get_type() != Type::Uint {
                             Err(CompileError::new_type_error(
                                 format!(
-                                    "array modifier requires uint index, found \"{}\"",
-                                    tc_index.get_type().display()
+                                    "array modifier requires uint index, found {}",
+                                    Color::red(tc_index.get_type().print(type_tree))
                                 ),
                                 loc.into_iter().collect(),
                             ))
@@ -2940,8 +2940,8 @@ fn typecheck_expr(
                     }
                     other => Err(CompileError::new_type_error(
                         format!(
-                            "[] modifier must operate on array or block, found \"{}\"",
-                            other.display()
+                            "[] modifier must operate on array or block, found {}",
+                            Color::red(other.print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     )),
@@ -3008,8 +3008,8 @@ fn typecheck_expr(
                 } else {
                     Err(CompileError::new_type_error(
                         format!(
-                            "struct modifier must operate on a struct, found \"{}\"",
-                            tcs_type.display()
+                            "struct modifier must operate on a struct, found {}",
+                            Color::red(tcs_type.print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     ))
@@ -3034,8 +3034,8 @@ fn typecheck_expr(
                     Err(CompileError::new_type_error(
                         format!(
                             "Cannot weak cast from type {} to type {}",
-                            tc_expr.get_type().display(),
-                            t.display()
+                            Color::red(tc_expr.get_type().print(type_tree)),
+                            Color::red(t.print(type_tree))
                         ),
                         debug_info.location.into_iter().collect(),
                     ))
@@ -3060,8 +3060,8 @@ fn typecheck_expr(
                     Err(CompileError::new_type_error(
                         format!(
                             "Cannot cast from type {} to type {}",
-                            tc_expr.get_type().display(),
-                            t.display()
+                            Color::red(tc_expr.get_type().print(type_tree)),
+                            Color::red(t.print(type_tree))
                         ),
                         debug_info.location.into_iter().collect(),
                     ))
@@ -3086,8 +3086,8 @@ fn typecheck_expr(
                     Err(CompileError::new_type_error(
                         format!(
                             "Cannot covariant cast from type {} to type {}",
-                            tc_expr.get_type().display(),
-                            t.display()
+                            Color::red(tc_expr.get_type().print(type_tree)),
+                            Color::red(t.print(type_tree))
                         ),
                         debug_info.location.into_iter().collect(),
                     ))
@@ -3166,8 +3166,8 @@ fn typecheck_expr(
                     Type::Option(t) => Ok(TypeCheckedExprKind::Try(Box::new(res), *t)),
                     other => Err(CompileError::new_type_error(
                         format!(
-                            "Try expression requires option type, found \"{}\"",
-                            other.display()
+                            "Try expression requires option type, found {}",
+                            Color::red(other.print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     )),
@@ -3191,9 +3191,9 @@ fn typecheck_expr(
                     Err(CompileError::new_type_error(
                         format!(
                             "SetGas(_) requires a uint, found a {}",
-                            expr.get_type().display()
+                            Color::red(expr.get_type().print(type_tree))
                         ),
-                        debug_info.location.into_iter().collect(),
+                        debug_info.locs(),
                     ))
                 } else {
                     Ok(TypeCheckedExprKind::SetGas(Box::new(expr)))
@@ -3244,8 +3244,8 @@ fn typecheck_expr(
                 if cond_expr.get_type() != Type::Bool {
                     Err(CompileError::new_type_error(
                         format!(
-                            "Condition of if expression must be bool: found \"{}\"",
-                            cond_expr.get_type().display()
+                            "Condition of if expression must be bool: found {}",
+                            Color::red(cond_expr.get_type().print(type_tree))
                         ),
                         debug_info.location.into_iter().collect(),
                     ))
@@ -3262,9 +3262,9 @@ fn typecheck_expr(
                     } else {
                         return Err(CompileError::new_type_error(
                             format!(
-                                "Mismatch of if and else types found: \"{}\" and \"{}\"",
-                                block_type.display(),
-                                else_type.display()
+                                "Mismatch of if and else types found: {} and {}",
+                                Color::red(block_type.print(type_tree)),
+                                Color::red(else_type.print(type_tree))
                             ),
                             debug_info.location.into_iter().collect(),
                         ));
@@ -3294,8 +3294,11 @@ fn typecheck_expr(
                     Type::Option(t) => *t,
                     unexpected => {
                         return Err(CompileError::new_type_error(
-                            format!("Expected option type got: \"{}\"", unexpected.display()),
-                            debug_info.location.into_iter().collect(),
+                            format!(
+                                "Expected option type got: {}",
+                                Color::red(unexpected.print(type_tree))
+                            ),
+                            debug_info.locs(),
                         ))
                     }
                 };
@@ -3342,9 +3345,9 @@ fn typecheck_expr(
                 } else {
                     return Err(CompileError::new_type_error(
                         format!(
-                            "Mismatch of if and else types found: \"{}\" and \"{}\"",
-                            block_type.display(),
-                            else_type.display()
+                            "Mismatch of if and else types found: {} and {}",
+                            Color::red(block_type.print(type_tree)),
+                            Color::red(else_type.print(type_tree))
                         ),
                         debug_info.location.into_iter().collect(),
                     ));
@@ -3389,8 +3392,8 @@ fn typecheck_expr(
                         Err(CompileError::new_type_error(
                             format!(
                                 "Type {} is not a member of {}",
-                                tipe.display(),
-                                tc_expr.get_type().display()
+                                Color::red(tipe.print(type_tree)),
+                                Color::red(tc_expr.get_type().print(type_tree))
                             ),
                             debug_info.location.into_iter().collect(),
                         ))
@@ -3398,8 +3401,8 @@ fn typecheck_expr(
                 } else {
                     Err(CompileError::new_type_error(
                         format!(
-                            "Tried to unioncast from non-union type \"{}\"",
-                            tc_expr.get_type().display()
+                            "Tried to unioncast from non-union type {}",
+                            Color::red(tc_expr.get_type().print(type_tree))
                         ),
                         debug_info.location.into_iter().collect(),
                     ))
@@ -3438,8 +3441,8 @@ fn typecheck_unary_op(
             }
             other => Err(CompileError::new_type_error(
                 format!(
-                    "invalid operand type \"{}\" for unary minus",
-                    other.display()
+                    "invalid operand type {} for unary minus",
+                    Color::red(other.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3453,8 +3456,8 @@ fn typecheck_unary_op(
                     )),
                     other => Err(CompileError::new_type_error(
                         format!(
-                            "invalid operand type \"{}\" for bitwise negation",
-                            other.display()
+                            "invalid operand type {} for bitwise negation",
+                            Color::red(other.print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     )),
@@ -3468,8 +3471,8 @@ fn typecheck_unary_op(
                     )),
                     other => Err(CompileError::new_type_error(
                         format!(
-                            "invalid operand type \"{}\" for bitwise negation",
-                            other.display()
+                            "invalid operand type {} for bitwise negation",
+                            Color::red(other.print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     )),
@@ -3494,8 +3497,8 @@ fn typecheck_unary_op(
             }
             other => Err(CompileError::new_type_error(
                 format!(
-                    "invalid operand type \"{}\" for logical negation",
-                    other.display()
+                    "invalid operand type {} for logical negation",
+                    Color::red(other.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3529,7 +3532,10 @@ fn typecheck_unary_op(
                 Type::Uint,
             )),
             other => Err(CompileError::new_type_error(
-                format!("invalid operand type \"{}\" for len", other.display()),
+                format!(
+                    "invalid operand type {} for len",
+                    Color::red(other.print(type_tree))
+                ),
                 loc.into_iter().collect(),
             )),
         },
@@ -3546,7 +3552,10 @@ fn typecheck_unary_op(
                         ))
                     }
                     other => Err(CompileError::new_type_error(
-                        format!("invalid operand type \"{}\" for uint()", other.display()),
+                        format!(
+                            "invalid operand type {} for uint()",
+                            Color::red(other.print(type_tree))
+                        ),
                         loc.into_iter().collect(),
                     )),
                 }
@@ -3561,7 +3570,10 @@ fn typecheck_unary_op(
                         TypeCheckedExprKind::UnaryOp(UnaryOp::ToInt, Box::new(sub_expr), Type::Int),
                     ),
                     other => Err(CompileError::new_type_error(
-                        format!("invalid operand type \"{}\" for int()", other.display()),
+                        format!(
+                            "invalid operand type {} for int()",
+                            Color::red(other.print(type_tree))
+                        ),
                         loc.into_iter().collect(),
                     )),
                 }
@@ -3580,7 +3592,10 @@ fn typecheck_unary_op(
                         ))
                     }
                     other => Err(CompileError::new_type_error(
-                        format!("invalid operand type \"{}\" for bytes32()", other.display()),
+                        format!(
+                            "invalid operand type {} for bytes32()",
+                            Color::red(other.print(type_tree))
+                        ),
                         loc.into_iter().collect(),
                     )),
                 }
@@ -3611,8 +3626,8 @@ fn typecheck_unary_op(
                     }
                     other => Err(CompileError::new_type_error(
                         format!(
-                            "invalid operand type \"{}\" for address cast",
-                            other.display()
+                            "invalid operand type {} for address cast",
+                            Color::red(other.print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     )),
@@ -3640,7 +3655,7 @@ fn typecheck_binary_op(
             match op {
                 BinaryOp::GetBuffer256 | BinaryOp::GetBuffer64 | BinaryOp::GetBuffer8 => {}
                 _ => {
-                    return typecheck_binary_op_const(op, val1, t1, val2, t2, loc);
+                    return typecheck_binary_op_const(op, val1, t1, val2, t2, type_tree, loc);
                 }
             }
         } else {
@@ -3731,9 +3746,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to getbuffer8: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to getbuffer8: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3747,9 +3762,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to getbuffer64: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to getbuffer64: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3763,9 +3778,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to getbuffer256: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to getbuffer256: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3785,9 +3800,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to mod: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to mod: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3807,9 +3822,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to <: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to <: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3829,9 +3844,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to >: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to >: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3851,9 +3866,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to <=: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to <=: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3873,9 +3888,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to >=: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to >=: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3894,9 +3909,9 @@ fn typecheck_binary_op(
             } else {
                 Err(CompileError::new_type_error(
                     format!(
-                        "invalid argument types to equality comparison: \"{}\" and \"{}\"",
-                        subtype1.display(),
-                        subtype2.display()
+                        "invalid argument types to equality comparison: {} and {}",
+                        Color::red(subtype1.print(type_tree)),
+                        Color::red(subtype2.print(type_tree))
                     ),
                     loc.into_iter().collect(),
                 ))
@@ -3927,9 +3942,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to binary bitwise operator: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to binary bitwise operator: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3943,9 +3958,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to binary logical operator: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to binary logical operator: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3959,9 +3974,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to binary hash operator: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to binary hash operator: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -4000,10 +4015,10 @@ fn typecheck_trinary_op(
                 )),
                 (t1, t2, t3) => Err(CompileError::new_type_error(
                     format!(
-                        "invalid argument types to 3-ary op: \"{}\", \"{}\" and \"{}\"",
-                        t1.display(),
-                        t2.display(),
-                        t3.display()
+                        "invalid argument types to 3-ary op: {}, {} and {}",
+                        Color::red(t1.print(type_tree)),
+                        Color::red(t2.print(type_tree)),
+                        Color::red(t3.print(type_tree))
                     ),
                     loc.into_iter().collect(),
                 )),
@@ -4026,6 +4041,7 @@ fn typecheck_binary_op_const(
     t1: Type,
     val2: Uint256,
     t2: Type,
+    type_tree: &TypeTree,
     loc: Option<Location>,
 ) -> Result<TypeCheckedExprKind, CompileError> {
     match op {
@@ -4052,9 +4068,9 @@ fn typecheck_binary_op_const(
             )),
             _ => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to binary op: \"{}\" and \"{}\"",
-                    t1.display(),
-                    t2.display()
+                    "invalid argument types to binary op: {} and {}",
+                    Color::red(t1.print(type_tree)),
+                    Color::red(t2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -4076,9 +4092,9 @@ fn typecheck_binary_op_const(
             },
             _ => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to divide: \"{}\" and \"{}\"",
-                    t1.display(),
-                    t2.display()
+                    "invalid argument types to divide: {} and {}",
+                    Color::red(t1.print(type_tree)),
+                    Color::red(t2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -4100,9 +4116,9 @@ fn typecheck_binary_op_const(
             },
             _ => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to mod: \"{}\" and \"{}\"",
-                    t1.display(),
-                    t2.display()
+                    "invalid argument types to mod: {} and {}",
+                    Color::red(t1.print(type_tree)),
+                    Color::red(t2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -4118,9 +4134,9 @@ fn typecheck_binary_op_const(
             )),
             (t1, t2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to <: \"{}\" and \"{}\"",
-                    t1.display(),
-                    t2.display()
+                    "invalid argument types to <: {} and {}",
+                    Color::red(t1.print(type_tree)),
+                    Color::red(t2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -4136,9 +4152,9 @@ fn typecheck_binary_op_const(
             )),
             (t1, t2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to >: \"{}\" and \"{}\"",
-                    t1.display(),
-                    t2.display()
+                    "invalid argument types to >: {} and {}",
+                    Color::red(t1.print(type_tree)),
+                    Color::red(t2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -4154,9 +4170,9 @@ fn typecheck_binary_op_const(
             )),
             (t1, t2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to <=: \"{}\" and \"{}\"",
-                    t1.display(),
-                    t2.display()
+                    "invalid argument types to <=: {} and {}",
+                    Color::red(t1.print(type_tree)),
+                    Color::red(t2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -4172,9 +4188,9 @@ fn typecheck_binary_op_const(
             )),
             (t1, t2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to >=: \"{}\" and \"{}\"",
-                    t1.display(),
-                    t2.display()
+                    "invalid argument types to >=: {} and {}",
+                    Color::red(t1.print(type_tree)),
+                    Color::red(t2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -4202,9 +4218,9 @@ fn typecheck_binary_op_const(
                             } else {
                                 return Err(CompileError::new_type_error(
                                     format!(
-                                        "invalid argument types to binary op: \"{}\" and \"{}\"",
-                                        t1.display(),
-                                        t2.display()
+                                        "invalid argument types to binary op: {} and {}",
+                                        Color::red(t1.print(type_tree)),
+                                        Color::red(t2.print(type_tree))
                                     ),
                                     loc.into_iter().collect(),
                                 ));
@@ -4219,9 +4235,9 @@ fn typecheck_binary_op_const(
             } else {
                 Err(CompileError::new_type_error(
                     format!(
-                        "invalid argument types to binary op: \"{}\" and \"{}\"",
-                        t1.display(),
-                        t2.display()
+                        "invalid argument types to binary op: {} and {}",
+                        Color::red(t1.print(type_tree)),
+                        Color::red(t2.print(type_tree))
                     ),
                     loc.into_iter().collect(),
                 ))
@@ -4236,9 +4252,9 @@ fn typecheck_binary_op_const(
             } else {
                 Err(CompileError::new_type_error(
                     format!(
-                        "invalid argument types to logical and: \"{}\" and \"{}\"",
-                        t1.display(),
-                        t2.display()
+                        "invalid argument types to logical and: {} and {}",
+                        Color::red(t1.print(type_tree)),
+                        Color::red(t2.print(type_tree))
                     ),
                     loc.into_iter().collect(),
                 ))
@@ -4253,9 +4269,9 @@ fn typecheck_binary_op_const(
             } else {
                 Err(CompileError::new_type_error(
                     format!(
-                        "invalid argument types to logical or: \"{}\" and \"{}\"",
-                        t1.display(),
-                        t2.display()
+                        "invalid argument types to logical or: {} and {}",
+                        Color::red(t1.print(type_tree)),
+                        Color::red(t2.print(type_tree))
                     ),
                     loc.into_iter().collect(),
                 ))
@@ -4285,8 +4301,8 @@ fn typecheck_binary_op_const(
                             return Err(CompileError::new_type_error(
                                 format!(
                                     "Attempt to shift a {} by a {}, must shift an integer type by a uint",
-                                    t2.display(),
-                                    t1.display()
+                                    Color::red(t2.print(type_tree)),
+                                    Color::red(t1.print(type_tree))
                                 ),
                                 loc.into_iter().collect(),
                             ))
@@ -4298,8 +4314,8 @@ fn typecheck_binary_op_const(
                 Err(CompileError::new_type_error(
                     format!(
                         "Attempt to shift a {} by a {}, must shift an integer type by a uint",
-                        t2.display(),
-                        t1.display()
+                        Color::red(t2.print(type_tree)),
+                        Color::red(t1.print(type_tree))
                     ),
                     loc.into_iter().collect(),
                 ))

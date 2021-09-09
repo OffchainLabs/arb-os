@@ -13,7 +13,6 @@ use crate::mavm::{Value, Instruction, Opcode};
 use crate::uint256::Uint256;
 use crate::console::Color;
 use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
-use lalrpop_util::ParseError;
 use regex::Regex;
 
 grammar(
@@ -100,11 +99,27 @@ BodyDecl: TopLevelDecl = {
 
 TypeDecl: TypeDecl = {
     "type" <i: Ident> <g: Generalization?> "=" <t: Type> ";" =>? {
-        let params = g.clone().into_iter().flatten().map(|(lno, name)| {
+        let params: Vec<_> = g.clone().into_iter().flatten().map(|(lno, name)| {
             (name, DebugInfo::here(file_info, lno, filename))
         }).collect();
-        let names = check_generic_parameters(params, &string_table)?;
-        Ok(new_type_decl(i, t.make_generic(&names)))
+        let names = check_generic_parameters(params.clone(), &string_table)?;
+        let tipe = t.make_generic(&names);
+        
+        for (index, (name, debug_info)) in params.into_iter().enumerate() {
+            let unused = tipe.find(&|tipe: &Type| *tipe == Type::Generic(index)).is_empty();
+            if unused {
+                Err(CompileError::new(
+                    "Generics error",
+                    format!(
+                        "Type {}'s generic arg {} isn't used",
+                        Color::red(string_table.name_from_id(i)),
+                        Color::red(string_table.name_from_id(name)),
+                    ),
+                    debug_info.locs(),
+                ))?;
+            }
+        }
+        Ok(new_type_decl(i, tipe))
     }
 }
 
@@ -116,17 +131,43 @@ FuncDecl: Func = {
         let debug = DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default());
         let name = string_table.name_from_id(i).clone();
 
-        let params = g.into_iter().flatten().map(|(lno, name)| {
+        // Generalize over the generic parameters
+        let params: Vec<_> = g.into_iter().flatten().map(|(lno, name)| {
             (name, DebugInfo::here(file_info, lno, filename))
         }).collect();
-        let names = check_generic_parameters(params, &string_table)?;
-
-        args.iter_mut().for_each(|arg| arg.tipe = arg.tipe.make_generic(&names));
+        let generic_ids = check_generic_parameters(params.clone(), &string_table)?;
+        args.iter_mut().for_each(|arg| arg.tipe = arg.tipe.make_generic(&generic_ids));
         if let Some(ref mut tipe) = ret {
-            *tipe = tipe.make_generic(&names);
+            *tipe = tipe.make_generic(&generic_ids);
+        }
+
+        // Check that every generic argument is used in the func's signature.
+        // Otherwise, it's provably useless to include it and we should just error.
+        for (index, (name, debug_info)) in params.into_iter().enumerate() {
+            
+            let take = |tipe: &Type| *tipe == Type::Generic(index);
+            
+            let mut used = match &ret {
+                Some(tipe) => !tipe.find(&take).is_empty(),
+                None => false,
+            };
+            
+            args.iter().for_each(|arg| used = used || !arg.tipe.find(&take).is_empty());
+            
+            if !used {
+                Err(CompileError::new(
+                    "Generics error",
+                    format!(
+                        "Func {}'s generic arg {} isn't in the signature",
+                        Color::red(string_table.name_from_id(i)),
+                        Color::red(string_table.name_from_id(name)),
+                    ),
+                    debug_info.locs(),
+                ))?;
+            }
         }
         
-	Ok(Func::new(name, i, public, view, write, false, args, ret, cb, BTreeSet::new(), names, 0, debug))
+	Ok(Func::new(name, i, public, view, write, false, args, ret, cb, BTreeSet::new(), generic_ids, 0, debug))
     }
 }
 
@@ -177,12 +218,7 @@ Attributes: Attributes = {
                 unrecognized => error_system.errors.push(
                     CompileError::new(
                         String::from("Lexer error"),
-                        format!(
-                            "Unrecognized attribute {}{}{}",
-                            CompileError::RED,
-                            unrecognized,
-                            CompileError::RESET,
-                        ),
+                        format!("Unrecognized attribute {}", Color::red(unrecognized)),
                         file_info.location(BytePos::from(lno), filename).into_iter().collect()
                     )
                 ),
@@ -634,10 +670,8 @@ ConstVal: Uint256 = {
                         CompileError::new_warning(
                             String::from("Parser warning"),
                             format!(
-                                "Constant {}{}{} was used despite being marked as intentionally unused",
-                                error_system.warn_color,
-                                &c,
-                                CompileError::RESET,
+                                "Constant {} was used despite being marked as intentionally unused",
+                                Color::color(error_system.warn_color, &c),
                             ),
                             loc
                         )
@@ -650,12 +684,7 @@ ConstVal: Uint256 = {
                 error_system.errors.push(
                     CompileError::new(
                         String::from("Parser error"),
-                        format!(
-                            "Unrecognized constant {}{}{}",
-                            CompileError::RED,
-                            &c,
-                            CompileError::RESET,
-                        ),
+                        format!("Unrecognized constant {}", Color::red(&c)),
                         loc
                     )
                 );

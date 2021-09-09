@@ -134,8 +134,8 @@ impl CompileStruct {
             warnings: vec![],
             warnings_are_errors: self.warnings_are_errors,
             warn_color: match self.warnings_are_errors {
-                true => CompileError::PINK,
-                false => CompileError::YELLOW,
+                true => Color::PINK,
+                false => Color::YELLOW,
             },
             file_info_chart: BTreeMap::new(),
         };
@@ -994,10 +994,8 @@ fn check_global_constants(
             error_system.warnings.push(CompileError::new_warning(
                 String::from("Compile warning"),
                 format!(
-                    "global constant {}{}{} is never used",
-                    error_system.warn_color,
-                    constant,
-                    CompileError::RESET,
+                    "global constant {} is never used",
+                    Color::color(error_system.warn_color, constant),
                 ),
                 vec![],
             ));
@@ -1208,10 +1206,8 @@ pub fn parse_from_source(
             error_system.warnings.push(CompileError::new_warning(
                 String::from("Compile warning"),
                 format!(
-                    "Constant {}{}{} is never used",
-                    error_system.warn_color,
-                    constant,
-                    CompileError::RESET,
+                    "Constant {} is never used",
+                    Color::color(error_system.warn_color, constant),
                 ),
                 vec![loc],
             ));
@@ -1297,26 +1293,20 @@ impl CompileError {
         }
     }
 
-    const RED: &'static str = "\x1b[31;1m";
-    const BLUE: &'static str = "\x1b[34;1m";
-    const YELLOW: &'static str = "\x1b[33;1m";
-    const PINK: &'static str = "\x1b[38;5;161;1m";
-    const RESET: &'static str = "\x1b[0;0m";
-
     pub fn pretty_fmt(
         &self,
         file_info_chart: &BTreeMap<u64, FileInfo>,
         warnings_are_errors: bool,
     ) -> String {
-        let blue = CompileError::BLUE;
-        let reset = CompileError::RESET;
+        let blue = Color::BLUE;
+        let reset = Color::RESET;
 
         let err_color = match self.is_warning {
             true => match warnings_are_errors {
-                true => CompileError::PINK,
-                false => CompileError::YELLOW,
+                true => Color::PINK,
+                false => Color::YELLOW,
             },
-            false => CompileError::RED,
+            false => Color::RED,
         };
 
         let last_line = &self.locations.last();
