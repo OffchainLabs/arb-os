@@ -197,7 +197,7 @@ public func accountStore_destroyAccount(acctStore: AccountStore, addrToDestroy: 
             acctStore,
             keccak256(contractInfo.code, 0, bytearray_size(contractInfo.code))
         );
-        if (acctStore.numContracts > 0) {
+        if (acctStore.numContracts > 0) {  // avoid underflow, if the count is somehow incorrect
             set acctStore.numContracts = acctStore.numContracts-1;
         }
     }

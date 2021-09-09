@@ -121,6 +121,7 @@ public func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: addre
 
 public view write func decompressAddress(
     stream: ByteStream,
+    addIfNotInTable: bool,
 ) -> option<(ByteStream, address)> {
     // Returns None if insufficient data in stream
     // A compressed address is one of three things:
@@ -140,11 +141,14 @@ public view write func decompressAddress(
         Some((stream, addressTable_getByIndex(globalIndexedAddressTable, decodedUint)?))
     } else {
         let (*stream, addr) = rlp_decodeAddress(stream)?;
-        let (giat, _, changed) = addressTable_getByAddressAlloc(globalIndexedAddressTable, addr);
-        if (changed) {
-            evmCallStack_addStorageCharge(2);   // charge current tx for 2 storage cells
-            globalIndexedAddressTable = giat;
+        if (addIfNotInTable) {
+            let (giat, _, changed) = addressTable_getByAddressAlloc(globalIndexedAddressTable, addr);
+            if (changed) {
+                evmCallStack_addStorageCharge(2);   // charge current tx for 2 storage cells
+                globalIndexedAddressTable = giat;
+            }
         }
+
         Some((stream, addr))
     };
 }
@@ -318,7 +322,7 @@ view write func decompressTx(
         maxGas
     };
 
-    let (*stream, toAddr) = decompressAddress(stream)?;
+    let (*stream, toAddr) = decompressAddress(stream, true)?;
     let value = 0;
     let calldata = xif let Some(tableEntry) = funcTableEntry {
         if (tableEntry.payable) {
