@@ -14,6 +14,15 @@ func tests() -> string {
         return "Generics don't work with closures";
     }
 
+    let store = struct {
+        value: "wow",
+    };
+    
+    //if (duplicate("wow", lambda) != ("wow", "wow")) {
+    if (duplicate::<string>(store, lambda) != ("wow", "wow")) {
+        return "Generics don't work with passed closures";
+    }
+    
     return "";
 }
 
@@ -24,3 +33,10 @@ func make_lambda<T>() -> tupfunc<T> {
     return lambda;
 }
 
+type storage<S> = struct {
+    value: S,
+};
+
+func duplicate<U>(store: storage<U>, lambda: tupfunc<U>) -> (U, U) {
+    return lambda::<uint>(store.value);
+}

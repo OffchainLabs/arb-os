@@ -26,6 +26,6 @@ func count<A, B>(input: simple<A, B>) -> uint {
     return len(input);
 }
 
-func first<A, B>(input: simple<A, B>) -> A {
-    return input.0;
+func first<A, B>(input2: simple<A, B>) -> A {
+    return input2.0;
 }

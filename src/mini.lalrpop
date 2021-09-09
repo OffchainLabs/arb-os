@@ -105,11 +105,6 @@ BodyDecl: TopLevelDecl = {
 TypeDecl: TypeDecl = {
     "type" <i: Ident> <g: Generalization?> "=" <t: Type> ";" => {
         let names: Vec<_> = g.into_iter().flatten().collect();
-        /*if names.len() > 0 {
-            println!("WITH {:?}", names.clone());
-            println!("TYPE {:?}", t);
-            println!("INTO {:?}", t.make_generic(&names));
-        }*/
         new_type_decl(i, t.make_generic(&names))
     }
 }
@@ -121,26 +116,15 @@ FuncDecl: Func = {
         let write = qualifiers.contains(&"write");
         let debug = DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default());
         let name = stringtable.name_from_id(i).clone();
-        
-        let names: Vec<_> = g.into_iter().flatten().collect();
 
-        if names.len() > 0 {
-            println!("WITH {:?}", names.clone());
-            println!("RETURN {:?}", ret);
-            println!("ARGS {:?}", args);
-        }
-        
+        let names = g.into_iter().flatten().collect();
+
         args.iter_mut().for_each(|arg| arg.tipe = arg.tipe.make_generic(&names));
         if let Some(ref mut tipe) = ret {
             *tipe = tipe.make_generic(&names);
         }
-
-        if names.len() > 0 {
-            println!("RETURN {:?}", ret);
-            println!("ARGS {:?}", args);
-        }
         
-	Func::new(name, i, public, view, write, false, args, ret, cb, BTreeSet::new(), 0, debug)
+	Func::new(name, i, public, view, write, false, args, ret, cb, BTreeSet::new(), names, 0, debug)
     }
 }
 
@@ -525,7 +509,7 @@ Expr12: Expr = {
         
         let name = format!("closure #{}", closures.len() + 1);
         let id = stringtable.get(name.clone());
-        let closure = Func::new(name, id, false, view, write, true, fa, t, cb, BTreeSet::new(), 0, debug);
+        let closure = Func::new(name, id, false, view, write, true, fa, t, cb, BTreeSet::new(), vec![], 0, debug);
         
 	    closures.insert(id, closure.clone());
         

@@ -255,6 +255,8 @@ fn test_generics() {
     test_for_error_string(Path::new("minitests/generics/basic.mexe"));
     test_for_error_string(Path::new("minitests/generics/func.mexe"));
     test_for_error_string(Path::new("minitests/generics/simple.mexe"));
+    test_for_error_string(Path::new("minitests/generics/colorful.mexe"));
+    test_for_error_string(Path::new("minitests/generics/closure.mexe"));
 }
 
 #[test]
