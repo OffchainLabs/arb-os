@@ -38,5 +38,5 @@ type storage<S> = struct {
 };
 
 func duplicate<U>(store: storage<U>, lambda: tupfunc<U>) -> (U, U) {
-    return lambda::<uint>(store.value);
+    return lambda(store.value);
 }

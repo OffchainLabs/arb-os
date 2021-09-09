@@ -1,6 +1,6 @@
 
 # Add your new mexe here
-minitest_outputs = codeloadtest simple-closure closure generics/basic.mini generics/simple.mini generics/func.mini
+minitest_outputs = codeloadtest simple-closure closure generics/basic generics/simple generics/func generics/closure
 upgrade_outputs = regcopy_new regcopy_old upgrade1_new upgrade1_old
 looptest_outputs = upgrade2_new upgrade2_old
 builtin_outputs = arraytest globaltest kvstest maptest

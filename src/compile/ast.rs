@@ -5,12 +5,12 @@
 //! Contains types and utilities for constructing the mini AST
 
 use crate::compile::typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNode};
-use crate::compile::{path_display, CompileError, Lines};
+use crate::compile::{path_display, CompileError, ErrorSystem, Lines};
 use crate::console::Color;
 use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
 use crate::mavm::{Instruction, LabelId, Value};
 use crate::pos::{BytePos, Location};
-use crate::stringtable::StringId;
+use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -111,7 +111,7 @@ pub enum Type {
     Every,
     Option(Box<Type>),
     Union(Vec<Type>),
-    Nominal(Vec<String>, StringId, Vec<Type>),
+    Nominal(Vec<String>, StringId, #[serde(default)] Vec<Type>),
     Generic(usize),
     ColoredAny(usize),
 }
@@ -258,7 +258,10 @@ impl Type {
         let mut tipe = self.clone();
         tipe.replace(&mut |tipe| {
             if let Type::Generic(slot) = tipe {
-                *tipe = specialization[*slot].clone();
+                match specialization.get(*slot) {
+                    Some(specific) => *tipe = specific.clone(),
+                    None => panic!("Generic func-call needs more generic args"),
+                }
             }
         });
         tipe
@@ -961,7 +964,7 @@ impl Type {
             Type::EthAddress => ("address".to_string(), type_set),
             Type::Buffer => ("buffer".to_string(), type_set),
             Type::Generic(id) => (format!("generic {}", id), type_set),
-            Type::ColoredAny(id) => (format!("colored_any {}", id), type_set),
+            Type::ColoredAny(id) => (format!("generic' {}", id), type_set),
             Type::Tuple(subtypes) => {
                 let mut out = "(".to_string();
                 for s in subtypes {
@@ -1158,6 +1161,28 @@ impl Type {
             }
         }
     }
+}
+
+/// Checks generic parameter names for duplicates.
+pub fn check_generic_parameters(
+    params: Vec<(StringId, DebugInfo)>,
+    error_system: &mut ErrorSystem,
+    string_table: &StringTable,
+) -> Vec<StringId> {
+    let mut seen = HashSet::new();
+    for (id, debug) in params.iter() {
+        if !seen.insert(id) {
+            error_system.errors.push(CompileError::new(
+                "Parser error",
+                format!(
+                    "Duplicate generic parameter {}",
+                    Color::red(string_table.name_from_id(*id))
+                ),
+                debug.locs(),
+            ));
+        }
+    }
+    params.into_iter().map(|(name, _)| name).collect()
 }
 
 pub fn type_vectors_covariant_castable(
