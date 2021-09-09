@@ -4,9 +4,7 @@
 
 
 use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVar, Type, CodeBlock, StructField, FuncArg, FuncProperties, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant, OptionConst, FieldInitializer, new_func_arg, new_type_decl};
-use crate::compile::ast::{TopLevelDecl, TypeDecl, GenericTypeDecl, Func, GlobalVarDecl, Type, CodeBlock, GenericFunc,
-StructField, FuncArg, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant,
-OptionConst, FieldInitializer, new_func_arg, new_type_decl, new_generic_type_decl};
+use crate::compile::ast::{GenericTypeDecl, GenericFunc, new_generic_type_decl};
 use crate::compile::{InliningMode, ErrorSystem, CompileError};
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
@@ -42,7 +40,7 @@ match {
 }
 
 pub Decls: Vec<TopLevelDecl> = {
-	<a: ("#![" <Attributes> "]")?><mut i:HeadDecl*> <mut n:BodyDecl+> => {
+	<a: ("#![" <Attributes> "]")?> <mut i:HeadDecl*> <mut n:BodyDecl+> => {
         i.append(&mut n);
         for decl in &mut i {
             if let (TopLevelDecl::FuncDecl(func), Some(attr)) = (decl, a) {
@@ -50,8 +48,18 @@ pub Decls: Vec<TopLevelDecl> = {
             }
         };
         i
-        },
+    },
 }
+
+ // => {
+        //i.append(&mut n);
+        //for decl in &mut i {
+            //if let (TopLevelDecl::FuncDecl(func), Some(attr)) = (decl, a) {
+                //func.debug_info.attributes.inline = func.debug_info.attributes.inline.and(&attr.inline);
+            //}
+        //};
+        //i
+        //}
 
 HeadDecl: TopLevelDecl = {
     <lno: @L> "use" <mut p: PathDecl> ";" => {
@@ -121,8 +129,15 @@ FuncDecl: Func = {
 }
 
 GenericFuncDecl: GenericFunc = {
-    <lno: @L> <attribs: ("#[" <Attributes> "]")?> <p: "public"?> <imp: "impure"?> "func<" <vars: CommaedIdents> ">" <i:Ident> "(" <fa:GenericFuncArgs> ")" <t: (GenericReturn)?> <cb:CodeBlock> =>
-            GenericFunc::new(i, vars, imp.is_some(), fa, t.unwrap_or(Type::Void), cb, p.is_some(), DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default())),
+    <lno: @L> <attribs: ("#[" <Attributes> "]")?> <qualifiers: (<Qualifier>)*> "func<" <vars: CommaedIdents> ">" <i:Ident> "(" <fa:GenericFuncArgs> ")" <t: (GenericReturn)?> <cb:CodeBlock> =>{
+        let public = qualifiers.contains(&"public");
+        let view = qualifiers.contains(&"view");
+        let write = qualifiers.contains(&"write");
+        let debug = DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default());
+        let name = stringtable.name_from_id(i).clone();
+
+        GenericFunc::new(name, i, vars, public, view, write, false, fa, t, cb, BTreeSet::new(), 0, debug)
+    },
 }
 
 Return: Type = {
@@ -315,9 +330,7 @@ Type: Type = {
     ),
     "map" "<" <t1:Type> "," <t2:Type> ","? ">" => Type::Map(Box::new(t1), Box::new(t2)),
     "string" => Type::Tuple(vec![Type::Uint, Type::Buffer]),
-    "any" => Type::Any,
     "option<" <t1:Type> ">" => Type::Option(Box::new(t1)),
-    "every" => Type::Every,
     "union<" <t1:CommaedTypes> ">" => Type::Union(t1),
     <q: Qualifier*> "func" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => {
         let view = q.contains(&"view");
@@ -342,7 +355,11 @@ GenericType: Type = {
 		s.to_usize().unwrap(),
 	),
 	"map" "<" <t1:GenericType> "," <t2:GenericType> ","? ">" => Type::Map(Box::new(t1), Box::new(t2)),
-	<i: "impure"?> "func" <a: CommaedGenericTypesInParens> <r: ("->" <GenericType>)?> => Type::Func(i.is_some(), a, Box::new(r.unwrap_or(Type::Void))),
+	<q: Qualifier*> "func" <a: CommaedGenericTypesInParens> <r: ("->" <GenericType>)?> => {
+	    let view = q.contains(&"view");
+        let write = q.contains(&"write");
+	    Type::Func(FuncProperties::new(view, write, false, false), a, Box::new(r.unwrap_or(Type::Void)))
+	},
 	"option<" <t1:GenericType> ">" => Type::Option(Box::new(t1)),
 	"union<" <t1:CommaedGenericTypes> ">" => Type::Union(t1),
 	"*" <Ident> => Type::Variable(current_path.to_owned(), <>),

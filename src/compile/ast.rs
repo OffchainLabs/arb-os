@@ -10,10 +10,11 @@ use crate::console::Color;
 use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
 use crate::mavm::{Instruction, LabelId, Value};
 use crate::pos::{BytePos, Location};
-use crate::stringtable::StringId;
+use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::fmt::Formatter;
 use std::rc::Rc;
@@ -907,8 +908,15 @@ impl Type {
     }
 
     pub fn display(&self) -> String {
-        self.display_indented(0, "::", None, false, &TypeTree::default(), &StringTable::new())
-            .0
+        self.display_indented(
+            0,
+            "::",
+            None,
+            false,
+            &TypeTree::default(),
+            &StringTable::new(),
+        )
+        .0
     }
 
     pub fn display_blue(&self, type_tree: &TypeTree, generic_types: &StringTable) -> String {
@@ -917,7 +925,8 @@ impl Type {
     }
 
     pub fn print(&self, type_tree: &TypeTree) -> String {
-        self.display_indented(0, "::", None, false, type_tree).0
+        self.display_indented(0, "::", None, false, type_tree, &StringTable::new())
+            .0
     }
 
     pub fn display_separator(
@@ -927,7 +936,14 @@ impl Type {
         include_pathname: bool,
         type_tree: &TypeTree,
     ) -> (String, HashSet<(Type, String)>) {
-        self.display_indented(0, separator, prefix, include_pathname, type_tree, &StringTable::new())
+        self.display_indented(
+            0,
+            separator,
+            prefix,
+            include_pathname,
+            type_tree,
+            &StringTable::new(),
+        )
     }
 
     fn display_indented(
@@ -1041,21 +1057,30 @@ impl Type {
                 (out, type_set)
             }
             Type::Generic(id, targs) => {
-                let arg_displays = targs.iter().map(|tipe| tipe.display_indented(
-                    indent_level,
-                    separator,
-                    prefix,
-                    include_pathname,
-                    type_tree,
-                    generic_funcs
-                )).collect::<Vec<_>>();
+                let arg_displays = targs
+                    .iter()
+                    .map(|tipe| {
+                        tipe.display_indented(
+                            indent_level,
+                            separator,
+                            prefix,
+                            include_pathname,
+                            type_tree,
+                            generic_funcs,
+                        )
+                    })
+                    .collect::<Vec<_>>();
                 let mut arg_display = String::new();
                 let mut args_subtypes = HashSet::new();
                 for (name, subtypes) in arg_displays {
                     arg_display.push_str(&name);
                     args_subtypes.extend(subtypes)
                 }
-                (format!("{}<{}>", generic_funcs.name_from_id(*id), arg_display), type_set)},
+                (
+                    format!("{}<{}>", generic_funcs.name_from_id(*id), arg_display),
+                    type_set,
+                )
+            }
             Type::Variable(_, id) => (format!("{}", generic_funcs.name_from_id(*id)), type_set),
             Type::Func(prop, args, ret) => {
                 let mut out = String::new();
@@ -1101,7 +1126,7 @@ impl Type {
                     prefix,
                     include_pathname,
                     type_tree,
-                    generic_funcs
+                    generic_funcs,
                 );
                 type_set.extend(key_subtypes);
                 let (val_display, val_subtypes) = val.display_indented(
@@ -1110,7 +1135,7 @@ impl Type {
                     prefix,
                     include_pathname,
                     type_tree,
-                    generic_funcs
+                    generic_funcs,
                 );
                 type_set.extend(val_subtypes);
                 (format!("map<{},{}>", key_display, val_display), type_set)
@@ -1196,7 +1221,8 @@ impl Type {
     pub fn consistent_over_args(
         &self,
         type_args: &BTreeMap<StringId, Type>,
-        type_tree: &TypeTree, generic_types: &StringTable
+        type_tree: &TypeTree,
+        generic_types: &StringTable,
     ) -> Result<(), CompileError> {
         let mut elf = self.clone();
         let mut has_error = Rc::new(RefCell::new(false));
@@ -1232,7 +1258,10 @@ impl Type {
         if *has_error.borrow_mut() {
             return Err(CompileError::new(
                 "Type Error".to_string(),
-                format!("Type \"{}\" failed consistency check", self.display_blue(type_tree, generic_types)),
+                format!(
+                    "Type \"{}\" failed consistency check",
+                    self.display_blue(type_tree, generic_types)
+                ),
                 vec![],
             ));
         }
@@ -1582,15 +1611,22 @@ pub struct Func<T = Statement> {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GenericFunc<T = Statement> {
-    pub name: StringId,
+    pub name: String,
+    pub id: StringId,
     pub type_variables: Vec<StringId>,
     pub args: Vec<FuncArg>,
     pub ret_type: Type,
     pub code: Vec<T>,
     pub tipe: Type,
-    pub kind: FuncDeclKind,
+    pub public: bool,
+    pub captures: BTreeSet<StringId>,
+    /// The minimum tuple-tree size needed to generate this func
+    pub frame_size: usize,
+    /// A global id unique to this function used for building jump labels
+    pub unique_id: Option<LabelId>,
+    /// Additional properties like viewness that this func has
+    pub properties: FuncProperties,
     pub debug_info: DebugInfo,
-    pub properties: PropertiesList,
 }
 
 impl Func {
@@ -1634,13 +1670,18 @@ impl Func {
 
 impl GenericFunc {
     pub fn new(
-        name: StringId,
+        name: String,
+        id: StringId,
         type_variables: Vec<StringId>,
-        is_impure: bool,
+        public: bool,
+        view: bool,
+        write: bool,
+        closure: bool,
         args: Vec<FuncArg>,
-        ret_type: Type,
+        ret_type: Option<Type>,
         code: Vec<Statement>,
-        exported: bool,
+        captures: BTreeSet<StringId>,
+        frame_size: usize,
         debug_info: DebugInfo,
     ) -> Self {
         let mut arg_types = Vec::new();
@@ -1648,20 +1689,22 @@ impl GenericFunc {
         for arg in args.iter() {
             arg_types.push(arg.tipe.clone());
         }
+        let prop = FuncProperties::new(view, write, closure, public);
+        let ret_type = ret_type.unwrap_or(Type::Void);
         GenericFunc {
             name,
+            id,
             type_variables,
             args: args_vec,
             ret_type: ret_type.clone(),
             code,
-            tipe: Type::Func(is_impure, arg_types, Box::new(ret_type)),
-            kind: if exported {
-                FuncDeclKind::Public
-            } else {
-                FuncDeclKind::Private
-            },
+            tipe: Type::Func(prop, arg_types, Box::new(ret_type)),
+            public,
+            captures,
+            frame_size,
+            unique_id: None,
+            properties: prop,
             debug_info,
-            properties: PropertiesList { pure: !is_impure },
         }
     }
     pub(crate) fn resolve(
@@ -1674,7 +1717,7 @@ impl GenericFunc {
             .map(|arg| arg.tipe.resolve(type_args))
             .collect::<Result<Vec<_>, _>>()?;
         let y = self.ret_type.resolve(type_args)?;
-        Ok(Type::Func(self.properties.pure, x, Box::new(y)))
+        Ok(Type::Func(self.properties, x, Box::new(y)))
     }
 }
 

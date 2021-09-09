@@ -1269,7 +1269,7 @@ pub fn sort_top_level_decls(
                 funcs.push(fd);
             }
             TopLevelDecl::GenericFuncDecl(gf) => {
-                generic_funcs.insert(gf.name, gf.clone());
+                generic_funcs.insert(gf.id, gf.clone());
             }
             TopLevelDecl::TypeDecl(td) => {
                 named_types.insert(td.name, td.tipe);
@@ -1292,7 +1292,7 @@ pub fn sort_top_level_decls(
         funcs,
         named_types,
         generic_types,
-        global_vars,
+        globals,
         func_table,
         generic_funcs,
     )
@@ -1332,7 +1332,8 @@ pub fn typecheck_top_level_decls(
     let type_table: HashMap<_, _> = named_types.clone().into_iter().collect();
     for (_, tipe) in generic_types {
         println!("{:?}", tipe.vars);
-        tipe.tipe.consistent_over_args(&tipe.vars, type_tree, &string_table)?;
+        tipe.tipe
+            .consistent_over_args(&tipe.vars, type_tree, &string_table)?;
     }
     let _ = generic_types.clone().into_iter().collect::<HashMap<_, _>>();
 
@@ -1359,21 +1360,22 @@ pub fn typecheck_top_level_decls(
                 &string_table,
                 &mut checked_closures,
                 &mut undefinable_ids,
-                generic_funcs,
+                &generic_funcs,
             )?,
         );
     }
 
-    checked_funcs.extend(checked_closures);
+    checked_funcs.extend(checked_closures.clone());
 
     for (id, func) in generic_funcs.iter() {
         let f = typecheck_generic_function(
             &func,
             &type_table,
-            &resolved_global_vars_map,
+            &global_vars_map,
             &func_table,
             type_tree,
             &string_table,
+            &mut checked_closures,
             &mut undefinable_ids,
             &generic_funcs,
         )?;
@@ -1449,7 +1451,7 @@ pub fn typecheck_function(
 
     let mut inner_type_table = type_table.clone();
     inner_type_table.extend(hm);
-    let mut tc_stats = typecheck_statement_sequence(
+    let tc_stats = typecheck_statement_sequence(
         &func.code,
         &func.ret_type,
         &inner_type_table,
@@ -1463,14 +1465,18 @@ pub fn typecheck_function(
         generics,
     )?;
     Ok(TypeCheckedFunc {
-        name: fd.name,
-        args: fd.args.clone(),
-        ret_type: fd.ret_type.clone(),
+        name: func.name.clone(),
+        id: func.id,
+        args: func.args.clone(),
+        ret_type: func.ret_type.clone(),
         code: tc_stats,
-        tipe: fd.tipe.clone(),
-        kind: fd.kind,
-        debug_info: DebugInfo::from(fd.debug_info),
-        properties: fd.properties.clone(),
+        tipe: func.tipe.clone(),
+        public: func.public,
+        captures: BTreeSet::new(),
+        frame_size: 0,
+        unique_id: func.unique_id,
+        properties: func.properties,
+        debug_info: func.debug_info,
     })
 }
 
@@ -1479,29 +1485,30 @@ pub fn typecheck_function(
 ///
 /// If not successful the function returns a `CompileError`.
 pub fn typecheck_generic_function(
-    fd: &GenericFunc,
+    func: &GenericFunc,
     type_table: &TypeTable,
-    global_vars: &HashMap<StringId, (Type, usize)>,
+    global_vars: &HashMap<StringId, Type>,
     func_table: &TypeTable,
     type_tree: &TypeTree,
     string_table: &StringTable,
+    closures: &mut BTreeMap<StringId, TypeCheckedFunc>,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
     generics: &BTreeMap<StringId, GenericFunc>,
 ) -> Result<TypeCheckedFunc, CompileError> {
     let mut hm = HashMap::new();
-    if fd.ret_type != Type::Void {
-        if fd.code.len() == 0 {
+    if func.ret_type != Type::Void {
+        if func.code.len() == 0 {
             return Err(CompileError::new_type_error(
                 format!(
                     "Func {}{}{} never returns",
                     CompileError::RED,
-                    string_table.name_from_id(fd.name),
+                    string_table.name_from_id(func.id),
                     CompileError::RESET,
                 ),
-                fd.debug_info.location.into_iter().collect(),
+                func.debug_info.location.into_iter().collect(),
             ));
         }
-        if let Some(stat) = fd.code.last() {
+        if let Some(stat) = func.code.last() {
             match &stat.kind {
                 StatementKind::Return(_) => {}
                 _ => {
@@ -1509,10 +1516,10 @@ pub fn typecheck_generic_function(
                         format!(
                             "Func {}{}{}'s last statement is not a return",
                             CompileError::RED,
-                            string_table.name_from_id(fd.name),
+                            string_table.name_from_id(func.id),
                             CompileError::RESET,
                         ),
-                        fd.debug_info
+                        func.debug_info
                             .location
                             .into_iter()
                             .chain(stat.debug_info.location.into_iter())
@@ -1523,24 +1530,24 @@ pub fn typecheck_generic_function(
         }
     }
 
-    if let Some(location_option) = undefinable_ids.get(&fd.name) {
+    if let Some(location_option) = undefinable_ids.get(&func.id) {
         return Err(CompileError::new_type_error(
             format!(
                 "Func {}{}{} has the same name as another top-level symbol",
                 CompileError::RED,
-                string_table.name_from_id(fd.name),
+                string_table.name_from_id(func.id),
                 CompileError::RESET,
             ),
             location_option
                 .iter()
-                .chain(fd.debug_info.location.iter())
+                .chain(func.debug_info.location.iter())
                 .cloned()
                 .collect(),
         ));
     }
-    undefinable_ids.insert(fd.name, fd.debug_info.location);
+    undefinable_ids.insert(func.id, func.debug_info.location);
 
-    for arg in fd.args.iter() {
+    for arg in func.args.iter() {
         arg.tipe.get_representation(type_tree).map_err(|_| {
             CompileError::new_type_error(
                 format!(
@@ -1557,7 +1564,7 @@ pub fn typecheck_generic_function(
                 format!(
                     "Func {}{}{}'s argument {}{}{} has the same name as a top-level symbol",
                     CompileError::RED,
-                    string_table.name_from_id(fd.name),
+                    string_table.name_from_id(func.id),
                     CompileError::RESET,
                     CompileError::RED,
                     string_table.name_from_id(arg.name),
@@ -1570,20 +1577,27 @@ pub fn typecheck_generic_function(
                     .collect(),
             ));
         }
-        let map = fd.type_variables.iter().map(|var| (*var, Type::Void)).collect();
-        arg.tipe.consistent_over_args(&map, type_tree, string_table)?;
+        let map = func
+            .type_variables
+            .iter()
+            .map(|var| (*var, Type::Void))
+            .collect();
+        arg.tipe
+            .consistent_over_args(&map, type_tree, string_table)?;
         hm.insert(arg.name, arg.tipe.clone());
     }
     let mut inner_type_table = type_table.clone();
     inner_type_table.extend(hm);
-    let tc_stats = typecheck_statement_sequence(
-        &fd.code,
-        &fd.ret_type,
+    let mut tc_stats = typecheck_statement_sequence(
+        &func.code,
+        &func.ret_type,
         &inner_type_table,
         global_vars,
         func_table,
         type_tree,
-        &undefinable_ids,
+        string_table,
+        undefinable_ids,
+        closures,
         &mut vec![],
         generics,
     )?;
@@ -2613,6 +2627,7 @@ fn typecheck_expr(
                     string_table,
                     closures,
                     undefinable_ids,
+                    generics,
                 )?;
 
                 fn find_captures(
