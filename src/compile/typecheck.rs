@@ -1380,6 +1380,7 @@ pub fn typecheck_function(
     }
     undefinable_ids.insert(func.id, func.debug_info.location);
 
+    let collected_type_vars = func.type_vars.clone().into_iter().collect();
     for arg in func.args.iter() {
         arg.tipe.get_representation(type_tree).map_err(|_| {
             CompileError::new_type_error(
@@ -1390,6 +1391,8 @@ pub fn typecheck_function(
                 arg.debug_info.location.into_iter().collect(),
             )
         })?;
+        arg.tipe
+            .consistent_over_args(&collected_type_vars, type_tree, string_table)?;
         if let Some(location_option) = undefinable_ids.get(&arg.name) {
             return Err(CompileError::new_type_error(
                 format!(
@@ -1421,6 +1424,9 @@ pub fn typecheck_function(
         closures,
         &mut vec![],
     )?;
+
+    func.ret_type
+        .consistent_over_args(&collected_type_vars, type_tree, string_table)?;
 
     if func.ret_type == Type::Void {
         if tc_stats.last().cloned().map(|s| s.kind) != Some(TypeCheckedStatementKind::ReturnVoid())
@@ -1463,6 +1469,7 @@ pub fn typecheck_function(
     Ok(TypeCheckedFunc {
         name: func.name.clone(),
         id: func.id,
+        type_vars: func.type_vars.clone(),
         args: func.args.clone(),
         ret_type: func.ret_type.clone(),
         code: tc_stats,

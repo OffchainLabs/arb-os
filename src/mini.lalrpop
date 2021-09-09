@@ -100,14 +100,14 @@ TypeDecl: TypeDecl = {
 }
 
 FuncDecl: Func = {
-	<attribs: ("#[" <Attributes> "]")?> <qualifiers: (<Qualifier>)*> "func" <lno: @L> <i:Ident> "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> => {
+	<attribs: ("#[" <Attributes> "]")?> <qualifiers: (<Qualifier>)*> "func" <lno: @L> <i:Ident> <vars: ("<" <CommaedIdents> ">")?>  "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> => {
         let public = qualifiers.contains(&"public");
         let view = qualifiers.contains(&"view");
         let write = qualifiers.contains(&"write");
         let debug = DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default());
         let name = stringtable.name_from_id(i).clone();
         
-	    Func::new(name, i, public, view, write, false, fa, t, cb, BTreeSet::new(), 0, debug)
+	    Func::new(name, i, vars.unwrap_or(vec![]), public, view, write, false, fa, t, cb, BTreeSet::new(), 0, debug)
     }
 }
 
@@ -307,6 +307,7 @@ Type: Type = {
         let write = q.contains(&"write");
         Type::Func(FuncProperties::new(view, write, true, false), a, Box::new(r.unwrap_or(Type::Void)))
     },
+ 	"*" <Ident> => Type::Variable(current_path.to_owned(), <>),
     Ident => Type::Nominal(current_path.to_owned(), <>),
 };
 
@@ -324,6 +325,13 @@ CommaedTypes: Vec<Type> = {
 
 Ident: StringId = {
 	IdentString => stringtable.get(<>),
+};
+
+CommaedIdents: Vec<StringId> = {
+	<mut t: (<Ident> ",")*> <e: (Ident)> ","? => {
+        t.push(e);
+        t
+    },
 };
 
 Expr: Expr = {
@@ -476,7 +484,7 @@ Expr12: Expr = {
         
         let name = format!("closure #{}", closures.len() + 1);
         let id = stringtable.get(name.clone());
-        let closure = Func::new(name, id, false, view, write, true, fa, t, cb, BTreeSet::new(), 0, debug);
+        let closure = Func::new(name, id, vec![], false, view, write, true, fa, t, cb, BTreeSet::new(), 0, debug);
         
 	    closures.insert(id, closure.clone());
         

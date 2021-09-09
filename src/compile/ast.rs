@@ -10,12 +10,14 @@ use crate::console::Color;
 use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
 use crate::mavm::{Instruction, LabelId, Value};
 use crate::pos::{BytePos, Location};
-use crate::stringtable::StringId;
+use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::fmt::Formatter;
+use std::rc::Rc;
 
 /// This is a map of the types at a given location, with the Vec<String> representing the module path
 /// and the usize representing the `StringId` of the type at that location.
@@ -105,6 +107,7 @@ pub enum Type {
     Array(Box<Type>),
     FixedArray(Box<Type>, usize),
     Struct(Vec<StructField>),
+    Variable(Vec<String>, StringId),
     Nominal(Vec<String>, StringId),
     Func(FuncProperties, Vec<Type>, Box<Type>),
     Map(Box<Type>, Box<Type>),
@@ -126,7 +129,8 @@ impl AbstractSyntaxTree for Type {
             | Type::Buffer
             | Type::Any
             | Type::Every
-            | Type::Nominal(_, _) => vec![],
+            | Type::Nominal(_, _)
+            | Type::Variable(_, _) => vec![],
             Type::Tuple(types) | Type::Union(types) => {
                 types.iter_mut().map(|t| TypeCheckedNode::Type(t)).collect()
             }
@@ -247,7 +251,7 @@ impl Type {
                 Type::Uint | Type::Int | Type::Bool | Type::Bytes32 | Type::EthAddress => true,
                 _ => false,
             },
-            Type::Buffer | Type::Void | Type::Every => rhs == self,
+            Type::Buffer | Type::Void | Type::Every | Type::Variable(_, _) => rhs == self,
             Type::Tuple(tvec) => {
                 if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
                     type_vectors_covariant_castable(tvec, &tvec2, type_tree, seen)
@@ -351,7 +355,7 @@ impl Type {
                 Type::Uint | Type::Int | Type::Bool | Type::Bytes32 | Type::EthAddress => true,
                 _ => false,
             },
-            Type::Buffer | Type::Void | Type::Every => rhs == self,
+            Type::Buffer | Type::Void | Type::Every | Type::Variable(_, _) => rhs == self,
             Type::Tuple(tvec) => {
                 if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
                     type_vectors_castable(tvec, &tvec2, type_tree, seen)
@@ -456,7 +460,8 @@ impl Type {
             | Type::Bytes32
             | Type::EthAddress
             | Type::Buffer
-            | Type::Every => (self == rhs),
+            | Type::Every
+            | Type::Variable(_, _) => (self == rhs),
             Type::Tuple(tvec) => {
                 if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
                     type_vectors_assignable(tvec, &tvec2, type_tree, seen)
@@ -566,7 +571,8 @@ impl Type {
             | Type::Bytes32
             | Type::EthAddress
             | Type::Buffer
-            | Type::Every => {
+            | Type::Every
+            | Type::Variable(_, _) => {
                 if self == rhs {
                     None
                 } else {
@@ -807,9 +813,57 @@ impl Type {
             Type::Map(_, _) | Type::Func(_, _, _) | Type::Nominal(_, _) => (Value::none(), false),
             Type::Any => (Value::none(), true),
             Type::Every => (Value::none(), false),
+            Type::Variable(_, _) => (Value::none(), false),
             Type::Option(_) => (Value::new_tuple(vec![Value::Int(Uint256::zero())]), true),
             Type::Union(_) => (Value::none(), false),
         }
+    }
+
+    pub fn consistent_over_args(
+        &self,
+        type_args: &BTreeSet<StringId>,
+        _type_tree: &TypeTree,
+        _string_table: &StringTable,
+    ) -> Result<(), CompileError> {
+        let mut elf = self.clone();
+        let mut has_error = Rc::new(RefCell::new(false));
+        if let Type::Variable(_, id) = self {
+            return type_args.get(id).map(|_| ()).ok_or_else(|| {
+                CompileError::new(
+                    format!("Variable args mismatch"),
+                    format!("failed consistency check"),
+                    vec![],
+                )
+            });
+        }
+
+        elf.recursive_apply(
+            |val, _a, b| {
+                match val {
+                    TypeCheckedNode::Type(t) => match t {
+                        Type::Variable(_, id) => match type_args.get(id) {
+                            Some(_) => {}
+                            None => {
+                                *b.borrow_mut() = true;
+                            }
+                        },
+                        _ => {}
+                    },
+                    _ => {}
+                }
+                true
+            },
+            &(),
+            &mut has_error,
+        );
+        if *has_error.borrow_mut() {
+            return Err(CompileError::new(
+                "Type Error".to_string(),
+                format!("Type \"{}\" failed consistency check", self.display()),
+                vec![],
+            ));
+        }
+        Ok(())
     }
 
     pub fn display(&self) -> String {
@@ -908,6 +962,7 @@ impl Type {
                 out.push('}');
                 (out, type_set)
             }
+            Type::Variable(_path, _id) => (format!("fix me"), type_set), /*(format!("{}", generic_funcs.name_from_id(*id)), type_set)*/
             Type::Nominal(path, id) => {
                 let out = format!(
                     "{}{}{}",
@@ -1161,6 +1216,9 @@ impl PartialEq for Type {
             }
             (Type::Nominal(p1, id1), Type::Nominal(p2, id2)) => (p1, id1) == (p2, id2),
             (Type::Option(x), Type::Option(y)) => *x == *y,
+            (Type::Variable(rpath, rid), Type::Variable(lpath, lid)) => {
+                rpath == lpath && rid == lid
+            }
             (Type::Union(x), Type::Union(y)) => type_vectors_equal(x, y),
             (_, _) => false,
         }
@@ -1333,6 +1391,7 @@ impl GlobalVar {
 pub struct Func<T = Statement> {
     pub name: String,
     pub id: StringId,
+    pub type_vars: Vec<StringId>,
     pub args: Vec<FuncArg>,
     pub ret_type: Type,
     pub code: Vec<T>,
@@ -1352,6 +1411,7 @@ impl Func {
     pub fn new(
         name: String,
         id: StringId,
+        type_vars: Vec<StringId>,
         public: bool,
         view: bool,
         write: bool,
@@ -1373,6 +1433,7 @@ impl Func {
         Func {
             name,
             id,
+            type_vars,
             args: args_vec,
             ret_type: ret_type.clone(),
             code,
