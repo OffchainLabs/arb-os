@@ -221,9 +221,46 @@ impl Type {
         }
     }
 
+    /// Find all -- potentially nested -- types matching some critereon
+    /// |take| decides whether to take a value, returning true when to do so
+    pub fn find<Take>(&self, take: &Take) -> Vec<Type>
+    where
+        Take: Fn(&Self) -> bool,
+    {
+        let mut found = vec![];
+        macro_rules! find {
+            ($tipe:expr) => {
+                found.extend($tipe.find(take));
+            };
+        }
+        match &self {
+            Self::Tuple(contents) | Self::Union(contents) | Self::Nominal(_, _, contents) => {
+                contents.iter().for_each(|val| find!(val));
+            }
+            Self::Option(inner) | Self::Array(inner) | Self::FixedArray(inner, _) => {
+                find!(inner);
+            }
+            Self::Map(key, value) => {
+                find!(key);
+                find!(value);
+            }
+            Self::Func(_, args, ret) => {
+                args.iter().for_each(|val| find!(val));
+                find!(ret);
+            }
+            Self::Struct(fields) => {
+                fields.iter().for_each(|field| find!(field.tipe));
+            }
+            _ => {}
+        }
+        if take(self) {
+            found.push(self.clone());
+        }
+        found
+    }
+
     /// Surgically replace types potentially nested within others.
     /// |via| makes the type substitution.
-    /// The application order allows a substituted type to itself be replaced.
     pub fn replace<Via>(&mut self, via: &mut Via)
     where
         Via: FnMut(&mut Self),
@@ -251,6 +288,22 @@ impl Type {
             _ => {}
         }
         via(self);
+    }
+
+    ///
+    pub fn num_generics(&self) -> usize {
+        let params = self.find(&|tipe| matches!(tipe, Type::Generic(_)));
+
+        let mut seen = HashSet::new();
+
+        for param in params {
+            match param {
+                Type::Generic(slot) => drop(seen.insert(slot)),
+                x => panic!("find() matched something wrong {:?}", x),
+            }
+        }
+
+        return seen.len();
     }
 
     /// Makes a specific version of this type, where the nominals listed are specialized.
@@ -1166,13 +1219,12 @@ impl Type {
 /// Checks generic parameter names for duplicates.
 pub fn check_generic_parameters(
     params: Vec<(StringId, DebugInfo)>,
-    error_system: &mut ErrorSystem,
     string_table: &StringTable,
-) -> Vec<StringId> {
+) -> Result<Vec<StringId>, CompileError> {
     let mut seen = HashSet::new();
     for (id, debug) in params.iter() {
         if !seen.insert(id) {
-            error_system.errors.push(CompileError::new(
+            return Err(CompileError::new(
                 "Parser error",
                 format!(
                     "Duplicate generic parameter {}",
@@ -1182,7 +1234,7 @@ pub fn check_generic_parameters(
             ));
         }
     }
-    params.into_iter().map(|(name, _)| name).collect()
+    Ok(params.into_iter().map(|(name, _)| name).collect())
 }
 
 pub fn type_vectors_covariant_castable(

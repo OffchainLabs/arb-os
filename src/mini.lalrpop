@@ -13,6 +13,7 @@ use crate::mavm::{Value, Instruction, Opcode};
 use crate::uint256::Uint256;
 use crate::console::Color;
 use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
+use lalrpop_util::ParseError;
 use regex::Regex;
 
 grammar(
@@ -71,12 +72,7 @@ HeadDecl: TopLevelDecl = {
             error_system.errors.push(
                 CompileError::new(
                     String::from("Parser error"),
-                    format!(
-                        "Constant {}{}{} is declared twice",
-                        CompileError::RED,
-                        n,
-                        CompileError::RESET,
-                    ),
+                    format!("Constant {} is declared twice", Color::red(&n)),
                     file_info.location(BytePos::from(lno), filename).into_iter().collect()
                 )
             )
@@ -103,34 +99,34 @@ BodyDecl: TopLevelDecl = {
 }
 
 TypeDecl: TypeDecl = {
-    "type" <i: Ident> <g: Generalization?> "=" <t: Type> ";" => {
-        let params = g.clone().into_iter().flatten().map(|(name, lno)| {
+    "type" <i: Ident> <g: Generalization?> "=" <t: Type> ";" =>? {
+        let params = g.clone().into_iter().flatten().map(|(lno, name)| {
             (name, DebugInfo::here(file_info, lno, filename))
         }).collect();
-        let names = check_generic_parameters(params, error_system, &string_table);
-        new_type_decl(i, t.make_generic(&names))
+        let names = check_generic_parameters(params, &string_table)?;
+        Ok(new_type_decl(i, t.make_generic(&names)))
     }
 }
 
 FuncDecl: Func = {
-    <attribs: ("#[" <Attributes> "]")?> <qualifiers: (<Qualifier>)*> "func" <lno: @L> <i:Ident> <g: Generalization?> "(" <mut args:FuncArgs> ")" <mut ret: (Return)?> <cb:CodeBlock> => {
+    <attribs: ("#[" <Attributes> "]")?> <qualifiers: (<Qualifier>)*> "func" <lno: @L> <i:Ident> <g: Generalization?> "(" <mut args:FuncArgs> ")" <mut ret: (Return)?> <cb:CodeBlock> =>? {
         let public = qualifiers.contains(&"public");
         let view = qualifiers.contains(&"view");
         let write = qualifiers.contains(&"write");
         let debug = DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default());
         let name = string_table.name_from_id(i).clone();
 
-        let params = g.into_iter().flatten().map(|(name, lno)| {
+        let params = g.into_iter().flatten().map(|(lno, name)| {
             (name, DebugInfo::here(file_info, lno, filename))
         }).collect();
-        let names = check_generic_parameters(params, error_system, &string_table);
+        let names = check_generic_parameters(params, &string_table)?;
 
         args.iter_mut().for_each(|arg| arg.tipe = arg.tipe.make_generic(&names));
         if let Some(ref mut tipe) = ret {
             *tipe = tipe.make_generic(&names);
         }
         
-	Func::new(name, i, public, view, write, false, args, ret, cb, BTreeSet::new(), names, 0, debug)
+	Ok(Func::new(name, i, public, view, write, false, args, ret, cb, BTreeSet::new(), names, 0, debug))
     }
 }
 
@@ -335,8 +331,8 @@ Type: Type = {
     }
 };
 
-Generalization: Vec<(StringId, usize)> = {
-    "<" <c: Comma<(<Ident> <@R>)>> ">" => c,
+Generalization: Vec<(usize, StringId)> = {
+    "<" <c: Comma<(<@R> <Ident>)>> ">" => c,
 }
 
 Specialization: Vec<Type> = {

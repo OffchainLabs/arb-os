@@ -2376,6 +2376,18 @@ fn typecheck_expr(
                 )?;
 
                 let old_type = expr.get_type().rep(type_tree)?;
+                let num_generic_params = old_type.num_generics();
+
+                if spec.len() != num_generic_params {
+                    return Err(CompileError::new_type_error(
+                        format!(
+                            "Func has {} generic args but {} were passed",
+                            Color::red(num_generic_params),
+                            Color::red(spec.len()),
+                        ),
+                        debug_info.locs(),
+                    ));
+                }
 
                 match expr.get_type_mut() {
                     Some(tipe) => {

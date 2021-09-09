@@ -1240,6 +1240,12 @@ impl Display for CompileError {
     }
 }
 
+impl<L, T> From<CompileError> for ParseError<L, T, CompileError> {
+    fn from(error: CompileError) -> ParseError<L, T, CompileError> {
+        ParseError::User { error }
+    }
+}
+
 impl CompileError {
     pub fn new<S, U>(title: S, description: U, locations: Vec<Location>) -> Self
     where

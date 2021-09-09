@@ -7,18 +7,17 @@ write func main() {
 }
 
 func tests() -> string {
-
+    
     let lambda = make_lambda::<string>();
-
+    
     if (lambda("duplicate") != ("duplicate", "duplicate")) {
         return "Generics don't work with closures";
     }
-
+    
     let store = struct {
         value: "wow",
     };
     
-    //if (duplicate("wow", lambda) != ("wow", "wow")) {
     if (duplicate::<string>(store, lambda) != ("wow", "wow")) {
         return "Generics don't work with passed closures";
     }
