@@ -50,4 +50,9 @@ impl StringTable {
     pub fn name_from_id(&self, name: StringId) -> &String {
         &self.by_id[name as usize]
     }
+
+    /// Takes a `usize` ID and returns the associated `String`
+    pub fn try_name_from_id(&self, name: StringId) -> Option<&String> {
+        self.by_id.get(name as usize)
+    }
 }

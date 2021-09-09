@@ -2220,6 +2220,24 @@ fn typecheck_expr(
                     },
                 },
             },
+            ExprKind::GenericRef(func_name, vars) => {
+                let x = func_table.get(func_name).ok_or_else(|| {
+                    CompileError::new(
+                        "Type Error".to_string(),
+                        format!(
+                            "Could not find function of name \"{}\"",
+                            string_table.name_from_id(*func_name)
+                        ),
+                        loc.into_iter().collect(),
+                    )
+                })?;
+                let vars = vars
+                    .iter()
+                    .map(|arg| (arg.name, arg.tipe.clone()))
+                    .collect();
+                let real = x.resolve(&vars, type_tree, string_table)?;
+                Ok(TypeCheckedExprKind::FuncRef(*func_name, real))
+            }
             ExprKind::TupleRef(tref, idx) => {
                 let tc_sub = typecheck_expr(
                     &*tref,

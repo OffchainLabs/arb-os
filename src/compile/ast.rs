@@ -14,7 +14,7 @@ use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::fmt::Formatter;
 use std::rc::Rc;
@@ -818,6 +818,54 @@ impl Type {
             Type::Union(_) => (Value::none(), false),
         }
     }
+    pub fn resolve(
+        &self,
+        type_args: &BTreeMap<StringId, Type>,
+        type_tree: &TypeTree,
+        string_table: &StringTable,
+    ) -> Result<Type, CompileError> {
+        let mut elf = self.clone();
+        let mut has_error = Rc::new(RefCell::new(false));
+        if let Type::Variable(_, id) = self {
+            return type_args.get(id).cloned().ok_or_else(|| {
+                CompileError::new(
+                    format!("failed to resolve variable"),
+                    format!("failed to resolve"),
+                    vec![],
+                )
+            });
+        }
+        elf.recursive_apply(
+            |val, _a, b| {
+                match val {
+                    TypeCheckedNode::Type(t) => match t {
+                        Type::Variable(_, id) => match type_args.get(id) {
+                            Some(inner) => **t = inner.clone(),
+                            None => {
+                                *b.borrow_mut() = true;
+                            }
+                        },
+                        _ => {}
+                    },
+                    _ => {}
+                }
+                true
+            },
+            &(),
+            &mut has_error,
+        );
+        if *has_error.borrow_mut() {
+            return Err(CompileError::new(
+                "Type Error".to_string(),
+                format!(
+                    "Failed to resolve type variable in: {}",
+                    self.display_generics(type_tree, string_table)
+                ),
+                vec![],
+            ));
+        }
+        Ok(elf)
+    }
 
     pub fn consistent_over_args(
         &self,
@@ -867,12 +915,18 @@ impl Type {
     }
 
     pub fn display(&self) -> String {
-        self.display_indented(0, "::", None, false, &TypeTree::new())
+        self.display_indented(0, "::", None, false, &TypeTree::new(), &StringTable::new())
+            .0
+    }
+
+    pub fn display_generics(&self, type_tree: &TypeTree, string_table: &StringTable) -> String {
+        self.display_indented(0, "::", None, false, type_tree, string_table)
             .0
     }
 
     pub fn print(&self, type_tree: &TypeTree) -> String {
-        self.display_indented(0, "::", None, false, type_tree).0
+        self.display_indented(0, "::", None, false, type_tree, &StringTable::new())
+            .0
     }
 
     pub fn display_separator(
@@ -882,7 +936,14 @@ impl Type {
         include_pathname: bool,
         type_tree: &TypeTree,
     ) -> (String, HashSet<(Type, String)>) {
-        self.display_indented(0, separator, prefix, include_pathname, type_tree)
+        self.display_indented(
+            0,
+            separator,
+            prefix,
+            include_pathname,
+            type_tree,
+            &StringTable::new(),
+        )
     }
 
     fn display_indented(
@@ -892,6 +953,7 @@ impl Type {
         prefix: Option<&str>,
         include_pathname: bool,
         type_tree: &TypeTree,
+        string_table: &StringTable,
     ) -> (String, HashSet<(Type, String)>) {
         let mut type_set = HashSet::new();
         match self {
@@ -912,6 +974,7 @@ impl Type {
                         prefix,
                         include_pathname,
                         type_tree,
+                        string_table,
                     );
                     out.push_str(&(displayed + ", "));
                     type_set.extend(subtypes);
@@ -926,6 +989,7 @@ impl Type {
                     prefix,
                     include_pathname,
                     type_tree,
+                    string_table,
                 );
                 (format!("[]{}", displayed), subtypes)
             }
@@ -936,6 +1000,7 @@ impl Type {
                     prefix,
                     include_pathname,
                     type_tree,
+                    string_table,
                 );
                 (format!("[{}]{}", size, displayed), subtypes)
             }
@@ -952,6 +1017,7 @@ impl Type {
                         prefix,
                         include_pathname,
                         type_tree,
+                        string_table,
                     );
                     out.push_str(&format!("    {}: {},\n", field.name, displayed));
                     for _ in 0..indent_level {
@@ -962,7 +1028,15 @@ impl Type {
                 out.push('}');
                 (out, type_set)
             }
-            Type::Variable(_path, _id) => (format!("fix me"), type_set), /*(format!("{}", generic_funcs.name_from_id(*id)), type_set)*/
+            Type::Variable(_path, id) => (
+                format!(
+                    "{}",
+                    string_table
+                        .try_name_from_id(*id)
+                        .unwrap_or(&format!("Unknown type variable ID: {}", id))
+                ),
+                type_set,
+            ),
             Type::Nominal(path, id) => {
                 let out = format!(
                     "{}{}{}",
@@ -1007,6 +1081,7 @@ impl Type {
                         prefix,
                         include_pathname,
                         type_tree,
+                        string_table,
                     );
                     out.push_str(&(displayed + ", "));
                     type_set.extend(subtypes)
@@ -1019,6 +1094,7 @@ impl Type {
                         prefix,
                         include_pathname,
                         type_tree,
+                        string_table,
                     );
                     out.push_str(" -> ");
                     out.push_str(&displayed);
@@ -1033,6 +1109,7 @@ impl Type {
                     prefix,
                     include_pathname,
                     type_tree,
+                    string_table,
                 );
                 type_set.extend(key_subtypes);
                 let (val_display, val_subtypes) = val.display_indented(
@@ -1041,6 +1118,7 @@ impl Type {
                     prefix,
                     include_pathname,
                     type_tree,
+                    string_table,
                 );
                 type_set.extend(val_subtypes);
                 (format!("map<{},{}>", key_display, val_display), type_set)
@@ -1054,6 +1132,7 @@ impl Type {
                     prefix,
                     include_pathname,
                     type_tree,
+                    string_table,
                 );
                 (format!("option<{}> ", display), subtypes)
             }
@@ -1067,6 +1146,7 @@ impl Type {
                         prefix,
                         include_pathname,
                         type_tree,
+                        string_table,
                     );
                     s.push_str(&name);
                     s.push_str(", ");
@@ -1640,6 +1720,7 @@ pub enum ExprKind {
     ShortcutOr(Box<Expr>, Box<Expr>),
     ShortcutAnd(Box<Expr>, Box<Expr>),
     VariableRef(StringId),
+    GenericRef(StringId, Vec<FuncArg>),
     TupleRef(Box<Expr>, Uint256),
     DotRef(Box<Expr>, String),
     Constant(Constant),
