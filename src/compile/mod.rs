@@ -89,6 +89,8 @@ struct Module {
     funcs: Vec<Func>,
     /// Map from `StringId`s in this file to the `Type`s they represent.
     named_types: HashMap<StringId, Type>,
+    /// Map from `StringId`s in this file to the generic types they represent.
+    generic_types: HashMap<StringId, (Vec<StringId>, Type)>,
     /// List of constants used in this file.
     constants: HashSet<String>,
     /// List of global variables defined within this file.
@@ -218,6 +220,7 @@ impl Module {
     fn new(
         funcs: Vec<Func>,
         named_types: HashMap<usize, Type>,
+        generic_types: HashMap<usize, (Vec<StringId>, Type)>,
         constants: HashSet<String>,
         global_vars: Vec<GlobalVar>,
         imports: Vec<Import>,
@@ -229,6 +232,7 @@ impl Module {
         Self {
             funcs,
             named_types,
+            generic_types,
             constants,
             global_vars,
             imports,
@@ -702,7 +706,7 @@ fn create_program_tree(
 
         let mut string_table = StringTable::new();
         let mut used_constants = HashSet::new();
-        let (imports, funcs, named_types, global_vars, func_table) =
+        let (imports, funcs, named_types, generic_types, global_vars, func_table) =
             typecheck::sort_top_level_decls(
                 parse_from_source(
                     source,
@@ -724,6 +728,7 @@ fn create_program_tree(
             Module::new(
                 funcs,
                 named_types,
+                generic_types,
                 used_constants,
                 global_vars,
                 imports,
@@ -878,6 +883,7 @@ fn typecheck_programs(
             |Module {
                  funcs,
                  named_types,
+                 generic_types,
                  constants,
                  global_vars,
                  imports,
@@ -891,6 +897,7 @@ fn typecheck_programs(
                     typecheck::typecheck_top_level_decls(
                         funcs,
                         &named_types,
+                        &generic_types,
                         global_vars,
                         &imports,
                         string_table,

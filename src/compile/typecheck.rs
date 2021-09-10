@@ -1230,6 +1230,7 @@ pub fn sort_top_level_decls(
     Vec<Import>,
     Vec<Func>,
     HashMap<usize, Type>,
+    HashMap<usize, (Vec<StringId>, Type)>,
     Vec<GlobalVar>,
     HashMap<usize, Type>,
 ) {
@@ -1252,6 +1253,7 @@ pub fn sort_top_level_decls(
     //let mut imports = vec![];
     let mut funcs = vec![];
     let mut named_types = HashMap::new();
+    let mut generic_types = HashMap::new();
     let mut func_table = HashMap::new();
     let mut globals = vec![];
 
@@ -1267,6 +1269,9 @@ pub fn sort_top_level_decls(
             TopLevelDecl::TypeDecl(td) => {
                 named_types.insert(td.name, td.tipe);
             }
+            TopLevelDecl::GenericTypeDecl(td) => {
+                generic_types.insert(td.name, (td.type_vars, td.tipe));
+            }
             TopLevelDecl::VarDecl(vd) => {
                 globals.push(vd);
             }
@@ -1278,7 +1283,14 @@ pub fn sort_top_level_decls(
         func_table.insert(*id, closure.tipe.clone());
     }
 
-    (imports, funcs, named_types, globals, func_table)
+    (
+        imports,
+        funcs,
+        named_types,
+        generic_types,
+        globals,
+        func_table,
+    )
 }
 
 /// Performs typechecking various top level declarations, `FuncDecl`s,
@@ -1286,6 +1298,7 @@ pub fn sort_top_level_decls(
 pub fn typecheck_top_level_decls(
     funcs: Vec<Func>,
     named_types: &HashMap<usize, Type>,
+    _generic_types: &HashMap<usize, (Vec<StringId>, Type)>,
     mut global_vars: Vec<GlobalVar>,
     imports: &Vec<Import>,
     string_table: StringTable,

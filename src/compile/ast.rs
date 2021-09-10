@@ -76,6 +76,7 @@ impl From<Option<Location>> for DebugInfo {
 #[derive(Debug, Clone)]
 pub enum TopLevelDecl {
     TypeDecl(TypeDecl),
+    GenericTypeDecl(GenericTypeDecl),
     FuncDecl(Func),
     VarDecl(GlobalVar),
     UseDecl(Import),
@@ -91,6 +92,26 @@ pub struct TypeDecl {
 
 pub fn new_type_decl(name: StringId, tipe: Type) -> TypeDecl {
     TypeDecl { name, tipe }
+}
+
+/// Type Declaration, contains the StringId corresponding to the type name, and the underlying Type.
+#[derive(Debug, Clone)]
+pub struct GenericTypeDecl {
+    pub name: StringId,
+    pub type_vars: Vec<StringId>,
+    pub tipe: Type,
+}
+
+pub fn new_generic_type_decl(
+    name: StringId,
+    type_vars: Vec<StringId>,
+    tipe: Type,
+) -> GenericTypeDecl {
+    GenericTypeDecl {
+        name,
+        type_vars,
+        tipe,
+    }
 }
 
 /// A type in the mini language.

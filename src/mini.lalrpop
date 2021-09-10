@@ -3,7 +3,7 @@
 //
 
 
-use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVar, Type, CodeBlock, StructField, FuncArg, FuncProperties, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant, OptionConst, FieldInitializer, new_func_arg, new_type_decl};
+use crate::compile::ast::{TopLevelDecl, TypeDecl, GenericTypeDecl, Func, GlobalVar, Type, CodeBlock, StructField, FuncArg, FuncProperties, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant, OptionConst, FieldInitializer, new_func_arg, new_type_decl, new_generic_type_decl};
 use crate::compile::{InliningMode, ErrorSystem, CompileError};
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
@@ -91,12 +91,17 @@ PathDecl: Vec<String> = {
 
 BodyDecl: TopLevelDecl = {
 	TypeDecl => TopLevelDecl::TypeDecl(<>),
+	GenericTypeDecl => TopLevelDecl::GenericTypeDecl(<>),
 	FuncDecl => TopLevelDecl::FuncDecl(<>),
 	GlobalVarDecl => TopLevelDecl::VarDecl(<>),
 }
 
 TypeDecl: TypeDecl = {
     "type" <Ident> "=" <Type> ";" => new_type_decl(<>),
+}
+
+GenericTypeDecl: GenericTypeDecl = {
+	"type" <Ident> "<" <CommaedIdents> ">" "=" <Type> => new_generic_type_decl(<>),
 }
 
 FuncDecl: Func = {
