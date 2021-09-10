@@ -272,7 +272,7 @@ impl Type {
             }
             Self::Option(ref mut inner)
             | Self::Array(ref mut inner)
-            | Self::FixedArray(ref mut inner, _) => via(inner),
+            | Self::FixedArray(ref mut inner, _) => inner.replace(via),
             Self::Map(ref mut key, ref mut value) => {
                 key.replace(via);
                 value.replace(via);
@@ -653,7 +653,12 @@ impl Type {
             Type::Nominal(_, _, _) => {
                 if let (Ok(left), Ok(right)) = (self.rep(type_tree), rhs.rep(type_tree)) {
                     if seen.insert((left.clone(), right.clone())) {
-                        left.assignable(&right, type_tree, seen)
+                        let result = left.assignable(&right, type_tree, seen.clone());
+                        if !result {
+                            dbg!(&left, &right);
+                            left.assignable(&right, type_tree, seen);
+                        }
+                        result
                     } else {
                         true
                     }
@@ -1122,14 +1127,15 @@ impl Type {
                                 out.push_str(&(displayed + ", "));
                                 type_set.extend(subtypes);
                             }
-                            //out.push_str("> ");
-                            out.push_str(&format!(
+                            out.push_str("> ");
+                            // TODO: Make this work for recursive generics
+                            /*out.push_str(&format!(
                                 "> := {}",
                                 match self.rep(type_tree) {
                                     Ok(tipe) => tipe.print(type_tree),
                                     Err(_) => format!("???"),
                                 }
-                            ));
+                            ));*/
                             out
                         }
                     }

@@ -896,6 +896,7 @@ fn typecheck_programs(
                         string_table,
                         func_table,
                         type_tree,
+                        &path,
                     )?;
 
                 checked_funcs.iter_mut().for_each(|(id, func)| {

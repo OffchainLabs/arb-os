@@ -3,7 +3,7 @@
 #
 
 # Add your mexe as an output file
-generics_files = basic simple nested func closure colorful
+generics_files = basic simple nested func closure colorful queue
 generics_outputs = $(patsubst %,generics/%, $(generics_files))
 
 minitest_outputs = codeloadtest simple-closure closure $(generics_outputs)

@@ -1326,6 +1326,7 @@ pub fn typecheck_top_level_decls(
     string_table: StringTable,
     func_table: HashMap<usize, Type>,
     type_tree: &TypeTree,
+    path: &Vec<String>,
 ) -> Result<
     (
         BTreeMap<StringId, TypeCheckedFunc>,
@@ -1359,6 +1360,16 @@ pub fn typecheck_top_level_decls(
     let mut checked_closures = BTreeMap::new();
 
     for func in &funcs {
+        let mut type_tree = type_tree.clone();
+        for (index, generic) in func.generics.iter().enumerate() {
+            type_tree.insert(
+                (path.clone(), *generic),
+                (
+                    Type::Generic(index),
+                    string_table.name_from_id(*generic).clone(),
+                ),
+            );
+        }
         checked_funcs.insert(
             func.id,
             typecheck_function(
@@ -1366,7 +1377,7 @@ pub fn typecheck_top_level_decls(
                 &type_table,
                 &global_vars_map,
                 &func_table,
-                type_tree,
+                &type_tree,
                 &string_table,
                 &mut checked_closures,
                 &mut undefinable_ids,
@@ -1647,6 +1658,7 @@ fn typecheck_statement<'a>(
                 closures,
                 scopes,
             )?;
+
             if func
                 .ret_type
                 .assignable(&tc_expr.get_type(), type_tree, HashSet::new())
