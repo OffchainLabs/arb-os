@@ -869,7 +869,7 @@ public view write func evmCallStack_returnFromCall(
         evmTracer_pushReturnRevert(
             resultCode,
             returnData,
-            resumeInfo.givenGas + resumeInfo.savedGas - leftoverGas,
+            resumeInfo.givenGas - leftoverGas,
         );
 
         // ready to return to caller
