@@ -1312,10 +1312,8 @@ impl CompileError {
         let last_line = &self.locations.last();
 
         let mut pretty = format!(
-            "{}{}{}: {}\n{}    --> {}{}\n",
-            err_color,
-            &self.title,
-            reset,
+            "{}: {}\n{}    --> {}{}\n",
+            Color::color(err_color, &self.title),
             self.description,
             blue,
             match last_line {
@@ -1323,8 +1321,12 @@ impl CompileError {
                 Some(location) => match file_info_chart.get(&location.file_id) {
                     None => String::from("file with id ") + &location.file_id.to_string(),
                     Some(info) => format!(
-                        "{}{} line {}{}{} column {}{}",
-                        info.path, reset, blue, location.line, reset, blue, location.column,
+                        "{}{} line {} column {}{}",
+                        info.path,
+                        reset,
+                        Color::blue(location.line),
+                        blue,
+                        location.column,
                     ),
                 },
             },
@@ -1355,12 +1357,10 @@ impl CompileError {
             .into_iter()
             .map(|x| {
                 format!(
-                    "     {}|{}{:0space$}{}^{}\n",
-                    blue,
-                    reset,
+                    "     {}{:0space$}{}\n",
+                    Color::blue("|"),
                     " ",
-                    err_color,
-                    reset,
+                    Color::color(err_color, "^"),
                     space = x.column.to_usize() + 1
                 )
             })

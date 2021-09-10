@@ -99,9 +99,7 @@ BodyDecl: TopLevelDecl = {
 
 TypeDecl: TypeDecl = {
     "type" <i: Ident> <g: Generalization?> "=" <t: Type> ";" =>? {
-        let params: Vec<_> = g.clone().into_iter().flatten().map(|(lno, name)| {
-            (name, DebugInfo::here(file_info, lno, filename))
-        }).collect();
+        let params: Vec<_> = g.into_iter().flatten().collect();
         let names = check_generic_parameters(params.clone(), &string_table)?;
         let tipe = t.make_generic(&names);
         
@@ -132,9 +130,7 @@ FuncDecl: Func = {
         let name = string_table.name_from_id(i).clone();
 
         // Generalize over the generic parameters
-        let params: Vec<_> = g.into_iter().flatten().map(|(lno, name)| {
-            (name, DebugInfo::here(file_info, lno, filename))
-        }).collect();
+        let params: Vec<_> = g.into_iter().flatten().collect();
         let generic_ids = check_generic_parameters(params.clone(), &string_table)?;
         args.iter_mut().for_each(|arg| arg.tipe = arg.tipe.make_generic(&generic_ids));
         if let Some(ref mut tipe) = ret {
@@ -367,8 +363,10 @@ Type: Type = {
     }
 };
 
-Generalization: Vec<(usize, StringId)> = {
-    "<" <c: Comma<(<@R> <Ident>)>> ">" => c,
+Generalization: Vec<(StringId, DebugInfo)> = {
+    "<" <g: Comma<(<@R> <Ident>)>> ">" => {
+        g.into_iter().map(|(lno, id)| { (id, DebugInfo::here(file_info, lno, filename)) }).collect()
+    },
 }
 
 Specialization: Vec<Type> = {

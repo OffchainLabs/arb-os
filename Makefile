@@ -1,6 +1,10 @@
 
-# Add your new mexe here
-minitest_outputs = codeloadtest simple-closure closure generics/basic generics/simple generics/func generics/closure
+# Add your mexe as an output file
+
+generics_files = basic simple func closure colorful
+generics_outputs = $(patsubst %,generics/%, $(generics_files))
+
+minitest_outputs = codeloadtest simple-closure closure $(generics_outputs)
 upgrade_outputs = regcopy_new regcopy_old upgrade1_new upgrade1_old
 looptest_outputs = upgrade2_new upgrade2_old
 builtin_outputs = arraytest globaltest kvstest maptest
@@ -14,6 +18,8 @@ looptest_mexes = $(patsubst %,looptest/%.mexe, $(looptest_outputs))
 
 libs_mexes = $(builtin_mexes) $(stdlib_mexes) $(minitest_mexes)
 test_mexes = $(builtin_mexes) $(stdlib_mexes) $(minitest_mexes) $(upgrade_mexes) $(looptest_mexes)
+
+target = ./target/release/mini
 
 compile = ./target/release/mini compile $(compile_options)
 upgrade = ./target/release/mini gen-upgrade-code
