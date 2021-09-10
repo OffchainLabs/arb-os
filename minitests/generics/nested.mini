@@ -1,0 +1,54 @@
+
+type base<A>    = A;
+type tupe<S, U> = (S, U);
+type flip<T, W> = (tupe<T, W>, tupe<W, T>);
+
+write func main() {
+    asm(tests().1) { log };
+}
+
+func diff<A, B>(arg: flip<A, B>) -> flip<A, B> { return arg; }
+func same<A   >(arg: flip<A, A>) -> flip<A, A> { return arg; }
+func noop<A   >(arg: A         ) -> A          { return arg; }
+
+func tests() -> string {
+    let flip_flop = ((true, 1024), (1024, true));
+    let diff_test = diff::<bool, uint>(flip_flop);
+    
+    let same_same = ((true, true), (true, true));
+    let diff_test = diff::<bool, bool>(same_same);    
+    let same_test = same::<bool>(same_same);
+    
+    let a = 32;
+    let b = noop::<uint>(32);
+    let c = noop::<base<uint> >(32);
+    let d = noop::<base<base<uint> > >(32);
+    a = b; a = c; a = d;
+    b = a; b = c; b = d;
+    c = a; c = b; c = d;
+    d = a; d = b; d = c;
+    
+    let complex_1 = explicit::<bool, uint>(flip_flop);
+    let complex_2 = explicit::<base<bool>, base<uint> >(flip_flop);
+    complex_2 = complex_1;
+    complex_1 = complex_2;
+    
+    let a = test();
+    let x = a.0 + a.1;
+    
+    let source = (((true, true), 1024), (1024, (true, true)));
+    let complex_1 = explicit::<(bool, bool), uint>(source);
+    let complex_2 = explicit::<(base<bool>, base<bool>), base<uint> >(source);
+    complex_2 = complex_1;
+    complex_1 = complex_2;
+    
+    return "";
+}
+
+func explicit<A, B>(arg: flip<A, B>) -> tupe<tupe<A, B>, tupe<B, A> > {
+    return arg;
+}
+
+func test() -> (base<base<uint> >, base<uint>) {
+    return (1, 2);
+}

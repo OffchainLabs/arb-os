@@ -1400,10 +1400,10 @@ pub fn typecheck_function(
 ) -> Result<TypeCheckedFunc, CompileError> {
     let mut func = func.clone();
 
-    func.ret_type = func.ret_type.color_generics();
+    func.ret_type = func.ret_type.commit_generic_slots();
     func.args
         .iter_mut()
-        .for_each(|arg| arg.tipe = arg.tipe.color_generics());
+        .for_each(|arg| arg.tipe = arg.tipe.commit_generic_slots());
 
     let mut hm = HashMap::new();
 
@@ -2375,7 +2375,7 @@ fn typecheck_expr(
                 )?;
 
                 let old_type = expr.get_type().rep(type_tree)?;
-                let num_generic_params = old_type.num_generics();
+                let num_generic_params = old_type.count_generic_slots();
 
                 if spec.len() != num_generic_params {
                     return Err(CompileError::new(

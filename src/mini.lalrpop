@@ -104,7 +104,7 @@ TypeDecl: TypeDecl = {
         let tipe = t.make_generic(&names);
         
         for (index, (name, debug_info)) in params.into_iter().enumerate() {
-            let unused = tipe.find(&|tipe: &Type| *tipe == Type::Generic(index)).is_empty();
+            let unused = tipe.find(&|tipe: &Type| *tipe == Type::GenericSlot(index)).is_empty();
             if unused {
                 Err(CompileError::new(
                     "Generics error",
@@ -141,7 +141,7 @@ FuncDecl: Func = {
         // Otherwise, it's provably useless to include it and we should just error.
         for (index, (name, debug_info)) in params.into_iter().enumerate() {
             
-            let take = |tipe: &Type| *tipe == Type::Generic(index);
+            let take = |tipe: &Type| *tipe == Type::GenericSlot(index);
             
             let mut used = match &ret {
                 Some(tipe) => !tipe.find(&take).is_empty(),
