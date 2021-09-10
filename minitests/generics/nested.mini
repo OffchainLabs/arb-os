@@ -16,34 +16,34 @@ func noop<A   >(arg: A         ) -> A          { return arg; }
 
 func tests() -> string {
     let flip_flop = ((true, 1024), (1024, true));
-    let diff_test = diff::<bool, uint>(flip_flop);
+    let _diff_test = diff::<bool, uint>(flip_flop);
     
     let same_same = ((true, true), (true, true));
-    let diff_test = diff::<bool, bool>(same_same);    
-    let same_test = same::<bool>(same_same);
+    let _diff_test = diff::<bool, bool>(same_same);    
+    let _same_test = same::<bool>(same_same);
     
-    let a = 32;
-    let b = noop::<uint>(32);
-    let c = noop::<base<uint> >(32);
-    let d = noop::<base<base<uint> > >(32);
-    a = b; a = c; a = d;
-    b = a; b = c; b = d;
-    c = a; c = b; c = d;
-    d = a; d = b; d = c;
+    let _a = 32;
+    let _b = noop::<uint>(32);
+    let _c = noop::<base<uint> >(32);
+    let _d = noop::<base<base<uint> > >(32);
+    _a = _b; _a = _c; _a = _d;
+    _b = _a; _b = _c; _b = _d;
+    _c = _a; _c = _b; _c = _d;
+    _d = _a; _d = _b; _d = _c;
     
-    let complex_1 = explicit::<bool, uint>(flip_flop);
-    let complex_2 = explicit::<base<bool>, base<uint> >(flip_flop);
-    complex_2 = complex_1;
-    complex_1 = complex_2;
+    let _complex_1 = explicit::<bool, uint>(flip_flop);
+    let _complex_2 = explicit::<base<bool>, base<uint> >(flip_flop);
+    _complex_2 = _complex_1;
+    _complex_1 = _complex_2;
     
     let a = test();
-    let x = a.0 + a.1;
+    let _ = a.0 + a.1;
     
     let source = (((true, true), 1024), (1024, (true, true)));
-    let complex_1 = explicit::<(bool, bool), uint>(source);
-    let complex_2 = explicit::<(base<bool>, base<bool>), base<uint> >(source);
-    complex_2 = complex_1;
-    complex_1 = complex_2;
+    let _complex_1 = explicit::<(bool, bool), uint>(source);
+    let _complex_2 = explicit::<(base<bool>, base<bool>), base<uint> >(source);
+    _complex_2 = _complex_1;
+    _complex_1 = _complex_2;
     
     return "";
 }

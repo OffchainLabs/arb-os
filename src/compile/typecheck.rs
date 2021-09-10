@@ -1428,8 +1428,8 @@ pub fn typecheck_function(
                 format!(
                     "Func {}'s argument {} has the unknown type {}",
                     Color::red(string_table.name_from_id(func.id)),
-                    Color::red(arg.tipe.print(type_tree)),
                     Color::red(string_table.name_from_id(arg.name)),
+                    Color::red(arg.tipe.print(type_tree)),
                 ),
                 arg.debug_info.location.into_iter().collect(),
             )
@@ -2393,8 +2393,8 @@ fn typecheck_expr(
                     Some(tipe) => {
                         *tipe = tipe
                             .rep(type_tree)?
-                            .make_specific(spec)
-                            .make_colored(&func.generics);
+                            .make_specific(spec)?
+                            .commit_params(&func.generics);
                     }
                     None => {
                         return Err(CompileError::new_type_error(
@@ -2483,12 +2483,12 @@ fn typecheck_expr(
 
                 // a closures inherits its parent's generics
                 closure_func.generics = func.generics.clone();
-                closure_func.tipe = closure_func.tipe.make_colored(&func.generics);
-                closure_func.ret_type = closure_func.ret_type.make_colored(&func.generics);
+                closure_func.tipe = closure_func.tipe.commit_params(&func.generics);
+                closure_func.ret_type = closure_func.ret_type.commit_params(&func.generics);
                 closure_func
                     .args
                     .iter_mut()
-                    .for_each(|arg| arg.tipe = arg.tipe.make_colored(&func.generics));
+                    .for_each(|arg| arg.tipe = arg.tipe.commit_params(&func.generics));
 
                 let id = closure_func.id;
                 let tipe = closure_func.tipe.clone();

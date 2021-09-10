@@ -6,7 +6,7 @@
 
 use crate::compile::typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNode};
 use crate::compile::{CompileError, Lines};
-use crate::console::Color;
+use crate::console::{human_readable_index, Color};
 use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
 use crate::mavm::{Instruction, LabelId, Value};
 use crate::pos::{BytePos, Location};
@@ -167,8 +167,6 @@ impl Type {
         let mut base_type = self.clone();
 
         while let Type::Nominal(path, id, spec) = base_type.clone() {
-            //let spec = spec.into_iter().map(|tipe| tipe.rep(type_tree)).collect::<Result<Vec<_>, _>>()?;
-
             base_type = type_tree
                 .get(&(path.clone(), id))
                 .cloned()
@@ -177,16 +175,8 @@ impl Type {
                     vec![],
                 ))?
                 .0
-                .make_specific(&spec);
+                .make_specific(&spec)?;
         }
-
-        /*base_type.replace(&mut |tipe: &mut Type| {
-            if let Type::Nominal(_, _, spec) = &tipe {
-                let replaced = tipe.make_specific(&spec);
-                *tipe = replaced;
-            }
-        });*/
-
         Ok(base_type)
     }
 
@@ -316,17 +306,29 @@ impl Type {
     }
 
     /// Makes a specific version of this type, where the nominals listed are specialized.
-    pub fn make_specific(&self, specialization: &Vec<Type>) -> Self {
+    pub fn make_specific(&self, specialization: &Vec<Type>) -> Result<Self, CompileError> {
         let mut tipe = self.clone();
+        let mut failure = None;
         tipe.replace(&mut |tipe| {
             if let Type::GenericSlot(slot) = tipe {
                 match specialization.get(*slot) {
                     Some(specific) => *tipe = specific.clone(),
-                    None => panic!("There's a parameter not covered by this specialization"),
+                    None => failure = Some(*slot),
                 }
             }
         });
-        tipe
+        match failure {
+            Some(slot) => Err(CompileError::new(
+                "Generics error",
+                format!(
+                    "Specialization {} is missing its {} type.",
+                    Color::red("<1st, 2nd, ...>"),
+                    Color::red(human_readable_index(slot + 1))
+                ),
+                vec![],
+            )),
+            None => Ok(tipe),
+        }
     }
 
     /// Makes a generic version of this type, where the nominals listed are generalized.
@@ -348,8 +350,19 @@ impl Type {
         tipe
     }
 
-    /// Makes a generic version of this type, where the nominals listed are generalized.
-    pub fn make_colored(&self, generalization: &Vec<StringId>) -> Self {
+    /// Converts all slots to immutable generics. This ensures they are never changed again at call sites.
+    pub fn commit_generic_slots(&self) -> Self {
+        let mut tipe = self.clone();
+        tipe.replace(&mut |tipe| {
+            if let Type::GenericSlot(slot) = tipe {
+                *tipe = Type::Generic(*slot);
+            }
+        });
+        tipe
+    }
+
+    /// Converts all named params to immutable generics. This ensures they are never changed again at call sites.
+    pub fn commit_params(&self, generalization: &Vec<StringId>) -> Self {
         let slots = generalization
             .into_iter()
             .enumerate()
@@ -362,17 +375,6 @@ impl Type {
                 if let Some(slot) = slots.get(&id) {
                     *tipe = Type::Generic(*slot);
                 }
-            }
-        });
-        tipe
-    }
-
-    /// Converts all slots to immutable generics. This ensures they are never changed again at call sites.
-    pub fn commit_generic_slots(&self) -> Self {
-        let mut tipe = self.clone();
-        tipe.replace(&mut |tipe| {
-            if let Type::GenericSlot(slot) = tipe {
-                *tipe = Type::Generic(*slot);
             }
         });
         tipe
