@@ -1,4 +1,6 @@
-
+/*
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
+ */
 
 type tupfunc<I> = func(I) -> (I, I);
 

@@ -1,6 +1,8 @@
+#
+# Copyright 2020, Offchain Labs, Inc. All rights reserved.
+#
 
 # Add your mexe as an output file
-
 generics_files = basic simple nested func closure colorful
 generics_outputs = $(patsubst %,generics/%, $(generics_files))
 

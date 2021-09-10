@@ -1,4 +1,6 @@
-
+/*
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
+ */
 
 type simple<T, W> = (T, T, W, string, W);           // (p0, p0, p1, string, p1)
 

@@ -1,3 +1,6 @@
+/*
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
+ */
 
 type base<A>    = A;
 type tupe<S, U> = (S, U);
