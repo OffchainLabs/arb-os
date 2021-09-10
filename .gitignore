@@ -45,6 +45,7 @@ perf.data
 .make/
 arb_os/bridge_arbos_versions.mini
 arb_os/arbos-upgrade-base.mexe
+looptest/upgrade2_base.mexe
 
 # user files
 rachel/
