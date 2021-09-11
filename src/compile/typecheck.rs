@@ -1187,43 +1187,6 @@ impl TypeCheckedExpr {
             TypeCheckedExprKind::Loop(..) => Type::Every,
         }
     }
-
-    /// Extracts the type returned from the expression.
-    pub fn get_type_mut(&mut self) -> Option<&mut Type> {
-        Some(match &mut self.kind {
-            TypeCheckedExprKind::UnaryOp(_, _, t) => t,
-            TypeCheckedExprKind::Binary(_, _, _, t) => t,
-            TypeCheckedExprKind::Trinary(_, _, _, _, t) => t,
-            TypeCheckedExprKind::LocalVariableRef(.., t) => t,
-            TypeCheckedExprKind::GlobalVariableRef(.., t) => t,
-            TypeCheckedExprKind::FuncRef(.., t) => t,
-            TypeCheckedExprKind::TupleRef(.., t) => t,
-            TypeCheckedExprKind::DotRef(.., t) => t,
-            TypeCheckedExprKind::Const(.., t) => t,
-            TypeCheckedExprKind::FunctionCall(.., t, _) => t,
-            TypeCheckedExprKind::StructInitializer(.., t) => t,
-            TypeCheckedExprKind::ArrayRef(.., t) => t,
-            TypeCheckedExprKind::FixedArrayRef(.., t) => t,
-            TypeCheckedExprKind::MapRef(.., t) => t,
-            TypeCheckedExprKind::ClosureLoad(.., t) => t,
-            TypeCheckedExprKind::Tuple(.., t) => t,
-            TypeCheckedExprKind::NewArray(.., t) => t,
-            TypeCheckedExprKind::NewFixedArray(.., t) => t,
-            TypeCheckedExprKind::NewMap(t) => t,
-            TypeCheckedExprKind::ArrayMod(.., t) => t,
-            TypeCheckedExprKind::FixedArrayMod(.., t) => t,
-            TypeCheckedExprKind::MapMod(.., t) => t,
-            TypeCheckedExprKind::StructMod(.., t) => t,
-            TypeCheckedExprKind::Cast(.., t) => t,
-            TypeCheckedExprKind::Asm(t, ..) => t,
-            TypeCheckedExprKind::Try(.., t) => t,
-            TypeCheckedExprKind::If(.., t) => t,
-            TypeCheckedExprKind::IfLet(.., t) => t,
-            TypeCheckedExprKind::Variant(sub) => return sub.get_type_mut(), // be careful with these,
-            TypeCheckedExprKind::CodeBlock(block) => return block.get_type_mut(), // they are to options
-            _ => return None,
-        })
-    }
 }
 
 type TypeCheckedFieldInitializer = FieldInitializer<TypeCheckedExpr>;
@@ -2257,15 +2220,54 @@ fn typecheck_expr(
                     scopes,
                 )?)))
             }
-            ExprKind::VariableRef(id) => {
+            ExprKind::VariableRef(id, spec) => {
                 if let Some(tipe) = func_table.get(id) {
-                    let tipe = tipe.rep(type_tree)?;
+                    let template_type = tipe.rep(type_tree)?;
+                    let num_generic_params = tipe.count_generic_slots();
+
+                    if spec.len() != num_generic_params {
+                        return Err(CompileError::new(
+                            "Generics error",
+                            format!(
+                                "Func {} has {} generic args but was passed {}",
+                                Color::red(string_table.name_from_id(*id)),
+                                Color::red(num_generic_params),
+                                Color::red(spec.len()),
+                            ),
+                            debug_info.locs(),
+                        ));
+                    }
+
+                    let tipe = template_type.make_specific(spec)?;
                     Ok(TypeCheckedExprKind::FuncRef(*id, tipe))
                 } else if let Some(tipe) = type_table.get(id) {
+                    if !spec.is_empty() {
+                        return Err(CompileError::new(
+                            "Generics error",
+                            format!(
+                                "Variable {} doesn't need specialization",
+                                Color::red(string_table.name_from_id(*id)),
+                            ),
+                            debug_info.locs(),
+                        ));
+                    }
+
                     let tipe = tipe.rep(type_tree)?;
                     Ok(TypeCheckedExprKind::LocalVariableRef(*id, tipe))
                 } else if let Some(tipe) = global_vars.get(id) {
                     let tipe = tipe.rep(type_tree)?;
+
+                    if !spec.is_empty() {
+                        return Err(CompileError::new(
+                            "Generics error",
+                            format!(
+                                "Global variable {} doesn't need specialization",
+                                Color::red(string_table.name_from_id(*id)),
+                            ),
+                            debug_info.locs(),
+                        ));
+                    }
+
                     Ok(TypeCheckedExprKind::GlobalVariableRef(*id, tipe))
                 } else {
                     Err(CompileError::new_type_error(
@@ -2372,8 +2374,8 @@ fn typecheck_expr(
                 Constant::Option(o) => TypeCheckedExprKind::Const(o.value(), o.type_of()),
                 Constant::Null => TypeCheckedExprKind::Const(Value::none(), Type::Any),
             }),
-            ExprKind::FunctionCall(expr, args, spec) => {
-                let mut expr = typecheck_expr(
+            ExprKind::FunctionCall(expr, args) => {
+                let expr = typecheck_expr(
                     expr,
                     type_table,
                     global_vars,
@@ -2386,40 +2388,9 @@ fn typecheck_expr(
                     scopes,
                 )?;
 
-                let old_type = expr.get_type().rep(type_tree)?;
-                let num_generic_params = old_type.count_generic_slots();
+                let expr_type = expr.get_type().rep(type_tree)?;
 
-                if spec.len() != num_generic_params {
-                    return Err(CompileError::new(
-                        "Generics error",
-                        format!(
-                            "Func has {} generic args but was passed {}",
-                            Color::red(num_generic_params),
-                            Color::red(spec.len()),
-                        ),
-                        debug_info.locs(),
-                    ));
-                }
-
-                match expr.get_type_mut() {
-                    Some(tipe) => {
-                        *tipe = tipe
-                            .rep(type_tree)?
-                            .make_specific(spec)?
-                            .commit_params(&func.generics);
-                    }
-                    None => {
-                        return Err(CompileError::new_type_error(
-                            format!(
-                                "tried to call a {}, which is not a function",
-                                Color::red(old_type.print(type_tree)),
-                            ),
-                            debug_info.locs(),
-                        ));
-                    }
-                }
-
-                match expr.get_type().rep(type_tree)? {
+                match expr_type.clone() {
                     Type::Func(prop, arg_types, ret_type) => {
                         if args.len() == arg_types.len() {
                             let mut tc_args = Vec::new();
@@ -2439,7 +2410,6 @@ fn typecheck_expr(
                                 tc_args.push(tc_arg);
 
                                 let resolved_arg_type = arg_types[i].clone();
-                                //let resolved_arg_type = resolved_arg_type.make_generic(&func.generics);
 
                                 if !resolved_arg_type.assignable(
                                     &tc_args[i].get_type().rep(type_tree)?,
@@ -2472,7 +2442,7 @@ fn typecheck_expr(
                     _ => Err(CompileError::new_type_error(
                         format!(
                             "tried to call a {}, which is not a function",
-                            Color::red(old_type.print(type_tree))
+                            Color::red(expr_type.print(type_tree))
                         ),
                         debug_info.locs(),
                     )),
@@ -2495,12 +2465,6 @@ fn typecheck_expr(
 
                 // a closures inherits its parent's generics
                 closure_func.generics = func.generics.clone();
-                closure_func.tipe = closure_func.tipe.commit_params(&func.generics);
-                closure_func.ret_type = closure_func.ret_type.commit_params(&func.generics);
-                closure_func
-                    .args
-                    .iter_mut()
-                    .for_each(|arg| arg.tipe = arg.tipe.commit_params(&func.generics));
 
                 let id = closure_func.id;
                 let tipe = closure_func.tipe.clone();
@@ -4371,12 +4335,6 @@ impl TypeCheckedCodeBlock {
             .clone()
             .map(|r| r.get_type())
             .unwrap_or(Type::Void)
-    }
-    pub fn get_type_mut(&mut self) -> Option<&mut Type> {
-        match &mut self.ret_expr {
-            Some(expr) => expr.get_type_mut(),
-            None => None,
-        }
     }
 }
 

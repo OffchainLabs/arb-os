@@ -21,9 +21,7 @@ public func array_new<T>(size: uint, base_val: T) -> array<T> {
         size: size,
         topstep: chunk,
         contents: newfixedarray(8, base_val),
-        access: closure(arr: array<T>, index: uint) -> T {
-            return array_get::<T>(arr, index);
-        },
+        access: array_get::<T>,
     };
 }
 

@@ -9,7 +9,7 @@ use std2::priorityq::priorityq_get;
 
 
 write func main() {
-	asm(tests().1) { log };
+    asm(tests().1) { log };
 }
 
 func tests() -> string {

@@ -26,7 +26,6 @@ use std::io::{self, Read};
 use std::path::Path;
 use typecheck::TypeCheckedFunc;
 
-
 pub use ast::{DebugInfo, GlobalVar, StructField, TopLevelDecl, Type, TypeTree};
 pub use source::Lines;
 use std::str::FromStr;

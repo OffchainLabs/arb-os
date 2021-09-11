@@ -362,25 +362,6 @@ impl Type {
         tipe
     }
 
-    /// Converts all named params to immutable generics. This ensures they are never changed again at call sites.
-    pub fn commit_params(&self, generalization: &Vec<StringId>) -> Self {
-        let slots = generalization
-            .into_iter()
-            .enumerate()
-            .map(|(index, id)| (*id, index))
-            .collect::<HashMap<_, _>>();
-
-        let mut tipe = self.clone();
-        tipe.replace(&mut |tipe| {
-            if let Type::Nominal(_, id, _) = tipe {
-                if let Some(slot) = slots.get(&id) {
-                    *tipe = Type::Generic(*slot);
-                }
-            }
-        });
-        tipe
-    }
-
     /// If self is a Struct, and name is the StringID of a field of self, then returns Some(n), where
     /// n is the index of the field of self whose ID matches name.  Otherwise returns None.
     pub fn get_struct_slot_by_name(&self, name: String) -> Option<usize> {
@@ -1851,12 +1832,12 @@ pub enum ExprKind {
     Trinary(TrinaryOp, Box<Expr>, Box<Expr>, Box<Expr>),
     ShortcutOr(Box<Expr>, Box<Expr>),
     ShortcutAnd(Box<Expr>, Box<Expr>),
-    VariableRef(StringId),
+    VariableRef(StringId, Vec<Type>),
     TupleRef(Box<Expr>, Uint256),
     DotRef(Box<Expr>, String),
     Constant(Constant),
     OptionInitializer(Box<Expr>),
-    FunctionCall(Box<Expr>, Vec<Expr>, Vec<Type>),
+    FunctionCall(Box<Expr>, Vec<Expr>),
     CodeBlock(CodeBlock),
     ArrayOrMapRef(Box<Expr>, Box<Expr>),
     StructInitializer(Vec<FieldInitializer>),

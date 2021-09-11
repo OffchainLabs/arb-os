@@ -248,7 +248,7 @@ StatementKind: StatementKind = {
         
         // the withs we assign at the end
         let mut withs = Expr {
-            kind: ExprKind::VariableRef(i),
+            kind: ExprKind::VariableRef(i, vec![]),
             debug_info: debug_info,
         };
         
@@ -261,7 +261,7 @@ StatementKind: StatementKind = {
         // a nested set of sub-value identifier ops that lets us build up nodes for those like a.b.c by going through
         // each of those for a, a.b, a.b.c, etc
         let mut nest = Expr {
-            kind: ExprKind::VariableRef(i),
+            kind: ExprKind::VariableRef(i, vec![]),
             debug_info: debug_info,
         };
         
@@ -474,13 +474,11 @@ Expr10: Expr = {
 Expr11: Expr = {
     <lno: @L> <c: Const> => Expr { kind: ExprKind::Constant(c), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
     <lno: @L> "Some(" <e: Expr> ")" => Expr { kind: ExprKind::OptionInitializer(Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
-    <lno: @L> <callable: Expr11> <s:("::" <Specialization>)?> "(" <e: Expr> ")" => {
-        let spec = s.into_iter().flatten().collect();
-        Expr::lno(ExprKind::FunctionCall(Box::new(callable), vec![e], spec), file_info, lno, filename)
+    <lno: @L> <callable: Expr11> "(" <e: Expr> ")" => {
+        Expr::lno(ExprKind::FunctionCall(Box::new(callable), vec![e]), file_info, lno, filename)
     },
-    <lno: @L> <callable: Expr11> <s:("::" <Specialization>)?> "(" <c: CommaedExprs?> ")" => {
-        let spec = s.into_iter().flatten().collect();
-        Expr::lno(ExprKind::FunctionCall(Box::new(callable), c.unwrap_or(vec![]), spec), file_info, lno, filename)
+    <lno: @L> <callable: Expr11> "(" <c: CommaedExprs?> ")" => {
+        Expr::lno(ExprKind::FunctionCall(Box::new(callable), c.unwrap_or(vec![])), file_info, lno, filename)
     },
     <lno: @L> <e1:Expr11> "[" <e2:Expr> "]" => Expr {
         kind: ExprKind::ArrayOrMapRef(Box::new(e1), Box::new(e2)),
@@ -564,7 +562,10 @@ Expr13: Expr = {
         <lno: @L> "error" => Expr { kind: ExprKind::Error, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
         <lno: @L> "getGas" "(" ")" => Expr { kind: ExprKind::GetGas, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
         <lno: @L> "setGas" "(" <e:Expr> ")" => Expr { kind: ExprKind::SetGas(Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
-    <lno: @L> <i: Ident> => Expr::lno(ExprKind::VariableRef(i), file_info, lno, filename),
+    <lno: @L> <i: Ident> <s:("::" <Specialization>)?> => {
+        let spec = s.into_iter().flatten().collect();
+        Expr::lno(ExprKind::VariableRef(i, spec), file_info, lno, filename)
+    },
     <lno: @L> <q: QuoteString> => Expr::lno(ExprKind::Quote(q), file_info, lno, filename),
 }
 
