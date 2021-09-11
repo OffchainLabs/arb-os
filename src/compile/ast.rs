@@ -909,7 +909,7 @@ impl Type {
         type_tree: &TypeTree,
         string_table: &StringTable,
     ) -> Result<Type, CompileError> {
-        let mut elf = self.clone();
+        let mut new_self = self.clone();
         let mut has_error = Rc::new(RefCell::new(false));
         if let Type::Variable(_, id) = self {
             return type_args.get(id).cloned().ok_or_else(|| {
@@ -920,7 +920,7 @@ impl Type {
                 )
             });
         }
-        elf.recursive_apply(
+        new_self.recursive_apply(
             |val, _a, b| {
                 match val {
                     TypeCheckedNode::Type(t) => match t {
@@ -949,7 +949,7 @@ impl Type {
                 vec![],
             ));
         }
-        Ok(elf)
+        Ok(new_self)
     }
 
     pub fn consistent_over_args(
@@ -958,28 +958,66 @@ impl Type {
         type_tree: &TypeTree,
         string_table: &StringTable,
     ) -> Result<(), CompileError> {
-        let mut elf = self.clone();
-        let mut has_error = Rc::new(RefCell::new(false));
+        let mut new_self = self.clone();
+        let mut remaining_args = type_args.clone();
         if let Type::Variable(_, id) = self {
+            if type_args.len() > 1 {
+                remaining_args.remove(id);
+                return Err(CompileError::new(
+                    format!("Type Error"),
+                    format!("Unused type arguments \"{}\"", {
+                        let mut bad_id_string = String::new();
+                        for id in remaining_args.iter() {
+                            bad_id_string.push_str(&format!(
+                                "{}, ",
+                                Type::Variable(vec![], *id).display(type_tree, string_table)
+                            ))
+                        }
+                        bad_id_string.pop();
+                        bad_id_string.pop();
+                        bad_id_string
+                    }),
+                    vec![],
+                ));
+            };
             return type_args.get(id).map(|_| ()).ok_or_else(|| {
                 CompileError::new(
-                    format!("Variable args mismatch"),
-                    format!("failed consistency check"),
+                    format!("Type Error"),
+                    format!(
+                        "Variable {} failed consistency check, not in vars list",
+                        string_table.name_from_id(*id)
+                    ),
                     vec![],
                 )
             });
         }
 
-        elf.recursive_apply(
-            |val, _a, b| {
+        let mut has_error = (
+            Rc::new(RefCell::<Option<Vec<usize>>>::new(None)),
+            Rc::new(RefCell::new(remaining_args)),
+        );
+
+        new_self.recursive_apply(
+            |val, _a, (b, c)| {
                 match val {
                     TypeCheckedNode::Type(t) => match t {
-                        Type::Variable(_, id) => match type_args.get(id) {
-                            Some(_) => {}
-                            None => {
-                                *b.borrow_mut() = true;
+                        Type::Variable(_, id) => {
+                            c.borrow_mut().remove(id);
+                            match type_args.get(id) {
+                                Some(_) => {}
+                                None => {
+                                    let mut check = false;
+                                    if let Some(ids) = &mut *b.borrow_mut() {
+                                        ids.push(*id)
+                                    } else {
+                                        check = true;
+                                    }
+                                    if check {
+                                        *b.borrow_mut() = Some(vec![*id]);
+                                    }
+                                }
                             }
-                        },
+                        }
                         _ => {}
                     },
                     _ => {}
@@ -989,13 +1027,40 @@ impl Type {
             &(),
             &mut has_error,
         );
-        if *has_error.borrow_mut() {
+        if let Some(bad_ids) = &*has_error.0.borrow_mut() {
             return Err(CompileError::new(
                 "Type Error".to_string(),
                 format!(
-                    "Type \"{}\" failed consistency check",
-                    self.display(type_tree, string_table)
+                    "Type \"{}\" failed consistency check, no variable(s) \"{}\" in type variables list",
+                    self.display(type_tree, string_table),
+                    {
+                        let mut bad_id_string = String::new();
+                        for id in bad_ids {
+                            bad_id_string.push_str(&format!("{}, ", Type::Variable(vec![], *id).display(type_tree, string_table)))
+                        }
+                        bad_id_string.pop();
+                        bad_id_string.pop();
+                        bad_id_string
+                    }
                 ),
+                vec![],
+            ));
+        }
+        if has_error.1.borrow().len() > 0 {
+            return Err(CompileError::new(
+                format!("Type Error"),
+                format!("Unused type arguments \"{}\"", {
+                    let mut bad_id_string = String::new();
+                    for id in has_error.1.borrow().iter() {
+                        bad_id_string.push_str(&format!(
+                            "{}, ",
+                            Type::Variable(vec![], *id).display(type_tree, string_table)
+                        ))
+                    }
+                    bad_id_string.pop();
+                    bad_id_string.pop();
+                    bad_id_string
+                }),
                 vec![],
             ));
         }
