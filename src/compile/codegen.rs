@@ -108,7 +108,7 @@ pub fn mavm_codegen_func(
             return Err(CompileError::new_codegen_error(
                 format!(
                     "type checking bug: func with non-func type {}",
-                    Color::red(wrong.display())
+                    Color::red(wrong.display_zero())
                 ),
                 debug_info.location,
             ))
@@ -954,7 +954,7 @@ fn mavm_codegen_expr(
                 return Err(CompileError::new_codegen_error(
                     format!(
                         "type-checking bug: tuple lookup in non-tuple type {}",
-                        Color::red(tce_type.display())
+                        Color::red(tce_type.display_zero())
                     ),
                     loc,
                 ));

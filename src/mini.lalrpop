@@ -313,6 +313,7 @@ Type: Type = {
         Type::Func(FuncProperties::new(view, write, true, false), a, Box::new(r.unwrap_or(Type::Void)))
     },
  	"*" <Ident> => Type::Variable(current_path.to_owned(), <>),
+ 	<i: Ident> "<" <t1: CommaedTypes> ">" => Type::Generic(i, t1),
     Ident => Type::Nominal(current_path.to_owned(), <>),
 };
 

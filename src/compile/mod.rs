@@ -813,7 +813,7 @@ fn resolve_imports(
                     x => panic!(
                         "Func {} somehow has non-func type {}",
                         import.name,
-                        x.display()
+                        x.display_zero()
                     ),
                 };
 

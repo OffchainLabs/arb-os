@@ -258,7 +258,7 @@ fn write_subtypes(
                     } else {
                         return Err(GenCodeError::new(format!(
                             "Encountered non nominal type in subtypes list: \"{}\"",
-                            subtype.display()
+                            subtype.display_zero()
                         )));
                     }
                 }

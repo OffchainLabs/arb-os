@@ -15,8 +15,6 @@ use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::fmt;
-use std::fmt::Formatter;
 use std::rc::Rc;
 
 /// This is a map of the types at a given location, with the Vec<String> representing the module path
@@ -130,6 +128,7 @@ pub enum Type {
     Struct(Vec<StructField>),
     Variable(Vec<String>, StringId),
     Nominal(Vec<String>, StringId),
+    Generic(StringId, Vec<Type>),
     Func(FuncProperties, Vec<Type>, Box<Type>),
     Map(Box<Type>, Box<Type>),
     Any,
@@ -152,7 +151,7 @@ impl AbstractSyntaxTree for Type {
             | Type::Every
             | Type::Nominal(_, _)
             | Type::Variable(_, _) => vec![],
-            Type::Tuple(types) | Type::Union(types) => {
+            Type::Tuple(types) | Type::Union(types) | Type::Generic(_, types) => {
                 types.iter_mut().map(|t| TypeCheckedNode::Type(t)).collect()
             }
             Type::Array(tipe) | Type::FixedArray(tipe, _) | Type::Option(tipe) => {
@@ -315,6 +314,18 @@ impl Type {
                     false
                 }
             }
+            Type::Generic(id, args) => {
+                if let Type::Generic(id2, args2) = rhs {
+                    id == id2
+                        && args.len() == args2.len()
+                        && args.iter().zip(args2.iter()).all(|(left, right)| {
+                            left.assignable(right, type_tree, seen.clone())
+                                && right.assignable(left, type_tree, seen.clone())
+                        })
+                } else {
+                    false
+                }
+            }
             Type::Func(_, args, ret) => {
                 if let Type::Func(_, args2, ret2) = rhs {
                     //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
@@ -419,6 +430,18 @@ impl Type {
                     false
                 }
             }
+            Type::Generic(id, args) => {
+                if let Type::Generic(id2, args2) = rhs {
+                    id == id2
+                        && args.len() == args2.len()
+                        && args.iter().zip(args2.iter()).all(|(left, right)| {
+                            left.assignable(right, type_tree, seen.clone())
+                                && right.assignable(left, type_tree, seen.clone())
+                        })
+                } else {
+                    false
+                }
+            }
             Type::Func(prop, args, ret) => {
                 if let Type::Func(prop2, args2, ret2) = rhs {
                     //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
@@ -481,8 +504,11 @@ impl Type {
             | Type::Bytes32
             | Type::EthAddress
             | Type::Buffer
-            | Type::Every
-            | Type::Variable(_, _) => (self == rhs),
+            | Type::Every => (self == rhs),
+            Type::Variable(left, right) => {
+                println!("{:?}>>:>{}", left, right);
+                unimplemented!()
+            }
             Type::Tuple(tvec) => {
                 if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
                     type_vectors_assignable(tvec, &tvec2, type_tree, seen)
@@ -521,6 +547,18 @@ impl Type {
                     } else {
                         true
                     }
+                } else {
+                    false
+                }
+            }
+            Type::Generic(id, args) => {
+                if let Type::Generic(id2, args2) = rhs {
+                    id == id2
+                        && args.len() == args2.len()
+                        && args.iter().zip(args2.iter()).all(|(left, right)| {
+                            left.assignable(right, type_tree, seen.clone())
+                                && right.assignable(left, type_tree, seen.clone())
+                        })
                 } else {
                     false
                 }
@@ -611,6 +649,25 @@ impl Type {
                         return Some(TypeMismatch::TupleLength(tvec.len(), tvec2.len()));
                     }
                     None
+                } else {
+                    Some(TypeMismatch::Type(self.clone(), rhs.clone()))
+                }
+            }
+            Type::Generic(id, types) => {
+                if let Type::Generic(rid, rtypes) = rhs {
+                    if id != rid {
+                        Some(TypeMismatch::GenericName(*id, *rid))
+                    } else if types.len() != rtypes.len() {
+                        Some(TypeMismatch::GenericLength(types.len(), rtypes.len()))
+                    } else {
+                        types.iter().zip(rtypes.iter()).enumerate().find_map(
+                            |(index, (left, right))| {
+                                left.first_mismatch(right, type_tree, seen.clone()).map(
+                                    |mismatch| TypeMismatch::GenericVar(index, Box::new(mismatch)),
+                                )
+                            },
+                        )
+                    }
                 } else {
                     Some(TypeMismatch::Type(self.clone(), rhs.clone()))
                 }
@@ -736,7 +793,12 @@ impl Type {
         }
     }
 
-    pub fn mismatch_string(&self, rhs: &Type, type_tree: &TypeTree) -> Option<String> {
+    pub fn mismatch_string(
+        &self,
+        rhs: &Type,
+        type_tree: &TypeTree,
+        string_table: &StringTable,
+    ) -> Option<String> {
         let (left, right) = (
             &self.get_representation(type_tree).ok()?,
             &rhs.get_representation(type_tree).ok()?,
@@ -769,13 +831,13 @@ impl Type {
                                 | Type::Every => String::new(),
                                 _ => format!(
                                     "\nleft: {}\nright: {}\nFirst mismatch: ",
-                                    Color::red(left.print(type_tree)),
-                                    Color::red(right.print(type_tree)),
+                                    Color::red(left.display(type_tree, string_table)),
+                                    Color::red(right.display(type_tree, string_table)),
                                 ),
                             },
                         }
                     },
-                    mismatch
+                    mismatch.display(type_tree, string_table)
                 )
             })
     }
@@ -831,7 +893,9 @@ impl Type {
                 }
                 (value_from_field_list(vals), is_safe)
             }
-            Type::Map(_, _) | Type::Func(_, _, _) | Type::Nominal(_, _) => (Value::none(), false),
+            Type::Map(_, _) | Type::Func(_, _, _) | Type::Nominal(_, _) | Type::Generic(_, _) => {
+                (Value::none(), false)
+            }
             Type::Any => (Value::none(), true),
             Type::Every => (Value::none(), false),
             Type::Variable(_, _) => (Value::none(), false),
@@ -880,7 +944,7 @@ impl Type {
                 "Type Error".to_string(),
                 format!(
                     "Failed to resolve type variable in: {}",
-                    self.display_generics(type_tree, string_table)
+                    self.display(type_tree, string_table)
                 ),
                 vec![],
             ));
@@ -891,8 +955,8 @@ impl Type {
     pub fn consistent_over_args(
         &self,
         type_args: &BTreeSet<StringId>,
-        _type_tree: &TypeTree,
-        _string_table: &StringTable,
+        type_tree: &TypeTree,
+        string_table: &StringTable,
     ) -> Result<(), CompileError> {
         let mut elf = self.clone();
         let mut has_error = Rc::new(RefCell::new(false));
@@ -928,25 +992,23 @@ impl Type {
         if *has_error.borrow_mut() {
             return Err(CompileError::new(
                 "Type Error".to_string(),
-                format!("Type \"{}\" failed consistency check", self.display()),
+                format!(
+                    "Type \"{}\" failed consistency check",
+                    self.display(type_tree, string_table)
+                ),
                 vec![],
             ));
         }
         Ok(())
     }
 
-    pub fn display(&self) -> String {
-        self.display_indented(0, "::", None, false, &TypeTree::new(), &StringTable::new())
-            .0
-    }
-
-    pub fn display_generics(&self, type_tree: &TypeTree, string_table: &StringTable) -> String {
+    pub fn display(&self, type_tree: &TypeTree, string_table: &StringTable) -> String {
         self.display_indented(0, "::", None, false, type_tree, string_table)
             .0
     }
 
-    pub fn print(&self, type_tree: &TypeTree) -> String {
-        self.display_indented(0, "::", None, false, type_tree, &StringTable::new())
+    pub fn display_zero(&self) -> String {
+        self.display_indented(0, "::", None, false, &HashMap::new(), &StringTable::new())
             .0
     }
 
@@ -1085,6 +1147,41 @@ impl Type {
                         .unwrap_or_else(|| "bad".to_string()),
                 ));
                 (out, type_set)
+            }
+            Type::Generic(id, targs) => {
+                let arg_displays = targs
+                    .iter()
+                    .map(|tipe| {
+                        tipe.display_indented(
+                            indent_level,
+                            separator,
+                            prefix,
+                            include_pathname,
+                            type_tree,
+                            string_table,
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                let mut arg_display = String::new();
+                let mut args_subtypes = HashSet::new();
+                for (name, subtypes) in arg_displays {
+                    arg_display.push_str(&name);
+                    arg_display.push_str(", ");
+                    args_subtypes.extend(subtypes)
+                }
+                //remove trailing comma
+                arg_display.pop();
+                arg_display.pop();
+                (
+                    format!(
+                        "{}<{}>",
+                        string_table
+                            .try_name_from_id(*id)
+                            .unwrap_or(&format!("Unknown generic, ID: {}", id)),
+                        arg_display
+                    ),
+                    type_set,
+                )
             }
             Type::Func(prop, args, ret) => {
                 let mut out = String::new();
@@ -1316,6 +1413,7 @@ impl PartialEq for Type {
                 (p1 == p2) && type_vectors_equal(&a1, &a2) && (*r1 == *r2)
             }
             (Type::Nominal(p1, id1), Type::Nominal(p2, id2)) => (p1, id1) == (p2, id2),
+            (Type::Generic(id1, vars1), Type::Generic(id2, vars2)) => (id1, vars1) == (id2, vars2),
             (Type::Option(x), Type::Option(y)) => *x == *y,
             (Type::Variable(rpath, rid), Type::Variable(lpath, lid)) => {
                 rpath == lpath && rid == lid
@@ -1359,77 +1457,126 @@ pub enum TypeMismatch {
     Option(Box<TypeMismatch>),
     Union(usize, Box<TypeMismatch>),
     UnionLength(usize, usize),
+    GenericName(StringId, StringId),
+    GenericVar(usize, Box<TypeMismatch>),
+    GenericLength(usize, usize),
     View,
     Write,
 }
 
-impl fmt::Display for TypeMismatch {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                TypeMismatch::Type(left, right) =>
-                    format!("expected {} got {}", left.display(), right.display()),
-                TypeMismatch::FieldType(name, problem) =>
-                    format!("in field \"{}\": {}", name, problem),
-                TypeMismatch::FieldName(left, right) =>
-                    format!("expected field name \"{}\", got \"{}\"", left, right),
-                TypeMismatch::UnresolvedRight(tipe) =>
-                    format!("could not resolve right-hand type \"{}\"", tipe.display()),
-                TypeMismatch::UnresolvedLeft(tipe) =>
-                    format!("could not resolve left-hand type \"{}\"", tipe.display()),
-                TypeMismatch::UnresolvedBoth(left, right) => format!(
-                    "could not resolve both right hand type \"{}\" and left hand type\"{}\"",
-                    left.display(),
-                    right.display()
-                ),
-                TypeMismatch::Length(left, right) => format!(
-                    "structs of different lengths: expected length {} got length {}",
-                    left, right
-                ),
-                TypeMismatch::ArrayLength(left, right) => format!(
-                    "arrays of different lengths: expected length {} got length {}",
-                    left, right
-                ),
-                TypeMismatch::ArrayMismatch(mismatch) =>
-                    format!("inner array type mismatch {}", mismatch),
-                TypeMismatch::Tuple(index, mismatch) =>
-                    format!("in tuple field {}: {}", index + 1, mismatch),
-                TypeMismatch::TupleLength(left, right) => format!(
-                    "tuples of different lengths: expected length {} got length {}",
-                    left, right
-                ),
-                TypeMismatch::FuncArg(index, mismatch) =>
-                    format!("in function argument {}: {}", index + 1, mismatch),
-                TypeMismatch::FuncArgLength(left, right) => format!(
-                    "left func has {} args but right func has {} args",
-                    left, right
-                ),
-                TypeMismatch::FuncReturn(mismatch) =>
-                    format!("in function return type: {}", mismatch),
-                TypeMismatch::Map { is_key, inner } => format!(
-                    "in map {}: {}",
-                    if *is_key { "key" } else { "value" },
-                    inner
-                ),
-                TypeMismatch::Option(mismatch) => format!("in inner option type: {}", mismatch),
-                TypeMismatch::Union(index, mismatch) =>
-                    format!("In type {} of union: {}", index + 1, mismatch),
-                TypeMismatch::UnionLength(left, right) => format!(
-                    "left func has {} args but right func has {} args",
-                    left, right
-                ),
-                TypeMismatch::View => format!(
-                    "assigning {} function to non-view function",
-                    Color::red("view")
-                ),
-                TypeMismatch::Write => format!(
-                    "assigning {} function to non-view function",
-                    Color::red("write")
-                ),
+impl TypeMismatch {
+    fn display(&self, type_tree: &TypeTree, string_table: &StringTable) -> String {
+        match self {
+            TypeMismatch::Type(left, right) => format!(
+                "expected {} got {}",
+                left.display(type_tree, string_table),
+                right.display(type_tree, string_table)
+            ),
+            TypeMismatch::FieldType(name, problem) => format!(
+                "in field \"{}\": {}",
+                name,
+                problem.display(type_tree, string_table)
+            ),
+            TypeMismatch::FieldName(left, right) => {
+                format!("expected field name \"{}\", got \"{}\"", left, right)
             }
-        )
+            TypeMismatch::UnresolvedRight(tipe) => format!(
+                "could not resolve right-hand type \"{}\"",
+                tipe.display(type_tree, string_table)
+            ),
+            TypeMismatch::UnresolvedLeft(tipe) => format!(
+                "could not resolve left-hand type \"{}\"",
+                tipe.display(type_tree, string_table)
+            ),
+            TypeMismatch::UnresolvedBoth(left, right) => format!(
+                "could not resolve both right hand type \"{}\" and left hand type\"{}\"",
+                left.display(type_tree, string_table),
+                right.display(type_tree, string_table)
+            ),
+            TypeMismatch::Length(left, right) => format!(
+                "structs of different lengths: expected length {} got length {}",
+                left, right
+            ),
+            TypeMismatch::ArrayLength(left, right) => format!(
+                "arrays of different lengths: expected length {} got length {}",
+                left, right
+            ),
+            TypeMismatch::ArrayMismatch(mismatch) => {
+                format!(
+                    "inner array type mismatch {}",
+                    mismatch.display(type_tree, string_table)
+                )
+            }
+            TypeMismatch::Tuple(index, mismatch) => {
+                format!(
+                    "in tuple field {}: {}",
+                    index + 1,
+                    mismatch.display(type_tree, string_table)
+                )
+            }
+            TypeMismatch::TupleLength(left, right) => format!(
+                "tuples of different lengths: expected length {} got length {}",
+                left, right
+            ),
+            TypeMismatch::FuncArg(index, mismatch) => {
+                format!(
+                    "in function argument {}: {}",
+                    index + 1,
+                    mismatch.display(type_tree, string_table)
+                )
+            }
+            TypeMismatch::FuncArgLength(left, right) => format!(
+                "left func has {} args but right func has {} args",
+                left, right
+            ),
+            TypeMismatch::FuncReturn(mismatch) => format!(
+                "in function return type: {}",
+                mismatch.display(type_tree, string_table)
+            ),
+            TypeMismatch::Map { is_key, inner } => format!(
+                "in map {}: {}",
+                if *is_key { "key" } else { "value" },
+                inner.display(type_tree, string_table)
+            ),
+            TypeMismatch::Option(mismatch) => format!(
+                "in inner option type: {}",
+                mismatch.display(type_tree, string_table)
+            ),
+            TypeMismatch::Union(index, mismatch) => {
+                format!(
+                    "In type {} of union: {}",
+                    index + 1,
+                    mismatch.display(type_tree, string_table)
+                )
+            }
+            TypeMismatch::UnionLength(left, right) => format!(
+                "left func has {} args but right func has {} args",
+                left, right
+            ),
+            TypeMismatch::GenericName(left, right) => format!(
+                "differently named generics left id: {} right id: {}",
+                left, right
+            ),
+            TypeMismatch::GenericVar(index, mismatch) => {
+                format!(
+                    "in generic variable {}: {}",
+                    index + 1,
+                    mismatch.display(type_tree, string_table)
+                )
+            }
+            TypeMismatch::GenericLength(left, right) => format!(
+                "left generics arg list has {} arguments but right has {}",
+                left, right
+            ),
+            TypeMismatch::View => format!(
+                "assigning {} function to non-view function",
+                Color::red("view")
+            ),
+            TypeMismatch::Write => format!(
+                "assigning {} function to non-view function",
+                Color::red("write")
+            ),
+        }
     }
 }
 
