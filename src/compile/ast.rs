@@ -635,12 +635,7 @@ impl Type {
             Type::Nominal(_, _, _) => {
                 if let (Ok(left), Ok(right)) = (self.rep(type_tree), rhs.rep(type_tree)) {
                     if seen.insert((left.clone(), right.clone())) {
-                        let result = left.assignable(&right, type_tree, seen.clone());
-                        if !result {
-                            dbg!(&left, &right);
-                            left.assignable(&right, type_tree, seen);
-                        }
-                        result
+                        left.assignable(&right, type_tree, seen.clone())
                     } else {
                         true
                     }
