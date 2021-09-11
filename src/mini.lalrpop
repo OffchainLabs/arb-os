@@ -564,7 +564,7 @@ Expr13: Expr = {
         <lno: @L> "error" => Expr { kind: ExprKind::Error, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
         <lno: @L> "getGas" "(" ")" => Expr { kind: ExprKind::GetGas, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
         <lno: @L> "setGas" "(" <e:Expr> ")" => Expr { kind: ExprKind::SetGas(Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
-	<lno: @L> <i: Ident> => Expr { kind: ExprKind::VariableRef(i), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+    <lno: @L> <i: Ident> => Expr::lno(ExprKind::VariableRef(i), file_info, lno, filename),
     <lno: @L> <q: QuoteString> => Expr::lno(ExprKind::Quote(q), file_info, lno, filename),
 }
 
@@ -623,7 +623,7 @@ IdentString: String = {
 };
 
 QuoteString: Vec<u8> = {
-    <lno: @L> <q: r#"s?"[a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~-]*""#> => {
+    <lno: @L> <q: r#"s?"[a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~\\/-]*""#> => {
         let re = Regex::new(r#"s?"(0x)?[a-fA-F0-9]+""#).unwrap();
         if re.is_match(q) {
             error_system.warnings.push(
@@ -637,7 +637,7 @@ QuoteString: Vec<u8> = {
                 )
             );
         }
-        let re = Regex::new(r#"s?"([a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~-]*)""#).unwrap();
+        let re = Regex::new(r#"s?"([a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~\\/-]*)""#).unwrap();
         let string = re.captures(q).unwrap().get(1).map_or(String::new(), |m| m.as_str().to_string());
         string.as_bytes().to_vec()
     },

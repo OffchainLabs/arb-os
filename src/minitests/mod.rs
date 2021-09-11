@@ -67,6 +67,7 @@ fn test_for_numeric_error_code(path: &Path) {
 #[test]
 fn test_arraytest() {
     test_for_error_string(Path::new("builtin/arraytest.mexe"));
+    test_for_error_string(Path::new("stdlib2/arraytest.mexe"));
 }
 
 #[test]
@@ -92,6 +93,7 @@ fn test_globaltest() {
 #[test]
 fn test_pqtest() {
     test_for_numeric_error_code(Path::new("stdlib/priorityqtest.mexe"));
+    test_for_error_string(Path::new("stdlib2/priorityqtest.mexe"));
 }
 
 #[test]

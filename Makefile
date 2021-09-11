@@ -11,15 +11,17 @@ upgrade_outputs = regcopy_new regcopy_old upgrade1_new upgrade1_old
 looptest_outputs = upgrade2_new upgrade2_old
 builtin_outputs = arraytest globaltest kvstest maptest
 stdlib_outputs = biguinttest blstest bytearraytest expandingIntArrayTest fixedpointtest keccaktest priorityqtest queuetest ripemd160test rlptest storageMapTest sha256test
+stdlib2_outputs = arraytest priorityqtest
 
 builtin_mexes = $(patsubst %,builtin/%.mexe, $(builtin_outputs))
 stdlib_mexes = $(patsubst %,stdlib/%.mexe, $(stdlib_outputs))
+stdlib2_mexes = $(patsubst %,stdlib2/%.mexe, $(stdlib2_outputs))
 minitest_mexes = $(patsubst %,minitests/%.mexe, $(minitest_outputs))
 upgrade_mexes = $(patsubst %,upgradetests/%.mexe, $(upgrade_outputs))
 looptest_mexes = $(patsubst %,looptest/%.mexe, $(looptest_outputs))
 
 libs_mexes = $(builtin_mexes) $(stdlib_mexes) $(minitest_mexes)
-test_mexes = $(builtin_mexes) $(stdlib_mexes) $(minitest_mexes) $(upgrade_mexes) $(looptest_mexes)
+test_mexes = $(builtin_mexes) $(stdlib_mexes) $(stdlib2_mexes) $(minitest_mexes) $(upgrade_mexes) $(looptest_mexes)
 
 target = ./target/release/mini
 
@@ -93,6 +95,9 @@ builtin/%.mexe: builtin/%.mini builtin/*.mini $(consts) .make/tools
 	$(compile) -c $(consts) $< -o $@ -t
 
 stdlib/%.mexe: stdlib/%.mini stdlib/*.mini builtin/*.mini $(consts) .make/tools
+	$(compile) -c $(consts) $< -o $@ -t
+
+stdlib2/%.mexe: stdlib2/%.mini stdlib2/*.mini builtin/*.mini $(consts) .make/tools
 	$(compile) -c $(consts) $< -o $@ -t
 
 minitests/%.mexe: minitests/%.mini minitests/*.mini stdlib/*.mini builtin/*.mini $(consts) .make/tools

@@ -26,6 +26,7 @@ use std::io::{self, Read};
 use std::path::Path;
 use typecheck::TypeCheckedFunc;
 
+
 pub use ast::{DebugInfo, GlobalVar, StructField, TopLevelDecl, Type, TypeTree};
 pub use source::Lines;
 use std::str::FromStr;
@@ -467,6 +468,8 @@ pub fn compile_from_file(
                         Some("core")
                     } else if res == Some("stdlib") {
                         Some("std")
+                    } else if res == Some("stdlib2") {
+                        Some("std2")
                     } else {
                         None
                     }
@@ -666,6 +669,8 @@ fn create_program_tree(
             path[0].clone()
         } else if path[0] == "std" {
             format!("../stdlib/{}", path[1])
+        } else if path[0] == "std2" {
+            format!("../stdlib2/{}", path[1])
         } else if path[0] == "core" {
             format!("../builtin/{}", path[1])
         } else {

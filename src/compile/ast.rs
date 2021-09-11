@@ -12,6 +12,7 @@ use crate::mavm::{Instruction, LabelId, Value};
 use crate::pos::{BytePos, Location};
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
+use derivative::Derivative;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap, HashSet};
 
@@ -1658,12 +1659,14 @@ impl Func {
 }
 
 /// The properties of a function or closure.
-#[derive(Debug, Clone, Copy, Eq, Serialize, Deserialize, Hash)]
+#[derive(Debug, Clone, Copy, Eq, Serialize, Deserialize, Derivative)]
+#[derivative(Hash)]
 pub struct FuncProperties {
     pub view: bool,
     pub write: bool,
     pub closure: bool,
     #[serde(default)]
+    #[derivative(Hash = "ignore")]
     pub public: bool,
 }
 
