@@ -504,11 +504,8 @@ impl Type {
             | Type::Bytes32
             | Type::EthAddress
             | Type::Buffer
-            | Type::Every => (self == rhs),
-            Type::Variable(left, right) => {
-                println!("{:?}>>:>{}", left, right);
-                unimplemented!()
-            }
+            | Type::Every
+            | Type::Variable(_, _) => (self == rhs),
             Type::Tuple(tvec) => {
                 if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
                     type_vectors_assignable(tvec, &tvec2, type_tree, seen)
@@ -908,9 +905,14 @@ impl Type {
         type_args: &BTreeMap<StringId, Type>,
         type_tree: &TypeTree,
         string_table: &StringTable,
+        debug_info: &DebugInfo,
     ) -> Result<Type, CompileError> {
         let mut new_self = self.clone();
-        let mut has_error = Rc::new(RefCell::new(false));
+        let remaining_args = type_args.clone();
+        let mut has_error = (
+            Rc::new(RefCell::<Option<BTreeSet<usize>>>::new(None)),
+            Rc::new(RefCell::new(remaining_args)),
+        );
         if let Type::Variable(_, id) = self {
             return type_args.get(id).cloned().ok_or_else(|| {
                 CompileError::new(
@@ -921,15 +923,28 @@ impl Type {
             });
         }
         new_self.recursive_apply(
-            |val, _a, b| {
+            |val, _a, (b, c)| {
                 match val {
                     TypeCheckedNode::Type(t) => match t {
-                        Type::Variable(_, id) => match type_args.get(id) {
-                            Some(inner) => **t = inner.clone(),
-                            None => {
-                                *b.borrow_mut() = true;
+                        Type::Variable(_, id) => {
+                            c.borrow_mut().remove(id);
+                            match type_args.get(id) {
+                                Some(inner) => **t = inner.clone(),
+                                None => {
+                                    let mut check = false;
+                                    if let Some(ids) = &mut *b.borrow_mut() {
+                                        ids.insert(*id);
+                                    } else {
+                                        check = true;
+                                    }
+                                    if check {
+                                        let mut error_set = BTreeSet::new();
+                                        error_set.insert(*id);
+                                        *b.borrow_mut() = Some(error_set);
+                                    }
+                                }
                             }
-                        },
+                        }
                         _ => {}
                     },
                     _ => {}
@@ -939,14 +954,44 @@ impl Type {
             &(),
             &mut has_error,
         );
-        if *has_error.borrow_mut() {
+        if let Some(bad_ids) = &*has_error.0.borrow() {
             return Err(CompileError::new(
                 "Type Error".to_string(),
                 format!(
-                    "Failed to resolve type variable in: {}",
+                    "Failed to resolve type variable(s) \"{}\" in: {}",
+                    {
+                        let mut bad_id_string = String::new();
+                        for id in bad_ids {
+                            bad_id_string.push_str(&format!(
+                                "{}, ",
+                                Type::Variable(vec![], *id).display(type_tree, string_table)
+                            ))
+                        }
+                        bad_id_string.pop();
+                        bad_id_string.pop();
+                        bad_id_string
+                    },
                     self.display(type_tree, string_table)
                 ),
                 vec![],
+            ));
+        }
+        if has_error.1.borrow().len() > 0 {
+            return Err(CompileError::new(
+                format!("Type Error"),
+                format!("Unused type arguments \"{}\"", {
+                    let mut bad_id_string = String::new();
+                    for (id, _tipe) in has_error.1.borrow().iter() {
+                        bad_id_string.push_str(&format!(
+                            "{}, ",
+                            Type::Variable(vec![], *id).display(type_tree, string_table)
+                        ))
+                    }
+                    bad_id_string.pop();
+                    bad_id_string.pop();
+                    bad_id_string
+                }),
+                debug_info.location.into_iter().collect(),
             ));
         }
         Ok(new_self)
@@ -957,11 +1002,13 @@ impl Type {
         type_args: &BTreeSet<StringId>,
         type_tree: &TypeTree,
         string_table: &StringTable,
+        use_all_args: bool,
+        debug_info: &DebugInfo,
     ) -> Result<(), CompileError> {
         let mut new_self = self.clone();
         let mut remaining_args = type_args.clone();
         if let Type::Variable(_, id) = self {
-            if type_args.len() > 1 {
+            if use_all_args && type_args.len() > 1 {
                 remaining_args.remove(id);
                 return Err(CompileError::new(
                     format!("Type Error"),
@@ -977,7 +1024,7 @@ impl Type {
                         bad_id_string.pop();
                         bad_id_string
                     }),
-                    vec![],
+                    debug_info.location.into_iter().collect(),
                 ));
             };
             return type_args.get(id).map(|_| ()).ok_or_else(|| {
@@ -987,7 +1034,7 @@ impl Type {
                         "Variable {} failed consistency check, not in vars list",
                         string_table.name_from_id(*id)
                     ),
-                    vec![],
+                    debug_info.location.into_iter().collect(),
                 )
             });
         }
@@ -1043,10 +1090,10 @@ impl Type {
                         bad_id_string
                     }
                 ),
-                vec![],
+                debug_info.location.into_iter().collect(),
             ));
         }
-        if has_error.1.borrow().len() > 0 {
+        if use_all_args && has_error.1.borrow().len() > 0 {
             return Err(CompileError::new(
                 format!("Type Error"),
                 format!("Unused type arguments \"{}\"", {
@@ -1061,7 +1108,7 @@ impl Type {
                     bad_id_string.pop();
                     bad_id_string
                 }),
-                vec![],
+                debug_info.location.into_iter().collect(),
             ));
         }
         Ok(())

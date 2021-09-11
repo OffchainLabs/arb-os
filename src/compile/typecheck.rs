@@ -1333,11 +1333,13 @@ pub fn typecheck_top_level_decls(
         );
     }
 
-    for (id, (vars, tipe)) in generic_types {
+    for (_id, (vars, tipe)) in generic_types {
         tipe.consistent_over_args(
             &vars.clone().into_iter().collect(),
             type_tree,
             &string_table,
+            true,
+            &DebugInfo::default(),
         )?;
     }
 
@@ -1412,8 +1414,13 @@ pub fn typecheck_function(
                 arg.debug_info.location.into_iter().collect(),
             )
         })?;
-        arg.tipe
-            .consistent_over_args(&collected_type_vars, type_tree, string_table)?;
+        arg.tipe.consistent_over_args(
+            &collected_type_vars,
+            type_tree,
+            string_table,
+            true,
+            &arg.debug_info,
+        )?;
         if let Some(location_option) = undefinable_ids.get(&arg.name) {
             return Err(CompileError::new_type_error(
                 format!(
@@ -1431,6 +1438,14 @@ pub fn typecheck_function(
         hm.insert(arg.name, arg.tipe.clone());
     }
 
+    func.tipe.consistent_over_args(
+        &collected_type_vars,
+        type_tree,
+        string_table,
+        true,
+        &func.debug_info,
+    )?;
+
     let mut inner_type_table = type_table.clone();
     inner_type_table.extend(hm);
     let mut tc_stats = typecheck_statement_sequence(
@@ -1445,9 +1460,6 @@ pub fn typecheck_function(
         closures,
         &mut vec![],
     )?;
-
-    func.ret_type
-        .consistent_over_args(&collected_type_vars, type_tree, string_table)?;
 
     if func.ret_type == Type::Void {
         if tc_stats.last().cloned().map(|s| s.kind) != Some(TypeCheckedStatementKind::ReturnVoid())
@@ -2261,7 +2273,7 @@ fn typecheck_expr(
                     .iter()
                     .map(|arg| (arg.name, arg.tipe.clone()))
                     .collect();
-                let real = x.resolve(&vars, type_tree, string_table)?;
+                let real = x.resolve(&vars, type_tree, string_table, &debug_info)?;
                 Ok(TypeCheckedExprKind::FuncRef(*func_name, real))
             }
             ExprKind::TupleRef(tref, idx) => {
