@@ -52,3 +52,12 @@ impl Color {
         Color::color(Color::LAVENDER, text)
     }
 }
+
+pub fn human_readable_index(index: usize) -> String {
+    match index % 10 {
+        1 => format!("{}st", index),
+        2 => format!("{}nd", index),
+        3 => format!("{}rd", index),
+        _ => format!("{}th", index),
+    }
+}

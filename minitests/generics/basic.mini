@@ -1,0 +1,38 @@
+/*
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
+ */
+
+type basic<T, W> = (T, W, string, W);           // (p0, p0, p1, string, p1)
+type concrete = (uint, uint);
+
+write func main() {
+    asm(tests().1) { log };
+}
+
+func tests() -> string {
+    
+    let nongeneric = load_concrete(4);
+    if (nongeneric.0 != nongeneric.1) {
+        return "Tuples don't work";
+    }
+    
+    let generic = load(4);
+    
+    if (generic.0 != 4 || generic.1 != !generic.3) {
+        return "Generics don't work";
+    }
+    
+    if (generic.2 != "I <3 Generics") {
+        return "Basic types don't work along-side generics";
+    }
+    
+    return "";
+}
+
+func load(arg: uint) -> basic<uint, bool> {
+    return (arg, true, "I <3 Generics", false);
+}
+
+func load_concrete(arg: uint) -> concrete {
+    return (arg, arg);
+}

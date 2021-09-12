@@ -1,0 +1,63 @@
+/*
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
+ */
+
+use std2::priorityq::priorityq_new;
+use std2::priorityq::priorityq_isEmpty;
+use std2::priorityq::priorityq_insert;
+use std2::priorityq::priorityq_get;
+
+
+write func main() {
+    asm(tests().1) { log };
+}
+
+func tests() -> string {
+    let q = priorityq_new::<string>();
+    if ( ! priorityq_isEmpty::<string>(q)) {
+	return "new queue isn't empty";
+    }
+    
+    let q = priorityq_new::<uint>();
+    q = priorityq_insert::<uint>(q, 97, 3);
+    if (priorityq_isEmpty::<uint>(q)) {
+	return "queue with insert looks empty";
+    }	
+    
+    q = priorityq_new::<uint>();
+    let pq = priorityq_insert::<uint>(q, 97, 3);
+    if (pq == q) {
+	return "new queue is equal to one with contents";
+    }
+    
+    q = priorityq_new::<uint>();
+    q = priorityq_insert::<uint>(q, 97, 3);
+    q = priorityq_insert::<uint>(q, 98, 2);
+    q = priorityq_insert::<uint>(q, 96, 4);
+    if let Some(res) = priorityq_get::<uint>(q) {
+	if (res.0 != 96) {
+	    return "queue didn't place 96 at the front";
+	}
+    } else {
+	return "queue is somehow empty";
+    }
+    
+    q = priorityq_new::<uint>();
+    let i = 0;
+    while (i < 58) {
+	q = priorityq_insert::<uint>(q, i+30, i+100);
+	i = i+1;
+    }
+    q = priorityq_insert::<uint>(q, 97, 293);
+    q = priorityq_insert::<uint>(q, 98, 292);
+    q = priorityq_insert::<uint>(q, 96, 294);
+    if let Some(res) = priorityq_get::<uint>(q) {
+	if (res.0 != 96) {
+	    return "stress-tested queue didn't place 96 at the front";
+	}
+    } else {
+	return "stress-tested queue is somehow empty";
+    }
+    
+    return "";
+}

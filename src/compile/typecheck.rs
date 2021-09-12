@@ -781,10 +781,8 @@ impl TypeCheckedFunc {
                 flowcheck_warnings.push(CompileError::new_warning(
                     String::from("Compile warning"),
                     format!(
-                        "value {}{}{} is assigned but never used",
-                        error_system.warn_color,
-                        string_table.name_from_id(id.clone()),
-                        CompileError::RESET,
+                        "value {} is assigned but never used",
+                        Color::color(error_system.warn_color, string_table.name_from_id(id)),
                     ),
                     vec![loc],
                 ));
@@ -1053,7 +1051,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             TypeCheckedExprKind::FunctionCall(func, args, _, _) => {
                 let func_type = func
                     .get_type()
-                    .get_representation(type_tree)
+                    .rep(type_tree)
                     .expect("Type tree inconsistency");
 
                 let prop = match func_type {
@@ -1080,7 +1078,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             TypeCheckedExprKind::FunctionCall(func, args, _, _) => {
                 let func_type = func
                     .get_type()
-                    .get_representation(type_tree)
+                    .rep(type_tree)
                     .expect("Type tree inconsistency");
 
                 let prop = match func_type {
@@ -1291,6 +1289,7 @@ pub fn typecheck_top_level_decls(
     string_table: StringTable,
     func_table: HashMap<usize, Type>,
     type_tree: &TypeTree,
+    path: &Vec<String>,
 ) -> Result<
     (
         BTreeMap<StringId, TypeCheckedFunc>,
@@ -1324,6 +1323,16 @@ pub fn typecheck_top_level_decls(
     let mut checked_closures = BTreeMap::new();
 
     for func in &funcs {
+        let mut type_tree = type_tree.clone();
+        for (index, generic) in func.generics.iter().enumerate() {
+            type_tree.insert(
+                (path.clone(), *generic),
+                (
+                    Type::Generic(index),
+                    string_table.name_from_id(*generic).clone(),
+                ),
+            );
+        }
         checked_funcs.insert(
             func.id,
             typecheck_function(
@@ -1331,7 +1340,7 @@ pub fn typecheck_top_level_decls(
                 &type_table,
                 &global_vars_map,
                 &func_table,
-                type_tree,
+                &type_tree,
                 &string_table,
                 &mut checked_closures,
                 &mut undefinable_ids,
@@ -1363,6 +1372,13 @@ pub fn typecheck_function(
     closures: &mut BTreeMap<StringId, TypeCheckedFunc>,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
 ) -> Result<TypeCheckedFunc, CompileError> {
+    let mut func = func.clone();
+
+    func.ret_type = func.ret_type.commit_generic_slots();
+    func.args
+        .iter_mut()
+        .for_each(|arg| arg.tipe = arg.tipe.commit_generic_slots());
+
     let mut hm = HashMap::new();
 
     if let Some(location_option) = undefinable_ids.get(&func.id) {
@@ -1381,11 +1397,13 @@ pub fn typecheck_function(
     undefinable_ids.insert(func.id, func.debug_info.location);
 
     for arg in func.args.iter() {
-        arg.tipe.get_representation(type_tree).map_err(|_| {
+        arg.tipe.rep(type_tree).map_err(|_| {
             CompileError::new_type_error(
                 format!(
-                    "Unknown type for function argument {}",
-                    Color::red(string_table.name_from_id(arg.name))
+                    "Func {}'s argument {} has the unknown type {}",
+                    Color::red(string_table.name_from_id(func.id)),
+                    Color::red(string_table.name_from_id(arg.name)),
+                    Color::red(arg.tipe.print(type_tree)),
                 ),
                 arg.debug_info.location.into_iter().collect(),
             )
@@ -1411,7 +1429,7 @@ pub fn typecheck_function(
     inner_type_table.extend(hm);
     let mut tc_stats = typecheck_statement_sequence(
         &func.code,
-        &func.ret_type,
+        &func,
         &inner_type_table,
         global_vars,
         func_table,
@@ -1463,12 +1481,13 @@ pub fn typecheck_function(
     Ok(TypeCheckedFunc {
         name: func.name.clone(),
         id: func.id,
-        args: func.args.clone(),
-        ret_type: func.ret_type.clone(),
+        args: func.args,
+        ret_type: func.ret_type,
         code: tc_stats,
         tipe: func.tipe.clone(),
         public: func.public,
         captures: BTreeSet::new(),
+        generics: func.generics.clone(),
         frame_size: 0,
         unique_id: func.unique_id,
         properties: func.properties,
@@ -1489,7 +1508,7 @@ pub fn typecheck_function(
 /// to the statement sequence.
 fn typecheck_statement_sequence(
     statements: &[Statement],
-    return_type: &Type,
+    func: &Func,
     type_table: &TypeTable,
     global_vars: &HashMap<StringId, Type>,
     func_table: &TypeTable,
@@ -1501,7 +1520,7 @@ fn typecheck_statement_sequence(
 ) -> Result<Vec<TypeCheckedStatement>, CompileError> {
     typecheck_statement_sequence_with_bindings(
         &statements,
-        return_type,
+        &func,
         type_table,
         global_vars,
         func_table,
@@ -1518,7 +1537,7 @@ fn typecheck_statement_sequence(
 /// added to type_table.
 fn typecheck_statement_sequence_with_bindings<'a>(
     statements: &'a [Statement],
-    return_type: &Type,
+    func: &Func,
     type_table: &'a TypeTable,
     global_vars: &'a HashMap<StringId, Type>,
     func_table: &TypeTable,
@@ -1537,7 +1556,7 @@ fn typecheck_statement_sequence_with_bindings<'a>(
     for stat in statements {
         let (tcs, bindings) = typecheck_statement(
             stat,
-            return_type,
+            &func,
             &inner_type_table,
             global_vars,
             func_table,
@@ -1563,7 +1582,7 @@ fn typecheck_statement_sequence_with_bindings<'a>(
 /// The argument loc provide the correct location to `CompileError` if the function fails.
 fn typecheck_statement<'a>(
     statement: &'a Statement,
-    return_type: &Type,
+    func: &Func,
     type_table: &'a TypeTable,
     global_vars: &'a HashMap<StringId, Type>,
     func_table: &TypeTable,
@@ -1577,13 +1596,13 @@ fn typecheck_statement<'a>(
     let debug_info = statement.debug_info;
     let (stat, binds) = match kind {
         StatementKind::ReturnVoid() => {
-            if Type::Void.assignable(return_type, type_tree, HashSet::new()) {
+            if Type::Void.assignable(&func.ret_type, type_tree, HashSet::new()) {
                 Ok((TypeCheckedStatementKind::ReturnVoid(), vec![]))
             } else {
                 Err(CompileError::new_type_error(
                     format!(
                         "Tried to return without type in function that returns {}",
-                        return_type.display()
+                        Color::red(&func.ret_type.print(type_tree))
                     ),
                     debug_info.location.into_iter().collect(),
                 ))
@@ -1595,24 +1614,27 @@ fn typecheck_statement<'a>(
                 type_table,
                 global_vars,
                 func_table,
-                return_type,
+                func,
                 type_tree,
                 string_table,
                 undefinable_ids,
                 closures,
                 scopes,
             )?;
-            if return_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
+
+            if func
+                .ret_type
+                .assignable(&tc_expr.get_type(), type_tree, HashSet::new())
+            {
                 Ok((TypeCheckedStatementKind::Return(tc_expr), vec![]))
             } else {
                 Err(CompileError::new_type_error(
                     format!(
-                        "return statement has wrong type, {}",
-                        return_type
-                            .mismatch_string(&tc_expr.get_type(), type_tree)
-                            .unwrap_or("failed to resolve type name".to_string())
+                        "return statement has wrong type:\nencountered {}\ninstead of  {}",
+                        Color::red(tc_expr.get_type().print(type_tree)),
+                        Color::red(&func.ret_type.print(type_tree)),
                     ),
-                    debug_info.location.into_iter().collect(),
+                    debug_info.locs(),
                 ))
             }
         }
@@ -1626,7 +1648,7 @@ fn typecheck_statement<'a>(
                             type_table,
                             global_vars,
                             func_table,
-                            return_type,
+                            func,
                             type_tree,
                             string_table,
                             undefinable_ids,
@@ -1664,7 +1686,7 @@ fn typecheck_statement<'a>(
                                     )
                                     .expect("Did not find type mismatch")
                             ),
-                            debug_info.location.into_iter().collect(),
+                            debug_info.locs(),
                         ));
                     } else {
                         *t = te
@@ -1681,7 +1703,7 @@ fn typecheck_statement<'a>(
                                 type_table,
                                 global_vars,
                                 func_table,
-                                return_type,
+                                func,
                                 type_tree,
                                 string_table,
                                 undefinable_ids,
@@ -1701,7 +1723,7 @@ fn typecheck_statement<'a>(
                 type_table,
                 global_vars,
                 func_table,
-                return_type,
+                func,
                 type_tree,
                 string_table,
                 undefinable_ids,
@@ -1716,7 +1738,7 @@ fn typecheck_statement<'a>(
                 type_table,
                 global_vars,
                 func_table,
-                return_type,
+                func,
                 type_tree,
                 string_table,
                 undefinable_ids,
@@ -1741,7 +1763,7 @@ fn typecheck_statement<'a>(
                 MatchPatternKind::Assign(_) => unimplemented!(),
                 MatchPatternKind::Tuple(pats) => {
                     let (tc_pats, bindings) =
-                        typecheck_patvec(tce_type.clone(), pats.to_vec(), debug_info.location)?;
+                        typecheck_patvec(tce_type.clone(), pats.to_vec(), type_tree, debug_info)?;
                     (
                         TypeCheckedStatementKind::Let(
                             TypeCheckedMatchPattern::new_tuple(tc_pats, pat.debug_info, tce_type),
@@ -1773,7 +1795,7 @@ fn typecheck_statement<'a>(
                 type_table,
                 global_vars,
                 func_table,
-                return_type,
+                func,
                 type_tree,
                 string_table,
                 undefinable_ids,
@@ -1825,7 +1847,7 @@ fn typecheck_statement<'a>(
                 type_table,
                 global_vars,
                 func_table,
-                return_type,
+                func,
                 type_tree,
                 string_table,
                 undefinable_ids,
@@ -1836,7 +1858,7 @@ fn typecheck_statement<'a>(
                 Type::Bool => {
                     let tc_body = typecheck_statement_sequence(
                         body,
-                        return_type,
+                        func,
                         type_table,
                         global_vars,
                         func_table,
@@ -1851,7 +1873,7 @@ fn typecheck_statement<'a>(
                 _ => Err(CompileError::new_type_error(
                     format!(
                         "while condition must be bool, found {}",
-                        tc_cond.get_type().display()
+                        Color::red(tc_cond.get_type().print(type_tree))
                     ),
                     debug_info.location.into_iter().collect(),
                 )),
@@ -1865,7 +1887,7 @@ fn typecheck_statement<'a>(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -1884,7 +1906,7 @@ fn typecheck_statement<'a>(
                 type_table,
                 global_vars,
                 func_table,
-                return_type,
+                func,
                 type_tree,
                 string_table,
                 undefinable_ids,
@@ -1899,7 +1921,7 @@ fn typecheck_statement<'a>(
                 type_table,
                 global_vars,
                 func_table,
-                return_type,
+                func,
                 type_tree,
                 string_table,
                 undefinable_ids,
@@ -1913,7 +1935,7 @@ fn typecheck_statement<'a>(
                 _ => Err(CompileError::new_type_error(
                     format!(
                         "assert condition must be of type (bool, any), found {}",
-                        tce.get_type().display()
+                        Color::red(tce.get_type().print(type_tree))
                     ),
                     debug_info.location.into_iter().collect(),
                 )),
@@ -1939,7 +1961,8 @@ fn typecheck_statement<'a>(
 fn typecheck_patvec(
     rhs_type: Type,
     patterns: Vec<MatchPattern>,
-    location: Option<Location>,
+    type_tree: &TypeTree,
+    debug: DebugInfo,
 ) -> Result<(Vec<TypeCheckedMatchPattern>, Vec<(StringId, Type)>), CompileError> {
     if let Type::Tuple(tvec) = rhs_type {
         if tvec.len() == patterns.len() {
@@ -1949,7 +1972,7 @@ fn typecheck_patvec(
                 if *rhs_type == Type::Void {
                     return Err(CompileError::new_type_error(
                         "attempted to assign void in tuple binding".to_string(),
-                        location.into_iter().collect(),
+                        debug.locs(),
                     ));
                 }
                 let pat = &patterns[i];
@@ -1973,7 +1996,7 @@ fn typecheck_patvec(
                         //TODO: implement this properly
                         return Err(CompileError::new_type_error(
                             "nested pattern not yet supported in let".to_string(),
-                            location.into_iter().collect(),
+                            debug.locs(),
                         ));
                     }
                 }
@@ -1982,16 +2005,16 @@ fn typecheck_patvec(
         } else {
             Err(CompileError::new_type_error(
                 "tuple-match let must receive tuple of equal size".to_string(),
-                location.into_iter().collect(),
+                debug.locs(),
             ))
         }
     } else {
         Err(CompileError::new_type_error(
             format!(
-                "tuple-match let must receive tuple value, found \"{}\"",
-                rhs_type.display()
+                "tuple-match let must receive tuple value, found {}",
+                Color::red(rhs_type.print(type_tree))
             ),
-            location.into_iter().collect(),
+            debug.locs(),
         ))
     }
 }
@@ -2008,7 +2031,7 @@ fn typecheck_expr(
     type_table: &TypeTable,
     global_vars: &HashMap<StringId, Type>,
     func_table: &TypeTable,
-    return_type: &Type,
+    func: &Func,
     type_tree: &TypeTree,
     string_table: &StringTable,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
@@ -2028,7 +2051,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2043,7 +2066,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2055,7 +2078,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2070,7 +2093,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2082,7 +2105,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2094,7 +2117,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2109,7 +2132,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2121,7 +2144,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2131,9 +2154,9 @@ fn typecheck_expr(
                 if (tc_sub1.get_type(), tc_sub2.get_type()) != (Type::Bool, Type::Bool) {
                     return Err(CompileError::new_type_error(
                         format!(
-                            "operands to logical or must be boolean, got \"{}\" and \"{}\"",
-                            tc_sub1.get_type().display(),
-                            tc_sub2.get_type().display(),
+                            "operands to logical or must be boolean, got {} and {}",
+                            Color::red(tc_sub1.get_type().print(type_tree)),
+                            Color::red(tc_sub2.get_type().print(type_tree)),
                         ),
                         loc.into_iter().collect(),
                     ));
@@ -2149,7 +2172,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2161,7 +2184,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2171,9 +2194,9 @@ fn typecheck_expr(
                 if (tc_sub1.get_type(), tc_sub2.get_type()) != (Type::Bool, Type::Bool) {
                     return Err(CompileError::new_type_error(
                         format!(
-                            "operands to logical and must be boolean, got \"{}\" and \"{}\"",
-                            tc_sub1.get_type().display(),
-                            tc_sub2.get_type().display()
+                            "operands to logical and must be boolean, got {} and {}",
+                            Color::red(tc_sub1.get_type().print(type_tree)),
+                            Color::red(tc_sub2.get_type().print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     ));
@@ -2189,7 +2212,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2197,29 +2220,72 @@ fn typecheck_expr(
                     scopes,
                 )?)))
             }
-            ExprKind::VariableRef(id) => match func_table.get(id) {
-                Some(t) => Ok(TypeCheckedExprKind::FuncRef(*id, (*t).clone())),
-                None => match type_table.get(id) {
-                    Some(t) => Ok(TypeCheckedExprKind::LocalVariableRef(*id, (*t).clone())),
-                    None => match global_vars.get(id) {
-                        Some(tipe) => Ok(TypeCheckedExprKind::GlobalVariableRef(*id, tipe.clone())),
-                        None => Err(CompileError::new_type_error(
+            ExprKind::VariableRef(id, spec) => {
+                if let Some(tipe) = func_table.get(id) {
+                    let template_type = tipe.rep(type_tree)?;
+                    let num_generic_params = tipe.count_generic_slots();
+
+                    if spec.len() != num_generic_params {
+                        return Err(CompileError::new(
+                            "Generics error",
                             format!(
-                                "reference to unrecognized identifier {}",
-                                Color::red(string_table.name_from_id(*id))
+                                "Func {} has {} generic args but was passed {}",
+                                Color::red(string_table.name_from_id(*id)),
+                                Color::red(num_generic_params),
+                                Color::red(spec.len()),
                             ),
-                            loc.into_iter().collect(),
-                        )),
-                    },
-                },
-            },
+                            debug_info.locs(),
+                        ));
+                    }
+
+                    let tipe = template_type.make_specific(spec)?;
+                    Ok(TypeCheckedExprKind::FuncRef(*id, tipe))
+                } else if let Some(tipe) = type_table.get(id) {
+                    if !spec.is_empty() {
+                        return Err(CompileError::new(
+                            "Generics error",
+                            format!(
+                                "Variable {} doesn't need specialization",
+                                Color::red(string_table.name_from_id(*id)),
+                            ),
+                            debug_info.locs(),
+                        ));
+                    }
+
+                    let tipe = tipe.rep(type_tree)?;
+                    Ok(TypeCheckedExprKind::LocalVariableRef(*id, tipe))
+                } else if let Some(tipe) = global_vars.get(id) {
+                    let tipe = tipe.rep(type_tree)?;
+
+                    if !spec.is_empty() {
+                        return Err(CompileError::new(
+                            "Generics error",
+                            format!(
+                                "Global variable {} doesn't need specialization",
+                                Color::red(string_table.name_from_id(*id)),
+                            ),
+                            debug_info.locs(),
+                        ));
+                    }
+
+                    Ok(TypeCheckedExprKind::GlobalVariableRef(*id, tipe))
+                } else {
+                    Err(CompileError::new_type_error(
+                        format!(
+                            "reference to unrecognized identifier {}",
+                            Color::red(string_table.name_from_id(*id))
+                        ),
+                        loc.into_iter().collect(),
+                    ))
+                }
+            }
             ExprKind::TupleRef(tref, idx) => {
                 let tc_sub = typecheck_expr(
                     &*tref,
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2243,10 +2309,10 @@ fn typecheck_expr(
                 } else {
                     Err(CompileError::new_type_error(
                         format!(
-                            "tuple field access to non-tuple value of type \"{}\"",
-                            tc_sub.get_type().display()
+                            "tuple field access to non-tuple value of type {}",
+                            Color::red(tc_sub.get_type().print(type_tree))
                         ),
-                        loc.into_iter().collect(),
+                        debug_info.locs(),
                     ))
                 }
             }
@@ -2256,19 +2322,19 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
                     closures,
                     scopes,
                 )?;
-                if let Type::Struct(v) = tc_sub.get_type().get_representation(type_tree)? {
+                if let Type::Struct(v) = tc_sub.get_type().rep(type_tree)? {
                     for sf in v.iter() {
                         if *name == sf.name {
                             let slot_num = tc_sub
                                 .get_type()
-                                .get_representation(type_tree)?
+                                .rep(type_tree)?
                                 .get_struct_slot_by_name(name.clone())
                                 .ok_or(CompileError::new_type_error(
                                     "Could not find name of struct field".to_string(),
@@ -2292,8 +2358,8 @@ fn typecheck_expr(
                 } else {
                     Err(CompileError::new_type_error(
                         format!(
-                            "struct field access to non-struct value of type \"{}\"",
-                            tc_sub.get_type().display()
+                            "struct field access to non-struct value of type {}",
+                            Color::red(tc_sub.get_type().print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     ))
@@ -2308,20 +2374,23 @@ fn typecheck_expr(
                 Constant::Option(o) => TypeCheckedExprKind::Const(o.value(), o.type_of()),
                 Constant::Null => TypeCheckedExprKind::Const(Value::none(), Type::Any),
             }),
-            ExprKind::FunctionCall(fexpr, args) => {
-                let tc_fexpr = typecheck_expr(
-                    fexpr,
+            ExprKind::FunctionCall(expr, args) => {
+                let expr = typecheck_expr(
+                    expr,
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
                     closures,
                     scopes,
                 )?;
-                match tc_fexpr.get_type().get_representation(type_tree)? {
+
+                let expr_type = expr.get_type().rep(type_tree)?;
+
+                match expr_type.clone() {
                     Type::Func(prop, arg_types, ret_type) => {
                         if args.len() == arg_types.len() {
                             let mut tc_args = Vec::new();
@@ -2331,7 +2400,7 @@ fn typecheck_expr(
                                     type_table,
                                     global_vars,
                                     func_table,
-                                    return_type,
+                                    func,
                                     type_tree,
                                     string_table,
                                     undefinable_ids,
@@ -2339,25 +2408,26 @@ fn typecheck_expr(
                                     scopes,
                                 )?;
                                 tc_args.push(tc_arg);
+
                                 let resolved_arg_type = arg_types[i].clone();
+
                                 if !resolved_arg_type.assignable(
-                                    &tc_args[i].get_type().get_representation(type_tree)?,
+                                    &tc_args[i].get_type().rep(type_tree)?,
                                     type_tree,
                                     HashSet::new(),
                                 ) {
                                     return Err(CompileError::new_type_error(
                                         format!(
-                                            "wrong argument type in function call, {}",
-                                            resolved_arg_type
-                                                .mismatch_string(&tc_args[i].get_type(), type_tree)
-                                                .unwrap_or("Compiler could not identify a specific mismatch".to_string())
+                                            "func arg has wrong type:\nencountered {}\ninstead of  {}",
+                                            Color::red(&tc_args[i].get_type().print(type_tree)),
+                                            Color::red(resolved_arg_type.print(type_tree)),
                                         ),
-                                        loc.into_iter().collect(),
+                                        tc_args[i].debug_info.locs(),
                                     ));
                                 }
                             }
                             Ok(TypeCheckedExprKind::FunctionCall(
-                                Box::new(tc_fexpr),
+                                Box::new(expr),
                                 tc_args,
                                 *ret_type,
                                 prop,
@@ -2371,10 +2441,10 @@ fn typecheck_expr(
                     }
                     _ => Err(CompileError::new_type_error(
                         format!(
-                            "function call to non-function value of type \"{}\"",
-                            tc_fexpr.get_type().get_representation(type_tree)?.display()
+                            "tried to call a {}, which is not a function",
+                            Color::red(expr_type.print(type_tree))
                         ),
-                        loc.into_iter().collect(),
+                        debug_info.locs(),
                     )),
                 }
             }
@@ -2383,23 +2453,28 @@ fn typecheck_expr(
                 &type_table,
                 global_vars,
                 func_table,
-                return_type,
+                func,
                 type_tree,
                 string_table,
                 undefinable_ids,
                 closures,
                 scopes,
             )?)),
-            ExprKind::Closure(func) => {
-                let id = func.id;
-                let tipe = func.tipe.clone();
+            ExprKind::Closure(closure_func) => {
+                let mut closure_func = closure_func.clone();
+
+                // a closures inherits its parent's generics
+                closure_func.generics = func.generics.clone();
+
+                let id = closure_func.id;
+                let tipe = closure_func.tipe.clone();
 
                 // The closure must capture only variables that are in scope above it.
                 // The type table as of this moment includes exactly these variables.
                 let capture_table = type_table;
 
                 let mut closure = typecheck_function(
-                    func,
+                    &closure_func,
                     &capture_table,
                     global_vars,
                     func_table,
@@ -2514,7 +2589,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2526,14 +2601,14 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
                     closures,
                     scopes,
                 )?;
-                match tc_arr.get_type().get_representation(type_tree)? {
+                match tc_arr.get_type().rep(type_tree)? {
                     Type::Array(t) => {
                         if tc_idx.get_type() == Type::Uint {
                             Ok(TypeCheckedExprKind::ArrayRef(
@@ -2544,8 +2619,8 @@ fn typecheck_expr(
                         } else {
                             Err(CompileError::new_type_error(
                                 format!(
-                                    "array index must be Uint, found \"{}\"",
-                                    tc_idx.get_type().display()
+                                    "array index must be Uint, found {}",
+                                    Color::red(tc_idx.get_type().print(type_tree))
                                 ),
                                 loc.into_iter().collect(),
                             ))
@@ -2562,8 +2637,8 @@ fn typecheck_expr(
                         } else {
                             Err(CompileError::new_type_error(
                                 format!(
-                                    "fixedarray index must be uint, found \"{}\"",
-                                    tc_idx.get_type().display()
+                                    "fixedarray index must be uint, found {}",
+                                    Color::red(tc_idx.get_type().print(type_tree))
                                 ),
                                 loc.into_iter().collect(),
                             ))
@@ -2589,8 +2664,8 @@ fn typecheck_expr(
                     }
                     _ => Err(CompileError::new_type_error(
                         format!(
-                            "fixedarray lookup in non-array type \"{}\"",
-                            tc_arr.get_type().get_representation(type_tree)?.display()
+                            "fixedarray lookup in non-array type {}",
+                            Color::red(tc_arr.get_type().rep(type_tree)?.print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     )),
@@ -2602,14 +2677,14 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
                     closures,
                     scopes,
                 )?),
-                tipe.get_representation(type_tree)?,
+                tipe.rep(type_tree)?,
                 Type::Array(Box::new(tipe.clone())),
             )),
             ExprKind::NewFixedArray(size, maybe_expr) => match maybe_expr {
@@ -2619,7 +2694,7 @@ fn typecheck_expr(
                         type_table,
                         global_vars,
                         func_table,
-                        return_type,
+                        func,
                         type_tree,
                         string_table,
                         undefinable_ids,
@@ -2648,7 +2723,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2668,8 +2743,8 @@ fn typecheck_expr(
                     Err(CompileError::new_type_error(
                         format!(
                             "Type {} is not a member of type union: {}",
-                            tc_type.display(),
-                            Type::Union(types.clone()).display()
+                            Color::red(tc_type.print(type_tree)),
+                            Color::red(Type::Union(types.clone()).print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     ))
@@ -2684,7 +2759,7 @@ fn typecheck_expr(
                         type_table,
                         global_vars,
                         func_table,
-                        return_type,
+                        func,
                         type_tree,
                         string_table,
                         undefinable_ids,
@@ -2711,7 +2786,7 @@ fn typecheck_expr(
                         type_table,
                         global_vars,
                         func_table,
-                        return_type,
+                        func,
                         type_tree,
                         string_table,
                         undefinable_ids,
@@ -2729,7 +2804,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2741,7 +2816,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2753,21 +2828,21 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
                     closures,
                     scopes,
                 )?;
-                match tc_arr.get_type().get_representation(type_tree)? {
+                match tc_arr.get_type().rep(type_tree)? {
                     Type::Array(t) => {
                         if t.assignable(&tc_val.get_type(), type_tree, HashSet::new()) {
                             if tc_index.get_type() != Type::Uint {
                                 Err(CompileError::new_type_error(
                                     format!(
-                                        "array modifier requires uint index, found \"{}\"",
-                                        tc_index.get_type().display()
+                                        "array modifier requires uint index, found {}",
+                                        Color::red(tc_index.get_type().print(type_tree))
                                     ),
                                     loc.into_iter().collect(),
                                 ))
@@ -2794,8 +2869,8 @@ fn typecheck_expr(
                         if tc_index.get_type() != Type::Uint {
                             Err(CompileError::new_type_error(
                                 format!(
-                                    "array modifier requires uint index, found \"{}\"",
-                                    tc_index.get_type().display()
+                                    "array modifier requires uint index, found {}",
+                                    Color::red(tc_index.get_type().print(type_tree))
                                 ),
                                 loc.into_iter().collect(),
                             ))
@@ -2841,8 +2916,8 @@ fn typecheck_expr(
                     }
                     other => Err(CompileError::new_type_error(
                         format!(
-                            "[] modifier must operate on array or block, found \"{}\"",
-                            other.display()
+                            "[] modifier must operate on array or block, found {}",
+                            Color::red(other.print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     )),
@@ -2854,7 +2929,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2866,14 +2941,14 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
                     closures,
                     scopes,
                 )?;
-                let tcs_type = tc_struc.get_type().get_representation(type_tree)?;
+                let tcs_type = tc_struc.get_type().rep(type_tree)?;
                 if let Type::Struct(fields) = &tcs_type {
                     match tcs_type.get_struct_slot_by_name(name.clone()) {
                         Some(index) => {
@@ -2909,8 +2984,8 @@ fn typecheck_expr(
                 } else {
                     Err(CompileError::new_type_error(
                         format!(
-                            "struct modifier must operate on a struct, found \"{}\"",
-                            tcs_type.display()
+                            "struct modifier must operate on a struct, found {}",
+                            Color::red(tcs_type.print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     ))
@@ -2922,7 +2997,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2935,8 +3010,8 @@ fn typecheck_expr(
                     Err(CompileError::new_type_error(
                         format!(
                             "Cannot weak cast from type {} to type {}",
-                            tc_expr.get_type().display(),
-                            t.display()
+                            Color::red(tc_expr.get_type().print(type_tree)),
+                            Color::red(t.print(type_tree))
                         ),
                         debug_info.location.into_iter().collect(),
                     ))
@@ -2948,7 +3023,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2961,8 +3036,8 @@ fn typecheck_expr(
                     Err(CompileError::new_type_error(
                         format!(
                             "Cannot cast from type {} to type {}",
-                            tc_expr.get_type().display(),
-                            t.display()
+                            Color::red(tc_expr.get_type().print(type_tree)),
+                            Color::red(t.print(type_tree))
                         ),
                         debug_info.location.into_iter().collect(),
                     ))
@@ -2974,7 +3049,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2987,8 +3062,8 @@ fn typecheck_expr(
                     Err(CompileError::new_type_error(
                         format!(
                             "Cannot covariant cast from type {} to type {}",
-                            tc_expr.get_type().display(),
-                            t.display()
+                            Color::red(tc_expr.get_type().print(type_tree)),
+                            Color::red(t.print(type_tree))
                         ),
                         debug_info.location.into_iter().collect(),
                     ))
@@ -3000,7 +3075,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -3023,7 +3098,7 @@ fn typecheck_expr(
                         type_table,
                         global_vars,
                         func_table,
-                        return_type,
+                        func,
                         type_tree,
                         string_table,
                         undefinable_ids,
@@ -3038,11 +3113,15 @@ fn typecheck_expr(
                 ))
             }
             ExprKind::Try(inner) => {
-                match return_type {
+                match &func.ret_type {
                     Type::Option(_) | Type::Any => {}
                     ret => {
                         return Err(CompileError::new_type_error(
-                            format!("Can only use \"?\" operator in functions that can return option, found \"{}\"", ret.display()),
+                            format!(
+                                "Can only use {} operator in functions that can return option, found {}",
+                                Color::red("?"),
+                                Color::red(ret.print(type_tree)),
+                            ),
                             loc.into_iter().collect()
                         ))
                     }
@@ -3052,19 +3131,19 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
                     closures,
                     scopes,
                 )?;
-                match res.get_type().get_representation(type_tree)? {
+                match res.get_type().rep(type_tree)? {
                     Type::Option(t) => Ok(TypeCheckedExprKind::Try(Box::new(res), *t)),
                     other => Err(CompileError::new_type_error(
                         format!(
-                            "Try expression requires option type, found \"{}\"",
-                            other.display()
+                            "Try expression requires option type, found {}",
+                            Color::red(other.print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     )),
@@ -3077,7 +3156,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -3088,9 +3167,9 @@ fn typecheck_expr(
                     Err(CompileError::new_type_error(
                         format!(
                             "SetGas(_) requires a uint, found a {}",
-                            expr.get_type().display()
+                            Color::red(expr.get_type().print(type_tree))
                         ),
-                        debug_info.location.into_iter().collect(),
+                        debug_info.locs(),
                     ))
                 } else {
                     Ok(TypeCheckedExprKind::SetGas(Box::new(expr)))
@@ -3102,7 +3181,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -3114,7 +3193,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -3129,7 +3208,7 @@ fn typecheck_expr(
                             type_table,
                             global_vars,
                             func_table,
-                            return_type,
+                            func,
                             type_tree,
                             string_table,
                             undefinable_ids,
@@ -3141,8 +3220,8 @@ fn typecheck_expr(
                 if cond_expr.get_type() != Type::Bool {
                     Err(CompileError::new_type_error(
                         format!(
-                            "Condition of if expression must be bool: found \"{}\"",
-                            cond_expr.get_type().display()
+                            "Condition of if expression must be bool: found {}",
+                            Color::red(cond_expr.get_type().print(type_tree))
                         ),
                         debug_info.location.into_iter().collect(),
                     ))
@@ -3159,9 +3238,9 @@ fn typecheck_expr(
                     } else {
                         return Err(CompileError::new_type_error(
                             format!(
-                                "Mismatch of if and else types found: \"{}\" and \"{}\"",
-                                block_type.display(),
-                                else_type.display()
+                                "Mismatch of if and else types found: {} and {}",
+                                Color::red(block_type.print(type_tree)),
+                                Color::red(else_type.print(type_tree))
                             ),
                             debug_info.location.into_iter().collect(),
                         ));
@@ -3180,7 +3259,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -3191,8 +3270,11 @@ fn typecheck_expr(
                     Type::Option(t) => *t,
                     unexpected => {
                         return Err(CompileError::new_type_error(
-                            format!("Expected option type got: \"{}\"", unexpected.display()),
-                            debug_info.location.into_iter().collect(),
+                            format!(
+                                "Expected option type got: {}",
+                                Color::red(unexpected.print(type_tree))
+                            ),
+                            debug_info.locs(),
                         ))
                     }
                 };
@@ -3203,7 +3285,7 @@ fn typecheck_expr(
                     &inner_type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -3218,7 +3300,7 @@ fn typecheck_expr(
                             type_table,
                             global_vars,
                             func_table,
-                            return_type,
+                            func,
                             type_tree,
                             string_table,
                             undefinable_ids,
@@ -3239,9 +3321,9 @@ fn typecheck_expr(
                 } else {
                     return Err(CompileError::new_type_error(
                         format!(
-                            "Mismatch of if and else types found: \"{}\" and \"{}\"",
-                            block_type.display(),
-                            else_type.display()
+                            "Mismatch of if and else types found: {} and {}",
+                            Color::red(block_type.print(type_tree)),
+                            Color::red(else_type.print(type_tree))
                         ),
                         debug_info.location.into_iter().collect(),
                     ));
@@ -3256,7 +3338,7 @@ fn typecheck_expr(
             }
             ExprKind::Loop(stats) => Ok(TypeCheckedExprKind::Loop(typecheck_statement_sequence(
                 stats,
-                return_type,
+                func,
                 type_table,
                 global_vars,
                 func_table,
@@ -3272,22 +3354,22 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
                     closures,
                     scopes,
                 )?;
-                if let Type::Union(types) = tc_expr.get_type().get_representation(type_tree)? {
+                if let Type::Union(types) = tc_expr.get_type().rep(type_tree)? {
                     if types.iter().any(|t| t == tipe) {
                         Ok(TypeCheckedExprKind::Cast(Box::new(tc_expr), tipe.clone()))
                     } else {
                         Err(CompileError::new_type_error(
                             format!(
                                 "Type {} is not a member of {}",
-                                tipe.display(),
-                                tc_expr.get_type().display()
+                                Color::red(tipe.print(type_tree)),
+                                Color::red(tc_expr.get_type().print(type_tree))
                             ),
                             debug_info.location.into_iter().collect(),
                         ))
@@ -3295,8 +3377,8 @@ fn typecheck_expr(
                 } else {
                     Err(CompileError::new_type_error(
                         format!(
-                            "Tried to unioncast from non-union type \"{}\"",
-                            tc_expr.get_type().display()
+                            "Tried to unioncast from non-union type {}",
+                            Color::red(tc_expr.get_type().print(type_tree))
                         ),
                         debug_info.location.into_iter().collect(),
                     ))
@@ -3316,7 +3398,7 @@ fn typecheck_unary_op(
     loc: Option<Location>,
     type_tree: &TypeTree,
 ) -> Result<TypeCheckedExprKind, CompileError> {
-    let tc_type = sub_expr.get_type().get_representation(type_tree)?;
+    let tc_type = sub_expr.get_type().rep(type_tree)?;
     match op {
         UnaryOp::Minus => match tc_type {
             Type::Int => {
@@ -3335,8 +3417,8 @@ fn typecheck_unary_op(
             }
             other => Err(CompileError::new_type_error(
                 format!(
-                    "invalid operand type \"{}\" for unary minus",
-                    other.display()
+                    "invalid operand type {} for unary minus",
+                    Color::red(other.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3350,8 +3432,8 @@ fn typecheck_unary_op(
                     )),
                     other => Err(CompileError::new_type_error(
                         format!(
-                            "invalid operand type \"{}\" for bitwise negation",
-                            other.display()
+                            "invalid operand type {} for bitwise negation",
+                            Color::red(other.print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     )),
@@ -3365,8 +3447,8 @@ fn typecheck_unary_op(
                     )),
                     other => Err(CompileError::new_type_error(
                         format!(
-                            "invalid operand type \"{}\" for bitwise negation",
-                            other.display()
+                            "invalid operand type {} for bitwise negation",
+                            Color::red(other.print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     )),
@@ -3391,8 +3473,8 @@ fn typecheck_unary_op(
             }
             other => Err(CompileError::new_type_error(
                 format!(
-                    "invalid operand type \"{}\" for logical negation",
-                    other.display()
+                    "invalid operand type {} for logical negation",
+                    Color::red(other.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3426,7 +3508,10 @@ fn typecheck_unary_op(
                 Type::Uint,
             )),
             other => Err(CompileError::new_type_error(
-                format!("invalid operand type \"{}\" for len", other.display()),
+                format!(
+                    "invalid operand type {} for len",
+                    Color::red(other.print(type_tree))
+                ),
                 loc.into_iter().collect(),
             )),
         },
@@ -3443,7 +3528,10 @@ fn typecheck_unary_op(
                         ))
                     }
                     other => Err(CompileError::new_type_error(
-                        format!("invalid operand type \"{}\" for uint()", other.display()),
+                        format!(
+                            "invalid operand type {} for uint()",
+                            Color::red(other.print(type_tree))
+                        ),
                         loc.into_iter().collect(),
                     )),
                 }
@@ -3458,7 +3546,10 @@ fn typecheck_unary_op(
                         TypeCheckedExprKind::UnaryOp(UnaryOp::ToInt, Box::new(sub_expr), Type::Int),
                     ),
                     other => Err(CompileError::new_type_error(
-                        format!("invalid operand type \"{}\" for int()", other.display()),
+                        format!(
+                            "invalid operand type {} for int()",
+                            Color::red(other.print(type_tree))
+                        ),
                         loc.into_iter().collect(),
                     )),
                 }
@@ -3477,7 +3568,10 @@ fn typecheck_unary_op(
                         ))
                     }
                     other => Err(CompileError::new_type_error(
-                        format!("invalid operand type \"{}\" for bytes32()", other.display()),
+                        format!(
+                            "invalid operand type {} for bytes32()",
+                            Color::red(other.print(type_tree))
+                        ),
                         loc.into_iter().collect(),
                     )),
                 }
@@ -3508,8 +3602,8 @@ fn typecheck_unary_op(
                     }
                     other => Err(CompileError::new_type_error(
                         format!(
-                            "invalid operand type \"{}\" for address cast",
-                            other.display()
+                            "invalid operand type {} for address cast",
+                            Color::red(other.print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     )),
@@ -3537,7 +3631,7 @@ fn typecheck_binary_op(
             match op {
                 BinaryOp::GetBuffer256 | BinaryOp::GetBuffer64 | BinaryOp::GetBuffer8 => {}
                 _ => {
-                    return typecheck_binary_op_const(op, val1, t1, val2, t2, loc);
+                    return typecheck_binary_op_const(op, val1, t1, val2, t2, type_tree, loc);
                 }
             }
         } else {
@@ -3572,8 +3666,8 @@ fn typecheck_binary_op(
             }
         }
     }
-    let subtype1 = tcs1.get_type().get_representation(type_tree)?;
-    let subtype2 = tcs2.get_type().get_representation(type_tree)?;
+    let subtype1 = tcs1.get_type().rep(type_tree)?;
+    let subtype2 = tcs2.get_type().rep(type_tree)?;
     match op {
         BinaryOp::Plus | BinaryOp::Minus | BinaryOp::Times => match (subtype1, subtype2) {
             (Type::Uint, Type::Uint) => Ok(TypeCheckedExprKind::Binary(
@@ -3590,9 +3684,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to binary op: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to binary op: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree)),
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3612,9 +3706,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to divide: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to divide: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree)),
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3628,9 +3722,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to getbuffer8: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to getbuffer8: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3644,9 +3738,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to getbuffer64: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to getbuffer64: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3660,9 +3754,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to getbuffer256: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to getbuffer256: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3682,9 +3776,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to mod: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to mod: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3704,9 +3798,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to <: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to <: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3726,9 +3820,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to >: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to >: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3748,9 +3842,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to <=: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to <=: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3770,9 +3864,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to >=: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to >=: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3791,9 +3885,9 @@ fn typecheck_binary_op(
             } else {
                 Err(CompileError::new_type_error(
                     format!(
-                        "invalid argument types to equality comparison: \"{}\" and \"{}\"",
-                        subtype1.display(),
-                        subtype2.display()
+                        "invalid argument types to equality comparison: {} and {}",
+                        Color::red(subtype1.print(type_tree)),
+                        Color::red(subtype2.print(type_tree))
                     ),
                     loc.into_iter().collect(),
                 ))
@@ -3824,9 +3918,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to binary bitwise operator: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to binary bitwise operator: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3840,9 +3934,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to binary logical operator: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to binary logical operator: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3856,9 +3950,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to binary hash operator: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to binary hash operator: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3882,9 +3976,9 @@ fn typecheck_trinary_op(
     type_tree: &TypeTree,
     loc: Option<Location>,
 ) -> Result<TypeCheckedExprKind, CompileError> {
-    let subtype1 = tcs1.get_type().get_representation(type_tree)?;
-    let subtype2 = tcs2.get_type().get_representation(type_tree)?;
-    let subtype3 = tcs3.get_type().get_representation(type_tree)?;
+    let subtype1 = tcs1.get_type().rep(type_tree)?;
+    let subtype2 = tcs2.get_type().rep(type_tree)?;
+    let subtype3 = tcs3.get_type().rep(type_tree)?;
     match op {
         TrinaryOp::SetBuffer8 | TrinaryOp::SetBuffer64 | TrinaryOp::SetBuffer256 => {
             match (subtype1, subtype2, subtype3) {
@@ -3897,10 +3991,10 @@ fn typecheck_trinary_op(
                 )),
                 (t1, t2, t3) => Err(CompileError::new_type_error(
                     format!(
-                        "invalid argument types to 3-ary op: \"{}\", \"{}\" and \"{}\"",
-                        t1.display(),
-                        t2.display(),
-                        t3.display()
+                        "invalid argument types to 3-ary op: {}, {} and {}",
+                        Color::red(t1.print(type_tree)),
+                        Color::red(t2.print(type_tree)),
+                        Color::red(t3.print(type_tree))
                     ),
                     loc.into_iter().collect(),
                 )),
@@ -3923,6 +4017,7 @@ fn typecheck_binary_op_const(
     t1: Type,
     val2: Uint256,
     t2: Type,
+    type_tree: &TypeTree,
     loc: Option<Location>,
 ) -> Result<TypeCheckedExprKind, CompileError> {
     match op {
@@ -3949,9 +4044,9 @@ fn typecheck_binary_op_const(
             )),
             _ => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to binary op: \"{}\" and \"{}\"",
-                    t1.display(),
-                    t2.display()
+                    "invalid argument types to binary op: {} and {}",
+                    Color::red(t1.print(type_tree)),
+                    Color::red(t2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3973,9 +4068,9 @@ fn typecheck_binary_op_const(
             },
             _ => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to divide: \"{}\" and \"{}\"",
-                    t1.display(),
-                    t2.display()
+                    "invalid argument types to divide: {} and {}",
+                    Color::red(t1.print(type_tree)),
+                    Color::red(t2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3997,9 +4092,9 @@ fn typecheck_binary_op_const(
             },
             _ => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to mod: \"{}\" and \"{}\"",
-                    t1.display(),
-                    t2.display()
+                    "invalid argument types to mod: {} and {}",
+                    Color::red(t1.print(type_tree)),
+                    Color::red(t2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -4015,9 +4110,9 @@ fn typecheck_binary_op_const(
             )),
             (t1, t2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to <: \"{}\" and \"{}\"",
-                    t1.display(),
-                    t2.display()
+                    "invalid argument types to <: {} and {}",
+                    Color::red(t1.print(type_tree)),
+                    Color::red(t2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -4033,9 +4128,9 @@ fn typecheck_binary_op_const(
             )),
             (t1, t2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to >: \"{}\" and \"{}\"",
-                    t1.display(),
-                    t2.display()
+                    "invalid argument types to >: {} and {}",
+                    Color::red(t1.print(type_tree)),
+                    Color::red(t2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -4051,9 +4146,9 @@ fn typecheck_binary_op_const(
             )),
             (t1, t2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to <=: \"{}\" and \"{}\"",
-                    t1.display(),
-                    t2.display()
+                    "invalid argument types to <=: {} and {}",
+                    Color::red(t1.print(type_tree)),
+                    Color::red(t2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -4069,9 +4164,9 @@ fn typecheck_binary_op_const(
             )),
             (t1, t2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to >=: \"{}\" and \"{}\"",
-                    t1.display(),
-                    t2.display()
+                    "invalid argument types to >=: {} and {}",
+                    Color::red(t1.print(type_tree)),
+                    Color::red(t2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -4099,9 +4194,9 @@ fn typecheck_binary_op_const(
                             } else {
                                 return Err(CompileError::new_type_error(
                                     format!(
-                                        "invalid argument types to binary op: \"{}\" and \"{}\"",
-                                        t1.display(),
-                                        t2.display()
+                                        "invalid argument types to binary op: {} and {}",
+                                        Color::red(t1.print(type_tree)),
+                                        Color::red(t2.print(type_tree))
                                     ),
                                     loc.into_iter().collect(),
                                 ));
@@ -4116,9 +4211,9 @@ fn typecheck_binary_op_const(
             } else {
                 Err(CompileError::new_type_error(
                     format!(
-                        "invalid argument types to binary op: \"{}\" and \"{}\"",
-                        t1.display(),
-                        t2.display()
+                        "invalid argument types to binary op: {} and {}",
+                        Color::red(t1.print(type_tree)),
+                        Color::red(t2.print(type_tree))
                     ),
                     loc.into_iter().collect(),
                 ))
@@ -4133,9 +4228,9 @@ fn typecheck_binary_op_const(
             } else {
                 Err(CompileError::new_type_error(
                     format!(
-                        "invalid argument types to logical and: \"{}\" and \"{}\"",
-                        t1.display(),
-                        t2.display()
+                        "invalid argument types to logical and: {} and {}",
+                        Color::red(t1.print(type_tree)),
+                        Color::red(t2.print(type_tree))
                     ),
                     loc.into_iter().collect(),
                 ))
@@ -4150,9 +4245,9 @@ fn typecheck_binary_op_const(
             } else {
                 Err(CompileError::new_type_error(
                     format!(
-                        "invalid argument types to logical or: \"{}\" and \"{}\"",
-                        t1.display(),
-                        t2.display()
+                        "invalid argument types to logical or: {} and {}",
+                        Color::red(t1.print(type_tree)),
+                        Color::red(t2.print(type_tree))
                     ),
                     loc.into_iter().collect(),
                 ))
@@ -4182,8 +4277,8 @@ fn typecheck_binary_op_const(
                             return Err(CompileError::new_type_error(
                                 format!(
                                     "Attempt to shift a {} by a {}, must shift an integer type by a uint",
-                                    t2.display(),
-                                    t1.display()
+                                    Color::red(t2.print(type_tree)),
+                                    Color::red(t1.print(type_tree))
                                 ),
                                 loc.into_iter().collect(),
                             ))
@@ -4195,8 +4290,8 @@ fn typecheck_binary_op_const(
                 Err(CompileError::new_type_error(
                     format!(
                         "Attempt to shift a {} by a {}, must shift an integer type by a uint",
-                        t2.display(),
-                        t1.display()
+                        Color::red(t2.print(type_tree)),
+                        Color::red(t1.print(type_tree))
                     ),
                     loc.into_iter().collect(),
                 ))
@@ -4282,7 +4377,7 @@ fn typecheck_codeblock(
     type_table: &TypeTable,
     global_vars: &HashMap<StringId, Type>,
     func_table: &TypeTable,
-    return_type: &Type,
+    func: &Func,
     type_tree: &TypeTree,
     string_table: &StringTable,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
@@ -4302,7 +4397,7 @@ fn typecheck_codeblock(
         );
         let (statement, bindings) = typecheck_statement(
             &statement,
-            return_type,
+            func,
             &inner_type_table,
             global_vars,
             func_table,
@@ -4335,7 +4430,7 @@ fn typecheck_codeblock(
                     &inner_type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,

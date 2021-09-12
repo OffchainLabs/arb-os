@@ -240,14 +240,14 @@ fn write_subtypes(
                 code,
                 "type {}{}{} = {};",
                 prefix.unwrap_or(""),
-                if let Type::Nominal(a, _) = subtype.clone() {
+                if let Type::Nominal(a, _, _) = subtype.clone() {
                     a.iter().map(|name| name.clone() + "_").collect::<String>()
                 } else {
                     format!("")
                 },
                 name,
                 {
-                    if let Type::Nominal(a, b) = subtype.clone() {
+                    if let Type::Nominal(a, b, _) = subtype.clone() {
                         let (displayed, subtypes) = type_tree
                             .get(&(a, b))
                             .unwrap()
@@ -306,7 +306,7 @@ fn get_globals_and_version_from_file(
     for global in globals.globals {
         if global.id != usize::max_value() {
             let mut tipe = global.tipe;
-            if let Type::Nominal(file_path, id) = tipe {
+            if let Type::Nominal(file_path, id, _) = tipe {
                 tipe = type_tree
                     .get(&(file_path.clone(), id))
                     .cloned()
@@ -332,7 +332,7 @@ fn get_globals_and_version_from_file(
             .collect::<Vec<_>>();
         for diff in cool_temp {
             let new_type = {
-                let mut new = if let Type::Nominal(file_path, id) = diff.0 {
+                let mut new = if let Type::Nominal(file_path, id, _) = diff.0 {
                     type_tree
                         .get(&(file_path.clone(), id))
                         .cloned()
@@ -381,7 +381,7 @@ fn replace_nominal(
                 let to_render = &mut *(*mut_state.1).borrow_mut();
                 to_render.insert((
                     tipe.clone(),
-                    if let Type::Nominal(path, id) = tipe {
+                    if let Type::Nominal(path, id, _) = tipe {
                         state
                             .get(&(path.clone(), *id))
                             .map(|(_, name)| name.clone())
@@ -392,11 +392,13 @@ fn replace_nominal(
                 ));
                 return false;
             }
-            if let Type::Nominal(path, id) = tipe {
-                mut_state.0.push(Type::Nominal(path.clone(), *id));
+            if let Type::Nominal(path, id, spec) = tipe {
+                mut_state
+                    .0
+                    .push(Type::Nominal(path.clone(), *id, spec.clone()));
                 let to_render = &mut *(*mut_state.1).borrow_mut();
                 to_render.insert((
-                    Type::Nominal(path.clone(), *id),
+                    Type::Nominal(path.clone(), *id, spec.clone()),
                     state
                         .get(&(path.clone(), *id))
                         .map(|(_, name)| name.clone())

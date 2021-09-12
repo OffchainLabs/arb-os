@@ -3,7 +3,7 @@
 //
 
 
-use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVar, Type, CodeBlock, StructField, FuncArg, FuncProperties, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant, OptionConst, FieldInitializer, new_func_arg, new_type_decl};
+use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVar, Type, CodeBlock, StructField, FuncArg, FuncProperties, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant, OptionConst, FieldInitializer, new_func_arg, new_type_decl, check_generic_parameters};
 use crate::compile::{InliningMode, ErrorSystem, CompileError};
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
@@ -16,7 +16,7 @@ use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
 use regex::Regex;
 
 grammar(
-    stringtable: &mut StringTable,                      // map of ids to strings
+    string_table: &mut StringTable,                     // map of ids to strings
     file_info: &Lines,                                  // the lines of source code
     filename: u64,                                      // filename hash
     current_path: &[String],                            // path to what's being parsed
@@ -38,6 +38,13 @@ match {
     _
 }
 
+Comma<T>: Vec<T> = {
+    <mut vec:(<T> ",")*> <last: T?> => {
+        vec.extend(last.into_iter());
+        vec
+    }
+};
+
 pub Decls: Vec<TopLevelDecl> = {
 	<a: ("#![" <Attributes> "]")?><mut i:HeadDecl*> <mut n:BodyDecl+> => {
         i.append(&mut n);
@@ -53,7 +60,7 @@ pub Decls: Vec<TopLevelDecl> = {
 HeadDecl: TopLevelDecl = {
     <lno: @L> "use" <mut p: PathDecl> ";" => {
         let file = p.pop().expect("Internal error: Path vector was empty");
-        let id = stringtable.get(file.clone());
+        let id = string_table.get(file.clone());
         TopLevelDecl::UseDecl(Import::new(
             p, file, Some(id), file_info.location(BytePos::from(lno), filename),
         ))
@@ -64,12 +71,7 @@ HeadDecl: TopLevelDecl = {
             error_system.errors.push(
                 CompileError::new(
                     String::from("Parser error"),
-                    format!(
-                        "Constant {}{}{} is declared twice",
-                        CompileError::RED,
-                        n,
-                        CompileError::RESET,
-                    ),
+                    format!("Constant {} is declared twice", Color::red(&n)),
                     file_info.location(BytePos::from(lno), filename).into_iter().collect()
                 )
             )
@@ -96,18 +98,72 @@ BodyDecl: TopLevelDecl = {
 }
 
 TypeDecl: TypeDecl = {
-    "type" <Ident> "=" <Type> ";" => new_type_decl(<>),
+    "type" <i: Ident> <g: Generalization?> "=" <t: Type> ";" =>? {
+        let params: Vec<_> = g.into_iter().flatten().collect();
+        let names = check_generic_parameters(params.clone(), &string_table)?;
+        let tipe = t.make_generic(&names);
+        
+        for (index, (name, debug_info)) in params.into_iter().enumerate() {
+            let unused = tipe.find(&|tipe: &Type| *tipe == Type::GenericSlot(index)).is_empty();
+            if unused {
+                Err(CompileError::new(
+                    "Generics error",
+                    format!(
+                        "Type {}'s generic arg {} isn't used",
+                        Color::red(string_table.name_from_id(i)),
+                        Color::red(string_table.name_from_id(name)),
+                    ),
+                    debug_info.locs(),
+                ))?;
+            }
+        }
+        Ok(new_type_decl(i, tipe))
+    }
 }
 
 FuncDecl: Func = {
-	<attribs: ("#[" <Attributes> "]")?> <qualifiers: (<Qualifier>)*> "func" <lno: @L> <i:Ident> "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> => {
+    <attribs: ("#[" <Attributes> "]")?> <qualifiers: (<Qualifier>)*> "func" <lno: @L> <i:Ident> <g: Generalization?> "(" <mut args:FuncArgs> ")" <mut ret: (Return)?> <cb:CodeBlock> =>? {
         let public = qualifiers.contains(&"public");
         let view = qualifiers.contains(&"view");
         let write = qualifiers.contains(&"write");
         let debug = DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default());
-        let name = stringtable.name_from_id(i).clone();
+        let name = string_table.name_from_id(i).clone();
+
+        // Generalize over the generic parameters
+        let params: Vec<_> = g.into_iter().flatten().collect();
+        let generic_ids = check_generic_parameters(params.clone(), &string_table)?;
+        args.iter_mut().for_each(|arg| arg.tipe = arg.tipe.make_generic(&generic_ids));
+        if let Some(ref mut tipe) = ret {
+            *tipe = tipe.make_generic(&generic_ids);
+        }
+
+        // Check that every generic argument is used in the func's signature.
+        // Otherwise, it's provably useless to include it and we should just error.
+        for (index, (name, debug_info)) in params.into_iter().enumerate() {
+            
+            let take = |tipe: &Type| *tipe == Type::GenericSlot(index);
+            
+            let mut used = match &ret {
+                Some(tipe) => !tipe.find(&take).is_empty(),
+                None => false,
+            };
+            
+            args.iter().for_each(|arg| used = used || !arg.tipe.find(&take).is_empty());
+            
+            if !used {
+                Err(CompileError::new(
+                    "Generics error",
+                    format!(
+                        "Func {}'s generic arg {} isn't in the signature",
+                        Color::red(string_table.name_from_id(i)),
+                        Color::red(string_table.name_from_id(name)),
+                    ),
+                    debug_info.locs(),
+                ))?;
+            }
+        }
         
-	    Func::new(name, i, public, view, write, false, fa, t, cb, BTreeSet::new(), 0, debug)
+	Ok(Func::new(name, i, public, view, write, false, args, ret, cb, BTreeSet::new(), generic_ids, 0, debug))
     }
 }
 
@@ -129,7 +185,7 @@ GlobalVarDecl: GlobalVar = {
         let mut debug_info = DebugInfo::here(file_info, lno, filename);
         debug_info.attributes = attribs.unwrap_or_default();
         GlobalVar::new(
-            i, stringtable.name_from_id(i).clone(), t, debug_info
+            i, string_table.name_from_id(i).clone(), t, debug_info
         )
     },
 }
@@ -158,12 +214,7 @@ Attributes: Attributes = {
                 unrecognized => error_system.errors.push(
                     CompileError::new(
                         String::from("Lexer error"),
-                        format!(
-                            "Unrecognized attribute {}{}{}",
-                            CompileError::RED,
-                            unrecognized,
-                            CompileError::RESET,
-                        ),
+                        format!("Unrecognized attribute {}", Color::red(unrecognized)),
                         file_info.location(BytePos::from(lno), filename).into_iter().collect()
                     )
                 ),
@@ -197,7 +248,7 @@ StatementKind: StatementKind = {
         
         // the withs we assign at the end
         let mut withs = Expr {
-            kind: ExprKind::VariableRef(i),
+            kind: ExprKind::VariableRef(i, vec![]),
             debug_info: debug_info,
         };
         
@@ -210,7 +261,7 @@ StatementKind: StatementKind = {
         // a nested set of sub-value identifier ops that lets us build up nodes for those like a.b.c by going through
         // each of those for a, a.b, a.b.c, etc
         let mut nest = Expr {
-            kind: ExprKind::VariableRef(i),
+            kind: ExprKind::VariableRef(i, vec![]),
             debug_info: debug_info,
         };
         
@@ -233,7 +284,7 @@ StatementKind: StatementKind = {
                 }
                 SubData::Dot(id) => {
                     let inside = e.clone();
-                    let name = stringtable.name_from_id(id).to_string();
+                    let name = string_table.name_from_id(id).to_string();
                     *build = Expr {
                         kind: ExprKind::StructMod(Box::new(nest.clone()), name.clone(), Box::new(inside)),
                         debug_info,
@@ -274,7 +325,7 @@ StructFields: Vec<StructField> = {
 }
 
 StructField: StructField = {
-	<i: Ident> ":" <t: Type> => StructField::new(stringtable.name_from_id(i).to_string(), t),
+	<i: Ident> ":" <t: Type> => StructField::new(string_table.name_from_id(i).to_string(), t),
 }
 
 Type: Type = {
@@ -307,8 +358,20 @@ Type: Type = {
         let write = q.contains(&"write");
         Type::Func(FuncProperties::new(view, write, true, false), a, Box::new(r.unwrap_or(Type::Void)))
     },
-    Ident => Type::Nominal(current_path.to_owned(), <>),
+    <i: Ident> <g: Specialization?> => {
+        Type::Nominal(current_path.to_owned(), i, g.into_iter().flatten().collect())
+    }
 };
+
+Generalization: Vec<(StringId, DebugInfo)> = {
+    "<" <g: Comma<(<@R> <Ident>)>> ">" => {
+        g.into_iter().map(|(lno, id)| { (id, DebugInfo::here(file_info, lno, filename)) }).collect()
+    },
+}
+
+Specialization: Vec<Type> = {
+    "<" <c: Comma<Type>> ">" => c,
+}
 
 CommaedTypesInParens: Vec<Type> = {
 	"(" ")" => vec![],
@@ -323,7 +386,7 @@ CommaedTypes: Vec<Type> = {
 };
 
 Ident: StringId = {
-	IdentString => stringtable.get(<>),
+	IdentString => string_table.get(<>),
 };
 
 Expr: Expr = {
@@ -336,7 +399,7 @@ Expr: Expr = {
 	debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))
     },
     <lno: @L> <t: Expr> "with" "{" <i:Ident> ":" <e: Expr> "}" => Expr {
-        kind: ExprKind::StructMod(Box::new(t), stringtable.name_from_id(i).to_string(), Box::new(e)),
+        kind: ExprKind::StructMod(Box::new(t), string_table.name_from_id(i).to_string(), Box::new(e)),
         debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename)),
     },
     Expr1,
@@ -411,14 +474,18 @@ Expr10: Expr = {
 Expr11: Expr = {
     <lno: @L> <c: Const> => Expr { kind: ExprKind::Constant(c), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
     <lno: @L> "Some(" <e: Expr> ")" => Expr { kind: ExprKind::OptionInitializer(Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
-    <lno: @L> <f: Expr11> "(" <e: Expr> ")" => Expr { kind: ExprKind::FunctionCall(Box::new(f), vec![e]), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
-    <lno: @L> <f: Expr11> "(" <c: CommaedExprs?> ")" => Expr { kind: ExprKind::FunctionCall(Box::new(f), c.unwrap_or(vec![])), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+    <lno: @L> <callable: Expr11> "(" <e: Expr> ")" => {
+        Expr::lno(ExprKind::FunctionCall(Box::new(callable), vec![e]), file_info, lno, filename)
+    },
+    <lno: @L> <callable: Expr11> "(" <c: CommaedExprs?> ")" => {
+        Expr::lno(ExprKind::FunctionCall(Box::new(callable), c.unwrap_or(vec![])), file_info, lno, filename)
+    },
     <lno: @L> <e1:Expr11> "[" <e2:Expr> "]" => Expr {
         kind: ExprKind::ArrayOrMapRef(Box::new(e1), Box::new(e2)),
         debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))
     },
     <lno: @L> <e:Expr11> "." <i:Ident> => Expr {
-        kind: ExprKind::DotRef(Box::new(e), stringtable.name_from_id(i).to_string()),
+        kind: ExprKind::DotRef(Box::new(e), string_table.name_from_id(i).to_string()),
         debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))
     },
     <lno: @L> <e:Expr11> "." <u:UnsignedInteger> => Expr { kind: ExprKind::TupleRef(Box::new(e), u), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
@@ -475,8 +542,8 @@ Expr12: Expr = {
         let debug = DebugInfo::here(file_info, lno, filename);
         
         let name = format!("closure #{}", closures.len() + 1);
-        let id = stringtable.get(name.clone());
-        let closure = Func::new(name, id, false, view, write, true, fa, t, cb, BTreeSet::new(), 0, debug);
+        let id = string_table.get(name.clone());
+        let closure = Func::new(name, id, false, view, write, true, fa, t, cb, BTreeSet::new(), vec![], 0, debug);
         
 	    closures.insert(id, closure.clone());
         
@@ -495,7 +562,10 @@ Expr13: Expr = {
         <lno: @L> "error" => Expr { kind: ExprKind::Error, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
         <lno: @L> "getGas" "(" ")" => Expr { kind: ExprKind::GetGas, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
         <lno: @L> "setGas" "(" <e:Expr> ")" => Expr { kind: ExprKind::SetGas(Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
-	<lno: @L> <i: Ident> => Expr { kind: ExprKind::VariableRef(i), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+    <lno: @L> <i: Ident> <s:("::" <Specialization>)?> => {
+        let spec = s.into_iter().flatten().collect();
+        Expr::lno(ExprKind::VariableRef(i, spec), file_info, lno, filename)
+    },
     <lno: @L> <q: QuoteString> => Expr::lno(ExprKind::Quote(q), file_info, lno, filename),
 }
 
@@ -513,7 +583,7 @@ FieldInitializers: Vec<FieldInitializer> = {
 }
 
 FieldInitializer: FieldInitializer = {
-	<i: Ident> ":" <e: Expr> => FieldInitializer::new(stringtable.name_from_id(i).to_string(), e),
+	<i: Ident> ":" <e: Expr> => FieldInitializer::new(string_table.name_from_id(i).to_string(), e),
 }
 
 CommaedExprs: Vec<Expr> = {
@@ -554,7 +624,7 @@ IdentString: String = {
 };
 
 QuoteString: Vec<u8> = {
-    <lno: @L> <q: r#"s?"[a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~-]*""#> => {
+    <lno: @L> <q: r#"s?"[a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~\\/-]*""#> => {
         let re = Regex::new(r#"s?"(0x)?[a-fA-F0-9]+""#).unwrap();
         if re.is_match(q) {
             error_system.warnings.push(
@@ -568,7 +638,7 @@ QuoteString: Vec<u8> = {
                 )
             );
         }
-        let re = Regex::new(r#"s?"([a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~-]*)""#).unwrap();
+        let re = Regex::new(r#"s?"([a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~\\/-]*)""#).unwrap();
         let string = re.captures(q).unwrap().get(1).map_or(String::new(), |m| m.as_str().to_string());
         string.as_bytes().to_vec()
     },
@@ -599,10 +669,8 @@ ConstVal: Uint256 = {
                         CompileError::new_warning(
                             String::from("Parser warning"),
                             format!(
-                                "Constant {}{}{} was used despite being marked as intentionally unused",
-                                error_system.warn_color,
-                                &c,
-                                CompileError::RESET,
+                                "Constant {} was used despite being marked as intentionally unused",
+                                Color::color(error_system.warn_color, &c),
                             ),
                             loc
                         )
@@ -615,12 +683,7 @@ ConstVal: Uint256 = {
                 error_system.errors.push(
                     CompileError::new(
                         String::from("Parser error"),
-                        format!(
-                            "Unrecognized constant {}{}{}",
-                            CompileError::RED,
-                            &c,
-                            CompileError::RESET,
-                        ),
+                        format!("Unrecognized constant {}", Color::red(&c)),
                         loc
                     )
                 );
