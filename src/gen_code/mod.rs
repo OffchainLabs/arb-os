@@ -2,7 +2,7 @@
 // Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
 //
 
-use crate::compile::{AbstractSyntaxTree, StructField, Type, TypeCheckedNode, TypeTree};
+use crate::compile::{AbstractSyntaxTree, NamedTypes, StructField, Type, TypeCheckedNode};
 use crate::console::Color;
 use crate::link::LinkedProgram;
 use crate::GenUpgrade;
@@ -102,8 +102,8 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
         .difference(&(input_fields.iter().collect()))
         .cloned()
         .collect();
-    let input_struct = Type::Struct(input_fields.clone());
-    let output_struct = Type::Struct(output_fields.clone());
+    let input_struct = Type::Struct(input_fields.clone(), vec![]);
+    let output_struct = Type::Struct(output_fields.clone(), vec![]);
     let mut output_only: Vec<_> = output_only.into_iter().collect();
     output_only.sort_by(|left, right| left.name.cmp(&right.name));
     let mut intersection: Vec<_> = intersection.into_iter().collect();
@@ -223,7 +223,7 @@ fn write_subtypes(
     code: &mut File,
     mut subtypes: HashSet<(Type, String)>,
     prefix: Option<&str>,
-    type_tree: &TypeTree,
+    nominals: &NamedTypes,
 ) -> Result<(), GenCodeError> {
     let mut total_subtypes = subtypes.clone();
     while !subtypes.is_empty() {
@@ -231,9 +231,9 @@ fn write_subtypes(
         let mut vec_subtypes = subtypes.iter().collect::<Vec<_>>();
         vec_subtypes.sort_by(|(lower, _), (higher, _)| {
             lower
-                .display_separator("_", None, true, type_tree)
+                .display_separator("_", None, true, nominals)
                 .0
-                .cmp(&higher.display_separator("_", None, true, type_tree).0)
+                .cmp(&higher.display_separator("_", None, true, nominals).0)
         });
         for (subtype, name) in vec_subtypes {
             writeln!(
@@ -248,11 +248,11 @@ fn write_subtypes(
                 name,
                 {
                     if let Type::Nominal(a, b, _) = subtype.clone() {
-                        let (displayed, subtypes) = type_tree
+                        let (displayed, subtypes) = nominals
                             .get(&(a, b))
                             .unwrap()
                             .0
-                            .display_separator("_", prefix, true, type_tree);
+                            .display_separator("_", prefix, true, nominals);
                         new_subtypes.extend(subtypes);
                         displayed
                     } else {
@@ -273,7 +273,7 @@ fn write_subtypes(
 
 fn get_globals_and_version_from_file(
     path: &Path,
-) -> Result<(Vec<StructField>, HashSet<(Type, String)>, TypeTree, u64), GenCodeError> {
+) -> Result<(Vec<StructField>, HashSet<(Type, String)>, NamedTypes, u64), GenCodeError> {
     let mut file = File::open(&path).map_err(|_| {
         GenCodeError::new(format!(
             "Could not create file \"{}\"",
@@ -295,7 +295,7 @@ fn get_globals_and_version_from_file(
         ))
     })?;
 
-    let type_tree = globals.type_tree.into_type_tree();
+    let nominals = globals.nominals.into_type_tree();
 
     let mut state: (Vec<_>, Rc<RefCell<HashSet<(Type, String)>>>) =
         (vec![], Rc::new(RefCell::new(HashSet::new())));
@@ -307,13 +307,13 @@ fn get_globals_and_version_from_file(
         if global.id != usize::max_value() {
             let mut tipe = global.tipe;
             if let Type::Nominal(file_path, id, _) = tipe {
-                tipe = type_tree
+                tipe = nominals
                     .get(&(file_path.clone(), id))
                     .cloned()
                     .unwrap_or((Type::Any, "fail1".to_string()))
                     .0;
             }
-            tipe.recursive_apply(replace_nominal, &type_tree, &mut state);
+            tipe.recursive_apply(replace_nominal, &nominals, &mut state);
 
             fields.push(StructField::new(global.name, tipe))
         }
@@ -333,7 +333,7 @@ fn get_globals_and_version_from_file(
         for diff in cool_temp {
             let new_type = {
                 let mut new = if let Type::Nominal(file_path, id, _) = diff.0 {
-                    type_tree
+                    nominals
                         .get(&(file_path.clone(), id))
                         .cloned()
                         .unwrap_or((Type::Any, "fail2".to_string()))
@@ -341,7 +341,7 @@ fn get_globals_and_version_from_file(
                     diff.clone()
                 };
                 new.0
-                    .recursive_apply(replace_nominal, &type_tree, &mut state);
+                    .recursive_apply(replace_nominal, &nominals, &mut state);
                 new
             };
             new_types.insert(new_type);
@@ -350,19 +350,19 @@ fn get_globals_and_version_from_file(
     }
     mem::drop(old_state);
     let subtypes = Rc::get_mut(&mut state.1).unwrap().clone().into_inner();
-    Ok((fields, subtypes, type_tree, globals.arbos_version))
+    Ok((fields, subtypes, nominals, globals.arbos_version))
 }
 
 fn type_decl_string(
     type_name: &String,
     tipe: &Type,
     prefix: Option<&str>,
-    type_tree: &TypeTree,
+    nominals: &NamedTypes,
 ) -> String {
     format!(
         "type {} = {};",
         type_name,
-        tipe.display_separator("_", prefix, true, type_tree).0
+        tipe.display_separator("_", prefix, true, nominals).0
     )
 }
 
@@ -372,7 +372,7 @@ fn let_string(name: &String, expr: &String) -> String {
 
 fn replace_nominal(
     node: &mut TypeCheckedNode,
-    state: &TypeTree,
+    state: &NamedTypes,
     mut_state: &mut (Vec<Type>, Rc<RefCell<HashSet<(Type, String)>>>),
 ) -> bool {
     match node {

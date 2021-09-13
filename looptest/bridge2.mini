@@ -19,7 +19,7 @@ type GlobalsBeforeUpgrade = struct {
 type GlobalsAfterUpgrade = struct {
     newGlobal1: option<int> ,
     newGlobal2: uint,
-    newGlobal3: (uint, uint, ),
+    newGlobal3: (uint, uint),
     _jump_table: any,
 };
 

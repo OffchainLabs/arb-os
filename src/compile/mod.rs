@@ -26,7 +26,7 @@ use std::io::{self, Read};
 use std::path::Path;
 use typecheck::TypeCheckedFunc;
 
-pub use ast::{DebugInfo, GlobalVar, StructField, TopLevelDecl, Type, TypeTree};
+pub use ast::{DebugInfo, GlobalVar, NamedTypes, StructField, TopLevelDecl, Type};
 pub use source::Lines;
 use std::str::FromStr;
 pub use typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNode};
@@ -64,6 +64,8 @@ pub struct CompileStruct {
     pub no_builtins: bool,
 }
 
+pub type ModPath = Vec<String>;
+
 #[derive(Clap, Debug)]
 pub enum InliningHeuristic {
     All,
@@ -100,7 +102,7 @@ struct Module {
     /// Map from `StringId`s to the types of the functions they represent.
     func_table: HashMap<StringId, Type>,
     /// The path to the module
-    path: Vec<String>,
+    path: ModPath,
     /// The name of the module, this may be removed later.
     name: String,
 }
@@ -122,7 +124,7 @@ struct TypeCheckedModule {
     /// The list of imports declared via `use` statements.
     imports: Vec<Import>,
     /// The path to the module
-    path: Vec<String>,
+    path: ModPath,
     /// The name of the module
     name: String,
 }
@@ -223,7 +225,7 @@ impl Module {
         imports: Vec<Import>,
         string_table: StringTable,
         func_table: HashMap<usize, Type>,
-        path: Vec<String>,
+        path: ModPath,
         name: String,
     ) -> Self {
         Self {
@@ -248,7 +250,7 @@ impl TypeCheckedModule {
         constants: HashSet<String>,
         global_vars: Vec<GlobalVar>,
         imports: Vec<Import>,
-        path: Vec<String>,
+        path: ModPath,
         name: String,
     ) -> Self {
         Self {
@@ -365,7 +367,7 @@ pub struct CompiledProgram {
     /// Name of the program, usually the func from which it was derived
     pub name: String,
     /// Path of the program
-    pub path: Vec<String>,
+    pub path: ModPath,
     /// Instructions to be run to execute the program/module
     pub code: Vec<Instruction>,
     /// All globals used in this program
@@ -374,8 +376,8 @@ pub struct CompiledProgram {
     pub source_file_map: Option<SourceFileMap>,
     /// Map from u64 hashes of file names to the `String`s, `Path`s, and `Content`s they originate from
     pub file_info_chart: HashMap<u64, FileInfo>,
-    /// Tree of the types
-    pub type_tree: TypeTree,
+    /// Map of every named type
+    pub nominals: NamedTypes,
     /// A global id unique to the source (usually a func) from which this program was compiled
     pub unique_id: LabelId,
     /// This program's debug info
@@ -385,12 +387,12 @@ pub struct CompiledProgram {
 impl CompiledProgram {
     pub fn new(
         name: String,
-        path: Vec<String>,
+        path: ModPath,
         code: Vec<Instruction>,
         globals: Vec<GlobalVar>,
         source_file_map: Option<SourceFileMap>,
         file_info_chart: HashMap<u64, FileInfo>,
-        type_tree: TypeTree,
+        nominals: NamedTypes,
         debug_info: DebugInfo,
     ) -> Self {
         let unique_id = Import::unique_id(&path, &name);
@@ -401,7 +403,7 @@ impl CompiledProgram {
             globals,
             source_file_map,
             file_info_chart,
-            type_tree,
+            nominals,
             unique_id,
             debug_info,
         }
@@ -569,10 +571,12 @@ pub fn compile_from_folder(
         builtins,
     )?;
 
-    resolve_imports(&mut programs, &mut import_map, error_system)?;
+    resolve_imports(&mut programs, &mut import_map)?;
+
+    // must happen before modules conversion
+    let nominals = process_named_types(&programs);
 
     // Conversion of programs from `HashMap` to `Vec` for typechecking
-    let type_tree = create_type_tree(&programs);
     let mut modules = vec![programs
         .remove(&if let Some(lib) = library {
             vec![lib.to_string(), main.to_string()]
@@ -586,7 +590,7 @@ pub fn compile_from_folder(
         out
     });
     let mut typechecked_modules =
-        typecheck_programs(&type_tree, modules, file_info_chart, error_system)?;
+        typecheck_programs(&nominals, modules, file_info_chart, error_system)?;
 
     if must_use_global_consts {
         check_global_constants(&typechecked_modules, constants_path, error_system);
@@ -611,15 +615,15 @@ pub fn compile_from_folder(
     let (progs, globals) = codegen_programs(
         typechecked_modules,
         error_system,
-        type_tree,
+        nominals,
         folder,
         release_build,
     )?;
     Ok((progs, globals))
 }
 
-/// Converts the `Vec<String>` used to identify a path into a single formatted string
-fn path_display(path: &Vec<String>) -> String {
+/// Converts the `ModPath` used to identify a path into a single formatted string
+pub fn path_display(path: &ModPath) -> String {
     let mut s = "".to_string();
     if let Some(first) = path.get(0) {
         s.push_str(first);
@@ -642,13 +646,7 @@ fn create_program_tree(
     constants_path: Option<&Path>,
     error_system: &mut ErrorSystem,
     builtins: bool,
-) -> Result<
-    (
-        HashMap<Vec<String>, Module>,
-        HashMap<Vec<String>, Vec<Import>>,
-    ),
-    CompileError,
-> {
+) -> Result<(HashMap<ModPath, Module>, HashMap<ModPath, Vec<Import>>), CompileError> {
     let mut paths = if let Some(lib) = library {
         vec![vec![lib.to_owned(), main.to_owned()]]
     } else {
@@ -742,60 +740,56 @@ fn create_program_tree(
 }
 
 fn resolve_imports(
-    modules: &mut HashMap<Vec<String>, Module>,
-    import_map: &mut HashMap<Vec<String>, Vec<Import>>,
-    error_system: &mut ErrorSystem,
+    modules: &mut HashMap<ModPath, Module>,
+    import_map: &mut HashMap<ModPath, Vec<Import>>,
 ) -> Result<(), CompileError> {
-    for (name, imports) in import_map {
+    for (path, imports) in import_map {
         for import in imports {
-            let import_path = import.path.clone();
-            let (named_type, imp_func) = if let Some(module) = modules.get_mut(&import_path) {
-                // Looks up info from target module
-                let string_id = module
-                    .string_table
-                    .get_if_exists(&import.name.clone())
-                    .ok_or(CompileError::new(
-                        "Import Error",
-                        format!(
-                            "Symbol {} does not exist in {}",
-                            Color::red(&import.name),
-                            Color::red(&import.path.join("/"))
+            let (named_type, imp_func) = match modules.get(&import.path) {
+                Some(module) => {
+                    // Look up the *other* module's string id
+                    let string_id = module.string_table.get_if_exists(&import.name).ok_or(
+                        CompileError::new(
+                            "Import Error",
+                            format!(
+                                "Symbol {} does not exist in {}",
+                                Color::red(&import.name),
+                                Color::red(path_display(&import.path))
+                            ),
+                            import.loc(),
                         ),
-                        import.location.into_iter().collect(),
-                    ))?;
-                let named_type = module.named_types.get(&string_id).cloned();
-                let imp_func = module.func_table.get(&string_id).cloned();
-                (named_type, imp_func)
-            } else {
-                return Err(CompileError::new(
-                    String::from("Internal error"),
-                    format!(
-                        "Can not find target file for import \"{}::{}\"",
-                        import.path.get(0).cloned().unwrap_or_else(String::new),
-                        import.name
-                    ),
-                    import.location.into_iter().collect(),
-                ));
+                    )?;
+                    let named_type = module.named_types.get(&string_id).cloned();
+                    let imp_func = module.func_table.get(&string_id).cloned();
+                    (named_type, imp_func)
+                }
+                None => {
+                    return Err(CompileError::new(
+                        "Import error",
+                        format!(
+                            "File for import {}::{} does not exist",
+                            Color::red(import.path.get(0).cloned().unwrap_or_else(String::new)),
+                            Color::red(&import.name)
+                        ),
+                        import.loc(),
+                    ));
+                }
             };
 
-            // Modifies origin module to include import
-            let origin_module = modules.get_mut(name).ok_or_else(|| {
+            // Get the module that's importing data from others
+            let module = modules.get_mut(path).ok_or_else(|| {
                 CompileError::new(
-                    String::from("Internal error"),
-                    format!(
-                        "Can not find originating file for import {}::{}",
-                        Color::red(import.path.get(0).map(String::as_str).unwrap_or_default()),
-                        Color::red(&import.name)
-                    ),
-                    import.location.into_iter().collect(),
+                    "Internal error",
+                    format!("Module {} does not exist", Color::red(path_display(&path))),
+                    vec![],
                 )
             })?;
 
-            let string_id = match origin_module.string_table.get_if_exists(&import.name) {
+            let string_id = match module.string_table.get_if_exists(&import.name) {
                 Some(string_id) => string_id,
                 None => {
                     return Err(CompileError::new(
-                        format!("Internal error"),
+                        "Internal error",
                         format!("Import {} has no string id", import.name),
                         import.loc(),
                     ))
@@ -803,75 +797,66 @@ fn resolve_imports(
             };
 
             if let Some(named_type) = named_type {
-                origin_module
-                    .named_types
-                    .insert(string_id, named_type.clone());
-            } else if let Some(imp_func) = imp_func {
+                module.named_types.insert(string_id, named_type);
+            }
+
+            if let Some(imp_func) = imp_func {
                 let public = match imp_func {
                     Type::Func(prop, _, _) => prop.public,
-                    x => panic!(
-                        "Func {} somehow has non-func type {}",
-                        import.name,
-                        x.display()
-                    ),
-                };
-
-                match public {
-                    true => {
-                        origin_module.func_table.insert(string_id, imp_func.clone());
-                    }
-                    false => {
+                    x => {
                         return Err(CompileError::new(
-                            format!("Import error"),
-                            format!("Func {} is private", Color::red(&import.name)),
+                            "Internal error",
+                            format!(
+                                "Func {} somehow has non-func type {}",
+                                Color::red(&import.name),
+                                x.display()
+                            ),
                             import.loc(),
                         ))
                     }
+                };
+
+                if !public {
+                    return Err(CompileError::new(
+                        "Import error",
+                        format!("Func {} is private", Color::red(&import.name)),
+                        import.loc(),
+                    ));
                 }
-            } else {
-                error_system.warnings.push(CompileError::new_warning(
-                    String::from("Compile warning"),
-                    format!(
-                        "import \"{}::{}\" does not correspond to a type or function",
-                        import.path.get(0).cloned().unwrap_or_else(String::new),
-                        import.name
-                    ),
-                    import.location.into_iter().collect(),
-                ));
+
+                module.func_table.insert(string_id, imp_func);
             }
         }
     }
     Ok(())
 }
 
-/// Constructor for `TypeTree`
-fn create_type_tree(program_tree: &HashMap<Vec<String>, Module>) -> TypeTree {
-    program_tree
-        .iter()
-        .map(|(path, program)| {
-            program
-                .named_types
-                .iter()
-                .map(|(id, tipe)| {
-                    (
-                        (path.clone(), *id),
-                        (
-                            tipe.clone(),
-                            program_tree
-                                .get(path)
-                                .map(|module| module.string_table.name_from_id(*id).clone())
-                                .unwrap(),
-                        ),
-                    )
-                })
-                .collect::<Vec<_>>()
-        })
-        .flatten()
-        .collect()
+/// Finds all named types
+fn process_named_types(program_tree: &HashMap<ModPath, Module>) -> NamedTypes {
+    let mut nominals = HashMap::new();
+
+    for (path, program) in program_tree {
+        for (id, tipe) in &program.named_types {
+            let name = program_tree
+                .get(path)
+                .map(|module| module.string_table.name_from_id(*id).clone())
+                .unwrap();
+
+            let place = (path.clone(), *id);
+            let definition = (tipe.clone(), name.clone());
+            nominals.insert(place, definition.clone());
+
+            let unique_id = Import::unique_id(path, &name);
+            let place = (vec![format!("meta")], unique_id as usize);
+            nominals.insert(place, definition);
+        }
+    }
+
+    nominals
 }
 
 fn typecheck_programs(
-    type_tree: &TypeTree,
+    nominals: &NamedTypes,
     modules: Vec<Module>,
     _file_info_chart: &mut BTreeMap<u64, FileInfo>,
     error_system: &mut ErrorSystem,
@@ -899,13 +884,13 @@ fn typecheck_programs(
                         &imports,
                         string_table,
                         func_table,
-                        type_tree,
+                        nominals,
                         &path,
                     )?;
 
                 checked_funcs.iter_mut().for_each(|(id, func)| {
-                    let detected_view = func.is_view(type_tree);
-                    let detected_write = func.is_write(type_tree);
+                    let detected_view = func.is_view(nominals);
+                    let detected_write = func.is_write(nominals);
 
                     let name = string_table.name_from_id(*id);
 
@@ -1011,7 +996,7 @@ fn check_global_constants(
 fn codegen_programs(
     typechecked_modules: Vec<TypeCheckedModule>,
     error_system: &mut ErrorSystem,
-    type_tree: TypeTree,
+    nominals: NamedTypes,
     folder: &Path,
     release_build: bool,
 ) -> Result<(Vec<CompiledProgram>, Vec<GlobalVar>), CompileError> {
@@ -1041,10 +1026,7 @@ fn codegen_programs(
             };
         }
         for import in &module.imports {
-            match import.id {
-                Some(id) => drop(func_labels.insert(id, Label::Func(import.unique_id))),
-                None => panic!("Import without id {:#?}", &import),
-            }
+            func_labels.insert(import.id, Label::Func(import.unique_id));
         }
 
         for (_, func) in module.checked_funcs {
@@ -1090,7 +1072,7 @@ fn codegen_programs(
                     globals,
                     source,
                     HashMap::new(),
-                    type_tree.clone(),
+                    nominals.clone(),
                     debug_info,
                 );
 

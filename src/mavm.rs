@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::compile::{DebugInfo, TypeTree};
+use crate::compile::{DebugInfo, NamedTypes};
 use crate::console::Color;
 use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
@@ -138,11 +138,11 @@ impl Instruction<AVMOpcode> {
 }
 
 impl Instruction {
-    pub fn is_view(&self, type_tree: &TypeTree) -> bool {
-        self.opcode.is_view(type_tree)
+    pub fn is_view(&self, nominals: &NamedTypes) -> bool {
+        self.opcode.is_view(nominals)
     }
-    pub fn is_write(&self, type_tree: &TypeTree) -> bool {
-        self.opcode.is_write(type_tree)
+    pub fn is_write(&self, nominals: &NamedTypes) -> bool {
+        self.opcode.is_write(nominals)
     }
     pub fn get_label(&self) -> Option<&Label> {
         match &self.opcode {
@@ -935,7 +935,7 @@ pub enum AVMOpcode {
 }
 
 impl Opcode {
-    pub fn is_view(&self, _: &TypeTree) -> bool {
+    pub fn is_view(&self, _: &NamedTypes) -> bool {
         match self {
             Opcode::AVMOpcode(AVMOpcode::Inbox)
             | Opcode::AVMOpcode(AVMOpcode::InboxPeek)
@@ -953,7 +953,7 @@ impl Opcode {
             _ => false,
         }
     }
-    pub fn is_write(&self, _: &TypeTree) -> bool {
+    pub fn is_write(&self, _: &NamedTypes) -> bool {
         match self {
             Opcode::AVMOpcode(AVMOpcode::Log)
             | Opcode::AVMOpcode(AVMOpcode::Inbox)

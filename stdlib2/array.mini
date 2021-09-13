@@ -8,7 +8,8 @@ type array<T> = struct {
     size: uint,
     topstep: uint,
     contents: block<T>,
-    access: func(array<T>, uint) -> T,
+    trait access: array_get::<T>,
+    trait insert: array_set::<T>,
 };
 
 public func array_new<T>(size: uint, base_val: T) -> array<T> {
@@ -21,7 +22,6 @@ public func array_new<T>(size: uint, base_val: T) -> array<T> {
         size: size,
         topstep: chunk,
         contents: newfixedarray(8, base_val),
-        access: array_get::<T>,
     };
 }
 

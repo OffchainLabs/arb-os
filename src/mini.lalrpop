@@ -3,7 +3,7 @@
 //
 
 
-use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVar, Type, CodeBlock, StructField, FuncArg, FuncProperties, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant, OptionConst, FieldInitializer, new_func_arg, new_type_decl, check_generic_parameters};
+use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVar, Type, CodeBlock, StructField, StructTrait, FuncArg, FuncProperties, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant, OptionConst, FieldInitializer, new_func_arg, new_type_decl, check_generic_parameters, check_typedef};
 use crate::compile::{InliningMode, ErrorSystem, CompileError};
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
@@ -39,8 +39,8 @@ match {
 }
 
 Comma<T>: Vec<T> = {
-    <mut vec:(<T> ",")*> <last: T?> => {
-        vec.extend(last.into_iter());
+    <mut vec:(<T> ",")*> <last: T> ","? => {
+        vec.push(last);
         vec
     }
 };
@@ -62,7 +62,7 @@ HeadDecl: TopLevelDecl = {
         let file = p.pop().expect("Internal error: Path vector was empty");
         let id = string_table.get(file.clone());
         TopLevelDecl::UseDecl(Import::new(
-            p, file, Some(id), file_info.location(BytePos::from(lno), filename),
+            p, file, id, file_info.location(BytePos::from(lno), filename),
         ))
     },
     <lno: @L> "const" <n: IdentString> "=" <u: UnsignedInteger> ";" => { 
@@ -98,27 +98,24 @@ BodyDecl: TopLevelDecl = {
 }
 
 TypeDecl: TypeDecl = {
-    "type" <i: Ident> <g: Generalization?> "=" <t: Type> ";" =>? {
+    "type" <id: Ident> <g: Generalization?> "=" <t: Type> ";" =>? {
         let params: Vec<_> = g.into_iter().flatten().collect();
-        let names = check_generic_parameters(params.clone(), &string_table)?;
-        let tipe = t.make_generic(&names);
+        let tipe = check_typedef(id, t, params, &*string_table)?;
+        Ok(new_type_decl(id, tipe))
+    },
+    "type" <id: Ident> <g: Generalization?> "=" "struct" "{" <fields: Comma<StructField>> <traits: Comma<StructTrait>> "}" ";" =>? {
+        let type_name = string_table.name_from_id(id);
+        let params: Vec<_> = g.into_iter().flatten().collect();
         
-        for (index, (name, debug_info)) in params.into_iter().enumerate() {
-            let unused = tipe.find(&|tipe: &Type| *tipe == Type::GenericSlot(index)).is_empty();
-            if unused {
-                Err(CompileError::new(
-                    "Generics error",
-                    format!(
-                        "Type {}'s generic arg {} isn't used",
-                        Color::red(string_table.name_from_id(i)),
-                        Color::red(string_table.name_from_id(name)),
-                    ),
-                    debug_info.locs(),
-                ))?;
-            }
+        let mut methods = vec![];
+        for (trait_name, func_name, spec) in traits {
+            let path = current_path.to_owned();
+            methods.push(StructTrait::new(trait_name, func_name, type_name.clone(), path, spec));
         }
-        Ok(new_type_decl(i, tipe))
-    }
+        
+        let tipe = check_typedef(id, Type::Struct(fields, methods), params, &*string_table)?;
+        Ok(new_type_decl(id, tipe))
+    },
 }
 
 FuncDecl: Func = {
@@ -141,14 +138,14 @@ FuncDecl: Func = {
         // Otherwise, it's provably useless to include it and we should just error.
         for (index, (name, debug_info)) in params.into_iter().enumerate() {
             
-            let take = |tipe: &Type| *tipe == Type::GenericSlot(index);
+            let mut take = |tipe: &Type| *tipe == Type::GenericSlot(index);
             
             let mut used = match &ret {
-                Some(tipe) => !tipe.find(&take).is_empty(),
+                Some(tipe) => !tipe.find(&mut take).is_empty(),
                 None => false,
             };
             
-            args.iter().for_each(|arg| used = used || !arg.tipe.find(&take).is_empty());
+            args.iter().for_each(|arg| used = used || !arg.tipe.find(&mut take).is_empty());
             
             if !used {
                 Err(CompileError::new(
@@ -320,14 +317,6 @@ CommaedMatchPatterns: Vec<MatchPattern> = {
 	<mut a: ( <MatchPattern> "," )+> <b: MatchPattern?> => {if let Some(c) = b {a.push(c)}a},
 }
 
-StructFields: Vec<StructField> = {
-	<mut a: (<StructField> ",")*> <b: StructField> ","? => {a.push(b);a},
-}
-
-StructField: StructField = {
-	<i: Ident> ":" <t: Type> => StructField::new(string_table.name_from_id(i).to_string(), t),
-}
-
 Type: Type = {
     "uint" => Type::Uint,
     "int" => Type::Int,
@@ -335,7 +324,8 @@ Type: Type = {
     "buffer" => Type::Buffer,
     "bytes32" => Type::Bytes32,
     "address" => Type::EthAddress,
-    "struct" "{" <StructFields> "}" => Type::Struct(<>),
+    "any" => Type::Any,
+    "every" => Type::Every,
     <CommaedTypesInParens> => Type::Tuple(<>),
     "[" "]" <Type> => Type::Array(Box::new(<>)),
     "[" <s:UnsignedInteger> "]" <t:Type> => Type::FixedArray(
@@ -344,9 +334,8 @@ Type: Type = {
     ),
     "map" "<" <t1:Type> "," <t2:Type> ","? ">" => Type::Map(Box::new(t1), Box::new(t2)),
     "string" => Type::Tuple(vec![Type::Uint, Type::Buffer]),
-    "any" => Type::Any,
+    "struct" "{" <fields: Comma<StructField>> "}" => Type::Struct(fields, vec![]),
     "option<" <t1:Type> ">" => Type::Option(Box::new(t1)),
-    "every" => Type::Every,
     "union<" <t1:CommaedTypes> ">" => Type::Union(t1),
     <q: Qualifier*> "func" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => {
         let view = q.contains(&"view");
@@ -364,13 +353,26 @@ Type: Type = {
 };
 
 Generalization: Vec<(StringId, DebugInfo)> = {
-    "<" <g: Comma<(<@R> <Ident>)>> ">" => {
-        g.into_iter().map(|(lno, id)| { (id, DebugInfo::here(file_info, lno, filename)) }).collect()
+    "<" <g: Comma<(<@R> <Ident>)>?> ">" => {
+        g.into_iter().flatten().map(|(lno, id)| { (id, DebugInfo::here(file_info, lno, filename)) }).collect()
     },
 }
 
 Specialization: Vec<Type> = {
-    "<" <c: Comma<Type>> ">" => c,
+    "<" <c: Comma<Type>?> ">" => c.into_iter().flatten().collect(),
+}
+
+StructField: StructField = {
+    <i: Ident> ":" <t: Type> => StructField::new(string_table.name_from_id(i).to_string(), t),
+}
+
+StructTrait: (String, String, Vec<Type>) = {
+    "trait" <i: Ident> ":" <m: Ident> <s:("::" <Specialization>)?> => {
+        let name = string_table.name_from_id(i).clone();
+        let func_name = string_table.name_from_id(m).clone();
+        let spec = s.into_iter().flatten().collect();
+        (name, func_name, spec)
+    }
 }
 
 CommaedTypesInParens: Vec<Type> = {

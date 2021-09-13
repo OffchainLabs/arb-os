@@ -1221,7 +1221,7 @@ fn mavm_codegen_expr(
         TypeCheckedExprKind::StructMod(struc, index, val, t) => {
             let val_locals = expr!(val, 0)?;
             let struc_locals = expr!(struc, 1)?;
-            if let Type::Struct(v) = t {
+            if let Type::Struct(v, _) = t {
                 let struct_len = v.len();
                 code.push(Instruction::from_opcode_imm(
                     Opcode::TupleSet(struct_len),
