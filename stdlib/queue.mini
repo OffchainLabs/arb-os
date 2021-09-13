@@ -7,7 +7,7 @@ type BoundedQueue = struct {
     nextPut: uint,
     nextGet: uint,
     contents: []any,
-}
+};
 
 public func boundedQueue_new(capacity: uint) -> BoundedQueue {
     return struct {
@@ -70,7 +70,7 @@ public func boundedQueue_set_nth(q: BoundedQueue, n: uint, value: any) -> option
 
 public func boundedQueue_expand(q: BoundedQueue, newSize: uint) -> BoundedQueue {
     if (newSize <= q.capacity) {
-        panic;
+        error;
     }
     let newQ = boundedQueue_new(newSize);
     while ( ! boundedQueue_isEmpty(q) ) {
@@ -78,13 +78,13 @@ public func boundedQueue_expand(q: BoundedQueue, newSize: uint) -> BoundedQueue 
             q = res.0;
             newQ = boundedQueue_put(newQ, res.1);
         } else {
-            panic;
+            error;
         }
     }
     return newQ;
 }
 
-type Queue = BoundedQueue
+type Queue = BoundedQueue;
 
 public func queue_new() -> Queue {
     return boundedQueue_new(8);
@@ -113,7 +113,7 @@ public func queue_getOrDie(q: Queue) -> (Queue, any) {
     return xif let Some(res) = queue_get(q) {
         res
     } else {
-        panic
+        error
     };
 }
 
@@ -148,11 +148,12 @@ public func queue_map(q: Queue, clo: func(any, any) -> any, data: any) -> Queue 
     };
 }
 
-type QueueStack = option<QueueStackCell>
+type QueueStack = option<QueueStackCell>;
+
 type QueueStackCell = struct {
     head: Queue,
     rest: QueueStack,
-}
+};
 
 public func queuestack_new() -> QueueStack {
     return None<QueueStackCell>;
@@ -169,7 +170,7 @@ public func queuestack_push(qs: QueueStack, q: Queue) -> QueueStack {
 
 func queuestack_stripEmpties(qs: QueueStack) -> QueueStack {
     return xloop {
-        if let Some(cell) = unsafecast<option<QueueStackCell>>(qs) {   // cast is safe but compiler doesn't know that
+        if let Some(cell) = unsafecast<option<QueueStackCell> >(qs) {   // cast is safe but compiler doesn't know that
             if (queue_isEmpty(cell.head)) {
                 qs = cell.rest;
             } else {

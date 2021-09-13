@@ -1,5 +1,9 @@
 
+//
 // This file is machine-generated. Don't edit it unless you know what you're doing.
+//
+// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
+//
 
 use impl2::set_newGlobal1_onUpgrade;
 use impl2::set_newGlobal2_onUpgrade;
@@ -8,18 +12,18 @@ use impl2::set_newGlobal3_onUpgrade;
 
 type GlobalsBeforeUpgrade = struct {
     global1: uint,
-    global2: option<int>,
+    global2: option<int> ,
     _jump_table: any,
-}
+};
 
 type GlobalsAfterUpgrade = struct {
-    newGlobal1: option<int>,
+    newGlobal1: option<int> ,
     newGlobal2: uint,
     newGlobal3: (uint, uint, ),
     _jump_table: any,
-}
+};
 
-public impure func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> (GlobalsAfterUpgrade, uint) {
+public view func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> (GlobalsAfterUpgrade, uint) {
     let newGlobal1 = set_newGlobal1_onUpgrade(input_globals);
     let newGlobal2 = set_newGlobal2_onUpgrade(input_globals);
     let newGlobal3 = set_newGlobal3_onUpgrade(input_globals);
@@ -29,7 +33,7 @@ public impure func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -
         newGlobal2: newGlobal2,
         newGlobal3: newGlobal3,
         _jump_table: _jump_table,
-    }, 41);
+    }, 42);
 }
 
 

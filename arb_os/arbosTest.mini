@@ -20,10 +20,14 @@ use accounts::account_setContractInfo;
 use accounts::account_getAllStorage;
 use accounts::account_getNextSeqNum;
 use accounts::account_getEthBalance;
+use accounts::account_setNextSeqNum;
 
-use codeSegment::translateEvmCodeSegment;
+use chainParameters::chainParams_getOrDie;
+
+use std::codeSegment::translateEvmCodeSegment;
 
 use evmOps::evmOp_return;
+use evmOps::evmOp_revert_knownPc;
 use evmOps::evmOp_revert_knownCodePc;
 use evmOps::evmOp_revertIfStatic;
 
@@ -35,9 +39,11 @@ use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallStack_setAccount;
 use evmCallStack::evmCallFrame_getCaller;
 use evmCallStack::evmCallFrame_getAccount;
+use evmCallStack::evmCallStack_getAccountInCurrentContext;
+use evmCallStack::evmCallStack_setAccountInCurrentContext;
 
 
-public impure func arbosTest_txcall() {
+public view write func arbosTest_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) < 4) {
@@ -52,6 +58,8 @@ public impure func arbosTest_txcall() {
             arbosTest_getAccountInfo(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbosTest_burnArbGas) {
             arbosTest_burnArbGas(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbosTest_setNonce) {
+            arbosTest_setNonce(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 2, 0, 0);
@@ -63,10 +71,10 @@ public impure func arbosTest_txcall() {
 }
 
 func getFuncCode(ba: ByteArray) -> uint {
-    return asm(224, bytearray_get256(ba, 0)) uint { shr };
+    return bytearray_get256(ba, 0) >> 224;
 }
 
-impure func arbosTest_installAccount(topFrame: EvmCallFrame, calldata: ByteArray) { // (bool, uint, uint, bytes, bytes)
+view write func arbosTest_installAccount(topFrame: EvmCallFrame, calldata: ByteArray) { // (bool, uint, uint, bytes, bytes)
     evmOp_revertIfStatic();
 
     // Verify that this has been called by address zero.
@@ -119,7 +127,7 @@ impure func arbosTest_installAccount(topFrame: EvmCallFrame, calldata: ByteArray
     }
 }
 
-impure func arbosTest_getMarshalledStorage(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> bytes
+view write func arbosTest_getMarshalledStorage(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> bytes
     // Return the marshalled storage for the contract at addr. Revert if no contract at that address.
     let caller = evmCallFrame_getCaller(topFrame);
     if (caller != address(0)) {
@@ -150,7 +158,7 @@ impure func arbosTest_getMarshalledStorage(topFrame: EvmCallFrame, calldata: Byt
     }
 }
 
-impure func arbosTest_getAccountInfo(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> bytes
+view write func arbosTest_getAccountInfo(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> bytes
     // Return the balance, nonce, and marshalled storage for the contract at addr. Revert if no contract at that address.
     if (evmCallFrame_getCaller(topFrame) != address(0)) {
         evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 20, 0, 0);
@@ -179,16 +187,35 @@ impure func arbosTest_getAccountInfo(topFrame: EvmCallFrame, calldata: ByteArray
     }
 }
 
-impure func arbosTest_burnArbGas(_topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> bytes
+view write func arbosTest_burnArbGas(_topFrame: EvmCallFrame, calldata: ByteArray) {
     // Burn a specified amount of ArbGas
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 30, 0, 0);
     }
-    let gasToBurn = bytearray_get256(calldata, 4) * const::Charging_DefaultArbGasDivisor;
-    let gasLeft = asm() uint { getgas };
+    let gasToBurn = bytearray_get256(calldata, 4) * chainParams_getOrDie(const::Atom_Param_AvmGasPerArbGas);
+    let gasLeft = getGas();
     if (gasToBurn >= gasLeft) {
         gasToBurn = gasLeft - 1;
     }
-    asm(gasLeft - gasToBurn,) { setgas };
+    setGas(gasLeft - gasToBurn);
+    evmOp_return(0, 0);
+}
+
+view write func arbosTest_setNonce(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (evmCallFrame_getCaller(topFrame) != address(0)) {
+        evmOp_revert_knownPc(40, 0, 0);
+    }
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownPc(41, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let newNonce = bytearray_get256(calldata, 36);
+    evmCallStack_setAccountInCurrentContext(
+        addr,
+        account_setNextSeqNum(
+            evmCallStack_getAccountInCurrentContext(addr),
+            newNonce,
+        ),
+    );
     evmOp_return(0, 0);
 }

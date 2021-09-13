@@ -4,16 +4,17 @@
 
 use crate::compile::miniconstants::init_constant_table;
 use crate::compile::DebugInfo;
+use crate::console::Color;
 use crate::evm::abi::ArbSys;
 use crate::evm::preinstalled_contracts::{_ArbAggregator, _ArbOwner, _try_upgrade};
+use crate::evm::test_contract_path2;
 use crate::evm::{preinstalled_contracts::_ArbInfo, test_contract_path, AbiForContract};
+use crate::mavm::Buffer;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Value};
 use crate::run::runtime_env::remap_l1_sender_address;
 use crate::run::RuntimeEnvironment;
-use crate::run::{
-    _bytestack_from_bytes, load_from_file, load_from_file_and_env_ret_file_info_table, run,
-    run_from_file, Machine, MachineState,
-};
+use crate::run::{_bytestack_from_bytes, load_from_file, run, run_from_file, Machine};
+use crate::run::{load_from_file_and_env_ret_file_info_table, MachineState};
 use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
 use ethers_signers::Signer;
@@ -33,20 +34,28 @@ fn test_from_file_with_args_and_return(
 ) {
     let res = run_from_file(path, args, coverage_filename, false);
     match res {
-        Ok(res) => {
-            assert_eq!(res[0], ret);
-        }
-        Err(e) => {
-            panic!("{:?}", e);
+        Ok(res) => match &res[0] {
+            Value::Buffer(_) if res[0] != ret => panic!("{}", &res[0].pretty_print(Color::RED)),
+            _ => {
+                if res[0] != ret {
+                    println!("  - expected {}", ret.pretty_print(Color::RED));
+                    println!("  - executed {}", res[0].pretty_print(Color::RED));
+                    panic!("Unexpected result from test");
+                }
+            }
+        },
+        Err((error, trace)) => {
+            println!("{}", error);
+            panic!("{:?}", trace);
         }
     }
 }
 
-fn test_from_file(path: &Path) {
+fn test_from_file(path: &Path, expected_return: Value) {
     test_from_file_with_args_and_return(
         path,
         vec![],
-        Value::Int(Uint256::zero()),
+        expected_return,
         Some({
             let mut file = path.to_str().unwrap().to_string();
             let length = file.len();
@@ -56,79 +65,94 @@ fn test_from_file(path: &Path) {
     );
 }
 
+/// Runs a .mexe file, seeing if any string-encoded error messages are reported
+fn test_for_error_string(path: &Path) {
+    test_from_file(path, Value::Buffer(Buffer::new_empty()))
+}
+
+/// Runs a .mexe file, seeing if any integer-encoded error messages are reported
+fn test_for_numeric_error_code(path: &Path) {
+    test_from_file(path, Value::Int(Uint256::from_usize(0)))
+}
+
 #[test]
 fn test_arraytest() {
-    test_from_file(Path::new("builtin/arraytest.mexe"));
+    test_for_error_string(Path::new("builtin/arraytest.mexe"));
 }
 
 #[test]
 fn test_kvstest() {
-    test_from_file(Path::new("builtin/kvstest.mexe"));
+    test_for_error_string(Path::new("builtin/kvstest.mexe"));
 }
 
 #[test]
 fn test_address_set() {
-    test_from_file(Path::new("stdlib/addressSetTest.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/addressSetTest.mexe"));
 }
 
 #[test]
 fn test_storage_map() {
-    test_from_file(Path::new("stdlib/storageMapTest.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/storageMapTest.mexe"));
 }
 
 #[test]
 fn test_queuetest() {
-    test_from_file(Path::new("stdlib/queuetest.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/queuetest.mexe"));
 }
 
 #[test]
 fn test_globaltest() {
-    test_from_file(Path::new("builtin/globaltest.mexe"));
+    test_for_numeric_error_code(Path::new("builtin/globaltest.mexe"));
 }
 
 #[test]
 fn test_pqtest() {
-    test_from_file(Path::new("stdlib/priorityqtest.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/priorityqtest.mexe"));
 }
 
 #[test]
 fn test_bytearray() {
-    test_from_file(Path::new("stdlib/bytearraytest.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/bytearraytest.mexe"));
 }
 
 #[test]
 fn test_map() {
-    test_from_file(Path::new("builtin/maptest.mexe"));
+    test_for_error_string(Path::new("builtin/maptest.mexe"));
 }
 
 #[test]
 fn test_keccak() {
-    test_from_file(Path::new("stdlib/keccaktest.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/keccaktest.mexe"));
 }
 
 #[test]
 fn test_bls() {
-    test_from_file(Path::new("stdlib/blstest.mexe"));
+    test_for_error_string(Path::new("stdlib/blstest.mexe"));
 }
 
 #[test]
 fn test_sha256() {
-    test_from_file(Path::new("stdlib/sha256test.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/sha256test.mexe"));
 }
 
 #[test]
 fn test_fixedpoint() {
-    test_from_file(Path::new("stdlib/fixedpointtest.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/fixedpointtest.mexe"));
 }
 
 #[test]
 fn test_ripemd160() {
-    test_from_file(Path::new("stdlib/ripemd160test.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/ripemd160test.mexe"));
 }
 
 #[test]
 fn test_biguint() {
-    test_from_file(Path::new("stdlib/biguinttest.mexe"));
+    test_for_numeric_error_code(Path::new("stdlib/biguinttest.mexe"));
+}
+
+#[test]
+fn test_expanding_int_array() {
+    test_for_numeric_error_code(Path::new("stdlib/expandingIntArrayTest.mexe"));
 }
 
 #[test]
@@ -233,7 +257,13 @@ fn test_rlp_list3(
 
 #[test]
 fn test_codeload() {
-    test_from_file(Path::new("minitests/codeloadtest.mexe"));
+    test_for_numeric_error_code(Path::new("minitests/codeloadtest.mexe"));
+}
+
+#[test]
+fn test_closures() {
+    test_for_error_string(Path::new("minitests/simple-closure.mexe"));
+    test_for_error_string(Path::new("minitests/closure.mexe"));
 }
 
 #[test]
@@ -253,12 +283,12 @@ fn test_sha256_precompile() {
 
 #[test]
 fn test_ecpairing_precompile() {
-    crate::evm::_evm_ecpairing_precompile(None, false);
+    crate::evm::evm_ecpairing_precompile(None, false);
 }
 
 #[test]
 fn test_ripemd160_precompile() {
-    crate::evm::_evm_eval_ripemd160(None, false);
+    crate::evm::evm_eval_ripemd160(None, false);
 }
 
 /*  Disabled this test because the format it uses is no longer supported. Aggregator testing
@@ -276,7 +306,7 @@ fn test_direct_deploy_and_call_add() {
 
 #[test]
 fn test_call_from_contract() {
-    let _log = crate::evm::_evm_test_contract_call(None, false);
+    let _log = crate::evm::evm_test_contract_call(None, false);
 }
 
 #[test]
@@ -286,12 +316,12 @@ fn test_direct_deploy_and_compressed_call_add() {
 
 #[test]
 fn test_payment_in_constructor() {
-    crate::evm::_evm_test_payment_in_constructor(None, false);
+    crate::evm::evm_test_payment_in_constructor(None, false);
 }
 
 #[test]
 fn test_block_num_consistency() {
-    let _ = crate::evm::_evm_block_num_consistency_test(false).unwrap();
+    let _ = crate::evm::evm_block_num_consistency_test(false).unwrap();
 }
 
 #[test]
@@ -306,7 +336,7 @@ fn test_arbsys_direct() {
 
 #[test]
 fn test_rate_control() {
-    //FIXME crate::evm::_evm_test_rate_control(None, false).unwrap();
+    let _ = crate::evm::preinstalled_contracts::evm_test_rate_control(None, false);
 }
 
 #[test]
@@ -316,25 +346,25 @@ fn test_function_table_access() {
 
 #[test]
 fn test_l2_to_l1_call() {
-    crate::evm::_evm_test_callback(None, false).unwrap();
+    crate::evm::evm_test_callback(None, false).unwrap();
 }
 
 #[test]
 fn test_evm_add_code() {
-    crate::evm::_basic_evm_add_test(None, false).unwrap();
+    crate::evm::basic_evm_add_test(None, false).unwrap();
 }
 
 #[test]
-pub fn test_crosscontract_call_with_constructors() {
-    match crate::evm::evm_xcontract_call_with_constructors(None, false, false) {
+pub fn test_tx_with_deposit() {
+    match crate::evm::evm_tx_with_deposit(None, false, false) {
         Ok(result) => assert_eq!(result, true),
         Err(e) => panic!("error {}", e),
     }
 }
 
 #[test]
-pub fn test_tx_with_deposit() {
-    match crate::evm::_evm_tx_with_deposit(None, false, false) {
+pub fn test_crosscontract_call_with_constructors() {
+    match crate::evm::evm_xcontract_call_with_constructors(None, false, false) {
         Ok(result) => assert_eq!(result, true),
         Err(e) => panic!("error {}", e),
     }
@@ -356,8 +386,9 @@ pub fn test_crosscontract_call_using_batch() {
     }
 }
 
-pub fn _test_crosscontract_call_using_compressed_batch() {
-    match crate::evm::_evm_xcontract_call_using_compressed_batch(None, false, false) {
+#[test]
+pub fn test_crosscontract_call_using_compressed_batch() {
+    match crate::evm::evm_xcontract_call_using_batch(None, false, false) {
         Ok(result) => assert_eq!(result, true),
         Err(e) => panic!("error {}", e),
     }
@@ -370,7 +401,7 @@ fn test_payment_to_empty_address() {
 
 #[test]
 fn test_underfunded_nested_call() {
-    assert!(crate::evm::_underfunded_nested_call_test(None, false).is_ok());
+    assert!(crate::evm::underfunded_nested_call_test(None, false).is_ok());
 }
 
 fn test_call_to_precompile5(
@@ -393,7 +424,7 @@ fn test_call_to_precompile5(
     let txid = machine.runtime_env.insert_tx_message(
         sender_addr.clone(),
         Uint256::from_u64(1_000_000_000),
-        Uint256::zero(),
+        None,
         Uint256::from_u64(5),
         Uint256::zero(),
         &calldata,
@@ -497,8 +528,8 @@ fn small_upgrade() {
 
 #[test]
 fn small_upgrade_auto_remap() {
-    let mut machine = load_from_file(Path::new("upgradetests/upgrade2_old.mexe"));
-    let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade2_new.mexe"));
+    let mut machine = load_from_file(Path::new("looptest/upgrade2_old.mexe"));
+    let uploader = CodeUploader::_new_from_file(Path::new("looptest/upgrade2_new.mexe"));
     let code_bytes = uploader._to_flat_vec();
     let msg = Value::new_tuple(vec![
         Value::Int(Uint256::from_usize(code_bytes.len())),
@@ -514,6 +545,51 @@ fn small_upgrade_auto_remap() {
         Value::Int(Uint256::from_u64(42))
     );
     machine.write_coverage("small_upgrade_auto_remap".to_string());
+}
+
+#[test]
+fn test_gasleft_with_delegatecall() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+    let my_addr = Uint256::from_u64(1025);
+
+    let mut greeter_contract =
+        AbiForContract::new_from_file(&test_contract_path2("Delegator", "Greeter")).unwrap();
+    if greeter_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .is_err()
+    {
+        panic!("failed to deploy Greeter contract");
+    }
+
+    let mut delegator_contract =
+        AbiForContract::new_from_file(&test_contract_path2("Delegator", "Delegator")).unwrap();
+    if delegator_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .is_err()
+    {
+        panic!("failed to deploy Delegator contract");
+    }
+
+    let (receipts, _) = delegator_contract
+        .call_function(
+            my_addr,
+            "testDelegate",
+            &[ethabi::Token::Address(greeter_contract.address.to_h160())],
+            &mut machine,
+            Uint256::zero(),
+            false,
+        )
+        .unwrap();
+
+    assert_eq!(receipts.len(), 1);
+    let logs = receipts[0]._get_evm_logs();
+    assert_eq!(logs.len(), 2);
+    let gasleft_before = Uint256::from_bytes(&logs[0].data);
+    let gasleft_after = Uint256::from_bytes(&logs[1].data);
+    assert!(gasleft_before > gasleft_after);
+
+    machine.write_coverage("test_gasleft_with_delegatecall".to_string());
 }
 
 #[test]
@@ -540,7 +616,7 @@ pub fn test_malformed_upgrade() {
         opcode!(ErrCodePoint),
         opcode!(PushInsn, Value::from(AVMOpcode::Halt.to_number())), // Log the state of the register,
         opcode!(PushInsn, Value::from(AVMOpcode::Log.to_number())), //  ensuring the old globals (1937)
-        opcode!(PushInsn, Value::from(AVMOpcode::Rget.to_number())), // was restored by the protector
+        opcode!(PushInsn, Value::from(AVMOpcode::Rpush.to_number())), // was restored by the protector
         opcode!(ErrSet),
         opcode!(ErrPush),
         opcode!(Log),
@@ -587,7 +663,7 @@ pub fn test_if_still_upgradable() -> Result<(), ethabi::Error> {
     let arbowner = _ArbOwner::_new(&wallet, false);
     let arbsys = ArbSys::new(&wallet, false);
     assert_eq!(
-        arbsys._arbos_version(&mut machine)?,
+        arbsys.arbos_version(&mut machine)?,
         *init_constant_table(Some(Path::new("arb_os/constants.json")))
             .unwrap()
             .get("ArbosVersionNumber")

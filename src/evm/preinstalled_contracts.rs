@@ -1,5 +1,6 @@
 use super::*;
-use crate::compile::miniconstants::init_constant_table;
+#[cfg(test)]
+use crate::evm::live_code::ArbosTest;
 use crate::run::runtime_env::{_inverse_remap_l1_sender_address, remap_l1_sender_address};
 use crate::run::{load_from_file, Machine, RuntimeEnvironment};
 use crate::uint256::Uint256;
@@ -1573,7 +1574,7 @@ pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), et
     let tx_id = machine.runtime_env.insert_tx_message(
         my_addr.clone(),
         Uint256::from_u64(1000000000),
-        Uint256::zero(),
+        None,
         remapped_addr.clone(),
         Uint256::from_u64(10000),
         &vec![],
@@ -1615,6 +1616,7 @@ fn test_upgrade_arbos_to_different_version() {
 fn test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos_before.mexe"));
     machine.start_at_zero(true);
+    machine.runtime_env.force_zero_gas_price = true;
     let _ = machine.run(None);
 
     let wallet = machine.runtime_env.new_wallet();
@@ -1632,8 +1634,8 @@ fn test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
 
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
-        arbsys_orig_binding._arbos_version(&mut machine)?,
-        Uint256::from_u64(40),
+        arbsys_orig_binding.arbos_version(&mut machine)?,
+        Uint256::from_u64(41),
     );
 
     arbowner._add_chain_owner(&mut machine, my_addr.clone(), true, false)?;
@@ -1648,9 +1650,11 @@ fn test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let uploader = CodeUploader::_new_from_file(mexe_path);
     let _previous_upgrade_hash = _try_upgrade(&arbowner, &mut machine, uploader, None)?.unwrap();
 
+    machine.runtime_env.force_zero_gas_price = false;
+
     let wallet2 = machine.runtime_env.new_wallet();
     let arbsys = ArbSys::new(&wallet2, false);
-    let arbos_version = arbsys._arbos_version(&mut machine)?;
+    let arbos_version = arbsys.arbos_version(&mut machine)?;
     assert_eq!(
         arbos_version,
         *init_constant_table(Some(Path::new("arb_os/constants.json")))
@@ -1658,7 +1662,8 @@ fn test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
             .get("ArbosVersionNumber")
             .unwrap()
     );
-    let arbos_version_orig = arbsys_orig_binding._arbos_version(&mut machine)?;
+
+    let arbos_version_orig = arbsys_orig_binding.arbos_version(&mut machine)?;
     assert_eq!(arbos_version, arbos_version_orig);
 
     machine.write_coverage("test_upgrade_arbos_to_different_version".to_string());
@@ -2157,7 +2162,8 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
     Ok(())
 }
 
-pub fn _evm_test_rate_control(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
+#[cfg(test)]
+pub fn evm_test_rate_control(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero(true);
 
@@ -2562,7 +2568,7 @@ fn _test_arb_stats() -> Result<(), ethabi::Error> {
     assert_eq!(storage, Uint256::from_u64(0));
     // assert_eq!(_arbgas, Uint256::from_u64(1_490_972));  // disable this because it will vary over versions
     assert_eq!(txs, Uint256::from_u64(0));
-    assert_eq!(contracts, Uint256::from_u64(19));
+    assert_eq!(contracts, Uint256::from_u64(20));
     machine.write_coverage("test_arb_statistics".to_string());
     Ok(())
 }
@@ -2631,206 +2637,6 @@ fn _evm_test_allowed_senders() {
         .unwrap());
 
     machine.write_coverage("test_allowed_senders".to_string());
-}
-
-pub struct ArbosTest {
-    pub contract_abi: AbiForContract,
-    debug: bool,
-}
-
-impl ArbosTest {
-    pub fn new(debug: bool) -> Self {
-        let mut contract_abi =
-            AbiForContract::new_from_file(&builtin_contract_path("ArbosTest")).unwrap();
-        contract_abi.bind_interface_to_address(Uint256::from_u64(105));
-        ArbosTest {
-            contract_abi,
-            debug,
-        }
-    }
-
-    pub fn _install_account_and_call(
-        &self,
-        machine: &mut Machine,
-        addr: Uint256,
-        balance: Uint256,
-        nonce: Uint256,
-        code: Vec<u8>,
-        storage: Vec<u8>,
-        calldata: Vec<u8>,
-    ) -> Result<Vec<u8>, ethabi::Error> {
-        self.install_account(
-            machine,
-            addr.clone(),
-            balance.clone(),
-            nonce.clone(),
-            Some(code),
-            Some(storage),
-        )?;
-        let _ = machine.runtime_env.get_seq_num(&Uint256::zero(), true);
-        let _ = machine.runtime_env.get_seq_num(&Uint256::zero(), true);
-        self.call(machine, Uint256::zero(), addr.clone(), calldata, balance)?;
-        let ret = self._get_marshalled_storage(machine, addr);
-        ret
-    }
-
-    pub fn install_account(
-        &self,
-        machine: &mut Machine,
-        addr: Uint256,
-        balance: Uint256,
-        nonce: Uint256,
-        code: Option<Vec<u8>>,
-        storage: Option<Vec<u8>>,
-    ) -> Result<(), ethabi::Error> {
-        let (receipts, sends) = self.contract_abi.call_function(
-            Uint256::zero(), // send from address zero
-            "installAccount",
-            &[
-                ethabi::Token::Address(addr.to_h160()),
-                ethabi::Token::Bool((code == None) && (storage == None)),
-                ethabi::Token::Uint(balance.to_u256()),
-                ethabi::Token::Uint(nonce.to_u256()),
-                ethabi::Token::Bytes(code.unwrap_or(vec![])),
-                ethabi::Token::Bytes(storage.unwrap_or(vec![])),
-            ],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if (receipts.len() != 1) || (sends.len() != 0) {
-            Err(ethabi::Error::from("wrong number of receipts or sends"))
-        } else if receipts[0].succeeded() {
-            Ok(())
-        } else {
-            Err(ethabi::Error::from("reverted"))
-        }
-    }
-
-    pub fn call(
-        &self,
-        machine: &mut Machine,
-        caller_addr: Uint256,
-        callee_addr: Uint256,
-        calldata: Vec<u8>,
-        callvalue: Uint256,
-    ) -> Result<Vec<u8>, ethabi::Error> {
-        machine.runtime_env.insert_eth_deposit_message(
-            Uint256::zero(),
-            caller_addr.clone(),
-            callvalue.clone(),
-            true,
-        );
-        let _tx_id = machine.runtime_env.insert_tx_message_from_contract(
-            caller_addr,
-            Uint256::from_usize(1_000_000_000),
-            Uint256::zero(),
-            callee_addr,
-            callvalue,
-            &calldata,
-            false,
-        );
-        let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
-        let num_sends_before = machine.runtime_env.get_all_sends().len();
-        let _arbgas_used = if self.debug {
-            machine.debug(None)
-        } else {
-            machine.run(None)
-        };
-        let logs = machine.runtime_env.get_all_receipt_logs();
-        let sends = machine.runtime_env.get_all_sends();
-
-        if (logs.len() != num_logs_before + 2) || (sends.len() != num_sends_before) {
-            return Err(ethabi::Error::from("wrong number of receipts or sends"));
-        }
-        if !logs[num_logs_before + 1].succeeded() {
-            println!(
-                "arbosTest.run revert code {}",
-                logs[num_logs_before + 1].get_return_code()
-            );
-            return Err(ethabi::Error::from("reverted"));
-        }
-
-        Ok(logs[num_logs_before + 1].get_return_data())
-    }
-
-    pub fn get_account_info(
-        &self,
-        machine: &mut Machine,
-        addr: Uint256,
-    ) -> Result<(Uint256, Uint256, Vec<u8>), ethabi::Error> {
-        let (receipts, sends) = self.contract_abi.call_function(
-            Uint256::zero(), // send from address zero
-            "getAccountInfo",
-            &[ethabi::Token::Address(addr.to_h160())],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if (receipts.len() != 1) || (sends.len() != 0) {
-            Err(ethabi::Error::from("wrong number of receipts or sends"))
-        } else if receipts[0].succeeded() {
-            let return_data = receipts[0].get_return_data();
-            Ok((
-                Uint256::from_bytes(&return_data[0..32]),
-                Uint256::from_bytes(&return_data[32..64]),
-                return_data[64..].to_vec(),
-            ))
-        } else {
-            println!(
-                "arbosTest.run revert code {}",
-                receipts[0].get_return_code()
-            );
-            Err(ethabi::Error::from("reverted"))
-        }
-    }
-
-    pub fn _get_marshalled_storage(
-        &self,
-        machine: &mut Machine,
-        addr: Uint256,
-    ) -> Result<Vec<u8>, ethabi::Error> {
-        let (receipts, sends) = self.contract_abi.call_function(
-            Uint256::zero(), // send from address zero
-            "getMarshalledStorage",
-            &[ethabi::Token::Address(addr.to_h160())],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-
-        if (receipts.len() != 1) || (sends.len() != 0) {
-            Err(ethabi::Error::from("wrong number of receipts or sends"))
-        } else if receipts[0].succeeded() {
-            return Ok(receipts[0].get_return_data()[64..].to_vec());
-        } else {
-            println!(
-                "arbosTest.run revert code {}",
-                receipts[0].get_return_code()
-            );
-            Err(ethabi::Error::from("reverted"))
-        }
-    }
-
-    pub fn _burn_arb_gas(
-        &self,
-        machine: &mut Machine,
-        sender_addr: Uint256,
-        amount: Uint256,
-    ) -> Result<u64, ethabi::Error> {
-        let (receipts, _) = self.contract_abi.call_function(
-            sender_addr, // send from address zero
-            "burnArbGas",
-            &[ethabi::Token::Uint(amount.to_u256())],
-            machine,
-            Uint256::zero(),
-            self.debug,
-        )?;
-        assert_eq!(receipts.len(), 1);
-        Ok(receipts[0].get_return_code().to_u64().unwrap())
-    }
 }
 
 #[test]

@@ -2,32 +2,32 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-impure func main() {
-	asm(tests(),) { log };
+write func main() {
+	asm(tests().1) { log };
 }
 
-func tests() -> uint {
+func tests() -> (uint, buffer) {
 	let m = newmap<(uint, uint), uint>;
 	if (m[(17, 18,)] != None<uint>) {
-		return 1;
+		return "map<(uint, uint), uint> isn't empty";
 	}
 
 	let m = newmap<uint, uint>;
 	if (m[17] != None<uint>) {
-		return 2;
+		return "map<uint, uint> isn't empty";
 	}
 
 	let m = newmap<(uint, uint), uint>;
 	m = m with { [(999, 321,)] = 42 };
 	if ( m[(999, 321,)] != Some(42) ) { 
-		return 3;
+		return "map assignment is wrong";
 	}
 
 	m = newmap<(uint, uint), uint>;
 	m = m with { [(999, 321,)] = 42 };
 	m = m with { [(0, 0,)] = 73 };
 	if ( m[(999, 321,)] != Some(42) ) { 
-		return 4;
+		return "map assignment is inconsistent";
 	}
 
 	m = newmap<(uint, uint), uint>;
@@ -36,8 +36,8 @@ func tests() -> uint {
 	m = m with { [(999, 321,)] = 13 };
 	m = m with { [(0, 0,)] = 173 };
 	if (m[(999, 321,)] != Some(13) ){
-		return 5;
+		return "map update is incorrect";
 	}
 
-	return 0;
+	return "";
 }

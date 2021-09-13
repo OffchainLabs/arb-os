@@ -2,10 +2,11 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-//!Provides utilities for emulation of AVM bytecode.
+//! Provides utilities for emulation of AVM bytecode.
 
 use super::RuntimeEnvironment;
 use crate::compile::{CompileError, DebugInfo, FileInfo};
+use crate::console::Color;
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Value};
 use crate::pos::{try_display_location, Location};
@@ -25,7 +26,7 @@ use std::str::FromStr;
 
 const MAX_PAIRING_SIZE: u64 = 30;
 
-///Represents a stack of `Value`s
+/// Represents a stack of `Value`s
 #[derive(Debug, Default, Clone)]
 pub struct ValueStack {
     contents: im::Vector<Value>,
@@ -46,27 +47,27 @@ impl ValueStack {
         self.contents.len()
     }
 
-    ///Pushes val to the top of self.
+    /// Pushes val to the top of self.
     pub fn push(&mut self, val: Value) {
         self.contents.push_back(val);
     }
 
-    ///Pushes a `Value` created from val to the top of self.
+    /// Pushes a `Value` created from val to the top of self.
     pub fn push_uint(&mut self, val: Uint256) {
         self.push(Value::Int(val))
     }
 
-    ///Pushes a `Value` created from val to the top of self.
+    /// Pushes a `Value` created from val to the top of self.
     pub fn push_usize(&mut self, val: usize) {
         self.push_uint(Uint256::from_usize(val));
     }
 
-    ///Pushes a `Value` created from val to the top of self.
+    /// Pushes a `Value` created from val to the top of self.
     pub fn push_codepoint(&mut self, val: CodePt) {
         self.push(Value::CodePoint(val));
     }
 
-    ///Pushes a `Value` created from val to the top of self.
+    /// Pushes a `Value` created from val to the top of self.
     pub fn push_bool(&mut self, val: bool) {
         self.push_uint(if val { Uint256::one() } else { Uint256::zero() })
     }
@@ -75,7 +76,7 @@ impl ValueStack {
         self.push(Value::Buffer(val));
     }
 
-    ///Returns the `Value` on the top of self, or None if self is empty.
+    /// Returns the `Value` on the top of self, or None if self is empty.
     pub fn top(&self) -> Option<Value> {
         if self.is_empty() {
             None
@@ -92,7 +93,7 @@ impl ValueStack {
         }
     }
 
-    ///Pops the top value off the stack and returns it, or if the stack is empty returns an
+    /// Pops the top value off the stack and returns it, or if the stack is empty returns an
     /// `ExecutionError`.
     pub fn pop(&mut self, state: &MachineState) -> Result<Value, ExecutionError> {
         match self.contents.pop_back() {
@@ -101,7 +102,7 @@ impl ValueStack {
         }
     }
 
-    ///If the top `Value` on the stack is a code point, pops the value and returns it as a `CodePt`,
+    /// If the top `Value` on the stack is a code point, pops the value and returns it as a `CodePt`,
     /// otherwise returns an `ExecutionError`.
     pub fn pop_codepoint(&mut self, state: &MachineState) -> Result<CodePt, ExecutionError> {
         let val = self.pop(state)?;
@@ -116,7 +117,7 @@ impl ValueStack {
         }
     }
 
-    ///If the top `Value` on the stack is an integer, pops the value and returns it as a `Uint256`,
+    /// If the top `Value` on the stack is an integer, pops the value and returns it as a `Uint256`,
     /// otherwise returns an `ExecutionError`.
     pub fn pop_uint(&mut self, state: &MachineState) -> Result<Uint256, ExecutionError> {
         let val = self.pop(state)?;
@@ -131,7 +132,7 @@ impl ValueStack {
         }
     }
 
-    ///If the top `Value` on the stack is not greater than the max usize, pops the value and returns
+    /// If the top `Value` on the stack is not greater than the max usize, pops the value and returns
     /// it as a `usize`, otherwise returns an `ExecutionError`
     pub fn pop_usize(&mut self, state: &MachineState) -> Result<usize, ExecutionError> {
         let val = self.pop_uint(state)?;
@@ -145,7 +146,7 @@ impl ValueStack {
         }
     }
 
-    ///If the top `Value` on self is a tuple, pops the `Value` and returns the contained values of
+    /// If the top `Value` on self is a tuple, pops the `Value` and returns the contained values of
     /// self as a vector. Otherwise returns an `ExecutionError`.
     pub fn pop_tuple(&mut self, state: &MachineState) -> Result<Vec<Value>, ExecutionError> {
         let val = self.pop(state)?;
@@ -161,7 +162,7 @@ impl ValueStack {
         }
     }
 
-    ///If the top `Value` on self is a buffer, pops the `Value` and returns it as a vector.
+    /// If the top `Value` on self is a buffer, pops the `Value` and returns it as a vector.
     /// Otherwise returns an `ExecutionError`.
     pub fn pop_buffer(&mut self, state: &MachineState) -> Result<Buffer, ExecutionError> {
         let val = self.pop(state)?;
@@ -176,7 +177,7 @@ impl ValueStack {
         }
     }
 
-    ///Returns a list of all CodePoint `Value`s as `CodePt`s, this is used for generating stack
+    /// Returns a list of all CodePoint `Value`s as `CodePt`s, this is used for generating stack
     /// traces, as all code points on the aux stack represent the start of a call frame.
     pub fn all_codepts(&self) -> Vec<CodePt> {
         self.contents
@@ -202,7 +203,7 @@ impl fmt::Display for ValueStack {
     }
 }
 
-///Represents an error encountered during runtime.
+/// Represents an error encountered during runtime.
 ///
 /// StoppedErr is for errors encountered when the `Machine` is not running, RunningErr is for when
 /// the machine is running, and Wrapped adds additional context to its contained error.
@@ -229,14 +230,20 @@ impl fmt::Display for ExecutionError {
             ExecutionError::StoppedErr(s) => writeln!(f, "error with machine stopped: {}", s),
             ExecutionError::Wrapped(s, bee) => writeln!(f, "{} ({})", s, *bee),
             ExecutionError::RunningErr(s, cp, ov) => match ov {
-                Some(val) => writeln!(f, "{} ({}) with value {}", s, cp, val),
+                Some(val) => writeln!(
+                    f,
+                    "{} ({}) with value\n\t{}",
+                    s,
+                    cp,
+                    val.pretty_print(Color::RESET)
+                ),
                 None => writeln!(f, "{} ({})", s, cp),
             },
         }
     }
 }
 
-///Represents the state of the containing `Machine`.
+/// Represents the state of the containing `Machine`.
 ///
 /// Running is used during execution, Stopped occurs when the program exits normally, and Error
 /// occurs when the `Machine` encounters a runtime error.
@@ -248,7 +255,7 @@ pub enum MachineState {
 }
 
 impl MachineState {
-    ///Returns true if self is the Running variant.
+    /// Returns true if self is the Running variant.
     pub fn is_running(&self) -> bool {
         if let MachineState::Running(_) = self {
             true
@@ -258,7 +265,7 @@ impl MachineState {
     }
 }
 
-///Holds AVM bytecode in a list of segments, the runtime is held on segment 0.
+/// Holds AVM bytecode in a list of segments, the runtime is held on segment 0.
 #[derive(Debug)]
 pub struct CodeStore {
     pub segments: Vec<Vec<Instruction<AVMOpcode>>>,
@@ -279,12 +286,12 @@ impl CodeStore {
         }
     }
 
-    ///Gets the size of the first code segment.
+    /// Gets the size of the first code segment.
     fn runtime_segment_size(&self) -> usize {
         self.segments[0].len()
     }
 
-    ///Returns the `Instruction` that codept points to, or None if codept points to an invalid
+    /// Returns the `Instruction` that codept points to, or None if codept points to an invalid
     /// location.
     ///
     /// Panics if codept is not an Internal or InSegment reference.
@@ -304,7 +311,7 @@ impl CodeStore {
         }
     }
 
-    ///Creates a new code segment containing a single panic instruction, returns a `CodePt` pointing
+    /// Creates a new code segment containing a single panic instruction, returns a `CodePt` pointing
     /// to the start of that segment.
     fn create_segment(&mut self) -> CodePt {
         self.segments.push(vec![Instruction::from_opcode(
@@ -314,7 +321,7 @@ impl CodeStore {
         CodePt::new_in_segment(self.segments.len() - 1, 0)
     }
 
-    ///Appends an instruction with opcode derived from op, and immediate from imm, to the end of the
+    /// Appends an instruction with opcode derived from op, and immediate from imm, to the end of the
     /// code segment pointed to by codept.
     ///
     /// The codept argument must point to a code segment, and must point to the end of that segment,
@@ -356,7 +363,7 @@ enum ProfilerEvent {
     Return(CodePt, usize),
 }
 
-///Records how much gas was used at each source location in a run of a `Machine`. Gas used by any
+/// Records how much gas was used at each source location in a run of a `Machine`. Gas used by any
 /// instructions without an associated location are added to the unknown_gas field.
 #[derive(Debug, Clone, Default)]
 pub struct ProfilerData {
@@ -367,7 +374,7 @@ pub struct ProfilerData {
 }
 
 impl ProfilerData {
-    ///Gets a reference to the gas cost at a given location if it has been recorded, or None
+    /// Gets a reference to the gas cost at a given location if it has been recorded, or None
     /// otherwise.
     ///
     /// The chart argument is used to convert the file ID in the location to a filename.
@@ -385,7 +392,7 @@ impl ProfilerData {
             Some(&mut self.unknown_gas)
         }
     }
-    ///Inserts gas into the entry corresponding to loc. Returns the previous value at that location
+    /// Inserts gas into the entry corresponding to loc. Returns the previous value at that location
     /// if it exists.
     ///
     /// The chart argument is used to convert the file ID in the location to a filename.
@@ -419,7 +426,7 @@ impl ProfilerData {
         }
     }
 
-    ///Starts a profiler session from self.  Allows the user to view the gas cost per file and view
+    /// Starts a profiler session from self.  Allows the user to view the gas cost per file and view
     /// the gas used over a range of lines.
     ///
     /// Use exit to exit the profiler.
@@ -714,7 +721,7 @@ impl FromStr for ProfilerMode {
     }
 }
 
-///Represents the state of execution of a AVM program including the code it is compiled from.
+/// Represents the state of execution of a AVM program including the code it is compiled from.
 #[derive(Debug)]
 pub struct Machine {
     stack: ValueStack,
@@ -756,7 +763,7 @@ impl Machine {
         self.stack.contents.last()
     }
 
-    ///Pushes 0 to the stack and sets the program counter to the first instruction. Used by the EVM
+    /// Pushes 0 to the stack and sets the program counter to the first instruction. Used by the EVM
     /// compiler.
     pub fn start_at_zero(&mut self, start_coverage: bool) {
         self.state = MachineState::Running(CodePt::Internal(0));
@@ -765,24 +772,24 @@ impl Machine {
         }
     }
 
-    ///Returns a stack trace of the current state of the machine.
+    /// Returns a stack trace of the current state of the machine.
     pub fn get_stack_trace(&self) -> StackTrace {
         StackTrace {
             trace: self.aux_stack.all_codepts(),
         }
     }
 
-    ///Adds a trace writer to the machine
+    /// Adds a trace writer to the machine
     pub fn add_trace_writer(&mut self, filename: &str) {
         self.trace_writer = Some(BufWriter::new(File::create(Path::new(filename)).unwrap()));
     }
 
-    ///Returns the value of the ArbGasRemaining register
+    /// Returns the value of the ArbGasRemaining register
     pub fn get_total_gas_usage(&self) -> Uint256 {
         self.total_gas_usage.clone()
     }
 
-    ///Sets the state of the machine to call the function at func_addr with args.
+    /// Sets the state of the machine to call the function at func_addr with args.
     ///
     /// Returns the stop location of the program counter, calculated by `runtime_segment_size`.
     pub fn call_state(&mut self, func_addr: CodePt, args: Vec<Value>) -> CodePt {
@@ -795,7 +802,7 @@ impl Machine {
         stop_pc
     }
 
-    ///Calls the function at address func_addr and runs until the program counter advances by the
+    /// Calls the function at address func_addr and runs until the program counter advances by the
     /// result of `runtime_segment_size`, or an error is encountered.
     ///
     /// If the machine stops normally, then returns the stack contents, otherwise returns an
@@ -814,7 +821,7 @@ impl Machine {
         };
         println!("ArbGas cost of call: {}", cost);
         if let Some(ret_val) = self.stack.top() {
-            println!("Stack top: {}", ret_val);
+            println!("Stack top: {}", ret_val.pretty_print(Color::RESET));
         }
         match &self.state {
             MachineState::Stopped => {
@@ -825,7 +832,7 @@ impl Machine {
         }
     }
 
-    ///If the machine is running returns the `CodePt` that represents the current program counter,
+    /// If the machine is running returns the `CodePt` that represents the current program counter,
     /// otherwise produces an `ExecutionError`.
     pub fn get_pc(&self) -> Result<CodePt, ExecutionError> {
         if let MachineState::Running(pc) = &self.state {
@@ -839,7 +846,7 @@ impl Machine {
         }
     }
 
-    ///Increments self's program counter.
+    /// Increments self's program counter.
     ///
     /// Panics if self is not running or the current program counter is an external reference.
     pub fn incr_pc(&mut self) {
@@ -854,7 +861,7 @@ impl Machine {
         }
     }
 
-    ///Returns the `Instruction` pointed to by self's program counter if it exists, and None
+    /// Returns the `Instruction` pointed to by self's program counter if it exists, and None
     /// otherwise.
     pub fn next_opcode(&self) -> Option<Instruction<AVMOpcode>> {
         if let MachineState::Running(pc) = self.state {
@@ -872,7 +879,7 @@ impl Machine {
         self.coverage = Some(HashSet::new());
     }
 
-    ///Starts the debugger, execution will end when the program counter of self reaches stop_pc, or
+    /// Starts the debugger, execution will end when the program counter of self reaches stop_pc, or
     /// an error state is reached.
     ///
     /// Returns the total gas used by the machine.
@@ -1020,7 +1027,7 @@ impl Machine {
         gas_cost
     }
 
-    ///Runs self until the program counter reaches stop_pc, an error state is encountered or the
+    /// Runs self until the program counter reaches stop_pc, an error state is encountered or the
     /// machine reaches a stopped state for any other reason.  Returns the total gas used by self.
     pub fn run(&mut self, stop_pc: Option<CodePt>) -> u64 {
         let mut gas_used = 0;
@@ -1104,7 +1111,7 @@ impl Machine {
         gas_used
     }
 
-    ///Generates a `ProfilerData` from a run of self with args from address 0.
+    /// Generates a `ProfilerData` from a run of self with args from address 0.
     pub fn profile_gen(&mut self, args: Vec<Value>, mode: ProfilerMode) -> ProfilerData {
         assert_ne!(mode, ProfilerMode::Never);
         self.call_state(CodePt::new_internal(0), args);
@@ -1247,14 +1254,14 @@ impl Machine {
         *stack_len = alt_stack.len();
     }
 
-    ///If the opcode has a specified gas cost returns the gas cost, otherwise returns None.
+    /// If the opcode has a specified gas cost returns the gas cost, otherwise returns None.
     pub(crate) fn next_op_gas(&self) -> Option<u64> {
         if let MachineState::Running(pc) = self.state {
             Some(match self.code.get_insn(pc)?.opcode {
                 AVMOpcode::Zero => 5,
-                AVMOpcode::Plus => 3,
+                AVMOpcode::Add => 3,
                 AVMOpcode::Mul => 3,
-                AVMOpcode::Minus => 3,
+                AVMOpcode::Sub => 3,
                 AVMOpcode::Div => 4,
                 AVMOpcode::Sdiv => 7,
                 AVMOpcode::Mod => 4,
@@ -1279,19 +1286,19 @@ impl Machine {
                 AVMOpcode::ShiftArith => 4,
                 AVMOpcode::Hash => 7,
                 AVMOpcode::Type => 3,
-                AVMOpcode::Hash2 => 8,
+                AVMOpcode::EthHash2 => 8,
                 AVMOpcode::Keccakf => 600,
                 AVMOpcode::Sha256f => 250,
                 AVMOpcode::Ripemd160f => 250, //TODO: measure and update this
                 AVMOpcode::Blake2f => self.gas_for_blake2f(),
                 AVMOpcode::Pop => 1,
-                AVMOpcode::PushStatic => 1,
-                AVMOpcode::Rget => 1,
+                AVMOpcode::Spush => 1,
+                AVMOpcode::Rpush => 1,
                 AVMOpcode::Rset => 2,
                 AVMOpcode::Jump => 4,
                 AVMOpcode::Cjump => 4,
                 AVMOpcode::StackEmpty => 2,
-                AVMOpcode::GetPC => 1,
+                AVMOpcode::PCpush => 1,
                 AVMOpcode::AuxPush => 1,
                 AVMOpcode::AuxPop => 1,
                 AVMOpcode::AuxStackEmpty => 2,
@@ -1313,14 +1320,14 @@ impl Machine {
                 AVMOpcode::Send => 100,
                 AVMOpcode::InboxPeek => 40,
                 AVMOpcode::Inbox => 40,
-                AVMOpcode::Panic => 5,
+                AVMOpcode::Error => 5,
                 AVMOpcode::Halt => 10,
                 AVMOpcode::ErrCodePoint => 25,
                 AVMOpcode::PushInsn => 25,
                 AVMOpcode::PushInsnImm => 25,
                 AVMOpcode::OpenInsn => 25,
                 AVMOpcode::DebugPrint => 1,
-                AVMOpcode::GetGas => 1,
+                AVMOpcode::PushGas => 1,
                 AVMOpcode::SetGas => 1,
                 AVMOpcode::EcRecover => 20_000,
                 AVMOpcode::EcAdd => 3500,
@@ -1376,7 +1383,7 @@ impl Machine {
         }
     }
 
-    ///Runs the instruction pointed to by the program counter, returns either a bool indicating
+    /// Runs the instruction pointed to by the program counter, returns either a bool indicating
     /// whether the instruction was blocked if execution does not hit an error state, or an
     /// `ExecutionError` if an error was encountered.
     pub fn run_one(&mut self, _debug: bool) -> Result<bool, ExecutionError> {
@@ -1418,7 +1425,7 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
-                    AVMOpcode::Zero | AVMOpcode::Panic => {
+                    AVMOpcode::Zero | AVMOpcode::Error => {
                         Err(ExecutionError::new("panicked", &self.state, None))
                     }
                     AVMOpcode::Jump => {
@@ -1435,12 +1442,12 @@ impl Machine {
                         }
                         Ok(true)
                     }
-                    AVMOpcode::GetPC => {
+                    AVMOpcode::PCpush => {
                         self.stack.push_codepoint(self.get_pc()?);
                         self.incr_pc();
                         Ok(true)
                     }
-                    AVMOpcode::Rget => {
+                    AVMOpcode::Rpush => {
                         self.stack.push(self.register.clone());
                         self.incr_pc();
                         Ok(true)
@@ -1451,7 +1458,7 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
-                    AVMOpcode::PushStatic => {
+                    AVMOpcode::Spush => {
                         self.stack.push(self.static_val.clone());
                         self.incr_pc();
                         Ok(true)
@@ -1640,14 +1647,14 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
-                    AVMOpcode::Plus => {
+                    AVMOpcode::Add => {
                         let r1 = self.stack.pop_uint(&self.state)?;
                         let r2 = self.stack.pop_uint(&self.state)?;
                         self.stack.push_uint(r1.add(&r2));
                         self.incr_pc();
                         Ok(true)
                     }
-                    AVMOpcode::Minus => {
+                    AVMOpcode::Sub => {
                         let r1 = self.stack.pop_uint(&self.state)?;
                         let r2 = self.stack.pop_uint(&self.state)?;
                         self.stack.push_uint(r1.unchecked_sub(&r2));
@@ -1897,7 +1904,7 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
-                    AVMOpcode::Hash2 => {
+                    AVMOpcode::EthHash2 => {
                         let r1 = self.stack.pop_uint(&self.state)?;
                         let r2 = self.stack.pop_uint(&self.state)?;
                         self.stack.push_uint(Uint256::avm_hash2(&r1, &r2));
@@ -2082,7 +2089,7 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
-                    AVMOpcode::GetGas => {
+                    AVMOpcode::PushGas => {
                         self.stack.push(Value::Int(self.arb_gas_remaining.clone()));
                         self.incr_pc();
                         Ok(true)
@@ -2583,7 +2590,7 @@ fn reverse32(x: u32) -> u32 {
     ((mid & 0x00ff00ff) << 8) | ((mid & 0xff00ff00) >> 8)
 }
 
-///Represents a stack trace, with each CodePt indicating a stack frame, Unknown variant is unused.
+/// Represents a stack trace, with each CodePt indicating a stack frame, Unknown variant is unused.
 #[derive(Debug)]
 pub struct StackTrace {
     pub trace: Vec<CodePt>,

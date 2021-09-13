@@ -98,7 +98,7 @@ impl AbiForContract {
         let request_id = machine.runtime_env.insert_tx_message(
             Uint256::from_u64(1025),
             Uint256::from_usize(1_000_000_000),
-            Uint256::zero(),
+            None,
             Uint256::zero(),
             payment,
             &augmented_code,
@@ -176,7 +176,7 @@ impl AbiForContract {
         machine.runtime_env.insert_tx_message_from_contract(
             sender_addr,
             Uint256::from_usize(10_000_000),
-            Uint256::zero(),
+            None,
             self.address.clone(),
             payment,
             &calldata,
@@ -214,7 +214,7 @@ impl AbiForContract {
 
         machine.runtime_env.insert_gas_estimation_message(
             Uint256::from_usize(10_000_000),
-            Uint256::zero(),
+            None,
             self.address.clone(),
             payment,
             &calldata,
@@ -302,7 +302,7 @@ impl AbiForContract {
         machine.runtime_env.insert_tx_message_from_contract(
             sender_addr,
             Uint256::from_usize(100_000_000),
-            Uint256::zero(),
+            None,
             self.address.clone(),
             payment,
             &calldata,
@@ -324,7 +324,8 @@ impl AbiForContract {
         ))
     }
 
-    pub fn _call_function_with_deposit(
+    #[cfg(test)]
+    pub fn call_function_with_deposit(
         &self,
         sender_addr: Uint256,
         func_name: &str,
@@ -339,7 +340,7 @@ impl AbiForContract {
         machine.runtime_env.insert_tx_message(
             sender_addr,
             Uint256::from_usize(100_000_000),
-            Uint256::zero(),
+            None,
             self.address.clone(),
             payment,
             &calldata,
@@ -376,7 +377,7 @@ impl AbiForContract {
 
         let (tx_contents, _tx_id_bytes) =
             machine.runtime_env.make_compressed_and_signed_l2_message(
-                Uint256::zero(),
+                None,
                 Uint256::from_usize(100_000_000),
                 self.address.clone(),
                 payment,
@@ -420,7 +421,7 @@ impl AbiForContract {
             ._append_compressed_and_signed_tx_message_to_batch(
                 batch,
                 Uint256::from_usize(100_000_000),
-                Uint256::zero(),
+                None,
                 self.address.clone(),
                 payment,
                 calldata,
@@ -449,7 +450,7 @@ impl AbiForContract {
             ._append_compressed_and_signed_tx_message_to_batch(
                 batch,
                 maybe_max_gas.unwrap_or(Uint256::from_usize(100_000_000)),
-                Uint256::zero(),
+                None,
                 self.address.clone(),
                 payment,
                 calldata,
@@ -550,7 +551,7 @@ impl<'a> ArbSys<'a> {
         }
     }
 
-    pub fn _arbos_version(&self, machine: &mut Machine) -> Result<Uint256, ethabi::Error> {
+    pub fn arbos_version(&self, machine: &mut Machine) -> Result<Uint256, ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function_compressed(
             self.my_address.clone(),
             "arbOSVersion",

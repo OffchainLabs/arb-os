@@ -28,31 +28,31 @@ const ChainOwnerKeccak = 0x1567aa7175e04611d194275bb504cc64e920959dd01df9d86ab04
 
 var globalChainParameters: map<uint, uint>;
 
-public impure func chainParams_get(which: uint) -> option<uint> {
+public view func chainParams_get(which: uint) -> option<uint> {
     return globalChainParameters[which];
 }
 
-public impure func chainParams_getOrDie(which: uint) -> uint {
+public view func chainParams_getOrDie(which: uint) -> uint {
     return xif let Some(val) = chainParams_get(which) {
         val
     } else {
-        panic
+        error
     };
 }
 
-public impure func chainParams_set(which: uint, value: uint) {
+public view write func chainParams_set(which: uint, value: uint) {
     if (globalChainParameters[which] == None<uint>) {
-        panic;
+        error;
     }
     chainParams_create(which, value);
 }
 
-public impure func chainParams_create(which: uint, value: uint) {
-    globalChainParameters = globalChainParameters with { [which] = value };
+public view write func chainParams_create(which: uint, value: uint) {
+    set globalChainParameters[which] = value;
     notifyParamsChanged();
 }
 
-public impure func chainParams_init() {
+public write func chainParams_init() {
     globalChainParameters = chainParams_getDefaults();
     chainOwners = setOfAddresses_emptySet();   // initially, only address 0 can act as the chain owner
 }
@@ -74,7 +74,7 @@ public func chainParams_getDefaults() -> map<uint, uint> {
         with { [const::Atom_Param_SecondsPerSend] = const::Default_Param_SecondsPerSend }
         with { [const::Atom_Param_L1GasPerL1CalldataUnit] = const::Default_Param_L1GasPerL1CalldataUnit }
         with { [const::Atom_Param_L1GasPerStorage] = const::Default_Param_L1GasPerStorage }
-        with { [const::Atom_Param_ArbGasDivisor] = const::Default_Param_ArbGasDivisor }
+        with { [const::Atom_Param_AvmGasPerArbGas] = const::Default_Param_AvmGasPerArbGas }
         with { [const::Atom_Param_NetworkFeeShareNumerator] = const::Default_Param_NetworkFeeShareNumerator }
         with { [const::Atom_Param_NetworkFeeShareDenominator] = const::Default_Param_NetworkFeeShareDenominator }
         with { [const::Atom_Param_GasPoolMax] = const::Default_Param_GasPoolMax }
@@ -87,27 +87,26 @@ public func chainParams_getDefaults() -> map<uint, uint> {
         with { [const::Atom_Param_L1GasPriceEstimateWeightDenominator] = const::Default_Param_L1GasPriceEstimateWeightDenominator }
         with { [const::Atom_Param_RetryableTxLifetimeSeconds] = const::Default_Param_RetryableTxLifetimeSeconds }
         with { [const::Atom_Param_ArbitrumNonZeroBalanceCallStipend] = const::Default_Param_ArbitrumNonZeroBalanceCallStipend }
+        with { [const::Atom_Param_GasPriceOracle] = const::Default_Param_GasPriceOracle }
         with { [const::Atom_Param_EnableL1ContractAddressAliasing] = const::Default_Param_EnableL1ContractAddressAliasing }
     ;
 }
 
-public impure func chainParams_gotParamsMessage(data: ByteArray) {
+public view write func chainParams_gotParamsMessage(data: ByteArray) {
     let stream = bytestream_new(data);
     loop {
         let paramId = xif let Some(res) = bytestream_get256(stream) {
-            let (ustr, pid) = res;
-            stream = ustr;
+            let (*stream, pid) = res;
             pid
         } else {
             return;
             0
         };
         let value = xif let Some(res) = bytestream_get256(stream) {
-            let (ustr, val) = res;
-            stream = ustr;
+            let (*stream, val) = res;
             val
         } else {
-            panic   // should never have an id without a matching value
+            error   // should never have an id without a matching value
         };
 
         if (paramId == const::ChainOwnerKeccak) {
@@ -120,28 +119,28 @@ public impure func chainParams_gotParamsMessage(data: ByteArray) {
     }
 }
 
-public impure func notifyParamsChanged() {
+public view write func notifyParamsChanged() {
     gasAccounting_notifyParamsChanged();
     accounts_notifyParamsChanged();
 }
 
-public impure func chainParams_chainId() -> uint {
+public view func chainParams_chainId() -> uint {
     return chainParams_getOrDie(const::Atom_Param_ChainID);
 }
 
-public impure func chainParams_getDefaultAggregator() -> address {
+public view func chainParams_getDefaultAggregator() -> address {
     return address(chainParams_getOrDie(const::Atom_Param_DefaultAggregator));
 }
 
-public impure func chainParams_setDefaultAggregator(newDefault: address) {
+public view write func chainParams_setDefaultAggregator(newDefault: address) {
     chainParams_set(const::Atom_Param_DefaultAggregator, uint(newDefault));
 }
 
-public impure func chainParams_getSecondsPerSend() -> uint {
+public view func chainParams_getSecondsPerSend() -> uint {
     return chainParams_getOrDie(const::Atom_Param_SecondsPerSend);
 }
 
-public impure func chainParams_serializeAllParams() -> ByteArray {
+public view func chainParams_serializeAllParams() -> ByteArray {
     return unsafecast<ByteArray>(
         builtin_kvsForall(
             unsafecast<Kvs>(globalChainParameters),
@@ -162,22 +161,22 @@ func sapClosure(key: uint, value: uint, ba: ByteArray) -> ByteArray {
 
 var chainOwners: SetOfAddresses;
 
-public impure func addChainOwner(newOwner: address) {
+public view write func addChainOwner(newOwner: address) {
     chainOwners = setOfAddresses_add(chainOwners, newOwner);
 }
 
-public impure func removeChainOwner(ownerToRemove: address) {
+public view write func removeChainOwner(ownerToRemove: address) {
     chainOwners = setOfAddresses_remove(chainOwners, ownerToRemove);
 }
 
-public impure func serializedListOfChainOwners() -> ByteArray {
+public view func serializedListOfChainOwners() -> ByteArray {
     return xif let Some(ba) = setOfAddresses_serialize(chainOwners) {
         ba
     } else {
-        panic
+        error
     };
 }
 
-public impure func hasChainOwnerPrivileges(addr: address) -> bool {
+public view func hasChainOwnerPrivileges(addr: address) -> bool {
     return setOfAddresses_contains(chainOwners, addr) || (addr == address(0));
 }

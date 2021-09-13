@@ -1,0 +1,8 @@
+
+func main() -> uint {
+    return 4;
+}
+
+view func main() -> uint {
+    return 4;
+}

@@ -41,6 +41,7 @@ jobs:
       matrix:
         os: [ubuntu-20.04]
         rust: [stable, nightly]
+      fail-fast: false
 
     steps:
       - name: Checkout
@@ -97,16 +98,15 @@ jobs:
           sudo npm install -g yarn && cd contracts && yarn install
 
       - name: Make and test ArbOS
-        run: make clean && make
+        run: make clean && make -j ci compile_options="-w"
 
-      - name: Check if ArbOS changed
+      - name: Check if ArbOS or replayTests changed
         run: git update-index --refresh && git diff-index HEAD --
 
       - name: Create code-coverage files if supported for rust ${{ matrix.rust }}
         if: matrix.rust == 'nightly'
         run: |
           grcov . --binary-path ./target/release/ -s . -t lcov --branch --ignore-not-existing --ignore "/*" -o lcov.info
-          make coverage
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1
@@ -153,9 +153,9 @@ jobs:
 
       - name: Build Arbitrum
         run: |
-          mkdir arbitrum/packages/arb-avm-cpp/build/
+          mkdir arbitrum/packages/arb-avm-cpp/debug/
           cd $_
-          cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake .. -DCMAKE_BUILD_TYPE=Debug
           make -j
 
       - name: Test Node's C++ Database

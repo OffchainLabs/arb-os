@@ -38,14 +38,14 @@ use std::stack::stack_push;
 type StorageMap = struct {
     tree: StorageMapNode,
     size: uint,
-}
+};
 
-type StorageMapNode = [8]any
+type StorageMapNode = [8]any;
 
 type StorageMapCell = struct {
     key: uint,
     value: uint,
-}
+};
 
 
 public func storageMap_new() -> StorageMap {
@@ -89,7 +89,7 @@ type Unwinder = struct {
     kvs: [8]any,
     index: uint,
     next: option<Unwinder>,
-}
+};
 
 #[noinline, ] public func storageMap_set(s: StorageMap, key: uint, value: uint) -> StorageMap {
     let (utree, maybeUnwinder, delta) = storageMap_set2(s.tree, key, value);
@@ -183,21 +183,21 @@ public func storageMap_delete(s: StorageMap, key: uint) -> StorageMap {
 //       so callers are advised not to rely on the ordering
 public func storageMap_forall(
     s: StorageMap,
-    closure: func(uint, uint, any) -> any,
+    applicator: func(uint, uint, any) -> any,
     state: any
 ) -> any {
-    return storageMap_forall_tree(s.tree, closure, state);
+    return storageMap_forall_tree(s.tree, applicator, state);
 }
 
 public func storageMap_forall_tree(
     t: StorageMapNode,
-    closure: func(uint, uint, any) -> any,
+    applicator: func(uint, uint, any) -> any,
     state: any
 ) -> any {
     return xif (t == unsafecast<StorageMapNode>(0)) {
         state
     } elseif (asm(t,) uint { length } == 2) {
-        closure(
+        applicator(
             unsafecast<StorageMapCell>(t).key,
             unsafecast<StorageMapCell>(t).value,
             state
@@ -205,7 +205,7 @@ public func storageMap_forall_tree(
    } else {
         let i = 0;
         while (i < 8) {
-            state = storageMap_forall_tree(unsafecast<StorageMapNode>(t[i]), closure, state);
+            state = storageMap_forall_tree(unsafecast<StorageMapNode>(t[i]), applicator, state);
             i = i+1;
         }
         state
@@ -216,7 +216,7 @@ type StorageMapDiff_State = struct {
     diffs: Stack,
     otherSM: StorageMap,
     firstOne: bool,
-}
+};
 
 public func storageMap_diff(s0: StorageMap, s1: StorageMap) -> Stack {
     let res1 = unsafecast<StorageMapDiff_State>(storageMap_forall(

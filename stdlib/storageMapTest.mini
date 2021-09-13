@@ -14,7 +14,7 @@ use std::stack::stack_size;
 use std::stack::stack_pop;
 
 
-impure func main() {
+write func main() {
 	asm(tests(),) { log };
 }
 

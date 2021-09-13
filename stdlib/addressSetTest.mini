@@ -15,7 +15,7 @@ use std::addressSet::addressPairSet_set;
 use std::addressSet::addressPairSet_lookup;
 
 
-impure func main() {
+write func main() {
 	asm(tests(),) { log };
 }
 
