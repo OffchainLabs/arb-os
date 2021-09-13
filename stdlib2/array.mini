@@ -2,15 +2,15 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
- type block<T> = [8]T;    // this is basically a maximum-size AVM tuple
+type block<T> = [8]T;    // this is basically a maximum-size AVM tuple
 
- type array<T> = struct {
-     size: uint,
-     topstep: uint,
-     contents: block<T>,
-     trait access: array_get::<T>,
-     trait insert: array_set::<T>,
- };
+type array<T> = struct {
+    size: uint,
+    topstep: uint,
+    contents: block<T>,
+    trait access: array_get::<T>,
+    trait insert: array_set::<T>,
+};
 
 public func array_new<T>(size: uint, base_val: T) -> array<T> {
     let chunk = 1;
