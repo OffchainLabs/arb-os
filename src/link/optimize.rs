@@ -2,12 +2,11 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-//!Provides functions for modifying a sequence of Instructions to improve performance and lower gas
-//! costs.
+//! Provides functions for modifying a sequence of Instructions to improve performance and lower gas costs.
 
 use crate::mavm::{AVMOpcode, Instruction, Opcode};
 
-///Removes instructions that have no effect on the output of the program.
+/// Removes instructions that have no effect on the output of the program.
 fn useless_opcodes_layer<'a, I>(iter: I) -> impl Iterator<Item = &'a Instruction>
 where
     I: Iterator<Item = &'a Instruction>,
@@ -18,7 +17,7 @@ where
     })
 }
 
-///Takes a slice of `Instruction`s and returns a vector of instructions with certain combinations of
+/// Takes a slice of `Instruction`s and returns a vector of instructions with certain combinations of
 /// instructions recursively either removed or replaced by simpler instructions.
 ///
 /// These combinations are:

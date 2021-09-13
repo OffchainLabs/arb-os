@@ -24,7 +24,7 @@ use std::bytearray::marshalledBytes_hash;
 const TwoTo64 = 0x10000000000000000;
 const LargeOffset = 0xf000000000000000;
 
-impure func main() {
+write func main() {
 	asm(tests(),) { log };
 }
 
@@ -315,7 +315,7 @@ func setupFromUnmarshal() -> ByteArray {
 	return xif let Some(ba) = bytearray_unmarshalBytes(marshalledStruct) {
 	    ba
 	} else {
-	    panic
+	    error
 	};
 }
 

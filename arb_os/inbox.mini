@@ -12,26 +12,43 @@ use std::queue::queuestack_new;
 use std::queue::queuestack_push;
 use std::queue::queuestack_get;
 
+use std::addressSet::AddressPairSet;
+use std::addressSet::addressPairSet_new;
+use std::addressSet::addressPairSet_lookup_options;
+use std::addressSet::addressPairSet_lookup_strict;
+use std::addressSet::addressPairSet_set;
+use std::addressSet::addressPairSet_serialize;
+
+use accounts::safeGetGlobalAccountStore;
+use accounts::safeSetGlobalAccountStore;
 use accounts::getGlobalAccountStore;
-use accounts::setGlobalAccountStore;
 use accounts::accountStore_get;
 use accounts::accountStore_set;
 use accounts::account_addToEthBalance;
+use accounts::account_checkAndIncrSeqNum;
 
 use blockhash::blockhash_submitHash;
 
 use chainParameters::chainParams_gotParamsMessage;
 use chainParameters::chainParams_chainId;
+use chainParameters::chainParams_getOrDie;
 
+use evmlogs::EvmLogs;
+
+use gasAccounting::GasUsage;
+use gasAccounting::allowedSenders_contains;
+use gasAccounting::gasAccounting_prepareTx;
 use gasAccounting::updateL1GasPriceEstimate;
 use gasAccounting::txFeeStats_zero;
 
 use messages::TxRequestData;
+use messages::processL2Request;
 
 use messageBatch::messageBatch_tryNew;
 use messageBatch::messageBatch_get;
 
 use output::outputStats_endOfBlock;
+use output::emitTxReceipt;
 
 use retrybuffer::RetryableTx;
 use retrybuffer::processRetryableTx;
@@ -55,13 +72,13 @@ use decompression::decompressAndVerifyEcdsaSignedTx;
 
 type Inbox = struct {
     queue: IncomingRequestQueue,    // queue of requests that haven't yet been retrieved from the inbox
-    arbBlockNum: uint,              // highest Arbitrum blocknum of messages that we have retrieved from the inbox
-    ethBlockNum: uint,              // highest L1 blocknum of messages that we have retrieved from the inbox
-    timestamp: uint,                // highest timestamp of messages that we have retrieved from the inbox
-    atStartOfBlock: bool,           // true iff we should start a new block when the next message arrives
+    arbBlockNum: uint,              // highest Arbitrum blocknum of messages that have been retrieved from the inbox
+    ethBlockNum: uint,              // highest L1 blocknum of messages that have been retrieved from the inbox
+    timestamp: uint,                // highest timestamp of messages that have been retrieved from the inbox
+    atStartOfBlock: bool,           // true iff we should start a new Arbitrum block when the next message arrives
     inboxHashAccumulator: bytes32,  // hash accumulator covering all inbox messages so far
-    pendingMessage: option<IncomingRequest>,
-}
+    pendingMessage: option<IncomingRequest>,  // message being held until sideloads have had a chance to be processed
+};
 
 var globalInbox: Inbox;
 var globalInputQueue: struct {
@@ -69,7 +86,7 @@ var globalInputQueue: struct {
     batchQ: IncomingRequestQueueStack,
 };
 
-public impure func inbox_init() {
+public write func inbox_init() {
     globalInbox = struct {
         queue: incomingRequestQueue_new(),
         arbBlockNum: 0,
@@ -83,15 +100,16 @@ public impure func inbox_init() {
         txQ: txRequestQueue_new(),
         batchQ: incomingRequestQueueStack_new()
     };
+    addressRemapExceptions = addressPairSet_new();
 }
 
-public impure func emitGenesisBlockReceipt() {
+public view write func emitGenesisBlockReceipt() {
     outputStats_endOfBlock(globalInbox.arbBlockNum, globalInbox.ethBlockNum, globalInbox.timestamp);
     blockhash_submitHash(globalInbox.ethBlockNum, globalInbox.inboxHashAccumulator);
-    globalInbox = globalInbox with { arbBlockNum: globalInbox.arbBlockNum + 1 };
+    set globalInbox.arbBlockNum = globalInbox.arbBlockNum + 1;
 }
 
-public impure func inbox_get() -> IncomingRequest {
+public view write func inbox_get() -> IncomingRequest {
     // Get the next message, in order of arrival.
     // If no messages have arrived, this will block until one arrives.
     // This is a loop because some events don't generate a message that we can return,
@@ -102,42 +120,46 @@ public impure func inbox_get() -> IncomingRequest {
             globalInbox = getFromL1Inbox(globalInbox);
         }
 
-        let (updatedQ, rawMsg,) = incomingRequestQueue_getOrDie(globalInbox.queue);
-        globalInbox = globalInbox with { queue: updatedQ };
+        let (updatedQ, rawMsg) = incomingRequestQueue_getOrDie(globalInbox.queue);
+        set globalInbox.queue = updatedQ ;
         let ebMsg = unsafecast<IncomingRequest>(rawMsg);
 
         let ebMsgHash = hashIncomingRequest(ebMsg);
-        globalInbox = globalInbox with {
-            inboxHashAccumulator: hash(globalInbox.inboxHashAccumulator, ebMsgHash)
-        };
+        set globalInbox.inboxHashAccumulator = hash(globalInbox.inboxHashAccumulator, ebMsgHash);
 
-        if (ebMsg.kind == const::L1MessageType_setChainParameters) {
+        //TODO: Here we check for two message types, for compatibility.
+        //      This is only needed in the first ArbOS upgrade version after the type-code was remapped.
+        //      In future versions, where all test code sends the non-legacy type code, we can just use the new type code.
+        if ((ebMsg.kind == const::L1MessageType_setChainParameters) || (ebMsg.kind == const::L1MessageType_setChainParameters_v36_and_below) ){
             if (ebMsg.sender == address(0)) {
                 chainParams_gotParamsMessage(ebMsg.msgData);
-            }   // ignore this message if it didn't come from chain owner
+            }   // ignore this message if it didn't come from address zero
+            // loop back to get the next message
         } else {
-            return ebMsg with {
-                requestId: uint(hash(bytes32(chainParams_chainId()), bytes32(ebMsg.requestId)))
-            };
+            set ebMsg.requestId = uint(hash(bytes32(chainParams_chainId()), bytes32(ebMsg.requestId)));
+            return ebMsg;
         }
     };
 }
 
-impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, fromSideload: bool) -> IncomingRequest {
+// translate a newly arrived message from the incoming format into the format we'll use internally
+view write func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, fromSideload: bool) -> IncomingRequest {
     if (! fromSideload) {
         updateL1GasPriceEstimate(newMsgRaw.sender, newMsgRaw.gasPriceL1);
     }
 
     if (newMsgRaw.ethBlockNumber < globalInbox.ethBlockNum) {
-        newMsgRaw = newMsgRaw with { ethBlockNumber: globalInbox.ethBlockNum };
+        // enforce non-decreasing property of Ethereum block numbers on incoming messages
+        set newMsgRaw.ethBlockNumber = globalInbox.ethBlockNum;
     }
     if (newMsgRaw.timestamp < globalInbox.timestamp) {
-        newMsgRaw = newMsgRaw with { timestamp: globalInbox.timestamp };
+        // enforce non-decreasing property of timestamps on incoming messages
+        set newMsgRaw.timestamp = globalInbox.timestamp;
     }
 
     return struct {
         kind: newMsgRaw.kind,
-        arbBlockNumber: globalInbox.arbBlockNum,
+        arbBlockNumber: globalInbox.arbBlockNum,    // assign the current Arbitrum block number
         ethBlockNumber: newMsgRaw.ethBlockNumber,
         timestamp: newMsgRaw.timestamp,
         sender: newMsgRaw.sender,
@@ -154,35 +176,38 @@ impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, fromSide
     };
 }
 
-#[noinline, ] impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
+#[noinline, ] view write func getFromL1Inbox(inbox: Inbox) -> Inbox {
     // Get a message from the L1 inbox, and append it to the inbox.
     // Automatically generate an end-of-block message if that is needed.
     // If there are no messages available in the L1 inbox, this blocks until one is available
 
     if let Some(pendingMsg) = inbox.pendingMessage {
-        let rawSideloadMsg = asm(inbox.arbBlockNum,) any { sideload };
+        // There is a pending message, so we need to handle any sideloads before proceeding.
+        // Sideloads are method that nodes can use to inject messages into their private copy of the AVM state.
+        // In the "on chain" AVM, a sideload instruction always returns (), but a node can make it return something
+        //      else, to get the node's private copy of the chain state to process some other message.
+        // At the end of each block, ArbOS will process as many sideloaded messages as it is given, until a sideload
+        //      returns (). Then ArbOS will go on to process the messages from the new L1 block.
+        let rawSideloadMsg = asm(inbox.arbBlockNum) any { sideload };
         if (rawSideloadMsg != ()) {
+            // a sideloaded message was received, so enqueue it for processing
             let newMsg = incomingRequestFromRaw(unsafecast<IncomingRequestFromInbox>(rawSideloadMsg), true);
             return inbox with {
                 queue: incomingRequestQueue_put(inbox.queue, newMsg)
             };
         }
 
-        // do end of block processing
+        // there are no more sideloads for this block, so do end of block processing
         outputStats_endOfBlock(inbox.arbBlockNum, inbox.ethBlockNum, inbox.timestamp);
         blockhash_submitHash(inbox.ethBlockNum, inbox.inboxHashAccumulator);
 
-        inbox = inbox with {
-            pendingMessage: None<IncomingRequest>
-        } with {
-            arbBlockNum: inbox.arbBlockNum + 1
-        } with {
-            ethBlockNum: pendingMsg.ethBlockNumber
-        } with {
-            timestamp: pendingMsg.timestamp
-        };
+        set inbox.pendingMessage = None<IncomingRequest>;
+        set inbox.arbBlockNum = inbox.arbBlockNum + 1;
+        set inbox.ethBlockNum = pendingMsg.ethBlockNumber;
+        set inbox.timestamp = pendingMsg.timestamp;
 
         return xif (pendingMsg.kind != const::L1MessageType_endOfBlock) {
+            // enqueue the pending message for processing
             inbox with {
                 queue: incomingRequestQueue_put(
                     inbox.queue,
@@ -198,41 +223,30 @@ impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, fromSide
 
     let newMsg = incomingRequestFromRaw(asm() IncomingRequestFromInbox { inbox }, false);
     if ( (!inbox.atStartOfBlock) && ((newMsg.ethBlockNumber > inbox.ethBlockNum) || (newMsg.timestamp > inbox.timestamp)) ){
-        return inbox with {
-            pendingMessage: Some(newMsg)
-        };
+        set inbox.pendingMessage = Some(newMsg);
     } elseif (newMsg.kind == const::L1MessageType_endOfBlock) {
-        return xif (inbox.atStartOfBlock) {
-            inbox
-        } else {
-            inbox with {
-                pendingMessage: Some(newMsg)
-            }
-        };
+        if ( ! inbox.atStartOfBlock) {
+            set inbox.pendingMessage = Some(newMsg);
+        }
+    } else {
+        set inbox.queue = incomingRequestQueue_put(inbox.queue, newMsg);
+        set inbox.ethBlockNum = newMsg.ethBlockNumber;
+        set inbox.arbBlockNum = newMsg.arbBlockNumber;
+        set inbox.timestamp = newMsg.timestamp;
+        set inbox.atStartOfBlock = false;
     }
-
-    return inbox with {
-        queue: incomingRequestQueue_put(inbox.queue, newMsg)
-    } with {
-        ethBlockNum: newMsg.ethBlockNumber
-    } with {
-        arbBlockNum: newMsg.arbBlockNumber
-    } with {
-        timestamp: newMsg.timestamp
-    } with {
-        atStartOfBlock: false
-    };
+    return inbox;
 }
 
-public impure func inbox_currentTimestamp() -> uint {
+public view func inbox_currentTimestamp() -> uint {
     return globalInbox.timestamp;
 }
 
-public impure func inbox_currentArbBlockNumber() -> uint {
+public view func inbox_currentArbBlockNumber() -> uint {
     return globalInbox.arbBlockNum;
 }
 
-public impure func inbox_currentEthBlockNumber() -> uint {
+public view func inbox_currentEthBlockNumber() -> uint {
     return globalInbox.ethBlockNum;
 }
 
@@ -241,11 +255,11 @@ type IncomingRequestFromInbox = struct {
     ethBlockNumber: uint,     // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
-    requestId: uint,
+    requestId: uint,          // unique value assigned by the L1 inbox contract
     gasPriceL1: uint,         // L1 gas price paid by this tx
-    msgSize: uint,
-    msgData: buffer,
-}
+    msgSize: uint,            // size of payload message
+    msgData: buffer,          // payload message data
+};
 
 type IncomingRequest = struct {
     kind: uint,               // type of message
@@ -253,32 +267,32 @@ type IncomingRequest = struct {
     ethBlockNumber: uint,     // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
-    requestId: uint,
+    requestId: uint,          // unique identifier for this request
     msgData: ByteArray,       // kind-specific data
     provenance: RequestProvenance,
     aggregator: option<AggregatorInfo>,
-    adminMode: bool,
-    gasEstimationParams: option<GasEstimationParams>,
-}
+    adminMode: bool,          // true iff this is a sideloaded message inserted for private execution by a node
+    gasEstimationParams: option<GasEstimationParams>,  // used if this is a gas estimation message
+};
 
 type GasEstimationParams = struct {
     computeGasLimit: uint,
     ignoreGasPrice: bool,
     ignoreMaxGas: bool,
-}
+};
 
 type RequestProvenance = struct {
     l1SeqNum: uint,
     parentRequestId: uint,
     indexInParent: uint,
-}
+};
 
 type AggregatorInfo = struct {
     aggregator: option<address>,
     calldataUnits: uint,
-}
+};
 
-func hashIncomingRequest(req: IncomingRequest) -> bytes32 {
+func hashIncomingRequest(req: IncomingRequest) -> bytes32 {  // a convenient hash over some fields of a request
     return hash(
         bytes32(req.kind),
         hash(
@@ -300,9 +314,49 @@ func hashIncomingRequest(req: IncomingRequest) -> bytes32 {
     );
 }
 
-public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
-    let msg = unsafecast<IncomingRequest>(());   // value will be re-initialized before use
-    
+public view write func mainRunLoop() {
+    loop {
+        if let Some(res) = txRequestQueue_get(globalInputQueue.txQ) {   // consume from txQ first
+            let (newQ, tx) = res;
+            globalInputQueue = globalInputQueue with {
+                txQ: newQ
+            };
+            handleArrivingTx(unsafecast<TxRequestData>(tx));
+        } else {
+            let msg = xif let Some(res) = incomingRequestQueueStack_get(globalInputQueue.batchQ) {  // consume from batchQ second
+                let (newQ, umsg) = res;
+                globalInputQueue = globalInputQueue with {
+                    batchQ: newQ
+                };
+                umsg
+            } else {
+                inbox_get()   // the queues are empty, so get the next message from the inbox
+            };
+            if let Some(batch) = messageBatch_tryNew(msg) {
+                // it's a batch message, so unpack all of its component requests and put them in the batchQ
+                let moreToDo = true;
+                let queue = incomingRequestQueue_new();
+                while (moreToDo) {
+                    if let Some(res) = messageBatch_get(batch) {
+                        let (newMsg, *batch) = res;
+                        queue = incomingRequestQueue_put(queue, newMsg);
+                    } else {
+                        moreToDo = false;
+                    }
+                }
+                globalInputQueue = globalInputQueue with {
+                    batchQ: incomingRequestQueueStack_push(globalInputQueue.batchQ, queue)
+                };
+                // set globalInputQueue.batchQ = incomingRequestQueueStack_push(globalInputQueue.batchQ, queue);
+            } else {
+                handleUnpackedMessage(msg);
+            }
+        }
+    }
+}
+
+/*
+public view write func inbox_getNextUnpackedRequest() -> TxRequestData {
     return xloop {
         if let Some(res) = txRequestQueue_get(globalInputQueue.txQ) {
             let (newQ, tx) = res;
@@ -311,15 +365,15 @@ public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
             };
             return unsafecast<TxRequestData>(tx);
         }
-        if let Some(res) = incomingRequestQueueStack_get(globalInputQueue.batchQ) {
+        let msg = xif let Some(res) = incomingRequestQueueStack_get(globalInputQueue.batchQ) {
             let (newQ, umsg) = res;
             globalInputQueue = globalInputQueue with {
                 batchQ: newQ
             };
-            msg = umsg;
+            umsg
         } else {
-            msg = inbox_get();
-        }
+            inbox_get()
+        };
 
         if let Some(batch) = messageBatch_tryNew(msg) {
             // it's a batch message, so unpack its components and queue them
@@ -354,33 +408,56 @@ public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
                 if (firstByte == const::L2MessageType_unsignedEOATx) {
                     let callvalue = bytearray_get256(msg.msgData, 1+4*32);
                     let gAcctStore = getGlobalAccountStore();
-                    setGlobalAccountStore(
-                        accountStore_set(
-                            gAcctStore,
-                            msg.sender,
-                            account_addToEthBalance(accountStore_get(gAcctStore, msg.sender), callvalue)
-                        )
-                    );
                     if let Some(txRequest) = translateUnsignedTx(msg) {
+                        let remappedSenderAddr = mapL1SenderAddress(msg.sender, Some(txRequest.calleeAddr));
+                        setGlobalAccountStore(
+                            accountStore_set(
+                                gAcctStore,
+                                remappedSenderAddr,
+                                account_addToEthBalance(accountStore_get(gAcctStore, remappedSenderAddr), callvalue)
+                            )
+                        );
                         return txRequest;
+                    } else {
+                        // request was malformatted, ignore it and execute loop again to get another
+                        //     but do the deposit anyway
+                        let remappedSenderAddr = mapL1SenderAddress(msg.sender, None<address>);
+                        setGlobalAccountStore(
+                            accountStore_set(
+                                gAcctStore,
+                                remappedSenderAddr,
+                                account_addToEthBalance(
+                                    accountStore_get(gAcctStore, remappedSenderAddr),
+                                    callvalue,
+                                )
+                            )
+                        );
                     }
-                    // else request was malformatted, ignore it and execute loop again to get another
-                    //     but don't undo the deposit
                 } elseif (firstByte == const::L2MessageType_unsignedContractTx) {
                     let callvalue = bytearray_get256(msg.msgData, 1+3*32);
                     let gAcctStore = getGlobalAccountStore();
-                    setGlobalAccountStore(
-                        accountStore_set(
-                            gAcctStore,
-                            msg.sender,
-                            account_addToEthBalance(accountStore_get(gAcctStore, msg.sender), callvalue)
-                        )
-                    );
                     if let Some(txRequest) = translateUnsignedTx(msg) {
+                        let remappedSenderAddr = mapL1SenderAddress(msg.sender, Some(txRequest.calleeAddr));
+                        setGlobalAccountStore(
+                            accountStore_set(
+                                gAcctStore,
+                                remappedSenderAddr,
+                                account_addToEthBalance(accountStore_get(gAcctStore, remappedSenderAddr), callvalue)
+                            )
+                        );
                         return txRequest;
+                    } else {
+                        // request was malformatted, ignore it and execute loop again to get another
+                        //     but do the deposit anyway
+                        let remappedSenderAddr = mapL1SenderAddress(msg.sender, None<address>);
+                        setGlobalAccountStore(
+                            accountStore_set(
+                                gAcctStore,
+                                remappedSenderAddr,
+                                account_addToEthBalance(accountStore_get(gAcctStore, remappedSenderAddr), callvalue)
+                            )
+                        );
                     }
-                    // else request was malformatted, ignore it and execute loop again to get another
-                    //     but don't undo the deposit
                 }
                 // else L2 msg type is invalid in ETH deposit message, ignore msg and execute loop again to get another
                 //      note that deposit doesn't happen in this case
@@ -392,14 +469,6 @@ public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
                     arbBlockNum: globalInbox.arbBlockNum + 1
                 };
             } elseif (msg.kind == const::L1MessageType_L2 || msg.kind == const::L1MessageType_L2ForGasEstimation) {
-                // record the calldata usage, so it can be reported in tx receipt
-                msg = msg with {
-                    aggregator: Some(struct {
-                        aggregator: xif let Some(aggInfo) = msg.aggregator { aggInfo.aggregator } else { None<address> },
-                        calldataUnits: bytearray_getCalldataUnits(msg.msgData),
-                    })
-                };
-
                 // it's an L2 message, so switch based on the L2 type
                 let firstByte = bytearray_getByte(msg.msgData, 0);
                 if (firstByte == const::L2MessageType_heartbeat) {
@@ -410,16 +479,6 @@ public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
                         return txRequest;
                     }
                     // else signature was invalid, ignore msg and execute loop again to get another
-//                } elseif (firstByte == const::L2MessageType_blsBatch) {
-//                    BLS batch message type disabled because it's not used
-//                    if let Some(updatedQ) = decompressAndVerifyBLSSignedTxBatch(
-//                        msg.msgData,
-//                        msg,
-//                        unsafecast<Queue>(globalInputQueue.txQ)
-//                    ) {
-//                        globalInputQueue = globalInputQueue with { txQ: unsafecast<TxRequestQueue>(updatedQ) };
-//                    }
-//                    // else BLS batch was bad, so ignore it
                 } else {
                     // subtype must be unsigned EOA, unsigned contract, or nonmutating
                     if let Some(txRequest) = translateUnsignedTx(msg) {
@@ -427,69 +486,199 @@ public impure func inbox_getNextUnpackedRequest() -> TxRequestData {
                     }
                     // else request was malformatted, ignore it and execute loop again to get another
                 }
-            } elseif (msg.kind == const::L1MessageType_rollupProtocolEvent) {
-                // ignore this message type, and execute loop again to get another message
-            } elseif (msg.kind == const::L1MessageType_submitRetryableTx) {
-                if let Some(txRequest) = processRetryableTx(msg) {
-                    return txRequest;
-                }
-                // submission failed, or no immediate tx included; either way, loop back to get next message
             } else {
-                // invalid message type -- ignore it
+                handleUnpackedMessage(msg);
             }
         }
     };
 }
+*/
 
-impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
-    let inStream = bytestream_new(request.msgData);
-    let (us, subtype) = bytestream_getByte(inStream)?;
-    inStream = us;
+view write func handleUnpackedMessage(msg: IncomingRequest) {
+    if (msg.kind == const::L1MessageType_L2FundedByL1) {
+        // record the calldata usage, so it can be reported in tx receipt
+        set msg.aggregator = Some(struct {
+            aggregator: None<address>,
+            calldataUnits: bytearray_getCalldataUnits(msg.msgData),
+        });
 
-    let (us, maxGas) = bytestream_get256(inStream)?;
-    inStream = us;
+        // the message carries an ETH deposit
+        // verify the validity of the message, process the deposit, then process the tx
+        let firstByte = bytearray_getByte(msg.msgData, 0);
+        if (firstByte == const::L2MessageType_unsignedEOATx) {
+            let callvalue = bytearray_get256(msg.msgData, 1+4*32);
+            let gAcctStore = safeGetGlobalAccountStore();
+            if let Some(txRequest) = translateUnsignedTx(msg) {
+                safeSetGlobalAccountStore(
+                    accountStore_set(
+                        gAcctStore,
+                        txRequest.caller,
+                        account_addToEthBalance(accountStore_get(gAcctStore, txRequest.caller), callvalue)
+                    )
+                );
+                handleArrivingTx(txRequest);
+            } else {
+                // request was malformatted, ignore it but do the deposit anyway
+                safeSetGlobalAccountStore(
+                    accountStore_set(
+                        gAcctStore,
+                        msg.sender,
+                        account_addToEthBalance(accountStore_get(gAcctStore, msg.sender), callvalue)
+                    )
+                );
+            }
+        } elseif (firstByte == const::L2MessageType_unsignedContractTx) {
+            let callvalue = bytearray_get256(msg.msgData, 1+3*32);
+            let gAcctStore = safeGetGlobalAccountStore();
+            if let Some(txRequest) = translateUnsignedTx(msg) {
+                safeSetGlobalAccountStore(
+                    accountStore_set(
+                        gAcctStore,
+                        txRequest.caller,
+                        account_addToEthBalance(accountStore_get(gAcctStore, txRequest.caller), callvalue)
+                    )
+                );
+                handleArrivingTx(txRequest);
+            } else {
+                // request was malformatted, ignore it but do the deposit anyway
+                safeSetGlobalAccountStore(
+                    accountStore_set(
+                        gAcctStore,
+                        msg.sender,
+                        account_addToEthBalance(accountStore_get(gAcctStore, msg.sender), callvalue)
+                    )
+                );
+            }
+        }
+        // else L2 msg type is invalid in ETH deposit message, ignore msg
+        //      note that deposit doesn't happen in this case
+    } elseif (msg.kind == const::L1MessageType_endOfBlock) {
+        // it's an end-of-block message, so just trigger end-of-block processing
+        outputStats_endOfBlock(msg.arbBlockNumber, msg.ethBlockNumber, msg.timestamp);
+        blockhash_submitHash(msg.ethBlockNumber, globalInbox.inboxHashAccumulator);
+        set globalInbox.arbBlockNum = globalInbox.arbBlockNum + 1;
+    } elseif (msg.kind == const::L1MessageType_L2 || msg.kind == const::L1MessageType_L2ForGasEstimation) {
+        // record the calldata usage, so it can be reported in tx receipt
+        set msg.aggregator = Some(struct {
+            aggregator: xif let Some(aggInfo) = msg.aggregator { aggInfo.aggregator } else { None<address> },
+            calldataUnits: bytearray_getCalldataUnits(msg.msgData),
+        });
 
-    let (us, gasPrice) = bytestream_get256(inStream)?;
-    inStream = us;
-
-    let seqNum = None<uint>;
-    if (subtype == const::L2MessageType_unsignedEOATx) {
-        let (us, sn) = bytestream_get256(inStream)?;
-        inStream = us;
-        seqNum = Some(sn);
+        // it's an L2 message, so switch based on the L2 type
+        let firstByte = bytearray_getByte(msg.msgData, 0);
+        if (firstByte == const::L2MessageType_heartbeat) {
+            // it's a heartbeat message, don't do anything
+        } elseif (firstByte == const::L2MessageType_signedCompressedTx) {
+            // it's a single message with compressed headers
+            if let Some(txRequest) = decompressAndVerifyEcdsaSignedTx(msg.msgData, msg) {
+                handleArrivingTx(txRequest);
+            }
+            // else signature was invalid, ignore msg
+        } else {
+            // subtype must be unsigned EOA, unsigned contract, or nonmutating
+            if let Some(txRequest) = translateUnsignedTx(msg) {
+                handleArrivingTx(txRequest);
+            }
+            // else request was malformatted, ignore it
+        }
+    } elseif (msg.kind == const::L1MessageType_rollupProtocolEvent) {
+        // ignore this message type
+    } elseif (msg.kind == const::L1MessageType_submitRetryableTx) {
+        if let Some(txRequest) = processRetryableTx(msg) {
+            handleArrivingTx(txRequest);
+        }
+        // submission failed, or no immediate tx included; either way, ignore the messge
+    } else {
+        // invalid message type -- ignore it
     }
+}
 
-    let (us, destAddrAsUint) = bytestream_get256(inStream)?;
-    inStream = us;
+view write func handleArrivingTx(tx: TxRequestData) {
+    let (resultCode, request) = xif (allowedSenders_contains(tx.caller) || tx.incomingRequest.adminMode) {
+        gasAccounting_prepareTx(tx)
+    } else {
+        (const::TxResultCode_senderNotPermitted, tx)
+    };
 
-    let (us, value) = bytestream_get256(inStream)?;
-    inStream = us;
+    if (resultCode == const::TxResultCode_success) {
+        if (processL2Request(request) == None<()>) {
+            // reject for message format error
+            emitTxReceipt(
+                request.incomingRequest,
+                const::TxResultCode_formatError,
+                None<ByteArray>,
+                None<EvmLogs>,
+                None<GasUsage>,
+                request.feeStats,
+                false,      // don't emit tracing info because the tx was bogus
+                tx.originalCaller,
+            );
+        }
+    } else {
+        // before emitting a failure receipt, try to increment caller's sequence number
+        if ((resultCode != const::TxResultCode_sequenceNumberTooLow) && (resultCode != const::TxResultCode_sequenceNumberTooHigh)) {
+            if let Some(seqNum) = request.seqNum {
+                let gAcctStore = safeGetGlobalAccountStore();
+                if let Some(acct) = account_checkAndIncrSeqNum(accountStore_get(gAcctStore, request.caller), seqNum) {
+                    safeSetGlobalAccountStore(accountStore_set(gAcctStore, request.caller, acct));
+                }
+            }
+        }
 
+        emitTxReceipt(
+            request.incomingRequest,
+            resultCode,
+            None<ByteArray>,
+            None<EvmLogs>,
+            None<GasUsage>,
+            request.feeStats,
+            true,
+            request.originalCaller,
+        );
+    }
+}
+
+view func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
+    let inStream = bytestream_new(request.msgData);
+    let (*inStream, subtype) = bytestream_getByte(inStream)?;
+    let (*inStream, maxGas) = bytestream_get256(inStream)?;
+    let (*inStream, gasPrice) = bytestream_get256(inStream)?;
+
+    let seqNum = xif (subtype == const::L2MessageType_unsignedEOATx) {
+        let (*inStream, sn) = bytestream_get256(inStream)?;
+        Some(sn)
+    } else {
+        None<uint>
+    };
+
+    let (*inStream, destAddrAsUint) = bytestream_get256(inStream)?;
+    let (*inStream, value) = bytestream_get256(inStream)?;
     let calldata = bytestream_getRemainingBytes(inStream);
 
     if (subtype == const::L2MessageType_unsignedEOATx) {
-        request = request with {
-            requestId: uint(hash(
-                bytes32(request.sender),
-                hash(bytes32(chainParams_chainId()), keccak256(request.msgData, 0, bytearray_size(request.msgData))),
-            ))
-        };
+        set request.requestId = uint(hash(
+            bytes32(request.sender),
+            hash(bytes32(chainParams_chainId()), keccak256(request.msgData, 0, bytearray_size(request.msgData))),
+        ));
     }
+    let destAddr = address(destAddrAsUint);
+    let updatedSender = mapL1SenderAddress(request.sender, Some(destAddr));
     return Some(
         struct {
             maxGas: maxGas,
             gasPrice: gasPrice,
             seqNum: seqNum,
-            caller: request.sender,
-            calleeAddr: address(destAddrAsUint),
-            gasPayer: request.sender,
+            caller: updatedSender,
+            calleeAddr: destAddr,
+            gasPayer: updatedSender,
             value: value,
             calldata: calldata,
             nonMutating: (subtype == const::L2MessageType_nonmutatingCall),
             isConstructor: (destAddrAsUint == 0),
-            incomingRequest: request,
+            incomingRequest: request with { sender: updatedSender },
             feeStats: txFeeStats_zero(),
             fromRetryable: None<RetryableTx>,
+            originalCaller: request.sender,
         }
     );
 }
@@ -499,7 +688,7 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
 
 type IncomingRequestQueue = struct {
     q: Queue,
-}
+};
 
 func incomingRequestQueue_new() -> IncomingRequestQueue {
     return struct { q: queue_new() };
@@ -518,7 +707,7 @@ func incomingRequestQueue_getOrDie(q: IncomingRequestQueue) -> (IncomingRequestQ
     return xif let Some(res) = incomingRequestQueue_get(q) {
         res
     } else {
-        panic
+        error
     };
 }
 
@@ -528,7 +717,7 @@ func incomingRequestQueue_put(q: IncomingRequestQueue, req: IncomingRequest) -> 
 
 type IncomingRequestQueueStack = struct {
     qs: QueueStack,
-}
+};
 
 func incomingRequestQueueStack_new() -> IncomingRequestQueueStack {
     return struct { qs: queuestack_new() };
@@ -546,7 +735,7 @@ func incomingRequestQueueStack_push(qs: IncomingRequestQueueStack, q: IncomingRe
 
 type TxRequestQueue = struct {
     q: Queue,
-}
+};
 
 func txRequestQueue_new() -> TxRequestQueue {
     return struct { q: queue_new() };
@@ -557,6 +746,30 @@ func txRequestQueue_get(q: TxRequestQueue) -> option<(TxRequestQueue, TxRequestD
     return Some((struct{ q: uq }, unsafecast<TxRequestData>(item)));
 }
 
+var addressRemapExceptions: AddressPairSet;
 
+public view func mapL1SenderAddress(callerAddr: address, maybeCallee: option<address>) -> address {
+    return xif (chainParams_getOrDie(const::Atom_Param_EnableL1ContractAddressAliasing) == 0) {
+        callerAddr
+    } elseif (addressPairSet_lookup_options(addressRemapExceptions, Some(callerAddr), maybeCallee)) {
+        callerAddr
+    } elseif (uint(callerAddr) == 0) {
+        // zero maps to zero
+        callerAddr
+    } else {
+        // deliberately allow overflow, address(.) will truncate
+        address(uint(callerAddr) + const::L1ToL2MapConstant)
+    };
+}
 
+public view func isL1MappingException(from: option<address>, to: option<address>) -> bool {
+    return addressPairSet_lookup_strict(addressRemapExceptions, from, to);
+}
 
+public view write func addressRemapExceptions_set(sender: option<address>, dest: option<address>, value: bool) {
+    addressRemapExceptions = addressPairSet_set(addressRemapExceptions, sender, dest, value);
+}
+
+public view func serializeAllRemapExceptions() -> ByteArray {
+    return addressPairSet_serialize(addressRemapExceptions);
+}

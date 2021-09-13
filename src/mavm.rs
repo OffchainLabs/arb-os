@@ -2,8 +2,8 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::compile::DebugInfo;
-use crate::stringtable::StringId;
+use crate::compile::{DebugInfo, TypeTree};
+use crate::console::Color;
 use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
 use ethers_core::utils::keccak256;
@@ -12,41 +12,32 @@ use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::{collections::HashMap, fmt, sync::Arc};
 
+pub type LabelId = u64;
+
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Label {
-    Func(StringId),
+    Func(LabelId),    // these are the same,
+    Closure(LabelId), // it's just for printing & debug purposes
     Anon(usize),
-    External(usize), // slot in imported funcs list
-    Evm(usize),      // program counter in EVM contract
+    Evm(usize), // program counter in EVM contract
 }
 
 impl Label {
-    pub fn relocate(
-        self,
-        int_offset: usize,
-        ext_offset: usize,
-        func_offset: usize,
-    ) -> (Self, usize) {
+    pub fn relocate(self, int_offset: usize, func_offset: usize) -> (Self, usize) {
         match self {
-            Label::Func(sid) => (Label::Func(sid + func_offset), sid + func_offset),
             Label::Anon(pc) => (Label::Anon(pc + int_offset), func_offset),
-            Label::External(slot) => (Label::External(slot + ext_offset), func_offset),
-            Label::Evm(_) => (self, func_offset),
+            _ => (self, func_offset),
         }
     }
 
     pub fn avm_hash(&self) -> Value {
         match self {
-            Label::Func(sid) => Value::avm_hash2(
+            Label::Func(id) | Label::Closure(id) => Value::avm_hash2(
                 &Value::Int(Uint256::from_usize(4)),
-                &Value::Int(Uint256::from_usize(*sid)),
+                &Value::Int(Uint256::from_u64(*id)),
             ),
             Label::Anon(n) => Value::avm_hash2(
                 &Value::Int(Uint256::from_usize(5)),
-                &Value::Int(Uint256::from_usize(*n)),
-            ),
-            Label::External(n) => Value::avm_hash2(
-                &Value::Int(Uint256::from_usize(6)),
                 &Value::Int(Uint256::from_usize(*n)),
             ),
             Label::Evm(_) => {
@@ -60,8 +51,8 @@ impl fmt::Display for Label {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Label::Func(sid) => write!(f, "function_{}", sid),
+            Label::Closure(sid) => write!(f, "closure_{}", sid),
             Label::Anon(n) => write!(f, "label_{}", n),
-            Label::External(slot) => write!(f, "external_{}", slot),
             Label::Evm(pc) => write!(f, "EvmPC({})", pc),
         }
     }
@@ -137,17 +128,6 @@ impl<T> Instruction<T> {
             None => Ok(self),
         }
     }
-
-    pub fn xlate_labels(self, xlate_map: &HashMap<Label, &Label>) -> Self {
-        match self.immediate {
-            Some(val) => Instruction::from_opcode_imm(
-                self.opcode,
-                val.xlate_labels(xlate_map),
-                self.debug_info,
-            ),
-            None => self,
-        }
-    }
 }
 
 impl Instruction<AVMOpcode> {
@@ -163,8 +143,11 @@ impl Instruction<AVMOpcode> {
 }
 
 impl Instruction {
-    pub fn is_pure(&self) -> bool {
-        self.opcode.is_pure()
+    pub fn is_view(&self, type_tree: &TypeTree) -> bool {
+        self.opcode.is_view(type_tree)
+    }
+    pub fn is_write(&self, type_tree: &TypeTree) -> bool {
+        self.opcode.is_write(type_tree)
     }
     pub fn get_label(&self) -> Option<&Label> {
         match &self.opcode {
@@ -176,16 +159,14 @@ impl Instruction {
     pub fn relocate(
         self,
         int_offset: usize,
-        ext_offset: usize,
         func_offset: usize,
         globals_offset: usize,
     ) -> (Self, usize) {
         let mut max_func_offset = func_offset;
         let opcode = match self.opcode {
-            Opcode::PushExternal(off) => Opcode::PushExternal(off + ext_offset),
+            Opcode::PushExternal(off) => Opcode::PushExternal(off),
             Opcode::Label(label) => {
-                let (new_label, new_func_offset) =
-                    label.relocate(int_offset, ext_offset, func_offset);
+                let (new_label, new_func_offset) = label.relocate(int_offset, func_offset);
                 if max_func_offset < new_func_offset {
                     max_func_offset = new_func_offset;
                 }
@@ -197,7 +178,7 @@ impl Instruction {
         };
         let imm = match self.immediate {
             Some(imm) => {
-                let (new_imm, new_func_offset) = imm.relocate(int_offset, ext_offset, func_offset);
+                let (new_imm, new_func_offset) = imm.relocate(int_offset, func_offset);
                 if max_func_offset < new_func_offset {
                     max_func_offset = new_func_offset;
                 }
@@ -210,6 +191,18 @@ impl Instruction {
             max_func_offset,
         )
     }
+
+    pub fn pretty_print(&self, highlight: &str) -> String {
+        let label_color = Color::PINK;
+        match &self.immediate {
+            Some(value) => format!(
+                "{} {}",
+                self.opcode.pretty_print(label_color),
+                value.pretty_print(highlight)
+            ),
+            None => format!("{}", self.opcode.pretty_print(label_color)),
+        }
+    }
 }
 
 impl<T> fmt::Display for Instruction<T>
@@ -218,7 +211,10 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.immediate {
-            Some(v) => write!(f, "[{}]\n        {}", v, self.opcode),
+            Some(value) => match value {
+                Value::Tuple(_) => write!(f, "[{}]\n        {}", value, self.opcode),
+                _ => write!(f, "{} {}", self.opcode, value),
+            },
             None => write!(f, "{}", self.opcode),
         }
     }
@@ -235,10 +231,6 @@ pub enum CodePt {
 impl CodePt {
     pub fn new_internal(pc: usize) -> Self {
         CodePt::Internal(pc)
-    }
-
-    pub fn new_external(name: StringId) -> Self {
-        CodePt::External(name)
     }
 
     pub fn new_in_segment(seg_num: usize, offset: usize) -> Self {
@@ -272,10 +264,10 @@ impl CodePt {
         }
     }
 
-    pub fn relocate(self, int_offset: usize, ext_offset: usize) -> Self {
+    pub fn relocate(self, int_offset: usize) -> Self {
         match self {
             CodePt::Internal(pc) => CodePt::Internal(pc + int_offset),
-            CodePt::External(off) => CodePt::External(off + ext_offset),
+            CodePt::External(off) => CodePt::External(off),
             CodePt::InSegment(_, _) => {
                 panic!("tried to relocate/link code at runtime");
             }
@@ -648,12 +640,12 @@ pub enum Value {
 }
 
 impl Value {
-    ///Returns a value containing no data, a zero sized tuple.
+    /// Returns a value containing no data, a zero sized tuple.
     pub fn none() -> Self {
         Value::Tuple(Arc::new(vec![]))
     }
 
-    ///Creates a single tuple `Value` from a `Vec<Value>`
+    /// Creates a single tuple `Value` from a `Vec<Value>`
     pub fn new_tuple(v: Vec<Value>) -> Self {
         Value::Tuple(Arc::new(v))
     }
@@ -752,12 +744,7 @@ impl Value {
         }
     }
 
-    pub fn relocate(
-        self,
-        int_offset: usize,
-        ext_offset: usize,
-        func_offset: usize,
-    ) -> (Self, usize) {
+    pub fn relocate(self, int_offset: usize, func_offset: usize) -> (Self, usize) {
         match self {
             Value::Int(_) => (self, 0),
             Value::Buffer(_) => (self, 0),
@@ -765,8 +752,7 @@ impl Value {
                 let mut rel_v = Vec::new();
                 let mut max_func_offset = 0;
                 for val in &*v {
-                    let (new_val, new_func_offset) =
-                        val.clone().relocate(int_offset, ext_offset, func_offset);
+                    let (new_val, new_func_offset) = val.clone().relocate(int_offset, func_offset);
                     rel_v.push(new_val);
                     if (max_func_offset < new_func_offset) {
                         max_func_offset = new_func_offset;
@@ -774,33 +760,15 @@ impl Value {
                 }
                 (Value::new_tuple(rel_v), max_func_offset)
             }
-            Value::CodePoint(cpt) => (Value::CodePoint(cpt.relocate(int_offset, ext_offset)), 0),
+            Value::CodePoint(cpt) => (Value::CodePoint(cpt.relocate(int_offset)), 0),
             Value::Label(label) => {
-                let (new_label, new_func_offset) =
-                    label.relocate(int_offset, ext_offset, func_offset);
+                let (new_label, new_func_offset) = label.relocate(int_offset, func_offset);
                 (Value::Label(new_label), new_func_offset)
             }
         }
     }
 
-    pub fn xlate_labels(self, label_map: &HashMap<Label, &Label>) -> Self {
-        match self {
-            Value::Int(_) | Value::CodePoint(_) | Value::Buffer(_) => self,
-            Value::Tuple(v) => {
-                let mut newv = Vec::new();
-                for val in &*v {
-                    newv.push(val.clone().xlate_labels(label_map));
-                }
-                Value::new_tuple(newv)
-            }
-            Value::Label(label) => match label_map.get(&label) {
-                Some(label2) => Value::Label(**label2),
-                None => self,
-            },
-        }
-    }
-
-    ///Converts `Value` to usize if possible, otherwise returns `None`.
+    /// Converts `Value` to usize if possible, otherwise returns `None`.
     pub fn to_usize(&self) -> Option<usize> {
         match self {
             Value::Int(i) => i.to_usize(),
@@ -844,15 +812,65 @@ impl Value {
             panic!();
         }
     }
+
+    pub fn pretty_print(&self, highlight: &str) -> String {
+        match self {
+            Value::Int(i) => Color::color(highlight, i),
+            Value::CodePoint(pc) => Color::color(highlight, pc),
+            Value::Label(label) => Color::color(highlight, label),
+            Value::Buffer(buf) => {
+                let mut text = String::from_utf8_lossy(&hex::decode(buf.hex_encode()).unwrap())
+                    .chars()
+                    .filter(|c| !c.is_ascii_control())
+                    .collect::<String>();
+                text.truncate(100);
+                Color::lavender(format!("\"{}\"", text))
+            }
+            Value::Tuple(tup) => match tup.is_empty() {
+                true => Color::grey("_"),
+                false => {
+                    let mut s = Color::color(highlight, "(");
+                    for (i, value) in tup.iter().enumerate() {
+                        let child = value.pretty_print(highlight);
+                        match i == 0 {
+                            true => {
+                                s = format!("{}{}", s, child);
+                            }
+                            false => {
+                                s = format!("{}{} {}", s, Color::grey(","), child);
+                            }
+                        }
+                    }
+                    format!("{}{}", s, Color::color(highlight, ")"))
+                }
+            },
+        }
+    }
+}
+
+impl From<usize> for Value {
+    fn from(v: usize) -> Self {
+        Self::Int(Uint256::from_usize(v))
+    }
+}
+
+impl From<u64> for Value {
+    fn from(v: u64) -> Self {
+        Self::Int(Uint256::from_u64(v))
+    }
+}
+
+impl From<u8> for Value {
+    fn from(v: u8) -> Self {
+        Self::Int(Uint256::from_usize(v.into()))
+    }
 }
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Int(i) => i.fmt(f),
-            Value::Buffer(buf) => {
-                write!(f, "Buffer({})", buf.hex_encode())
-            }
+            Value::Buffer(buf) => write!(f, "Buffer({})", buf.hex_encode()),
             Value::CodePoint(pc) => write!(f, "CodePoint({})", pc),
             Value::Label(label) => write!(f, "Label({})", label),
             Value::Tuple(tup) => {
@@ -878,7 +896,7 @@ impl fmt::Display for Value {
 pub enum Opcode {
     GetLocal,
     SetLocal,
-    MakeFrame(usize, usize),
+    MakeFrame(usize, usize, bool, bool),
     Label(Label),
     PushExternal(usize), // push codeptr of external function -- index in imported_funcs
     TupleGet(usize),     // arg is size of anysize_tuple
@@ -899,9 +917,9 @@ pub enum Opcode {
 #[repr(u8)]
 pub enum AVMOpcode {
     Zero = 0x00,
-    Plus = 0x01,
+    Add = 0x01,
     Mul,
-    Minus,
+    Sub,
     Div,
     Sdiv,
     Mod,
@@ -926,19 +944,19 @@ pub enum AVMOpcode {
     ShiftArith,
     Hash = 0x20,
     Type,
-    Hash2,
+    EthHash2,
     Keccakf,
     Sha256f,
     Ripemd160f,
     Blake2f,
     Pop = 0x30,
-    PushStatic,
-    Rget,
+    Spush,
+    Rpush,
     Rset,
     Jump,
     Cjump,
     StackEmpty,
-    GetPC,
+    PCpush,
     AuxPush,
     AuxPop,
     AuxStackEmpty,
@@ -960,10 +978,10 @@ pub enum AVMOpcode {
     Send = 0x70,
     InboxPeek,
     Inbox,
-    Panic,
+    Error,
     Halt,
     SetGas,
-    GetGas,
+    PushGas,
     ErrCodePoint,
     PushInsn,
     PushInsnImm,
@@ -984,27 +1002,52 @@ pub enum AVMOpcode {
 }
 
 impl Opcode {
-    pub fn is_pure(&self) -> bool {
+    pub fn is_view(&self, _: &TypeTree) -> bool {
+        match self {
+            Opcode::AVMOpcode(AVMOpcode::Inbox)
+            | Opcode::AVMOpcode(AVMOpcode::InboxPeek)
+            | Opcode::AVMOpcode(AVMOpcode::Rpush)
+            | Opcode::AVMOpcode(AVMOpcode::PushInsn)
+            | Opcode::AVMOpcode(AVMOpcode::PushInsnImm)
+            | Opcode::AVMOpcode(AVMOpcode::ErrCodePoint)
+            | Opcode::AVMOpcode(AVMOpcode::ErrPush)
+            | Opcode::AVMOpcode(AVMOpcode::PushGas)
+            | Opcode::AVMOpcode(AVMOpcode::Sideload)
+            | Opcode::AVMOpcode(AVMOpcode::Jump)
+            | Opcode::AVMOpcode(AVMOpcode::Cjump)
+            | Opcode::AVMOpcode(AVMOpcode::AuxPop)
+            | Opcode::AVMOpcode(AVMOpcode::AuxPush) => true,
+            _ => false,
+        }
+    }
+    pub fn is_write(&self, _: &TypeTree) -> bool {
         match self {
             Opcode::AVMOpcode(AVMOpcode::Log)
             | Opcode::AVMOpcode(AVMOpcode::Inbox)
             | Opcode::AVMOpcode(AVMOpcode::InboxPeek)
             | Opcode::AVMOpcode(AVMOpcode::Send)
             | Opcode::AVMOpcode(AVMOpcode::Rset)
-            | Opcode::AVMOpcode(AVMOpcode::Rget)
             | Opcode::AVMOpcode(AVMOpcode::PushInsn)
             | Opcode::AVMOpcode(AVMOpcode::PushInsnImm)
-            | Opcode::AVMOpcode(AVMOpcode::ErrCodePoint)
             | Opcode::AVMOpcode(AVMOpcode::ErrSet)
-            | Opcode::AVMOpcode(AVMOpcode::ErrPush)
             | Opcode::AVMOpcode(AVMOpcode::SetGas)
-            | Opcode::AVMOpcode(AVMOpcode::GetGas)
+            | Opcode::AVMOpcode(AVMOpcode::Sideload)    // this is special-cased, so we can't reorder these
             | Opcode::AVMOpcode(AVMOpcode::Jump)
             | Opcode::AVMOpcode(AVMOpcode::Cjump)
             | Opcode::AVMOpcode(AVMOpcode::AuxPop)
-            | Opcode::AVMOpcode(AVMOpcode::AuxPush)
-            | Opcode::AVMOpcode(AVMOpcode::Sideload) => false,
-            _ => true,
+            | Opcode::AVMOpcode(AVMOpcode::AuxPush) => true,
+            _ => false,
+        }
+    }
+
+    pub fn pretty_print(&self, label_color: &str) -> String {
+        match self {
+            Opcode::MakeFrame(nargs, space, prebuilt, return_address) => match prebuilt {
+                true => format!("MakeFrame<{}, {}, {}>", nargs, space, return_address),
+                false => format!("MakeFrame({}, {}, {})", nargs, space, return_address),
+            },
+            Opcode::Label(label) => Value::Label(*label).pretty_print(label_color),
+            _ => format!("{}", self.to_name()),
         }
     }
 }
@@ -1012,9 +1055,9 @@ impl Opcode {
 impl Opcode {
     pub fn from_name(name: &str) -> Self {
         match name {
-            "rget" => Opcode::AVMOpcode(AVMOpcode::Rget),
+            "rget" => Opcode::AVMOpcode(AVMOpcode::Rpush),
             "rset" => Opcode::AVMOpcode(AVMOpcode::Rset),
-            "pushstatic" => Opcode::AVMOpcode(AVMOpcode::PushStatic),
+            "spush" => Opcode::AVMOpcode(AVMOpcode::Spush),
             "tset" => Opcode::AVMOpcode(AVMOpcode::Tset),
             "tget" => Opcode::AVMOpcode(AVMOpcode::Tget),
             "tlen" => Opcode::AVMOpcode(AVMOpcode::Tlen),
@@ -1033,14 +1076,14 @@ impl Opcode {
             "unaryminus" => Opcode::UnaryMinus,
             "bitwiseneg" => Opcode::AVMOpcode(AVMOpcode::BitwiseNeg),
             "hash" => Opcode::AVMOpcode(AVMOpcode::Hash),
-            "hash2" => Opcode::AVMOpcode(AVMOpcode::Hash2),
+            "ethhash2" => Opcode::AVMOpcode(AVMOpcode::EthHash2),
             "keccakf" => Opcode::AVMOpcode(AVMOpcode::Keccakf),
             "sha256f" => Opcode::AVMOpcode(AVMOpcode::Sha256f),
             "ripemd160f" => Opcode::AVMOpcode(AVMOpcode::Ripemd160f),
             "blake2f" => Opcode::AVMOpcode(AVMOpcode::Blake2f),
             "length" => Opcode::AVMOpcode(AVMOpcode::Tlen),
-            "plus" => Opcode::AVMOpcode(AVMOpcode::Plus),
-            "minus" => Opcode::AVMOpcode(AVMOpcode::Minus),
+            "add" => Opcode::AVMOpcode(AVMOpcode::Add),
+            "sub" => Opcode::AVMOpcode(AVMOpcode::Sub),
             "mul" => Opcode::AVMOpcode(AVMOpcode::Mul),
             "div" => Opcode::AVMOpcode(AVMOpcode::Div),
             "mod" => Opcode::AVMOpcode(AVMOpcode::Mod),
@@ -1068,13 +1111,14 @@ impl Opcode {
             "jump" => Opcode::AVMOpcode(AVMOpcode::Jump),
             "log" => Opcode::AVMOpcode(AVMOpcode::Log),
             "send" => Opcode::AVMOpcode(AVMOpcode::Send),
+            "errpush" => Opcode::AVMOpcode(AVMOpcode::ErrPush),
             "errcodept" => Opcode::AVMOpcode(AVMOpcode::ErrCodePoint),
             "pushinsn" => Opcode::AVMOpcode(AVMOpcode::PushInsn),
             "pushinsnimm" => Opcode::AVMOpcode(AVMOpcode::PushInsnImm),
             "openinsn" => Opcode::AVMOpcode(AVMOpcode::OpenInsn),
             "debugprint" => Opcode::AVMOpcode(AVMOpcode::DebugPrint),
             "setgas" => Opcode::AVMOpcode(AVMOpcode::SetGas),
-            "getgas" => Opcode::AVMOpcode(AVMOpcode::GetGas),
+            "pushgas" => Opcode::AVMOpcode(AVMOpcode::PushGas),
             "errset" => Opcode::AVMOpcode(AVMOpcode::ErrSet),
             "sideload" => Opcode::AVMOpcode(AVMOpcode::Sideload),
             "ecrecover" => Opcode::AVMOpcode(AVMOpcode::EcRecover),
@@ -1092,10 +1136,22 @@ impl Opcode {
     pub fn to_name(&self) -> &str {
         match self {
             Opcode::AVMOpcode(avm) => avm.to_name(),
+            Opcode::GetLocal => "GetLocal",
+            Opcode::SetLocal => "SetLocal",
+            Opcode::GetGlobalVar(_) => "GetGlobal",
+            Opcode::SetGlobalVar(_) => "SetGlobal",
+            Opcode::Label(_) => "Label",
+            Opcode::PushExternal(_) => "PushExternal",
+            Opcode::TupleGet(_) => "TupleGet",
+            Opcode::TupleSet(_) => "TupleSet",
+            Opcode::ArrayGet => "ArrayGet",
+            Opcode::UncheckedFixedArrayGet(_) => "UncheckedFixedArrayGet",
+            Opcode::Return => "return",
             Opcode::UnaryMinus => "unaryminus",
             Opcode::LogicalAnd => "logicaland",
             Opcode::LogicalOr => "logicalor",
-            _ => "Unknown",
+            Opcode::Len => "len",
+            _ => "to_name() not implemented",
         }
     }
 }
@@ -1109,9 +1165,9 @@ impl From<AVMOpcode> for Opcode {
 impl AVMOpcode {
     fn to_name(&self) -> &str {
         match self {
-            AVMOpcode::Rget => "rget",
+            AVMOpcode::Rpush => "rpush",
             AVMOpcode::Rset => "rset",
-            AVMOpcode::PushStatic => "pushstatic",
+            AVMOpcode::Spush => "spush",
             AVMOpcode::Tset => "tset",
             AVMOpcode::Tget => "tget",
             AVMOpcode::Pop => "pop",
@@ -1128,15 +1184,15 @@ impl AVMOpcode {
             AVMOpcode::Swap2 => "swap2",
             AVMOpcode::BitwiseNeg => "bitwiseneg",
             AVMOpcode::Hash => "hash",
-            AVMOpcode::Hash2 => "hash2",
+            AVMOpcode::EthHash2 => "ethhash2",
             AVMOpcode::Type => "type",
             AVMOpcode::Keccakf => "keccakf",
             AVMOpcode::Sha256f => "sha256f",
             AVMOpcode::Ripemd160f => "ripemd160f",
             AVMOpcode::Blake2f => "blake2f",
             AVMOpcode::Tlen => "length",
-            AVMOpcode::Plus => "plus",
-            AVMOpcode::Minus => "minus",
+            AVMOpcode::Add => "add",
+            AVMOpcode::Sub => "sub",
             AVMOpcode::Mul => "mul",
             AVMOpcode::Div => "div",
             AVMOpcode::Mod => "mod",
@@ -1162,13 +1218,13 @@ impl AVMOpcode {
             AVMOpcode::Noop => "noop",
             AVMOpcode::ErrPush => "errpush",
             AVMOpcode::Inbox => "inbox",
-            AVMOpcode::Panic => "panic",
+            AVMOpcode::Error => "error",
             AVMOpcode::Zero => "zero",
             AVMOpcode::Halt => "halt",
             AVMOpcode::InboxPeek => "inboxpeek",
             AVMOpcode::Jump => "jump",
             AVMOpcode::Cjump => "cjump",
-            AVMOpcode::GetPC => "getpc",
+            AVMOpcode::PCpush => "pcpush",
             AVMOpcode::Breakpoint => "breakpoint",
             AVMOpcode::Log => "log",
             AVMOpcode::Send => "send",
@@ -1178,7 +1234,7 @@ impl AVMOpcode {
             AVMOpcode::OpenInsn => "openinsn",
             AVMOpcode::DebugPrint => "debugprint",
             AVMOpcode::SetGas => "setgas",
-            AVMOpcode::GetGas => "getgas",
+            AVMOpcode::PushGas => "pushgas",
             AVMOpcode::ErrSet => "errset",
             AVMOpcode::Sideload => "sideload",
             AVMOpcode::EcRecover => "ecrecover",
@@ -1198,9 +1254,9 @@ impl AVMOpcode {
     pub fn from_number(num: usize) -> Option<Self> {
         match num {
             0x00 => Some(AVMOpcode::Zero),
-            0x01 => Some(AVMOpcode::Plus),
+            0x01 => Some(AVMOpcode::Add),
             0x02 => Some(AVMOpcode::Mul),
-            0x03 => Some(AVMOpcode::Minus),
+            0x03 => Some(AVMOpcode::Sub),
             0x04 => Some(AVMOpcode::Div),
             0x05 => Some(AVMOpcode::Sdiv),
             0x06 => Some(AVMOpcode::Mod),
@@ -1225,19 +1281,19 @@ impl AVMOpcode {
             0x1d => Some(AVMOpcode::ShiftArith),
             0x20 => Some(AVMOpcode::Hash),
             0x21 => Some(AVMOpcode::Type),
-            0x22 => Some(AVMOpcode::Hash2),
+            0x22 => Some(AVMOpcode::EthHash2),
             0x23 => Some(AVMOpcode::Keccakf),
             0x24 => Some(AVMOpcode::Sha256f),
             0x25 => Some(AVMOpcode::Ripemd160f),
             0x26 => Some(AVMOpcode::Blake2f),
             0x30 => Some(AVMOpcode::Pop),
-            0x31 => Some(AVMOpcode::PushStatic),
-            0x32 => Some(AVMOpcode::Rget),
+            0x31 => Some(AVMOpcode::Spush),
+            0x32 => Some(AVMOpcode::Rpush),
             0x33 => Some(AVMOpcode::Rset),
             0x34 => Some(AVMOpcode::Jump),
             0x35 => Some(AVMOpcode::Cjump),
             0x36 => Some(AVMOpcode::StackEmpty),
-            0x37 => Some(AVMOpcode::GetPC),
+            0x37 => Some(AVMOpcode::PCpush),
             0x38 => Some(AVMOpcode::AuxPush),
             0x39 => Some(AVMOpcode::AuxPop),
             0x3a => Some(AVMOpcode::AuxStackEmpty),
@@ -1259,10 +1315,10 @@ impl AVMOpcode {
             0x70 => Some(AVMOpcode::Send),
             0x71 => Some(AVMOpcode::InboxPeek),
             0x72 => Some(AVMOpcode::Inbox),
-            0x73 => Some(AVMOpcode::Panic),
+            0x73 => Some(AVMOpcode::Error),
             0x74 => Some(AVMOpcode::Halt),
             0x75 => Some(AVMOpcode::SetGas),
-            0x76 => Some(AVMOpcode::GetGas),
+            0x76 => Some(AVMOpcode::PushGas),
             0x77 => Some(AVMOpcode::ErrCodePoint),
             0x78 => Some(AVMOpcode::PushInsn),
             0x79 => Some(AVMOpcode::PushInsnImm),
@@ -1287,9 +1343,9 @@ impl AVMOpcode {
     pub fn to_number(&self) -> u8 {
         match self {
             AVMOpcode::Zero => 0,
-            AVMOpcode::Plus => 0x01,
+            AVMOpcode::Add => 0x01,
             AVMOpcode::Mul => 0x02,
-            AVMOpcode::Minus => 0x03,
+            AVMOpcode::Sub => 0x03,
             AVMOpcode::Div => 0x04,
             AVMOpcode::Sdiv => 0x05,
             AVMOpcode::Mod => 0x06,
@@ -1314,19 +1370,19 @@ impl AVMOpcode {
             AVMOpcode::ShiftArith => 0x1d,
             AVMOpcode::Hash => 0x20,
             AVMOpcode::Type => 0x21,
-            AVMOpcode::Hash2 => 0x22,
+            AVMOpcode::EthHash2 => 0x22,
             AVMOpcode::Keccakf => 0x23,
             AVMOpcode::Sha256f => 0x24,
             AVMOpcode::Ripemd160f => 0x25,
             AVMOpcode::Blake2f => 0x26,
             AVMOpcode::Pop => 0x30,
-            AVMOpcode::PushStatic => 0x31,
-            AVMOpcode::Rget => 0x32,
+            AVMOpcode::Spush => 0x31,
+            AVMOpcode::Rpush => 0x32,
             AVMOpcode::Rset => 0x33,
             AVMOpcode::Jump => 0x34,
             AVMOpcode::Cjump => 0x35,
             AVMOpcode::StackEmpty => 0x36,
-            AVMOpcode::GetPC => 0x37,
+            AVMOpcode::PCpush => 0x37,
             AVMOpcode::AuxPush => 0x38,
             AVMOpcode::AuxPop => 0x39,
             AVMOpcode::AuxStackEmpty => 0x3a,
@@ -1348,10 +1404,10 @@ impl AVMOpcode {
             AVMOpcode::Send => 0x70,
             AVMOpcode::InboxPeek => 0x71,
             AVMOpcode::Inbox => 0x72,
-            AVMOpcode::Panic => 0x73,
+            AVMOpcode::Error => 0x73,
             AVMOpcode::Halt => 0x74,
             AVMOpcode::SetGas => 0x75,
-            AVMOpcode::GetGas => 0x76,
+            AVMOpcode::PushGas => 0x76,
             AVMOpcode::ErrCodePoint => 0x77,
             AVMOpcode::PushInsn => 0x78,
             AVMOpcode::PushInsnImm => 0x79,
@@ -1385,7 +1441,9 @@ fn test_consistent_opcode_numbers() {
 impl fmt::Display for Opcode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Opcode::MakeFrame(s1, s2) => write!(f, "MakeFrame({}, {})", s1, s2),
+            Opcode::MakeFrame(s1, s2, pre, ret) => {
+                write!(f, "MakeFrame({}, {}, {}, {})", s1, s2, pre, ret)
+            }
             Opcode::Label(label) => label.fmt(f),
             _ => write!(f, "{}", self.to_name()),
         }

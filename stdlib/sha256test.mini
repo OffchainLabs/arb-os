@@ -13,7 +13,7 @@ use std::sha256::sha256_byteArray;
 use std::sha256::sha256hasher_pushByte;
 use std::sha256::sha256hasher_push256;
 
-impure func main() {
+write func main() {
     if let Some(x) = tests() {
 	    asm(x,) { log };
 	} else {
