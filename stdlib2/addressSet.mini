@@ -1,0 +1,71 @@
+//
+// Copyright 2021, Offchain Labs, Inc. All rights reserved.
+//
+
+// This implements a set-of-addresses data structure.
+
+use std::bytearray::ByteArray;
+
+use std::storageMap::StorageMap;
+use std::storageMap::storageMap_new;
+use std::storageMap::storageMap_get;
+use std::storageMap::storageMap_set;
+use std::storageMap::storageMap_size;
+use std::storageMap::storageMap_serializeListOfNonzeros;
+
+
+type Set<T> = struct {
+    contents: StorageMap,
+    inverted: bool,        // if true, then membership is inverted (an item is in the set iff it's NOT in contents)
+    trait access: set_get::<T>,
+};
+
+public func set_new_empty<T>() -> SetOfAddresses<T> {
+    return struct {
+        contents: storageMap_new(),
+        inverted: false,
+    };
+}
+
+public func set_new_all() -> SetOfAddresses {
+    return struct {
+        contents: storageMap_new(),
+        inverted: true
+    };
+}
+
+public func setOfAddresses_isEmpty(sa: SetOfAddresses) -> bool {
+    return (! sa.inverted) && (storageMap_size(sa.contents) == 0);
+}
+
+public func setOfAddresses_isAll(sa: SetOfAddresses) -> bool {
+    return sa.inverted && (storageMap_size(sa.contents) == 0);
+}
+
+public func setOfAddresses_add(sa: SetOfAddresses, addr: address) -> SetOfAddresses {
+    return sa with {
+        contents: storageMap_set(sa.contents, uint(addr), xif (sa.inverted) { 0 } else { 1 })
+    };
+}
+
+public func setOfAddresses_remove(sa: SetOfAddresses, addr: address) -> SetOfAddresses {
+    return sa with {
+        contents: storageMap_set(sa.contents, uint(addr), xif (sa.inverted) { 1 } else { 0 })
+    };
+}
+
+public func setOfAddresses_contains(sa: SetOfAddresses, addr: address) -> bool {
+    return xif (storageMap_get(sa.contents, uint(addr)) == 0) {
+        sa.inverted
+    } else {
+        ! sa.inverted
+    };
+}
+
+public func setOfAddresses_serialize(sa: SetOfAddresses) -> option<ByteArray> {
+    return xif (sa.inverted) {
+        None<ByteArray>
+    } else {
+        Some(storageMap_serializeListOfNonzeros(sa.contents))
+    };
+}

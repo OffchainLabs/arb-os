@@ -54,20 +54,20 @@ func test_1() -> string {
 }
 
 func test_2() -> string {
-
+    
     let spider = "//\(oo)/\\";
     
-    let _ = array_new::<string>(17, spider);
+    let a = array_new::<string>(17, spider);
     
-    /*if (a[6] != spider || a[7] != a[8]) {
-	return "new small array isn't initialized";
+    if (a[6] != spider || a[7] != a[8]) {
+      return "new small array isn't initialized";
     }
-
+    
     let a = array_new::<bool>(71, true);
     if (a[6] != true) {
 	return "new large array isn't initialized";
     }
-
+    
     let a = array_new::<uint>(64, 8);
     a = array_set::<uint>(a, 17, 3);
     if (a[17] != 3) {
@@ -88,7 +88,7 @@ func test_2() -> string {
     a = array_set::<uint>(a, 42, 5);
     if (a[99] != 4) {
 	return "array overwrites corrupt other entries";
-    }*/
+    }
     
     return "";
 }

@@ -6,12 +6,12 @@
 
 use crate::compile::{
     comma_list, CompileError, CompiledProgram, DebugInfo, ErrorSystem, FileInfo, GlobalVar,
-    SourceFileMap, Type, TypeTree,
+    NamedTypes, SourceFileMap, Type,
 };
 use crate::console::Color;
 use crate::mavm::{AVMOpcode, Instruction, LabelId, Opcode, Value};
 use crate::pos::{try_display_location, Location};
-use crate::stringtable::StringId;
+use crate::stringtable::{StringId, StringTable};
 use petgraph::dot::{Config, Dot};
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::DfsPostOrder;
@@ -38,15 +38,15 @@ pub struct SerializableTypeTree {
 }
 
 impl SerializableTypeTree {
-    pub fn from_type_tree(tree: TypeTree) -> Self {
+    pub fn from_type_tree(tree: NamedTypes) -> Self {
         let mut inner = BTreeMap::new();
         for ((path, id), tipe) in tree.into_iter() {
             inner.insert(format!("{}, {}", comma_list(&path), id), tipe);
         }
         Self { inner }
     }
-    pub fn into_type_tree(self) -> TypeTree {
-        let mut type_tree = HashMap::new();
+    pub fn into_type_tree(self) -> NamedTypes {
+        let mut nominals = HashMap::new();
         for (path, tipe) in self.inner.into_iter() {
             let mut x: Vec<_> = path.split(", ").map(|val| val.to_string()).collect();
             let id = x
@@ -54,9 +54,9 @@ impl SerializableTypeTree {
                 .map(|id| id.parse::<usize>())
                 .expect("empty list")
                 .expect("failed to parse");
-            type_tree.insert((x, id), tipe);
+            nominals.insert((x, id), tipe);
         }
-        type_tree
+        nominals
     }
 }
 
@@ -70,9 +70,9 @@ pub struct LinkedProgram {
     pub code: Vec<Instruction<AVMOpcode>>,
     pub static_val: Value,
     pub globals: Vec<GlobalVar>,
-    // #[serde(default)]
     pub file_info_chart: BTreeMap<u64, FileInfo>,
-    pub type_tree: SerializableTypeTree,
+    #[serde(alias = "type_tree")]
+    pub nominals: SerializableTypeTree,
 }
 
 impl LinkedProgram {
@@ -134,18 +134,13 @@ pub struct Import {
     /// Unique global id this import refers to
     pub unique_id: LabelId,
     /// `StringId` of the use-statement from parsing according to the containing module's `StringTable`
-    pub id: Option<StringId>,
+    pub id: StringId,
     /// Location of the use-statement in code
     pub location: Option<Location>,
 }
 
 impl Import {
-    pub fn new(
-        path: Vec<String>,
-        name: String,
-        id: Option<StringId>,
-        location: Option<Location>,
-    ) -> Self {
+    pub fn new(path: Vec<String>, name: String, id: StringId, location: Option<Location>) -> Self {
         let unique_id = Import::unique_id(&path, &name);
         Import {
             path,
@@ -160,15 +155,16 @@ impl Import {
         self.location.into_iter().collect()
     }
 
-    pub fn new_builtin(virtual_file: &str, name: &str) -> Self {
+    pub fn new_builtin(virtual_file: &str, name: &str, string_table: &mut StringTable) -> Self {
         let path = vec!["core".to_string(), virtual_file.to_string()];
         let name = name.to_string();
         let unique_id = Import::unique_id(&path, &name);
+        let id = string_table.get(name.to_string());
         Import {
             path,
             name,
             unique_id,
-            id: None,
+            id,
             location: None,
         }
     }
@@ -207,7 +203,7 @@ pub fn link(
 ) -> CompiledProgram {
     let mut merged_source_file_map = SourceFileMap::new_empty();
     let mut merged_file_info_chart = HashMap::new();
-    let type_tree = progs[0].type_tree.clone();
+    let nominals = progs[0].nominals.clone();
 
     let mut graph = ProgGraph::new();
     let mut id_to_node = HashMap::new();
@@ -330,7 +326,7 @@ pub fn link(
         globals,
         Some(merged_source_file_map),
         merged_file_info_chart,
-        type_tree,
+        nominals,
         DebugInfo::default(),
     )
 }
@@ -462,6 +458,6 @@ pub fn postlink_compile(
         static_val: Value::none(),
         globals: program.globals.clone(),
         file_info_chart,
-        type_tree: SerializableTypeTree::from_type_tree(program.type_tree),
+        nominals: SerializableTypeTree::from_type_tree(program.nominals),
     })
 }
