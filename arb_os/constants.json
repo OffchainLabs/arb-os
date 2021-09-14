@@ -1,5 +1,5 @@
 {
-  "arbos_version": 42,
+  "arbos_version": 43,
   "integer": {
     "AVMSendType_batch": 0,
     "AVM_add": 1,
@@ -87,6 +87,9 @@
     "Address_ReservedForEthBridge": 200,
     "Charging_MinArbGasForContractTx": 50,
     "Charging_MemoryChargeDenominator": 100000,
+    "ContractStateVersion_original": 0,
+    "_ContractStateVersion_propStorageGas": 1,
+    "ContractStateVersion_current": 1,
     "EVMCallType_call": 0,
     "EVMCallType_callcode": 1,
     "EVMCallType_delegatecall": 2,

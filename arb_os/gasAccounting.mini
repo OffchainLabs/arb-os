@@ -103,8 +103,7 @@ type FeeConfig = struct {
 };
 
 type TxGasState = struct {        // this is the gas state of the currently running transaction
-    gasInReserve: uint,           // how much gas is being held in reserve
-    gasReservedForStorage: uint,  // how much gas is being reserved to pay for storage
+    currentStorageOnlyGas: uint,  // how much gas is being reserved to pay for storage
     originalMax: uint,            // the tx's original maxGas value
     price: uint,                  // price of gas for this tx, in wei per unit of gas
     weiHeldForGas: uint,          // amount of currency we're holding to cover the current tx's gas use
@@ -359,7 +358,7 @@ public view func gasAccounting_getPricesInArbGas(aggregatorAddr: address) -> (ui
     );
 }
 
-public view func _gasAccounting_getStoragePriceInArbGas() -> uint {
+public view func gasAccounting_getStoragePriceInArbGas() -> uint {
     let prices = gasAccountingInfo.currentPrices;
     let arbGasPrice = prices.perArbGasTotal;
     return xif (arbGasPrice==0) {
@@ -424,7 +423,7 @@ public view write func gasAccounting_startTxCharges(
 
     let _ = switchToChargingOS();   // call this in case we're somehow still charging a tx; ignore return value
 
-    let gasForComputation = {
+    let allPurposeGas = {
         let txGasLimit = chainParams_getOrDie(const::Atom_Param_TxGasLimit);
         xif (maxGas < txGasLimit) {
             maxGas
@@ -452,8 +451,7 @@ public view write func gasAccounting_startTxCharges(
     let gasUsedByOS = ((~0) - getGas()) / gasAccountingInfo.pricingParams.arbGasDivisor;
 
     set gasAccountingInfo.txState = Some(struct {
-        gasInReserve: 0,
-        gasReservedForStorage: safeSub(maxGas, gasForComputation),
+        currentStorageOnlyGas: safeSub(maxGas, allPurposeGas),
         originalMax: maxGas,
         price: gasPrice,
         weiHeldForGas: weiToHold,
@@ -463,13 +461,13 @@ public view write func gasAccounting_startTxCharges(
 
     arbStatistics_addToGasUsed(gasUsedByOS);
 
-    setGas(safeMul(gasForComputation, gasAccountingInfo.pricingParams.arbGasDivisor));
+    setGas(safeMul(allPurposeGas, gasAccountingInfo.pricingParams.arbGasDivisor));
 
     return (const::TxResultCode_success, acctStore);
 }
 
 public view write func gasAccounting_endTxCharges(
-    storageDelta: int,
+    storageAllocations: uint,
     feeStats: TxFeeStats,
 ) -> option<(    // None if there is no active tx
     bool,        // had enough gas to complete the tx?
@@ -480,68 +478,42 @@ public view write func gasAccounting_endTxCharges(
     // stop charging the current tx for gas
     // refund any unused gas
 
-    // switch over to charging the OS for gas
     let txState = gasAccountingInfo.txState?;
 
-    let computeGasRemaining = safeAdd(txState.gasInReserve, switchToChargingOS());
-    let computeGasUsed = safeSub(safeSub(txState.originalMax, txState.gasReservedForStorage), computeGasRemaining);
+    let computeGasRemaining = switchToChargingOS();
+    let confirmed = (computeGasRemaining > 0);
+    let totalGasRemaining = computeGasRemaining + txState.currentStorageOnlyGas;
+    let totalGasUsed = safeSub(txState.originalMax, totalGasRemaining);
 
-    arbStatistics_addToStorage(storageDelta);
-
-    let storagePriceInArbGas = xif (txState.price == 0) {
-        0
-    } else {
-        safeAdd(gasAccountingInfo.currentPrices.perStorageCell, txState.price - 1) / txState.price
-    };
-    let gasNeededForStorage = xif ((storageDelta > int(0)) && (txState.price > 0)) {
-        safeMul(uint(storageDelta), storagePriceInArbGas)
-    } else {
-        0
-    };
-
-    let (confirmed, storageGasUsed, totalGasUsed, weiForStorage, weiForCompute) = xif (safeAdd(computeGasUsed, gasNeededForStorage) <= txState.originalMax) {
-        (
-            true,
-            gasNeededForStorage,
-            safeAdd(computeGasUsed, gasNeededForStorage),
-            safeMul(gasNeededForStorage, txState.price),
-            safeMul(computeGasUsed, txState.price)
-        )
-    } else {
-        (
-            false,
-            safeSub(txState.originalMax, computeGasUsed),
-            txState.originalMax,
-            safeMul(safeSub(txState.originalMax, computeGasUsed), txState.price),
-            safeMul(computeGasUsed, txState.price),
-        )
-    };
+    let arbGasPerStorage = gasAccounting_getStoragePriceInArbGas();
+    let storageGasUsed = safeMul(storageAllocations, arbGasPerStorage);
+    let weiForStorage = safeMul(storageGasUsed, txState.price);
+    let computeGasUsed = safeSub(totalGasUsed, storageGasUsed);
+    let weiForCompute = safeMul(computeGasUsed, txState.price);
 
     // refund the unused gas, and pay fees
     let payments = deferredPayments_new();
 
-    let refund = safeMul(safeSub(txState.originalMax, totalGasUsed), txState.price);
+    let refund = safeMul(totalGasRemaining, txState.price);
     if (refund > 0) {
         payments = deferredPayments_add(payments, const::EscrowStoreID_txGas, txState.refundTo, refund);
     }
     let basePrice = gasAccountingInfo.currentPrices.perArbGasBase;
-    if (basePrice > txState.price) {
-        basePrice = txState.price;
-    }
     payments = deferredPayments_add(
         payments,
         const::EscrowStoreID_txGas,
         address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
         safeAdd(safeMul(computeGasUsed, basePrice), safeMul(storageGasUsed, txState.price)),
     );
-    let congestionPrice = safeSub(txState.price, basePrice);
-    payments = deferredPayments_add(
-        payments,
-        const::EscrowStoreID_txGas,
-        address(chainParams_getOrDie(const::Atom_Param_CongestionFeeRecipient)),
-        safeMul(computeGasUsed, congestionPrice),
-    );
-
+    if (txState.price > basePrice) {
+        let congestionPrice = safeSub(txState.price, basePrice);
+        payments = deferredPayments_add(
+            payments,
+            const::EscrowStoreID_txGas,
+            address(chainParams_getOrDie(const::Atom_Param_CongestionFeeRecipient)),
+            safeMul(computeGasUsed, congestionPrice),
+        );
+    }
     set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(computeGasUsed));
     set gasAccountingInfo.gasRemainingThisBlock = xif (gasAccountingInfo.gasRemainingThisBlock >= computeGasUsed) {
         gasAccountingInfo.gasRemainingThisBlock - computeGasUsed
@@ -550,6 +522,7 @@ public view write func gasAccounting_endTxCharges(
     };
     set gasAccountingInfo.txState = None<TxGasState>;
 
+    arbStatistics_addToStorage(storageAllocations);
     arbStatistics_addToGasUsed(computeGasUsed);
 
     return Some((
@@ -560,7 +533,7 @@ public view write func gasAccounting_endTxCharges(
         },
         feeStats with {
             units: feeStats.units with {
-                storage: xif(storageDelta > int(0)) { uint(storageDelta) } else { 0 }
+                storage: storageAllocations
             } with {
                 compute: computeGasUsed
             }
@@ -575,48 +548,42 @@ public view write func gasAccounting_endTxCharges(
     ));
 }
 
-public view write func gasAccounting_pauseTxCharges() -> uint {
+public view write func gasAccounting_pauseTxCharges() -> (uint, uint) {
     // pause charging the currently running tx
-    // return how many units of the tx's initial maxGas are still unused
+    // return how many units of the tx's initial (allPurposeGas, storageOnlyGas) are still unused
 
     return xif let Some(txState) = gasAccountingInfo.txState {
-        let currentGasUnused = switchToChargingOS();
-        set txState.gasInReserve = safeAdd(txState.gasInReserve, currentGasUnused);
+        let storageGas = txState.currentStorageOnlyGas;
+        set txState.currentStorageOnlyGas = 0;
         set gasAccountingInfo.txState = Some(txState);
-        currentGasUnused
+        (switchToChargingOS(), storageGas)
     } else {
         // oops, someone tried to pause tx charges when there's no active tx
         // to be safe, report that the tx is completely out of gas
-        0
+        (0, 0)
     };
 }
 
-public view write func gasAccounting_resumeTxCharges(allocationRequested: uint) -> uint {
+public view write func gasAccounting_resumeTxCharges(allPurposeGas: uint, storageOnlyGas: uint) -> option<()> {
     // resume the charging of the tx for gas
-    // allocationRequested is how much of its gas the tx wants to allocate for whatever is going to execute
-    // return how much gas we actually allocated = min(requested, available)
+    // allow the execution to have (allPurposeGas, storageOnlyGas) available to it
 
     return xif let Some(txState) = gasAccountingInfo.txState {
         // stop charging the OS, and record the OS gas usage as overhead
         let osGasUsed = ((~0) - getGas()) / gasAccountingInfo.pricingParams.arbGasDivisor;
 
-        if (allocationRequested > txState.gasInReserve) {
-            allocationRequested = txState.gasInReserve;  // can't request more gas than you have
-        }
-
-        set txState.gasInReserve = safeSub(txState.gasInReserve, allocationRequested);
-        set gasAccountingInfo.txState = Some(txState);
         set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(osGasUsed));
-
         arbStatistics_addToGasUsed(osGasUsed);
 
-        setGas(safeMul(allocationRequested, gasAccountingInfo.pricingParams.arbGasDivisor));   // start charging the application
+        setGas(safeMul(allPurposeGas, gasAccountingInfo.pricingParams.arbGasDivisor));   // start charging the application
 
-        allocationRequested
+        set txState.currentStorageOnlyGas = storageOnlyGas;
+        set gasAccountingInfo.txState = Some(txState);
+
+        Some(())
     } else {
         // something went wrong: tried to resume tx charges when there isn't an active tx
-        // to be safe, report that tx is completely out of gas
-        0
+        None<()>
     };
 }
 
@@ -631,6 +598,26 @@ view write func switchToChargingOS() -> uint {
         // we were charging the tx; switch to charging the OS and return tx's unused amount from ArbGasRemaining
         setGas(~0);
         avmGasRemaining / chainParams_getOrDie(const::Atom_Param_AvmGasPerArbGas)
+    };
+}
+
+public view write func gasAccounting_chargeCurrentTxForStorage(units: uint) -> uint {
+    // charge the current tx's storage gas for units of storage allocated
+    // if there is enough storage gas, return 0, otherwise return the amount of extra gas that needs to be collected
+    let gasDue = units * gasAccounting_getStoragePriceInArbGas();
+    return xif let Some(txState) = gasAccountingInfo.txState {
+        xif (gasDue <= txState.currentStorageOnlyGas) {
+            set txState.currentStorageOnlyGas = txState.currentStorageOnlyGas - gasDue;
+            set gasAccountingInfo.txState = Some(txState);
+            0
+        } else {
+            gasDue = gasDue - txState.currentStorageOnlyGas;
+            set txState.currentStorageOnlyGas = 0;
+            set gasAccountingInfo.txState = Some(txState);
+            gasDue
+        }
+    } else {
+        gasDue
     };
 }
 

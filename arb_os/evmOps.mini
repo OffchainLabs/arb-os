@@ -1166,7 +1166,11 @@ public view write func evmOp_create2(value: uint, offset: uint, length: uint, sa
             if let Some(contractCode) = evmCallStack_getTopFrameReturnData() {
                 if ((bytearray_size(contractCode) == 0) || (bytearray_getByte(contractCode, 0) != 0xef)) { // required by EIP-3541
                     let astore = evmCallStack_getAccountStoreInCurrentContext();
-                    if let Some(res) = accountStore_createOrAddCodeRef(astore, contractCode) {
+                    if let Some(res) = accountStore_createOrAddCodeRef(
+                        astore,
+                        const::ContractStateVersion_current,
+                        contractCode
+                    ) {
                         let (uastore, startPoint2, evmJumpTable2, _) = res;
                         evmCallStack_setAccountStoreInCurrentContext(uastore);
                         if let Some(oldAcct) = evmCallStack_getAccount(newAddress) {
