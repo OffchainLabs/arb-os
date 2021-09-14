@@ -136,8 +136,8 @@ impl CompileStruct {
             warnings: vec![],
             warnings_are_errors: self.warnings_are_errors,
             warn_color: match self.warnings_are_errors {
-                true => CompileError::PINK,
-                false => CompileError::YELLOW,
+                true => Color::PINK,
+                false => Color::YELLOW,
             },
             file_info_chart: BTreeMap::new(),
         };
@@ -469,6 +469,8 @@ pub fn compile_from_file(
                         Some("core")
                     } else if res == Some("stdlib") {
                         Some("std")
+                    } else if res == Some("stdlib2") {
+                        Some("std2")
                     } else {
                         None
                     }
@@ -668,6 +670,8 @@ fn create_program_tree(
             path[0].clone()
         } else if path[0] == "std" {
             format!("../stdlib/{}", path[1])
+        } else if path[0] == "std2" {
+            format!("../stdlib2/{}", path[1])
         } else if path[0] == "core" {
             format!("../builtin/{}", path[1])
         } else {
@@ -898,6 +902,7 @@ fn typecheck_programs(
                         string_table,
                         func_table,
                         type_tree,
+                        &path,
                     )?;
 
                 checked_funcs.iter_mut().for_each(|(id, func)| {
@@ -996,10 +1001,8 @@ fn check_global_constants(
             error_system.warnings.push(CompileError::new_warning(
                 "Compile Warning",
                 format!(
-                    "global constant {}{}{} is never used",
-                    error_system.warn_color,
-                    constant,
-                    CompileError::RESET,
+                    "global constant {} is never used",
+                    Color::color(error_system.warn_color, constant),
                 ),
                 vec![],
             ));
@@ -1216,10 +1219,8 @@ pub fn parse_from_source(
             error_system.warnings.push(CompileError::new_warning(
                 "Compile Warning",
                 format!(
-                    "Constant {}{}{} is never used",
-                    error_system.warn_color,
-                    constant,
-                    CompileError::RESET,
+                    "Constant {} is never used",
+                    Color::color(error_system.warn_color, constant),
                 ),
                 vec![loc],
             ));
@@ -1245,6 +1246,12 @@ pub struct CompileError {
 impl Display for CompileError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{}", self.description)
+    }
+}
+
+impl<L, T> From<CompileError> for ParseError<L, T, CompileError> {
+    fn from(error: CompileError) -> ParseError<L, T, CompileError> {
+        ParseError::User { error }
     }
 }
 
@@ -1299,35 +1306,27 @@ impl CompileError {
         }
     }
 
-    const RED: &'static str = "\x1b[31;1m";
-    const BLUE: &'static str = "\x1b[34;1m";
-    const YELLOW: &'static str = "\x1b[33;1m";
-    const PINK: &'static str = "\x1b[38;5;161;1m";
-    const RESET: &'static str = "\x1b[0;0m";
-
     pub fn pretty_fmt(
         &self,
         file_info_chart: &BTreeMap<u64, FileInfo>,
         warnings_are_errors: bool,
     ) -> String {
-        let blue = CompileError::BLUE;
-        let reset = CompileError::RESET;
+        let blue = Color::BLUE;
+        let reset = Color::RESET;
 
         let err_color = match self.is_warning {
             true => match warnings_are_errors {
-                true => CompileError::PINK,
-                false => CompileError::YELLOW,
+                true => Color::PINK,
+                false => Color::YELLOW,
             },
-            false => CompileError::RED,
+            false => Color::RED,
         };
 
         let last_line = &self.locations.last();
 
         let mut pretty = format!(
-            "{}{}{}: {}\n{}    --> {}{}\n",
-            err_color,
-            &self.title,
-            reset,
+            "{}: {}\n{}    --> {}{}\n",
+            Color::color(err_color, &self.title),
             self.description,
             blue,
             match last_line {
@@ -1335,8 +1334,12 @@ impl CompileError {
                 Some(location) => match file_info_chart.get(&location.file_id) {
                     None => String::from("file with id ") + &location.file_id.to_string(),
                     Some(info) => format!(
-                        "{}{} line {}{}{} column {}{}",
-                        info.path, reset, blue, location.line, reset, blue, location.column,
+                        "{}{} line {} column {}{}",
+                        info.path,
+                        reset,
+                        Color::blue(location.line),
+                        blue,
+                        location.column,
                     ),
                 },
             },
@@ -1367,12 +1370,10 @@ impl CompileError {
             .into_iter()
             .map(|x| {
                 format!(
-                    "     {}|{}{:0space$}{}^{}\n",
-                    blue,
-                    reset,
+                    "     {}{:0space$}{}\n",
+                    Color::blue("|"),
                     " ",
-                    err_color,
-                    reset,
+                    Color::color(err_color, "^"),
                     space = x.column.to_usize() + 1
                 )
             })

@@ -67,6 +67,7 @@ fn test_for_numeric_error_code(path: &Path) {
 #[test]
 fn test_arraytest() {
     test_for_error_string(Path::new("builtin/arraytest.mexe"));
+    test_for_error_string(Path::new("stdlib2/arraytest.mexe"));
 }
 
 #[test]
@@ -92,6 +93,7 @@ fn test_globaltest() {
 #[test]
 fn test_pqtest() {
     test_for_numeric_error_code(Path::new("stdlib/priorityqtest.mexe"));
+    test_for_error_string(Path::new("stdlib2/priorityqtest.mexe"));
 }
 
 #[test]
@@ -248,6 +250,17 @@ fn test_codeload() {
 fn test_closures() {
     test_for_error_string(Path::new("minitests/simple-closure.mexe"));
     test_for_error_string(Path::new("minitests/closure.mexe"));
+}
+
+#[test]
+fn test_generics() {
+    test_for_error_string(Path::new("minitests/generics/basic.mexe"));
+    test_for_error_string(Path::new("minitests/generics/simple.mexe"));
+    test_for_error_string(Path::new("minitests/generics/nested.mexe"));
+    test_for_error_string(Path::new("minitests/generics/func.mexe"));
+    test_for_error_string(Path::new("minitests/generics/closure.mexe"));
+    test_for_error_string(Path::new("minitests/generics/colorful.mexe"));
+    test_for_error_string(Path::new("minitests/generics/queue.mexe"));
 }
 
 #[test]

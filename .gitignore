@@ -11,8 +11,10 @@ builtin/*.mexe
 upgradetests/*.mexe
 stdlib/*.mao
 stdlib/*.mexe
+stdlib2/*.mexe
 minitests/*.mao
 minitests/*.mexe
+minitests/*/*.mexe
 testlogs/*
 arb_os/contractTemplates.mini
 .idea
@@ -45,7 +47,7 @@ perf.data
 arb_os/bridge_arbos_versions.mini
 arb_os/arbos-upgrade-base.mexe
 
-# Local work
-ed/
-emily/
+# user files
 rachel/
+emily/
+ed/

@@ -1,0 +1,22 @@
+/*
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
+ */
+
+write func main() {
+    asm(tests().1) { log };
+}
+
+func tests() -> string {
+
+    let generic = wrap::<uint>(8);
+
+    if (generic.0 + generic.1 != 16) {
+        return "Generic funcs don't work";
+    }
+
+    return "";
+}
+
+func wrap<T>(arg: T) -> (T, T) {
+    return (arg, arg);
+}

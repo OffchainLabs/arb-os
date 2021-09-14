@@ -1,0 +1,13 @@
+
+func test_xif_else() -> uint {
+    let x = xif (true == false) {
+        1
+    } elseif let Some(thing) = None<uint> {
+        2
+    } elseif (true) {
+        0
+    } else {
+        3
+    };
+    return x;
+}
