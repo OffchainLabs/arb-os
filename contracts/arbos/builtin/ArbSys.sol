@@ -76,6 +76,12 @@ interface ArbSys {
      */
     function mapL1SenderContractAddressToL2Alias(address sender, address dest) external pure returns(address);
 
+    /**
+     * @notice get the caller's amount of available storage gas
+     * @return amount of storage gas available to the caller
+     */
+    function getStorageGasAvailable() external returns(uint);
+
     event L2ToL1Transaction(address caller, address indexed destination, uint indexed uniqueId,
                             uint indexed batchNumber, uint indexInBatch,
                             uint arbBlockNum, uint ethBlockNum, uint timestamp,

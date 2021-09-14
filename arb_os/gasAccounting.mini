@@ -368,6 +368,14 @@ public view func gasAccounting_getStoragePriceInArbGas() -> uint {
     };
 }
 
+public view func gasAccounting_getCurrentStorageGasAvailable() -> uint {
+    return xif let Some(txState) = gasAccountingInfo.txState {
+        txState.currentStorageOnlyGas
+    } else {
+        0
+    };
+}
+
 public view func getAddressForReserveFundsDeposit() -> address {
     return address(chainParams_getOrDie(const::Atom_Param_CongestionFeeRecipient));
 }

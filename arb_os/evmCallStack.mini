@@ -1727,6 +1727,14 @@ public func _evmCallFrame_getParent(frame: EvmCallFrame) -> option<EvmCallFrame>
     return frame.parent;
 }
 
+public func evmCallFrame_getReservedStorageGas(frame: EvmCallFrame) -> uint {
+    return xif let Some(resumeInfo) = frame.resumeInfo {
+        resumeInfo.savedStorageGas
+    } else {
+        0
+    };
+}
+
 public view write func evmCallStack_callHitError(errInfo: any) {
     debug((664, errInfo));
     if (evmCallStack_returnFromCall(const::TxResultCode_revert, 0, 0, None<view write func()>) == None<()>) {
