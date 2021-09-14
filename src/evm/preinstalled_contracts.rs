@@ -2745,7 +2745,7 @@ fn test_congestion_price_adjustment() {
 
     machine
         .runtime_env
-        ._advance_time(Uint256::from_u64(48), Some(Uint256::from_u64(720)), false);
+        ._advance_time(Uint256::from_u64(96), Some(Uint256::from_u64(1440)), false);
     let prices2 = arbgasinfo
         //._get_prices_in_wei(&mut machine, randomish_address.clone())  preserve this for later integration
         ._get_prices_in_wei_with_aggregator(&mut machine, my_address.clone())

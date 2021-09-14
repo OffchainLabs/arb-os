@@ -19,7 +19,13 @@ use gasAccounting::TxGasState;
 
 
 public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> map<uint, uint> {
-    return oldGlobals.globalChainParameters;
+    return oldGlobals.globalChainParameters with {
+        [const::Atom_Param_SmallGasPoolMax] = xif let Some(val) = oldGlobals.globalChainParameters[const::Atom_Param_GasPoolMax] {
+            val / 10
+        } else {
+            const::Default_Param_SmallGasPoolMax
+        }
+    };
 }
 
 public func set_globalCallStack_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
@@ -33,7 +39,13 @@ public func set_gasAccountingInfo_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) ->
         feeConfig: old.feeConfig,
         currentPrices: old.currentPrices,
         gasRemainingThisBlock: old.gasRemainingThisBlock,
-        congestionState: old.congestionState,
+        congestionState: struct {
+            gasPool: old.congestionState.gasPool,
+            smallGasPool: old.congestionState.gasPool / int(10),
+            lastArbBlockNumSeen: old.congestionState.lastArbBlockNumSeen,
+            lastTimestampSeen: old.congestionState.lastTimestampSeen,
+            congestionPriceWei: old.congestionState.congestionPriceWei,
+        },
         speedLimitPerSecond: old.speedLimitPerSecond,
         pricingParams: old.pricingParams,
         gasAllocatedToThisBlock: old.gasAllocatedToThisBlock,

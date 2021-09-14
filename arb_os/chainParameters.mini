@@ -78,6 +78,7 @@ public func chainParams_getDefaults() -> map<uint, uint> {
         with { [const::Atom_Param_NetworkFeeShareNumerator] = const::Default_Param_NetworkFeeShareNumerator }
         with { [const::Atom_Param_NetworkFeeShareDenominator] = const::Default_Param_NetworkFeeShareDenominator }
         with { [const::Atom_Param_GasPoolMax] = const::Default_Param_GasPoolMax }
+        with { [const::Atom_Param_SmallGasPoolMax] = const::Default_Param_SmallGasPoolMax }
         with { [const::Atom_Param_TxGasLimit] = const::Default_Param_TxGasLimit }
         with { [const::Atom_Param_RetryablePriceBase] = const::Default_Param_RetryablePriceBase }
         with { [const::Atom_Param_RetryablePricePerByteNumerator] = const::Default_Param_RetryablePricePerByteNumerator }

@@ -229,6 +229,7 @@
     "NetworkFeeShareNumerator": 15,
     "NetworkFeeShareDenominator": 100,
     "GasPoolMax": 288000000,
+    "SmallGasPoolMax": 28800000,
     "TxGasLimit": 8000000,
     "RetryablePriceBase": 1,
     "RetryablePricePerByteNumerator": 1,

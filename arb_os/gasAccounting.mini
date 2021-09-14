@@ -86,6 +86,7 @@ type GasPrices = struct {    // all prices in this struct are denominated in wei
 
 type CongestionState = struct {
     gasPool: int,         // amount of gas available for use (note: signed value; if negative, we have overused gas)
+    smallGasPool: int,    // smaller gas pool, for use in the price adjustment algorithm
     lastArbBlockNumSeen: uint,
     lastTimestampSeen: uint,
     congestionPriceWei: uint,
@@ -185,6 +186,7 @@ view write func setupParameters(isInit: bool) {
 view func initCongestionState(isInit: bool) -> CongestionState {
     return struct {
         gasPool: int(chainParams_getOrDie(const::Atom_Param_GasPoolMax)),
+        smallGasPool: int(chainParams_getOrDie(const::Atom_Param_SmallGasPoolMax)),
         lastArbBlockNumSeen: xif (isInit) { 0 } else { inbox_currentArbBlockNumber() },
         lastTimestampSeen: xif (isInit) { 0 } else { inbox_currentTimestamp() },
         congestionPriceWei: 0,
@@ -384,6 +386,8 @@ public view write func gasAccounting_addToGasPool(delta: uint) {
     gasAccountingInfo = gasAccountingInfo with {
         congestionState: gasAccountingInfo.congestionState with {
             gasPool: gasAccountingInfo.congestionState.gasPool + int(delta)
+        } with {
+            smallGasPool: gasAccountingInfo.congestionState.smallGasPool + int(delta)
         }
     };
 }
@@ -466,6 +470,7 @@ public view write func gasAccounting_startTxCharges(
         refundTo: payer,
     });
     set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(gasUsedByOS));
+    set gasAccountingInfo.congestionState.smallGasPool = safeSubInt(gasAccountingInfo.congestionState.smallGasPool, int(gasUsedByOS));
 
     arbStatistics_addToGasUsed(gasUsedByOS);
 
@@ -523,6 +528,7 @@ public view write func gasAccounting_endTxCharges(
         );
     }
     set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(computeGasUsed));
+    set gasAccountingInfo.congestionState.smallGasPool = safeSubInt(gasAccountingInfo.congestionState.smallGasPool, int(computeGasUsed));
     set gasAccountingInfo.gasRemainingThisBlock = xif (gasAccountingInfo.gasRemainingThisBlock >= computeGasUsed) {
         gasAccountingInfo.gasRemainingThisBlock - computeGasUsed
     } else {
@@ -581,6 +587,7 @@ public view write func gasAccounting_resumeTxCharges(allPurposeGas: uint, storag
         let osGasUsed = ((~0) - getGas()) / gasAccountingInfo.pricingParams.arbGasDivisor;
 
         set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(osGasUsed));
+        set gasAccountingInfo.congestionState.smallGasPool = safeSubInt(gasAccountingInfo.congestionState.smallGasPool, int(osGasUsed));
         arbStatistics_addToGasUsed(osGasUsed);
 
         setGas(safeMul(allPurposeGas, gasAccountingInfo.pricingParams.arbGasDivisor));   // start charging the application
@@ -949,7 +956,9 @@ view func updateCongestionState(state: CongestionState, toBlockNum: uint, toTime
     let basePrice = gasAccountingInfo.currentPrices.perArbGasBase;
     let totalPrice = safeAdd(basePrice, state.congestionPriceWei);
     let gasPool = state.gasPool;
+    let smallGasPool = state.smallGasPool;
     let gasPoolMax = chainParams_getOrDie(const::Atom_Param_GasPoolMax);
+    let smallGasPoolMax = chainParams_getOrDie(const::Atom_Param_SmallGasPoolMax);
     let speedLimit = chainParams_getOrDie(const::Atom_Param_SpeedLimitPerSecond);
 
     // doing a per-second loop isn't elegant, but cost is low enough that it shouldn't be a problem
@@ -960,6 +969,10 @@ view func updateCongestionState(state: CongestionState, toBlockNum: uint, toTime
         if (gasPool > int(gasPoolMax)) {
             gasPool = int(gasPoolMax);
         }
+        smallGasPool = safeAddInt(smallGasPool, int(speedLimit));
+        if (smallGasPool > int(smallGasPoolMax)) {
+            smallGasPool = int(smallGasPoolMax);
+        }
 
         let maxtc = xif (gasPool > int(0)) {
             gasPool
@@ -967,13 +980,21 @@ view func updateCongestionState(state: CongestionState, toBlockNum: uint, toTime
             int(0)
         };
         // now 0 <= maxtc <= gasPoolMax
+        let smaxtc = xif (smallGasPool > int(0)) {
+            smallGasPool
+        } else {
+            int(0)
+        };
+        // now 0 <= smaxtc <= smallGasPoolMax
 
         // constants here are chosen so that adjustment is by factor between 7/8 and 9/8 per mainnet block, as in EIP-1559
-        totalPrice = totalPrice * (121 * gasPoolMax - 2 * uint(maxtc)) / (120 * gasPoolMax);
+        totalPrice = totalPrice * (121 * gasPoolMax - 2 * uint(maxtc)) / (240 * gasPoolMax)
+                   + totalPrice * (121 * smallGasPoolMax - 2 * uint(smaxtc)) / (240 * smallGasPoolMax);
         if (totalPrice < basePrice) { totalPrice = basePrice; }
     }
     return struct {
         gasPool: gasPool,
+        smallGasPool: smallGasPool,
         lastArbBlockNumSeen: toBlockNum,
         lastTimestampSeen: toTimestamp,
         congestionPriceWei: safeSub(totalPrice, basePrice),
