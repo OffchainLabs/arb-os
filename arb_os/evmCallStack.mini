@@ -889,8 +889,7 @@ public view write func evmCallStack_returnFromCall(
         evmTracer_pushReturnRevert(
             resultCode,
             returnData,
-            (resumeInfo.givenAPGas + resumeInfo.savedAPGas - leftoverAPGas)
-                   + (resumeInfo.givenStorageGas + resumeInfo.savedStorageGas - leftoverStorageGas),
+            (resumeInfo.givenAPGas - leftoverAPGas) + (resumeInfo.givenStorageGas - leftoverStorageGas),
         );
 
         // ready to return to caller
@@ -935,10 +934,9 @@ public view write func evmCallStack_returnFromCall(
         }
 
         if (resultCode == const::TxResultCode_success) {
-            gasAccounting_resumeTxCharges(leftoverAPGas, leftoverStorageGas)?;
+            let _ = gasAccounting_resumeTxCharges(leftoverAPGas, leftoverStorageGas)?;
             let (entryPoint, evmJumpTable) = xif (globalCurrentTxRequest.isConstructor) {
                 // the call was a constructor, so we need to install the resulting EVM code as the new contract's deploy code
-                let _ = gasAccounting_resumeTxCharges(leftoverAPGas, leftoverStorageGas);
                 let (uAcctStore, ep, ejt, created) = accountStore_createOrAddCodeRef(
                     topFrame.accountStore,
                     const::ContractStateVersion_current,
