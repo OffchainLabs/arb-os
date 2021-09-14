@@ -8,7 +8,7 @@ use super::ast::{BinaryOp, FuncProperties, GlobalVar, TrinaryOp, Type, UnaryOp};
 use super::typecheck::{
     TypeCheckedExpr, TypeCheckedFunc, TypeCheckedMatchPattern, TypeCheckedStatement,
 };
-use crate::compile::ast::{DebugInfo, MatchPatternKind, TypeTree};
+use crate::compile::ast::{DebugInfo, MatchPatternKind};
 use crate::compile::typecheck::{
     TypeCheckedCodeBlock, TypeCheckedExprKind, TypeCheckedStatementKind,
 };
@@ -1109,13 +1109,12 @@ fn mavm_codegen_expr(
                 DebugInfo::from(loc)
             ))
         }
-        TypeCheckedExprKind::NewArray(sz_expr, base_type, array_type) => {
+        TypeCheckedExprKind::NewArray(sz_expr, value, array_type) => {
             let call_type = Type::Func(
                 FuncProperties::pure(),
                 vec![Type::Uint, Type::Any],
                 Box::new(array_type.clone()),
             );
-            let default_val = base_type.default_value(&TypeTree::default());
             let the_expr = TypeCheckedExpr {
                 kind: TypeCheckedExprKind::FunctionCall(
                     Box::new(TypeCheckedExpr::new(
@@ -1128,7 +1127,7 @@ fn mavm_codegen_expr(
                     vec![
                         *sz_expr.clone(),
                         TypeCheckedExpr::new(
-                            TypeCheckedExprKind::Const(default_val, Type::Any),
+                            TypeCheckedExprKind::Const(value.clone(), Type::Any),
                             DebugInfo::from(loc),
                         ),
                     ],

@@ -284,7 +284,7 @@ pub fn link(
         let path = &graph[node].path;
         let debug_info = &graph[node].debug_info;
 
-        if ["core", "std", "meta"].contains(&path[0].as_str()) {
+        if ["core", "std", "std2", "meta"].contains(&path[0].as_str()) {
             continue;
         }
 

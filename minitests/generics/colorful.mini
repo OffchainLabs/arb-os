@@ -1,0 +1,43 @@
+/*
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
+ */
+
+write func main() {
+    asm(tests().1) { log };
+}
+
+func tests() -> string {
+
+    let generic = color::<string>("wow");
+
+    if (generic != ("wow", "wow", "wow")) {
+        return "Generics don't work when passed around";
+    }
+
+    return "";
+}
+
+func color<T>(arg: T) -> (T, T, T) {
+    
+    let pair = (arg, arg);
+    
+    let same = unwrap::<(T, T)>(struct {
+        entry: pair,
+        other: (pair, pair),
+    });
+    
+    return (arg, pair.0, pass::<T>(same.1));
+}
+
+func pass<R>(arg: R) -> R {
+    return arg;
+}
+
+type wrapper<T> = struct {
+    entry: T,
+    other: (T, T),
+};
+
+func unwrap<X>(wrap: wrapper<X>) -> X {
+    return wrap.other.1;
+}
