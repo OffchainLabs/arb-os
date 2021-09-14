@@ -31,16 +31,9 @@ func tests() -> uint {
         return 1;
     }
 
-    if let Some(_) = fixedPoint_add(s9292, s1000) {
-        return 2;
-    }
-
-    if let Some(sum) = fixedPoint_add(s1000, s1000) {
-        if (!fixedPoint_equal(sum, fixedPoint_new(17820*2, 1000))) {
-            return 3;
-        }
-    } else {
-        return 4;
+    let sum = fixedPoint_add(s1000, s1000);
+    if (!fixedPoint_equal(sum, fixedPoint_new(17820*2, 1000))) {
+        return 3;
     }
 
     if let Some(_) = fixedPoint_mul(s9292, s1000) {

@@ -34,6 +34,7 @@ use messages::TxRequestData;
 
 use std::fixedpoint::FixedPoint;
 use std::fixedpoint::fixedPoint_new;
+use std::fixedpoint::fixedPoint_add;
 use std::fixedpoint::fixedPoint_mulByUintTrunc;
 use std::fixedpoint::fixedPoint_plusOne;
 use std::fixedpoint::fixedPoint_div;
@@ -988,8 +989,11 @@ view func updateCongestionState(state: CongestionState, toBlockNum: uint, toTime
         // now 0 <= smaxtc <= smallGasPoolMax
 
         // constants here are chosen so that adjustment is by factor between 7/8 and 9/8 per mainnet block, as in EIP-1559
-        totalPrice = totalPrice * (121 * gasPoolMax - 2 * uint(maxtc)) / (240 * gasPoolMax)
-                   + totalPrice * (121 * smallGasPoolMax - 2 * uint(smaxtc)) / (240 * smallGasPoolMax);
+        let multiplier = fixedPoint_add(
+            fixedPoint_new(121 * gasPoolMax - 2 * uint(maxtc), 240 * gasPoolMax),
+            fixedPoint_new(121 * smallGasPoolMax - 2 * uint(smaxtc), 240 * smallGasPoolMax),
+        );
+        totalPrice = fixedPoint_mulByUintTrunc(multiplier, totalPrice);
         if (totalPrice < basePrice) { totalPrice = basePrice; }
     }
     return struct {
