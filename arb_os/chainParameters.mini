@@ -61,9 +61,6 @@ public func chainParams_getDefaults() -> map<uint, uint> {
     return newmap<uint, uint>
         with { [const::Atom_Param_SecondsPerBlockNumerator] = const::Default_Param_SecondsPerBlockNumerator }
         with { [const::Atom_Param_SecondsPerBlockDenominator] = const::Default_Param_SecondsPerBlockDenominator }
-        with { [const::Atom_Param_FeesEnabled] = const::Default_Param_FeesEnabled }
-        with { [const::Atom_Param_NetworkFeeRecipient] = const::Default_Param_NetworkFeeRecipient }
-        with { [const::Atom_Param_CongestionFeeRecipient] = const::Default_Param_CongestionFeeRecipient }
         with { [const::Atom_Param_DefaultAggregator] = const::Default_Param_DefaultAggregator }
         with { [const::Atom_Param_DefaultBaseTxFeeL1Gas] = const::Default_Param_DefaultBaseTxFeeL1Gas }
         with { [const::Atom_Param_MinBaseTxFeeL1Gas] = const::Default_Param_MinBaseTxFeeL1Gas }

@@ -29,6 +29,7 @@ use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 
 use gasAccounting::getRetryableTxPrice;
+use gasAccounting::getNetworkFeeRecipient;
 
 use retrybuffer::retryBuffer_getLifetime;
 use retrybuffer::retryBuffer_getTxTimeout;
@@ -177,10 +178,7 @@ view write func arbRetryable_keepalive(topFrame: EvmCallFrame, calldata: ByteArr
         evmOp_revert_knownPc(52, 0, 0);
     }
     if (callvalue > 0) {
-        if (evmCallStack_transferEthFromCurrent(
-            address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
-            callvalue
-        ) == None<()>) {
+        if (evmCallStack_transferEthFromCurrent(getNetworkFeeRecipient(), callvalue) == None<()>) {
             evmOp_revert_knownPc(53, 0, 0);
         }
     }

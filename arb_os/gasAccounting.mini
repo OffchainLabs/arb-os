@@ -2,12 +2,11 @@
 // Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
 //
 
-use accounts::AccountStore;
-use std::bytearray::ByteArray;
 
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsForall;
 
+use accounts::AccountStore;
 use accounts::safeGetGlobalAccountStore;
 use accounts::safeSetGlobalAccountStore;
 use accounts::accountStore_get;
@@ -31,6 +30,9 @@ use evmCallStack::evmCallStack_getAccountInCurrentContext;
 use evmCallStack::evmCallStack_setAccountInCurrentContext;
 
 use messages::TxRequestData;
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
 
 use std::fixedpoint::FixedPoint;
 use std::fixedpoint::fixedPoint_new;
@@ -124,6 +126,7 @@ type RetryablePrices = struct {
 
 public view write func gasAccounting_init() {    // initialize on boot, before we have gotten the chain init message
     initGasPriceEstimator();
+    initFeeAdministration();
     setupParameters(true);
 }
 
@@ -198,10 +201,6 @@ public view func getGasAccountingParams() -> (uint, uint, uint) {
         chainParams_getOrDie(const::Atom_Param_GasPoolMax),
         chainParams_getOrDie(const::Atom_Param_TxGasLimit),
     );
-}
-
-public view func feesEnabled() -> bool {
-    return chainParams_getOrDie(const::Atom_Param_FeesEnabled) != 0;
 }
 
 view func setPrices(
@@ -370,7 +369,7 @@ public view func _gasAccounting_getStoragePriceInArbGas() -> uint {
 }
 
 public view func getAddressForReserveFundsDeposit() -> address {
-    return address(chainParams_getOrDie(const::Atom_Param_CongestionFeeRecipient));
+    return getCongestionFeeRecipient();
 }
 
 public view write func gasAccounting_addToGasPool(delta: uint) {
@@ -444,7 +443,7 @@ public view write func gasAccounting_startTxCharges(
         acctStore = accountStore_payFullyFromEscrow(
             acctStore,
             const::EscrowStoreID_txGas,
-            address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
+            getNetworkFeeRecipient(),
         );
         return (const::TxResultCode_insufficientGasFunds, acctStore);
     }
@@ -531,14 +530,14 @@ public view write func gasAccounting_endTxCharges(
     payments = deferredPayments_add(
         payments,
         const::EscrowStoreID_txGas,
-        address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
+        getNetworkFeeRecipient(),
         safeAdd(safeMul(computeGasUsed, basePrice), safeMul(storageGasUsed, txState.price)),
     );
     let congestionPrice = safeSub(txState.price, basePrice);
     payments = deferredPayments_add(
         payments,
         const::EscrowStoreID_txGas,
-        address(chainParams_getOrDie(const::Atom_Param_CongestionFeeRecipient)),
+        getCongestionFeeRecipient(),
         safeMul(computeGasUsed, congestionPrice),
     );
 
@@ -836,7 +835,7 @@ view write func payForTxAndL1Gas(
 
         let (fullyPaid, ufs, weiPaid) = tryToPayForL1Gas(
             payer,
-            address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
+            getNetworkFeeRecipient(),
             networkPrice,
             safeMul(calldataUnits, networkUnitPrice),
             feeStats,
@@ -1013,11 +1012,7 @@ public view func getFeesForRetryableTx(
         set feeStats.units.calldataUnit = 16 * calldataSize;
         set feeStats.weiPaid.tx = prices.perTx;
         set feeStats.weiPaid.calldataUnit = safeMul(calldataSize * 16, calldataUnitPrice);
-        (
-            totalDue,
-            address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
-            feeStats,
-        )
+        (totalDue, getNetworkFeeRecipient(), feeStats)
     } else {
         (0, address(0), txFeeStats_zero())
     };
@@ -1167,3 +1162,66 @@ public view write func allowedSenders_remove(addr: address) {
 public view func allowedSenders_serialize() -> option<ByteArray> {
     return setOfAddresses_serialize(gasAccountingInfo.allowedSenders);
 }
+
+type FeeAdministration = struct {
+    administrators: SetOfAddresses,
+    feesEnabled: bool,
+    networkFeeRecipient: address,
+    congestionFeeRecipient: address,
+};
+
+var feeAdministration: FeeAdministration;
+
+write func initFeeAdministration() {
+    feeAdministration = defaultFeeAdministration(true);
+}
+
+public func defaultFeeAdministration(feesOn: bool) -> FeeAdministration {
+    return struct {
+        administrators: setOfAddresses_add(setOfAddresses_emptySet(), address(0xC234E41AE2cb00311956Aa7109fC801ae8c80941)),
+        feesEnabled: feesOn,
+        networkFeeRecipient: address(0x582A62dB643BCFF3B0Bf1DA45f812e3a354d7518),
+        congestionFeeRecipient: address(0xb04D2C62c0Cd8cec5691Cefd2E7CF041EBD26382),
+    };
+}
+
+public view func isFeeAdministrator(addr: address) -> bool {
+    return setOfAddresses_contains(feeAdministration.administrators, addr);
+}
+
+public view write func addFeeAdministrator(addr: address) {
+    set feeAdministration.administrators = setOfAddresses_add(feeAdministration.administrators, addr);
+}
+
+public view write func removeFeeAdministrator(addr: address) {
+    set feeAdministration.administrators = setOfAddresses_remove(feeAdministration.administrators, addr);
+}
+
+public view func getAllFeeAdministrators() -> ByteArray {
+    return xif let Some(ba) = setOfAddresses_serialize(feeAdministration.administrators) {
+        ba
+    } else {
+        bytearray_new(0)
+    };
+}
+
+public view func feesEnabled() -> bool {
+    return feeAdministration.feesEnabled;
+}
+
+public view func getNetworkFeeRecipient() -> address {
+    return feeAdministration.networkFeeRecipient;
+}
+
+public view write func setNetworkFeeRecipient(addr: address) {
+    set feeAdministration.networkFeeRecipient = addr;
+}
+
+public view func getCongestionFeeRecipient() -> address {
+    return feeAdministration.congestionFeeRecipient;
+}
+
+public view write func setCongestionFeeRecipient(addr: address) {
+    set feeAdministration.congestionFeeRecipient = addr;
+}
+

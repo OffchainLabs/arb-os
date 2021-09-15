@@ -209,9 +209,6 @@
   "parameters_int": {
     "SecondsPerBlockNumerator": 15,
     "SecondsPerBlockDenominator": 1,
-    "FeesEnabled": 0,
-    "NetworkFeeRecipient": 0,
-    "CongestionFeeRecipient": 0,
     "DefaultAggregator": 0,
     "DefaultBaseTxFeeL1Gas": 4000,
     "MinBaseTxFeeL1Gas": 500,
