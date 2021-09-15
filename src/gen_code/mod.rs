@@ -5,6 +5,7 @@
 use crate::compile::{AbstractSyntaxTree, StructField, Type, TypeCheckedNode, TypeTree};
 use crate::console::Color;
 use crate::link::LinkedProgram;
+use crate::stringtable::StringId;
 use crate::GenUpgrade;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -17,7 +18,6 @@ use std::io::Write;
 use std::mem;
 use std::path::Path;
 use std::rc::Rc;
-use crate::stringtable::StringId;
 
 #[derive(Debug)]
 pub struct GenCodeError {
@@ -305,7 +305,7 @@ fn get_globals_and_version_from_file(
 
     let mut old_state = state.clone();
     for global in globals.globals {
-        if global.id != StringId::new(vec![], usize::MAX) {
+        if global.id != StringId::new(vec![], String::new()) {
             let mut tipe = global.tipe;
             if let Type::Nominal(file_path, id, _) = tipe {
                 tipe = type_tree

@@ -595,7 +595,7 @@ fn flowcheck_liveliness(
             TypeCheckedNode::Expression(expr) => match &mut expr.kind {
                 //TODO: This change exposed dot refs don't hold regular StringIds in their second
                 // field but rather indexes of the field in a struct
-                 TypeCheckedExprKind::LocalVariableRef(id, ..) => {
+                TypeCheckedExprKind::LocalVariableRef(id, ..) => {
                     killed.insert(id.clone());
                     alive.remove(id);
                     reborn.remove(id);
@@ -783,7 +783,10 @@ impl TypeCheckedFunc {
                     String::from("Compile warning"),
                     format!(
                         "value {} is assigned but never used",
-                        Color::color(error_system.warn_color, string_table.name_from_id(id.clone())),
+                        Color::color(
+                            error_system.warn_color,
+                            string_table.name_from_id(id.clone())
+                        ),
                     ),
                     vec![*loc],
                 ));
@@ -1756,7 +1759,11 @@ fn typecheck_statement<'a>(
             let (stat, bindings) = match &pat.kind {
                 MatchPatternKind::Bind(name) => (
                     TypeCheckedStatementKind::Let(
-                        TypeCheckedMatchPattern::new_bind(name.clone(), pat.debug_info, tce_type.clone()),
+                        TypeCheckedMatchPattern::new_bind(
+                            name.clone(),
+                            pat.debug_info,
+                            tce_type.clone(),
+                        ),
                         tc_expr,
                     ),
                     vec![(name.clone(), tce_type)],
@@ -1806,7 +1813,10 @@ fn typecheck_statement<'a>(
             match type_table.get(id) {
                 Some(var_type) => {
                     if var_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
-                        Ok((TypeCheckedStatementKind::AssignLocal(id.clone(), tc_expr), vec![]))
+                        Ok((
+                            TypeCheckedStatementKind::AssignLocal(id.clone(), tc_expr),
+                            vec![],
+                        ))
                     } else {
                         Err(CompileError::new_type_error(
                             format!(
@@ -1822,7 +1832,10 @@ fn typecheck_statement<'a>(
                 None => match global_vars.get(id) {
                     Some(var_type) => {
                         if var_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
-                            Ok((TypeCheckedStatementKind::AssignGlobal(id.clone(), tc_expr), vec![]))
+                            Ok((
+                                TypeCheckedStatementKind::AssignGlobal(id.clone(), tc_expr),
+                                vec![],
+                            ))
                         } else {
                             Err(CompileError::new_type_error(
                                 format!(
@@ -2503,7 +2516,9 @@ fn typecheck_expr(
                                 TypeCheckedStatementKind::Let(pat, ref mut expr) => {
                                     let right = vec![TypeCheckedNode::Expression(expr)];
                                     captures.extend(find_captures(right, local.clone()));
-                                    local.extend(pat.collect_identifiers().iter().map(|x| x.0.clone()));
+                                    local.extend(
+                                        pat.collect_identifiers().iter().map(|x| x.0.clone()),
+                                    );
                                     continue;
                                 }
                                 _ => {}
@@ -2538,8 +2553,11 @@ fn typecheck_expr(
                         match node {
                             TypeCheckedNode::Statement(stat) => match &mut stat.kind {
                                 TypeCheckedStatementKind::Let(pat, ..) => {
-                                    let ids: Vec<_> =
-                                        pat.collect_identifiers().iter().map(|x| x.0.clone()).collect();
+                                    let ids: Vec<_> = pat
+                                        .collect_identifiers()
+                                        .iter()
+                                        .map(|x| x.0.clone())
+                                        .collect();
                                     idents.extend(ids);
                                 }
                                 _ => {}
@@ -2561,7 +2579,8 @@ fn typecheck_expr(
                     idents
                 }
 
-                let args: HashSet<StringId> = closure.args.iter().map(|arg| arg.name.clone()).collect();
+                let args: HashSet<StringId> =
+                    closure.args.iter().map(|arg| arg.name.clone()).collect();
                 let arg_count = args.len();
                 let captures = find_captures(closure.child_nodes(), args);
 
