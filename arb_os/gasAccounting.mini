@@ -494,10 +494,10 @@ public view write func gasAccounting_endTxCharges(
     let totalGasUsed = safeSub(txState.originalMax, totalGasRemaining);
 
     let arbGasPerStorage = gasAccounting_getStoragePriceInArbGas();
-    let storageGasUsed = safeMul(storageAllocations, arbGasPerStorage);
-    let weiForStorage = safeMul(storageGasUsed, txState.price);
-    let computeGasUsed = safeSub(totalGasUsed, storageGasUsed);
-    let weiForCompute = safeMul(computeGasUsed, txState.price);
+    let gasUsedForStorage = safeMul(storageAllocations, arbGasPerStorage);
+    let weiForStorage = safeMul(gasUsedForStorage, txState.price);
+    let gasUsedForCompute = safeSub(totalGasUsed, gasUsedForStorage);
+    let weiForCompute = safeMul(gasUsedForCompute, txState.price);
 
     // refund the unused gas, and pay fees
     let payments = deferredPayments_new();
@@ -511,7 +511,7 @@ public view write func gasAccounting_endTxCharges(
         payments,
         const::EscrowStoreID_txGas,
         address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
-        safeAdd(safeMul(computeGasUsed, basePrice), safeMul(storageGasUsed, txState.price)),
+        safeAdd(safeMul(gasUsedForCompute, basePrice), safeMul(gasUsedForStorage, txState.price)),
     );
     if (txState.price > basePrice) {
         let congestionPrice = safeSub(txState.price, basePrice);
@@ -519,19 +519,19 @@ public view write func gasAccounting_endTxCharges(
             payments,
             const::EscrowStoreID_txGas,
             address(chainParams_getOrDie(const::Atom_Param_CongestionFeeRecipient)),
-            safeMul(computeGasUsed, congestionPrice),
+            safeMul(gasUsedForCompute, congestionPrice),
         );
     }
-    set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(computeGasUsed));
-    set gasAccountingInfo.gasRemainingThisBlock = xif (gasAccountingInfo.gasRemainingThisBlock >= computeGasUsed) {
-        gasAccountingInfo.gasRemainingThisBlock - computeGasUsed
+    set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(gasUsedForCompute));
+    set gasAccountingInfo.gasRemainingThisBlock = xif (gasAccountingInfo.gasRemainingThisBlock >= gasUsedForCompute) {
+        gasAccountingInfo.gasRemainingThisBlock - gasUsedForCompute
     } else {
         0
     };
     set gasAccountingInfo.txState = None<TxGasState>;
 
     arbStatistics_addToStorage(storageAllocations);
-    arbStatistics_addToGasUsed(computeGasUsed);
+    arbStatistics_addToGasUsed(gasUsedForCompute);
 
     return Some((
         confirmed,
@@ -543,7 +543,7 @@ public view write func gasAccounting_endTxCharges(
             units: feeStats.units with {
                 storage: storageAllocations
             } with {
-                compute: computeGasUsed
+                compute: gasUsedForCompute
             }
         } with {
             weiPaid: feeStats.weiPaid with {

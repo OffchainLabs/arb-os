@@ -205,7 +205,6 @@ public view write func evmCallStack_addStorageCharge(units: uint) {
         if (avmGasToBurn >= avmGasLeft) {
             avmGasToBurn = avmGasLeft-1;
         }
-        gasAccounting_addToGasPool(avmGasToBurn / avmGasPerArbGas);
         setGas(avmGasLeft - avmGasToBurn);
     }
 }
@@ -870,6 +869,10 @@ public view write func evmCallStack_returnFromCall(
             set newTopFrame.evmLogs = topFrame.evmLogs;
             set newTopFrame.sendQueue = topFrame.sendQueue;
             set newTopFrame.selfDestructQueue = topFrame.selfDestructQueue;
+        } else {
+            // copy the storage allocations back to the parent frame, even though the tx didn't succeed
+            //      this is needed to make gas pool tracking and receipt generation work as intended
+            set newTopFrame.storageAllocations = topFrame.storageAllocations;
         }
         set newTopFrame.returnInfo = Some(
             struct {
