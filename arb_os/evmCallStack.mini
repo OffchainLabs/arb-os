@@ -1143,7 +1143,10 @@ public view write func evmCallStack_returnFromCall(
         } else {
             // Request failed
             let _ = gasAccounting_resumeTxCharges(leftoverAPGas, leftoverStorageGas);
-            let (_, gasUsage, feeStats, payments) = gasAccounting_endTxCharges(0, globalCurrentTxRequest.feeStats)?;
+            let (_, gasUsage, feeStats, payments) = gasAccounting_endTxCharges(
+                topFrame.storageAllocations,
+                globalCurrentTxRequest.feeStats
+            )?;
             if let Some(uas) = deferredPayments_apply(getGlobalAccountStore(), payments) {
                 setGlobalAccountStore(uas);
             }
