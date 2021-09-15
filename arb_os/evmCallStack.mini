@@ -201,7 +201,15 @@ public view write func evmCallStack_addStorageCharge(units: uint) {
         let remainingGasToCharge = gasAccounting_chargeCurrentTxForStorage(units);
         let avmGasToBurn = remainingGasToCharge * chainParams_getOrDie(const::Atom_Param_AvmGasPerArbGas);
         let gasLeft = getGas();
-        setGas(xif (gasLeft > avmGasToBurn) { gasLeft - avmGasToBurn } else { 1 });
+        setGas(
+            xif (gasLeft > avmGasToBurn) {
+                gasAccounting_addToGasPool(remainingGasToCharge);
+                gasLeft - avmGasToBurn
+            } else {
+                gasAccounting_addToGasPool(gasLeft / chainParams_getOrDie(const::Atom_Param_AvmGasPerArbGas));
+                1
+            }
+        );
     }
 }
 
