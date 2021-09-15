@@ -71,7 +71,7 @@ pub fn mavm_codegen_func(
     }
     for capture in &func.captures {
         let next_slot = locals.len();
-        locals.insert(*capture, next_slot);
+        locals.insert(capture.clone(), next_slot);
     }
 
     let (mut space_for_locals, _slot_map) = mavm_codegen_statements(
@@ -122,7 +122,7 @@ fn mavm_codegen_code_block(
     block: &TypeCheckedCodeBlock,
     code: &mut Vec<Instruction>,
     num_locals: usize,
-    locals: &HashMap<usize, usize>,
+    locals: &HashMap<StringId, usize>,
     label_gen: &mut LabelGenerator,
     string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
@@ -198,7 +198,7 @@ fn mavm_codegen_statements(
     statements: Vec<TypeCheckedStatement>, // statements to codegen
     code: &mut Vec<Instruction>,           // accumulates the code as it's generated
     mut num_locals: usize,                 // num locals that have been allocated
-    locals: &HashMap<usize, usize>,        // lookup local variable slot number by name
+    locals: &HashMap<StringId, usize>,        // lookup local variable slot number by name
     label_gen: &mut LabelGenerator,
     string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
@@ -245,7 +245,7 @@ fn mavm_codegen_statement(
     statement: TypeCheckedStatement, // statement to codegen
     code: &mut Vec<Instruction>,     // accumulates the code as it's generated
     mut num_locals: usize,           // num locals that have been allocated
-    locals: &HashMap<usize, usize>,  // lookup local variable slot number by name
+    locals: &HashMap<StringId, usize>,  // lookup local variable slot number by name
     label_gen: &mut LabelGenerator,
     string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
@@ -531,15 +531,15 @@ fn mavm_codegen_tuple_pattern(
     code: &mut Vec<Instruction>,
     pattern: &TypeCheckedMatchPattern,
     local_slot_num_base: usize,
-    locals: &HashMap<usize, usize>,
+    locals: &HashMap<StringId, usize>,
     globals: &HashMap<StringId, GlobalVar>,
     string_table: &StringTable,
     debug_info: DebugInfo,
-) -> Result<(usize, HashMap<usize, usize>, HashSet<usize>), CompileError> {
+) -> Result<(usize, HashMap<StringId, usize>, HashSet<StringId>), CompileError> {
     match &pattern.kind {
         MatchPatternKind::Bind(name) => {
             let mut bindings = HashMap::new();
-            bindings.insert(*name, local_slot_num_base);
+            bindings.insert(name.clone(), local_slot_num_base);
             code.push(Instruction::from_opcode_imm(
                 Opcode::SetLocal,
                 Value::Int(Uint256::from_usize(local_slot_num_base)),
@@ -572,7 +572,7 @@ fn mavm_codegen_tuple_pattern(
                 ))
             }
             let mut assignments = HashSet::new();
-            assignments.insert(*id);
+            assignments.insert(id.clone());
             Ok((0, HashMap::new(), assignments))
         }
         MatchPatternKind::Tuple(sub_pats) => {
@@ -604,7 +604,7 @@ fn mavm_codegen_tuple_pattern(
                 num_bindings += num_new_bindings;
                 bindings.extend(new_bindings);
                 for name in new_assignments {
-                    if !assignments.insert(name) {
+                    if !assignments.insert(name.clone()) {
                         return Err(CompileError::new_codegen_error(
                             format!(
                                 "assigned to variable {} in mixed let multiple times",
@@ -635,7 +635,7 @@ fn mavm_codegen_expr(
     expr: &TypeCheckedExpr,
     code: &mut Vec<Instruction>,
     num_locals: usize,
-    locals: &HashMap<usize, usize>,
+    locals: &HashMap<StringId, usize>,
     label_gen: &mut LabelGenerator,
     string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
@@ -1317,7 +1317,7 @@ fn mavm_codegen_expr(
             let after_label = label_gen.next();
             let slot_num = num_locals;
             let mut new_locals = locals.clone();
-            new_locals.insert(*name, slot_num);
+            new_locals.insert(name.clone(), slot_num);
             let exp_locals = mavm_codegen_expr(
                 expr,
                 code,
@@ -1434,7 +1434,7 @@ fn codegen_fixed_array_mod(
     size: usize,
     code: &mut Vec<Instruction>,
     num_locals: usize,
-    locals: &HashMap<usize, usize>,
+    locals: &HashMap<StringId, usize>,
     label_gen: &mut LabelGenerator,
     string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
@@ -1535,7 +1535,7 @@ fn codegen_fixed_array_mod_2(
     size: usize,
     code: &mut Vec<Instruction>,
     num_locals: usize,
-    locals: &HashMap<usize, usize>,
+    locals: &HashMap<StringId, usize>,
     label_gen: &mut LabelGenerator,
     string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,

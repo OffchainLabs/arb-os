@@ -17,6 +17,7 @@ use std::io::Write;
 use std::mem;
 use std::path::Path;
 use std::rc::Rc;
+use crate::stringtable::StringId;
 
 #[derive(Debug)]
 pub struct GenCodeError {
@@ -304,7 +305,7 @@ fn get_globals_and_version_from_file(
 
     let mut old_state = state.clone();
     for global in globals.globals {
-        if global.id != usize::max_value() {
+        if global.id != StringId::new(vec![], usize::MAX) {
             let mut tipe = global.tipe;
             if let Type::Nominal(file_path, id, _) = tipe {
                 tipe = type_tree
@@ -383,7 +384,7 @@ fn replace_nominal(
                     tipe.clone(),
                     if let Type::Nominal(path, id, _) = tipe {
                         state
-                            .get(&(path.clone(), *id))
+                            .get(&(path.clone(), id.clone()))
                             .map(|(_, name)| name.clone())
                             .unwrap_or(format!("Bad"))
                     } else {
@@ -395,17 +396,17 @@ fn replace_nominal(
             if let Type::Nominal(path, id, spec) = tipe {
                 mut_state
                     .0
-                    .push(Type::Nominal(path.clone(), *id, spec.clone()));
+                    .push(Type::Nominal(path.clone(), id.clone(), spec.clone()));
                 let to_render = &mut *(*mut_state.1).borrow_mut();
                 to_render.insert((
-                    Type::Nominal(path.clone(), *id, spec.clone()),
+                    Type::Nominal(path.clone(), id.clone(), spec.clone()),
                     state
-                        .get(&(path.clone(), *id))
+                        .get(&(path.clone(), id.clone()))
                         .map(|(_, name)| name.clone())
                         .unwrap_or(format!("Bad")),
                 ));
                 **tipe = state
-                    .get(&(path.clone(), *id))
+                    .get(&(path.clone(), id.clone()))
                     .cloned()
                     .unwrap_or((Type::Any, "fail4".to_string()))
                     .0;

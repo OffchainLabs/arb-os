@@ -217,12 +217,12 @@ impl CompileStruct {
 impl Module {
     fn new(
         funcs: Vec<Func>,
-        named_types: HashMap<usize, Type>,
+        named_types: HashMap<StringId, Type>,
         constants: HashSet<String>,
         global_vars: Vec<GlobalVar>,
         imports: Vec<Import>,
         string_table: StringTable,
-        func_table: HashMap<usize, Type>,
+        func_table: HashMap<StringId, Type>,
         path: Vec<String>,
         name: String,
     ) -> Self {
@@ -244,7 +244,7 @@ impl TypeCheckedModule {
     fn new(
         checked_funcs: BTreeMap<StringId, TypeCheckedFunc>,
         string_table: StringTable,
-        named_types: HashMap<usize, Type>,
+        named_types: HashMap<StringId, Type>,
         constants: HashSet<String>,
         global_vars: Vec<GlobalVar>,
         imports: Vec<Import>,
@@ -704,7 +704,7 @@ fn create_program_tree(
             },
         );
 
-        let mut string_table = StringTable::new();
+        let mut string_table = StringTable::new(path.clone());
         let mut used_constants = HashSet::new();
         let (imports, funcs, named_types, global_vars, func_table) =
             typecheck::sort_top_level_decls(
@@ -854,12 +854,12 @@ fn create_type_tree(program_tree: &HashMap<Vec<String>, Module>) -> TypeTree {
                 .iter()
                 .map(|(id, tipe)| {
                     (
-                        (path.clone(), *id),
+                        (path.clone(), id.clone()),
                         (
                             tipe.clone(),
                             program_tree
                                 .get(path)
-                                .map(|module| module.string_table.name_from_id(*id).clone())
+                                .map(|module| module.string_table.name_from_id(id.clone()).clone())
                                 .unwrap(),
                         ),
                     )
@@ -907,7 +907,7 @@ fn typecheck_programs(
                     let detected_view = func.is_view(type_tree);
                     let detected_write = func.is_write(type_tree);
 
-                    let name = string_table.name_from_id(*id);
+                    let name = string_table.name_from_id(id.clone());
 
                     if detected_view && !func.properties.view {
                         typecheck_issues.push(CompileError::new_type_error(
@@ -1023,7 +1023,7 @@ fn codegen_programs(
         let mut global_vars = HashMap::new();
         for mut global in module.global_vars {
             global.offset = Some(globals_so_far);
-            global_vars.insert(global.id, global);
+            global_vars.insert(global.id.clone(), global);
             globals_so_far += 1;
         }
 
@@ -1036,12 +1036,12 @@ fn codegen_programs(
         let mut func_labels = HashMap::new(); // local StringId to global Labels
         for (id, func) in &module.checked_funcs {
             match func.properties.closure {
-                true => func_labels.insert(*id, Label::Closure(func.unique_id.unwrap())),
-                false => func_labels.insert(*id, Label::Func(func.unique_id.unwrap())),
+                true => func_labels.insert(id.clone(), Label::Closure(func.unique_id.unwrap())),
+                false => func_labels.insert(id.clone(), Label::Func(func.unique_id.unwrap())),
             };
         }
         for import in &module.imports {
-            match import.id {
+            match import.id.clone() {
                 Some(id) => drop(func_labels.insert(id, Label::Func(import.unique_id))),
                 None => panic!("Import without id {:#?}", &import),
             }
@@ -1115,7 +1115,7 @@ fn codegen_programs(
 
     let mut globals: Vec<_> = globals.into_iter().map(|x| x.1).collect();
     globals.push(GlobalVar::new(
-        usize::MAX,
+        StringId::new(vec![], usize::MAX),
         "_jump_table".to_string(),
         Type::Any,
         DebugInfo::default(),

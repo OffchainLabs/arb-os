@@ -110,7 +110,7 @@ TypeDecl: TypeDecl = {
                     "Generics error",
                     format!(
                         "Type {}'s generic arg {} isn't used",
-                        Color::red(string_table.name_from_id(i)),
+                        Color::red(string_table.name_from_id(i.clone())),
                         Color::red(string_table.name_from_id(name)),
                     ),
                     debug_info.locs(),
@@ -127,7 +127,7 @@ FuncDecl: Func = {
         let view = qualifiers.contains(&"view");
         let write = qualifiers.contains(&"write");
         let debug = DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default());
-        let name = string_table.name_from_id(i).clone();
+        let name = string_table.name_from_id(i.clone()).clone();
 
         // Generalize over the generic parameters
         let params: Vec<_> = g.into_iter().flatten().collect();
@@ -155,7 +155,7 @@ FuncDecl: Func = {
                     "Generics error",
                     format!(
                         "Func {}'s generic arg {} isn't in the signature",
-                        Color::red(string_table.name_from_id(i)),
+                        Color::red(string_table.name_from_id(i.clone())),
                         Color::red(string_table.name_from_id(name)),
                     ),
                     debug_info.locs(),
@@ -185,7 +185,7 @@ GlobalVarDecl: GlobalVar = {
         let mut debug_info = DebugInfo::here(file_info, lno, filename);
         debug_info.attributes = attribs.unwrap_or_default();
         GlobalVar::new(
-            i, string_table.name_from_id(i).clone(), t, debug_info
+            i.clone(), string_table.name_from_id(i.clone()).clone(), t, debug_info
         )
     },
 }
@@ -248,7 +248,7 @@ StatementKind: StatementKind = {
         
         // the withs we assign at the end
         let mut withs = Expr {
-            kind: ExprKind::VariableRef(i, vec![]),
+            kind: ExprKind::VariableRef(i.clone(), vec![]),
             debug_info: debug_info,
         };
         
@@ -261,7 +261,7 @@ StatementKind: StatementKind = {
         // a nested set of sub-value identifier ops that lets us build up nodes for those like a.b.c by going through
         // each of those for a, a.b, a.b.c, etc
         let mut nest = Expr {
-            kind: ExprKind::VariableRef(i, vec![]),
+            kind: ExprKind::VariableRef(i.clone(), vec![]),
             debug_info: debug_info,
         };
         
@@ -543,7 +543,7 @@ Expr12: Expr = {
         
         let name = format!("closure #{}", closures.len() + 1);
         let id = string_table.get(name.clone());
-        let closure = Func::new(name, id, false, view, write, true, fa, t, cb, BTreeSet::new(), vec![], 0, debug);
+        let closure = Func::new(name, id.clone(), false, view, write, true, fa, t, cb, BTreeSet::new(), vec![], 0, debug);
         
 	    closures.insert(id, closure.clone());
         

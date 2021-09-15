@@ -18,7 +18,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 
 /// This is a map of the types at a given location, with the Vec<String> representing the module path
 /// and the usize representing the `StringId` of the type at that location.
-pub type TypeTree = HashMap<(Vec<String>, usize), (Type, String)>;
+pub type TypeTree = HashMap<(Vec<String>, StringId), (Type, String)>;
 
 /// Debugging info serialized into mini executables, currently only contains a location.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -169,7 +169,7 @@ impl Type {
 
         while let Type::Nominal(path, id, spec) = base_type.clone() {
             base_type = type_tree
-                .get(&(path.clone(), id))
+                .get(&(path.clone(), id.clone()))
                 .cloned()
                 .ok_or(CompileError::new_type_error(
                     format!("No type at {:?}, {}", path, id),
@@ -182,10 +182,10 @@ impl Type {
     }
 
     /// Finds all nominal sub-types present under a type
-    pub fn find_nominals(&self) -> Vec<usize> {
+    pub fn find_nominals(&self) -> Vec<StringId> {
         match self {
             Type::Nominal(_, id, _) => {
-                vec![*id]
+                vec![id.clone()]
             }
             Type::Array(tipe) | Type::FixedArray(tipe, ..) | Type::Option(tipe) => {
                 tipe.find_nominals()
@@ -337,7 +337,7 @@ impl Type {
         let slots = generalization
             .into_iter()
             .enumerate()
-            .map(|(index, id)| (*id, index))
+            .map(|(index, id)| (id.clone(), index))
             .collect::<HashMap<_, _>>();
 
         let mut tipe = self.clone();
@@ -1086,7 +1086,7 @@ impl Type {
                         format!("")
                     },
                     type_tree
-                        .get(&(path.clone(), *id))
+                        .get(&(path.clone(), id.clone()))
                         .map(|(_, name)| name.clone())
                         .unwrap_or(format!("???")),
                     match spec.len() {
@@ -1120,7 +1120,7 @@ impl Type {
                 type_set.insert((
                     self.clone(),
                     type_tree
-                        .get(&(path.clone(), *id))
+                        .get(&(path.clone(), id.clone()))
                         .map(|d| d.1.clone())
                         .unwrap_or_else(|| "bad".to_string()),
                 ));
@@ -1226,7 +1226,7 @@ pub fn check_generic_parameters(
                 "Parser error",
                 format!(
                     "Duplicate generic parameter {}",
-                    Color::red(string_table.name_from_id(*id))
+                    Color::red(string_table.name_from_id(id.clone()))
                 ),
                 debug.locs(),
             ));
@@ -1733,8 +1733,8 @@ impl<T> MatchPattern<T> {
     }
     pub fn collect_identifiers(&self) -> Vec<(StringId, bool, DebugInfo)> {
         match &self.kind {
-            MatchPatternKind::Bind(id) => vec![(*id, false, self.debug_info)],
-            MatchPatternKind::Assign(id) => vec![(*id, true, self.debug_info)],
+            MatchPatternKind::Bind(id) => vec![(id.clone(), false, self.debug_info)],
+            MatchPatternKind::Assign(id) => vec![(id.clone(), true, self.debug_info)],
             MatchPatternKind::Tuple(pats) => pats
                 .iter()
                 .flat_map(|pat| pat.collect_identifiers())
