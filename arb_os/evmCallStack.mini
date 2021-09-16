@@ -198,10 +198,14 @@ public view write func evmCallStack_addStorageCharge(units: uint) {
         set topFrame.storageAllocations = topFrame.storageAllocations + units;
         globalCallStack = Some(topFrame);
 
-        let remainingGasToCharge = gasAccounting_chargeCurrentTxForStorage(units);
-        let avmGasToBurn = remainingGasToCharge * chainParams_getOrDie(const::Atom_Param_AvmGasPerArbGas);
-        let gasLeft = getGas();
-        setGas(xif (gasLeft > avmGasToBurn) { gasLeft - avmGasToBurn } else { 1 });
+        let remainingArbGasToCharge = gasAccounting_chargeCurrentTxForStorage(units);
+        let avmGasPerArbGas = chainParams_getOrDie(const::Atom_Param_AvmGasPerArbGas);
+        let avmGasToBurn = remainingArbGasToCharge * avmGasPerArbGas;
+        let avmGasLeft = getGas();
+        if (avmGasToBurn >= avmGasLeft) {
+            avmGasToBurn = avmGasLeft-1;
+        }
+        setGas(avmGasLeft - avmGasToBurn);
     }
 }
 
@@ -865,6 +869,10 @@ public view write func evmCallStack_returnFromCall(
             set newTopFrame.evmLogs = topFrame.evmLogs;
             set newTopFrame.sendQueue = topFrame.sendQueue;
             set newTopFrame.selfDestructQueue = topFrame.selfDestructQueue;
+        } else {
+            // copy the storage allocations back to the parent frame, even though the tx didn't succeed
+            //      this is needed to make gas pool tracking and receipt generation work as intended
+            set newTopFrame.storageAllocations = topFrame.storageAllocations;
         }
         set newTopFrame.returnInfo = Some(
             struct {
@@ -889,8 +897,7 @@ public view write func evmCallStack_returnFromCall(
         evmTracer_pushReturnRevert(
             resultCode,
             returnData,
-            (resumeInfo.givenAPGas + resumeInfo.savedAPGas - leftoverAPGas)
-                   + (resumeInfo.givenStorageGas + resumeInfo.savedStorageGas - leftoverStorageGas),
+            (resumeInfo.givenAPGas - leftoverAPGas) + (resumeInfo.givenStorageGas - leftoverStorageGas),
         );
 
         // ready to return to caller
@@ -909,7 +916,7 @@ public view write func evmCallStack_returnFromCall(
 
         // turn charging back on, with the remaining gas, including the gas that was saved when the now-returning call was made
         // if the call reverted, keep all of the storage gas, because callee's storage allocations were reverted
-        gasAccounting_resumeTxCharges(
+        let _ = gasAccounting_resumeTxCharges(
             resumeInfo.savedAPGas + leftoverAPGas,
             resumeInfo.savedStorageGas + xif(resultCode == const::TxResultCode_success) { leftoverStorageGas } else { resumeInfo.givenStorageGas },
         )?;
@@ -935,10 +942,9 @@ public view write func evmCallStack_returnFromCall(
         }
 
         if (resultCode == const::TxResultCode_success) {
-            gasAccounting_resumeTxCharges(leftoverAPGas, leftoverStorageGas)?;
+            let _ = gasAccounting_resumeTxCharges(leftoverAPGas, leftoverStorageGas)?;
             let (entryPoint, evmJumpTable) = xif (globalCurrentTxRequest.isConstructor) {
                 // the call was a constructor, so we need to install the resulting EVM code as the new contract's deploy code
-                let _ = gasAccounting_resumeTxCharges(leftoverAPGas, leftoverStorageGas);
                 let (uAcctStore, ep, ejt, created) = accountStore_createOrAddCodeRef(
                     topFrame.accountStore,
                     const::ContractStateVersion_current,
@@ -1136,7 +1142,11 @@ public view write func evmCallStack_returnFromCall(
             }
         } else {
             // Request failed
-            let (_, gasUsage, feeStats, payments) = gasAccounting_endTxCharges(0, globalCurrentTxRequest.feeStats)?;
+            let _ = gasAccounting_resumeTxCharges(leftoverAPGas, leftoverStorageGas);
+            let (_, gasUsage, feeStats, payments) = gasAccounting_endTxCharges(
+                topFrame.storageAllocations,
+                globalCurrentTxRequest.feeStats
+            )?;
             if let Some(uas) = deferredPayments_apply(getGlobalAccountStore(), payments) {
                 setGlobalAccountStore(uas);
             }
