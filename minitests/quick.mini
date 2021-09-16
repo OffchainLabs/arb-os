@@ -1,12 +1,61 @@
 
 
 write func main() {
-    asm(tests().1) { log };
+    asm(test_1().1) { log };
 }
 
-func tests() -> string {
+func test_1() -> string {
     
+    let result = "should be overwritten";
+    let _ = result;
+    
+    let pair = (32, 64, "carry me");
+    
+    let sum = pair.0 + pair.1;
+    
+    if (sum != 96) {
+        return "dot doesn't work";
+    }
+    
+    let (_, __, *result) = pair;
+    
+    if (result != "carry me") {
+        return "Did not let-assign correctly";
+    }
+    
+    let (result) = (32, 32);
+    
+    if (result != (32, 32)) {
+        return "Did not single-shadow correctly";
+    }
+    
+    let super_wide = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, "nest me :)");
+    
+    let result = super_wide.10;
+    
+    if (result != "nest me :)") {
+        return "Wide dot doesn't work";
+    }
+    
+    let (_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, result) = super_wide;
+    
+    let (*sum) = _1 + _2 + _3 + _4 + _5 + _6 + _7 + _8 + _9;
+    
+    if (sum != 45) {
+        return "Wide let doesn't work";
+    }
+    
+    if (result != "nest me :)") {
+        return "Wide let doesn't work";
+    }
+    
+    return test_2();
+}
 
+#[print]
+func test_2() -> string {
+    
+    
     
     return "";
 }

@@ -1527,6 +1527,24 @@ impl TypeMismatch {
 }
 
 /// Field of a struct, contains field name and underlying type.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssignRef {
+    pub id: StringId,
+    pub shadow: bool,
+    pub debug_info: DebugInfo,
+}
+
+impl AssignRef {
+    pub fn new(id: StringId, shadow: bool, debug_info: DebugInfo) -> Self {
+        Self {
+            id,
+            shadow,
+            debug_info,
+        }
+    }
+}
+
+/// Field of a struct, contains field name and underlying type.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub struct StructField {
     pub name: String,
@@ -1718,61 +1736,12 @@ pub enum StatementKind {
     Return(Expr),
     Break(Option<Expr>, Option<String>),
     Expression(Expr),
-    Let(MatchPattern, Expr),
     Assign(StringId, Expr),
+    Let(Vec<AssignRef>, Expr),
     While(Expr, Vec<Statement>),
     Asm(Vec<Instruction>, Vec<Expr>),
     DebugPrint(Expr),
     Assert(Expr),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MatchPattern<T = ()> {
-    pub(crate) kind: MatchPatternKind<MatchPattern<T>>,
-    pub(crate) debug_info: DebugInfo,
-    pub(crate) cached: T,
-}
-
-/// Either a single identifier or a tuple of identifiers, used in mini let bindings.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum MatchPatternKind<T> {
-    Bind(StringId),
-    Assign(StringId),
-    Tuple(Vec<T>),
-}
-
-impl<T> MatchPattern<T> {
-    pub fn new_bind(id: StringId, debug_info: DebugInfo, cached: T) -> Self {
-        Self {
-            kind: MatchPatternKind::Bind(id),
-            debug_info,
-            cached,
-        }
-    }
-    pub fn new_assign(id: StringId, debug_info: DebugInfo, cached: T) -> Self {
-        Self {
-            kind: MatchPatternKind::Assign(id),
-            debug_info,
-            cached,
-        }
-    }
-    pub fn new_tuple(id: Vec<MatchPattern<T>>, debug_info: DebugInfo, cached: T) -> Self {
-        Self {
-            kind: MatchPatternKind::Tuple(id),
-            debug_info,
-            cached,
-        }
-    }
-    pub fn collect_identifiers(&self) -> Vec<(StringId, bool, DebugInfo)> {
-        match &self.kind {
-            MatchPatternKind::Bind(id) => vec![(*id, false, self.debug_info)],
-            MatchPatternKind::Assign(id) => vec![(*id, true, self.debug_info)],
-            MatchPatternKind::Tuple(pats) => pats
-                .iter()
-                .flat_map(|pat| pat.collect_identifiers())
-                .collect(),
-        }
-    }
 }
 
 /// An identifier or array index for left-hand-side substructure assignments

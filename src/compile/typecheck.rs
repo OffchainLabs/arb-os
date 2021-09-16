@@ -5,16 +5,16 @@
 //! Converts non-type checked ast nodes to type checked versions, and other related utilities.
 
 use super::ast::{
-    Attributes, BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func, GlobalVar,
-    MatchPattern, MatchPatternKind, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp,
-    Type, TypeTree, UnaryOp,
+    AssignRef, Attributes, BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func,
+    GlobalVar, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp, Type, TypeTree,
+    UnaryOp,
 };
 use crate::compile::ast::{FieldInitializer, FuncProperties};
 use crate::compile::{CompileError, ErrorSystem, InliningHeuristic};
 use crate::console::Color;
 use crate::link::Import;
 use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
-use crate::pos::{Column, Location};
+use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
@@ -259,7 +259,7 @@ fn inline(
     }
     if let TypeCheckedNode::Expression(exp) = to_do {
         if let TypeCheckedExpr {
-            kind: TypeCheckedExprKind::FunctionCall(name, args, _, _),
+            kind: TypeCheckedExprKind::FunctionCall(name, _args, _, _),
             debug_info: _,
         } = exp
         {
@@ -290,42 +290,7 @@ fn inline(
                     let mut code: Vec<_> = if func.args.len() == 0 {
                         vec![]
                     } else {
-                        vec![TypeCheckedStatement {
-                            kind: TypeCheckedStatementKind::Let(
-                                TypeCheckedMatchPattern::new_tuple(
-                                    func.args
-                                        .iter()
-                                        .map(|arg| {
-                                            TypeCheckedMatchPattern::new_bind(
-                                                arg.name,
-                                                arg.debug_info,
-                                                arg.tipe.clone(),
-                                            )
-                                        })
-                                        .collect(),
-                                    func.debug_info,
-                                    Type::Tuple(
-                                        func.args.iter().map(|arg| arg.tipe.clone()).collect(),
-                                    ),
-                                ),
-                                TypeCheckedExpr {
-                                    kind: TypeCheckedExprKind::Tuple(
-                                        args.iter()
-                                            .cloned()
-                                            .map(|mut expr| {
-                                                expr.recursive_apply(strip_returns, &(), &mut ());
-                                                expr
-                                            })
-                                            .collect(),
-                                        Type::Tuple(
-                                            func.args.iter().map(|arg| arg.tipe.clone()).collect(),
-                                        ),
-                                    ),
-                                    debug_info: DebugInfo::default(),
-                                },
-                            ),
-                            debug_info: DebugInfo::default(),
-                        }]
+                        unimplemented!()
                     };
                     code.append(&mut func.code.clone());
                     let last = code.pop();
@@ -504,75 +469,41 @@ fn flowcheck_liveliness(
     for node in &mut node_iter {
         let repeat = match node {
             TypeCheckedNode::Statement(stat) => match &mut stat.kind {
-                TypeCheckedStatementKind::AssignLocal(id, expr) => {
+                TypeCheckedStatementKind::SetLocals(assigned, expr) => {
                     process!(vec![TypeCheckedNode::Expression(expr)], problems, false);
 
-                    if let Some(loc) = alive.get(id) {
-                        problems.push((*loc, id.clone()));
-                    }
+                    for local in assigned {
+                        let id = local.id;
+                        let loc = local.debug_info.locs()[0];
 
-                    if let None = born.get(id) {
-                        reborn.insert(id.clone(), stat.debug_info.location.unwrap());
-                    }
-
-                    if !alive.contains_key(id) && !born.contains(id) && !killed.contains(id) {
-                        rescue.insert(id.clone());
-                    }
-
-                    // we don't assert that the variable is born since it might not be from this scope
-                    alive.insert(id.clone(), stat.debug_info.location.unwrap());
-                    continue;
-                }
-
-                TypeCheckedStatementKind::Let(pat, expr) => {
-                    process!(vec![TypeCheckedNode::Expression(expr)], problems, false);
-
-                    let ids: Vec<(StringId, bool, Location)> = pat
-                        .collect_identifiers()
-                        .iter()
-                        .map(|(id, assigns, debug_info)| {
-                            (id.clone(), *assigns, {
-                                // since assign-type patterns prefix the variable with a star,
-                                // we have to shift over by one to line up the arrow.
-                                let mut loc = debug_info.location.unwrap().clone();
-                                loc.column = Column::from(
-                                    loc.column.to_usize()
-                                        + match assigns {
-                                            true => 1,
-                                            false => 0,
-                                        },
-                                );
-                                loc
-                            })
-                        })
-                        .collect();
-
-                    for (id, assigns, loc) in ids.iter() {
-                        if *assigns {
-                            if let Some(loc) = alive.get(id) {
-                                problems.push((*loc, id.clone()));
-                            }
-                            if let None = born.get(id) {
-                                reborn.insert(id.clone(), stat.debug_info.location.unwrap());
-                            }
-                            if !alive.contains_key(id) && !born.contains(id) && !killed.contains(id)
-                            {
-                                rescue.insert(id.clone());
-                            }
-                            alive.insert(*id, *loc);
-                        } else {
-                            if let Some(_) = born.get(id) {
-                                if let Some(loc) = alive.get(id) {
-                                    problems.push((*loc, id.clone()))
+                        if local.shadow {
+                            if let Some(_) = born.get(&id) {
+                                if let Some(loc) = alive.get(&id) {
+                                    problems.push((*loc, id))
                                 }
                             }
-
-                            if !alive.contains_key(id) && !born.contains(id) && !killed.contains(id)
+                            if !alive.contains_key(&id)
+                                && !born.contains(&id)
+                                && !killed.contains(&id)
                             {
-                                rescue.insert(id.clone());
+                                rescue.insert(id);
                             }
-                            born.insert(*id);
-                            alive.insert(*id, *loc);
+                            born.insert(id);
+                            alive.insert(id, loc);
+                        } else {
+                            if let Some(loc) = alive.get(&id) {
+                                problems.push((*loc, id));
+                            }
+                            if let None = born.get(&id) {
+                                reborn.insert(id, stat.debug_info.location.unwrap());
+                            }
+                            if !alive.contains_key(&id)
+                                && !born.contains(&id)
+                                && !killed.contains(&id)
+                            {
+                                rescue.insert(id);
+                            }
+                            alive.insert(id, loc);
                         }
                     }
                     continue;
@@ -807,8 +738,7 @@ pub enum TypeCheckedStatementKind {
     Return(TypeCheckedExpr),
     Break(Option<TypeCheckedExpr>, String),
     Expression(TypeCheckedExpr),
-    Let(TypeCheckedMatchPattern, TypeCheckedExpr),
-    AssignLocal(StringId, TypeCheckedExpr),
+    SetLocals(Vec<AssignRef>, TypeCheckedExpr),
     AssignGlobal(StringId, TypeCheckedExpr),
     While(TypeCheckedExpr, Vec<TypeCheckedStatement>),
     Asm(Vec<Instruction>, Vec<TypeCheckedExpr>),
@@ -822,8 +752,7 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
             TypeCheckedStatementKind::ReturnVoid() => vec![],
             TypeCheckedStatementKind::Return(exp)
             | TypeCheckedStatementKind::Expression(exp)
-            | TypeCheckedStatementKind::Let(_, exp)
-            | TypeCheckedStatementKind::AssignLocal(_, exp)
+            | TypeCheckedStatementKind::SetLocals(_, exp)
             | TypeCheckedStatementKind::AssignGlobal(_, exp)
             | TypeCheckedStatementKind::Assert(exp)
             | TypeCheckedStatementKind::DebugPrint(exp) => vec![TypeCheckedNode::Expression(exp)],
@@ -870,8 +799,6 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
         }
     }
 }
-
-pub type TypeCheckedMatchPattern = MatchPattern<Type>;
 
 /// A mini expression with associated `DebugInfo` that has been type checked.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -1582,6 +1509,7 @@ fn typecheck_statement<'a>(
 ) -> Result<(TypeCheckedStatement, Vec<(StringId, Type)>), CompileError> {
     let kind = &statement.kind;
     let debug_info = statement.debug_info;
+    let locs = debug_info.locs();
     let (stat, binds) = match kind {
         StatementKind::ReturnVoid() => {
             if Type::Void.assignable(&func.ret_type, type_tree, HashSet::new()) {
@@ -1720,8 +1648,8 @@ fn typecheck_statement<'a>(
             )?),
             vec![],
         )),
-        StatementKind::Let(pat, expr) => {
-            let tc_expr = typecheck_expr(
+        StatementKind::Let(assigned, expr) => {
+            let expr = typecheck_expr(
                 expr,
                 type_table,
                 global_vars,
@@ -1733,52 +1661,89 @@ fn typecheck_statement<'a>(
                 closures,
                 scopes,
             )?;
-            let tce_type = tc_expr.get_type();
-            if tce_type == Type::Void {
-                return Err(CompileError::new_type_error(
-                    format!("Assignment of void value to local variable"),
-                    debug_info.location.into_iter().collect(),
-                ));
-            }
-            let (stat, bindings) = match &pat.kind {
-                MatchPatternKind::Bind(name) => (
-                    TypeCheckedStatementKind::Let(
-                        TypeCheckedMatchPattern::new_bind(*name, pat.debug_info, tce_type.clone()),
-                        tc_expr,
-                    ),
-                    vec![(*name, tce_type)],
-                ),
-                MatchPatternKind::Assign(_) => unimplemented!(),
-                MatchPatternKind::Tuple(pats) => {
-                    let (tc_pats, bindings) =
-                        typecheck_patvec(tce_type.clone(), pats.to_vec(), type_tree, debug_info)?;
-                    (
-                        TypeCheckedStatementKind::Let(
-                            TypeCheckedMatchPattern::new_tuple(tc_pats, pat.debug_info, tce_type),
-                            tc_expr,
-                        ),
-                        bindings,
-                    )
-                }
+
+            let types = match expr.get_type() {
+                Type::Tuple(vec) if assigned.len() > 1 => vec.clone(),
+                x => vec![x.clone()],
             };
 
-            for (id, _, _) in pat.collect_identifiers() {
+            if types.len() != assigned.len() {
+                return Err(CompileError::new_type_error(
+                    format!(
+                        "Left side needs {} items but right has {}",
+                        Color::red(assigned.len()),
+                        Color::red(types.len()),
+                    ),
+                    locs,
+                ));
+            }
+
+            let mut bindings = vec![];
+
+            for (assigned, tipe) in assigned.iter().zip(types.into_iter()) {
+                let id = assigned.id;
+                let name = Color::red(string_table.name_from_id(id));
+
                 if let Some(location_option) = undefinable_ids.get(&id) {
-                    return Err(CompileError::new_type_error(
+                    Err(CompileError::new_type_error(
                         String::from("Variable has the same name as a top-level symbol"),
                         location_option
                             .iter()
                             .chain(statement.debug_info.location.iter())
                             .cloned()
                             .collect(),
-                    ));
+                    ))?
+                }
+
+                if let Some(_) = global_vars.get(&id) {
+                    Err(CompileError::new_type_error(
+                        match assigned.shadow {
+                            true => format!("Tried to shadow global variable {}", name),
+                            false => format!("Tried to let-assign global variable {}", name),
+                        },
+                        assigned.debug_info.locs(),
+                    ))?
+                }
+
+                if tipe == Type::Void {
+                    Err(CompileError::new_type_error(
+                        format!("Tried to assign something void to {}", name),
+                        assigned.debug_info.locs(),
+                    ))?
+                }
+
+                if assigned.shadow {
+                    bindings.push((id, tipe));
+                } else {
+                    match type_table.get(&id) {
+                        Some(var_type) => {
+                            if !var_type.assignable(&tipe, type_tree, HashSet::new()) {
+                                Err(CompileError::new_type_error(
+                                    format!(
+                                        "Cannot make assignment for {}\n {}",
+                                        name,
+                                        var_type
+                                            .mismatch_string(&tipe, type_tree)
+                                            .unwrap_or("Did not find mismatch".to_string())
+                                    ),
+                                    assigned.debug_info.locs(),
+                                ))?
+                            }
+                        }
+                        None => Err(CompileError::new_type_error(
+                            format!("assignment to undeclared variable {}", name),
+                            assigned.debug_info.locs(),
+                        ))?,
+                    }
                 }
             }
+
+            let stat = TypeCheckedStatementKind::SetLocals(assigned.clone(), expr);
 
             Ok((stat, bindings))
         }
         StatementKind::Assign(id, expr) => {
-            let tc_expr = typecheck_expr(
+            let expr = typecheck_expr(
                 expr,
                 type_table,
                 global_vars,
@@ -1790,43 +1755,46 @@ fn typecheck_statement<'a>(
                 closures,
                 scopes,
             )?;
-            match type_table.get(id) {
-                Some(var_type) => {
-                    if var_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
-                        Ok((TypeCheckedStatementKind::AssignLocal(*id, tc_expr), vec![]))
-                    } else {
-                        Err(CompileError::new_type_error(
-                            format!(
-                                "mismatched types in assignment statement {}",
-                                var_type
-                                    .mismatch_string(&tc_expr.get_type(), type_tree)
-                                    .expect("Did not find mismatch")
-                            ),
-                            debug_info.location.into_iter().collect(),
-                        ))
-                    }
+
+            let tipe = expr.get_type().rep(type_tree)?;
+
+            if let Some(var_type) = type_table.get(id) {
+                if var_type.assignable(&tipe, type_tree, HashSet::new()) {
+                    let assigned = vec![AssignRef::new(*id, false, debug_info)];
+                    Ok((TypeCheckedStatementKind::SetLocals(assigned, expr), vec![]))
+                } else {
+                    Err(CompileError::new_type_error(
+                        format!(
+                            "mismatched types in assignment statement {}",
+                            var_type
+                                .mismatch_string(&tipe, type_tree)
+                                .unwrap_or("Did not find mismatch".to_string())
+                        ),
+                        locs,
+                    ))
                 }
-                None => match global_vars.get(id) {
-                    Some(var_type) => {
-                        if var_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
-                            Ok((TypeCheckedStatementKind::AssignGlobal(*id, tc_expr), vec![]))
-                        } else {
-                            Err(CompileError::new_type_error(
-                                format!(
-                                    "mismatched types in assignment statement {}",
-                                    var_type
-                                        .mismatch_string(&tc_expr.get_type(), type_tree)
-                                        .expect("Did not find type mismatch")
-                                ),
-                                debug_info.location.into_iter().collect(),
-                            ))
-                        }
-                    }
-                    None => Err(CompileError::new_type_error(
-                        "assignment to non-existent variable".to_string(),
-                        debug_info.location.into_iter().collect(),
-                    )),
-                },
+            } else if let Some(var_type) = global_vars.get(id) {
+                if var_type.assignable(&tipe, type_tree, HashSet::new()) {
+                    Ok((TypeCheckedStatementKind::AssignGlobal(*id, expr), vec![]))
+                } else {
+                    Err(CompileError::new_type_error(
+                        format!(
+                            "mismatched types in assignment statement {}",
+                            var_type
+                                .mismatch_string(&tipe, type_tree)
+                                .unwrap_or("Did not find mismatch".to_string())
+                        ),
+                        locs,
+                    ))
+                }
+            } else {
+                Err(CompileError::new_type_error(
+                    format!(
+                        "assignment to undeclared variable {}",
+                        Color::red(string_table.name_from_id(*id))
+                    ),
+                    locs,
+                ))
             }
         }
         StatementKind::While(cond, body) => {
@@ -1937,74 +1905,6 @@ fn typecheck_statement<'a>(
         },
         binds,
     ))
-}
-
-/// Type checks a `Vec<MatchPattern>`, representing a tuple match pattern against `Type` rhs_type.
-///
-/// This is used in let bindings, and may have other uses in the future.
-///
-/// If successful this function returns a tuple containing a `TypeCheckedMatchPattern`, and a
-/// `Vec<(StringId, Type)>` representing the bindings produced from this match pattern.  Otherwise
-/// the function returns a `CompileError`
-fn typecheck_patvec(
-    rhs_type: Type,
-    patterns: Vec<MatchPattern>,
-    type_tree: &TypeTree,
-    debug: DebugInfo,
-) -> Result<(Vec<TypeCheckedMatchPattern>, Vec<(StringId, Type)>), CompileError> {
-    if let Type::Tuple(tvec) = rhs_type {
-        if tvec.len() == patterns.len() {
-            let mut tc_pats = Vec::new();
-            let mut bindings = Vec::new();
-            for (i, rhs_type) in tvec.iter().enumerate() {
-                if *rhs_type == Type::Void {
-                    return Err(CompileError::new_type_error(
-                        "attempted to assign void in tuple binding".to_string(),
-                        debug.locs(),
-                    ));
-                }
-                let pat = &patterns[i];
-                match &pat.kind {
-                    MatchPatternKind::Bind(name) => {
-                        tc_pats.push(TypeCheckedMatchPattern::new_bind(
-                            *name,
-                            pat.debug_info,
-                            rhs_type.clone(),
-                        ));
-                        bindings.push((*name, rhs_type.clone()));
-                    }
-                    MatchPatternKind::Assign(name) => {
-                        tc_pats.push(TypeCheckedMatchPattern::new_assign(
-                            *name,
-                            pat.debug_info,
-                            rhs_type.clone(),
-                        ));
-                    }
-                    MatchPatternKind::Tuple(_) => {
-                        //TODO: implement this properly
-                        return Err(CompileError::new_type_error(
-                            "nested pattern not yet supported in let".to_string(),
-                            debug.locs(),
-                        ));
-                    }
-                }
-            }
-            Ok((tc_pats, bindings))
-        } else {
-            Err(CompileError::new_type_error(
-                "tuple-match let must receive tuple of equal size".to_string(),
-                debug.locs(),
-            ))
-        }
-    } else {
-        Err(CompileError::new_type_error(
-            format!(
-                "tuple-match let must receive tuple value, found {}",
-                Color::red(rhs_type.print(type_tree))
-            ),
-            debug.locs(),
-        ))
-    }
 }
 
 /// Performs type checking on the expression expr.  Returns `TypeCheckedExpr` if successful, and
@@ -2290,7 +2190,7 @@ fn typecheck_expr(
                         ))
                     } else {
                         Err(CompileError::new_type_error(
-                            "tuple field access to non-existent field".to_string(),
+                            "tuple is not wide enough",
                             loc.into_iter().collect(),
                         ))
                     }
@@ -2481,16 +2381,10 @@ fn typecheck_expr(
                     for node in &mut nodes {
                         match node {
                             TypeCheckedNode::Statement(stat) => match &mut stat.kind {
-                                TypeCheckedStatementKind::AssignLocal(id, ref mut expr) => {
+                                TypeCheckedStatementKind::SetLocals(assigned, ref mut expr) => {
                                     let right = vec![TypeCheckedNode::Expression(expr)];
                                     captures.extend(find_captures(right, local.clone()));
-                                    local.insert(*id);
-                                    continue;
-                                }
-                                TypeCheckedStatementKind::Let(pat, ref mut expr) => {
-                                    let right = vec![TypeCheckedNode::Expression(expr)];
-                                    captures.extend(find_captures(right, local.clone()));
-                                    local.extend(pat.collect_identifiers().iter().map(|x| x.0));
+                                    local.extend(assigned.iter().map(|x| x.id));
                                     continue;
                                 }
                                 _ => {}
@@ -2524,9 +2418,8 @@ fn typecheck_expr(
                     for node in &mut nodes {
                         match node {
                             TypeCheckedNode::Statement(stat) => match &mut stat.kind {
-                                TypeCheckedStatementKind::Let(pat, ..) => {
-                                    let ids: Vec<_> =
-                                        pat.collect_identifiers().iter().map(|x| x.0).collect();
+                                TypeCheckedStatementKind::SetLocals(assigned, ..) => {
+                                    let ids = assigned.iter().map(|x| x.id);
                                     idents.extend(ids);
                                 }
                                 _ => {}

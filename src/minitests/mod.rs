@@ -264,6 +264,11 @@ fn test_generics() {
 }
 
 #[test]
+fn test_quick() {
+    test_for_error_string(Path::new("minitests/quick.mexe"));
+}
+
+#[test]
 fn test_direct_deploy_add() {
     crate::evm::evm_direct_deploy_add(None, false);
 }

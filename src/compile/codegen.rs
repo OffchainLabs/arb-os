@@ -4,13 +4,12 @@
 
 //! Contains utilities for generating instructions from AST structures.
 
-use super::ast::{BinaryOp, FuncProperties, GlobalVar, TrinaryOp, Type, UnaryOp};
-use super::typecheck::{
-    TypeCheckedExpr, TypeCheckedFunc, TypeCheckedMatchPattern, TypeCheckedStatement,
+use super::ast::{
+    AssignRef, BinaryOp, DebugInfo, FuncProperties, GlobalVar, TrinaryOp, Type, UnaryOp,
 };
-use crate::compile::ast::{DebugInfo, MatchPatternKind};
+use super::typecheck::{TypeCheckedExpr, TypeCheckedFunc, TypeCheckedNode, TypeCheckedStatement};
 use crate::compile::typecheck::{
-    TypeCheckedCodeBlock, TypeCheckedExprKind, TypeCheckedStatementKind,
+    AbstractSyntaxTree, TypeCheckedCodeBlock, TypeCheckedExprKind, TypeCheckedStatementKind,
 };
 use crate::compile::CompileError;
 use crate::console::Color;
@@ -20,21 +19,24 @@ use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use std::collections::{HashMap, HashSet};
 
+/// Represents a slot number in a locals tuple
 type SlotNum = usize;
 
+/// Represents the code generation process for a function.
 struct Codegen<'a> {
-    /// The code being generated
+    /// The code being generated.
     code: &'a mut Vec<Instruction>,
-    /// A source of unique labels
+    /// A source of unique labels.
     label_gen: &'a mut LabelGenerator,
-    /// 
+    /// Maps `StringId`s to parsed names
     string_table: &'a StringTable,
     /// Associates each imported function with a unique label
     func_labels: &'a HashMap<StringId, Label>,
-    /// Maps names to globals
+    /// List of globals this func has access to.
     globals: &'a HashMap<StringId, GlobalVar>,
-    /// 
+    /// Compiler issues discovered during codegen that needn't halt compilation.
     issues: &'a mut Vec<CompileError>,
+    /// Whether to elide debug-only constructs like assert().
     release_build: bool,
 
     locals: HashMap<StringId, SlotNum>,
@@ -58,7 +60,7 @@ impl Codegen<'_> {
 /// Each func gets a unique, hashed label id, after which local labels are assigned. This ensures
 /// two labels are the same iff they point to the same destination.
 pub fn mavm_codegen_func(
-    func: TypeCheckedFunc,
+    mut func: TypeCheckedFunc, // only mutable because of child_nodes()
     string_table: &StringTable,
     globals: &HashMap<StringId, GlobalVar>,
     func_labels: &HashMap<StringId, Label>,
@@ -94,18 +96,18 @@ pub fn mavm_codegen_func(
         debug_info,
     )); // placeholder; will replace this later
 
-    for arg in func.args {
+    for arg in func.args.clone() {
         let next_slot = locals.len();
         locals.insert(arg.name, next_slot);
     }
-    for capture in &func.captures {
+    for capture in func.captures.clone() {
         let next_slot = locals.len();
-        locals.insert(*capture, next_slot);
+        locals.insert(capture, next_slot);
     }
 
     let mut label_gen = LabelGenerator::new(unique_id + 1);
 
-    let mut codegen = Codegen {
+    let mut cgen = Codegen {
         code: &mut code,
         label_gen: &mut label_gen,
         string_table,
@@ -118,9 +120,11 @@ pub fn mavm_codegen_func(
         next_slot: locals.len(),
     };
 
-    let _ = codegen_statements(func.code, &mut codegen, &locals, 0)?;
+    let _ = codegen_statements(func.code, &mut cgen, &locals, 0)?;
 
-    let mut space_for_locals = codegen.next_slot + 512;
+    //codegen(func.child_nodes(), &mut cgen, 0, true)?;
+
+    let mut space_for_locals = cgen.next_slot + 128;
 
     match func.tipe {
         Type::Func(_prop, _, ret) => {
@@ -150,6 +154,238 @@ pub fn mavm_codegen_func(
 
     Ok((code, label_gen))
 }
+
+/*fn codegen(
+    nodes: Vec<TypeCheckedNode>,
+    cgen: &mut Codegen,
+    stack_items: usize,
+    scope: bool,
+) -> Result<(), CompileError> {
+    // The *current* assignment for each local variable when entering the scope.
+    let saved_locals = cgen.locals.clone();
+
+    macro_rules! expr {
+        ($expr:expr, $push:expr) => {
+            codegen(
+                vec![TypeCheckedNode::Expression($expr)],
+                cgen,
+                stack_items + $push,
+                false,
+            )?
+        };
+        ($expr:expr) => {
+            expr!($expr, 0)
+        };
+    }
+
+    for mut node in nodes {
+
+        let debug = match &node {
+            TypeCheckedNode::Statement(stat) => stat.debug_info,
+            TypeCheckedNode::Expression(expr) => expr.debug_info,
+            TypeCheckedNode::StructField(field) => DebugInfo::default(),
+            TypeCheckedNode::Type(tipe) => panic!("Found type node {}", tipe.display()),
+        };
+
+        macro_rules! opcode {
+            ($opcode:ident) => {
+                Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), debug)
+            };
+            ($opcode:ident, $immediate:expr) => {
+                Instruction::from_opcode_imm(
+                    Opcode::AVMOpcode(AVMOpcode::$opcode),
+                    $immediate,
+                    debug,
+                )
+            };
+            (@$($opcode:tt)+) => {
+                Instruction::from_opcode(Opcode::$($opcode)+, debug)
+            };
+        }
+
+        match node {
+            TypeCheckedNode::Statement(stat) => {
+                match &mut stat.kind {
+                    TypeCheckedStatementKind::SetLocals(id, expr) => {
+                        expr!(expr);
+                    }
+                    TypeCheckedStatementKind::AssignGlobal(id, expr) => {
+                        expr!(expr);
+                        let global = cgen.globals.get(id).expect("No global exists for stringID");
+                        let offset = global.offset.unwrap();
+                        cgen.code.push(opcode!(@SetGlobalVar(offset)));
+                    }
+                    TypeCheckedStatementKind::ReturnVoid() => {
+                        for _ in 0..stack_items {
+                            cgen.code.push(opcode!(Pop));
+                        }
+                        cgen.code.push(opcode!(@Return));
+                    }
+                    TypeCheckedStatementKind::Return(expr) => {
+                        for _ in 0..stack_items {
+                            cgen.code.push(opcode!(Pop));
+                        }
+                        expr!(expr);
+                        cgen.code.push(opcode!(@Return));
+                    }
+                    TypeCheckedStatementKind::While(cond, body) => {}
+                    TypeCheckedStatementKind::Asm(payload, args) => {
+                        let nargs = args.len();
+                        for i in 0..nargs {}
+                        for insn in payload {
+                            cgen.code.push(insn.clone());
+                        }
+                    }
+                    TypeCheckedStatementKind::Expression(expr) => {
+                        // TODO: Add typechecking of dropped expressions
+                        expr!(expr);
+                    }
+                    TypeCheckedStatementKind::DebugPrint(expr) => {
+                        expr!(expr);
+                        cgen.code.push(opcode!(DebugPrint));
+                    }
+                    TypeCheckedStatementKind::Assert(expr) => {
+                        if cgen.release_build {
+                            // Release builds don't include asserts
+                            continue;
+                        }
+                    }
+                    TypeCheckedStatementKind::Break(..) => {
+                        panic!("Encountered a break node");
+                    }
+                }
+            }
+            TypeCheckedNode::Expression(expr) => {
+                match &mut expr.kind {
+                    TypeCheckedExprKind::CodeBlock(block) => {
+                        codegen(block.child_nodes(), cgen, stack_items, true)?;
+                    }
+                    TypeCheckedExprKind::If(cond, block, else_block, _) => {
+
+                    }
+                    TypeCheckedExprKind::Loop(body) => {
+
+                    }
+                    TypeCheckedExprKind::Error => cgen.code.push(opcode!(Error)),
+                    TypeCheckedExprKind::NewBuffer => cgen.code.push(opcode!(NewBuffer)),
+                    TypeCheckedExprKind::GetGas => cgen.code.push(opcode!(PushGas)),
+                    TypeCheckedExprKind::SetGas(amount) => {
+                        expr!(amount);
+                        cgen.code.push(opcode!(SetGas));
+                    }
+                    TypeCheckedExprKind::Const(val, _) => {
+                        cgen.code.push(opcode!(Noop, val.clone()))
+                    }
+                    TypeCheckedExprKind::Quote(bytes) => {
+                        cgen.code.push(opcode!(
+                            Noop,
+                            Value::new_tuple(vec![
+                                Value::from(bytes.len()),
+                                Value::Buffer(Buffer::from_bytes(bytes.clone())),
+                            ])
+                        ));
+                    }
+                    TypeCheckedExprKind::Variant(inner) => {
+
+                    }
+                    TypeCheckedExprKind::Tuple(fields, _) => {
+
+                    }
+                    TypeCheckedExprKind::LocalVariableRef(id, _) => {
+                        match cgen.locals.get(id) {
+                            Some(slot) => {
+                                cgen.code.push(opcode!(@GetLocal(*slot)));
+                            }
+                            None => return Err(CompileError::new(
+                                "Internal error",
+                                format!("Variable {} doesn't have an assigned slot", Color::red(cgen.string_table.name_from_id(*id))),
+                                debug.locs(),
+                            ))
+                        }
+                    }
+                    TypeCheckedExprKind::FuncRef(name, _) => {
+
+                    }
+                    TypeCheckedExprKind::FunctionCall(fexpr, args, _, prop) => {
+
+                    }
+                    TypeCheckedExprKind::DotRef(tce, slot_num, s_size, _) => {
+
+                    }
+                    TypeCheckedExprKind::Try(variant, _) => {
+
+                    }
+                    TypeCheckedExprKind::StructMod(structure, index, value, _) => {
+
+                    }
+                    TypeCheckedExprKind::StructInitializer(fields, _) => {
+
+                    }
+                    TypeCheckedExprKind::UnaryOp(op, tce, _) => {
+
+                    }
+                    TypeCheckedExprKind::Binary(op, tce1, tce2, _) => {
+                        expr!(tce2, 0);
+                        expr!(tce1, 1);
+                        let opcode = Opcode::AVMOpcode(match op {
+                            BinaryOp::GetBuffer8 => AVMOpcode::GetBuffer8,
+                            BinaryOp::GetBuffer64 => AVMOpcode::GetBuffer64,
+                            BinaryOp::GetBuffer256 => AVMOpcode::GetBuffer256,
+                            BinaryOp::Plus => AVMOpcode::Add,
+                            BinaryOp::Minus => AVMOpcode::Sub,
+                            BinaryOp::Times => AVMOpcode::Mul,
+                            BinaryOp::Div => AVMOpcode::Div,
+                            BinaryOp::Mod => AVMOpcode::Mod,
+                            BinaryOp::Sdiv => AVMOpcode::Sdiv,
+                            BinaryOp::Smod => AVMOpcode::Smod,
+                            BinaryOp::BitwiseAnd => AVMOpcode::BitwiseAnd,
+                            BinaryOp::BitwiseOr => AVMOpcode::BitwiseOr,
+                            BinaryOp::ShiftLeft => AVMOpcode::ShiftLeft,
+                            BinaryOp::ShiftRight => AVMOpcode::ShiftRight,
+                            BinaryOp::BitwiseXor => AVMOpcode::BitwiseXor,
+                            BinaryOp::Hash => AVMOpcode::EthHash2,
+                            BinaryOp::Equal | BinaryOp::NotEqual => AVMOpcode::Equal,
+                            BinaryOp::GreaterThan | BinaryOp::LessEq => AVMOpcode::GreaterThan,
+                            BinaryOp::SGreaterThan | BinaryOp::SLessEq => AVMOpcode::SGreaterThan,
+                            BinaryOp::LessThan | BinaryOp::GreaterEq => AVMOpcode::LessThan,
+                            BinaryOp::SLessThan | BinaryOp::SGreaterEq => AVMOpcode::SLessThan,
+                        });
+                        cgen.code.push(Instruction::from_opcode(opcode, debug));
+                        match op {
+                            BinaryOp::NotEqual
+                                | BinaryOp::LessEq
+                                | BinaryOp::GreaterEq
+                                | BinaryOp::SLessEq
+                                | BinaryOp::SGreaterEq => {
+                                    // negate these to flip the comparisons
+                                    cgen.code.push(opcode!(IsZero));
+                                }
+                            _ => {}
+                        }
+                    }
+                    x => {
+                        panic!("expr {:?} not supported", x);
+                    }
+                }
+            }
+            TypeCheckedNode::StructField(field) => {
+                codegen(field.child_nodes(), cgen, stack_items, false)?;
+            }
+            _ => {}
+        }
+    }
+
+    if scope {
+        for (id, slot) in saved_locals {
+            if let Some(alias) = cgen.locals.get(&id) {
+                cgen.aliases.entry(id).or_insert(vec![]).push(*alias);
+                cgen.locals.insert(id, slot);
+            }
+        }
+    }
+
+    Ok(())
+}*/
 
 /// Generates code for the provided statements with index 0 generated first. code represents the
 /// code generated previously, num_locals the maximum number of locals used at any point in the call
@@ -247,25 +483,44 @@ fn codegen_statement(
             }
             Ok(HashMap::new())
         }
-        TypeCheckedStatementKind::Let(pat, expr) => {
+        TypeCheckedStatementKind::SetLocals(assigned, expr) => {
             expr!(expr);
-            let (bindings, _assignments) = codegen_tuple_pattern(cgen, &pat, locals, debug)?;
-            Ok(bindings)
-        }
-        TypeCheckedStatementKind::AssignLocal(name, expr) => {
-            let slot_num = match locals.get(name) {
-                Some(slot) => slot,
-                None => {
-                    return Err(CompileError::new_codegen_error(
-                        "assigned to non-existent variable".to_string(),
-                        loc,
-                    ))
+            let mut bindings = HashMap::new();
+
+            let count = assigned.len();
+
+            for _ in 0..(count - 1) {
+                cgen.code.push(opcode!(Dup0));
+            }
+
+            for (index, local) in assigned.into_iter().enumerate() {
+                let slot = if local.shadow {
+                    cgen.next_slot()
+                } else {
+                    match locals.get(&local.id) {
+                        Some(slot) => *slot,
+                        None => Err(CompileError::new(
+                            "Internal Error",
+                            "No slot has been assigned",
+                            local.debug_info.locs(),
+                        ))?,
+                    }
+                };
+
+                bindings.insert(local.id, slot);
+
+                if count > 1 {
+                    cgen.code.push(Instruction::from_opcode_imm(
+                        Opcode::TupleGet(count),
+                        Value::Int(Uint256::from_usize(index)),
+                        debug,
+                    ));
                 }
-            };
-            expr!(expr);
-            cgen.code
-                .push(Instruction::from_opcode(Opcode::SetLocal(*slot_num), debug));
-            Ok(HashMap::new())
+
+                cgen.code
+                    .push(Instruction::from_opcode(Opcode::SetLocal(slot), debug));
+            }
+            Ok(bindings)
         }
         TypeCheckedStatementKind::AssignGlobal(id, expr) => {
             expr!(expr);
@@ -358,87 +613,6 @@ fn codegen_code_block(
         codegen_expr(ret_expr, cgen, &new_locals, stack_items)?;
     }
     Ok(())
-}
-
-/// Generates code for assigning the contents of a tuple on the top of the stack to a sequential set
-/// of locals. code represents previously generated code, pattern is a slice of match patterns
-/// corresponding to the structure of the tuple, local_slot_num_base is the slot of the first local
-/// being assigned to, and loc is the location the operation originates from in the source code.
-fn codegen_tuple_pattern(
-    cgen: &mut Codegen,
-    pattern: &TypeCheckedMatchPattern,
-    locals: &HashMap<usize, usize>,
-    debug_info: DebugInfo,
-) -> Result<(HashMap<usize, usize>, HashSet<usize>), CompileError> {
-    match &pattern.kind {
-        MatchPatternKind::Bind(name) => {
-            let slot = cgen.next_slot();
-
-            let mut bindings = HashMap::new();
-            bindings.insert(*name, slot);
-            cgen.code
-                .push(Instruction::from_opcode(Opcode::SetLocal(slot), debug_info));
-            Ok((bindings, HashSet::new()))
-        }
-        MatchPatternKind::Assign(id) => {
-            if let Some(val) = locals.get(id) {
-                cgen.code
-                    .push(Instruction::from_opcode(Opcode::SetLocal(*val), debug_info))
-            } else {
-                cgen.code.push(Instruction::from_opcode(
-                    Opcode::SetGlobalVar(
-                        cgen.globals
-                            .get(id)
-                            .ok_or_else(|| {
-                                CompileError::new_codegen_error(
-                                    "assigned to non-existent variable in mixed let".to_string(),
-                                    debug_info.location,
-                                )
-                            })?
-                            .offset
-                            .unwrap(),
-                    ),
-                    debug_info,
-                ))
-            }
-            let mut assignments = HashSet::new();
-            assignments.insert(*id);
-            Ok((HashMap::new(), assignments))
-        }
-        MatchPatternKind::Tuple(sub_pats) => {
-            let mut bindings = HashMap::new();
-            let mut assignments = HashSet::new();
-            let pat_size = sub_pats.len();
-            for (i, pat) in sub_pats.iter().enumerate() {
-                if i < pat_size - 1 {
-                    cgen.code.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::Dup0),
-                        debug_info,
-                    ));
-                }
-                cgen.code.push(Instruction::from_opcode_imm(
-                    Opcode::TupleGet(pat_size),
-                    Value::Int(Uint256::from_usize(i)),
-                    debug_info,
-                ));
-                let (new_bindings, new_assignments) =
-                    codegen_tuple_pattern(cgen, pat, locals, debug_info)?;
-                bindings.extend(new_bindings);
-                for name in new_assignments {
-                    if !assignments.insert(name) {
-                        return Err(CompileError::new_codegen_error(
-                            format!(
-                                "assigned to variable {} in mixed let multiple times",
-                                cgen.string_table.name_from_id(name)
-                            ),
-                            debug_info.location,
-                        ));
-                    }
-                }
-            }
-            Ok((bindings, assignments))
-        }
-    }
 }
 
 /// Generates code for the expression expr.

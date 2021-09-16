@@ -3,7 +3,7 @@
 //
 
 
-use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVar, Type, CodeBlock, StructField, FuncArg, FuncProperties, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant, OptionConst, FieldInitializer, new_func_arg, new_type_decl, check_generic_parameters};
+use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVar, Type, CodeBlock, AssignRef, StructField, FuncArg, FuncProperties, Statement, StatementKind, DebugInfo, Attributes, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant, OptionConst, FieldInitializer, new_func_arg, new_type_decl, check_generic_parameters};
 use crate::compile::{InliningMode, ErrorSystem, CompileError};
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
@@ -229,9 +229,13 @@ StatementKind: StatementKind = {
     <lno: @L> "loop" <cb: CodeBlock> => StatementKind::Expression(Expr { kind: ExprKind::Loop(cb), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename)), }),
     <lno: @L> "if" "let" "Some(" <l: Ident> ")" "=" <r:Expr> <t: CodeBlock> <e: ElseIf?> => StatementKind::Expression( Expr { kind: ExprKind::IfLet(l,Box::new(r),CodeBlock::new(t,None),e), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno),filename))}),
     <lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> <r: ElseIf?> => StatementKind::Expression( Expr { kind: ExprKind::If(Box::new(c), CodeBlock::new(t, None), r), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno),filename))}),
-    "let" <p: MatchPattern> "=" <e: Expr> ";" => StatementKind::Let(p, e),
-    <e: Expr> ";" => StatementKind::Expression(e),
+    "let" <lno: @L> <i: Ident> "=" <e: Expr> ";" => {
+        let debug_info = DebugInfo::here(file_info, lno, filename);
+        StatementKind::Let(vec![AssignRef::new(i, true, debug_info)], e)
+    },
+    "let" "(" <c: Comma<<AssignRef>>> ")" "=" <e: Expr> ";" => StatementKind::Let(c, e),
     <i: Ident> "=" <e: Expr> ";" => StatementKind::Assign(i, e),
+    <e: Expr> ";" => StatementKind::Expression(e),
     "return" <e: Expr> ";" => StatementKind::Return(e),
     "return" ";" => StatementKind::ReturnVoid(),
     <lno: @L> "return" "None" ";" => StatementKind::Return(Expr{ kind: ExprKind::Constant(Constant::Option(OptionConst::None(Type::Every))), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))}),
@@ -310,14 +314,9 @@ SubData: SubData = {
     "[" <e: Expr> "]" => SubData::ArrayOrMap(e),
 }
 
-MatchPattern: MatchPattern = {
-    <lno: @L> <i: Ident> => MatchPattern::new_bind(i, DebugInfo::from(file_info.location(BytePos::from(lno), filename)), ()),
-    <lno: @L> "*"<i: Ident> => MatchPattern::new_assign(i, DebugInfo::from(file_info.location(BytePos::from(lno), filename)), ()),
-    <lno: @L> "(" <c: CommaedMatchPatterns> ")" => MatchPattern::new_tuple(c, DebugInfo::from(file_info.location(BytePos::from(lno), filename)), ()),
-}
-
-CommaedMatchPatterns: Vec<MatchPattern> = {
-	<mut a: ( <MatchPattern> "," )+> <b: MatchPattern?> => {if let Some(c) = b {a.push(c)}a},
+AssignRef: AssignRef = {
+        <lno: @L> <i: Ident> => AssignRef::new(i, true,  DebugInfo::here(file_info, lno, filename)),
+    "*" <lno: @L> <i: Ident> => AssignRef::new(i, false, DebugInfo::here(file_info, lno, filename)),
 }
 
 StructFields: Vec<StructField> = {
