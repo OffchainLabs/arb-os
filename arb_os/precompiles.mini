@@ -41,6 +41,7 @@ use arbfunctiontable::arbFunctionTable_txcall;
 use arbaggregator::arbaggregator_txcall;
 use arbretryable::arbretryable_txcall;
 use arbstatistics::arbStatistics_txcall;
+use arbfeeadmin::arbFeeAdmin_txcall;
 
 
 public view write func precompiles_init(acctStore: AccountStore, isUpgrade: bool) -> option<AccountStore> {
@@ -174,6 +175,13 @@ public view write func precompiles_init(acctStore: AccountStore, isUpgrade: bool
         acctStore,
         address(const::Address_ArbStatistics),
         makeTrampoline(arbStatistics_txcall),
+        true,
+        isUpgrade,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(const::Address_ArbFeeAdmin),
+        makeTrampoline(arbFeeAdmin_txcall),
         true,
         isUpgrade,
     )?;

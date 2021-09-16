@@ -1,0 +1,185 @@
+//
+// Copyright 2021, Offchain Labs, Inc. All rights reserved.
+//
+
+use evmCallStack::EvmCallFrame;
+use evmCallStack::evmCallStack_topFrame;
+use evmCallStack::evmCallStack_setTopFrameMemory;
+use evmCallStack::evmCallFrame_getCalldata;
+use evmCallStack::evmCallFrame_getCaller;
+use evmCallStack::evmCallStack_callHitError;
+
+use evmOps::evmOp_return;
+use evmOps::evmOp_revert_knownPc;
+
+use gasAccounting::isFeeAdministrator;
+use gasAccounting::addFeeAdministrator;
+use gasAccounting::removeFeeAdministrator;
+use gasAccounting::getAllFeeAdministrators;
+use gasAccounting::setNetworkFeeRecipient;
+use gasAccounting::getNetworkFeeRecipient;
+use gasAccounting::setCongestionFeeRecipient;
+use gasAccounting::getCongestionFeeRecipient;
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_copy;
+
+
+public view write func arbFeeAdmin_txcall() {
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        if (bytearray_size(calldata) < 4) {
+            evmOp_revert_knownPc(0, 0, 0);
+        }
+        let funcCode = (bytearray_get256(calldata, 0) >> 224);
+        if (funcCode == const::funcCode_ArbFeeAdmin_isFeeAdministrator) {
+            arbFeeAdmin_isFeeAdministrator(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbFeeAdmin_setCongestionFeeRecipient) {
+            arbFeeAdmin_setCongestionFeeRecipient(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbFeeAdmin_getNetworkFeeRecipient) {
+            arbFeeAdmin_getNetworkFeeRecipient(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbFeeAdmin_setNetworkFeeRecipient) {
+            arbFeeAdmin_setNetworkFeeRecipient(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbFeeAdmin_removeFeeAdministrator) {
+            arbFeeAdmin_removeFeeAdministrator(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbFeeAdmin_addFeeAdministrator) {
+            arbFeeAdmin_addFeeAdministrator(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbFeeAdmin_getAllFeeAdministrators) {
+            arbFeeAdmin_getAllFeeAdministrators(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbFeeAdmin_getCongestionFeeRecipient) {
+            arbFeeAdmin_getCongestionFeeRecipient(topFrame, calldata);
+        } else {
+            // unrecognized function code
+            evmOp_revert_knownPc(1, 0, 0);
+        }
+    } else {
+        // this shouldn't happen -- should always be called in an EVM tx
+        evmCallStack_callHitError(25);
+    }
+}
+
+// function isFeeAdministrator(address addr) external view returns(bool);
+view write func arbFeeAdmin_isFeeAdministrator(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(10, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let mem = bytearray_set256(bytearray_new(0), 0, xif (isFeeAdministrator(addr)) { 1 } else { 0 });
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownPc(11, 0, 0);
+    }
+}
+
+// function addFeeAdministrator(address addr) external;
+view write func arbFeeAdmin_addFeeAdministrator(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if ( ! isFeeAdministrator(evmCallFrame_getCaller(topFrame))) {
+        evmOp_revert_knownPc(20, 0, 0);
+    }
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(21, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    addFeeAdministrator(addr);
+    evmOp_return(0, 0);
+}
+
+// function removeFeeAdministrator(address addr) external;
+view write func arbFeeAdmin_removeFeeAdministrator(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if ( ! isFeeAdministrator(evmCallFrame_getCaller(topFrame))) {
+        evmOp_revert_knownPc(30, 0, 0);
+    }
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(31, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    removeFeeAdministrator(addr);
+    evmOp_return(0, 0);
+}
+
+// function getAllFeeAdministrators() external view returns(bytes memory);
+view write func arbFeeAdmin_getAllFeeAdministrators(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(40, 0, 0);
+    }
+
+    let serialized = getAllFeeAdministrators();
+    let mem = bytearray_copy(
+        serialized,
+        0,
+        bytearray_set256(
+            bytearray_set256(
+                bytearray_new(0),
+                0,
+                32,
+            ),
+            32,
+            bytearray_size(serialized),
+        ),
+        64,
+        bytearray_size(serialized),  // don't need to round up, because already a multiple of 32
+    );
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, bytearray_size(mem));
+    } else {
+        evmOp_revert_knownPc(41, 0, 0);
+    }
+}
+
+// function setNetworkFeeRecipient(address addr) external;
+view write func arbFeeAdmin_setNetworkFeeRecipient(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if ( ! isFeeAdministrator(evmCallFrame_getCaller(topFrame))) {
+        evmOp_revert_knownPc(50, 0, 0);
+    }
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(51, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    setNetworkFeeRecipient(addr);
+    evmOp_return(0, 0);
+}
+
+// function getNetworkFeeRecipient() external view returns(address);
+view write func arbFeeAdmin_getNetworkFeeRecipient(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(60, 0, 0);
+    }
+    let mem = bytearray_set256(bytearray_new(0), 0, uint(getNetworkFeeRecipient()));
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownPc(61, 0, 0);
+    }
+}
+
+// function setCongestionFeeRecipient(address addr) external;
+view write func arbFeeAdmin_setCongestionFeeRecipient(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if ( ! isFeeAdministrator(evmCallFrame_getCaller(topFrame))) {
+        evmOp_revert_knownPc(70, 0, 0);
+    }
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(71, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    setCongestionFeeRecipient(addr);
+    evmOp_return(0, 0);
+}
+
+// function getCongestionFeeRecipient() external view returns(address);
+view write func arbFeeAdmin_getCongestionFeeRecipient(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(80, 0, 0);
+    }
+    let mem = bytearray_set256(bytearray_new(0), 0, uint(getCongestionFeeRecipient()));
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownPc(81, 0, 0);
+    }
+}
+
