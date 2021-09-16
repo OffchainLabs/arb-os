@@ -250,8 +250,14 @@ fn write_subtypes(
                 {
                     if let Type::Nominal(a, b, _) = subtype.clone() {
                         let (displayed, subtypes) = type_tree
-                            .get(&(a, b))
-                            .unwrap()
+                            .get(&(a.clone(), b.clone()))
+                            .or_else(|| {
+                                type_tree.get({
+                                    let new_id = StringId::new(a.clone(), b.id.clone());
+                                    &(a.clone(), new_id)
+                                })
+                            })
+                            .expect(&format!("{:?} {}", a, b))
                             .0
                             .display_separator("_", prefix, true, type_tree);
                         new_subtypes.extend(subtypes);

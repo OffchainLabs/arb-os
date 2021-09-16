@@ -41,7 +41,7 @@ impl SerializableTypeTree {
     pub fn from_type_tree(tree: TypeTree) -> Self {
         let mut inner = BTreeMap::new();
         for ((path, id), tipe) in tree.into_iter() {
-            inner.insert(format!("{}, {}", comma_list(&path), id), tipe);
+            inner.insert(format!("{}, {}", comma_list(&path), id.id), tipe);
         }
         Self { inner }
     }
@@ -49,14 +49,11 @@ impl SerializableTypeTree {
         let mut type_tree = HashMap::new();
         for (path, tipe) in self.inner.into_iter() {
             let mut x: Vec<_> = path.split(", ").map(|val| val.to_string()).collect();
-            let id = x
-                .pop()
-                .map(|id| id.parse::<usize>())
-                .expect("empty list")
-                .expect("failed to parse");
-            type_tree.insert((x, id), tipe);
+            let id = x.pop().expect("empty list");
+            let sid = StringId::new(x.clone(), id.clone());
+            type_tree.insert((x, sid), tipe);
         }
-        unimplemented!() /*type_tree*/
+        type_tree
     }
 }
 

@@ -1088,7 +1088,7 @@ impl Type {
                     type_tree
                         .get(&(path.clone(), id.clone()))
                         .map(|(_, name)| name.clone())
-                        .unwrap_or(format!("???")),
+                        .unwrap_or(format!("{}", id)),
                     match spec.len() {
                         0 => format!(""),
                         _ => {
