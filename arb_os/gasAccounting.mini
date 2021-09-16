@@ -35,6 +35,9 @@ use messages::TxRequestData;
 use std::fixedpoint::FixedPoint;
 use std::fixedpoint::fixedPoint_new;
 use std::fixedpoint::fixedPoint_add;
+use std::fixedpoint::fixedPoint_sub;
+use std::fixedpoint::fixedPoint_mul;
+use std::fixedpoint::fixedPoint_mulByUint;
 use std::fixedpoint::fixedPoint_mulByUintTrunc;
 use std::fixedpoint::fixedPoint_plusOne;
 use std::fixedpoint::fixedPoint_div;
@@ -975,25 +978,61 @@ view func updateCongestionState(state: CongestionState, toBlockNum: uint, toTime
             smallGasPool = int(smallGasPoolMax);
         }
 
-        let maxtc = xif (gasPool > int(0)) {
-            gasPool
-        } else {
-            int(0)
+        let clippedGasPool = {
+            let gpmax = int(chainParams_getOrDie(const::Atom_Param_GasPoolMax));
+            xif (gasPool > gpmax) {
+                gpmax
+            } elseif (gasPool > int(0)) {
+                gasPool
+            } else {
+                int(0)
+            }
         };
-        // now 0 <= maxtc <= gasPoolMax
-        let smaxtc = xif (smallGasPool > int(0)) {
-            smallGasPool
-        } else {
-            int(0)
-        };
-        // now 0 <= smaxtc <= smallGasPoolMax
+        // now 0 <= clippedGasPool <= gasPoolMax
 
-        // constants here are chosen so that adjustment is by factor between 7/8 and 9/8 per mainnet block, as in EIP-1559
-        let multiplier = fixedPoint_add(
-            fixedPoint_new(121 * gasPoolMax - 2 * uint(maxtc), 240 * gasPoolMax),
-            fixedPoint_new(121 * smallGasPoolMax - 2 * uint(smaxtc), 240 * smallGasPoolMax),
+        let clippedSmallGasPool = {
+            let sgpmax = int(chainParams_getOrDie(const::Atom_Param_SmallGasPoolMax));
+            xif (smallGasPool > sgpmax) {
+                sgpmax
+            } elseif (smallGasPool > int(0)) {
+                smallGasPool
+            } else {
+                int(0)
+            }
+        };
+        // now 0 <= clippedSmallGasPool <= gasPoolMax
+
+        // constants here are chosen so that adjustment is by factor between 119/120 and 121/120 per second,
+        //        which is approximately between 7/8 and 9/8 per mainnet block, as in EIP-1559
+        //        assuming that (at base price), compute cost is <= 10% of total cost
+        let fractionFull = fixedPoint_add(     // 0 when both pools empty, 1 when both pools full
+            fixedPoint_new(uint(clippedGasPool), 2*gasPoolMax),
+            fixedPoint_new(uint(clippedSmallGasPool), 2*smallGasPoolMax),
         );
-        totalPrice = fixedPoint_mulByUintTrunc(multiplier, totalPrice);
+        let priceMultiplier = fixedPoint_mul(
+            xif let Some(res) = fixedPoint_sub(
+                fixedPoint_add(
+                    fixedPoint_mulByUint(
+                        fixedPoint_add(
+                            fixedPoint_new(119, 1),
+                            fixedPoint_mulByUint(fractionFull, 2),
+                        ),
+                        totalPrice
+                    ),
+                    fixedPoint_mulByUint(
+                        fractionFull,
+                        18*basePrice
+                    )
+                ),
+                fixedPoint_new(9*basePrice, 1),
+            ) {
+                res
+            } else {
+                fixedPoint_new(1200-1, 10)    // something went wrong, so set this to slowly deflate the price
+            },
+            fixedPoint_new(1, 120),
+        );
+        totalPrice = fixedPoint_mulByUintTrunc(priceMultiplier, totalPrice);
         if (totalPrice < basePrice) { totalPrice = basePrice; }
     }
     return struct {

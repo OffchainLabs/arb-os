@@ -36,24 +36,12 @@ func tests() -> uint {
         return 3;
     }
 
-    if let Some(_) = fixedPoint_mul(s9292, s1000) {
-        return 5;
+    if (!fixedPoint_equal(fixedPoint_mul(s1000, s1000), fixedPoint_new(17820*17820, 1000*1000))) {
+        return 6;
     }
 
-    if let Some(prod) = fixedPoint_mul(s1000, s1000) {
-        if (!fixedPoint_equal(prod, fixedPoint_new(17820*17820/1000, 1000))) {
-            return 6;
-        }
-    } else {
-        return 7;
-    }
-
-    if let Some(prod) = fixedPoint_mul(s9292, fixedPoint_fromUintMatch(970000, s9292)) {
-        if (!fixedPoint_equal(prod, fixedPoint_new(179292*970000, 9292))) {
-            return 8;
-        }
-    } else {
-        return 9;
+    if (!fixedPoint_equal(fixedPoint_mul(s9292, fixedPoint_fromUintMatch(970000, s9292)), fixedPoint_new(179292*970000, 9292))) {
+        return 8;
     }
 
     let zero  = fixedPoint_zero();
@@ -82,9 +70,7 @@ func tests() -> uint {
     if (fixedPoint_compare(slope, inverse) != int(1)) {
         return 12;
     }
-    if let Some(issue) = fixedPoint_sub(slope, inverse) {
-        return 13;
-    }
+
     if let Some(quotient) = fixedPoint_div(slope, inverse) {
         if (!fixedPoint_equal(quotient, fixedPoint_new(81, 25))) {
             return 14;
