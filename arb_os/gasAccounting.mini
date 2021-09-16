@@ -532,6 +532,7 @@ public view write func gasAccounting_endTxCharges(
     }
     
     set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(gasUsedForCompute));
+    set gasAccountingInfo.congestionState.smallGasPool = safeSubInt(gasAccountingInfo.congestionState.smallGasPool, int(gasUsedForCompute));
     set gasAccountingInfo.gasRemainingThisBlock = xif (gasAccountingInfo.gasRemainingThisBlock >= gasUsedForCompute) {
         gasAccountingInfo.gasRemainingThisBlock - gasUsedForCompute
     } else {

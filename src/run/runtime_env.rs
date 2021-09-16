@@ -221,7 +221,7 @@ impl RuntimeEnvironment {
         if self.force_zero_gas_price {
             Uint256::zero()
         } else {
-            Uint256::_from_gwei(2)
+            Uint256::_from_gwei(20)
         }
     }
 
