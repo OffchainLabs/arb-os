@@ -3,7 +3,6 @@
 //
 
 use std::stack::Stack;
-use std::bytearray::ByteArray;
 use std::bytestream::ByteStream;
 
 use evmCallStack::evmCallStack_callHitError;

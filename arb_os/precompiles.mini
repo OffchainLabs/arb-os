@@ -3,9 +3,7 @@
 //
 
 use accounts::AccountStore;
-use std::bytearray::ByteArray;
 
-use evmCallStack::EvmCallFrame;
 use evmCallStack::evmCallStack_topFrame;
 use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallFrame_getCalldata;

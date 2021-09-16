@@ -5,9 +5,6 @@
 use evmCallStack::EvmCallFrame;
 use std::bytearray::ByteArray;
 
-use chainParameters::chainParams_chainId;
-
-use evmCallStack::evmCallStack_stackDepth;
 use evmCallStack::evmCallStack_topFrame;
 use evmCallStack::evmCallStack_getTopFrameMemoryOrDie;
 use evmCallStack::evmCallStack_setTopFrameMemory;
