@@ -468,7 +468,7 @@ pub fn underfunded_nested_call_test(
         .deploy(&[], &mut machine, Uint256::zero(), None, debug)
         .is_err()
     {
-        panic!("failed to deploy Fibonacci contract");
+        panic!("failed to deploy Underfunded contract");
     }
 
     let (logs, sends) = contract.call_function(

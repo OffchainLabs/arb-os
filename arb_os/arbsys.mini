@@ -21,6 +21,7 @@ use evmCallStack::evmCallFrame_getCallvalue;
 use evmCallStack::evmCallFrame_getAccount;
 use evmCallStack::evmCallFrame_runningAsAddress;
 use evmCallStack::evmCallFrame_getCaller;
+use evmCallStack::evmCallFrame_getReservedStorageGas;
 
 use evmOps::evmOp_log4;
 use evmOps::evmOp_return;
@@ -49,6 +50,8 @@ use inbox::inbox_currentArbBlockNumber;
 use inbox::inbox_currentEthBlockNumber;
 use inbox::inbox_currentTimestamp;
 use inbox::mapL1SenderAddress;
+
+use gasAccounting::gasAccounting_getCurrentStorageGasAvailable;
 
 use output::queueMessageForSend;
 
@@ -82,6 +85,8 @@ public view write func arbsys_txcall() {
             arbsys_myCallersAddressWithoutAliasing(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbSys_mapL1SenderContractAddressToL2Alias) {
             arbsys_mapL1SenderContractAddressToL2Alias(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbSys_getStorageGasAvailable) {
+            arbsys_getStorageGasAvailable(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbSys), 1, 0, 0);
@@ -422,5 +427,23 @@ view write func arbsys_mapL1SenderContractAddressToL2Alias(_topFrame: EvmCallFra
         evmOp_return(0, 32);
     } else {
         evmOp_revert_knownPc(91, 0, 0);
+    }
+}
+
+view write func arbsys_getStorageGasAvailable(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(100, 0, 0);
+    }
+    let thisFrameStorageGas = gasAccounting_getCurrentStorageGasAvailable();
+    let parentReservedStorageGas = xif let Some(parentFrame) = topFrame.parent {
+        evmCallFrame_getReservedStorageGas(parentFrame)
+    } else {
+        0
+    };
+    let mem = bytearray_set256(bytearray_new(0), 0, thisFrameStorageGas + parentReservedStorageGas);
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownPc(101, 0, 0);
     }
 }
