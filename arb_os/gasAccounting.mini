@@ -36,7 +36,6 @@ use std::fixedpoint::FixedPoint;
 use std::fixedpoint::fixedPoint_new;
 use std::fixedpoint::fixedPoint_add;
 use std::fixedpoint::fixedPoint_sub;
-use std::fixedpoint::fixedPoint_mul;
 use std::fixedpoint::fixedPoint_mulByUint;
 use std::fixedpoint::fixedPoint_mulByUintTrunc;
 use std::fixedpoint::fixedPoint_plusOne;
@@ -1009,30 +1008,18 @@ view func updateCongestionState(state: CongestionState, toBlockNum: uint, toTime
             fixedPoint_new(uint(clippedGasPool), 2*gasPoolMax),
             fixedPoint_new(uint(clippedSmallGasPool), 2*smallGasPoolMax),
         );
-        let priceMultiplier = fixedPoint_mul(
-            xif let Some(res) = fixedPoint_sub(
-                fixedPoint_add(
-                    fixedPoint_mulByUint(
-                        fixedPoint_add(
-                            fixedPoint_new(119, 1),
-                            fixedPoint_mulByUint(fractionFull, 2),
-                        ),
-                        totalPrice
-                    ),
-                    fixedPoint_mulByUint(
-                        fractionFull,
-                        18*basePrice
-                    )
-                ),
-                fixedPoint_new(9*basePrice, 1),
+        let factor = fixedPoint_mulByUintTrunc(
+            xif let Some(diff) = fixedPoint_sub(
+                fixedPoint_new(121, 1),
+                fixedPoint_mulByUint(fractionFull, 2),
             ) {
-                res
+                diff
             } else {
-                fixedPoint_new(1200-1, 10)    // something went wrong, so set this to slowly deflate the price
+                fixedPoint_new(120, 1)
             },
-            fixedPoint_new(1, 120),
+            totalPrice + 9 * basePrice,
         );
-        totalPrice = fixedPoint_mulByUintTrunc(priceMultiplier, totalPrice);
+        totalPrice = (factor - 1080*basePrice) / 120;
         if (totalPrice < basePrice) { totalPrice = basePrice; }
     }
     return struct {
@@ -1193,7 +1180,7 @@ public func deferredPayments_apply(acctStore: AccountStore, dp: DeferredPayments
             if let Some(uAcctStore) = accountStore_payFromEscrow(acctStore, escrowKey, recipient, amount) {
                 acctStore = uAcctStore;
             } else {
-                asm(11000) { debugprint };
+                debug((11000, amount));
                 return None<AccountStore>;
             }
         } else {
