@@ -15,14 +15,14 @@ pub const TUPLE_SIZE: usize = 8;
 /// Takes a slice of instructions from a single function scope, and changes tuples of size greater
 /// than TUPLE_SIZE to nested tuples with each subtuple at most TUPLE_SIZE
 pub fn fix_tuple_size(
-    code_in: &[Instruction],
+    code: Vec<Instruction>,
     num_globals: usize,
 ) -> Result<Vec<Instruction>, CompileError> {
     let mut code_out = Vec::new();
     let mut locals_tree = TupleTree::new(1, true);
     let global_tree = TupleTree::new(num_globals, false);
 
-    for insn in code_in.iter() {
+    for insn in code {
         let debug_info = insn.debug_info;
 
         macro_rules! opcode {
@@ -62,51 +62,13 @@ pub fn fix_tuple_size(
                     locals_tree.write_code(true, lnum, &mut code_out, debug_info)?;
                 }
             }
-            Opcode::TupleGet(size) => {
+            Opcode::TupleGet(offset, size) => {
                 let ttree = TupleTree::new(size, false);
-                if let Some(index) = &insn.immediate {
-                    match index.to_usize() {
-                        Some(iu) => {
-                            ttree.read_code(false, iu, &mut code_out, debug_info)?;
-                        }
-                        None => {
-                            return Err(CompileError::new(
-                                String::from("Compile error: fix_tuple_size"),
-                                "index too large".to_string(),
-                                debug_info.location.into_iter().collect(),
-                            ))
-                        }
-                    }
-                } else {
-                    return Err(CompileError::new(
-                        String::from("Compile error: fix_tuple_size"),
-                        "TupleGet without immediate arg".to_string(),
-                        debug_info.location.into_iter().collect(),
-                    ));
-                }
+                ttree.read_code(false, offset, &mut code_out, debug_info)?;
             }
-            Opcode::TupleSet(size) => {
+            Opcode::TupleSet(offset, size) => {
                 let ttree = TupleTree::new(size, false);
-                if let Some(index) = &insn.immediate {
-                    match index.to_usize() {
-                        Some(iu) => {
-                            ttree.write_code(false, iu, &mut code_out, debug_info)?;
-                        }
-                        None => {
-                            return Err(CompileError::new(
-                                String::from("Compile error: fix_tuple_size"),
-                                "TupleSet index too large".to_string(),
-                                debug_info.location.into_iter().collect(),
-                            ))
-                        }
-                    }
-                } else {
-                    return Err(CompileError::new(
-                        String::from("Compile error: fix_tuple_size"),
-                        "TupleSet without immediate arg".to_string(),
-                        debug_info.location.into_iter().collect(),
-                    ));
-                }
+                ttree.write_code(false, offset, &mut code_out, debug_info)?;
             }
             Opcode::SetLocal(offset) => {
                 locals_tree.write_code(true, offset, &mut code_out, debug_info)?;

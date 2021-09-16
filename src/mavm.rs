@@ -874,8 +874,8 @@ pub enum Opcode {
     Capture(LabelId),                    // create a callable closure capture
     GetLocal(usize),                     // get a local variable within a func frame
     SetLocal(usize),                     // set a local variable within a func frame
-    TupleGet(usize),                     // arg is size of anysize_tuple
-    TupleSet(usize),                     // arg is size of anysize_tuple
+    TupleGet(usize, usize),              // args are offset and size for the anysize_tuple
+    TupleSet(usize, usize),              // args are offset and size for the anysize_tuple
     GetGlobalVar(usize),                 // gets a global variable at a global index
     SetGlobalVar(usize),                 // sets a global variable at a global index
     BackwardLabelTarget(usize),          // sets up a backward label as indexed by the jump table
@@ -1020,6 +1020,8 @@ impl Opcode {
                 true => format!("MakeFrame<{}, {}, {}>", nargs, space, return_address),
                 false => format!("MakeFrame({}, {}, {})", nargs, space, return_address),
             },
+            Opcode::GetLocal(slot) => format!("GetLocal {}", Color::pink(slot)),
+            Opcode::SetLocal(slot) => format!("SetLocal {}", Color::pink(slot)),
             Opcode::SetGlobalVar(id) => format!("SetGlobal {}", Color::pink(id)),
             Opcode::GetGlobalVar(id) => format!("GetGlobal {}", Color::pink(id)),
             Opcode::Label(label) => Value::Label(*label).pretty_print(label_color),
@@ -1132,8 +1134,8 @@ impl Opcode {
             Opcode::GetGlobalVar(_) => "GetGlobal",
             Opcode::SetGlobalVar(_) => "SetGlobal",
             Opcode::Label(_) => "Label",
-            Opcode::TupleGet(_) => "TupleGet",
-            Opcode::TupleSet(_) => "TupleSet",
+            Opcode::TupleGet(_, _) => "TupleGet",
+            Opcode::TupleSet(_, _) => "TupleSet",
             Opcode::UncheckedFixedArrayGet(_) => "UncheckedFixedArrayGet",
             Opcode::Return => "return",
             Opcode::FuncCall(_) => "FuncCall",

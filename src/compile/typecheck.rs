@@ -827,7 +827,7 @@ pub enum TypeCheckedExprKind {
     GlobalVariableRef(StringId, Type),
     Variant(Box<TypeCheckedExpr>),
     FuncRef(StringId, Type),
-    TupleRef(Box<TypeCheckedExpr>, Uint256, Type),
+    TupleRef(Box<TypeCheckedExpr>, usize, usize, Type),
     DotRef(Box<TypeCheckedExpr>, StringId, usize, Type),
     Const(Value, Type),
     FunctionCall(
@@ -904,7 +904,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             TypeCheckedExprKind::UnaryOp(_, exp, _)
             | TypeCheckedExprKind::Variant(exp)
             | TypeCheckedExprKind::SetGas(exp)
-            | TypeCheckedExprKind::TupleRef(exp, _, _)
+            | TypeCheckedExprKind::TupleRef(exp, ..)
             | TypeCheckedExprKind::DotRef(exp, _, _, _)
             | TypeCheckedExprKind::NewArray(exp, _, _)
             | TypeCheckedExprKind::Cast(exp, _)
@@ -1928,6 +1928,7 @@ fn typecheck_expr(
 ) -> Result<TypeCheckedExpr, CompileError> {
     let debug_info = expr.debug_info;
     let loc = debug_info.location;
+    let locs = debug_info.locs();
     Ok(TypeCheckedExpr {
         kind: match &expr.kind {
             ExprKind::NewBuffer => Ok(TypeCheckedExprKind::NewBuffer),
@@ -2167,9 +2168,9 @@ fn typecheck_expr(
                     ))
                 }
             }
-            ExprKind::TupleRef(tref, idx) => {
-                let tc_sub = typecheck_expr(
-                    &*tref,
+            ExprKind::TupleRef(tuple_expr, offset_value) => {
+                let tuple_expr = typecheck_expr(
+                    &*tuple_expr,
                     type_table,
                     global_vars,
                     func_table,
@@ -2180,29 +2181,29 @@ fn typecheck_expr(
                     closures,
                     scopes,
                 )?;
-                let uidx = idx.to_usize().unwrap();
-                if let Type::Tuple(tv) = tc_sub.get_type() {
-                    if uidx < tv.len() {
-                        Ok(TypeCheckedExprKind::TupleRef(
-                            Box::new(tc_sub),
-                            idx.clone(),
-                            tv[uidx].clone(),
-                        ))
-                    } else {
-                        Err(CompileError::new_type_error(
-                            "tuple is not wide enough",
-                            loc.into_iter().collect(),
-                        ))
-                    }
-                } else {
+                let offset = offset_value.to_usize().unwrap();
+
+                let tipe = match tuple_expr.get_type().rep(type_tree)? {
+                    Type::Tuple(tup) => tup,
+                    wrong => Err(CompileError::new_type_error(
+                        format!("{} isn't a tuple", Color::red(wrong.print(type_tree))),
+                        locs.clone(),
+                    ))?,
+                };
+
+                if offset >= tipe.len() {
                     Err(CompileError::new_type_error(
-                        format!(
-                            "tuple field access to non-tuple value of type {}",
-                            Color::red(tc_sub.get_type().print(type_tree))
-                        ),
-                        debug_info.locs(),
-                    ))
+                        "tuple is not wide enough",
+                        locs,
+                    ))?
                 }
+
+                Ok(TypeCheckedExprKind::TupleRef(
+                    Box::new(tuple_expr),
+                    offset,
+                    tipe.len(),
+                    tipe[offset].clone(),
+                ))
             }
             ExprKind::DotRef(sref, name) => {
                 let tc_sub = typecheck_expr(

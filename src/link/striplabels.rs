@@ -154,9 +154,8 @@ pub fn fix_backward_labels(
                         insn.debug_info,
                     ));
                 }
-                code_xformed.push(Instruction::from_opcode_imm(
-                    Opcode::TupleGet(jump_table.len()),
-                    Value::Int(Uint256::from_usize(index)),
+                code_xformed.push(Instruction::from_opcode(
+                    Opcode::TupleGet(index, jump_table.len()),
                     insn.debug_info,
                 ));
             }

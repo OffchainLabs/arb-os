@@ -155,7 +155,7 @@ pub fn mavm_codegen_func(
     Ok((code, label_gen))
 }
 
-/*fn codegen(
+fn codegen(
     nodes: Vec<TypeCheckedNode>,
     cgen: &mut Codegen,
     stack_items: usize,
@@ -179,7 +179,6 @@ pub fn mavm_codegen_func(
     }
 
     for mut node in nodes {
-
         let debug = match &node {
             TypeCheckedNode::Statement(stat) => stat.debug_info,
             TypeCheckedNode::Expression(expr) => expr.debug_info,
@@ -203,11 +202,55 @@ pub fn mavm_codegen_func(
             };
         }
 
+        macro_rules! block {
+            ($expr:expr) => {{
+                codegen(
+                    vec![TypeCheckedNode::Expression(&mut TypeCheckedExpr::new(
+                        TypeCheckedExprKind::CodeBlock($expr.clone()),
+                        debug,
+                    ))],
+                    cgen,
+                    stack_items,
+                    false,
+                )?;
+                // TODO: Alias
+            }};
+        }
+
         match node {
             TypeCheckedNode::Statement(stat) => {
                 match &mut stat.kind {
-                    TypeCheckedStatementKind::SetLocals(id, expr) => {
+                    TypeCheckedStatementKind::SetLocals(assigned, expr) => {
                         expr!(expr);
+                        let count = assigned.len();
+                        for _ in 0..(count - 1) {
+                            cgen.code.push(opcode!(Dup0));
+                        }
+
+                        for (index, local) in assigned.into_iter().enumerate() {
+                            let slot = if local.shadow {
+                                cgen.next_slot()
+                            } else {
+                                match cgen.locals.get(&local.id) {
+                                    Some(slot) => *slot,
+                                    None => Err(CompileError::new(
+                                        "Internal Error",
+                                        "No slot has been assigned",
+                                        local.debug_info.locs(),
+                                    ))?,
+                                }
+                            };
+                            cgen.locals.insert(local.id, slot);
+
+                            if count > 1 {
+                                cgen.code.push(Instruction::from_opcode(
+                                    Opcode::TupleGet(index, count),
+                                    debug,
+                                ));
+                            }
+
+                            cgen.code.push(opcode!(@SetLocal(slot)));
+                        }
                     }
                     TypeCheckedStatementKind::AssignGlobal(id, expr) => {
                         expr!(expr);
@@ -231,7 +274,9 @@ pub fn mavm_codegen_func(
                     TypeCheckedStatementKind::While(cond, body) => {}
                     TypeCheckedStatementKind::Asm(payload, args) => {
                         let nargs = args.len();
-                        for i in 0..nargs {}
+                        for i in 0..nargs {
+                            expr!(&mut args[nargs - 1 - i], i);
+                        }
                         for insn in payload {
                             cgen.code.push(insn.clone());
                         }
@@ -261,11 +306,22 @@ pub fn mavm_codegen_func(
                         codegen(block.child_nodes(), cgen, stack_items, true)?;
                     }
                     TypeCheckedExprKind::If(cond, block, else_block, _) => {
-
+                        expr!(cond);
+                        let end_label = cgen.label_gen.next();
+                        cgen.code.push(opcode!(IsZero));
+                        cgen.code.push(opcode!(Cjump, Value::Label(end_label)));
+                        block!(block);
+                        // TODO: alias
+                        if let Some(else_block) = else_block {
+                            let else_label = cgen.label_gen.next();
+                            block!(else_block);
+                        }
+                        // TODO: alias
+                        cgen.code.push(opcode!(@Label(end_label)));
                     }
-                    TypeCheckedExprKind::Loop(body) => {
-
-                    }
+                    TypeCheckedExprKind::IfLet(name, expr, block, else_block, _) => {}
+                    TypeCheckedExprKind::Loop(body) => {}
+                    TypeCheckedExprKind::Cast(expr, _) => expr!(expr),
                     TypeCheckedExprKind::Error => cgen.code.push(opcode!(Error)),
                     TypeCheckedExprKind::NewBuffer => cgen.code.push(opcode!(NewBuffer)),
                     TypeCheckedExprKind::GetGas => cgen.code.push(opcode!(PushGas)),
@@ -285,48 +341,67 @@ pub fn mavm_codegen_func(
                             ])
                         ));
                     }
-                    TypeCheckedExprKind::Variant(inner) => {
-
-                    }
-                    TypeCheckedExprKind::Tuple(fields, _) => {
-
-                    }
-                    TypeCheckedExprKind::LocalVariableRef(id, _) => {
-                        match cgen.locals.get(id) {
-                            Some(slot) => {
-                                cgen.code.push(opcode!(@GetLocal(*slot)));
-                            }
-                            None => return Err(CompileError::new(
+                    TypeCheckedExprKind::Variant(inner) => {}
+                    TypeCheckedExprKind::LocalVariableRef(id, _) => match cgen.locals.get(id) {
+                        Some(slot) => {
+                            cgen.code.push(opcode!(@GetLocal(*slot)));
+                        }
+                        None => {
+                            return Err(CompileError::new(
                                 "Internal error",
-                                format!("Variable {} doesn't have an assigned slot", Color::red(cgen.string_table.name_from_id(*id))),
+                                format!(
+                                    "Variable {} doesn't have an assigned slot",
+                                    Color::red(cgen.string_table.name_from_id(*id))
+                                ),
                                 debug.locs(),
                             ))
                         }
-                    }
-                    TypeCheckedExprKind::FuncRef(name, _) => {
-
-                    }
+                    },
+                    TypeCheckedExprKind::FuncRef(name, _) => {}
                     TypeCheckedExprKind::FunctionCall(fexpr, args, _, prop) => {
-
+                        let nargs = args.len();
+                        for i in 0..nargs {
+                            expr!(&mut args[nargs - 1 - i], i);
+                        }
+                        expr!(fexpr, nargs + 1);
+                        cgen.code.push(opcode!(@FuncCall(*prop)));
                     }
-                    TypeCheckedExprKind::DotRef(tce, slot_num, s_size, _) => {
-
+                    TypeCheckedExprKind::Tuple(fields, _) => {
+                        let fields_len = fields.len();
+                        for i in 0..fields_len {
+                            expr!(&mut fields[fields_len - 1 - i], i);
+                        }
+                        let empty_vec = vec![Value::none(); fields_len];
+                        cgen.code.push(opcode!(Noop, Value::new_tuple(empty_vec)));
+                        for i in 0..fields_len {
+                            cgen.code.push(Instruction::from_opcode(
+                                Opcode::TupleSet(i, fields_len),
+                                debug,
+                            ));
+                        }
                     }
-                    TypeCheckedExprKind::Try(variant, _) => {
-
+                    TypeCheckedExprKind::TupleRef(expr, offset, width, _) => {
+                        expr!(expr);
+                        cgen.code.push(Instruction::from_opcode(
+                            Opcode::TupleGet(*offset, *width),
+                            debug,
+                        ));
                     }
-                    TypeCheckedExprKind::StructMod(structure, index, value, _) => {
-
+                    TypeCheckedExprKind::DotRef(expr, offset, width, _) => {
+                        expr!(expr);
+                        cgen.code.push(Instruction::from_opcode(
+                            Opcode::TupleGet(*offset, *width),
+                            debug,
+                        ));
                     }
-                    TypeCheckedExprKind::StructInitializer(fields, _) => {
-
-                    }
-                    TypeCheckedExprKind::UnaryOp(op, tce, _) => {
-
-                    }
-                    TypeCheckedExprKind::Binary(op, tce1, tce2, _) => {
-                        expr!(tce2, 0);
-                        expr!(tce1, 1);
+                    TypeCheckedExprKind::FixedArrayRef(..) => {}
+                    TypeCheckedExprKind::Try(variant, _) => {}
+                    TypeCheckedExprKind::StructMod(structure, index, value, _) => {}
+                    TypeCheckedExprKind::StructInitializer(fields, _) => {}
+                    TypeCheckedExprKind::UnaryOp(op, tce, _) => {}
+                    TypeCheckedExprKind::Binary(op, expr1, expr2, _) => {
+                        expr!(expr1, 0);
+                        expr!(expr2, 1);
                         let opcode = Opcode::AVMOpcode(match op {
                             BinaryOp::GetBuffer8 => AVMOpcode::GetBuffer8,
                             BinaryOp::GetBuffer64 => AVMOpcode::GetBuffer64,
@@ -353,14 +428,22 @@ pub fn mavm_codegen_func(
                         cgen.code.push(Instruction::from_opcode(opcode, debug));
                         match op {
                             BinaryOp::NotEqual
-                                | BinaryOp::LessEq
-                                | BinaryOp::GreaterEq
-                                | BinaryOp::SLessEq
-                                | BinaryOp::SGreaterEq => {
-                                    // negate these to flip the comparisons
-                                    cgen.code.push(opcode!(IsZero));
-                                }
+                            | BinaryOp::LessEq
+                            | BinaryOp::GreaterEq
+                            | BinaryOp::SLessEq
+                            | BinaryOp::SGreaterEq => {
+                                // negate these to flip the comparisons
+                                cgen.code.push(opcode!(IsZero));
+                            }
                             _ => {}
+                        }
+                    }
+                    TypeCheckedExprKind::FixedArrayMod(..) => {}
+                    TypeCheckedExprKind::Asm(_, payload, args) => {
+                        let nargs = args.len();
+                        for i in 0..nargs {}
+                        for insn in payload {
+                            cgen.code.push(insn.clone());
                         }
                     }
                     x => {
@@ -385,7 +468,7 @@ pub fn mavm_codegen_func(
     }
 
     Ok(())
-}*/
+}
 
 /// Generates code for the provided statements with index 0 generated first. code represents the
 /// code generated previously, num_locals the maximum number of locals used at any point in the call
@@ -510,9 +593,8 @@ fn codegen_statement(
                 bindings.insert(local.id, slot);
 
                 if count > 1 {
-                    cgen.code.push(Instruction::from_opcode_imm(
-                        Opcode::TupleGet(count),
-                        Value::Int(Uint256::from_usize(index)),
+                    cgen.code.push(Instruction::from_opcode(
+                        Opcode::TupleGet(index, count),
                         debug,
                     ));
                 }
@@ -689,9 +771,8 @@ fn codegen_expr(
                 UnaryOp::BitwiseNeg => opcode!(BitwiseNeg),
                 UnaryOp::Not => opcode!(IsZero),
                 UnaryOp::Hash => opcode!(Hash),
-                UnaryOp::Len => Instruction::from_opcode_imm(
-                    Opcode::TupleGet(3),
-                    Value::Int(Uint256::zero()),
+                UnaryOp::Len => Instruction::from_opcode(
+                    Opcode::TupleGet(0, 3),
                     debug,
                 ),
                 UnaryOp::ToAddress => {
@@ -869,9 +950,8 @@ fn codegen_expr(
 
                 for (index, capture) in captures.iter().enumerate().rev() {
                     if let Some(_) = locals.get(capture) {
-                        cgen.code.push(Instruction::from_opcode_imm(
-                            Opcode::TupleSet(*local_space),
-                            Value::from(index + nargs),
+                        cgen.code.push(Instruction::from_opcode(
+                            Opcode::TupleSet(index + nargs, *local_space),
                             debug,
                         ))
                     }
@@ -920,7 +1000,7 @@ fn codegen_expr(
             cgen.code.push(opcode!(Noop, Value::Label(the_label)));
             Ok(())
         }
-        TypeCheckedExprKind::TupleRef(tce, idx, _) => {
+        TypeCheckedExprKind::TupleRef(tce, idx, _, _) => {
             let tce_type = tce.get_type();
             let tuple_size = if let Type::Tuple(fields) = tce_type {
                 fields.len()
@@ -934,18 +1014,16 @@ fn codegen_expr(
                 ));
             };
             expr!(tce, 0)?;
-            cgen.code.push(Instruction::from_opcode_imm(
-                Opcode::TupleGet(tuple_size),
-                Value::Int(idx.clone()),
+            cgen.code.push(Instruction::from_opcode(
+                Opcode::TupleGet(*idx, tuple_size),
                 debug,
             ));
             Ok(())
         }
         TypeCheckedExprKind::DotRef(tce, slot_num, s_size, _) => {
             expr!(tce, 0)?;
-            cgen.code.push(Instruction::from_opcode_imm(
-                Opcode::TupleGet(*s_size),
-                Value::Int(Uint256::from_usize(*slot_num)),
+            cgen.code.push(Instruction::from_opcode(
+                Opcode::TupleGet(*slot_num, *s_size),
                 debug,
             ));
             Ok(())
@@ -976,9 +1054,8 @@ fn codegen_expr(
             let empty_vec = TupleTree::new(fields_len, false).make_empty();
             cgen.code.push(opcode!(Noop, empty_vec));
             for i in 0..fields_len {
-                cgen.code.push(Instruction::from_opcode_imm(
-                    Opcode::TupleSet(fields_len),
-                    Value::Int(Uint256::from_usize(i)),
+                cgen.code.push(Instruction::from_opcode(
+                    Opcode::TupleSet(i, fields_len),
                     debug,
                 ));
             }
@@ -993,9 +1070,8 @@ fn codegen_expr(
             let empty_vec = vec![Value::none(); fields_len];
             cgen.code.push(opcode!(Noop, Value::new_tuple(empty_vec)));
             for i in 0..fields_len {
-                cgen.code.push(Instruction::from_opcode_imm(
-                    Opcode::TupleSet(fields_len),
-                    Value::Int(Uint256::from_usize(i)),
+                cgen.code.push(Instruction::from_opcode(
+                    Opcode::TupleSet(i, fields_len),
                     debug,
                 ));
             }
@@ -1137,9 +1213,8 @@ fn codegen_expr(
             expr!(struc, 1)?;
             if let Type::Struct(v) = t {
                 let struct_len = v.len();
-                cgen.code.push(Instruction::from_opcode_imm(
-                    Opcode::TupleSet(struct_len),
-                    Value::Int(Uint256::from_usize(*index)),
+                cgen.code.push(Instruction::from_opcode(
+                    Opcode::TupleSet(*index, struct_len),
                     debug,
                 ));
             } else {

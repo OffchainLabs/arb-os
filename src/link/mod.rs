@@ -382,7 +382,7 @@ pub fn postlink_compile(
         striplabels::fix_backward_labels(&program.code, program.globals.len() - 1);
     consider_debug_printing(&code, did_print, "after fix_backward_labels");
 
-    let code = xformcode::fix_tuple_size(&code, program.globals.len())?;
+    let code = xformcode::fix_tuple_size(code, program.globals.len())?;
     consider_debug_printing(&code, did_print, "after fix_tuple_size");
 
     let code = optimize::peephole(&code);
