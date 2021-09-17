@@ -1107,3 +1107,54 @@ fn test_recurse_impl(depth: u64, should_revert: bool) {
         }
     );
 }
+
+#[test]
+fn test_barely_out_of_gas() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+
+    let mut contract = AbiForContract::new_from_file(&test_contract_path("BlockNum")).unwrap();
+    if let Err(receipt) = contract.deploy(&[], &mut machine, Uint256::zero(), None, false) {
+        if !receipt.unwrap().succeeded() {
+            panic!("unexpected failure deploying BlockNum contract");
+        }
+    }
+
+    let mut low_gas = 1;
+    let mut hi_gas = 1000000;
+    let success_code = Uint256::zero();
+    // let out_of_gas_code = Uint256::from_u64(16);
+
+    assert!(call_deplete_gas(&mut machine, &contract, low_gas) != success_code);
+    assert!(call_deplete_gas(&mut machine, &contract, hi_gas) == success_code);
+
+    while hi_gas > low_gas + 1 {
+        let mid_gas = (hi_gas + low_gas) / 2;
+        if call_deplete_gas(&mut machine, &contract, mid_gas) == success_code {
+            hi_gas = mid_gas;
+        } else {
+            low_gas = mid_gas;
+        }
+    }
+}
+
+#[cfg(test)]
+fn call_deplete_gas(machine: &mut Machine, contract: &AbiForContract, gas: u64) -> Uint256 {
+    let (receipts, _) = contract
+        .call_function(
+            Uint256::from_u64(80293481),
+            "useGasDownTo",
+            &[ethabi::Token::Uint(Uint256::from_u64(gas).to_u256())],
+            machine,
+            Uint256::zero(),
+            false,
+        )
+        .unwrap();
+
+    machine
+        .runtime_env
+        ._advance_time(Uint256::one(), Some(Uint256::from_u64(15)), false);
+
+    assert_eq!(receipts.len(), 1);
+    receipts[0].get_return_code()
+}
