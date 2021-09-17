@@ -1,6 +1,7 @@
 pragma solidity >=0.4.21 <0.7.0;
 
 import "../builtin/ArbSys.sol";
+import "../builtin/ArbosTest.sol";
 
 
 contract BlockNum {
@@ -23,5 +24,18 @@ contract BlockNum {
             ArbSys(address(100)).wasMyCallersAddressAliased(),
             ArbSys(address(100)).myCallersAddressWithoutAliasing()
         );
+    }
+
+    function recursiveCall(uint depth, bool shouldRevert) public {
+        if (depth > 0) {
+            this.recursiveCall(depth-1, shouldRevert);
+        }
+        require(!shouldRevert);
+    }
+
+    function useGasDownTo(uint targetGas) public {
+        uint gas = gasleft();
+        require(gas > targetGas);
+        ArbosTest(address(105)).burnArbGas(gas-targetGas);
     }
 }

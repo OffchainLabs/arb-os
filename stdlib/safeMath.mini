@@ -10,11 +10,28 @@ public func safeAdd(x: uint, y: uint) -> uint {
     return ret;
 }
 
+public func trySafeAdd(x: uint, y: uint) -> option<uint> {
+    let ret = x + y;
+    return xif (ret < x) {
+        None<uint>
+    } else {
+        Some(ret)
+    };
+}
+
 public func safeSub(x: uint, y: uint) -> uint {
     if (x < y) {
         error;
     }
     return x - y;
+}
+
+public func trySafeSub(x: uint, y: uint) -> option<uint> {
+    return xif (x < y) {
+        None<uint>
+    } else {
+        Some(x - y)
+    };
 }
 
 public func safeMul(x: uint, y: uint) -> uint {
@@ -23,6 +40,15 @@ public func safeMul(x: uint, y: uint) -> uint {
         error;
     }
     return ret;
+}
+
+public func trySafeMul(x: uint, y: uint) -> option<uint> {
+    let ret = x * y;
+    return xif ((x != 0) && (y != (ret/x))) {
+        None<uint>
+    } else {
+        Some(ret)
+    };
 }
 
 public func safeToInt(x: uint) -> int {
@@ -61,12 +87,40 @@ public func safeSubInt(x: int, y: int) -> int {
     return ret;
 }
 
+public func trySafeSubInt(x: int, y: int) -> option<int> {
+    let ret = x - y;
+    return xif (y > int(0)) {
+        xif (ret > x) {
+            None<int>
+        } else {
+            Some(ret)
+        }
+    } elseif (y < int(0)) {
+        xif (ret < x) {
+            None<int>
+        } else {
+            Some(ret)
+        }
+    } else {
+        Some(ret)
+    };
+}
+
 public func safeMulInt(x: int, y: int) -> int {
     let ret = x * y;
     if ((x != int(0)) && (y != (ret/x))) {
         error;
     }
     return ret;
+}
+
+public func trySafeMulInt(x: int, y: int) -> option<int> {
+    let ret = x * y;
+    return xif ((x != int(0)) && (y != (ret/x))) {
+        None<int>
+    } else {
+        Some(ret)
+    };
 }
 
 public func safeToUint(x: int) -> uint {

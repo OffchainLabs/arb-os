@@ -541,7 +541,7 @@ public func accountStore_newEscrow(acctStore: AccountStore, payer: address, amou
     ));
 }
 
-public func _accountStore_getEscrowBalance(acctStore: AccountStore, key: uint) -> uint {
+public func accountStore_getEscrowBalance(acctStore: AccountStore, key: uint) -> uint {
     return storageMap_get(acctStore.escrowStore.escrowedValues, key);
 }
 

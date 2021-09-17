@@ -163,6 +163,7 @@ var globalCurrentRetryableRequest: option<IncomingRequestAndLogs>;  // describes
 public write func evmCallStack_init() {
     globalCallStack = None<EvmCallFrame>;
     globalCurrentRetryableRequest = None<IncomingRequestAndLogs>;
+    returnFromCallNestingDepth = 0;
 }
 
 public view func getRetryBufferInCurrentContext() -> RetryBuffer {
@@ -792,7 +793,7 @@ public view write func evmCallStack_doCall(
         );
 
         // jump to the called code's startCodePoint -- this should never return
-        let _ = gasAccounting_resumeTxCharges(gas, storageGas)?;
+        gasAccounting_resumeTxCharges(gas, storageGas)?;
         emptyAvmStack();
         asm(startCodePoint) { jump };
     } else {
@@ -830,7 +831,49 @@ public view write func evmCallStack_doCall(
     return error;
 }
 
+// returnFromCallNestingDepth keeps track of the nesting depth of evmCallStack_returnFromCalls
+// it is incremented on every entry to that function, and set to zero on every exit
+// If its value gets above a threshold, this means we must be in an error loop, so we exit the current tx abruptly
+//        and get back to a safe state.
+var returnFromCallNestingDepth: uint;
+
 public view write func evmCallStack_returnFromCall(
+    resultCode: uint,
+    returnOffset: uint,
+    returnLength: uint,
+    jumpTargetIfTxEnd: option<view write func()>,
+) -> option<()> {
+    if (returnFromCallNestingDepth > 10) {
+        emergencyTerminateCurrentTx();
+    } else {
+        returnFromCallNestingDepth = returnFromCallNestingDepth + 1;
+        evmCallStack_returnFromCall_impl(resultCode, returnOffset, returnLength, jumpTargetIfTxEnd)?;
+    }
+    return Some(());
+}
+
+view write func emergencyTerminateCurrentTx() {
+    // there must have been an error loop exiting from a tx,
+    // so issue a failure receipt for the current tx and get back to the main run loop
+
+    debug((10001, ()));
+    emitTxReceipt(
+        globalCurrentTxRequest.incomingRequest,
+        const::TxResultCode_unknownFailure,
+        None<ByteArray>,
+        None<EvmLogs>,
+        None<GasUsage>,
+        txFeeStats_zero(),
+        false,    // don't emit tracing info, because we're unsure of what is going on
+        globalCurrentTxRequest.originalCaller,
+    );
+    globalCallStack = None<EvmCallFrame>;
+    emptyAvmStack();
+    returnFromCallNestingDepth = 0;
+    restoreAuxStackAndCall(mainRunLoop, None<Stack>, true);
+}
+
+view write func evmCallStack_returnFromCall_impl(
     resultCode: uint,
     returnOffset: uint,
     returnLength: uint,
@@ -916,11 +959,12 @@ public view write func evmCallStack_returnFromCall(
 
         // turn charging back on, with the remaining gas, including the gas that was saved when the now-returning call was made
         // if the call reverted, keep all of the storage gas, because callee's storage allocations were reverted
-        let _ = gasAccounting_resumeTxCharges(
+        gasAccounting_resumeTxCharges(
             resumeInfo.savedAPGas + leftoverAPGas,
             resumeInfo.savedStorageGas + xif(resultCode == const::TxResultCode_success) { leftoverStorageGas } else { resumeInfo.givenStorageGas },
         )?;
 
+        returnFromCallNestingDepth = 0;
         restoreAuxStackAndCall(resumeInfo.codePoint, resumeInfo.auxStackContents, false);
 
         evmCallStack_callHitError(8);
@@ -941,8 +985,8 @@ public view write func evmCallStack_returnFromCall(
             returnData = bytearray_new(0);
         }
 
-        if (resultCode == const::TxResultCode_success) {
-            let _ = gasAccounting_resumeTxCharges(leftoverAPGas, leftoverStorageGas)?;
+        if (   (resultCode == const::TxResultCode_success)
+            && (gasAccounting_resumeTxCharges(leftoverAPGas, leftoverStorageGas) != None<()>) ) {
             let (entryPoint, evmJumpTable) = xif (globalCurrentTxRequest.isConstructor) {
                 // the call was a constructor, so we need to install the resulting EVM code as the new contract's deploy code
                 let (uAcctStore, ep, ejt, created) = accountStore_createOrAddCodeRef(
@@ -1142,7 +1186,12 @@ public view write func evmCallStack_returnFromCall(
             }
         } else {
             // Request failed
-            let _ = gasAccounting_resumeTxCharges(leftoverAPGas, leftoverStorageGas);
+
+            if (gasAccounting_resumeTxCharges(leftoverAPGas, leftoverStorageGas) == None<()>) {
+                resultCode = const::TxResultCode_executionRanOutOfGas;
+                // even though we didn't succeed in switching back to charging the tx for gas,
+                //     gasAccounting_endTxCharges will do the right thing because it will act as if user had zero gas left
+            }
             let (_, gasUsage, feeStats, payments) = gasAccounting_endTxCharges(
                 topFrame.storageAllocations,
                 globalCurrentTxRequest.feeStats
@@ -1173,6 +1222,7 @@ public view write func evmCallStack_returnFromCall(
         // Now discard any EVM and AVM stack contents and jump back to the main run loop.
         globalCallStack = None<EvmCallFrame>;
         emptyAvmStack();
+        returnFromCallNestingDepth = 0;
         restoreAuxStackAndCall(
             xif let Some(target) = jumpTargetIfTxEnd { target } else { mainRunLoop },
             None<Stack>,
