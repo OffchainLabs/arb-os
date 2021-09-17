@@ -24,4 +24,11 @@ contract BlockNum {
             ArbSys(address(100)).myCallersAddressWithoutAliasing()
         );
     }
+
+    function recursiveCall(uint depth, bool shouldRevert) public {
+        if (depth > 0) {
+            this.recursiveCall(depth-1, shouldRevert);
+        }
+        require(!shouldRevert);
+    }
 }

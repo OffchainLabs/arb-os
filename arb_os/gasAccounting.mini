@@ -507,7 +507,11 @@ public view write func gasAccounting_endTxCharges(
     };
 
     let arbGasPerStorage = gasAccounting_getStoragePriceInArbGas();
-    let gasUsedForStorage = safeMul(storageAllocations, arbGasPerStorage);
+    let gasUsedForStorage = xif let Some(x) = trySafeMul(storageAllocations, arbGasPerStorage) {
+        x
+    } else {
+        0
+    };
     let gasUsedForCompute = xif (gasUsedForStorage > totalGasUsed) {
         gasUsedForStorage = totalGasUsed;
         0

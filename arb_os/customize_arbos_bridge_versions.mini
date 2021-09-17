@@ -22,6 +22,10 @@ public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade
     return oldGlobals.globalChainParameters;
 }
 
+public func set_returnFromCallNestingDepth_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> uint {
+    return 0;
+}
+
 public func set_globalCallStack_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
     return None<EvmCallFrame>;
 }

@@ -1057,3 +1057,53 @@ fn test_l1_sender_rewrite() {
         assert_eq!(res, post);
     }
 }
+
+#[test]
+fn test_recurse_norevert() {
+    test_recurse_impl(20, false);
+}
+
+#[test]
+fn test_recurse_revert() {
+    test_recurse_impl(20, true);
+}
+
+#[cfg(test)]
+fn test_recurse_impl(depth: u64, should_revert: bool) {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+
+    let my_addr = Uint256::from_u64(80293481);
+
+    let mut contract = AbiForContract::new_from_file(&test_contract_path("BlockNum")).unwrap();
+    if let Err(receipt) = contract.deploy(&[], &mut machine, Uint256::zero(), None, false) {
+        if !receipt.unwrap().succeeded() {
+            panic!("unexpected failure deploying BlockNum contract");
+        }
+    }
+
+    let (receipts, _) = contract
+        .call_function(
+            my_addr.clone(),
+            "recursiveCall",
+            &[
+                ethabi::Token::Uint(Uint256::from_u64(depth).to_u256()),
+                ethabi::Token::Bool(should_revert),
+            ],
+            &mut machine,
+            Uint256::zero(),
+            false,
+        )
+        .unwrap();
+
+    assert_eq!(receipts.len(), 1);
+    let receipt = receipts[0].clone();
+    assert_eq!(
+        receipt.get_return_code(),
+        if should_revert {
+            Uint256::one()
+        } else {
+            Uint256::zero()
+        }
+    );
+}
