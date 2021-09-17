@@ -916,7 +916,7 @@ pub enum TypeCheckedExprKind {
     MapRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
     ClosureLoad(StringId, usize, usize, BTreeSet<StringId>, Type),
     Tuple(Vec<TypeCheckedExpr>, Type),
-    NewArray(Box<TypeCheckedExpr>, Type, Type),
+    NewArray(Box<TypeCheckedExpr>, Value, Type),
     NewFixedArray(usize, Option<Box<TypeCheckedExpr>>, Type),
     NewMap(Type),
     ArrayMod(
@@ -2684,7 +2684,7 @@ fn typecheck_expr(
                     closures,
                     scopes,
                 )?),
-                tipe.rep(type_tree)?,
+                tipe.default_value(type_tree),
                 Type::Array(Box::new(tipe.clone())),
             )),
             ExprKind::NewFixedArray(size, maybe_expr) => match maybe_expr {

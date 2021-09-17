@@ -688,7 +688,7 @@ fn mavm_codegen_expr(
             code.push(opcode!(
                 Noop,
                 Value::new_tuple(vec![
-                    Value::Int(Uint256::from_usize(2 * bytes.len())),
+                    Value::Int(Uint256::from_usize(bytes.len())),
                     Value::Buffer(Buffer::from_bytes(bytes.clone())),
                 ])
             ));
@@ -1109,13 +1109,12 @@ fn mavm_codegen_expr(
                 DebugInfo::from(loc)
             ))
         }
-        TypeCheckedExprKind::NewArray(sz_expr, base_type, array_type) => {
+        TypeCheckedExprKind::NewArray(sz_expr, value, array_type) => {
             let call_type = Type::Func(
                 FuncProperties::pure(),
                 vec![Type::Uint, Type::Any],
                 Box::new(array_type.clone()),
             );
-            let (default_val, _is_safe) = base_type.default_value();
             let the_expr = TypeCheckedExpr {
                 kind: TypeCheckedExprKind::FunctionCall(
                     Box::new(TypeCheckedExpr::new(
@@ -1128,7 +1127,7 @@ fn mavm_codegen_expr(
                     vec![
                         *sz_expr.clone(),
                         TypeCheckedExpr::new(
-                            TypeCheckedExprKind::Const(default_val, Type::Any),
+                            TypeCheckedExprKind::Const(value.clone(), Type::Any),
                             DebugInfo::from(loc),
                         ),
                     ],
