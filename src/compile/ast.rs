@@ -969,7 +969,7 @@ impl Type {
                 emulated_builtin(*size, t.default_value(type_tree))
             }
             Type::Nominal(..) => {
-                let tipe = self.rep(type_tree).unwrap_or(Type::Any);
+                let tipe = self.rep(type_tree).expect("Could not resolve nominal");
                 tipe.default_value(type_tree)
             }
             Type::Generic(_) | Type::GenericSlot(_) => {
