@@ -856,7 +856,7 @@ view write func emergencyTerminateCurrentTx() {
     // there must have been an error loop exiting from a tx,
     // so issue a failure receipt for the current tx and get back to the main run loop
 
-    debug(10001);
+    debug((10001, ()));
     emitTxReceipt(
         globalCurrentTxRequest.incomingRequest,
         const::TxResultCode_unknownFailure,
