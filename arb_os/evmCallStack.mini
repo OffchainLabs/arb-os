@@ -793,7 +793,7 @@ public view write func evmCallStack_doCall(
         );
 
         // jump to the called code's startCodePoint -- this should never return
-        let _ = gasAccounting_resumeTxCharges(gas, storageGas)?;
+        gasAccounting_resumeTxCharges(gas, storageGas)?;
         emptyAvmStack();
         asm(startCodePoint) { jump };
     } else {
@@ -959,7 +959,7 @@ view write func evmCallStack_returnFromCall_impl(
 
         // turn charging back on, with the remaining gas, including the gas that was saved when the now-returning call was made
         // if the call reverted, keep all of the storage gas, because callee's storage allocations were reverted
-        let _ = gasAccounting_resumeTxCharges(
+        gasAccounting_resumeTxCharges(
             resumeInfo.savedAPGas + leftoverAPGas,
             resumeInfo.savedStorageGas + xif(resultCode == const::TxResultCode_success) { leftoverStorageGas } else { resumeInfo.givenStorageGas },
         )?;
@@ -985,8 +985,8 @@ view write func evmCallStack_returnFromCall_impl(
             returnData = bytearray_new(0);
         }
 
-        if (resultCode == const::TxResultCode_success) {
-            let _ = gasAccounting_resumeTxCharges(leftoverAPGas, leftoverStorageGas)?;
+        if (   (resultCode == const::TxResultCode_success)
+            && (gasAccounting_resumeTxCharges(leftoverAPGas, leftoverStorageGas) != None<()>) ) {
             let (entryPoint, evmJumpTable) = xif (globalCurrentTxRequest.isConstructor) {
                 // the call was a constructor, so we need to install the resulting EVM code as the new contract's deploy code
                 let (uAcctStore, ep, ejt, created) = accountStore_createOrAddCodeRef(
@@ -1186,7 +1186,12 @@ view write func evmCallStack_returnFromCall_impl(
             }
         } else {
             // Request failed
-            let _ = gasAccounting_resumeTxCharges(leftoverAPGas, leftoverStorageGas);
+
+            if (gasAccounting_resumeTxCharges(leftoverAPGas, leftoverStorageGas) == None<()>) {
+                resultCode = const::TxResultCode_executionRanOutOfGas;
+                // even though we didn't succeed in switching back to charging the tx for gas,
+                //     gasAccounting_endTxCharges will do the right thing because it will act as if user had zero gas left
+            }
             let (_, gasUsage, feeStats, payments) = gasAccounting_endTxCharges(
                 topFrame.storageAllocations,
                 globalCurrentTxRequest.feeStats

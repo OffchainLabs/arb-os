@@ -634,20 +634,27 @@ public view write func gasAccounting_resumeTxCharges(allPurposeGas: uint, storag
     // allow the execution to have (allPurposeGas, storageOnlyGas) available to it
 
     return xif let Some(txState) = gasAccountingInfo.txState {
-        // stop charging the OS, and record the OS gas usage as overhead
-        let osGasUsed = ((~0) - getGas()) / gasAccountingInfo.pricingParams.arbGasDivisor;
-
-        set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(osGasUsed));
-        arbStatistics_addToGasUsed(osGasUsed);
-
-        setGas(safeMul(allPurposeGas, gasAccountingInfo.pricingParams.arbGasDivisor));   // start charging the application
-
         set txState.currentStorageOnlyGas = storageOnlyGas;
         set gasAccountingInfo.txState = Some(txState);
 
-        Some(())
+        xif (allPurposeGas > 0) {
+            // stop charging the OS, and record the OS gas usage as overhead
+            let osGasUsed = ((~0) - getGas()) / gasAccountingInfo.pricingParams.arbGasDivisor;
+
+            set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(osGasUsed));
+            arbStatistics_addToGasUsed(osGasUsed);
+
+            setGas(safeMul(allPurposeGas, gasAccountingInfo.pricingParams.arbGasDivisor));   // start charging the application
+
+            Some(())
+        } else {
+            // user is out of gas, so don't switch to charging the user
+            // return None to indicate that this happened
+            None<()>
+        }
     } else {
         // something went wrong: tried to resume tx charges when there isn't an active tx
+        // to be safe, return what we would return if we were in a tx and the tx was out of gas
         None<()>
     };
 }
