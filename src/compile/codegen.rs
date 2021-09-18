@@ -120,9 +120,9 @@ pub fn mavm_codegen_func(
         next_slot: locals.len(),
     };
 
-    let _ = codegen_statements(func.code, &mut cgen, &locals, 0)?;
+    //let _ = codegen_statements(func.code, &mut cgen, &locals, 0)?;
 
-    //codegen(func.child_nodes(), &mut cgen, 0, true)?;
+    codegen(func.child_nodes(), &mut cgen, 0, true)?;
 
     let mut space_for_locals = cgen.next_slot + 128;
 
@@ -182,7 +182,6 @@ fn codegen(
         let debug = match &node {
             TypeCheckedNode::Statement(stat) => stat.debug_info,
             TypeCheckedNode::Expression(expr) => expr.debug_info,
-            TypeCheckedNode::StructField(field) => DebugInfo::default(),
             TypeCheckedNode::Type(tipe) => panic!("Found type node {}", tipe.display()),
         };
 
@@ -199,6 +198,23 @@ fn codegen(
             };
             (@$($opcode:tt)+) => {
                 Instruction::from_opcode(Opcode::$($opcode)+, debug)
+            };
+        }
+
+        macro_rules! clear_stack {
+            () => {
+                for _ in 0..stack_items {
+                    cgen.code.push(opcode!(Pop));
+                }
+            };
+        }
+
+        macro_rules! error {
+            ($text:expr, $($args:expr)*) => {
+                Err(CompileError::new("Internal error", format!($text, $($args)*), debug.locs()))?
+            };
+            (@$text:expr, $debug:expr) => {
+                Err(CompileError::new("Internal error", format!($text), $debug.locs()))?
             };
         }
 
@@ -233,11 +249,9 @@ fn codegen(
                             } else {
                                 match cgen.locals.get(&local.id) {
                                     Some(slot) => *slot,
-                                    None => Err(CompileError::new(
-                                        "Internal Error",
-                                        "No slot has been assigned",
-                                        local.debug_info.locs(),
-                                    ))?,
+                                    None => {
+                                        error!(@"No slot has been assigned", local.debug_info)
+                                    }
                                 }
                             };
                             cgen.locals.insert(local.id, slot);
@@ -259,19 +273,18 @@ fn codegen(
                         cgen.code.push(opcode!(@SetGlobalVar(offset)));
                     }
                     TypeCheckedStatementKind::ReturnVoid() => {
-                        for _ in 0..stack_items {
-                            cgen.code.push(opcode!(Pop));
-                        }
+                        clear_stack!();
                         cgen.code.push(opcode!(@Return));
                     }
                     TypeCheckedStatementKind::Return(expr) => {
-                        for _ in 0..stack_items {
-                            cgen.code.push(opcode!(Pop));
-                        }
+                        clear_stack!();
                         expr!(expr);
                         cgen.code.push(opcode!(@Return));
                     }
-                    TypeCheckedStatementKind::While(cond, body) => {}
+                    TypeCheckedStatementKind::Expression(expr) => {
+                        // TODO: Add typechecking of dropped expressions
+                        expr!(expr);
+                    }
                     TypeCheckedStatementKind::Asm(payload, args) => {
                         let nargs = args.len();
                         for i in 0..nargs {
@@ -280,10 +293,6 @@ fn codegen(
                         for insn in payload {
                             cgen.code.push(insn.clone());
                         }
-                    }
-                    TypeCheckedStatementKind::Expression(expr) => {
-                        // TODO: Add typechecking of dropped expressions
-                        expr!(expr);
                     }
                     TypeCheckedStatementKind::DebugPrint(expr) => {
                         expr!(expr);
@@ -295,6 +304,7 @@ fn codegen(
                             continue;
                         }
                     }
+                    TypeCheckedStatementKind::While(cond, body) => {}
                     TypeCheckedStatementKind::Break(..) => {
                         panic!("Encountered a break node");
                     }
@@ -308,18 +318,44 @@ fn codegen(
                     TypeCheckedExprKind::If(cond, block, else_block, _) => {
                         expr!(cond);
                         let end_label = cgen.label_gen.next();
+                        let else_label = cgen.label_gen.next();
                         cgen.code.push(opcode!(IsZero));
-                        cgen.code.push(opcode!(Cjump, Value::Label(end_label)));
+                        cgen.code.push(opcode!(Cjump, Value::Label(else_label)));
                         block!(block);
                         // TODO: alias
+
+                        cgen.code.push(opcode!(@Label(else_label)));
                         if let Some(else_block) = else_block {
-                            let else_label = cgen.label_gen.next();
                             block!(else_block);
                         }
                         // TODO: alias
                         cgen.code.push(opcode!(@Label(end_label)));
                     }
-                    TypeCheckedExprKind::IfLet(name, expr, block, else_block, _) => {}
+                    TypeCheckedExprKind::IfLet(id, right, block, else_block, _) => {
+                        expr!(right);
+                        let end_label = cgen.label_gen.next();
+                        let else_label = cgen.label_gen.next();
+                        cgen.code.push(opcode!(Dup0));
+                        cgen.code.push(opcode!(Tget, Value::from(0)));
+                        cgen.code.push(opcode!(IsZero));
+                        cgen.code.push(opcode!(Cjump, Value::Label(else_label)));
+
+                        // Some(_) case
+                        let slot = cgen.next_slot();
+                        cgen.locals.insert(*id, slot);
+                        cgen.code.push(opcode!(Tget, Value::from(1)));
+                        cgen.code.push(opcode!(@SetLocal(slot)));
+                        block!(block);
+                        cgen.code.push(opcode!(Jump, Value::Label(end_label)));
+
+                        // None case
+                        cgen.code.push(opcode!(@Label(else_label)));
+                        cgen.code.push(opcode!(Pop));
+                        if let Some(else_block) = else_block {
+                            block!(else_block);
+                        }
+                        cgen.code.push(opcode!(@Label(end_label)));
+                    }
                     TypeCheckedExprKind::Loop(body) => {}
                     TypeCheckedExprKind::Cast(expr, _) => expr!(expr),
                     TypeCheckedExprKind::Error => cgen.code.push(opcode!(Error)),
@@ -341,23 +377,27 @@ fn codegen(
                             ])
                         ));
                     }
-                    TypeCheckedExprKind::Variant(inner) => {}
                     TypeCheckedExprKind::LocalVariableRef(id, _) => match cgen.locals.get(id) {
                         Some(slot) => {
                             cgen.code.push(opcode!(@GetLocal(*slot)));
                         }
                         None => {
-                            return Err(CompileError::new(
-                                "Internal error",
-                                format!(
-                                    "Variable {} doesn't have an assigned slot",
-                                    Color::red(cgen.string_table.name_from_id(*id))
-                                ),
-                                debug.locs(),
-                            ))
+                            error!(
+                                "Variable {} doesn't have an assigned slot",
+                                cgen.string_table.name_from_id(*id)
+                            )
                         }
                     },
-                    TypeCheckedExprKind::FuncRef(name, _) => {}
+                    TypeCheckedExprKind::FuncRef(id, _) => {
+                        let func_label = match cgen.func_labels.get(id) {
+                            Some(label) => *label,
+                            None => {
+                                error!("No label for func ref {}", id)
+                            }
+                        };
+                        cgen.code.push(opcode!(Noop, Value::Label(func_label)));
+                    }
+                    TypeCheckedExprKind::GlobalVariableRef(id, _) => {}
                     TypeCheckedExprKind::FunctionCall(fexpr, args, _, prop) => {
                         let nargs = args.len();
                         for i in 0..nargs {
@@ -394,14 +434,37 @@ fn codegen(
                             debug,
                         ));
                     }
+                    TypeCheckedExprKind::ArrayRef(expr1, expr2, t) => {}
+                    TypeCheckedExprKind::FixedArrayRef(expr1, expr2, size, _) => {}
+                    TypeCheckedExprKind::NewArray(sz_expr, value, array_type) => {}
+                    TypeCheckedExprKind::NewFixedArray(sz, bo_expr, _) => {}
                     TypeCheckedExprKind::FixedArrayRef(..) => {}
-                    TypeCheckedExprKind::Try(variant, _) => {}
+                    TypeCheckedExprKind::NewMap(t) => {}
+                    TypeCheckedExprKind::MapRef(map_expr, key_expr, t) => {}
                     TypeCheckedExprKind::StructMod(structure, index, value, _) => {}
-                    TypeCheckedExprKind::StructInitializer(fields, _) => {}
-                    TypeCheckedExprKind::UnaryOp(op, tce, _) => {}
-                    TypeCheckedExprKind::Binary(op, expr1, expr2, _) => {
-                        expr!(expr1, 0);
-                        expr!(expr2, 1);
+                    TypeCheckedExprKind::UnaryOp(op, expr, _) => {
+                        expr!(expr);
+                        cgen.code.push(match op {
+                            UnaryOp::BitwiseNeg => opcode!(BitwiseNeg),
+                            UnaryOp::Not => opcode!(IsZero),
+                            UnaryOp::Hash => opcode!(Hash),
+                            UnaryOp::Len => opcode!(Tlen),
+                            UnaryOp::ToAddress => {
+                                let mask = Uint256::from_usize(2)
+                                    .exp(&Uint256::from_usize(160))
+                                    .sub(&Uint256::one())
+                                    .expect("mask is incorrect");
+                                opcode!(BitwiseAnd, Value::Int(mask))
+                            }
+                            UnaryOp::Minus => {
+                                opcode!(Sub, Value::from(0))
+                            }
+                            UnaryOp::ToUint | UnaryOp::ToInt | UnaryOp::ToBytes32 => opcode!(Noop),
+                        });
+                    }
+                    TypeCheckedExprKind::Binary(op, left, right, _) => {
+                        expr!(left, 0);
+                        expr!(right, 1);
                         let opcode = Opcode::AVMOpcode(match op {
                             BinaryOp::GetBuffer8 => AVMOpcode::GetBuffer8,
                             BinaryOp::GetBuffer64 => AVMOpcode::GetBuffer64,
@@ -438,21 +501,61 @@ fn codegen(
                             _ => {}
                         }
                     }
+                    TypeCheckedExprKind::Trinary(op, expr1, expr2, expr3, _) => {}
+                    TypeCheckedExprKind::ShortcutOr(left, right) => {
+                        expr!(left);
+                        let short = cgen.label_gen.next();
+                        cgen.code.push(opcode!(Dup0));
+                        cgen.code.push(opcode!(Cjump, Value::Label(short)));
+                        cgen.code.push(opcode!(Pop));
+                        expr!(right);
+                        cgen.code.push(opcode!(@Label(short)));
+                    }
+                    TypeCheckedExprKind::ShortcutAnd(left, right) => {
+                        expr!(left);
+                        let short = cgen.label_gen.next();
+                        cgen.code.push(opcode!(Dup0));
+                        cgen.code.push(opcode!(IsZero));
+                        cgen.code.push(opcode!(Cjump, Value::Label(short)));
+                        cgen.code.push(opcode!(Pop));
+                        expr!(right);
+                        cgen.code.push(opcode!(@Label(short)));
+                    }
+                    TypeCheckedExprKind::ArrayMod(arr, index, val, t) => {}
                     TypeCheckedExprKind::FixedArrayMod(..) => {}
+                    TypeCheckedExprKind::MapMod(map, key, val, t) => {}
                     TypeCheckedExprKind::Asm(_, payload, args) => {
                         let nargs = args.len();
-                        for i in 0..nargs {}
+                        for i in 0..nargs {
+                            expr!(&mut args[nargs - 1 - i], i);
+                        }
                         for insn in payload {
                             cgen.code.push(insn.clone());
                         }
                     }
-                    x => {
-                        panic!("expr {:?} not supported", x);
+                    TypeCheckedExprKind::Variant(inner) => {
+                        expr!(inner);
+                        cgen.code.push(opcode!(
+                            Noop,
+                            Value::new_tuple(vec![Value::from(1), Value::none()])
+                        ));
+                        cgen.code.push(opcode!(Tset, Value::from(1)));
+                    }
+                    TypeCheckedExprKind::Try(variant, _) => {
+                        expr!(variant);
+                        let success = cgen.label_gen.next();
+                        cgen.code.push(opcode!(Dup0));
+                        cgen.code.push(opcode!(Tget, Value::from(0)));
+                        cgen.code.push(opcode!(Cjump, Value::Label(success)));
+                        cgen.code.push(opcode!(@Return));
+                        clear_stack!();
+                        cgen.code.push(opcode!(@Label(success)));
+                        cgen.code.push(opcode!(Tget, Value::from(1)));
+                    }
+                    TypeCheckedExprKind::ClosureLoad(id, nargs, local_space, captures, _) => {
+                        unimplemented!("Needs to happen after register coloring");
                     }
                 }
-            }
-            TypeCheckedNode::StructField(field) => {
-                codegen(field.child_nodes(), cgen, stack_items, false)?;
             }
             _ => {}
         }
@@ -771,10 +874,7 @@ fn codegen_expr(
                 UnaryOp::BitwiseNeg => opcode!(BitwiseNeg),
                 UnaryOp::Not => opcode!(IsZero),
                 UnaryOp::Hash => opcode!(Hash),
-                UnaryOp::Len => Instruction::from_opcode(
-                    Opcode::TupleGet(0, 3),
-                    debug,
-                ),
+                UnaryOp::Len => Instruction::from_opcode(Opcode::TupleGet(0, 3), debug),
                 UnaryOp::ToAddress => {
                     let mask = Uint256::from_usize(2)
                         .exp(&Uint256::from_usize(160))
@@ -1045,7 +1145,7 @@ fn codegen_expr(
         TypeCheckedExprKind::CodeBlock(block) => {
             codegen_code_block(block, cgen, locals, stack_items)
         }
-        TypeCheckedExprKind::StructInitializer(fields, _) => {
+        /*TypeCheckedExprKind::StructInitializer(fields, _) => {
             let fields_len = fields.len();
             for i in 0..fields_len {
                 let field = &fields[fields_len - 1 - i];
@@ -1060,7 +1160,7 @@ fn codegen_expr(
                 ));
             }
             Ok(())
-        }
+        }*/
         TypeCheckedExprKind::Tuple(fields, _) => {
             let fields_len = fields.len();
             for i in 0..fields_len {

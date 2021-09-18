@@ -8,6 +8,7 @@ use crate::compile::{CompileError, DebugInfo, GlobalVar, TypeTree};
 use crate::console::Color;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
 use crate::uint256::Uint256;
+use std::sync::Arc;
 
 /// The maximum size of an AVM tuple
 pub const TUPLE_SIZE: usize = 8;
@@ -128,6 +129,20 @@ pub fn fix_tuple_size(
             _ => {
                 code_out.push(insn.clone());
             }
+        }
+    }
+
+    for curr in code_out.iter_mut() {
+        // replace any wide immediate values
+
+        if let Some(ref mut value) = curr.immediate {
+            value.replace2(&mut |value| match value {
+                Value::Tuple(tup) if tup.len() >= 8 => {
+                    let folded = TupleTree::fold_into_tuple(tup.to_vec());
+                    *value = folded;
+                }
+                _ => {}
+            });
         }
     }
 

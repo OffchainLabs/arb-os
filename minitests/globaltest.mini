@@ -18,7 +18,7 @@ var global10: MyType;
 
 
 view write func main() {
-    asm(tests(),) { log };
+    asm(tests()) { log };
 }
 
 view write func tests() -> uint {
@@ -137,6 +137,7 @@ view write func tests() -> uint {
     return struct9test();
 }
 
+#[print]
 func struct9test() -> uint {
     let _theStruct = struct {
         field0: 0,

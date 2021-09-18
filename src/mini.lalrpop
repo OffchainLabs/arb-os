@@ -238,7 +238,6 @@ StatementKind: StatementKind = {
     <e: Expr> ";" => StatementKind::Expression(e),
     "return" <e: Expr> ";" => StatementKind::Return(e),
     "return" ";" => StatementKind::ReturnVoid(),
-    <lno: @L> "return" "None" ";" => StatementKind::Return(Expr{ kind: ExprKind::Constant(Constant::Option(OptionConst::None(Type::Every))), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))}),
     "break" <e: Expr?> ";" => StatementKind::Break(e, None),
     "debug" "(" <e: Expr> ")" ";" => StatementKind::DebugPrint(e),
     "assert" "(" <e: Expr> ")" ";" => StatementKind::Assert(e),
@@ -569,6 +568,9 @@ Expr13: Expr = {
     <lno: @L> "error" => Expr { kind: ExprKind::Error, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
     <lno: @L> "getGas" "(" ")" => Expr { kind: ExprKind::GetGas, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
     <lno: @L> "setGas" "(" <e:Expr> ")" => Expr { kind: ExprKind::SetGas(Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+    <lno: @L> "None" => {
+        Expr::lno(ExprKind::Constant(Constant::Option(OptionConst::None(Type::Every))), file_info, lno, filename)
+    },
     <lno: @L> <i: Ident> <s:("::" <Specialization>)?> => {
         let spec = s.into_iter().flatten().collect();
         Expr::lno(ExprKind::VariableRef(i, spec), file_info, lno, filename)

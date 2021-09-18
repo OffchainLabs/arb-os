@@ -1,10 +1,14 @@
+/*
+ * Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
+ */
+
 
 var global: uint;
 
 type Produce = func(uint, uint) -> string;
 
 write func main() {
-	asm(tests().1) { log };
+    asm(tests().1) { log };
 }
 
 func tests() -> string {

@@ -54,7 +54,6 @@ pub trait AbstractSyntaxTree {
 pub enum TypeCheckedNode<'a> {
     Statement(&'a mut TypeCheckedStatement),
     Expression(&'a mut TypeCheckedExpr),
-    StructField(&'a mut TypeCheckedFieldInitializer),
     Type(&'a mut Type),
 }
 
@@ -63,9 +62,6 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
         match self {
             TypeCheckedNode::Statement(stat) => stat.child_nodes(),
             TypeCheckedNode::Expression(exp) => exp.child_nodes(),
-            TypeCheckedNode::StructField(field) => {
-                vec![TypeCheckedNode::Expression(&mut field.value)]
-            }
             TypeCheckedNode::Type(tipe) => tipe.child_nodes(),
         }
     }
@@ -73,7 +69,6 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
         match self {
             TypeCheckedNode::Statement(stat) => stat.is_view(type_tree),
             TypeCheckedNode::Expression(exp) => exp.is_view(type_tree),
-            TypeCheckedNode::StructField(field) => field.is_view(type_tree),
             TypeCheckedNode::Type(_) => false,
         }
     }
@@ -81,7 +76,6 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
         match self {
             TypeCheckedNode::Statement(stat) => stat.is_write(type_tree),
             TypeCheckedNode::Expression(exp) => exp.is_write(type_tree),
-            TypeCheckedNode::StructField(field) => field.is_write(type_tree),
             TypeCheckedNode::Type(_) => false,
         }
     }
@@ -110,12 +104,6 @@ impl<'a> TypeCheckedNode<'a> {
                         expr.debug_info.attributes.codegen_print || attributes.codegen_print;
                     let child_attributes = expr.debug_info.attributes.clone();
                     TypeCheckedNode::propagate_attributes(expr.child_nodes(), &child_attributes);
-                }
-                TypeCheckedNode::StructField(field) => {
-                    field.value.debug_info.attributes.codegen_print =
-                        field.value.debug_info.attributes.codegen_print || attributes.codegen_print;
-                    let child_attributes = field.value.debug_info.attributes.clone();
-                    TypeCheckedNode::propagate_attributes(field.child_nodes(), &child_attributes);
                 }
                 _ => {}
             }
@@ -568,14 +556,6 @@ fn flowcheck_liveliness(
                 }
                 _ => false,
             },
-            TypeCheckedNode::StructField(field) => {
-                process!(
-                    vec![TypeCheckedNode::Expression(&mut field.value)],
-                    problems,
-                    false
-                );
-                continue;
-            }
             _ => false,
         };
 
@@ -837,7 +817,6 @@ pub enum TypeCheckedExprKind {
         FuncProperties,
     ),
     CodeBlock(TypeCheckedCodeBlock),
-    StructInitializer(Vec<TypeCheckedFieldInitializer>, Type),
     ArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
     FixedArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, usize, Type),
     MapRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
@@ -935,10 +914,6 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                     .collect()
             }
             TypeCheckedExprKind::CodeBlock(block) => block.child_nodes(),
-            TypeCheckedExprKind::StructInitializer(fields, _) => fields
-                .iter_mut()
-                .map(|field| TypeCheckedNode::StructField(field))
-                .collect(),
             TypeCheckedExprKind::Tuple(exps, _) | TypeCheckedExprKind::Asm(_, _, exps) => exps
                 .iter_mut()
                 .map(|exp| TypeCheckedNode::Expression(exp))
@@ -1081,7 +1056,6 @@ impl TypeCheckedExpr {
             TypeCheckedExprKind::Const(.., t) => t.clone(),
             TypeCheckedExprKind::FunctionCall(.., t, _) => t.clone(),
             TypeCheckedExprKind::CodeBlock(block) => block.get_type(),
-            TypeCheckedExprKind::StructInitializer(.., t) => t.clone(),
             TypeCheckedExprKind::ArrayRef(.., t) => t.clone(),
             TypeCheckedExprKind::FixedArrayRef(.., t) => t.clone(),
             TypeCheckedExprKind::MapRef(.., t) => t.clone(),
@@ -2401,7 +2375,6 @@ fn typecheck_expr(
                                 }
                                 _ => {}
                             },
-                            TypeCheckedNode::StructField(_) => {}
                             TypeCheckedNode::Type(_) => continue,
                         }
 
@@ -2434,7 +2407,6 @@ fn typecheck_expr(
                                 }
                                 _ => {}
                             },
-                            TypeCheckedNode::StructField(_) => {}
                             TypeCheckedNode::Type(_) => continue,
                         }
                         idents.extend(all_idents(node.child_nodes()));
@@ -2632,33 +2604,6 @@ fn typecheck_expr(
                     ))
                 }
             }
-            ExprKind::StructInitializer(fieldvec) => {
-                let mut tc_fields = Vec::new();
-                let mut tc_fieldtypes = Vec::new();
-                for field in fieldvec {
-                    let tc_expr = typecheck_expr(
-                        &field.value,
-                        type_table,
-                        global_vars,
-                        func_table,
-                        func,
-                        type_tree,
-                        string_table,
-                        undefinable_ids,
-                        closures,
-                        scopes,
-                    )?;
-                    tc_fields.push(TypeCheckedFieldInitializer::new(
-                        field.name.clone(),
-                        tc_expr.clone(),
-                    ));
-                    tc_fieldtypes.push(StructField::new(field.name.clone(), tc_expr.get_type()));
-                }
-                Ok(TypeCheckedExprKind::StructInitializer(
-                    tc_fields,
-                    Type::Struct(tc_fieldtypes),
-                ))
-            }
             ExprKind::Tuple(fields) => {
                 let mut tc_fields = Vec::new();
                 let mut types = Vec::new();
@@ -2679,6 +2624,27 @@ fn typecheck_expr(
                     tc_fields.push(tc_field);
                 }
                 Ok(TypeCheckedExprKind::Tuple(tc_fields, Type::Tuple(types)))
+            }
+            ExprKind::StructInitializer(fieldvec) => {
+                let mut fields = vec![];
+                let mut types = vec![];
+                for field in fieldvec {
+                    let expr = typecheck_expr(
+                        &field.value,
+                        type_table,
+                        global_vars,
+                        func_table,
+                        func,
+                        type_tree,
+                        string_table,
+                        undefinable_ids,
+                        closures,
+                        scopes,
+                    )?;
+                    types.push(StructField::new(field.name.clone(), expr.get_type()));
+                    fields.push(expr);
+                }
+                Ok(TypeCheckedExprKind::Tuple(fields, Type::Struct(types)))
             }
             ExprKind::ArrayOrMapMod(arr, index, val) => {
                 let tc_arr = typecheck_expr(

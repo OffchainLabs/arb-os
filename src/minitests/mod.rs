@@ -86,11 +86,6 @@ fn test_queuetest() {
 }
 
 #[test]
-fn test_globaltest() {
-    test_for_numeric_error_code(Path::new("builtin/globaltest.mexe"));
-}
-
-#[test]
 fn test_pqtest() {
     test_for_numeric_error_code(Path::new("stdlib/priorityqtest.mexe"));
     test_for_error_string(Path::new("stdlib2/priorityqtest.mexe"));
@@ -242,6 +237,11 @@ fn test_rlp_list3(
 }
 
 #[test]
+fn test_arithmetic() {
+    test_for_error_string(Path::new("minitests/arithmetic.mexe"));
+}
+
+#[test]
 fn test_codeload() {
     test_for_numeric_error_code(Path::new("minitests/codeloadtest.mexe"));
 }
@@ -261,6 +261,11 @@ fn test_generics() {
     test_for_error_string(Path::new("minitests/generics/closure.mexe"));
     test_for_error_string(Path::new("minitests/generics/colorful.mexe"));
     test_for_error_string(Path::new("minitests/generics/queue.mexe"));
+}
+
+#[test]
+fn test_globals() {
+    test_for_numeric_error_code(Path::new("minitests/globaltest.mexe"));
 }
 
 #[test]

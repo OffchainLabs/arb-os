@@ -786,6 +786,23 @@ impl Value {
         current
     }
 
+    /// Surgically replace types potentially nested within others.
+    /// |via| makes the type substitution.
+    pub fn replace2<Via>(&mut self, via: &mut Via)
+    where
+        Via: FnMut(&mut Self),
+    {
+        match self {
+            Self::Tuple(ref mut contents) => {
+                let mut nested = contents.to_vec();
+                nested.iter_mut().for_each(|val| val.replace2(via));
+                *contents = Arc::new(nested);
+            }
+            _ => {}
+        }
+        via(self);
+    }
+
     pub fn pretty_print(&self, highlight: &str) -> String {
         match self {
             Value::Int(i) => Color::color(highlight, i),
@@ -826,6 +843,12 @@ impl Value {
                 }
             },
         }
+    }
+}
+
+impl Default for Value {
+    fn default() -> Self {
+        return Value::none();
     }
 }
 
@@ -1024,6 +1047,8 @@ impl Opcode {
             Opcode::SetLocal(slot) => format!("SetLocal {}", Color::pink(slot)),
             Opcode::SetGlobalVar(id) => format!("SetGlobal {}", Color::pink(id)),
             Opcode::GetGlobalVar(id) => format!("GetGlobal {}", Color::pink(id)),
+            Opcode::TupleGet(slot, size) => format!("TupleGet {}", Color::pink(slot)),
+            Opcode::TupleSet(slot, size) => format!("TupleSet {}", Color::pink(slot)),
             Opcode::Label(label) => Value::Label(*label).pretty_print(label_color),
             Opcode::Capture(id) => format!("Capture λ_{}", id % 256),
             Opcode::FuncCall(prop) => format!(

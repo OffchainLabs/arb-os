@@ -1,7 +1,10 @@
+/*
+ * Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
+ */
 
 
 write func main() {
-	asm(tests().1) { log };
+    asm(tests().1) { log };
 }
 
 func tests() -> string {
@@ -18,6 +21,8 @@ func tests() -> string {
     if (flip != -flop) {
         return "Uh oh, unary minus is broken";
     }
-    
+
     return "";
 }
+
+
