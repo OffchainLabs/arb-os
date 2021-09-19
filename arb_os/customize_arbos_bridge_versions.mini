@@ -58,5 +58,7 @@ public func set_globalCurrentRetryableRequest_onUpgrade(_oldGlobals: GlobalsBefo
      return None<IncomingRequestAndLogs>;
 }
 
-func _dummy() -> uint { return 0; }
+public func set_upgradeApprovedUntil_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> uint {
+    return 0;
+}
 

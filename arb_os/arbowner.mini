@@ -72,10 +72,12 @@ use std::rlp::keccakOfRlpEncodedUintPair;
 
 var upgradeInProgress: option<AvmCodeBuilder>;
 var previousArbosUpgradeHash: bytes32;
+var upgradeApprovedUntil: uint;
 
 public write func arbowner_init() {
     upgradeInProgress = None<AvmCodeBuilder>;
     previousArbosUpgradeHash = bytes32(0);
+    upgradeApprovedUntil = 0;
 }
 
 public view write func arbowner_txcall() {
@@ -268,6 +270,7 @@ view write func arbowner_finishCodeUploadAsArbosUpgrade(_topFrame: EvmCallFrame,
         let upgradeCodePoint = unsafecast<view write func()>(avmCodeBuilder_finish(upgrade));
         upgradeInProgress = None<AvmCodeBuilder>;
         previousArbosUpgradeHash = newCodeHash;
+        upgradeApprovedUntil = 0;
         let _ = evmCallStack_returnFromCall(const::TxResultCode_success, 0, 0, Some(upgradeCodePoint));
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 44, 0, 0);
