@@ -4,7 +4,7 @@
 
 public func builtin_assert(assertion: (bool, any)) {
     let (success, print) = assertion;
-    if (!success) {
+    if !success {
         debug(print);
         return error;
     }

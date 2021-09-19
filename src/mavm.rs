@@ -703,14 +703,6 @@ impl Value {
         }
     }
 
-    /// Converts `Value` to usize if possible, otherwise returns `None`.
-    pub fn to_usize(&self) -> Option<usize> {
-        match self {
-            Value::Int(i) => i.to_usize(),
-            _ => None,
-        }
-    }
-
     pub fn avm_hash(&self) -> Value {
         //BUGBUG: should do same hash as AVM
         match self {

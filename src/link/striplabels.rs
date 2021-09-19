@@ -6,7 +6,6 @@
 
 use crate::compile::CompileError;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
-use crate::uint256::Uint256;
 use std::collections::{HashMap, HashSet};
 
 /// Replaces labels with code points in code_in, and in copies of jump_table. A

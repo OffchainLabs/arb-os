@@ -4,9 +4,7 @@
 
 //! Contains utilities for generating instructions from AST structures.
 
-use super::ast::{
-    AssignRef, BinaryOp, DebugInfo, FuncProperties, GlobalVar, TrinaryOp, Type, UnaryOp,
-};
+use super::ast::{BinaryOp, DebugInfo, FuncProperties, GlobalVar, TrinaryOp, Type, UnaryOp};
 use super::typecheck::{TypeCheckedExpr, TypeCheckedFunc, TypeCheckedNode, TypeCheckedStatement};
 use crate::compile::typecheck::{
     AbstractSyntaxTree, TypeCheckedCodeBlock, TypeCheckedExprKind, TypeCheckedStatementKind,
@@ -178,7 +176,7 @@ fn codegen(
         };
     }
 
-    for mut node in nodes {
+    for node in nodes {
         let debug = match &node {
             TypeCheckedNode::Statement(stat) => stat.debug_info,
             TypeCheckedNode::Expression(expr) => expr.debug_info,
@@ -435,10 +433,9 @@ fn codegen(
                         ));
                     }
                     TypeCheckedExprKind::ArrayRef(expr1, expr2, t) => {}
-                    TypeCheckedExprKind::FixedArrayRef(expr1, expr2, size, _) => {}
                     TypeCheckedExprKind::NewArray(sz_expr, value, array_type) => {}
                     TypeCheckedExprKind::NewFixedArray(sz, bo_expr, _) => {}
-                    TypeCheckedExprKind::FixedArrayRef(..) => {}
+                    TypeCheckedExprKind::FixedArrayRef(expr1, expr2, size, _) => {}
                     TypeCheckedExprKind::NewMap(t) => {}
                     TypeCheckedExprKind::MapRef(map_expr, key_expr, t) => {}
                     TypeCheckedExprKind::StructMod(structure, index, value, _) => {}
@@ -1244,25 +1241,18 @@ fn codegen_expr(
             };
             expr!(&the_expr, 0)
         }
-        TypeCheckedExprKind::NewFixedArray(sz, bo_expr, _) => {
-            match bo_expr {
-                Some(expr) => {
-                    expr!(expr, 0)?;
-                    for _i in 0..7 {
-                        cgen.code.push(opcode!(Dup0));
-                    }
-                    let empty_tuple = vec![Value::new_tuple(Vec::new()); 8];
-                    cgen.code.push(opcode!(Noop, Value::new_tuple(empty_tuple)));
-                    for i in 0..8 {
-                        cgen.code
-                            .push(opcode!(Tset, Value::Int(Uint256::from_usize(i))));
-                    }
-                }
-                None => {
-                    let empty_tuple = vec![Value::new_tuple(Vec::new()); 8];
-                    cgen.code.push(opcode!(Noop, Value::new_tuple(empty_tuple)));
-                }
+        TypeCheckedExprKind::NewFixedArray(sz, expr, _) => {
+            expr!(expr, 0)?;
+            for _i in 0..7 {
+                cgen.code.push(opcode!(Dup0));
             }
+            let empty_tuple = vec![Value::new_tuple(Vec::new()); 8];
+            cgen.code.push(opcode!(Noop, Value::new_tuple(empty_tuple)));
+            for i in 0..8 {
+                cgen.code
+                    .push(opcode!(Tset, Value::Int(Uint256::from_usize(i))));
+            }
+
             let mut tuple_size: usize = 8;
             while tuple_size < *sz {
                 for _i in 0..7 {

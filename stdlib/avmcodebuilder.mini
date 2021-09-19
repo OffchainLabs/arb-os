@@ -5,6 +5,9 @@
 use std::bytestream::ByteStream;
 use std::bytestream::bytestream_atEof;
 use std::bytestream::bytestream_getByte;
+use std::bytestream::bytestream_getN;
+
+use std::bytearray::bytearray_toSizeAndBuffer;
 
 use std::rlp::rlp_decodeUint;
 
@@ -101,6 +104,13 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
         }
     } elseif (kind == 2) { // empty buffer
         Some((stream, newbuffer()))
+    } elseif (kind == 2) {    // empty buffer
+        Some((stream, newbuffer()))
+    } elseif (kind == 3) {    // non-empty buffer
+        let (*stream, size) = rlp_decodeUint(stream)?;
+        let (*stream, ba) = bytestream_getN(stream, size)?;
+        let (_, buf) = bytearray_toSizeAndBuffer(ba);
+        Some((stream, buf))
     } elseif (kind == 10) {   // 0-tuple
         Some((stream, ()))
     } elseif (kind == 11) {   // 1-tuple

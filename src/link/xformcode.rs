@@ -8,7 +8,6 @@ use crate::compile::{CompileError, DebugInfo, GlobalVar, TypeTree};
 use crate::console::Color;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
 use crate::uint256::Uint256;
-use std::sync::Arc;
 
 /// The maximum size of an AVM tuple
 pub const TUPLE_SIZE: usize = 8;

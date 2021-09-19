@@ -29,8 +29,8 @@ fn test_basic() {
 }
 
 #[test]
-fn test_xif_else() {
-    let machine = compile_run_cycle("minitests/xif-else.mini".to_string());
+fn test_if_else() {
+    let machine = compile_run_cycle("minitests/if-else.mini".to_string());
     assert_eq!(machine.stack_top(), Some(&Value::Int(Uint256::zero())));
 }
 

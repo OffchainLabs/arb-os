@@ -2,16 +2,17 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+
 public func main() {
     let ret = fact(5);
-    asm(ret,) { log };
+    asm(ret) { log };
 }
 
 func fact(n: uint) -> uint {
     let ret = 1;
-    while (n > 0) {
+    while n > 0 {
         ret = ret*n;
         n = n-1;
     }
-    return ret;
+    ret
 }

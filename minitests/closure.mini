@@ -15,21 +15,21 @@ view write func tests() -> string {
 
     let lambda = capture_2();
 
-    if (lambda(48, 96) != "Closures are so cool!") {
+    if lambda(48, 96) != "Closures are so cool!" {
         return "Uh oh, closures don't work when passed around";
     }
     
-    if (lambda(48, 96) != lambda(48, 96)) {
+    if lambda(48, 96) != lambda(48, 96) {
         return "Uh oh, closures are stateful";
     }
     
     lambda = capture_1(3);
     
-    if (lambda(1, 2) != "Capture count doesn't matter!") {
+    if lambda(1, 2) != "Capture count doesn't matter!" {
         return lambda(1, 2);
     } 
     
-    return test_global_capture();
+    test_global_capture()
 }
 
 func capture_2() -> Produce {
@@ -44,32 +44,33 @@ func capture_2() -> Produce {
         let sum = arg1 + a;
         let mul = arg2 * b.0 + b.1;
 
-        if (sum != arg1 + 32) {
+        if sum != arg1 + 32 {
             return "a wasn't captured correctly";
         }
-        if (mul != arg2 * 64 + 128) {
+        if mul != arg2 * 64 + 128 {
             return "b wasn't captured correctly";
         }
 
         let (_, _, message) = b;
 
-        return message;
+        message
     };
 
-    if (lambda(1024, 512) != "Closures are so cool!") {
+    if lambda(1024, 512) != "Closures are so cool!" {
         return error;
     }
-    return lambda;
+    lambda
 }
 
 func capture_1(sum: uint) -> Produce {
     
-    return closure(arg1: uint, arg2: uint) -> string {
-        if (arg1 + arg2 == sum) {
-            return "Capture count doesn't matter!";
+    closure(arg1: uint, arg2: uint) -> string {
+        if arg1 + arg2 == sum {
+            "Capture count doesn't matter!"
+        } else {
+            "Uh oh, a wasn't 0"
         }
-        return "Uh oh, a wasn't 0";
-    };
+    }
 }
 
 view write func test_global_capture() -> string {
@@ -78,21 +79,21 @@ view write func test_global_capture() -> string {
     
     let saved_global = 2;
     let true_capture = closure() -> uint {
-        return saved_global;
+        saved_global
     };
     saved_global = 1024; // no longer the same
     
     let viewable = view closure() -> uint {
-        return global;
+        global
     };
     
-    if (viewable() != 2) {
+    if viewable() != 2 {
         return "Could not read a 2";
     }
     
     global = 4;
     
-    if (viewable() != 4) {
+    if viewable() != 4 {
         return "Could not read a 4";
     }
     
@@ -102,7 +103,7 @@ view write func test_global_capture() -> string {
     
     writeable(16);
     
-    if (viewable() != 16) {
+    if viewable() != 16 {
         return "Could not read-write a 16";
     }
     
@@ -113,18 +114,18 @@ view write func test_global_capture() -> string {
     let loops = 0;
     writeable(0);
     
-    while (loops < 32) {
+    while loops < 32 {
         view_and_write();
         loops = loops + 1;
     }
     
-    if (viewable() != 32) {
+    if viewable() != 32 {
         return "Could not update global";
     }
     
-    if (true_capture() != saved_global / 512) {
+    if true_capture() != saved_global / 512 {
         return "True global capture didn't work";
     }
     
-    return "";
+    ""
 }

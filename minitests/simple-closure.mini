@@ -15,10 +15,11 @@ func tests() -> string {
 
     let lambda = make_lambda();
 
-    if (lambda(48, 96) != "Closures are so cool!") {
-        return "Uh oh, closures don't work when passed around";
+    if lambda(48, 96) != "Closures are so cool!" {
+        "Uh oh, closures don't work when passed around"
+    } else {
+        ""
     }
-    return "";
 }
 
 func make_lambda() -> Produce {
@@ -32,12 +33,12 @@ func make_lambda() -> Produce {
         let _ = arg1 + arg2;
         let b = "Closures are so cool!";
         
-        return b;
+        b
     };
 
-    if (lambda(a, b) != "Closures are so cool!") {
+    if lambda(a, b) != "Closures are so cool!" {
         return error;
     }
 
-    return lambda;
+    lambda
 }

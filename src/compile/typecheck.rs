@@ -823,7 +823,7 @@ pub enum TypeCheckedExprKind {
     ClosureLoad(StringId, usize, usize, BTreeSet<StringId>, Type),
     Tuple(Vec<TypeCheckedExpr>, Type),
     NewArray(Box<TypeCheckedExpr>, Value, Type),
-    NewFixedArray(usize, Option<Box<TypeCheckedExpr>>, Type),
+    NewFixedArray(usize, Box<TypeCheckedExpr>, Type),
     NewMap(Type),
     ArrayMod(
         Box<TypeCheckedExpr>,
@@ -886,6 +886,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             | TypeCheckedExprKind::TupleRef(exp, ..)
             | TypeCheckedExprKind::DotRef(exp, _, _, _)
             | TypeCheckedExprKind::NewArray(exp, _, _)
+            | TypeCheckedExprKind::NewFixedArray(_, exp, _)
             | TypeCheckedExprKind::Cast(exp, _)
             | TypeCheckedExprKind::Try(exp, _) => vec![TypeCheckedNode::Expression(exp)],
             TypeCheckedExprKind::Trinary(_, a, b, c, _) => vec![
@@ -916,10 +917,6 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             TypeCheckedExprKind::CodeBlock(block) => block.child_nodes(),
             TypeCheckedExprKind::Tuple(exps, _) | TypeCheckedExprKind::Asm(_, _, exps) => exps
                 .iter_mut()
-                .map(|exp| TypeCheckedNode::Expression(exp))
-                .collect(),
-            TypeCheckedExprKind::NewFixedArray(_, oexp, _) => oexp
-                .into_iter()
                 .map(|exp| TypeCheckedNode::Expression(exp))
                 .collect(),
             TypeCheckedExprKind::ArrayMod(exp1, exp2, exp3, _)
@@ -2541,32 +2538,26 @@ fn typecheck_expr(
                 tipe.default_value(type_tree),
                 Type::Array(Box::new(tipe.clone())),
             )),
-            ExprKind::NewFixedArray(size, maybe_expr) => match maybe_expr {
-                Some(expr) => {
-                    let tc_expr = typecheck_expr(
-                        expr,
-                        type_table,
-                        global_vars,
-                        func_table,
-                        func,
-                        type_tree,
-                        string_table,
-                        undefinable_ids,
-                        closures,
-                        scopes,
-                    )?;
-                    Ok(TypeCheckedExprKind::NewFixedArray(
-                        *size,
-                        Some(Box::new(tc_expr.clone())),
-                        Type::FixedArray(Box::new(tc_expr.get_type()), *size),
-                    ))
-                }
-                None => Ok(TypeCheckedExprKind::NewFixedArray(
+            ExprKind::NewFixedArray(size, expr) => {
+                let expr = typecheck_expr(
+                    expr,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    func,
+                    type_tree,
+                    string_table,
+                    undefinable_ids,
+                    closures,
+                    scopes,
+                )?;
+                let tipe = expr.get_type();
+                Ok(TypeCheckedExprKind::NewFixedArray(
                     *size,
-                    None,
-                    Type::FixedArray(Box::new(Type::Any), *size),
-                )),
-            },
+                    Box::new(expr.clone()),
+                    Type::FixedArray(Box::new(tipe), *size),
+                ))
+            }
             ExprKind::NewMap(key_type, value_type) => Ok(TypeCheckedExprKind::NewMap(Type::Map(
                 Box::new(key_type.clone()),
                 Box::new(value_type.clone()),
