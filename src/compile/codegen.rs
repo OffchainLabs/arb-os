@@ -1026,16 +1026,7 @@ fn codegen_expr(
                 DebugInfo::from(loc)
             ))
         }
-        /*TypeCheckedExprKind::ArrayMod(arr, index, val, t) => {
-            expr!(&TypeCheckedExpr::builtin(
-                "builtin_arraySet",
-                vec![arr, index, val],
-                t,
-                string_table,
-                DebugInfo::from(loc)
-            ))
-        }
-        TypeCheckedExprKind::MapMod(map, key, val, t) => {
+        /*        TypeCheckedExprKind::MapMod(map, key, val, t) => {
             expr!(&TypeCheckedExpr::builtin(
                 "builtin_kvsSet",
                 vec![map, key, val],

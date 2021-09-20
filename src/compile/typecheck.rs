@@ -11,7 +11,7 @@ use super::ast::{
 };
 use crate::compile::ast::{FieldInitializer, FuncProperties};
 use crate::compile::{CompileError, ErrorSystem, InliningHeuristic};
-use crate::console::Color;
+use crate::console::{Color, human_readable_index};
 use crate::link::Import;
 use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
 use crate::pos::Location;
@@ -2089,6 +2089,13 @@ fn typecheck_expr(
                     scopes,
                 )?;
 
+                let func_name = match &expr.kind {
+                    TypeCheckedExprKind::FuncRef(id, _) => {
+                        format!(" {}", string_table.name_from_id(*id))
+                    }
+                    _ => String::new(),
+                };
+
                 let expr_type = expr.get_type().rep(type_tree)?;
 
                 match expr_type.clone() {
@@ -2119,7 +2126,9 @@ fn typecheck_expr(
                                 ) {
                                     return Err(CompileError::new_type_error(
                                         format!(
-                                            "func arg has wrong type:\nencountered {}\ninstead of  {}",
+                                            "func{}'s {} arg has wrong type:\nencountered {}\ninstead of  {}",
+                                            Color::red(func_name),
+                                            Color::red(human_readable_index(i + 1)),
                                             Color::red(&tc_args[i].get_type().print(type_tree)),
                                             Color::red(resolved_arg_type.print(type_tree)),
                                         ),
@@ -2477,9 +2486,10 @@ fn typecheck_expr(
                 }
                 Ok(TypeCheckedExprKind::Tuple(fields, Type::Struct(types)))
             }
-            ExprKind::ArrayOrMapMod(store, key, item) => {
+            ExprKind::ArrayOrMapMod(unchecked_store, key, item) => {
+                
                 let store = typecheck_expr(
-                    store,
+                    unchecked_store,
                     type_table,
                     global_vars,
                     func_table,
@@ -2490,37 +2500,39 @@ fn typecheck_expr(
                     closures,
                     scopes,
                 )?;
-                let key = typecheck_expr(
-                    key,
-                    type_table,
-                    global_vars,
-                    func_table,
-                    func,
-                    type_tree,
-                    string_table,
-                    undefinable_ids,
-                    closures,
-                    scopes,
-                )?;
-                let item = typecheck_expr(
-                    item,
-                    type_table,
-                    global_vars,
-                    func_table,
-                    func,
-                    type_tree,
-                    string_table,
-                    undefinable_ids,
-                    closures,
-                    scopes,
-                )?;
-
                 let store_type = store.get_type().rep(type_tree)?;
-                let key_type = key.get_type().rep(type_tree)?;
-                let item_type = item.get_type().rep(type_tree)?;
-
+                
                 match store_type {
                     Type::FixedArray(inner_type, size) => {
+
+                        let key = typecheck_expr(
+                            key,
+                            type_table,
+                            global_vars,
+                            func_table,
+                            func,
+                            type_tree,
+                            string_table,
+                            undefinable_ids,
+                            closures,
+                            scopes,
+                        )?;
+                        let item = typecheck_expr(
+                            item,
+                            type_table,
+                            global_vars,
+                            func_table,
+                            func,
+                            type_tree,
+                            string_table,
+                            undefinable_ids,
+                            closures,
+                            scopes,
+                        )?;
+
+                        let key_type = key.get_type().rep(type_tree)?;
+                        let item_type = item.get_type().rep(type_tree)?;
+                        
                         if key_type != Type::Uint {
                             error!(
                                 "array modifier requires {} index, found {}",
@@ -2528,7 +2540,7 @@ fn typecheck_expr(
                                 key_type.print(type_tree)
                             );
                         }
-                        if !item_type.assignable(&inner_type, type_tree, HashSet::new()) {
+                        if !inner_type.assignable(&item_type, type_tree, HashSet::new()) {
                             error!(
                                 "mismatched types in array modifier, {}",
                                 inner_type
@@ -2544,8 +2556,44 @@ fn typecheck_expr(
                             Type::FixedArray(inner_type, size),
                         ))
                     }
-                    Type::Array(t) => {
-                        error!("unimplemented")
+                    Type::Array(inner_type) => {
+
+                        // The compiler doesn't know that `[]entry` here is the same as `array`.
+                        // We could cast to `array`, but we'd need to have the type imported.
+                        // So we cast to `every` to satisfy the function argument.
+                        let array_cast = Expr::new(
+                            ExprKind::UnsafeCast(Box::new(*unchecked_store.clone()), Type::Every),
+                            debug_info,
+                        );
+                        
+                        let call = Expr::build_call(
+                            "builtin_arraySet",
+                            vec![&array_cast, key, item],
+                            string_table,
+                            debug_info,
+                        )?;
+
+                        // The compiler doesn't know that `array` here is the same as `[]item`,
+                        // so we trick it into thinking we have an `[]item`.
+                        let array_type = Type::Array(Box::new(*inner_type.clone()));
+                        let call_cast = Expr::new(
+                            ExprKind::UnsafeCast(Box::new(call), array_type),
+                            debug_info,
+                        );
+                        
+                        let expr = typecheck_expr(
+                            &call_cast,
+                            type_table,
+                            global_vars,
+                            func_table,
+                            func,
+                            type_tree,
+                            string_table,
+                            undefinable_ids,
+                            closures,
+                            scopes,
+                        )?;
+                        Ok(expr.kind)
                     }
                     Type::Map(kt, vt) => {
                         error!("unimplemented")
@@ -2557,7 +2605,7 @@ fn typecheck_expr(
                 }
             }
             ExprKind::Cast(expr, t) => {
-                let tc_expr = typecheck_expr(
+                let expr = typecheck_expr(
                     expr,
                     type_table,
                     global_vars,
@@ -2569,12 +2617,12 @@ fn typecheck_expr(
                     closures,
                     scopes,
                 )?;
-                if t.castable(&tc_expr.get_type(), type_tree, HashSet::new()) {
-                    Ok(TypeCheckedExprKind::Cast(Box::new(tc_expr), t.clone()))
+                if t.castable(&expr.get_type(), type_tree, HashSet::new()) {
+                    Ok(TypeCheckedExprKind::Cast(Box::new(expr), t.clone()))
                 } else {
                     error!(
                         "Cannot cast from type {} to type {}",
-                        tc_expr.get_type().print(type_tree),
+                        expr.get_type().print(type_tree),
                         t.print(type_tree)
                     );
                 }

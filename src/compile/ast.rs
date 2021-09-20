@@ -1780,6 +1780,28 @@ impl Expr {
     pub fn new(kind: ExprKind, debug_info: DebugInfo) -> Self {
         Self { kind, debug_info }
     }
+
+    pub fn build_call(
+        name: &str,
+        args: Vec<&Self>,
+        string_table: &StringTable,
+        debug_info: DebugInfo,
+    ) -> Result<Self, CompileError> {
+
+        let id = match string_table.get_if_exists(name) {
+            Some(id) => id,
+            None => return Err(CompileError::new(
+                "Import error",
+                format!("Please import {}", name),
+                debug_info.locs(),
+            )),
+        };
+
+        let func_ref = Box::new(Expr::new(ExprKind::VariableRef(id, vec![]), debug_info));
+        let args = args.into_iter().cloned().collect();
+
+        Ok(Expr::new(ExprKind::FunctionCall(func_ref, args), debug_info))
+    }
 }
 
 /// A mini unary operator.
