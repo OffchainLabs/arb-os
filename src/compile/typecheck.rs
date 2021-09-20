@@ -208,11 +208,11 @@ fn flowcheck_reachability<T: AbstractSyntaxTree>(node: &mut T) -> Vec<CompileErr
     }
 
     warnings.push(CompileError::new_warning(
-        String::from("Compile warning"),
+        "Compile warning",
         if locations.len() == 2 {
-            String::from("found unreachable statement")
+            "found unreachable statement"
         } else {
-            String::from("found unreachable statements")
+            "found unreachable statements"
         },
         locations,
     ));
@@ -1266,6 +1266,14 @@ fn typecheck_statement<'a>(
     let kind = &statement.kind;
     let debug_info = statement.debug_info;
     let locs = debug_info.locs();
+
+    // TODO make actually warn
+    macro_rules! warn {
+        ($text:expr $(,$args:expr)* $(,)?) => {
+            return Err(CompileError::new("Typecheck error", format!($text, $(Color::red($args),)*), debug_info.locs()));
+        };
+    }
+
     let (stat, binds) = match kind {
         StatementKind::ReturnVoid() => {
             if Type::Void.assignable(&func.ret_type, type_tree, HashSet::new()) {
@@ -1389,8 +1397,8 @@ fn typecheck_statement<'a>(
             },
             vec![],
         )),
-        StatementKind::Expression(expr) => Ok((
-            TypeCheckedStatementKind::Expression(typecheck_expr(
+        StatementKind::Expression(expr) => {
+            let expr = typecheck_expr(
                 expr,
                 type_table,
                 global_vars,
@@ -1401,9 +1409,13 @@ fn typecheck_statement<'a>(
                 undefinable_ids,
                 closures,
                 scopes,
-            )?),
-            vec![],
-        )),
+            )?;
+            let tipe = expr.get_type();
+            if !matches!(tipe, Type::Void | Type::Every) {
+                warn!("Statement discards {} value", tipe.print(type_tree));
+            }
+            Ok((TypeCheckedStatementKind::Expression(expr), vec![]))
+        }
         StatementKind::Let(assigned, expr) => {
             let expr = typecheck_expr(
                 expr,
@@ -1689,9 +1701,6 @@ fn typecheck_expr(
     macro_rules! error {
         ($text:expr $(,$args:expr)* $(,)?) => {
             return Err(CompileError::new("Typecheck error", format!($text, $(Color::red($args),)*), debug_info.locs()));
-        };
-        (@$text:expr, $debug:expr) => {
-            return Err(CompileError::new("Typecheck error", format!($text), $debug.locs()));
         };
     }
 

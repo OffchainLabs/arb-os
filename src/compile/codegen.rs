@@ -282,6 +282,9 @@ fn codegen(
                     TypeCheckedStatementKind::Expression(expr) => {
                         // TODO: Add typechecking of dropped expressions
                         expr!(expr);
+                        if !matches!(expr.get_type(), Type::Void | Type::Every) {
+                            cgen.code.push(opcode!(Pop));
+                        }
                     }
                     TypeCheckedStatementKind::Asm(payload, args) => {
                         let nargs = args.len();
@@ -418,14 +421,14 @@ fn codegen(
                         cgen.code.push(opcode!(@FuncCall(*prop)));
                     }
                     TypeCheckedExprKind::Tuple(fields, _) => {
-                        let fields_len = fields.len();
-                        for i in 0..fields_len {
-                            expr!(&mut fields[fields_len - 1 - i], i);
+                        let nfields = fields.len();
+                        for i in 0..nfields {
+                            expr!(&mut fields[nfields - 1 - i], i);
                         }
-                        let empty_vec = vec![Value::none(); fields_len];
-                        cgen.code.push(opcode!(Noop, Value::new_tuple(empty_vec)));
-                        for i in 0..fields_len {
-                            cgen.code.push(opcode!(@TupleSet(i, fields_len)));
+                        let container = vec![Value::none(); nfields];
+                        cgen.code.push(opcode!(Noop, Value::new_tuple(container)));
+                        for i in 0..nfields {
+                            cgen.code.push(opcode!(@TupleSet(i, nfields)));
                         }
                     }
                     TypeCheckedExprKind::TupleRef(expr, offset, width, _) => {
@@ -636,44 +639,6 @@ fn codegen_statement(
     }
 
     match &statement.kind {
-        TypeCheckedStatementKind::ReturnVoid() => {
-            cgen.code
-                .push(Instruction::from_opcode(Opcode::Return, debug));
-            Ok(HashMap::new())
-        }
-        TypeCheckedStatementKind::Return(expr) => {
-            expr!(expr);
-            if stack_items > 0 {
-                cgen.code.push(opcode!(AuxPush));
-                for _ in 0..stack_items {
-                    cgen.code.push(opcode!(Pop));
-                }
-                cgen.code.push(opcode!(AuxPop));
-            }
-            cgen.code
-                .push(Instruction::from_opcode(Opcode::Return, debug));
-            Ok(HashMap::new())
-        }
-        TypeCheckedStatementKind::Break(..) => {
-            panic!("Encountered a break node")
-        }
-        TypeCheckedStatementKind::Expression(expr) => {
-            expr!(expr);
-            if !(expr.get_type() == Type::Void || expr.get_type() == Type::Every) {
-                cgen.code.push(opcode!(Pop));
-                if expr.get_type() != Type::Tuple(vec![]) {
-                    cgen.issues.push(CompileError::new_warning(
-                        String::from("Compile warning"),
-                        format!(
-                            "expression statement returns value of type {:?}, which is discarded",
-                            expr.get_type()
-                        ),
-                        loc.into_iter().collect(),
-                    ));
-                }
-            }
-            Ok(HashMap::new())
-        }
         TypeCheckedStatementKind::SetLocals(assigned, expr) => {
             expr!(expr);
             let mut bindings = HashMap::new();
@@ -720,21 +685,6 @@ fn codegen_statement(
                 Opcode::SetGlobalVar(offset),
                 debug,
             ));
-            Ok(HashMap::new())
-        }
-        TypeCheckedStatementKind::Asm(insns, args) => {
-            let n_args = args.len();
-            for i in 0..n_args {
-                codegen_expr(&args[n_args - 1 - i], cgen, locals, stack_items + i)?;
-            }
-            for insn in insns {
-                cgen.code.push(insn.clone());
-            }
-            Ok(HashMap::new())
-        }
-        TypeCheckedStatementKind::DebugPrint(expr) => {
-            expr!(expr);
-            cgen.code.push(opcode!(DebugPrint));
             Ok(HashMap::new())
         }
         TypeCheckedStatementKind::Assert(expr) => {
@@ -920,22 +870,6 @@ fn codegen_expr(
             ));
             Ok(())
         }
-        TypeCheckedExprKind::Tuple(fields, _) => {
-            let fields_len = fields.len();
-            for i in 0..fields_len {
-                let field = &fields[fields_len - 1 - i];
-                expr!(&field, i)?;
-            }
-            let empty_vec = vec![Value::none(); fields_len];
-            cgen.code.push(opcode!(Noop, Value::new_tuple(empty_vec)));
-            for i in 0..fields_len {
-                cgen.code.push(Instruction::from_opcode(
-                    Opcode::TupleSet(i, fields_len),
-                    debug,
-                ));
-            }
-            Ok(())
-        }
         TypeCheckedExprKind::ArrayRef(expr1, expr2, t) => {
             expr!(&TypeCheckedExpr::builtin(
                 "builtin_arrayGet",
@@ -1074,7 +1008,6 @@ fn codegen_expr(
             }
             Ok(())
         }
-        TypeCheckedExprKind::Cast(expr, _) => expr!(expr, 0),
         TypeCheckedExprKind::Asm(_, insns, args) => {
             let n_args = args.len();
             for i in 0..n_args {
@@ -1083,77 +1016,6 @@ fn codegen_expr(
             for insn in insns {
                 cgen.code.push(insn.clone());
             }
-            Ok(())
-        }
-        TypeCheckedExprKind::Try(exp, _) => {
-            expr!(exp, 0)?;
-            let extract = cgen.label_gen.next();
-            cgen.code.push(opcode!(Dup0));
-            cgen.code.push(opcode!(Tget, Value::Int(Uint256::zero())));
-            cgen.code.push(opcode!(Cjump, Value::Label(extract)));
-            // We use the auxstack here to temporarily store the return value while we clear the temp values on the stack
-            if stack_items > 0 {
-                cgen.code.push(opcode!(AuxPush));
-                for _ in 0..stack_items {
-                    cgen.code.push(opcode!(Pop));
-                }
-                cgen.code.push(opcode!(AuxPop));
-            }
-            cgen.code
-                .push(Instruction::from_opcode(Opcode::Return, debug));
-            cgen.code
-                .push(Instruction::from_opcode(Opcode::Label(extract), debug));
-            cgen.code.push(opcode!(Tget, Value::Int(Uint256::one())));
-            Ok(())
-        }
-        TypeCheckedExprKind::If(cond, block, else_block, _) => {
-            expr!(cond, 0)?;
-            let after_label = cgen.label_gen.next();
-            let end_label = cgen.label_gen.next();
-            cgen.code.push(opcode!(IsZero));
-            cgen.code.push(opcode!(Cjump, Value::Label(after_label)));
-            codegen_code_block(block, cgen, locals, stack_items)?;
-            if else_block.is_some() {
-                cgen.code.push(opcode!(Jump, Value::Label(end_label)));
-            }
-            cgen.code
-                .push(Instruction::from_opcode(Opcode::Label(after_label), debug));
-            if let Some(block) = else_block {
-                codegen_code_block(block, cgen, locals, stack_items)?;
-            }
-            cgen.code
-                .push(Instruction::from_opcode(Opcode::Label(end_label), debug));
-            Ok(())
-        }
-        TypeCheckedExprKind::IfLet(name, expr, block, else_block, _) => {
-            let after_label = cgen.label_gen.next();
-            let slot_num = cgen.next_slot();
-            let mut new_locals = locals.clone();
-            new_locals.insert(*name, slot_num);
-            codegen_expr(expr, cgen, &locals, stack_items)?;
-            cgen.code.push(opcode!(Dup0));
-            cgen.code
-                .push(opcode!(Tget, Value::Int(Uint256::from_usize(0))));
-            cgen.code.push(opcode!(IsZero));
-            cgen.code.push(opcode!(Cjump, Value::Label(after_label)));
-            cgen.code
-                .push(opcode!(Tget, Value::Int(Uint256::from_usize(1))));
-            cgen.code
-                .push(Instruction::from_opcode(Opcode::SetLocal(slot_num), debug));
-            codegen_code_block(&block, cgen, &new_locals, stack_items)?;
-
-            let outside_label = cgen.label_gen.next();
-            cgen.code.push(opcode!(Jump, Value::Label(outside_label)));
-            cgen.code
-                .push(Instruction::from_opcode(Opcode::Label(after_label), debug));
-            cgen.code.push(opcode!(Pop));
-            if let Some(else_block) = else_block {
-                codegen_code_block(&else_block, cgen, &locals, stack_items)?;
-            }
-            cgen.code.push(Instruction::from_opcode(
-                Opcode::Label(outside_label),
-                debug,
-            ));
             Ok(())
         }
         TypeCheckedExprKind::Loop(body, _) => {
