@@ -139,8 +139,7 @@ fn flowcheck_imports(mut nodes: Vec<TypeCheckedNode>, imports: &mut BTreeMap<usi
             let nominals = match &expr.kind {
                 TypeCheckedExprKind::Cast(_, tipe)
                 | TypeCheckedExprKind::Const(_, tipe)
-                | TypeCheckedExprKind::ClosureLoad(.., tipe)
-                | TypeCheckedExprKind::NewArray(_, _, tipe) => tipe.find_nominals(),
+                | TypeCheckedExprKind::ClosureLoad(.., tipe) => tipe.find_nominals(),
                 _ => vec![],
             };
             for nominal in &nominals {
@@ -611,15 +610,8 @@ pub enum TypeCheckedExprKind {
     MapRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
     ClosureLoad(StringId, usize, usize, BTreeSet<StringId>, Type),
     Tuple(Vec<TypeCheckedExpr>, Type),
-    NewArray(Box<TypeCheckedExpr>, Value, Type),
     NewFixedArray(usize, Box<TypeCheckedExpr>, Type),
     NewMap(Type),
-    ArrayMod(
-        Box<TypeCheckedExpr>,
-        Box<TypeCheckedExpr>,
-        Box<TypeCheckedExpr>,
-        Type,
-    ),
     FixedArrayMod(
         Box<TypeCheckedExpr>,
         Box<TypeCheckedExpr>,
@@ -627,13 +619,13 @@ pub enum TypeCheckedExprKind {
         usize,
         Type,
     ),
-    MapMod(
+    StructMod(
         Box<TypeCheckedExpr>,
-        Box<TypeCheckedExpr>,
+        usize,
+        usize,
         Box<TypeCheckedExpr>,
         Type,
     ),
-    StructMod(Box<TypeCheckedExpr>, usize, Box<TypeCheckedExpr>, Type),
     Cast(Box<TypeCheckedExpr>, Type),
     Asm(Type, Vec<Instruction>, Vec<TypeCheckedExpr>),
     Error,
@@ -673,7 +665,6 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             | TypeCheckedExprKind::Variant(exp)
             | TypeCheckedExprKind::SetGas(exp)
             | TypeCheckedExprKind::TupleRef(exp, ..)
-            | TypeCheckedExprKind::NewArray(exp, _, _)
             | TypeCheckedExprKind::NewFixedArray(_, exp, _)
             | TypeCheckedExprKind::Cast(exp, _)
             | TypeCheckedExprKind::Try(exp, _) => vec![TypeCheckedNode::Expression(exp)],
@@ -688,7 +679,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             | TypeCheckedExprKind::ArrayRef(lexp, rexp, _)
             | TypeCheckedExprKind::FixedArrayRef(lexp, rexp, _, _)
             | TypeCheckedExprKind::MapRef(lexp, rexp, _)
-            | TypeCheckedExprKind::StructMod(lexp, _, rexp, _) => vec![
+            | TypeCheckedExprKind::StructMod(lexp, _, _, rexp, _) => vec![
                 TypeCheckedNode::Expression(lexp),
                 TypeCheckedNode::Expression(rexp),
             ],
@@ -709,9 +700,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                 .iter_mut()
                 .map(|exp| TypeCheckedNode::Expression(exp))
                 .collect(),
-            TypeCheckedExprKind::ArrayMod(exp1, exp2, exp3, _)
-            | TypeCheckedExprKind::FixedArrayMod(exp1, exp2, exp3, _, _)
-            | TypeCheckedExprKind::MapMod(exp1, exp2, exp3, _) => vec![
+            TypeCheckedExprKind::FixedArrayMod(exp1, exp2, exp3, _, _) => vec![
                 TypeCheckedNode::Expression(exp1),
                 TypeCheckedNode::Expression(exp2),
                 TypeCheckedNode::Expression(exp3),
@@ -843,12 +832,9 @@ impl TypeCheckedExpr {
             TypeCheckedExprKind::MapRef(.., t) => t.clone(),
             TypeCheckedExprKind::ClosureLoad(.., t) => t.clone(),
             TypeCheckedExprKind::Tuple(.., t) => t.clone(),
-            TypeCheckedExprKind::NewArray(.., t) => t.clone(),
             TypeCheckedExprKind::NewFixedArray(.., t) => t.clone(),
             TypeCheckedExprKind::NewMap(t) => t.clone(),
-            TypeCheckedExprKind::ArrayMod(.., t) => t.clone(),
             TypeCheckedExprKind::FixedArrayMod(.., t) => t.clone(),
-            TypeCheckedExprKind::MapMod(.., t) => t.clone(),
             TypeCheckedExprKind::StructMod(.., t) => t.clone(),
             TypeCheckedExprKind::Cast(.., t) => t.clone(),
             TypeCheckedExprKind::Asm(t, ..) => t.clone(),
@@ -1289,7 +1275,7 @@ fn typecheck_statement<'a>(
             }
         }
         StatementKind::Return(expr) => {
-            let tc_expr = typecheck_expr(
+            let expr = typecheck_expr(
                 expr,
                 type_table,
                 global_vars,
@@ -1302,17 +1288,17 @@ fn typecheck_statement<'a>(
                 scopes,
             )?;
 
-            if func
-                .ret_type
-                .assignable(&tc_expr.get_type(), type_tree, HashSet::new())
-            {
-                Ok((TypeCheckedStatementKind::Return(tc_expr), vec![]))
+            let tipe = expr.get_type().rep(type_tree)?;
+            let ret_type = func.ret_type.rep(type_tree)?;
+
+            if ret_type.assignable(&tipe, type_tree, HashSet::new()) {
+                Ok((TypeCheckedStatementKind::Return(expr), vec![]))
             } else {
                 Err(CompileError::new_type_error(
                     format!(
                         "return statement has wrong type:\nencountered {}\ninstead of  {}",
-                        Color::red(tc_expr.get_type().print(type_tree)),
-                        Color::red(&func.ret_type.print(type_tree)),
+                        Color::red(tipe.print(type_tree)),
+                        Color::red(ret_type.print(type_tree)),
                     ),
                     debug_info.locs(),
                 ))
@@ -2007,6 +1993,78 @@ fn typecheck_expr(
                     fields[slot].tipe.clone(),
                 ))
             }
+            ExprKind::StructMod(struc, name, item) => {
+                let struc = typecheck_expr(
+                    struc,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    func,
+                    type_tree,
+                    string_table,
+                    undefinable_ids,
+                    closures,
+                    scopes,
+                )?;
+                let item = typecheck_expr(
+                    item,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    func,
+                    type_tree,
+                    string_table,
+                    undefinable_ids,
+                    closures,
+                    scopes,
+                )?;
+
+                let struc_type = struc.get_type().rep(type_tree)?;
+                let item_type = item.get_type().rep(type_tree)?;
+
+                let fields = match &struc_type {
+                    Type::Struct(fields) => fields,
+                    _ => {
+                        error!(
+                            "can't edit .{} for non-struct {}",
+                            name,
+                            struc_type.print(type_tree)
+                        )
+                    }
+                };
+
+                let slot = fields.into_iter().position(|field| &field.name == name);
+
+                let slot = match slot {
+                    Some(slot) => slot,
+                    None => {
+                        error!(
+                            "There's no field .{} in {}",
+                            name,
+                            struc_type.print(type_tree)
+                        )
+                    }
+                };
+
+                let field_type = &fields[slot].tipe;
+
+                if !item_type.assignable(&field_type, type_tree, HashSet::new()) {
+                    error!(
+                        "incorrect value type in struct modifier, {}",
+                        field_type
+                            .mismatch_string(&item_type, type_tree)
+                            .unwrap_or("Did not find type mismatch".to_string())
+                    );
+                }
+
+                Ok(TypeCheckedExprKind::StructMod(
+                    Box::new(struc),
+                    slot,
+                    fields.len(),
+                    Box::new(item),
+                    struc_type,
+                ))
+            }
             ExprKind::Constant(constant) => Ok(match constant {
                 Constant::Uint(n) => TypeCheckedExprKind::Const(Value::Int(n.clone()), Type::Uint),
                 Constant::Int(n) => TypeCheckedExprKind::Const(Value::Int(n.clone()), Type::Int),
@@ -2014,6 +2072,7 @@ fn typecheck_expr(
                     TypeCheckedExprKind::Const(Value::Int(Uint256::from_bool(*b)), Type::Bool)
                 }
                 Constant::Option(o) => TypeCheckedExprKind::Const(o.value(), o.type_of()),
+                Constant::Value(v) => TypeCheckedExprKind::Const(v.clone(), Type::Every),
                 Constant::Null => TypeCheckedExprKind::Const(Value::none(), Type::Any),
             }),
             ExprKind::FunctionCall(expr, args) => {
@@ -2286,9 +2345,29 @@ fn typecheck_expr(
                     ),
                 }
             }
-            ExprKind::NewArray(size_expr, tipe) => Ok(TypeCheckedExprKind::NewArray(
-                Box::new(typecheck_expr(
-                    size_expr,
+            ExprKind::NewArray(size_expr, tipe) => {
+                let fill = Expr::new(
+                    ExprKind::Constant(Constant::Value(tipe.default_value(type_tree))),
+                    debug_info,
+                );
+
+                let id = string_table.get_if_exists("builtin_arrayNew").unwrap();
+                let builtin = Box::new(Expr::new(ExprKind::VariableRef(id, vec![]), debug_info));
+
+                let call = Expr::new(
+                    ExprKind::FunctionCall(builtin, vec![*size_expr.clone(), fill]),
+                    debug_info,
+                );
+
+                // The compiler doesn't know that `array` here is the same as `[]any`,
+                // so we trick it into thinking we have an `[]any`.
+                let cast = Expr::new(
+                    ExprKind::UnsafeCast(Box::new(call), Type::Array(Box::new(tipe.clone()))),
+                    debug_info,
+                );
+
+                let expr = typecheck_expr(
+                    &cast,
                     type_table,
                     global_vars,
                     func_table,
@@ -2298,10 +2377,10 @@ fn typecheck_expr(
                     undefinable_ids,
                     closures,
                     scopes,
-                )?),
-                tipe.default_value(type_tree),
-                Type::Array(Box::new(tipe.clone())),
-            )),
+                )?;
+
+                Ok(expr.kind)
+            }
             ExprKind::NewFixedArray(size, expr) => {
                 let expr = typecheck_expr(
                     expr,
@@ -2398,9 +2477,9 @@ fn typecheck_expr(
                 }
                 Ok(TypeCheckedExprKind::Tuple(fields, Type::Struct(types)))
             }
-            ExprKind::ArrayOrMapMod(arr, index, val) => {
-                let tc_arr = typecheck_expr(
-                    arr,
+            ExprKind::ArrayOrMapMod(store, key, item) => {
+                let store = typecheck_expr(
+                    store,
                     type_table,
                     global_vars,
                     func_table,
@@ -2411,8 +2490,8 @@ fn typecheck_expr(
                     closures,
                     scopes,
                 )?;
-                let tc_index = typecheck_expr(
-                    index,
+                let key = typecheck_expr(
+                    key,
                     type_table,
                     global_vars,
                     func_table,
@@ -2423,8 +2502,8 @@ fn typecheck_expr(
                     closures,
                     scopes,
                 )?;
-                let tc_val = typecheck_expr(
-                    val,
+                let item = typecheck_expr(
+                    item,
                     type_table,
                     global_vars,
                     func_table,
@@ -2435,133 +2514,46 @@ fn typecheck_expr(
                     closures,
                     scopes,
                 )?;
-                match tc_arr.get_type().rep(type_tree)? {
-                    Type::Array(t) => {
-                        if t.assignable(&tc_val.get_type(), type_tree, HashSet::new()) {
-                            if tc_index.get_type() != Type::Uint {
-                                error!(
-                                    "array modifier requires uint index, found {}",
-                                    Color::red(tc_index.get_type().print(type_tree))
-                                );
-                            } else {
-                                Ok(TypeCheckedExprKind::ArrayMod(
-                                    Box::new(tc_arr),
-                                    Box::new(tc_index),
-                                    Box::new(tc_val),
-                                    Type::Array(t),
-                                ))
-                            }
-                        } else {
+
+                let store_type = store.get_type().rep(type_tree)?;
+                let key_type = key.get_type().rep(type_tree)?;
+                let item_type = item.get_type().rep(type_tree)?;
+
+                match store_type {
+                    Type::FixedArray(inner_type, size) => {
+                        if key_type != Type::Uint {
+                            error!(
+                                "array modifier requires {} index, found {}",
+                                "uint",
+                                key_type.print(type_tree)
+                            );
+                        }
+                        if !item_type.assignable(&inner_type, type_tree, HashSet::new()) {
                             error!(
                                 "mismatched types in array modifier, {}",
-                                t.mismatch_string(&tc_val.get_type(), type_tree)
+                                inner_type
+                                    .mismatch_string(&item_type, type_tree)
                                     .unwrap_or("Did not find type mismatch".to_string())
                             );
                         }
+                        Ok(TypeCheckedExprKind::FixedArrayMod(
+                            Box::new(store),
+                            Box::new(key),
+                            Box::new(item),
+                            size,
+                            Type::FixedArray(inner_type, size),
+                        ))
                     }
-                    Type::FixedArray(t, sz) => {
-                        if tc_index.get_type() != Type::Uint {
-                            error!(
-                                "array modifier requires uint index, found {}",
-                                tc_index.get_type().print(type_tree)
-                            );
-                        } else {
-                            Ok(TypeCheckedExprKind::FixedArrayMod(
-                                Box::new(tc_arr),
-                                Box::new(tc_index),
-                                Box::new(tc_val),
-                                sz,
-                                Type::FixedArray(t, sz),
-                            ))
-                        }
+                    Type::Array(t) => {
+                        error!("unimplemented")
                     }
                     Type::Map(kt, vt) => {
-                        if tc_index.get_type() == *kt {
-                            if vt.assignable(&tc_val.get_type(), type_tree, HashSet::new()) {
-                                Ok(TypeCheckedExprKind::MapMod(
-                                    Box::new(tc_arr),
-                                    Box::new(tc_index),
-                                    Box::new(tc_val),
-                                    Type::Map(kt, vt),
-                                ))
-                            } else {
-                                error!(
-                                    "invalid value type for map modifier, {}",
-                                    vt.mismatch_string(&tc_val.get_type(), type_tree)
-                                        .unwrap_or("Did not find type mismatch".to_string())
-                                );
-                            }
-                        } else {
-                            error!(
-                                "invalid key type for map modifier, {}",
-                                kt.mismatch_string(&tc_index.get_type(), type_tree)
-                                    .unwrap_or("Did not find type mismatch".to_string())
-                            );
-                        }
+                        error!("unimplemented")
                     }
                     other => error!(
                         "[] modifier must operate on array or block, found {}",
                         other.print(type_tree)
                     ),
-                }
-            }
-            ExprKind::StructMod(struc, name, val) => {
-                let tc_struc = typecheck_expr(
-                    struc,
-                    type_table,
-                    global_vars,
-                    func_table,
-                    func,
-                    type_tree,
-                    string_table,
-                    undefinable_ids,
-                    closures,
-                    scopes,
-                )?;
-                let tc_val = typecheck_expr(
-                    val,
-                    type_table,
-                    global_vars,
-                    func_table,
-                    func,
-                    type_tree,
-                    string_table,
-                    undefinable_ids,
-                    closures,
-                    scopes,
-                )?;
-                let tcs_type = tc_struc.get_type().rep(type_tree)?;
-                if let Type::Struct(fields) = &tcs_type {
-                    match tcs_type.get_struct_slot_by_name(name.clone()) {
-                        Some(index) => {
-                            if fields[index].tipe.assignable(
-                                &tc_val.get_type(),
-                                type_tree,
-                                HashSet::new(),
-                            ) {
-                                Ok(TypeCheckedExprKind::StructMod(
-                                    Box::new(tc_struc),
-                                    index,
-                                    Box::new(tc_val),
-                                    tcs_type,
-                                ))
-                            } else {
-                                error!(
-                                    "incorrect value type in struct modifier, {}",
-                                    fields[index]
-                                        .tipe
-                                        .mismatch_string(&tc_val.get_type(), type_tree)
-                                        .unwrap_or("Did not find type mismatch".to_string())
-                                );
-                            }
-                        }
-                        None => error!("struct modifier must use valid field name",),
-                    }
-                } else {
-                    error!(
-                        "struct modifier must operate on a struct, found {}",
-                        tcs_type.print(type_tree)
-                    );
                 }
             }
             ExprKind::Cast(expr, t) => {

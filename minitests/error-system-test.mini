@@ -42,7 +42,7 @@ func main(arg: option<RandomGenerator>) -> (option<RandomGenerator>, option<opti
 var unused_global: uint;
 var used_global: uint;
 
-#[bad_attribute, inline]
+#[bad_attribute, print]
 public func hop() {
     used_global = crazy(4, 8, true, 4);
     asm(used_global) { log };
@@ -84,7 +84,7 @@ write view func crazy(n: uint, unused_arg: uint, unused_arg2: bool, _intentional
         return ret * y;
         
         let loopy = 4;
-        let unreachable_variable = loop {
+        let unreachable_variable = loop<uint> {
           return loopy;
           loopy = loopy - 8;
           loopy = 4;            // should not warn

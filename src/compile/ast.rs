@@ -361,22 +361,6 @@ impl Type {
         tipe
     }
 
-    /// If self is a Struct, and name is the StringID of a field of self, then returns Some(n), where
-    /// n is the index of the field of self whose ID matches name.  Otherwise returns None.
-    pub fn get_struct_slot_by_name(&self, name: String) -> Option<usize> {
-        match self {
-            Type::Struct(fields) => {
-                for (i, field) in fields.iter().enumerate() {
-                    if field.name == name {
-                        return Some(i);
-                    }
-                }
-                None
-            }
-            _ => None,
-        }
-    }
-
     pub fn castable(
         &self,
         rhs: &Self,
@@ -1650,6 +1634,7 @@ pub enum Constant {
     Int(Uint256),
     Bool(bool),
     Option(OptionConst),
+    Value(Value),
     Null,
 }
 
@@ -1681,6 +1666,7 @@ impl Constant {
             Constant::Int(_) => Type::Int,
             Constant::Bool(_) => Type::Bool,
             Constant::Option(inner) => inner.type_of(),
+            Constant::Value(_) => Type::Every,
             Constant::Null => Type::Void,
         }
     }
@@ -1692,6 +1678,7 @@ impl Constant {
             Constant::Int(i) => Value::Int(i.clone()),
             Constant::Bool(b) => Value::Int(Uint256::from_bool(*b)),
             Constant::Option(c) => c.value(),
+            Constant::Value(value) => value.clone(),
             Constant::Null => Value::none(),
         }
     }

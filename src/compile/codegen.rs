@@ -370,7 +370,16 @@ fn codegen(
                         }
                         cgen.code.push(opcode!(@Label(end_label)));
                     }
-                    TypeCheckedExprKind::Loop(body, _) => {}
+                    TypeCheckedExprKind::Loop(body, _) => {
+                        let slot = cgen.next_slot();
+                        let top = cgen.label_gen.next();
+                        cgen.code.push(opcode!(Noop, Value::Label(top)));
+                        cgen.code.push(opcode!(@SetLocal(slot)));
+                        cgen.code.push(opcode!(@Label(top)));
+                        block!(body);
+                        cgen.code.push(opcode!(@GetLocal(slot)));
+                        cgen.code.push(opcode!(Jump));
+                    }
                     TypeCheckedExprKind::Cast(expr, _) => expr!(expr),
                     TypeCheckedExprKind::Error => cgen.code.push(opcode!(Error)),
                     TypeCheckedExprKind::NewBuffer => cgen.code.push(opcode!(NewBuffer)),
@@ -445,7 +454,6 @@ fn codegen(
                         cgen.code.push(opcode!(@TupleGet(*offset, *width)));
                     }
                     TypeCheckedExprKind::ArrayRef(expr1, expr2, t) => {}
-                    TypeCheckedExprKind::NewArray(sz_expr, value, array_type) => {}
                     TypeCheckedExprKind::NewFixedArray(size, fill, _) => {
                         expr!(fill);
                         for _ in 0..7 {
@@ -560,7 +568,11 @@ fn codegen(
                     }
                     TypeCheckedExprKind::NewMap(t) => {}
                     TypeCheckedExprKind::MapRef(map_expr, key_expr, t) => {}
-                    TypeCheckedExprKind::StructMod(structure, index, value, _) => {}
+                    TypeCheckedExprKind::StructMod(structure, slot, size, item, _) => {
+                        expr!(item, 0);
+                        expr!(structure, 1);
+                        cgen.code.push(opcode!(@TupleSet(*slot, *size)));
+                    }
                     TypeCheckedExprKind::UnaryOp(op, expr1, _) => {
                         expr!(expr1);
                         cgen.code.push(match op {
@@ -650,9 +662,7 @@ fn codegen(
                         expr!(right);
                         cgen.code.push(opcode!(@Label(short)));
                     }
-                    TypeCheckedExprKind::ArrayMod(arr, index, val, t) => {}
                     TypeCheckedExprKind::FixedArrayMod(..) => {}
-                    TypeCheckedExprKind::MapMod(map, key, val, t) => {}
                     TypeCheckedExprKind::Asm(_, payload, args) => {
                         let nargs = args.len();
                         for i in 0..nargs {
@@ -1007,62 +1017,6 @@ fn codegen_expr(
                 DebugInfo::from(loc)
             ))
         }
-        TypeCheckedExprKind::NewArray(sz_expr, value, array_type) => {
-            let call_type = Type::Func(
-                FuncProperties::pure(2, 1),
-                vec![Type::Uint, Type::Any],
-                Box::new(array_type.clone()),
-            );
-            let the_expr = TypeCheckedExpr {
-                kind: TypeCheckedExprKind::FunctionCall(
-                    Box::new(TypeCheckedExpr::new(
-                        TypeCheckedExprKind::FuncRef(
-                            string_table.get_if_exists("builtin_arrayNew").unwrap(),
-                            call_type.clone(),
-                        ),
-                        DebugInfo::from(loc),
-                    )),
-                    vec![
-                        *sz_expr.clone(),
-                        TypeCheckedExpr::new(
-                            TypeCheckedExprKind::Const(value.clone(), Type::Any),
-                            DebugInfo::from(loc),
-                        ),
-                    ],
-                    call_type,
-                    FuncProperties::pure(2, 1),
-                ),
-                debug_info: DebugInfo::from(loc),
-            };
-            expr!(&the_expr, 0)
-        }
-        TypeCheckedExprKind::NewFixedArray(sz, expr, _) => {
-            expr!(expr, 0)?;
-            for _i in 0..7 {
-                cgen.code.push(opcode!(Dup0));
-            }
-            let empty_tuple = vec![Value::new_tuple(Vec::new()); 8];
-            cgen.code.push(opcode!(Noop, Value::new_tuple(empty_tuple)));
-            for i in 0..8 {
-                cgen.code
-                    .push(opcode!(Tset, Value::Int(Uint256::from_usize(i))));
-            }
-
-            let mut tuple_size: usize = 8;
-            while tuple_size < *sz {
-                for _i in 0..7 {
-                    cgen.code.push(opcode!(Dup0));
-                }
-                let empty_tuple = vec![Value::new_tuple(Vec::new()); 8];
-                cgen.code.push(opcode!(Noop, Value::new_tuple(empty_tuple)));
-                for i in 0..8 {
-                    cgen.code
-                        .push(opcode!(Tset, Value::Int(Uint256::from_usize(i))));
-                }
-                tuple_size *= 8;
-            }
-            Ok(())
-        }
         TypeCheckedExprKind::NewMap(t) => {
             expr!(&TypeCheckedExpr::builtin(
                 "builtin_kvsNew",
@@ -1072,7 +1026,7 @@ fn codegen_expr(
                 DebugInfo::from(loc)
             ))
         }
-        TypeCheckedExprKind::ArrayMod(arr, index, val, t) => {
+        /*TypeCheckedExprKind::ArrayMod(arr, index, val, t) => {
             expr!(&TypeCheckedExpr::builtin(
                 "builtin_arraySet",
                 vec![arr, index, val],
@@ -1089,21 +1043,7 @@ fn codegen_expr(
                 string_table,
                 DebugInfo::from(loc)
             ))
-        }
-        TypeCheckedExprKind::StructMod(struc, index, val, t) => {
-            expr!(val, 0)?;
-            expr!(struc, 1)?;
-            if let Type::Struct(v) = t {
-                let struct_len = v.len();
-                cgen.code.push(Instruction::from_opcode(
-                    Opcode::TupleSet(*index, struct_len),
-                    debug,
-                ));
-            } else {
-                panic!("impossible value in TypeCheckedExpr::StructMod");
-            }
-            Ok(())
-        }
+        }*/
         TypeCheckedExprKind::Asm(_, insns, args) => {
             let n_args = args.len();
             for i in 0..n_args {

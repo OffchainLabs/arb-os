@@ -3,33 +3,8 @@
  */
 
 
-write func main() {
+func main(arg: [8]uint) {
     
-    if let Some(issue) = test_1() {
-        asm(issue.1) { log };
-    } else if let Some(issue) = test_2() {
-        asm(issue.1) { log };
-    } else {
-        asm("".1) { log };
-    }
+    let _ = arg with { [0] = "" };
 }
 
- func test_1() -> option<string> {
-
-     let result = loop<string> {
-         break "loop-de-loop";
-     };
-
-     assert(result == "loop-de-loop");
-
-     loop {
-         break;
-     }
-    
-     None
- }
-
-
-func test_2() -> option<string> {
-    None
-}
