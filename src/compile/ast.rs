@@ -585,7 +585,8 @@ impl Type {
     pub fn assignable(
         &self,
         rhs: &Self,
-        type_tree: &TypeTree,
+        left_type_tree: &TypeTree,
+        right_type_tree: &TypeTree,
         mut seen: HashSet<(Type, Type)>,
     ) -> bool {
         if *rhs == Type::Every {
@@ -600,42 +601,49 @@ impl Type {
             | Type::Bytes32
             | Type::EthAddress
             | Type::Buffer
-            | Type::Every => match rhs.rep(type_tree) {
+            | Type::Every => match rhs.rep(right_type_tree) {
                 Ok(right) => right == *self,
                 Err(_) => false,
             },
             Type::Tuple(tvec) => {
-                if let Ok(Type::Tuple(tvec2)) = rhs.rep(type_tree) {
-                    type_vectors_assignable(tvec, &tvec2, type_tree, seen)
+                if let Ok(Type::Tuple(tvec2)) = rhs.rep(right_type_tree) {
+                    type_vectors_assignable(tvec, &tvec2, left_type_tree, right_type_tree, seen)
                 } else {
                     false
                 }
             }
             Type::Array(t) => {
-                if let Ok(Type::Array(t2)) = rhs.rep(type_tree) {
-                    t.assignable(&t2, type_tree, seen)
+                if let Ok(Type::Array(t2)) = rhs.rep(right_type_tree) {
+                    t.assignable(&t2, left_type_tree, right_type_tree, seen)
                 } else {
                     false
                 }
             }
             Type::FixedArray(t, s) => {
-                if let Ok(Type::FixedArray(t2, s2)) = rhs.rep(type_tree) {
-                    (*s == s2) && t.assignable(&t2, type_tree, seen)
+                if let Ok(Type::FixedArray(t2, s2)) = rhs.rep(right_type_tree) {
+                    (*s == s2) && t.assignable(&t2, left_type_tree, right_type_tree, seen)
                 } else {
                     false
                 }
             }
             Type::Struct(fields) => {
-                if let Ok(Type::Struct(fields2)) = rhs.rep(type_tree) {
-                    field_vectors_assignable(fields, &fields2, type_tree, seen)
+                if let Ok(Type::Struct(fields2)) = rhs.rep(right_type_tree) {
+                    field_vectors_assignable(
+                        fields,
+                        &fields2,
+                        left_type_tree,
+                        right_type_tree,
+                        seen,
+                    )
                 } else {
                     false
                 }
             }
             Type::Nominal(_, _, _) => {
-                if let (Ok(left), Ok(right)) = (self.rep(type_tree), rhs.rep(type_tree)) {
+                if let (Ok(left), Ok(right)) = (self.rep(left_type_tree), rhs.rep(right_type_tree))
+                {
                     if seen.insert((left.clone(), right.clone())) {
-                        left.assignable(&right, type_tree, seen.clone())
+                        left.assignable(&right, left_type_tree, right_type_tree, seen.clone())
                     } else {
                         true
                     }
@@ -651,17 +659,23 @@ impl Type {
 
                     (view1 || !view2)
                         && (write1 || !write2)
-                        && arg_vectors_assignable(args2, args, type_tree, seen.clone())
-                        && (ret.assignable(ret2, type_tree, seen))
+                        && arg_vectors_assignable(
+                            args2,
+                            args,
+                            left_type_tree,
+                            right_type_tree,
+                            seen.clone(),
+                        )
+                        && (ret.assignable(ret2, left_type_tree, right_type_tree, seen))
                 } else {
                     false
                 }
             }
             Type::Map(key1, val1) => {
                 if let Type::Map(key2, val2) = rhs {
-                    if let Ok(val2) = val2.rep(type_tree) {
-                        key1.assignable(key2, type_tree, seen.clone())
-                            && (val1.assignable(&val2, type_tree, seen))
+                    if let Ok(val2) = val2.rep(right_type_tree) {
+                        key1.assignable(key2, left_type_tree, right_type_tree, seen.clone())
+                            && (val1.assignable(&val2, left_type_tree, right_type_tree, seen))
                     } else {
                         false
                     }
@@ -670,28 +684,28 @@ impl Type {
                 }
             }
             Type::Option(inner) => {
-                if let Ok(Type::Option(inner2)) = rhs.rep(type_tree) {
-                    inner.assignable(&inner2, type_tree, seen)
+                if let Ok(Type::Option(inner2)) = rhs.rep(right_type_tree) {
+                    inner.assignable(&inner2, left_type_tree, right_type_tree, seen)
                 } else {
                     false
                 }
             }
             Type::Union(types) => {
-                if let Ok(Type::Union(types2)) = rhs.rep(type_tree) {
-                    type_vectors_assignable(types, &types2, type_tree, seen)
+                if let Ok(Type::Union(types2)) = rhs.rep(right_type_tree) {
+                    type_vectors_assignable(types, &types2, left_type_tree, right_type_tree, seen)
                 } else {
                     false
                 }
             }
             Type::GenericSlot(slot) => {
-                if let Ok(Type::GenericSlot(slot2)) = rhs.rep(type_tree) {
+                if let Ok(Type::GenericSlot(slot2)) = rhs.rep(right_type_tree) {
                     *slot == slot2
                 } else {
                     false
                 }
             }
             Type::Generic(slot) => {
-                if let Ok(Type::Generic(slot2)) = rhs.rep(type_tree) {
+                if let Ok(Type::Generic(slot2)) = rhs.rep(right_type_tree) {
                     *slot == slot2
                 } else {
                     false
@@ -1267,14 +1281,15 @@ pub fn type_vectors_castable(
 pub fn type_vectors_assignable(
     tvec1: &[Type],
     tvec2: &[Type],
-    type_tree: &TypeTree,
+    left_type_tree: &TypeTree,
+    right_type_tree: &TypeTree,
     seen: HashSet<(Type, Type)>,
 ) -> bool {
     tvec1.len() == tvec2.len()
         && tvec1
             .iter()
             .zip(tvec2)
-            .all(|(t1, t2)| t1.assignable(t2, type_tree, seen.clone()))
+            .all(|(t1, t2)| t1.assignable(t2, left_type_tree, right_type_tree, seen.clone()))
 }
 
 fn field_vectors_covariant_castable(
@@ -1307,14 +1322,15 @@ fn field_vectors_castable(
 pub fn arg_vectors_assignable(
     tvec1: &[Type],
     tvec2: &[Type],
-    type_tree: &TypeTree,
+    left_type_tree: &TypeTree,
+    right_type_tree: &TypeTree,
     seen: HashSet<(Type, Type)>,
 ) -> bool {
     tvec1.len() == tvec2.len()
         && tvec1
             .iter()
             .zip(tvec2)
-            .all(|(t1, t2)| t1.assignable(t2, type_tree, seen.clone()))
+            .all(|(t1, t2)| t1.assignable(t2, left_type_tree, right_type_tree, seen.clone()))
 }
 
 pub fn field_vectors_mismatch(
@@ -1342,12 +1358,15 @@ pub fn field_vectors_mismatch(
 fn field_vectors_assignable(
     tvec1: &[StructField],
     tvec2: &[StructField],
-    type_tree: &TypeTree,
+    left_type_tree: &TypeTree,
+    right_type_tree: &TypeTree,
     seen: HashSet<(Type, Type)>,
 ) -> bool {
     tvec1.len() == tvec2.len()
         && tvec1.iter().zip(tvec2).all(|(t1, t2)| {
-            t1.tipe.assignable(&t2.tipe, type_tree, seen.clone()) && t1.name == t2.name
+            t1.tipe
+                .assignable(&t2.tipe, left_type_tree, right_type_tree, seen.clone())
+                && t1.name == t2.name
         })
 }
 

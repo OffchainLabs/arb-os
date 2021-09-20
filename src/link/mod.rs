@@ -45,12 +45,12 @@ impl SerializableTypeTree {
         }
         Self { inner }
     }
-    pub fn into_type_tree(self) -> TypeTree {
+    pub fn into_type_tree(self, fix: bool) -> TypeTree {
         let mut type_tree = HashMap::new();
         for (path, tipe) in self.inner.into_iter() {
             let mut x: Vec<_> = path.split(", ").map(|val| val.to_string()).collect();
             let id = x.pop().expect("empty list");
-            let sid = StringId::new(x.clone(), id.clone());
+            let sid = StringId::new(if fix { x.clone() } else { vec![] }, id.clone());
             type_tree.insert((x, sid), tipe);
         }
         type_tree

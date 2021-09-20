@@ -1600,7 +1600,7 @@ fn typecheck_statement<'a>(
     let debug_info = statement.debug_info;
     let (stat, binds) = match kind {
         StatementKind::ReturnVoid() => {
-            if Type::Void.assignable(&func.ret_type, type_tree, HashSet::new()) {
+            if Type::Void.assignable(&func.ret_type, type_tree, type_tree, HashSet::new()) {
                 Ok((TypeCheckedStatementKind::ReturnVoid(), vec![]))
             } else {
                 Err(CompileError::new_type_error(
@@ -1628,7 +1628,7 @@ fn typecheck_statement<'a>(
 
             if func
                 .ret_type
-                .assignable(&tc_expr.get_type(), type_tree, HashSet::new())
+                .assignable(&tc_expr.get_type(), type_tree, type_tree, HashSet::new())
             {
                 Ok((TypeCheckedStatementKind::Return(tc_expr), vec![]))
             } else {
@@ -1812,7 +1812,12 @@ fn typecheck_statement<'a>(
             )?;
             match type_table.get(id) {
                 Some(var_type) => {
-                    if var_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
+                    if var_type.assignable(
+                        &tc_expr.get_type(),
+                        type_tree,
+                        type_tree,
+                        HashSet::new(),
+                    ) {
                         Ok((
                             TypeCheckedStatementKind::AssignLocal(id.clone(), tc_expr),
                             vec![],
@@ -1831,7 +1836,12 @@ fn typecheck_statement<'a>(
                 }
                 None => match global_vars.get(id) {
                     Some(var_type) => {
-                        if var_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
+                        if var_type.assignable(
+                            &tc_expr.get_type(),
+                            type_tree,
+                            type_tree,
+                            HashSet::new(),
+                        ) {
                             Ok((
                                 TypeCheckedStatementKind::AssignGlobal(id.clone(), tc_expr),
                                 vec![],
@@ -2428,6 +2438,7 @@ fn typecheck_expr(
                                 if !resolved_arg_type.assignable(
                                     &tc_args[i].get_type().rep(type_tree)?,
                                     type_tree,
+                                    type_tree,
                                     HashSet::new(),
                                 ) {
                                     return Err(CompileError::new_type_error(
@@ -2753,7 +2764,7 @@ fn typecheck_expr(
                 let tc_type = tc_expr.get_type();
                 if types
                     .iter()
-                    .any(|t| t.assignable(&tc_type, type_tree, HashSet::new()))
+                    .any(|t| t.assignable(&tc_type, type_tree, type_tree, HashSet::new()))
                 {
                     Ok(TypeCheckedExprKind::Cast(
                         Box::new(tc_expr),
@@ -2857,7 +2868,7 @@ fn typecheck_expr(
                 )?;
                 match tc_arr.get_type().rep(type_tree)? {
                     Type::Array(t) => {
-                        if t.assignable(&tc_val.get_type(), type_tree, HashSet::new()) {
+                        if t.assignable(&tc_val.get_type(), type_tree, type_tree, HashSet::new()) {
                             if tc_index.get_type() != Type::Uint {
                                 Err(CompileError::new_type_error(
                                     format!(
@@ -2906,7 +2917,12 @@ fn typecheck_expr(
                     }
                     Type::Map(kt, vt) => {
                         if tc_index.get_type() == *kt {
-                            if vt.assignable(&tc_val.get_type(), type_tree, HashSet::new()) {
+                            if vt.assignable(
+                                &tc_val.get_type(),
+                                type_tree,
+                                type_tree,
+                                HashSet::new(),
+                            ) {
                                 Ok(TypeCheckedExprKind::MapMod(
                                     Box::new(tc_arr),
                                     Box::new(tc_index),
@@ -2975,6 +2991,7 @@ fn typecheck_expr(
                             if fields[index].tipe.assignable(
                                 &tc_val.get_type(),
                                 type_tree,
+                                type_tree,
                                 HashSet::new(),
                             ) {
                                 Ok(TypeCheckedExprKind::StructMod(
@@ -3024,7 +3041,7 @@ fn typecheck_expr(
                     closures,
                     scopes,
                 )?;
-                if t.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
+                if t.assignable(&tc_expr.get_type(), type_tree, type_tree, HashSet::new()) {
                     Ok(TypeCheckedExprKind::Cast(Box::new(tc_expr), t.clone()))
                 } else {
                     Err(CompileError::new_type_error(
@@ -3251,9 +3268,19 @@ fn typecheck_expr(
                         .clone()
                         .map(|b| b.get_type())
                         .unwrap_or(Type::Void);
-                    let if_type = if block_type.assignable(&else_type, type_tree, HashSet::new()) {
+                    let if_type = if block_type.assignable(
+                        &else_type,
+                        type_tree,
+                        type_tree,
+                        HashSet::new(),
+                    ) {
                         block_type
-                    } else if else_type.assignable(&block_type, type_tree, HashSet::new()) {
+                    } else if else_type.assignable(
+                        &block_type,
+                        type_tree,
+                        type_tree,
+                        HashSet::new(),
+                    ) {
                         else_type
                     } else {
                         return Err(CompileError::new_type_error(
@@ -3334,20 +3361,26 @@ fn typecheck_expr(
                     .clone()
                     .map(|b| b.get_type())
                     .unwrap_or(Type::Void);
-                let if_let_type = if block_type.assignable(&else_type, type_tree, HashSet::new()) {
-                    block_type
-                } else if else_type.assignable(&block_type, type_tree, HashSet::new()) {
-                    else_type
-                } else {
-                    return Err(CompileError::new_type_error(
-                        format!(
-                            "Mismatch of if and else types found: {} and {}",
-                            Color::red(block_type.print(type_tree)),
-                            Color::red(else_type.print(type_tree))
-                        ),
-                        debug_info.location.into_iter().collect(),
-                    ));
-                };
+                let if_let_type =
+                    if block_type.assignable(&else_type, type_tree, type_tree, HashSet::new()) {
+                        block_type
+                    } else if else_type.assignable(
+                        &block_type,
+                        type_tree,
+                        type_tree,
+                        HashSet::new(),
+                    ) {
+                        else_type
+                    } else {
+                        return Err(CompileError::new_type_error(
+                            format!(
+                                "Mismatch of if and else types found: {} and {}",
+                                Color::red(block_type.print(type_tree)),
+                                Color::red(else_type.print(type_tree))
+                            ),
+                            debug_info.location.into_iter().collect(),
+                        ));
+                    };
                 Ok(TypeCheckedExprKind::IfLet(
                     l.clone(),
                     Box::new(tcr),

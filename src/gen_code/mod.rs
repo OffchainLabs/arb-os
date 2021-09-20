@@ -2,7 +2,9 @@
 // Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
 //
 
-use crate::compile::{AbstractSyntaxTree, StructField, Type, TypeCheckedNode, TypeTree};
+use crate::compile::{
+    comma_list, AbstractSyntaxTree, StructField, Type, TypeCheckedNode, TypeTree,
+};
 use crate::console::Color;
 use crate::link::LinkedProgram;
 use crate::stringtable::StringId;
@@ -85,11 +87,32 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
     )
     .unwrap();
     writeln!(code, "").unwrap();
+    println!("before");
     let (mut input_fields, in_recursers, in_tree, old_arbos_version) =
-        get_globals_and_version_from_file(&from)?;
-    let (mut output_fields, out_recursers, out_tree, _) = get_globals_and_version_from_file(&to)?;
+        get_globals_and_version_from_file(&from, false)?;
+    println!("middle");
+    let (mut output_fields, out_recursers, out_tree, _) =
+        get_globals_and_version_from_file(&to, true)?;
+    println!("after");
     output_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
     input_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
+    let in_account_store = input_fields
+        .iter()
+        .find(|field| field.name == "globalAccountStore")
+        .unwrap();
+    let out_account_store = output_fields
+        .iter()
+        .find(|field| field.name == "globalAccountStore")
+        .unwrap();
+    println!("?: {}", in_account_store.tipe.display());
+    println!("?: {}", out_account_store.tipe.display());
+    println!("??: {}", in_account_store == out_account_store);
+    println!(
+        "??: {:?}",
+        in_account_store
+            .tipe
+            .first_mismatch(&out_account_store.tipe, &in_tree, HashSet::new())
+    );
     let mut intersection: HashSet<&StructField> = input_fields
         .iter()
         .collect::<HashSet<_>>()
@@ -280,6 +303,7 @@ fn write_subtypes(
 
 fn get_globals_and_version_from_file(
     path: &Path,
+    fix: bool,
 ) -> Result<(Vec<StructField>, HashSet<(Type, String)>, TypeTree, u64), GenCodeError> {
     let mut file = File::open(&path).map_err(|_| {
         GenCodeError::new(format!(
@@ -302,7 +326,7 @@ fn get_globals_and_version_from_file(
         ))
     })?;
 
-    let type_tree = globals.type_tree.into_type_tree();
+    let type_tree = globals.type_tree.into_type_tree(fix);
 
     let mut state: (Vec<_>, Rc<RefCell<HashSet<(Type, String)>>>) =
         (vec![], Rc::new(RefCell::new(HashSet::new())));
@@ -315,9 +339,9 @@ fn get_globals_and_version_from_file(
             let mut tipe = global.tipe;
             if let Type::Nominal(file_path, id, _) = tipe {
                 tipe = type_tree
-                    .get(&(file_path.clone(), id))
+                    .get(&(file_path.clone(), id.clone()))
                     .cloned()
-                    .unwrap_or((Type::Any, "fail1".to_string()))
+                    .expect(&format!("{}: {}", comma_list(&file_path), id))
                     .0;
             }
             tipe.recursive_apply(replace_nominal, &type_tree, &mut state);
