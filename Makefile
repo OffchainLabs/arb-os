@@ -6,7 +6,7 @@
 generics_files = basic simple nested func closure colorful queue
 generics_outputs = $(patsubst %,generics/%, $(generics_files))
 
-minitest_outputs = arithmetic codeloadtest globaltest simple-closure closure quick $(generics_outputs)
+minitest_outputs = arithmetic codeloadtest globaltest simple-closure closure quick wide-tuples $(generics_outputs)
 upgrade_outputs = regcopy_new regcopy_old upgrade1_new upgrade1_old
 looptest_outputs = upgrade2_new upgrade2_old
 builtin_outputs = arraytest kvstest maptest
@@ -172,7 +172,7 @@ arb_os/arbos-upgrade-base.mexe: $(arbos_source_no_bridge) .make/tools
 	@touch .make/test
 
 .make/libs: $(libs_mexes)
-	cargo test --release -- test_arraytest test_xif_else test_closures test_codeblocks test_basic test_codeload test_globaltest test_map test_kvstest test_fixedpoint test_error_system test_queuetest test_keccak test_pqtest test_storage_map test_expanding_int_array test_bytearray test_biguint test_rlp
+	cargo test --release -- test_arraytest test_if_else test_closures test_codeblocks test_basic test_codeload test_globaltest test_map test_kvstest test_fixedpoint test_error_system test_queuetest test_keccak test_pqtest test_storage_map test_expanding_int_array test_bytearray test_biguint test_rlp
 	exit 1
 	@touch .make/libs
 

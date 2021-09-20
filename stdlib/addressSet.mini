@@ -26,53 +26,53 @@ type SetOfAddresses = struct {
 };
 
 public func setOfAddresses_emptySet() -> SetOfAddresses {
-    return struct {
+    struct {
         contents: storageMap_new(),
         inverted: false,
-    };
+    }
 }
 
 public func setOfAddresses_all() -> SetOfAddresses {
-    return struct {
+    struct {
         contents: storageMap_new(),
         inverted: true
-    };
+    }
 }
 
 public func setOfAddresses_isEmpty(sa: SetOfAddresses) -> bool {
-    return (! sa.inverted) && (storageMap_size(sa.contents) == 0);
+    (! sa.inverted) && (storageMap_size(sa.contents) == 0)
 }
 
 public func setOfAddresses_isAll(sa: SetOfAddresses) -> bool {
-    return sa.inverted && (storageMap_size(sa.contents) == 0);
+    sa.inverted && (storageMap_size(sa.contents) == 0)
 }
 
 public func setOfAddresses_add(sa: SetOfAddresses, addr: address) -> SetOfAddresses {
-    return sa with {
-        contents: storageMap_set(sa.contents, uint(addr), xif (sa.inverted) { 0 } else { 1 })
-    };
+    sa with {
+        contents: storageMap_set(sa.contents, uint(addr), if sa.inverted { 0 } else { 1 })
+    }
 }
 
 public func setOfAddresses_remove(sa: SetOfAddresses, addr: address) -> SetOfAddresses {
-    return sa with {
-        contents: storageMap_set(sa.contents, uint(addr), xif (sa.inverted) { 1 } else { 0 })
-    };
+    sa with {
+        contents: storageMap_set(sa.contents, uint(addr), if sa.inverted { 1 } else { 0 })
+    }
 }
 
 public func setOfAddresses_contains(sa: SetOfAddresses, addr: address) -> bool {
-    return xif (storageMap_get(sa.contents, uint(addr)) == 0) {
+    if storageMap_get(sa.contents, uint(addr)) == 0 {
         sa.inverted
     } else {
         ! sa.inverted
-    };
+    }
 }
 
 public func setOfAddresses_serialize(sa: SetOfAddresses) -> option<ByteArray> {
-    return xif (sa.inverted) {
+    if sa.inverted {
         None<ByteArray>
     } else {
         Some(storageMap_serializeListOfNonzeros(sa.contents))
-    };
+    }
 }
 
 
@@ -81,7 +81,7 @@ type AddressPairSet = struct {
 };
 
 public func addressPairSet_new() -> AddressPairSet {
-    return struct { contents: newmap<(uint, uint), bool> };
+    struct { contents: newmap<(uint, uint), bool> }
 }
 
 public func addressPairSet_set(
@@ -90,12 +90,12 @@ public func addressPairSet_set(
     second: option<address>,
     newValue: bool,
 ) -> AddressPairSet {
-    let addr1 = xif let Some(a1) = first {
+    let addr1 = if let Some(a1) = first {
         uint(a1)
     } else {
         const::WildcardForAddress
     };
-    let addr2 = xif let Some(a2) = second {
+    let addr2 = if let Some(a2) = second {
         uint(a2)
     } else {
         const::WildcardForAddress
@@ -103,16 +103,16 @@ public func addressPairSet_set(
 
     //assert(((addr1 != const::WildcardForAddress) || (addr2 != const::WildcardForAddress), ()));
 
-    return aps with {
+    aps with {
         contents: aps.contents with { [(addr1, addr2)] = newValue }
-    };
+    }
 }
 
 public func addressPairSet_lookup(aps: AddressPairSet, addr1: address, addr2: address) -> bool {
     let cont = aps.contents;
-    return (cont[(uint(addr1), const::WildcardForAddress)] == Some(true))
+    (cont[(uint(addr1), const::WildcardForAddress)] == Some(true))
         || (cont[(const::WildcardForAddress, uint(addr2))] == Some(true))
-        || (cont[(uint(addr1), uint(addr2))] == Some(true));
+        || (cont[(uint(addr1), uint(addr2))] == Some(true))
 }
 
 public func addressPairSet_lookup_options(
@@ -120,11 +120,11 @@ public func addressPairSet_lookup_options(
     addr1: option<address>,
     addr2: option<address>,
 ) -> bool {
-    return addressPairSet_lookup(
+    addressPairSet_lookup(
         aps,
-        xif let Some(a1) = addr1 { a1 } else { address(const::WildcardForAddress) },
-        xif let Some(a2) = addr2 { a2 } else { address(const::WildcardForAddress) },
-    );
+        if let Some(a1) = addr1 { a1 } else { address(const::WildcardForAddress) },
+        if let Some(a2) = addr2 { a2 } else { address(const::WildcardForAddress) },
+    )
 }
 
 public func addressPairSet_lookup_strict(   // look for specific match (i.e., specific addr doesn't match wildcard)
@@ -132,12 +132,12 @@ public func addressPairSet_lookup_strict(   // look for specific match (i.e., sp
     addr1: option<address>,
     addr2: option<address>,
 ) -> bool {
-    return aps.contents[
+    aps.contents[
         (
-            xif let Some(a1) = addr1 { uint(a1) } else { const::WildcardForAddress },
-            xif let Some(a2) = addr2 { uint(a2) } else { const::WildcardForAddress },
+            if let Some(a1) = addr1 { uint(a1) } else { const::WildcardForAddress },
+            if let Some(a2) = addr2 { uint(a2) } else { const::WildcardForAddress },
         )
-    ] == Some(true);
+    ] == Some(true)
 }
 
 public func addressPairSet_serialize(aps: AddressPairSet) -> ByteArray {
@@ -146,11 +146,11 @@ public func addressPairSet_serialize(aps: AddressPairSet) -> ByteArray {
         unsafecast<func(any, any, any) -> any>(apss_closure),
         bytearray_new(0),
     );
-    return unsafecast<ByteArray>(rawResult);
+    unsafecast<ByteArray>(rawResult)
 }
 
 func apss_closure(key:(uint, uint), value: uint, state: ByteArray) -> ByteArray {
-    return xif (value == 0) {
+    if value == 0 {
         state
     } else {
         let sz = bytearray_size(state);
@@ -159,11 +159,5 @@ func apss_closure(key:(uint, uint), value: uint, state: ByteArray) -> ByteArray 
             sz+32,
             key.1
         )
-    };
+    }
 }
-
-
-
-
-
-

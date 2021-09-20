@@ -30,7 +30,7 @@ use typecheck::TypeCheckedFunc;
 pub use ast::{DebugInfo, FuncProperties, GlobalVar, StructField, TopLevelDecl, Type, TypeTree};
 pub use source::Lines;
 use std::str::FromStr;
-pub use typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNode};
+pub use typecheck::{AbstractSyntaxTree, TypeCheckedNode};
 
 mod ast;
 mod codegen;
@@ -54,8 +54,6 @@ pub struct CompileStruct {
     pub output: Option<String>,
     #[clap(short, long)]
     pub format: Option<String>,
-    #[clap(short, long)]
-    pub inline: Option<InliningHeuristic>,
     #[clap(short, long)]
     pub consts_file: Option<String>,
     #[clap(short, long)]
@@ -155,7 +153,6 @@ impl CompileStruct {
             let (progs, all_globals) = match compile_from_file(
                 path,
                 &mut file_info_chart,
-                &self.inline,
                 constants_path,
                 self.must_use_global_consts,
                 &mut error_system,
@@ -263,20 +260,6 @@ impl TypeCheckedModule {
             path,
             name,
         }
-    }
-
-    /// Inlines functions in the AST by replacing function calls with `CodeBlock` expressions where
-    /// appropriate
-    fn inline(&mut self, heuristic: &InliningHeuristic) {
-        let mut new_funcs = self.checked_funcs.clone();
-        for (_id, func) in &mut new_funcs {
-            func.inline(
-                &self.checked_funcs.values().cloned().collect(),
-                &self.string_table,
-                heuristic,
-            )
-        }
-        self.checked_funcs = new_funcs;
     }
 
     /// Propagates inherited attributes down top-level decls.
@@ -452,7 +435,6 @@ impl CompiledProgram {
 pub fn compile_from_file(
     path: &Path,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    inline: &Option<InliningHeuristic>,
     constants_path: Option<&Path>,
     must_use_global_consts: bool,
     error_system: &mut ErrorSystem,
@@ -484,7 +466,6 @@ pub fn compile_from_file(
             library,
             "main",
             file_info_chart,
-            inline,
             constants_path,
             must_use_global_consts,
             error_system,
@@ -503,7 +484,6 @@ pub fn compile_from_file(
                 )
             })?,
             file_info_chart,
-            inline,
             constants_path,
             must_use_global_consts,
             error_system,
@@ -538,14 +518,12 @@ fn _print_node(node: &mut TypeCheckedNode, state: &String, mut_state: &mut usize
 /// The `folder` argument gives the path to the folder, `library` optionally contains a library
 /// prefix attached to the front of all paths, `main` contains the name of the main file in the
 /// folder, `file_info_chart` contains a map from the `u64` hashes of file names to the `FileInfo`
-/// they represent, useful for formatting errors, and `inline` determines whether inlining is used
-/// when compiling this folder.
+/// they represent, useful for formatting errors
 pub fn compile_from_folder(
     folder: &Path,
     library: Option<&str>,
     main: &str,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
-    inline: &Option<InliningHeuristic>,
     constants_path: Option<&Path>,
     must_use_global_consts: bool,
     error_system: &mut ErrorSystem,
@@ -597,13 +575,6 @@ pub fn compile_from_folder(
     // Control flow analysis stage
     for module in &mut typechecked_modules {
         module.flowcheck(error_system);
-    }
-
-    // Inlining stage
-    if let Some(cool) = inline {
-        typechecked_modules
-            .iter_mut()
-            .for_each(|module| module.inline(cool));
     }
 
     for module in &mut typechecked_modules {

@@ -4,7 +4,7 @@
 
 
 use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVar, Type, CodeBlock, AssignRef, StructField, FuncArg, FuncProperties, Statement, StatementKind, DebugInfo, Attributes, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant, OptionConst, FieldInitializer, new_func_arg, new_type_decl, check_generic_parameters};
-use crate::compile::{InliningMode, ErrorSystem, CompileError};
+use crate::compile::{ErrorSystem, CompileError};
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
 use crate::link::Import;
@@ -48,11 +48,6 @@ Comma<T>: Vec<T> = {
 pub Decls: Vec<TopLevelDecl> = {
     <a: ("#![" <Attributes> "]")?> <mut i:HeadDecl*> <mut n:BodyDecl+> => {
         i.append(&mut n);
-        for decl in &mut i {
-            if let (TopLevelDecl::FuncDecl(func), Some(attr)) = (decl, a) {
-                func.debug_info.attributes.inline = func.debug_info.attributes.inline.and(&attr.inline);
-            }
-        };
         i
     },
 }
@@ -211,8 +206,6 @@ Attributes: Attributes = {
         for name in names.into_iter().chain(last.into_iter()) {
             match name.as_ref() {
                 "breakpoint" => attribs.breakpoint = true,
-                "inline" => attribs.inline = InliningMode::Always,
-                "noinline" => attribs.inline = InliningMode::Never,
                 "print" => attribs.codegen_print = true,
                 unrecognized => error_system.errors.push(
                     CompileError::new(
@@ -228,7 +221,7 @@ Attributes: Attributes = {
 }
 
 StatementKind: StatementKind = {
-    "while" <cond: Expr> <block: CodeBlockStat> => StatementKind::While(cond, block.body),
+    "while" <cond: Expr> <block: CodeBlockStat> => StatementKind::While(cond, block),
     "let" <lno: @L> <i: Ident> "=" <e: Expr> ";" => {
         let debug_info = DebugInfo::here(file_info, lno, filename);
         StatementKind::Let(vec![AssignRef::new(i, true, debug_info)], e)
@@ -526,7 +519,10 @@ Expr11: Expr = {
         Expr::lno(ExprKind::TupleRef(Box::new(e), u), file_info, lno, filename)
     },
     <lno: @L> "loop" <block: CodeBlockStat> => {
-        Expr::lno(ExprKind::Loop(block.body), file_info, lno, filename)
+        Expr::lno(ExprKind::Loop(block, Type::Void), file_info, lno, filename)
+    },
+    <lno: @L> "loop" "<" <tipe: Type> ">" <block: CodeBlockStat> => {
+        Expr::lno(ExprKind::Loop(block, tipe), file_info, lno, filename)
     },
     Expr12,
 }

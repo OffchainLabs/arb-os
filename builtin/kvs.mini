@@ -57,7 +57,7 @@ public func builtin_kvsSize(kvs: Kvs) -> uint {
 public func builtin_kvsGet(kvs: Kvs, key: any) -> option<any> {
     let hashedKey = uint(hash(key));
     let s = kvs.tree;
-    loop {
+    loop<option<any> > {
         if s == unsafecast<KvsNode>(0) {
             // empty subtree
             return None;
@@ -92,7 +92,7 @@ type Unwinder = struct {
 
 public func builtin_kvsSet(s: Kvs, key: any, value: any) -> Kvs {
     let (utree, maybeUnwinder, delta) = kvs_set2(s.tree, key, Some(value));
-    loop {
+    loop<Kvs> {
         if let Some(unwinder) = maybeUnwinder {
             utree = unwinder.kvs with {
                 [unwinder.index] = utree
@@ -111,7 +111,7 @@ func kvs_set2(s: KvsNode, key: any, value: option<any>) -> (KvsNode, option<Unwi
     let hashedKey = uint(hash(key));
     let reductionFactor = 1;
     let unwinder = None<Unwinder>;
-    loop {
+    loop<(KvsNode, option<Unwinder>, int)> {
         if s == unsafecast<KvsNode>(0) {
             if value == None<any> {
                 // writing None to an empty slot; do nothing
@@ -174,7 +174,7 @@ func kvs_set2(s: KvsNode, key: any, value: option<any>) -> (KvsNode, option<Unwi
 
 public func builtin_kvsDelete(s: Kvs, key: uint) -> Kvs {
     let (utree, maybeUnwinder, delta) = kvs_set2(s.tree, key, None<any>);
-    loop {
+    loop<Kvs> {
         if let Some(unwinder) = maybeUnwinder {
             utree = unwinder.kvs with {
                 [unwinder.index] = utree
