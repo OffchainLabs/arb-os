@@ -11,7 +11,7 @@ use crate::stringtable::StringId;
 use crate::GenUpgrade;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fs::{File, OpenOptions};
@@ -87,45 +87,42 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
     )
     .unwrap();
     writeln!(code, "").unwrap();
-    println!("before");
     let (mut input_fields, in_recursers, in_tree, old_arbos_version) =
         get_globals_and_version_from_file(&from, false)?;
-    println!("middle");
     let (mut output_fields, out_recursers, out_tree, _) =
         get_globals_and_version_from_file(&to, true)?;
-    println!("after");
     output_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
     input_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
-    let in_account_store = input_fields
+
+    let output_map = output_fields
         .iter()
-        .find(|field| field.name == "globalAccountStore")
-        .unwrap();
-    let out_account_store = output_fields
-        .iter()
-        .find(|field| field.name == "globalAccountStore")
-        .unwrap();
-    println!("?: {}", in_account_store.tipe.display());
-    println!("?: {}", out_account_store.tipe.display());
-    println!("??: {}", in_account_store == out_account_store);
-    println!(
-        "??: {:?}",
-        in_account_store
-            .tipe
-            .first_mismatch(&out_account_store.tipe, &in_tree, HashSet::new())
-    );
-    let mut intersection: HashSet<&StructField> = input_fields
-        .iter()
-        .collect::<HashSet<_>>()
-        .intersection(&(output_fields.iter().collect::<HashSet<_>>()))
-        .cloned()
-        .collect();
+        .map(|field| (&field.name, &field.tipe))
+        .collect::<HashMap<_, _>>();
+    let mut intersection = HashSet::new();
+    for field in &input_fields {
+        if let Some(tipe) = output_map.get(&field.name) {
+            if field
+                .tipe
+                .assignable(*tipe, &in_tree, &out_tree, HashSet::new())
+            {
+                intersection.insert(field);
+            }
+        };
+    }
+
     intersection.remove(&StructField::new(String::from("_jump_table"), Type::Any));
-    let output_only: HashSet<&StructField> = output_fields
+
+    let input_map = input_fields
         .iter()
-        .collect::<HashSet<_>>()
-        .difference(&(input_fields.iter().collect()))
-        .cloned()
-        .collect();
+        .map(|field| (&field.name, &field.tipe))
+        .collect::<HashMap<_, _>>();
+    let mut output_only = HashSet::new();
+    for field in &output_fields {
+        if !input_map.contains_key(&field.name) {
+            output_only.insert(field);
+        };
+    }
+
     let input_struct = Type::Struct(input_fields.clone());
     let output_struct = Type::Struct(output_fields.clone());
     let mut output_only: Vec<_> = output_only.into_iter().collect();
