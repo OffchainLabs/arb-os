@@ -208,11 +208,11 @@ fn codegen(
         }
 
         macro_rules! error {
-            ($text:expr, $($args:expr)*) => {
-                Err(CompileError::new("Internal error", format!($text, $($args)*), debug.locs()))?
+            ($text:expr $(,$args:expr)* $(,)?) => {
+                return Err(CompileError::new("Internal error", format!($text, $(Color::red($args),)*), debug.locs()));
             };
             (@$text:expr, $debug:expr) => {
-                Err(CompileError::new("Internal error", format!($text), $debug.locs()))?
+                return Err(CompileError::new("Internal error", format!($text), $debug.locs()));
             };
         }
 
@@ -411,7 +411,16 @@ fn codegen(
                         };
                         cgen.code.push(opcode!(Noop, Value::Label(func_label)));
                     }
-                    TypeCheckedExprKind::GlobalVariableRef(id, _) => {}
+                    TypeCheckedExprKind::GlobalVariableRef(id, _) => {
+                        let offset = match cgen.globals.get(id) {
+                            Some(global) => global.offset.unwrap(),
+                            None => {
+                                let globals = format!("{:?}", cgen.globals);
+                                error!("StringId {} doesn't exist in {}", id, globals);
+                            }
+                        };
+                        cgen.code.push(opcode!(@GetGlobalVar(offset)));
+                    }
                     TypeCheckedExprKind::FunctionCall(fexpr, args, _, prop) => {
                         let nargs = args.len();
                         for i in 0..nargs {
@@ -437,8 +446,118 @@ fn codegen(
                     }
                     TypeCheckedExprKind::ArrayRef(expr1, expr2, t) => {}
                     TypeCheckedExprKind::NewArray(sz_expr, value, array_type) => {}
-                    TypeCheckedExprKind::NewFixedArray(sz, bo_expr, _) => {}
-                    TypeCheckedExprKind::FixedArrayRef(expr1, expr2, size, _) => {}
+                    TypeCheckedExprKind::NewFixedArray(size, fill, _) => {
+                        expr!(fill);
+                        for _ in 0..7 {
+                            cgen.code.push(opcode!(Dup0));
+                        }
+                        let container = vec![Value::new_tuple(Vec::new()); 8];
+                        cgen.code.push(opcode!(Noop, Value::new_tuple(container)));
+                        for i in 0..8 {
+                            cgen.code.push(opcode!(Tset, Value::from(i)));
+                        }
+
+                        let mut tuple_size: usize = 8;
+                        while tuple_size < *size {
+                            for _ in 0..7 {
+                                cgen.code.push(opcode!(Dup0));
+                            }
+                            let container = vec![Value::new_tuple(Vec::new()); 8];
+                            cgen.code.push(opcode!(Noop, Value::new_tuple(container)));
+                            for i in 0..8 {
+                                cgen.code.push(opcode!(Tset, Value::from(i)));
+                            }
+                            tuple_size *= 8;
+                        }
+                    }
+                    TypeCheckedExprKind::FixedArrayRef(expr1, expr2, size, _) => {
+                        expr!(expr1, 0);
+                        expr!(expr2, 1);
+                        if *size != 8 {
+                            //TODO: also skip check if size is larger power of 8
+                            let cont_label = cgen.label_gen.next();
+                            cgen.code.push(opcode!(Dup0));
+                            cgen.code.push(opcode!(GreaterThan, Value::from(*size)));
+                            cgen.code.push(opcode!(Cjump, Value::Label(cont_label)));
+                            cgen.code.push(opcode!(Error));
+                            cgen.code.push(opcode!(@Label(cont_label)));
+                        }
+                        cgen.code.push(opcode!(@UncheckedFixedArrayGet(*size)));
+                    }
+                    TypeCheckedExprKind::FixedArrayMod(arr, key, val, size, _) => {
+                        expr!(val, 0);
+                        expr!(arr, 1);
+                        expr!(key, 2);
+
+                        if *size != 8 {
+                            // TODO: safe for if-condition to say size does not equal any power of 8
+                            let ok_label = cgen.label_gen.next();
+                            cgen.code.push(opcode!(Dup0));
+                            cgen.code.push(opcode!(GreaterThan, Value::from(*size)));
+                            cgen.code.push(opcode!(Cjump, Value::Label(ok_label)));
+                            cgen.code.push(opcode!(Error));
+                            cgen.code.push(opcode!(@Label(ok_label)));
+                        }
+
+                        fn fixed_array_step(cgen: &mut Codegen, size: usize, debug: DebugInfo) {
+                            macro_rules! opcode {
+                                ($opcode:ident) => {
+                                    Instruction::from_opcode(
+                                        Opcode::AVMOpcode(AVMOpcode::$opcode),
+                                        debug,
+                                    )
+                                };
+                                ($opcode:ident, $immediate:expr) => {
+                                    Instruction::from_opcode_imm(
+                                        Opcode::AVMOpcode(AVMOpcode::$opcode),
+                                        $immediate,
+                                        debug,
+                                    )
+                                };
+                            }
+
+                            if size <= 8 {
+                                // stack: idx tuple val
+                                cgen.code.push(opcode!(Tset));
+                                return;
+                            }
+
+                            // stack: idx tupletree val
+                            cgen.code.push(opcode!(Dup2, Value::from(TUPLE_SIZE)));
+                            cgen.code.push(opcode!(AuxPush));
+                            cgen.code.push(opcode!(Dup1));
+
+                            // stack: idx TUPLE_SIZE idx tupletree val; aux: tupletree
+                            cgen.code.push(opcode!(Mod));
+                            cgen.code.push(opcode!(Dup0));
+                            cgen.code.push(opcode!(AuxPush));
+
+                            // stack: slot idx tupletree val; aux: slot tupletree
+                            cgen.code.push(opcode!(Swap1));
+                            cgen.code.push(opcode!(Swap1, Value::from(TUPLE_SIZE)));
+                            cgen.code.push(opcode!(Div));
+
+                            // stack: subidx slot tupletree val; aux: slot tupletree
+                            cgen.code.push(opcode!(Swap2));
+                            cgen.code.push(opcode!(Swap1));
+
+                            // stack: slot tupletree subidx val; aux: slot tupletree
+                            cgen.code.push(opcode!(Tget));
+                            cgen.code.push(opcode!(Swap1));
+
+                            fixed_array_step(cgen, (size + (TUPLE_SIZE - 1)) / TUPLE_SIZE, debug);
+
+                            // stack: newsubtupletree; aux: slot tupletree
+                            cgen.code.push(opcode!(AuxPop));
+                            cgen.code.push(opcode!(AuxPop));
+                            cgen.code.push(opcode!(Swap1));
+
+                            // stack: slot tupletree newsubtupletree
+                            cgen.code.push(opcode!(Tset));
+                        }
+
+                        fixed_array_step(cgen, *size, debug);
+                    }
                     TypeCheckedExprKind::NewMap(t) => {}
                     TypeCheckedExprKind::MapRef(map_expr, key_expr, t) => {}
                     TypeCheckedExprKind::StructMod(structure, index, value, _) => {}
@@ -879,26 +998,6 @@ fn codegen_expr(
                 DebugInfo::from(loc)
             ))
         }
-        TypeCheckedExprKind::FixedArrayRef(expr1, expr2, size, _) => {
-            expr!(expr1)?;
-            expr!(expr2, 1)?;
-            if *size != 8 {
-                //TODO: also skip check if size is larger power of 8
-                let cont_label = cgen.label_gen.next();
-                cgen.code.push(opcode!(Dup0));
-                cgen.code
-                    .push(opcode!(GreaterThan, Value::Int(Uint256::from_usize(*size))));
-                cgen.code.push(opcode!(Cjump, Value::Label(cont_label)));
-                cgen.code.push(opcode!(Error));
-                cgen.code
-                    .push(Instruction::from_opcode(Opcode::Label(cont_label), debug));
-            }
-            cgen.code.push(Instruction::from_opcode(
-                Opcode::UncheckedFixedArrayGet(*size),
-                debug,
-            ));
-            Ok(())
-        }
         TypeCheckedExprKind::MapRef(map_expr, key_expr, t) => {
             expr!(&TypeCheckedExpr::builtin(
                 "builtin_kvsGet",
@@ -982,9 +1081,6 @@ fn codegen_expr(
                 DebugInfo::from(loc)
             ))
         }
-        TypeCheckedExprKind::FixedArrayMod(arr, index, val, size, _) => {
-            codegen_fixed_array_mod(arr, index, val, *size, cgen, locals, debug, stack_items)
-        }
         TypeCheckedExprKind::MapMod(map, key, val, t) => {
             expr!(&TypeCheckedExpr::builtin(
                 "builtin_kvsSet",
@@ -1033,122 +1129,5 @@ fn codegen_expr(
             Ok(())
         }
         _ => panic!("removed"),
-    }
-}
-
-/// Used to codegen the FixedArrayMod variant of TypeCheckedExpr.
-fn codegen_fixed_array_mod(
-    arr_expr: &TypeCheckedExpr,
-    idx_expr: &TypeCheckedExpr,
-    val_expr: &TypeCheckedExpr,
-    size: usize,
-    cgen: &mut Codegen,
-    locals: &HashMap<usize, usize>,
-    debug_info: DebugInfo,
-    stack_items: usize,
-) -> Result<(), CompileError> {
-    codegen_expr(val_expr, cgen, locals, stack_items)?;
-    codegen_expr(arr_expr, cgen, locals, stack_items + 1)?;
-    codegen_expr(idx_expr, cgen, locals, stack_items + 2)?;
-
-    macro_rules! opcode {
-        ($opcode:ident) => {
-            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), debug_info)
-        };
-        ($opcode:ident, $immediate:expr) => {
-            Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::$opcode),
-                $immediate,
-                debug_info,
-            )
-        };
-    }
-
-    if size != 8 {
-        // TODO: safe for if-condition to say size does not equal any power of 8
-        let ok_label = cgen.label_gen.next();
-        cgen.code.push(opcode!(Dup0));
-        cgen.code
-            .push(opcode!(GreaterThan, Value::Int(Uint256::from_usize(size))));
-        cgen.code.push(opcode!(Cjump, Value::Label(ok_label)));
-        cgen.code.push(opcode!(Error));
-        cgen.code.push(Instruction::from_opcode(
-            Opcode::Label(ok_label),
-            debug_info,
-        ));
-    }
-
-    codegen_fixed_array_mod_2(val_expr, cgen, size, locals, debug_info)
-}
-
-/// Used by codegen_fixed_array_mod, you should not call this directly.
-fn codegen_fixed_array_mod_2(
-    val_expr: &TypeCheckedExpr,
-    cgen: &mut Codegen,
-    size: usize,
-    locals: &HashMap<usize, usize>,
-    debug_info: DebugInfo,
-) -> Result<(), CompileError> {
-    macro_rules! opcode {
-        ($opcode:ident) => {
-            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), debug_info)
-        };
-        ($opcode:ident, $immediate:expr) => {
-            Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::$opcode),
-                $immediate,
-                debug_info,
-            )
-        };
-    }
-
-    if size <= 8 {
-        // stack: idx tuple val
-        cgen.code.push(opcode!(Tset));
-        Ok(())
-    } else {
-        let tuple_size = Value::Int(Uint256::from_usize(TUPLE_SIZE));
-        // stack: idx tupletree val
-        cgen.code.push(opcode!(Dup2, tuple_size.clone()));
-        cgen.code.push(opcode!(AuxPush));
-        cgen.code.push(opcode!(Dup1));
-
-        // stack: idx TUPLE_SIZE idx tupletree val; aux: tupletree
-        cgen.code.push(opcode!(Mod));
-        cgen.code.push(opcode!(Dup0));
-        cgen.code.push(opcode!(AuxPush));
-
-        // stack: slot idx tupletree val; aux: slot tupletree
-        cgen.code.push(opcode!(Swap1));
-        cgen.code.push(opcode!(Swap1, tuple_size));
-        cgen.code.push(opcode!(Div));
-
-        // stack: subidx slot tupletree val; aux: slot tupletree
-        cgen.code.push(opcode!(Swap2));
-        cgen.code.push(opcode!(Swap1));
-
-        // stack: slot tupletree subidx val; aux: slot tupletree
-        cgen.code.push(opcode!(Tget));
-        cgen.code.push(opcode!(Swap1));
-
-        // stack: subidx subtupletree val; aux: slot tupletree
-
-        codegen_fixed_array_mod_2(
-            val_expr,
-            cgen,
-            (size + (TUPLE_SIZE - 1)) / TUPLE_SIZE,
-            locals,
-            debug_info,
-        )?;
-
-        // stack: newsubtupletree; aux: slot tupletree
-        cgen.code.push(opcode!(AuxPop));
-        cgen.code.push(opcode!(AuxPop));
-        cgen.code.push(opcode!(Swap1));
-
-        // stack: slot tupletree newsubtupletree
-        cgen.code.push(opcode!(Tset));
-
-        Ok(())
     }
 }
