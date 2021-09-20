@@ -1635,7 +1635,7 @@ fn test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys_orig_binding.arbos_version(&mut machine)?,
-        Uint256::from_u64(43),
+        Uint256::from_u64(42),
     );
 
     arbowner._add_chain_owner(&mut machine, my_addr.clone(), true, false)?;
