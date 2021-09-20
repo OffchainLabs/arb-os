@@ -64,24 +64,6 @@ pub struct CompileStruct {
     pub no_builtins: bool,
 }
 
-#[derive(Clap, Debug)]
-pub enum InliningHeuristic {
-    All,
-    None,
-}
-
-impl FromStr for InliningHeuristic {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "all" => Ok(InliningHeuristic::All),
-            "none" => Ok(InliningHeuristic::None),
-            other => Err(format!("Unrecognized inlining heuristic: \"{}\"", other)),
-        }
-    }
-}
-
 /// Represents the contents of a source file after parsing.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Module {

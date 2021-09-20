@@ -10,14 +10,13 @@ use super::ast::{
     UnaryOp,
 };
 use crate::compile::ast::{FieldInitializer, FuncProperties};
-use crate::compile::{CompileError, ErrorSystem, InliningHeuristic};
-use crate::console::{Color, human_readable_index};
+use crate::compile::{CompileError, ErrorSystem};
+use crate::console::{human_readable_index, Color};
 use crate::link::Import;
-use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
+use crate::mavm::{Instruction, Value};
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
-use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 type TypeTable = HashMap<usize, Type>;
@@ -605,13 +604,10 @@ pub enum TypeCheckedExprKind {
         FuncProperties,
     ),
     CodeBlock(TypeCheckedCodeBlock),
-    ArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
     FixedArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, usize, Type),
-    MapRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
     ClosureLoad(StringId, usize, usize, BTreeSet<StringId>, Type),
     Tuple(Vec<TypeCheckedExpr>, Type),
     NewFixedArray(usize, Box<TypeCheckedExpr>, Type),
-    NewMap(Type),
     FixedArrayMod(
         Box<TypeCheckedExpr>,
         Box<TypeCheckedExpr>,
@@ -658,7 +654,6 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             | TypeCheckedExprKind::Const(..)
             | TypeCheckedExprKind::NewBuffer
             | TypeCheckedExprKind::Quote(..)
-            | TypeCheckedExprKind::NewMap(..)
             | TypeCheckedExprKind::GetGas
             | TypeCheckedExprKind::Error => vec![],
             TypeCheckedExprKind::UnaryOp(_, exp, _)
@@ -676,9 +671,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             TypeCheckedExprKind::Binary(_, lexp, rexp, _)
             | TypeCheckedExprKind::ShortcutOr(lexp, rexp)
             | TypeCheckedExprKind::ShortcutAnd(lexp, rexp)
-            | TypeCheckedExprKind::ArrayRef(lexp, rexp, _)
             | TypeCheckedExprKind::FixedArrayRef(lexp, rexp, _, _)
-            | TypeCheckedExprKind::MapRef(lexp, rexp, _)
             | TypeCheckedExprKind::StructMod(lexp, _, _, rexp, _) => vec![
                 TypeCheckedNode::Expression(lexp),
                 TypeCheckedNode::Expression(rexp),
@@ -764,47 +757,6 @@ impl TypeCheckedExpr {
         Self { kind, debug_info }
     }
 
-    /// Creates a type-aware builtin function call based on its sub expressions
-    pub fn builtin(
-        name: &str,
-        args: Vec<&TypeCheckedExpr>,
-        ret: &Type,
-        string_table: &StringTable,
-        debug_info: DebugInfo,
-    ) -> Self {
-        let mut arg_types = vec![];
-
-        for arg in args.iter() {
-            arg_types.push(arg.get_type());
-        }
-
-        let nargs = args.len();
-        let nouts = match ret {
-            Type::Void => 0,
-            _ => 1,
-        };
-        let prop = FuncProperties::pure(nargs, nouts);
-        let call_type = Type::Func(prop, arg_types, Box::new(ret.clone()));
-
-        TypeCheckedExpr::new(
-            TypeCheckedExprKind::FunctionCall(
-                Box::new(TypeCheckedExpr::new(
-                    TypeCheckedExprKind::FuncRef(
-                        string_table
-                            .get_if_exists(name)
-                            .expect(&format!("builtin {} does not exist", Color::red(name))),
-                        call_type.clone(),
-                    ),
-                    debug_info,
-                )),
-                args.into_iter().cloned().collect(),
-                call_type,
-                prop,
-            ),
-            debug_info,
-        )
-    }
-
     /// Extracts the type returned from the expression.
     pub fn get_type(&self) -> Type {
         match &self.kind {
@@ -827,13 +779,10 @@ impl TypeCheckedExpr {
             TypeCheckedExprKind::Const(.., t) => t.clone(),
             TypeCheckedExprKind::FunctionCall(.., t, _) => t.clone(),
             TypeCheckedExprKind::CodeBlock(block) => block.get_type(),
-            TypeCheckedExprKind::ArrayRef(.., t) => t.clone(),
             TypeCheckedExprKind::FixedArrayRef(.., t) => t.clone(),
-            TypeCheckedExprKind::MapRef(.., t) => t.clone(),
             TypeCheckedExprKind::ClosureLoad(.., t) => t.clone(),
             TypeCheckedExprKind::Tuple(.., t) => t.clone(),
             TypeCheckedExprKind::NewFixedArray(.., t) => t.clone(),
-            TypeCheckedExprKind::NewMap(t) => t.clone(),
             TypeCheckedExprKind::FixedArrayMod(.., t) => t.clone(),
             TypeCheckedExprKind::StructMod(.., t) => t.clone(),
             TypeCheckedExprKind::Cast(.., t) => t.clone(),
@@ -2278,82 +2227,6 @@ fn typecheck_expr(
                     id, arg_count, frame_size, captures, tipe,
                 ))
             }
-            ExprKind::ArrayOrMapRef(array, index) => {
-                let tc_arr = typecheck_expr(
-                    &*array,
-                    type_table,
-                    global_vars,
-                    func_table,
-                    func,
-                    type_tree,
-                    string_table,
-                    undefinable_ids,
-                    closures,
-                    scopes,
-                )?;
-                let tc_idx = typecheck_expr(
-                    &*index,
-                    type_table,
-                    global_vars,
-                    func_table,
-                    func,
-                    type_tree,
-                    string_table,
-                    undefinable_ids,
-                    closures,
-                    scopes,
-                )?;
-                match tc_arr.get_type().rep(type_tree)? {
-                    Type::Array(t) => {
-                        if tc_idx.get_type() == Type::Uint {
-                            Ok(TypeCheckedExprKind::ArrayRef(
-                                Box::new(tc_arr),
-                                Box::new(tc_idx),
-                                *t,
-                            ))
-                        } else {
-                            error!(
-                                "array index must be Uint, found {}",
-                                tc_idx.get_type().print(type_tree)
-                            );
-                        }
-                    }
-                    Type::FixedArray(t, sz) => {
-                        if tc_idx.get_type() == Type::Uint {
-                            Ok(TypeCheckedExprKind::FixedArrayRef(
-                                Box::new(tc_arr),
-                                Box::new(tc_idx),
-                                sz,
-                                *t,
-                            ))
-                        } else {
-                            error!(
-                                "fixedarray index must be uint, found {}",
-                                tc_idx.get_type().print(type_tree)
-                            );
-                        }
-                    }
-                    Type::Map(kt, vt) => {
-                        if tc_idx.get_type() == *kt {
-                            Ok(TypeCheckedExprKind::MapRef(
-                                Box::new(tc_arr),
-                                Box::new(tc_idx),
-                                Type::Option(Box::new(*vt)),
-                            ))
-                        } else {
-                            error!(
-                                "invalid key value in map lookup, {}",
-                                kt.mismatch_string(&tc_idx.get_type(), type_tree)
-                                    .unwrap_or("Did not find type mismatch".to_string())
-                            );
-                        }
-                    }
-                    _ => error!(
-                        "fixedarray lookup in non-array type {}",
-                        tc_arr.get_type().rep(type_tree)?.print(type_tree)
-                    ),
-                }
-            }
             ExprKind::NewArray(size_expr, tipe) => {
                 let fill = Expr::new(
                     ExprKind::Constant(Constant::Value(tipe.default_value(type_tree))),
@@ -2410,10 +2283,9 @@ fn typecheck_expr(
                     Type::FixedArray(Box::new(tipe), *size),
                 ))
             }
-            ExprKind::NewMap(key_type, value_type) => Ok(TypeCheckedExprKind::NewMap(Type::Map(
-                Box::new(key_type.clone()),
-                Box::new(value_type.clone()),
-            ))),
+            ExprKind::NewMap(key_type, value_type) => {
+                error!("unimplemented");
+            }
             ExprKind::NewUnion(types, expr) => {
                 let tc_expr = typecheck_expr(
                     expr,
@@ -2486,8 +2358,95 @@ fn typecheck_expr(
                 }
                 Ok(TypeCheckedExprKind::Tuple(fields, Type::Struct(types)))
             }
+            ExprKind::ArrayOrMapRef(unchecked_store, key) => {
+                let store = typecheck_expr(
+                    &*unchecked_store,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    func,
+                    type_tree,
+                    string_table,
+                    undefinable_ids,
+                    closures,
+                    scopes,
+                )?;
+
+                let store_type = store.get_type().rep(type_tree)?;
+
+                match store_type {
+                    Type::FixedArray(inner_type, size) => {
+                        let key = typecheck_expr(
+                            &*key,
+                            type_table,
+                            global_vars,
+                            func_table,
+                            func,
+                            type_tree,
+                            string_table,
+                            undefinable_ids,
+                            closures,
+                            scopes,
+                        )?;
+
+                        let key_type = key.get_type().rep(type_tree)?;
+
+                        if key_type != Type::Uint {
+                            error!(
+                                "{} index must be uint, found {}",
+                                "[]",
+                                key_type.print(type_tree)
+                            );
+                        }
+
+                        Ok(TypeCheckedExprKind::FixedArrayRef(
+                            Box::new(store),
+                            Box::new(key),
+                            size,
+                            *inner_type,
+                        ))
+                    }
+                    Type::Array(t) => {
+                        // The compiler doesn't know that `[]entry` here is the same as `array`.
+                        // We could cast to `array`, but we'd need to have the type imported.
+                        // So we cast to `every` to satisfy the function argument.
+                        let array_cast = Expr::new(
+                            ExprKind::UnsafeCast(Box::new(*unchecked_store.clone()), Type::Every),
+                            debug_info,
+                        );
+
+                        let call = Expr::build_call(
+                            "builtin_arrayGet",
+                            vec![&array_cast, key],
+                            string_table,
+                            debug_info,
+                        )?;
+
+                        let expr = typecheck_expr(
+                            &call,
+                            type_table,
+                            global_vars,
+                            func_table,
+                            func,
+                            type_tree,
+                            string_table,
+                            undefinable_ids,
+                            closures,
+                            scopes,
+                        )?;
+                        Ok(expr.kind)
+                    }
+                    Type::Map(kt, vt) => {
+                        error!("unimplemented")
+                    }
+                    _ => error!(
+                        "{} lookup in non-array & non-map type {}",
+                        "[]",
+                        store_type.print(type_tree)
+                    ),
+                }
+            }
             ExprKind::ArrayOrMapMod(unchecked_store, key, item) => {
-                
                 let store = typecheck_expr(
                     unchecked_store,
                     type_table,
@@ -2501,10 +2460,9 @@ fn typecheck_expr(
                     scopes,
                 )?;
                 let store_type = store.get_type().rep(type_tree)?;
-                
+
                 match store_type {
                     Type::FixedArray(inner_type, size) => {
-
                         let key = typecheck_expr(
                             key,
                             type_table,
@@ -2532,7 +2490,7 @@ fn typecheck_expr(
 
                         let key_type = key.get_type().rep(type_tree)?;
                         let item_type = item.get_type().rep(type_tree)?;
-                        
+
                         if key_type != Type::Uint {
                             error!(
                                 "array modifier requires {} index, found {}",
@@ -2557,7 +2515,6 @@ fn typecheck_expr(
                         ))
                     }
                     Type::Array(inner_type) => {
-
                         // The compiler doesn't know that `[]entry` here is the same as `array`.
                         // We could cast to `array`, but we'd need to have the type imported.
                         // So we cast to `every` to satisfy the function argument.
@@ -2565,7 +2522,7 @@ fn typecheck_expr(
                             ExprKind::UnsafeCast(Box::new(*unchecked_store.clone()), Type::Every),
                             debug_info,
                         );
-                        
+
                         let call = Expr::build_call(
                             "builtin_arraySet",
                             vec![&array_cast, key, item],
@@ -2576,11 +2533,9 @@ fn typecheck_expr(
                         // The compiler doesn't know that `array` here is the same as `[]item`,
                         // so we trick it into thinking we have an `[]item`.
                         let array_type = Type::Array(Box::new(*inner_type.clone()));
-                        let call_cast = Expr::new(
-                            ExprKind::UnsafeCast(Box::new(call), array_type),
-                            debug_info,
-                        );
-                        
+                        let call_cast =
+                            Expr::new(ExprKind::UnsafeCast(Box::new(call), array_type), debug_info);
+
                         let expr = typecheck_expr(
                             &call_cast,
                             type_table,
@@ -2599,7 +2554,8 @@ fn typecheck_expr(
                         error!("unimplemented")
                     }
                     other => error!(
-                        "[] modifier must operate on array or block, found {}",
+                        "{} mod must operate on array or block, found {}",
+                        "[]",
                         other.print(type_tree)
                     ),
                 }
