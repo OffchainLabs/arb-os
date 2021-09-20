@@ -732,6 +732,36 @@ impl<'a> ArbSys<'a> {
             Err(ethabi::Error::from("reverted"))
         }
     }
+
+    #[cfg(test)]
+    pub fn trigger_arbos_upgrade(
+        &self,
+        machine: &mut Machine,
+        new_code_hash: Uint256,
+        old_code_hash: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "triggerArbosUpgrade",
+            &[
+                ethabi::Token::FixedBytes(new_code_hash.to_bytes_be()),
+                ethabi::Token::FixedBytes(old_code_hash.to_bytes_be()),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
 }
 
 pub struct ArbAddressTable<'a> {

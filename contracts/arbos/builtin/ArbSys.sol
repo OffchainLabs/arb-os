@@ -76,6 +76,13 @@ interface ArbSys {
      */
     function mapL1SenderContractAddressToL2Alias(address sender, address dest) external pure returns(address);
 
+    /**
+     * @notice trigger an ArbOS upgrade that has been fully approved by the authorized parties
+     * @param newCodeHash hash of new code that will be installed by the upgrade
+     * @param oldCodeHash hash of the code that is currently running
+     */
+    function triggerArbosUpgrade(bytes32 newCodeHash, bytes32 oldCodeHash) external;
+
     event L2ToL1Transaction(address caller, address indexed destination, uint indexed uniqueId,
                             uint indexed batchNumber, uint indexInBatch,
                             uint arbBlockNum, uint ethBlockNum, uint timestamp,

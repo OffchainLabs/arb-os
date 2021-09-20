@@ -5,6 +5,8 @@
 use evmCallStack::EvmCallFrame;
 use std::bytearray::ByteArray;
 
+use arbowner::triggerArbosUpgrade;
+
 use chainParameters::chainParams_chainId;
 
 use evmCallStack::evmCallStack_stackDepth;
@@ -82,6 +84,8 @@ public view write func arbsys_txcall() {
             arbsys_myCallersAddressWithoutAliasing(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbSys_mapL1SenderContractAddressToL2Alias) {
             arbsys_mapL1SenderContractAddressToL2Alias(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbSys_triggerArbosUpgrade) {
+            arbsys_triggerArbosUpgrade(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbSys), 1, 0, 0);
@@ -423,4 +427,17 @@ view write func arbsys_mapL1SenderContractAddressToL2Alias(_topFrame: EvmCallFra
     } else {
         evmOp_revert_knownPc(91, 0, 0);
     }
+}
+
+view write func arbsys_triggerArbosUpgrade(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4 + 2*32) {
+        evmOp_revert_knownPc(100, 0, 0);
+    }
+    let newCodeHash = bytes32(bytearray_get256(calldata, 4));
+    let oldCodeHash = bytes32(bytearray_get256(calldata, 36));
+
+    triggerArbosUpgrade(newCodeHash, oldCodeHash);
+
+    // if we reach here, the upgrade request was rejected, or the upgrade failed
+    evmOp_revert_knownPc(100, 0, 0);
 }

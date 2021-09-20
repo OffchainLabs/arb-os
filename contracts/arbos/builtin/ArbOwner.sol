@@ -31,6 +31,9 @@ interface ArbOwner {
     // Install the currently uploaded code as an ArbOS upgrade.
     // Revert if the hash of the uploaded code bytes does not equal newCodeHash
     // Revert if (oldCodeHash != 0) && (oldCodeHash != [hash of code bytes from the previous ArbOS upgrade]
+    function approveCodeUploadAsArbosUpgrade(bytes32 newCodeHash, bytes32 oldCodeHash, uint approvedUntil) external;
+
+    // The following function is in the API for compatibility testing purposes only. It will fail in ArbOS version 43 and later.
     function finishCodeUploadAsArbosUpgrade(bytes32 newCodeHash, bytes32 oldCodeHash) external;
 
     // Get the code hash of the last upgrade that was installed, or zero if there hasn't been an upgrade on this chain

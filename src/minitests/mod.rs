@@ -6,7 +6,7 @@ use crate::compile::miniconstants::init_constant_table;
 use crate::compile::DebugInfo;
 use crate::console::Color;
 use crate::evm::abi::ArbSys;
-use crate::evm::preinstalled_contracts::{_ArbAggregator, _ArbOwner, _try_upgrade};
+use crate::evm::preinstalled_contracts::{_ArbAggregator, _ArbOwner, try_upgrade};
 use crate::evm::test_contract_path2;
 use crate::evm::{preinstalled_contracts::_ArbInfo, test_contract_path, AbiForContract};
 use crate::mavm::Buffer;
@@ -680,7 +680,7 @@ pub fn test_if_still_upgradable() -> Result<(), ethabi::Error> {
         DebugInfo::default(),
     ));
 
-    _try_upgrade(&arbowner, &mut machine, uploader, None)?;
+    try_upgrade(&arbowner, &arbsys, &mut machine, uploader, None, false)?;
 
     assert_eq!(machine.runtime_env.logs.last(), Some(&log_value));
 
