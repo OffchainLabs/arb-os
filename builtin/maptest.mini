@@ -6,9 +6,9 @@ write func main() {
     asm(tests().1) { log };
 }
 
-func tests() -> (uint, buffer) {
+func tests() -> string {
     let m = newmap<(uint, uint), uint>;
-    if m[(17, 18,)] != None<uint> {
+    if m[(17, 18)] != None<uint> {
 	return "map<(uint, uint), uint> isn't empty";
     }
 
@@ -18,24 +18,24 @@ func tests() -> (uint, buffer) {
     }
 
     let m = newmap<(uint, uint), uint>;
-    m = m with { [(999, 321,)] = 42 };
-    if m[(999, 321,)] != Some(42) { 
+    m = m with { [(999, 321)] = 42 };
+    if m[(999, 321)] != Some(42) { 
 	return "map assignment is wrong";
     }
 
     m = newmap<(uint, uint), uint>;
-    m = m with { [(999, 321,)] = 42 };
-    m = m with { [(0, 0,)] = 73 };
-    if m[(999, 321,)] != Some(42) { 
+    m = m with { [(999, 321)] = 42 };
+    m = m with { [(  0,   0)] = 73 };
+    if m[(999, 321)] != Some(42) { 
 	return "map assignment is inconsistent";
     }
 
     m = newmap<(uint, uint), uint>;
-    m = m with { [(999, 321,)] = 42 };
-    m = m with { [(0, 0,)] = 73 };
-    m = m with { [(999, 321,)] = 13 };
-    m = m with { [(0, 0,)] = 173 };
-    if m[(999, 321,)] != Some(13) {
+    m = m with { [(999, 321)] =  42 };
+    m = m with { [(  0,   0)] =  73 };
+    m = m with { [(999, 321)] =  13 };
+    m = m with { [(  0,   0)] = 173 };
+    if m[(999, 321)] != Some(13) {
 	return "map update is incorrect";
     }
 

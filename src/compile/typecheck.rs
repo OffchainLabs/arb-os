@@ -2281,9 +2281,6 @@ fn typecheck_expr(
                     Type::FixedArray(Box::new(tipe), *size),
                 ))
             }
-            ExprKind::NewMap(key_type, value_type) => {
-                error!("unimplemented");
-            }
             ExprKind::NewUnion(types, expr) => {
                 let tc_expr = typecheck_expr(
                     expr,
@@ -2356,7 +2353,31 @@ fn typecheck_expr(
                 }
                 Ok(TypeCheckedExprKind::Tuple(fields, Type::Struct(types)))
             }
-            ExprKind::ArrayOrMapRef(unchecked_store, key) => {
+            ExprKind::NewMap(key_type, value_type) => {
+                let call = Expr::build_call("builtin_kvsNew", vec![], string_table, debug_info)?;
+
+                // The compiler doesn't know that `Kvs` here is the same as `map<k,v>`,
+                // so we trick it into thinking we have a `map<k,v>`.
+                let map_type = Type::Map(Box::new(key_type.clone()), Box::new(value_type.clone()));
+                let call_cast =
+                    Expr::new(ExprKind::UnsafeCast(Box::new(call), map_type), debug_info);
+
+                let expr = typecheck_expr(
+                    &call_cast,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    func,
+                    type_tree,
+                    string_table,
+                    undefinable_ids,
+                    closures,
+                    scopes,
+                )?;
+
+                Ok(expr.kind)
+            }
+            ExprKind::ArrayOrMapRef(unchecked_store, unchecked_key) => {
                 let store = typecheck_expr(
                     &*unchecked_store,
                     type_table,
@@ -2369,26 +2390,24 @@ fn typecheck_expr(
                     closures,
                     scopes,
                 )?;
+                let key = typecheck_expr(
+                    &*unchecked_key,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    func,
+                    type_tree,
+                    string_table,
+                    undefinable_ids,
+                    closures,
+                    scopes,
+                )?;
 
                 let store_type = store.get_type().rep(type_tree)?;
+                let key_type = key.get_type().rep(type_tree)?;
 
                 match store_type {
                     Type::FixedArray(inner_type, size) => {
-                        let key = typecheck_expr(
-                            &*key,
-                            type_table,
-                            global_vars,
-                            func_table,
-                            func,
-                            type_tree,
-                            string_table,
-                            undefinable_ids,
-                            closures,
-                            scopes,
-                        )?;
-
-                        let key_type = key.get_type().rep(type_tree)?;
-
                         if key_type != Type::Uint {
                             error!(
                                 "{} index must be uint, found {}",
@@ -2415,7 +2434,7 @@ fn typecheck_expr(
 
                         let call = Expr::build_call(
                             "builtin_arrayGet",
-                            vec![&array_cast, key],
+                            vec![&array_cast, unchecked_key],
                             string_table,
                             debug_info,
                         )?;
@@ -2434,8 +2453,53 @@ fn typecheck_expr(
                         )?;
                         Ok(expr.kind)
                     }
-                    Type::Map(kt, vt) => {
-                        error!("unimplemented")
+                    Type::Map(store_key_type, store_value_type) => {
+                        if !store_key_type.assignable(&key_type, type_tree, HashSet::new()) {
+                            error!(
+                                "tried to {} lookup {} in map with {} keys",
+                                "[]",
+                                key_type.print(type_tree),
+                                store_key_type.print(type_tree),
+                            );
+                        }
+
+                        // The compiler doesn't know that `map<k,v>` here is the same as `Kvs`.
+                        // We could cast to `Kvs`, but we'd need to have the type imported.
+                        // So we cast to `every` to satisfy the function argument.
+                        let kvs_cast = Expr::new(
+                            ExprKind::UnsafeCast(Box::new(*unchecked_store.clone()), Type::Every),
+                            debug_info,
+                        );
+
+                        let call = Expr::build_call(
+                            "builtin_kvsGet",
+                            vec![&kvs_cast, unchecked_key],
+                            string_table,
+                            debug_info,
+                        )?;
+
+                        // Make the compiler *smarter* by tagging the value with the right type
+                        let value_cast = Expr::new(
+                            ExprKind::UnsafeCast(
+                                Box::new(call),
+                                Type::Option(store_value_type.clone()),
+                            ),
+                            debug_info,
+                        );
+
+                        let expr = typecheck_expr(
+                            &value_cast,
+                            type_table,
+                            global_vars,
+                            func_table,
+                            func,
+                            type_tree,
+                            string_table,
+                            undefinable_ids,
+                            closures,
+                            scopes,
+                        )?;
+                        Ok(expr.kind)
                     }
                     _ => error!(
                         "{} lookup in non-array & non-map type {}",
@@ -2447,6 +2511,18 @@ fn typecheck_expr(
             ExprKind::ArrayOrMapMod(unchecked_store, unchecked_key, unchecked_item) => {
                 let store = typecheck_expr(
                     unchecked_store,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    func,
+                    type_tree,
+                    string_table,
+                    undefinable_ids,
+                    closures,
+                    scopes,
+                )?;
+                let key = typecheck_expr(
+                    unchecked_key,
                     type_table,
                     global_vars,
                     func_table,
@@ -2469,25 +2545,13 @@ fn typecheck_expr(
                     closures,
                     scopes,
                 )?;
+
                 let store_type = store.get_type().rep(type_tree)?;
+                let key_type = key.get_type().rep(type_tree)?;
                 let item_type = item.get_type().rep(type_tree)?;
 
                 match store_type {
                     Type::FixedArray(inner_type, size) => {
-                        let key = typecheck_expr(
-                            unchecked_key,
-                            type_table,
-                            global_vars,
-                            func_table,
-                            func,
-                            type_tree,
-                            string_table,
-                            undefinable_ids,
-                            closures,
-                            scopes,
-                        )?;
-                        let key_type = key.get_type().rep(type_tree)?;
-
                         if key_type != Type::Uint {
                             error!(
                                 "array modifier requires {} index, found {}",
@@ -2529,18 +2593,18 @@ fn typecheck_expr(
                             unchecked_store.debug_info,
                         );
 
-                        let call = Expr::build_call(
+                        let call = Box::new(Expr::build_call(
                             "builtin_arraySet",
                             vec![&array_cast, unchecked_key, unchecked_item],
                             string_table,
                             debug_info,
-                        )?;
+                        )?);
 
                         // The compiler doesn't know that `array` here is the same as `[]item`,
                         // so we trick it into thinking we have an `[]item`.
                         let array_type = Type::Array(Box::new(*inner_type.clone()));
                         let call_cast =
-                            Expr::new(ExprKind::UnsafeCast(Box::new(call), array_type), debug_info);
+                            Expr::new(ExprKind::UnsafeCast(call, array_type), debug_info);
 
                         let expr = typecheck_expr(
                             &call_cast,
@@ -2556,8 +2620,49 @@ fn typecheck_expr(
                         )?;
                         Ok(expr.kind)
                     }
-                    Type::Map(kt, vt) => {
-                        error!("unimplemented")
+                    Type::Map(store_key_type, store_value_type) => {
+                        if !store_key_type.assignable(&key_type, type_tree, HashSet::new()) {
+                            error!(
+                                "tried to {} lookup {} in map with {} keys",
+                                "[]",
+                                key_type.print(type_tree),
+                                store_key_type.print(type_tree),
+                            );
+                        }
+
+                        // The compiler doesn't know that `map<k,v>` here is the same as `Kvs`.
+                        // We could cast to `Kvs`, but we'd need to have the type imported.
+                        // So we cast to `every` to satisfy the function argument.
+                        let kvs_cast = Expr::new(
+                            ExprKind::UnsafeCast(Box::new(*unchecked_store.clone()), Type::Every),
+                            debug_info,
+                        );
+
+                        let call = Box::new(Expr::build_call(
+                            "builtin_kvsSet",
+                            vec![&kvs_cast, unchecked_key, unchecked_item],
+                            string_table,
+                            debug_info,
+                        )?);
+
+                        // The compiler doesn't know that `Kvs` here is the same as `map<k,v>`,
+                        // so we trick it into thinking we have an `map<k,v>`.
+                        let map_type = Type::Map(store_key_type, store_value_type);
+                        let call_cast = Expr::new(ExprKind::UnsafeCast(call, map_type), debug_info);
+
+                        let expr = typecheck_expr(
+                            &call_cast,
+                            type_table,
+                            global_vars,
+                            func_table,
+                            func,
+                            type_tree,
+                            string_table,
+                            undefinable_ids,
+                            closures,
+                            scopes,
+                        )?;
+                        Ok(expr.kind)
                     }
                     other => error!(
                         "{} mod must operate on array or block, found {}",
@@ -3362,10 +3467,10 @@ fn typecheck_binary_op(
             )),
         },
         BinaryOp::Equal | BinaryOp::NotEqual => {
-            if subtype1 != Type::Void
-                && subtype2 != Type::Void
-                && ((subtype1 == Type::Any) || (subtype2 == Type::Any) || (subtype1 == subtype2))
-            {
+            let mutual = subtype1.assignable(&subtype2, type_tree, HashSet::new())
+                && subtype2.assignable(&subtype1, type_tree, HashSet::new());
+
+            if mutual {
                 Ok(TypeCheckedExprKind::Binary(
                     op,
                     Box::new(tcs1),
