@@ -13,10 +13,14 @@ impl Color {
     pub const BLUE: &'static str = "\x1b[34;1m";
     pub const YELLOW: &'static str = "\x1b[33;1m";
     pub const PINK: &'static str = "\x1b[38;5;161;1m";
+    pub const MINT: &'static str = "\x1b[38;5;48;1m";
     pub const GREY: &'static str = "\x1b[90m";
     pub const RESET: &'static str = "\x1b[0;0m";
 
+    pub const LIME: &'static str = "\x1b[38;5;119;1m";
     pub const LAVENDER: &'static str = "\x1b[38;5;183;1m";
+    pub const MAROON: &'static str = "\x1b[38;5;124;1m";
+    pub const ORANGE: &'static str = "\x1b[38;5;202;1m";
 
     pub fn color<S: fmt::Display>(color: &str, text: S) -> String {
         format!("{}{}{}", color, text, Color::RESET)
@@ -50,6 +54,11 @@ impl Color {
     /// Colors text lavender.
     pub fn lavender<S: fmt::Display>(text: S) -> String {
         Color::color(Color::LAVENDER, text)
+    }
+
+    /// Colors text maroon.
+    pub fn maroon<S: fmt::Display>(text: S) -> String {
+        Color::color(Color::MAROON, text)
     }
 }
 

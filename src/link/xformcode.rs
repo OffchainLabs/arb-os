@@ -4,7 +4,7 @@
 
 //! Provides utilities for dealing with nested tuples and conversion from large flat tuples to nested tuples
 
-use crate::compile::{CompileError, DebugInfo};
+use crate::compile::{CompileError, DebugInfo, GlobalVar, TypeTree};
 use crate::console::Color;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
 use crate::uint256::Uint256;
@@ -227,6 +227,67 @@ pub fn make_uninitialized_tuple(size: usize) -> Value {
     TupleTree::new(size, false).make_empty()
 }
 
+/// Creates a globals tuple with the globals' access offsets in the slots.
+pub fn make_numbered_tuple(size: usize) -> Value {
+    //TupleTree::new(size, false).make_value((0..size).into_iter().map(Value::from).collect())
+    let mut sequence: Vec<_> = (0..(size - 1)).into_iter().map(Value::from).collect();
+    sequence.push(Value::none());
+    TupleTree::fold_into_tuple(sequence)
+}
+
+/// Creates a globals tuple with the globals' names in the slots.
+pub fn make_named_tuple(globals: &Vec<GlobalVar>) -> Value {
+    TupleTree::fold_into_tuple(
+        globals
+            .iter()
+            .map(|g| Value::from(g.name.as_ref()))
+            .collect(),
+    )
+}
+
+/// Creates a globals tuple with default values. The jump table is inserted at the end.
+pub fn make_globals_tuple(
+    globals: &Vec<GlobalVar>,
+    jump_table: &Value,
+    type_tree: &TypeTree,
+) -> Value {
+    let mut values: Vec<_> = globals
+        .iter()
+        .map(|g| g.tipe.default_value(type_tree))
+        .collect();
+    values[globals.len() - 1] = jump_table.clone();
+    TupleTree::fold_into_tuple(values)
+}
+
+/// Creates a globals tuple with (global-name, default-value) pairs
+pub fn make_globals_tuple_debug(globals: &Vec<GlobalVar>, type_tree: &TypeTree) -> Value {
+    let values = globals
+        .iter()
+        .map(|g| {
+            Value::new_tuple(vec![
+                Value::from(g.name.as_ref()),
+                g.tipe.default_value(type_tree),
+            ])
+        })
+        .collect();
+    TupleTree::fold_into_tuple(values)
+}
+
+/// Replaces all instances of CodePt::Null with the error codepoint.
+pub fn set_error_codepoints(mut code: Vec<Instruction>) -> Vec<Instruction> {
+    let error_codepoint = Value::CodePoint(CodePt::Internal(code.len() - 1));
+
+    for curr in &mut code {
+        let mut when = |codept: &Value| matches!(codept, Value::CodePoint(CodePt::Null));
+        let mut with = |_codept: Value| error_codepoint.clone();
+
+        if let Some(ref mut value) = curr.immediate {
+            *value = value.clone().replace(&mut with, &mut when);
+        }
+    }
+    code
+}
+
 /// Represents tuple structure of mini value.
 #[derive(Debug)]
 pub enum TupleTree {
@@ -287,6 +348,11 @@ impl TupleTree {
     fn make_value(&self, vals: Vec<Value>) -> Value {
         let (val, _) = self.make_value_2(vals);
         val
+    }
+
+    /// Takes a list of values and folds them up into a nested, 8-ary tuple.
+    pub fn fold_into_tuple(values: Vec<Value>) -> Value {
+        TupleTree::new(values.len(), false).make_value(values)
     }
 
     /// Internal call used by `make_value`.
@@ -467,10 +533,4 @@ impl TupleTree {
             Ok(())
         }
     }
-}
-
-/// Generates a `TupleTree` of size equal to the length of lis, and fills its leaf nodes with the
-/// `Value`s in lis.
-pub fn value_from_field_list(lis: Vec<Value>) -> Value {
-    TupleTree::new(lis.len(), false).make_value(lis)
 }
