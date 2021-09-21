@@ -2630,6 +2630,15 @@ fn typecheck_expr(
                             );
                         }
 
+                        if !store_value_type.assignable(&item_type, type_tree, HashSet::new()) {
+                            error!(
+                                "tried to {} set {} in map with {} values",
+                                "[]",
+                                item_type.print(type_tree),
+                                store_value_type.print(type_tree),
+                            );
+                        }
+
                         // The compiler doesn't know that `map<k,v>` here is the same as `Kvs`.
                         // We could cast to `Kvs`, but we'd need to have the type imported.
                         // So we cast to `every` to satisfy the function argument.

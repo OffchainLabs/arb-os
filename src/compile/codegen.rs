@@ -280,11 +280,7 @@ fn codegen(
                         cgen.code.push(opcode!(@Return));
                     }
                     TypeCheckedStatementKind::Expression(expr) => {
-                        // TODO: Add typechecking of dropped expressions
                         expr!(expr);
-                        if !matches!(expr.get_type(), Type::Void | Type::Every) {
-                            cgen.code.push(opcode!(Pop));
-                        }
                     }
                     TypeCheckedStatementKind::Asm(payload, args) => {
                         let nargs = args.len();
