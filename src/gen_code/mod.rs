@@ -94,34 +94,30 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
     output_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
     input_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
 
-    let output_map = output_fields
-        .iter()
-        .map(|field| (&field.name, &field.tipe))
-        .collect::<HashMap<_, _>>();
-    let mut intersection = HashSet::new();
-    for field in &input_fields {
-        if let Some(tipe) = output_map.get(&field.name) {
-            if field
-                .tipe
-                .assignable(*tipe, &in_tree, &out_tree, HashSet::new())
-            {
-                intersection.insert(field);
-            }
-        };
-    }
-
-    intersection.remove(&StructField::new(String::from("_jump_table"), Type::Any));
-
     let input_map = input_fields
         .iter()
         .map(|field| (&field.name, &field.tipe))
         .collect::<HashMap<_, _>>();
+
+    let mut intersection = HashSet::new();
     let mut output_only = HashSet::new();
+
     for field in &output_fields {
-        if !input_map.contains_key(&field.name) {
+        if let Some(tipe) = input_map.get(&field.name) {
+            if field
+                .tipe
+                .assignable(*tipe, &out_tree, &in_tree, HashSet::new())
+            {
+                intersection.insert(field);
+            } else {
+                output_only.insert(field);
+            }
+        } else {
             output_only.insert(field);
         };
     }
+
+    intersection.remove(&StructField::new(String::from("_jump_table"), Type::Any));
 
     let input_struct = Type::Struct(input_fields.clone());
     let output_struct = Type::Struct(output_fields.clone());
