@@ -77,6 +77,7 @@ use gasAccounting::getAddressForReserveFundsDeposit;
 use gasAccounting::deferredPayments_apply;
 use gasAccounting::gasAccounting_addToGasPool;
 use gasAccounting::gasAccounting_chargeCurrentTxForStorage;
+use gasAccounting::gasAccounting_recordAllocationForRefund;
 
 use std::codeSegment::getDummyAcceptContractCode;
 use std::codeSegment::translateEvmCodeSegment;
@@ -194,7 +195,7 @@ public view func evmCallStack_currentTxRequestGasBid() -> uint {
     return globalCurrentTxRequest.gasPrice;
 }
 
-public view write func evmCallStack_addStorageCharge(units: uint) {
+public view write func evmCallStack_addStorageCharge(units: uint, refundInfo: option<(address, uint)>) {
     if let Some(topFrame) = globalCallStack {
         set topFrame.storageAllocations = topFrame.storageAllocations + units;
         globalCallStack = Some(topFrame);
@@ -203,7 +204,12 @@ public view write func evmCallStack_addStorageCharge(units: uint) {
         let avmGasPerArbGas = chainParams_getOrDie(const::Atom_Param_AvmGasPerArbGas);
         let avmGasToBurn = remainingArbGasToCharge * avmGasPerArbGas;
         let avmGasLeft = getGas();
-        if (avmGasToBurn >= avmGasLeft) {
+        if (avmGasToBurn < avmGasLeft) {
+            if let Some(ri) = refundInfo {
+                let (addr, storageIndex) = ri;
+                gasAccounting_recordAllocationForRefund(addr, storageIndex);
+            }
+        } else {
             avmGasToBurn = avmGasLeft-1;
         }
         setGas(avmGasLeft - avmGasToBurn);
@@ -348,7 +354,7 @@ public view write func initEvmCallStack(
                 asm(entryPoint) { jump };
             } else {
                 // caller didn't have enough funds
-                if let Some(res) = gasAccounting_endTxCharges(0, request.feeStats) {
+                if let Some(res) = gasAccounting_endTxCharges(0, request.feeStats, None<AccountStore>) {
                     // insufficient balance error
                     let (_, gasUsage, feeStats, payments) = res;
                     if let Some(uas) = deferredPayments_apply(safeGetGlobalAccountStore(), payments) {
@@ -996,7 +1002,7 @@ view write func evmCallStack_returnFromCall_impl(
                 )?;
                 globalCallStack = Some(topFrame with { accountStore: uAcctStore });
                 if (created) {
-                    evmCallStack_addStorageCharge( (bytearray_size(returnData) + 31) / 32 );
+                    evmCallStack_addStorageCharge( (bytearray_size(returnData) + 31) / 32, None<(address, uint)>);
                 }
                 topFrame = globalCallStack?;
                 (ep, ejt)
@@ -1005,7 +1011,8 @@ view write func evmCallStack_returnFromCall_impl(
             };
             let (completed, gasUsage, feeStats, deferredPayments) = gasAccounting_endTxCharges(
                 topFrame.storageAllocations,
-                globalCurrentTxRequest.feeStats
+                globalCurrentTxRequest.feeStats,
+                Some(topFrame.accountStore),
             )?;
 
             if (completed) {
@@ -1194,7 +1201,8 @@ view write func evmCallStack_returnFromCall_impl(
             }
             let (_, gasUsage, feeStats, payments) = gasAccounting_endTxCharges(
                 topFrame.storageAllocations,
-                globalCurrentTxRequest.feeStats
+                globalCurrentTxRequest.feeStats,
+                Some(getGlobalAccountStore()),
             )?;
             if let Some(uas) = deferredPayments_apply(getGlobalAccountStore(), payments) {
                 setGlobalAccountStore(uas);
@@ -1673,7 +1681,7 @@ public view write func evmCallStack_setTopFrameStorageCell(offset: uint, value: 
     set topFrame.runningAsAccount = runningAsAccount;
     globalCallStack = Some(topFrame);
     if (storageSizeAfter > storageSizeBefore) {
-        evmCallStack_addStorageCharge(storageSizeAfter - storageSizeBefore);
+        evmCallStack_addStorageCharge(storageSizeAfter - storageSizeBefore, Some((topFrame.runningAs, offset)));
     }
     return Some(());
 }
@@ -1801,7 +1809,7 @@ public view write func evmCallStack_callHitError(errInfo: any) {
         // something has gone seriously wrong with the evmCallStack
         // recover by clearing the evmCallStack, refunding unused gas, and jumping to the error handler
         globalCallStack = None<EvmCallFrame>;
-        let _ = gasAccounting_endTxCharges(0, txFeeStats_zero());
+        let _ = gasAccounting_endTxCharges(0, txFeeStats_zero(), None<AccountStore>);
 
         errorHandler();
         //NOTREACHED
