@@ -2075,15 +2075,15 @@ impl Machine {
                     }
                     AVMOpcode::DebugPrint => {
                         let r1 = self.stack.pop(&self.state)?;
-                        println!("debugprint: {}", r1);
+                        println!("debugprint: {}", r1.pretty_print(Color::PINK));
                         println!(
                             "{}\n{}",
-                            try_display_location(
+                            Color::grey(try_display_location(
                                 insn.debug_info.location,
                                 &self.file_info_chart,
                                 true
-                            ),
-                            self.arb_gas_remaining
+                            )),
+                            Color::blue(&self.arb_gas_remaining),
                         );
                         check_debugprint_for_malformed_trace_info(&r1);
                         self.incr_pc();

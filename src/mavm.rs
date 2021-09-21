@@ -1039,8 +1039,12 @@ impl Opcode {
             Opcode::SetLocal(slot) => format!("SetLocal {}", Color::pink(slot)),
             Opcode::SetGlobalVar(id) => format!("SetGlobal {}", Color::pink(id)),
             Opcode::GetGlobalVar(id) => format!("GetGlobal {}", Color::pink(id)),
-            Opcode::TupleGet(slot, size) => format!("TupleGet {}", Color::pink(slot)),
-            Opcode::TupleSet(slot, size) => format!("TupleSet {}", Color::pink(slot)),
+            Opcode::TupleGet(slot, size) => {
+                format!("TupleGet {} {}", Color::pink(slot), Color::grey(size))
+            }
+            Opcode::TupleSet(slot, size) => {
+                format!("TupleSet {} {}", Color::pink(slot), Color::grey(size))
+            }
             Opcode::Label(label) => Value::Label(*label).pretty_print(label_color),
             Opcode::Capture(id) => format!("Capture λ_{}", id % 256),
             Opcode::FuncCall(prop) => format!(

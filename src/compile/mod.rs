@@ -29,7 +29,6 @@ use typecheck::TypeCheckedFunc;
 
 pub use ast::{DebugInfo, FuncProperties, GlobalVar, StructField, TopLevelDecl, Type, TypeTree};
 pub use source::Lines;
-use std::str::FromStr;
 pub use typecheck::{AbstractSyntaxTree, TypeCheckedNode};
 
 mod ast;

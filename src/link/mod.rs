@@ -331,7 +331,7 @@ pub fn postlink_compile(
     debug: bool,
 ) -> Result<LinkedProgram, CompileError> {
     let consider_debug_printing = |code: &Vec<Instruction>, did_print: bool, phase: &str| {
-        if debug {
+        /*if debug {
             println!("========== {} ==========", phase);
             for (idx, insn) in code.iter().enumerate() {
                 println!(
@@ -351,12 +351,12 @@ pub fn postlink_compile(
                     );
                 }
             }
-        }
+        }*/
     };
 
     let mut did_print = false;
 
-    if debug {
+    /*if debug {
         println!("========== after initial linking ===========");
         for (idx, insn) in program.code.iter().enumerate() {
             println!(
@@ -376,7 +376,7 @@ pub fn postlink_compile(
                 did_print = true;
             }
         }
-    }
+    }*/
 
     let (code, jump_table) =
         striplabels::fix_backward_labels(&program.code, program.globals.len() - 1);

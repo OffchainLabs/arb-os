@@ -1202,8 +1202,7 @@ fn typecheck_statement<'a>(
     let debug_info = statement.debug_info;
     let locs = debug_info.locs();
 
-    // TODO make actually warn
-    macro_rules! warn {
+    macro_rules! error {
         ($text:expr $(,$args:expr)* $(,)?) => {
             return Err(CompileError::new("Typecheck error", format!($text, $(Color::red($args),)*), debug_info.locs()));
         };
@@ -1347,7 +1346,7 @@ fn typecheck_statement<'a>(
             )?;
             let tipe = expr.get_type();
             if !matches!(tipe, Type::Void | Type::Every) {
-                warn!("Statement discards {} value", tipe.print(type_tree));
+                error!("Statement discards {} value", tipe.print(type_tree));
             }
             Ok((TypeCheckedStatementKind::Expression(expr), vec![]))
         }
@@ -1631,7 +1630,6 @@ fn typecheck_expr(
 ) -> Result<TypeCheckedExpr, CompileError> {
     let debug_info = expr.debug_info;
     let loc = debug_info.location;
-    let locs = debug_info.locs();
 
     macro_rules! error {
         ($text:expr $(,$args:expr)* $(,)?) => {
@@ -2406,7 +2404,7 @@ fn typecheck_expr(
                             *inner_type,
                         ))
                     }
-                    Type::Array(t) => {
+                    Type::Array(_) => {
                         // The compiler doesn't know that `[]entry` here is the same as `array`.
                         // We could cast to `array`, but we'd need to have the type imported.
                         // So we cast to `every` to satisfy the function argument.
@@ -2446,7 +2444,7 @@ fn typecheck_expr(
                     ),
                 }
             }
-            ExprKind::ArrayOrMapMod(unchecked_store, key, item) => {
+            ExprKind::ArrayOrMapMod(unchecked_store, unchecked_key, unchecked_item) => {
                 let store = typecheck_expr(
                     unchecked_store,
                     type_table,
@@ -2459,12 +2457,25 @@ fn typecheck_expr(
                     closures,
                     scopes,
                 )?;
+                let item = typecheck_expr(
+                    unchecked_item,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    func,
+                    type_tree,
+                    string_table,
+                    undefinable_ids,
+                    closures,
+                    scopes,
+                )?;
                 let store_type = store.get_type().rep(type_tree)?;
+                let item_type = item.get_type().rep(type_tree)?;
 
                 match store_type {
                     Type::FixedArray(inner_type, size) => {
                         let key = typecheck_expr(
-                            key,
+                            unchecked_key,
                             type_table,
                             global_vars,
                             func_table,
@@ -2475,21 +2486,7 @@ fn typecheck_expr(
                             closures,
                             scopes,
                         )?;
-                        let item = typecheck_expr(
-                            item,
-                            type_table,
-                            global_vars,
-                            func_table,
-                            func,
-                            type_tree,
-                            string_table,
-                            undefinable_ids,
-                            closures,
-                            scopes,
-                        )?;
-
                         let key_type = key.get_type().rep(type_tree)?;
-                        let item_type = item.get_type().rep(type_tree)?;
 
                         if key_type != Type::Uint {
                             error!(
@@ -2500,7 +2497,7 @@ fn typecheck_expr(
                         }
                         if !inner_type.assignable(&item_type, type_tree, HashSet::new()) {
                             error!(
-                                "mismatched types in array modifier, {}",
+                                "mismatched types in fixed-array modifier, {}",
                                 inner_type
                                     .mismatch_string(&item_type, type_tree)
                                     .unwrap_or("Did not find type mismatch".to_string())
@@ -2515,17 +2512,26 @@ fn typecheck_expr(
                         ))
                     }
                     Type::Array(inner_type) => {
+                        if !inner_type.assignable(&item_type, type_tree, HashSet::new()) {
+                            error!(
+                                "mismatched types in array modifier, {}",
+                                inner_type
+                                    .mismatch_string(&item_type, type_tree)
+                                    .unwrap_or("Did not find type mismatch".to_string())
+                            );
+                        }
+
                         // The compiler doesn't know that `[]entry` here is the same as `array`.
                         // We could cast to `array`, but we'd need to have the type imported.
                         // So we cast to `every` to satisfy the function argument.
                         let array_cast = Expr::new(
                             ExprKind::UnsafeCast(Box::new(*unchecked_store.clone()), Type::Every),
-                            debug_info,
+                            unchecked_store.debug_info,
                         );
 
                         let call = Expr::build_call(
                             "builtin_arraySet",
-                            vec![&array_cast, key, item],
+                            vec![&array_cast, unchecked_key, unchecked_item],
                             string_table,
                             debug_info,
                         )?;

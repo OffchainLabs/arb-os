@@ -1575,10 +1575,6 @@ impl FuncProperties {
         }
     }
 
-    pub fn pure(nargs: usize, nouts: usize) -> Self {
-        Self::new(false, false, false, false, true, nargs, nouts)
-    }
-
     pub fn purity(&self) -> (bool, bool) {
         (self.view, self.write)
     }

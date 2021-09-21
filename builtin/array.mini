@@ -156,8 +156,8 @@ func arraySwap2(b: block, chunk: uint, index: uint, value: any)  -> arraySwapSub
 	let subIndex = index/chunk;
 	let sub = arraySwap2(
 	    unsafecast<block>(b[subIndex]),
-	    chunk/8,
-	    index%chunk,
+	    chunk / 8,
+	    index % chunk,
 	    value
 	);
 	sub with { bloc: b with {[subIndex] = sub.bloc} }
@@ -203,8 +203,8 @@ func arrayOp2(b: block, chunk: uint, index: uint, applicator: opClosure) -> arra
 	let subIndex = index/chunk;
 	let sub = arrayOp2(
 	    unsafecast<block>(b[subIndex]),
-	    chunk/8,
-	    index%chunk,
+	    chunk / 8,
+	    index % chunk,
 	    applicator
 	);
 	sub with { bloc: b with {[subIndex] = sub.bloc} }

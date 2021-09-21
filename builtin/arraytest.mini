@@ -25,7 +25,7 @@ write func main() {
     asm(tests().1) { log };
 }
 
-func tests() -> (uint, buffer) {
+func tests() -> string {
     let a = newarray<any>(17);
     if a[6] != null {
 	return "new small array isn't blank";

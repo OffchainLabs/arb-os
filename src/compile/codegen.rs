@@ -4,18 +4,18 @@
 
 //! Contains utilities for generating instructions from AST structures.
 
-use super::ast::{BinaryOp, DebugInfo, FuncProperties, GlobalVar, TrinaryOp, Type, UnaryOp};
-use super::typecheck::{TypeCheckedExpr, TypeCheckedFunc, TypeCheckedNode, TypeCheckedStatement};
+use super::ast::{BinaryOp, DebugInfo, GlobalVar, TrinaryOp, Type, UnaryOp};
+use super::typecheck::{TypeCheckedExpr, TypeCheckedFunc, TypeCheckedNode};
 use crate::compile::typecheck::{
-    AbstractSyntaxTree, TypeCheckedCodeBlock, TypeCheckedExprKind, TypeCheckedStatementKind,
+    AbstractSyntaxTree, TypeCheckedExprKind, TypeCheckedStatementKind,
 };
 use crate::compile::CompileError;
 use crate::console::Color;
-use crate::link::{TupleTree, TUPLE_SIZE};
+use crate::link::TUPLE_SIZE;
 use crate::mavm::{AVMOpcode, Buffer, Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// Represents a slot number in a locals tuple
 type SlotNum = usize;
@@ -336,6 +336,7 @@ fn codegen(
                         cgen.code.push(opcode!(IsZero));
                         cgen.code.push(opcode!(Cjump, Value::Label(else_label)));
                         block!(block);
+                        cgen.code.push(opcode!(Jump, Value::Label(end_label)));
                         // TODO: alias
 
                         cgen.code.push(opcode!(@Label(else_label)));
@@ -659,7 +660,6 @@ fn codegen(
                         expr!(right);
                         cgen.code.push(opcode!(@Label(short)));
                     }
-                    TypeCheckedExprKind::FixedArrayMod(..) => {}
                     TypeCheckedExprKind::Asm(_, payload, args) => {
                         let nargs = args.len();
                         for i in 0..nargs {
