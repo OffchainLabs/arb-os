@@ -71,7 +71,9 @@ type Account = struct {
 };
 
 type AccountContractInfo = struct {
-    code: ByteArray,                         // deployed EVM code for the contract
+    contractStateVersion: uint,                  // this changes when the rules of contract interpretation change,
+                                                 //       for example due to Ethereum hardfork
+    code: ByteArray,                             // deployed EVM code for the contract
     evmJumpTable: map<uint, view write func()>,  // maps each valid EVM jump destination to the corresponding AVM codepoint
     startCodePoint: view write func(),           // entry point for the translated AVM code
     storage: StorageMap,
@@ -195,7 +197,7 @@ public func accountStore_destroyAccount(acctStore: AccountStore, addrToDestroy: 
     if let Some(contractInfo) = accountStore_get(acctStore, addrToDestroy).contractInfo {
         acctStore = accountStore_dropCodeRef(
             acctStore,
-            keccak256(contractInfo.code, 0, bytearray_size(contractInfo.code))
+            hashForCodeRef(contractInfo.code, contractInfo.contractStateVersion),
         );
         if (acctStore.numContracts > 0) {  // avoid underflow, if the count is somehow incorrect
             set acctStore.numContracts = acctStore.numContracts-1;
@@ -375,10 +377,11 @@ public view write func accountStore_createAccountFromEvmCode(
         evmCallStack_addStorageCharge( (bytearray_size(code) + 31) / 32 );
         set oldAcct.nextSeqNum = 1;
         set oldAcct.contractInfo = Some(struct {
-           code: code,
-           evmJumpTable: evmJumpTable,
-           startCodePoint: initCodePt,
-           storage: storageMap,
+            contractStateVersion: const::ContractStateVersion_current,
+            code: code,
+            evmJumpTable: evmJumpTable,
+            startCodePoint: initCodePt,
+            storage: storageMap,
         });
         Some(accountStore_set(store, newAddr, oldAcct))
     } else {
@@ -398,6 +401,7 @@ public func accountStore_upgradeContractFromEvmCode(
     let oldAcct = accountStore_get(store, addr);
     let contractAdded = false;
     set oldAcct.contractInfo = Some(struct {
+        contractStateVersion: const::ContractStateVersion_current,
         code: code,
         evmJumpTable: evmJumpTable,
         startCodePoint: initCodePt,
@@ -436,6 +440,7 @@ public func accountStore_createBuiltinContract(
 
     return xif (account_isEmpty(oldAcct) || !isUpgrade) {
         set oldAcct.contractInfo = Some(struct {
+            contractStateVersion: const::ContractStateVersion_current,
             code: fakeCode,
             evmJumpTable: newmap<uint, view write func()>,
             startCodePoint: entryPoint,
@@ -536,7 +541,7 @@ public func accountStore_newEscrow(acctStore: AccountStore, payer: address, amou
     ));
 }
 
-public func _accountStore_getEscrowBalance(acctStore: AccountStore, key: uint) -> uint {
+public func accountStore_getEscrowBalance(acctStore: AccountStore, key: uint) -> uint {
     return storageMap_get(acctStore.escrowStore.escrowedValues, key);
 }
 
@@ -667,6 +672,7 @@ public func account_setContractInfo(
 
     return acct with { contractInfo: Some(
         struct {
+            contractStateVersion: const::ContractStateVersion_current,
             code: code,
             evmJumpTable: evmJumpTable,
             startCodePoint: startCodePoint,
@@ -685,6 +691,14 @@ public func account_getCodeSize(acct: Account) -> uint {
 
 public func account_getCode(acct: Account) -> option<ByteArray> {
     return Some((acct.contractInfo?).code);
+}
+
+public func account_usesOriginalStorageGasAlloc(acct: Account) -> bool {
+    return xif let Some(contractInfo) = acct.contractInfo {
+        contractInfo.contractStateVersion == const::ContractStateVersion_original
+    } else {
+        false
+    };
 }
 
 type asfa_wrappedState = struct {
@@ -715,11 +729,19 @@ func asfaClosure(_: any, acct: Account, wrappedState: asfa_wrappedState) -> asfa
     };
 }
 
+func hashForCodeRef(code: ByteArray, contractStateVersion: uint) -> bytes32 {
+    // This hash, meant as the key in the coderef table, is a collision-free function of this function's args.
+    // For the original contractStateVersion (= 0) this is just the keccak256 of the code, so it is
+    //       backward-compatible with the original hashing scheme.
+    return bytes32(uint(keccak256(code, 0, bytearray_size(code))) + contractStateVersion);  // overflow OK
+}
+
 // If a CodeRef exists for code, increment its reference count.
 // If one doesn't exist, create and initialize one.
 // Return the attributes of the resulting CodeRef
 public view write func accountStore_createOrAddCodeRef(
     acctStore: AccountStore,
+    contractStateVersion: uint,
     code: ByteArray
 ) -> option<(
     AccountStore,
@@ -727,7 +749,7 @@ public view write func accountStore_createOrAddCodeRef(
     map<uint, view write func()>,
     bool,
 )> {
-    let codeHash = keccak256(code, 0, bytearray_size(code));
+    let codeHash = hashForCodeRef(code, contractStateVersion);  // overflow OK
     return xif let Some(codeRef) = acctStore.codeRefTable[codeHash] {
         Some((
             accountStore_addCodeRef(acctStore, codeHash)?,
@@ -738,7 +760,7 @@ public view write func accountStore_createOrAddCodeRef(
     } else {
         let (startCodePoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(code), false);
         Some((
-            accountStore_createCodeRef(acctStore, code, evmJumpTable, startCodePoint),
+            accountStore_createCodeRef(acctStore, contractStateVersion, code, evmJumpTable, startCodePoint),
             unsafecast<view write func()>(startCodePoint),
             unsafecast<map<uint, view write func()> >(evmJumpTable),
             true,
@@ -757,11 +779,12 @@ public func accountStore_addCodeRef(acctStore: AccountStore, codeHash: bytes32) 
 
 public func accountStore_createCodeRef(
     acctStore: AccountStore,
+    contractStateVersion: uint,
     code: ByteArray,
     evmJumpTable: map<uint, view write func()>,
     startCodePoint: view write func(),
 ) -> AccountStore {
-    let codeHash = keccak256(code, 0, bytearray_size(code));
+    let codeHash = hashForCodeRef(code, contractStateVersion);  // overflow OK
     set acctStore.codeRefTable[codeHash] = struct {
         refCount: 1,
         code: code,

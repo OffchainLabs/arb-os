@@ -80,9 +80,9 @@ public write func arbStatistics_init() {
     };
 }
 
-public view write func arbStatistics_addToStorage(delta: int) {
+public view write func arbStatistics_addToStorage(delta: uint) {
     arbStats = arbStats with {
-        storage: uint(int(arbStats.storage) + delta)
+        storage: arbStats.storage + delta
     };
 }
 
