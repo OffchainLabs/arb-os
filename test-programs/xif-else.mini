@@ -1,5 +1,5 @@
 
-func test_xif_else() -> uint {
+func main() -> uint {
     let x = xif (true == false) {
         1
     } elseif let Some(thing) = None<uint> {
