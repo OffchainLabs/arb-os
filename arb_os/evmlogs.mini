@@ -8,11 +8,15 @@
 
 type EvmLogs = struct {
     last: any,
-    rest: any,
-}
+    rest: EvmLogs,
+};
 
 public func evmlogs_empty() -> EvmLogs {  // make an empty log-sequence
     return unsafecast<EvmLogs>(());
+}
+
+func evmlogs_isEmpty(logs: EvmLogs) -> bool {
+    return logs == unsafecast<EvmLogs>(());
 }
 
 public func evmlogs_appendAny(logs: EvmLogs, item: any) -> EvmLogs {
@@ -25,12 +29,34 @@ public func evmlogs_appendAny(logs: EvmLogs, item: any) -> EvmLogs {
 
 public func evmlogs_numLogs(logs: EvmLogs) -> uint {
     let ret = 0;
-    loop {
-        if (logs == unsafecast<EvmLogs>(())) {
+    return xloop {
+        if (evmlogs_isEmpty(logs )) {
             return ret;
         } else {
             ret = ret + 1;
-            logs = unsafecast<EvmLogs>(logs.rest);
+            logs = logs.rest;
         }
+    };
+}
+
+type EvmLogMapFunc = view write func(any, any) -> (any, any);  // (log, state) -> (updatedLog, updatedState)
+
+public view write func evmlogs_forall(logs: EvmLogs, mapFunc: EvmLogMapFunc, state: any) -> (EvmLogs, any) {
+    // reverse the order of the logs, so we can apply the map to them in order
+    let revLogs = evmlogs_empty();
+    while (! evmlogs_isEmpty(logs)) {
+        revLogs = evmlogs_appendAny(revLogs, logs.last);
+        logs = logs.rest;
     }
+
+    // now reverse the list again, applying the map to each item
+    // list ends up in its original order, but with the map having been applied to each log
+    while (! evmlogs_isEmpty(revLogs)) {
+        let (updatedLog, ustate) = mapFunc(revLogs.last, state);
+        state = ustate;
+        logs = evmlogs_appendAny(logs, updatedLog);
+        revLogs = revLogs.rest;
+    }
+
+    return (logs, state);
 }

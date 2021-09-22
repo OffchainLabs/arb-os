@@ -2,72 +2,59 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-//!Contains utilities for generating instructions from AST structures.
+//! Contains utilities for generating instructions from AST structures.
 
-use super::ast::{BinaryOp, FuncArg, GlobalVarDecl, Type, UnaryOp};
-use super::symtable::CopyingSymTable;
+use super::ast::{BinaryOp, FuncProperties, GlobalVarDecl, TrinaryOp, Type, UnaryOp};
 use super::typecheck::{
-    PropertiesList, TypeCheckedExpr, TypeCheckedFunc, TypeCheckedIfArm, TypeCheckedMatchPattern,
-    TypeCheckedStatement,
+    TypeCheckedExpr, TypeCheckedFunc, TypeCheckedMatchPattern, TypeCheckedStatement,
 };
-use crate::link::{ImportedFunc, TupleTree, TUPLE_SIZE};
-use crate::mavm::{AVMOpcode, Instruction, Label, LabelGenerator, Opcode, Value};
-use crate::pos::Location;
+use crate::compile::ast::{DebugInfo, MatchPatternKind};
+use crate::compile::typecheck::{
+    TypeCheckedCodeBlock, TypeCheckedExprKind, TypeCheckedStatementKind,
+};
+use crate::compile::{CompileError, ErrorSystem, FileInfo};
+use crate::console::Color;
+use crate::link::{TupleTree, TUPLE_SIZE};
+use crate::mavm::{AVMOpcode, Buffer, Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::{cmp::max, collections::HashMap};
 
-///Represents any encountered during codegen
-#[derive(Debug)]
-pub struct CodegenError {
-    pub reason: &'static str,
-    pub location: Option<Location>,
-}
-
-pub fn new_codegen_error(reason: &'static str, location: Option<Location>) -> CodegenError {
-    CodegenError { reason, location }
-}
-
-///Top level function for code generation, generates code for modules.
+/// Top level function for code generation, generates code for modules.
 ///
-///In this function, funcs represents a list of functions in scope, string_table is used to get
-/// builtins, imported_funcs is a list of functions imported from other modules, and global_vars
-/// lists the globals available in the module.
+/// In this function, funcs represents a list of functions in scope, string_table is used to get
+/// builtins, and global_vars lists the globals available in the module.
 ///
 /// The function returns a vector of instructions representing the generated code if it is
-/// successful, otherwise it returns a CodegenError.
+/// successful, otherwise it returns a `CompileError`.
 pub fn mavm_codegen(
-    funcs: Vec<TypeCheckedFunc>,
+    funcs: BTreeMap<StringId, TypeCheckedFunc>,
     string_table: &StringTable,
-    imported_funcs: &[ImportedFunc],
     global_vars: &[GlobalVarDecl],
-) -> Result<Vec<Instruction>, CodegenError> {
-    let mut import_func_map = HashMap::new();
-    for imp_func in imported_funcs {
-        import_func_map.insert(imp_func.name_id, Label::External(imp_func.slot_num));
-    }
-
+    file_info_chart: &mut BTreeMap<u64, FileInfo>,
+    error_system: &mut ErrorSystem,
+    release_build: bool,
+) -> Result<Vec<Instruction>, CompileError> {
     let mut global_var_map = HashMap::new();
     for (idx, gv) in global_vars.iter().enumerate() {
-        global_var_map.insert(gv.name, idx);
+        global_var_map.insert(gv.name_id, idx);
     }
 
     let mut label_gen = LabelGenerator::new();
     let mut funcs_code = BTreeMap::new();
-    for func in funcs {
-        if !func.imported {
-            let id = func.name;
-            let (lg, function_code) = mavm_codegen_func(
-                func,
-                label_gen,
-                string_table,
-                &import_func_map,
-                &global_var_map,
-            )?;
-            label_gen = lg;
-            funcs_code.insert(id, function_code);
-        }
+    for (id, func) in funcs {
+        let (lg, function_code) = mavm_codegen_func(
+            func,
+            label_gen,
+            string_table,
+            &global_var_map,
+            file_info_chart,
+            error_system,
+            release_build,
+        )?;
+        label_gen = lg;
+        funcs_code.insert(id, function_code);
     }
     let mut code = Vec::new();
     for (_id, mut func) in funcs_code {
@@ -76,187 +63,374 @@ pub fn mavm_codegen(
     Ok(code)
 }
 
-///This generates code for individual mini functions.
+/// This generates code for individual mini functions.
 ///
-///In this function, func represents the function to be codegened, label_gen should point to the
-/// next available label ID, string_table is used to get builtins, imported_func_map is a list of
+/// In this function, func represents the function to be codegened, label_gen should point to the
+/// next available label ID, string_table is used to get builtins, imported_func_labels is a list of
 /// functions imported from other modules, and global_var_map lists the globals available in the
 /// module.
 ///
 /// If successful the function returns a tuple containing the state of the label generator after
-/// codegen, and a vector of the generated code, otherwise it returns a CodegenError.
-fn mavm_codegen_func(
-    func: TypeCheckedFunc,
-    mut label_gen: LabelGenerator,
+/// codegen, and a vector of the generated code, otherwise it returns a `CompileError`.
+pub fn mavm_codegen_func(
+    mut func: TypeCheckedFunc,
+    label_gen: LabelGenerator,
     string_table: &StringTable,
-    import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
-) -> Result<(LabelGenerator, Vec<Instruction>), CodegenError> {
+    file_info_chart: &mut BTreeMap<u64, FileInfo>,
+    error_system: &mut ErrorSystem,
+    release_build: bool,
+) -> Result<(LabelGenerator, Vec<Instruction>), CompileError> {
+    if func.ret_type == Type::Void
+        && func.code.last().cloned().map(|s| s.kind) != Some(TypeCheckedStatementKind::ReturnVoid())
+    {
+        func.code.push(TypeCheckedStatement {
+            kind: TypeCheckedStatementKind::ReturnVoid(),
+            debug_info: {
+                let mut debug_info = DebugInfo::default();
+                debug_info.attributes.codegen_print = func.debug_info.attributes.codegen_print;
+                debug_info
+            },
+        });
+    }
     let mut code = vec![];
-    let location = func.location;
-    code.push(Instruction::from_opcode(
-        Opcode::Label(Label::Func(func.name)),
-        location,
-    ));
+    let debug_info = func.debug_info;
+
+    let unique_id = match func.unique_id {
+        Some(id) => id,
+        None => {
+            return Err(CompileError::new_codegen_error(
+                format!("Func {} has no id", Color::red(&func.name)),
+                func.debug_info.location,
+            ))
+        }
+    };
+
+    let label = match func.properties.closure {
+        true => Label::Closure(unique_id),
+        false => Label::Func(unique_id),
+    };
+
+    code.push(Instruction::from_opcode(Opcode::Label(label), debug_info));
 
     let num_args = func.args.len();
-    let locals = CopyingSymTable::<usize>::new();
+    let mut locals = HashMap::new();
 
     let make_frame_slot = code.len();
     code.push(Instruction::from_opcode(
         Opcode::AVMOpcode(AVMOpcode::Noop),
-        location,
+        debug_info,
     )); // placeholder; will replace this later
 
-    let (lg, max_num_locals, maybe_continue) = add_args_to_locals_table(
-        locals,
-        &func.args,
-        0,
-        func.code,
-        &mut code,
-        label_gen,
-        string_table,
-        import_func_map,
-        global_var_map,
-    )?;
-    label_gen = lg;
-
-    if maybe_continue {
-        match func.ret_type {
-            Type::Void => {
-                code.push(Instruction::from_opcode(Opcode::Return, location));
-            }
-            _ => {
-                return Err(new_codegen_error(
-                    "apparent path to end of function without return",
-                    location,
-                ));
-            }
-        }
+    for arg in func.args {
+        let next_slot = locals.len();
+        locals.insert(arg.name, next_slot);
+    }
+    for capture in &func.captures {
+        let next_slot = locals.len();
+        locals.insert(*capture, next_slot);
     }
 
-    // put makeframe Instruction at beginning of function, to build the frame (replacing placeholder)
-    code[make_frame_slot] =
-        Instruction::from_opcode(Opcode::MakeFrame(num_args, max_num_locals), location);
+    let (label_gen, mut space_for_locals, _slot_map) = mavm_codegen_statements(
+        func.code,
+        &mut code,
+        locals.len(),
+        &locals,
+        label_gen,
+        string_table,
+        &func.func_labels,
+        global_var_map,
+        0,
+        &mut vec![],
+        file_info_chart,
+        error_system,
+        release_build,
+    )?;
+
+    match func.tipe {
+        Type::Func(_prop, _, ret) => {
+            // put makeframe Instruction at beginning of function, to build the frame (replacing placeholder)
+
+            let prebuilt = !func.captures.is_empty(); // whether caller will pass in the frame
+
+            if !func.captures.is_empty() {
+                space_for_locals = func.frame_size;
+            }
+
+            code[make_frame_slot] = Instruction::from_opcode(
+                Opcode::MakeFrame(num_args, space_for_locals, prebuilt, &*ret != &Type::Every),
+                debug_info,
+            );
+        }
+        wrong => {
+            return Err(CompileError::new_codegen_error(
+                format!(
+                    "type checking bug: func with non-func type {}",
+                    Color::red(wrong.display())
+                ),
+                debug_info.location,
+            ))
+        }
+    }
 
     Ok((label_gen, code))
 }
 
-///This adds args to locals, and then codegens the statements in statements, using the updated
-/// locals and other function arguments as parameters.
-///
-/// If successful the function returns a tuple containing the updated label generator, maximum
-/// number of locals used so far by this call frame, and a bool that is set to true when the
-/// function may continue past the end of the generated code, otherwise the function returns a
-/// CodegenError.
-fn add_args_to_locals_table(
-    locals: CopyingSymTable<'_, usize>,
-    args: &[FuncArg],
+fn mavm_codegen_code_block<'a>(
+    block: &TypeCheckedCodeBlock,
+    code: &'a mut Vec<Instruction>,
     num_locals: usize,
-    statements: Vec<TypeCheckedStatement>,
-    code: &mut Vec<Instruction>,
+    locals: &HashMap<usize, usize>,
     label_gen: LabelGenerator,
     string_table: &StringTable,
-    import_func_map: &HashMap<StringId, Label>,
+    func_labels: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
-) -> Result<(LabelGenerator, usize, bool), CodegenError> {
-    let mut locals_map = HashMap::new();
-    for (index, arg) in args.iter().enumerate() {
-        locals_map.insert(arg.name, num_locals + index);
-    }
-    let new_locals = locals.push_multi(locals_map);
-    mavm_codegen_statements(
-        statements,
+    prepushed_vals: usize,
+    scopes: &mut Vec<(String, Label, Option<Type>)>,
+    file_info_chart: &mut BTreeMap<u64, FileInfo>,
+    error_system: &mut ErrorSystem,
+    debug_info: DebugInfo,
+    release_build: bool,
+) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CompileError> {
+    let (bottom_label, lg) = label_gen.next();
+    scopes.push((
+        block.scope.clone().unwrap_or("_".to_string()),
+        bottom_label,
+        None,
+    ));
+    let (lab_gen, nl, block_locals) = mavm_codegen_statements(
+        block.body.clone(),
         code,
-        num_locals + args.len(),
-        &new_locals,
-        label_gen,
+        num_locals,
+        locals,
+        lg,
         string_table,
-        import_func_map,
+        func_labels,
         global_var_map,
-    )
-    .map(|(a, b, c, _)| (a, b, c))
+        prepushed_vals,
+        scopes,
+        file_info_chart,
+        error_system,
+        release_build,
+    )?;
+    if let Some(ret_expr) = &block.ret_expr {
+        let mut new_locals = locals.clone();
+        new_locals.extend(block_locals);
+        let (lg, code, prepushed_vals_expr) = mavm_codegen_expr(
+            ret_expr,
+            code,
+            nl,
+            &new_locals,
+            lab_gen,
+            string_table,
+            func_labels,
+            global_var_map,
+            prepushed_vals,
+            scopes,
+            file_info_chart,
+            error_system,
+            release_build,
+        )
+        .map(|(lg, code, exp_locals)| (lg, code, max(num_locals, max(exp_locals, nl))))?;
+        code.push(Instruction::from_opcode(
+            Opcode::Label(bottom_label),
+            debug_info,
+        ));
+        let _scope = scopes.pop();
+        Ok((lg, code, prepushed_vals_expr))
+    } else {
+        code.push(Instruction::from_opcode(
+            Opcode::Label(bottom_label),
+            debug_info,
+        ));
+        Ok((lab_gen, code, max(num_locals, nl)))
+    }
 }
 
-///Generates code for the provided statements with index 0 generated first. code represents the
+/// Generates code for the provided statements with index 0 generated first. code represents the
 /// code generated previously, num_locals the maximum number of locals used at any point in the call
 /// frame so far, locals is a map of local variables, label_gen points to the next available locals
-/// slot, string_table is used to get builtins, import_func_map associates each imported function
+/// slot, string_table is used to get builtins, func_labels associates each imported function
 /// with a label, and global_var_map maps global variable IDs to their slot number.
 ///
 /// If successful the function returns a tuple containing the updated label generator, maximum
 /// number of locals used so far by this call frame, a bool that is set to true when the function
 /// may continue past the end of the generated code, and a map of locals available at the end of the
-/// statement sequence, otherwise the function returns a CodegenError.
+/// statement sequence, otherwise the function returns a `CompileError`.
 fn mavm_codegen_statements(
     statements: Vec<TypeCheckedStatement>, // statements to codegen
     code: &mut Vec<Instruction>,           // accumulates the code as it's generated
     mut num_locals: usize,                 // num locals that have been allocated
-    locals: &CopyingSymTable<'_, usize>,   // lookup local variable slot number by name
+    locals: &HashMap<usize, usize>,        // lookup local variable slot number by name
     mut label_gen: LabelGenerator,
     string_table: &StringTable,
-    import_func_map: &HashMap<StringId, Label>,
+    func_labels: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
-) -> Result<(LabelGenerator, usize, bool, HashMap<StringId, usize>), CodegenError> {
+    prepushed_vals: usize,
+    scopes: &mut Vec<(String, Label, Option<Type>)>,
+    file_info_chart: &mut BTreeMap<u64, FileInfo>,
+    error_system: &mut ErrorSystem,
+    release_build: bool,
+) -> Result<(LabelGenerator, usize, HashMap<StringId, usize>), CompileError> {
     let mut bindings = HashMap::new();
     for statement in statements {
-        let new_locals = locals.push_multi(bindings.clone());
-        let (lg, statement_locals, returns, statement_bindings) = mavm_codegen_statement(
+        let mut new_locals = locals.clone();
+        new_locals.extend(bindings.clone());
+        let (lg, statement_locals, statement_bindings) = mavm_codegen_statement(
             statement,
             code,
             num_locals,
             &new_locals,
             label_gen,
             string_table,
-            import_func_map,
+            func_labels,
             global_var_map,
+            prepushed_vals,
+            scopes,
+            file_info_chart,
+            error_system,
+            release_build,
         )?;
         label_gen = lg;
         num_locals = max(statement_locals, num_locals);
         for (id, bind) in statement_bindings {
             bindings.insert(id, bind);
         }
-        if returns {
-            return Ok((label_gen, num_locals, false, bindings));
-        }
     }
-    Ok((label_gen, num_locals, true, bindings))
+    Ok((label_gen, num_locals, bindings))
 }
 
-///Generates code for the provided statement. code represents the code generated previously,
+/// Generates code for the provided statement. code represents the code generated previously,
 /// num_locals the maximum number of locals used at any point in the call frame so far, locals is a
 /// map of local variables, label_gen points to the next available locals slot, string_table is used
-/// to get builtins, import_func_map associates each imported function with a label, and
+/// to get builtins, func_labels associates each imported function with a label, and
 /// global_var_map maps global variable IDs to their slot number.
 ///
 /// If successful the function returns a tuple containing the updated label generator, number of
 /// locals slots used by this statement, a bool that is set to true if execution can not continue
 /// past this statement, and a map of locals generated by this statement, otherwise the function
-/// returns a CodegenError.
+/// returns a `CompileError`.
 fn mavm_codegen_statement(
-    statement: TypeCheckedStatement,     // statement to codegen
-    mut code: &mut Vec<Instruction>,     // accumulates the code as it's generated
-    mut num_locals: usize,               // num locals that have been allocated
-    locals: &CopyingSymTable<'_, usize>, // lookup local variable slot number by name
+    statement: TypeCheckedStatement, // statement to codegen
+    mut code: &mut Vec<Instruction>, // accumulates the code as it's generated
+    mut num_locals: usize,           // num locals that have been allocated
+    locals: &HashMap<usize, usize>,  // lookup local variable slot number by name
     mut label_gen: LabelGenerator,
     string_table: &StringTable,
-    import_func_map: &HashMap<StringId, Label>,
+    func_labels: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
-) -> Result<(LabelGenerator, usize, bool, HashMap<StringId, usize>), CodegenError> {
-    match &statement {
-        TypeCheckedStatement::Noop(_) => Ok((label_gen, 0, false, HashMap::new())),
-        TypeCheckedStatement::Panic(loc) => {
-            code.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::Panic),
-                *loc,
+    prepushed_vals: usize,
+    scopes: &mut Vec<(String, Label, Option<Type>)>,
+    file_info_chart: &mut BTreeMap<u64, FileInfo>,
+    error_system: &mut ErrorSystem,
+    release_build: bool,
+) -> Result<(LabelGenerator, usize, HashMap<StringId, usize>), CompileError> {
+    let debug = statement.debug_info;
+    let loc = statement.debug_info.location;
+    match &statement.kind {
+        TypeCheckedStatementKind::ReturnVoid() => {
+            code.push(Instruction::from_opcode(Opcode::Return, debug));
+            Ok((label_gen, 0, HashMap::new()))
+        }
+        TypeCheckedStatementKind::Return(expr) => {
+            let (lg, c, exp_locals) = mavm_codegen_expr(
+                expr,
+                code,
+                num_locals,
+                &locals,
+                label_gen,
+                string_table,
+                func_labels,
+                global_var_map,
+                prepushed_vals,
+                scopes,
+                file_info_chart,
+                error_system,
+                release_build,
+            )?;
+            if prepushed_vals > 0 {
+                c.push(Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::AuxPush),
+                    debug,
+                ));
+                for _ in 0..prepushed_vals {
+                    c.push(Instruction::from_opcode(
+                        Opcode::AVMOpcode(AVMOpcode::Pop),
+                        debug,
+                    ));
+                }
+                c.push(Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::AuxPop),
+                    debug,
+                ));
+            }
+            c.push(Instruction::from_opcode(Opcode::Return, debug));
+            Ok((lg, exp_locals, HashMap::new()))
+        }
+        TypeCheckedStatementKind::Break(oexpr, scope_id) => {
+            let mut inner_scopes = (*scopes).clone();
+            let (_scope_name, lab, t) = scopes
+                .iter_mut()
+                .rev()
+                .find(|(s, _, _)| scope_id == s)
+                .ok_or_else(|| {
+                    CompileError::new_codegen_error(
+                        format!("could not find scope {}", scope_id),
+                        loc,
+                    )
+                })?;
+            if let Some(tipe) = t {
+                if *tipe
+                    != oexpr
+                        .clone()
+                        .map(|exp| exp.get_type())
+                        .unwrap_or(Type::Tuple(vec![]))
+                {
+                    //Uncomment for info on break statement type mismatches
+                    /*println!(
+                        "Types did not match in break statement expected {:?} got {:?}",
+                        tipe,
+                        oexpr
+                            .clone()
+                            .map(|exp| exp.get_type())
+                            .unwrap_or(Type::Tuple(vec![]))
+                    );*/
+                }
+            } else {
+                *t = Some(
+                    oexpr
+                        .clone()
+                        .map(|exp| exp.get_type())
+                        .unwrap_or(Type::Tuple(vec![])),
+                );
+            }
+            let (lg, code, num_locals) = if let Some(expr) = oexpr {
+                mavm_codegen_expr(
+                    expr,
+                    code,
+                    num_locals,
+                    locals,
+                    label_gen,
+                    string_table,
+                    func_labels,
+                    global_var_map,
+                    prepushed_vals,
+                    &mut inner_scopes,
+                    file_info_chart,
+                    error_system,
+                    release_build,
+                )?
+            } else {
+                (label_gen, code, prepushed_vals)
+            };
+            code.push(Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::Jump),
+                Value::Label(*lab),
+                debug,
             ));
-            Ok((label_gen, 0, true, HashMap::new()))
+            Ok((lg, num_locals, HashMap::new()))
         }
-        TypeCheckedStatement::ReturnVoid(loc) => {
-            code.push(Instruction::from_opcode(Opcode::Return, *loc));
-            Ok((label_gen, 0, true, HashMap::new()))
-        }
-        TypeCheckedStatement::Return(expr, loc) => {
+        TypeCheckedStatementKind::Expression(expr) => {
             let (lg, c, exp_locals) = mavm_codegen_expr(
                 expr,
                 code,
@@ -264,111 +438,72 @@ fn mavm_codegen_statement(
                 &locals,
                 label_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
-                0,
+                prepushed_vals,
+                scopes,
+                file_info_chart,
+                error_system,
+                release_build,
             )?;
-            c.push(Instruction::from_opcode(Opcode::Return, *loc));
-            Ok((lg, exp_locals, true, HashMap::new()))
-        }
-        TypeCheckedStatement::Expression(expr, loc) => {
-            let (lg, c, exp_locals) = mavm_codegen_expr(
-                expr,
-                code,
-                num_locals,
-                &locals,
-                label_gen,
-                string_table,
-                import_func_map,
-                global_var_map,
-                0,
-            )?;
-            if expr.get_type() != Type::Void {
+            if !(expr.get_type() == Type::Void || expr.get_type() == Type::Every) {
                 c.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::Pop),
-                    *loc,
+                    debug,
                 ));
                 if expr.get_type() != Type::Tuple(vec![]) {
-                    println!(
-                        "Warning: expression statement at {} returns value of type {:?}, which is discarded",
-                        if let Some(loc) = loc {
-                            format!("line: {} column: {}", loc.line, loc.column)
-                        } else {
-                            "unknown location".to_string()
-                        },
-                        expr.get_type()
-                    );
+                    error_system.warnings.push(CompileError::new_warning(
+                        String::from("Compile warning"),
+                        format!(
+                            "expression statement returns value of type {:?}, which is discarded",
+                            expr.get_type()
+                        ),
+                        loc.into_iter().collect(),
+                    ));
                 }
             }
-            Ok((lg, exp_locals, false, HashMap::new()))
+            Ok((lg, exp_locals, HashMap::new()))
         }
-        TypeCheckedStatement::Let(pat, expr, loc) => match pat {
-            TypeCheckedMatchPattern::Simple(name, _) => {
-                let slot_num = num_locals;
-                let (lg, c, exp_locals) = mavm_codegen_expr(
-                    expr,
-                    code,
-                    num_locals,
-                    &locals,
-                    label_gen,
-                    string_table,
-                    import_func_map,
-                    global_var_map,
-                    0,
-                )?;
-                let mut bindings = HashMap::new();
-                bindings.insert(*name, slot_num);
-                num_locals += 1;
-                num_locals = max(num_locals, exp_locals);
-                label_gen = lg;
-                code = c;
-                code.push(Instruction::from_opcode_imm(
-                    Opcode::SetLocal,
-                    Value::Int(Uint256::from_usize(slot_num)),
-                    *loc,
-                ));
-                Ok((label_gen, num_locals, false, bindings))
-            }
-            TypeCheckedMatchPattern::Tuple(pattern, _) => {
-                let (lg, c, exp_locals) = mavm_codegen_expr(
-                    expr,
-                    code,
-                    num_locals,
-                    &locals,
-                    label_gen,
-                    string_table,
-                    import_func_map,
-                    global_var_map,
-                    0,
-                )?;
-                label_gen = lg;
-                code = c;
-                let mut pairs = HashMap::new();
-                let mut binding_types = Vec::new();
-                for (i, sub_pat) in pattern.clone().iter().enumerate() {
-                    match sub_pat {
-                        TypeCheckedMatchPattern::Simple(name, _) => {
-                            pairs.insert(*name, num_locals + i);
-                            binding_types.push((*name, num_locals + i));
-                        }
-                        TypeCheckedMatchPattern::Tuple(_, _) => {
-                            return Err(new_codegen_error(
-                                "nested pattern not supported in pattern-match let",
-                                *loc,
-                            ));
-                        }
-                    }
-                }
-                mavm_codegen_tuple_pattern(code, pattern, num_locals, *loc);
-                num_locals += pattern.len();
-                num_locals = max(num_locals, exp_locals);
-                Ok((label_gen, num_locals, false, pairs))
-            }
-        },
-        TypeCheckedStatement::AssignLocal(name, expr, loc) => {
-            let slot_num = match locals.get(*name) {
+        TypeCheckedStatementKind::Let(pat, expr) => {
+            let (lg, c, exp_locals) = mavm_codegen_expr(
+                expr,
+                code,
+                num_locals,
+                &locals,
+                label_gen,
+                string_table,
+                func_labels,
+                global_var_map,
+                prepushed_vals,
+                scopes,
+                file_info_chart,
+                error_system,
+                release_build,
+            )?;
+            label_gen = lg;
+            code = c;
+            let (new_locals, bindings, _assignments) = mavm_codegen_tuple_pattern(
+                code,
+                &pat,
+                num_locals,
+                locals,
+                global_var_map,
+                string_table,
+                debug,
+            )?;
+            num_locals += new_locals;
+            num_locals = max(num_locals, exp_locals);
+            Ok((label_gen, num_locals, bindings))
+        }
+        TypeCheckedStatementKind::AssignLocal(name, expr) => {
+            let slot_num = match locals.get(name) {
                 Some(slot) => slot,
-                None => return Err(new_codegen_error("assigned to non-existent variable", *loc)),
+                None => {
+                    return Err(CompileError::new_codegen_error(
+                        "assigned to non-existent variable".to_string(),
+                        loc,
+                    ))
+                }
             };
             let (lg, c, exp_locals) = mavm_codegen_expr(
                 expr,
@@ -377,20 +512,24 @@ fn mavm_codegen_statement(
                 &locals,
                 label_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
-                0,
+                prepushed_vals,
+                scopes,
+                file_info_chart,
+                error_system,
+                release_build,
             )?;
             label_gen = lg;
             code = c;
             code.push(Instruction::from_opcode_imm(
                 Opcode::SetLocal,
-                Value::Int(Uint256::from_usize(slot_num)),
-                *loc,
+                Value::Int(Uint256::from_usize(*slot_num)),
+                debug,
             ));
-            Ok((label_gen, exp_locals, false, HashMap::new()))
+            Ok((label_gen, exp_locals, HashMap::new()))
         }
-        TypeCheckedStatement::AssignGlobal(idx, expr, loc) => {
+        TypeCheckedStatementKind::AssignGlobal(idx, expr) => {
             let (lg, c, exp_locals) = mavm_codegen_expr(
                 expr,
                 code,
@@ -398,53 +537,18 @@ fn mavm_codegen_statement(
                 &locals,
                 label_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
-                0,
+                prepushed_vals,
+                scopes,
+                file_info_chart,
+                error_system,
+                release_build,
             )?;
-            c.push(Instruction::from_opcode(Opcode::SetGlobalVar(*idx), *loc));
-            Ok((lg, exp_locals, false, HashMap::new()))
+            c.push(Instruction::from_opcode(Opcode::SetGlobalVar(*idx), debug));
+            Ok((lg, exp_locals, HashMap::new()))
         }
-        TypeCheckedStatement::Loop(body, loc) => {
-            let slot_num = Value::Int(Uint256::from_usize(num_locals));
-            num_locals += 1;
-            let (top_label, lg) = label_gen.next();
-            label_gen = lg;
-            code.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Noop),
-                Value::Label(top_label),
-                *loc,
-            ));
-            code.push(Instruction::from_opcode_imm(
-                Opcode::SetLocal,
-                slot_num.clone(),
-                *loc,
-            ));
-            code.push(Instruction::from_opcode(Opcode::Label(top_label), *loc));
-            let (lg, nl, _, hm) = mavm_codegen_statements(
-                body.to_vec(),
-                code,
-                num_locals,
-                locals,
-                label_gen,
-                string_table,
-                import_func_map,
-                global_var_map,
-            )?;
-            label_gen = lg;
-            num_locals = nl;
-            code.push(Instruction::from_opcode_imm(
-                Opcode::GetLocal,
-                slot_num,
-                *loc,
-            ));
-            code.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::Jump),
-                *loc,
-            ));
-            Ok((label_gen, num_locals, true, hm))
-        }
-        TypeCheckedStatement::While(cond, body, loc) => {
+        TypeCheckedStatementKind::While(cond, body) => {
             let slot_num = Value::Int(Uint256::from_usize(num_locals));
             num_locals += 1;
             let (top_label, lg) = label_gen.next();
@@ -453,32 +557,37 @@ fn mavm_codegen_statement(
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
                 Value::Label(top_label),
-                *loc,
+                debug,
             ));
             code.push(Instruction::from_opcode_imm(
                 Opcode::SetLocal,
                 slot_num.clone(),
-                *loc,
+                debug,
             ));
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Jump),
                 Value::Label(cond_label),
-                *loc,
+                debug,
             ));
-            code.push(Instruction::from_opcode(Opcode::Label(top_label), *loc));
-            let (lg, nl, _, _) = mavm_codegen_statements(
+            code.push(Instruction::from_opcode(Opcode::Label(top_label), debug));
+            let (lg, nl, _) = mavm_codegen_statements(
                 body.to_vec(),
                 code,
                 num_locals,
                 locals,
                 label_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
+                prepushed_vals,
+                scopes,
+                file_info_chart,
+                error_system,
+                release_build,
             )?;
             label_gen = lg;
             num_locals = nl;
-            code.push(Instruction::from_opcode(Opcode::Label(cond_label), *loc));
+            code.push(Instruction::from_opcode(Opcode::Label(cond_label), debug));
             let (lg, c, cond_locals) = mavm_codegen_expr(
                 cond,
                 code,
@@ -486,44 +595,28 @@ fn mavm_codegen_statement(
                 &locals,
                 label_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
-                0,
+                prepushed_vals,
+                scopes,
+                file_info_chart,
+                error_system,
+                release_build,
             )?;
             label_gen = lg;
             code = c;
             code.push(Instruction::from_opcode_imm(
                 Opcode::GetLocal,
                 slot_num,
-                *loc,
+                debug,
             ));
             code.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Cjump),
-                *loc,
+                debug,
             ));
-            Ok((
-                label_gen,
-                max(cond_locals, num_locals),
-                false,
-                HashMap::new(),
-            ))
+            Ok((label_gen, max(cond_locals, num_locals), HashMap::new()))
         }
-        TypeCheckedStatement::If(arm) => {
-            let (end_label, lg) = label_gen.next();
-            let (lg, nl1, might_continue) = mavm_codegen_if_arm(
-                arm,
-                end_label,
-                code,
-                num_locals,
-                locals,
-                lg,
-                string_table,
-                import_func_map,
-                global_var_map,
-            )?;
-            Ok((lg, nl1, !might_continue, HashMap::new()))
-        }
-        TypeCheckedStatement::Asm(insns, args, _loc) => {
+        TypeCheckedStatementKind::Asm(insns, args) => {
             let n_args = args.len();
             let mut exp_locals = 0;
             for i in 0..n_args {
@@ -534,9 +627,13 @@ fn mavm_codegen_statement(
                     locals,
                     label_gen,
                     string_table,
-                    import_func_map,
+                    func_labels,
                     global_var_map,
-                    i,
+                    prepushed_vals + i,
+                    scopes,
+                    file_info_chart,
+                    error_system,
+                    release_build,
                 )?;
                 exp_locals = max(exp_locals, e_locals);
                 label_gen = lg;
@@ -545,9 +642,9 @@ fn mavm_codegen_statement(
             for insn in insns {
                 code.push(insn.clone());
             }
-            Ok((label_gen, exp_locals, false, HashMap::new()))
+            Ok((label_gen, exp_locals, HashMap::new()))
         }
-        TypeCheckedStatement::DebugPrint(e, loc) => {
+        TypeCheckedStatementKind::DebugPrint(e) => {
             let (lg, c, exp_locals) = mavm_codegen_expr(
                 e,
                 code,
@@ -555,111 +652,71 @@ fn mavm_codegen_statement(
                 &locals,
                 label_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
-                0,
+                prepushed_vals,
+                scopes,
+                file_info_chart,
+                error_system,
+                release_build,
             )?;
             label_gen = lg;
             code = c;
             code.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::DebugPrint),
-                *loc,
+                debug,
             ));
-            Ok((label_gen, exp_locals, false, HashMap::new()))
+            Ok((label_gen, exp_locals, HashMap::new()))
         }
-        TypeCheckedStatement::IfLet(name, expr, block, else_block, loc) => {
-            let (after_label, lgg) = label_gen.next();
-            let slot_num = num_locals;
-            let new_locals = locals.push_one(*name, slot_num);
-            let (lg, c, exp_locals) = mavm_codegen_expr(
-                expr,
+        TypeCheckedStatementKind::Assert(expr) => {
+            if release_build {
+                // Release builds don't include asserts
+                return Ok((label_gen, 0, HashMap::new()));
+            }
+
+            let call_type = Type::Func(
+                FuncProperties::pure(),
+                vec![Type::Tuple(vec![Type::Bool, Type::Any])],
+                Box::new(Type::Void),
+            );
+
+            let assert_call = TypeCheckedExpr {
+                kind: TypeCheckedExprKind::FunctionCall(
+                    Box::new(TypeCheckedExpr {
+                        kind: TypeCheckedExprKind::FuncRef(
+                            string_table.get_if_exists("builtin_assert").unwrap(),
+                            call_type.clone(),
+                        ),
+                        debug_info: DebugInfo::from(loc),
+                    }),
+                    vec![expr.clone()],
+                    call_type,
+                    FuncProperties::pure(),
+                ),
+                debug_info: DebugInfo::from(loc),
+            };
+
+            let (lg, _, exp_locals) = mavm_codegen_expr(
+                &assert_call,
                 code,
                 num_locals,
-                &locals,
-                lgg,
-                string_table,
-                import_func_map,
-                global_var_map,
-                0,
-            )?;
-            label_gen = lg;
-            code = c;
-            code.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::Dup0),
-                *loc,
-            ));
-            code.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Tget),
-                Value::Int(Uint256::from_usize(0)),
-                *loc,
-            ));
-            code.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::IsZero),
-                *loc,
-            ));
-            code.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Cjump),
-                Value::Label(after_label),
-                *loc,
-            ));
-            code.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Tget),
-                Value::Int(Uint256::from_usize(1)),
-                *loc,
-            ));
-            code.push(Instruction::from_opcode_imm(
-                Opcode::SetLocal,
-                Value::Int(Uint256::from_usize(slot_num)),
-                *loc,
-            ));
-            let (lg, mut total_locals, mut can_continue, _) = mavm_codegen_statements(
-                block.clone(),
-                code,
-                num_locals + 1,
-                &new_locals,
+                locals,
                 label_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
+                prepushed_vals,
+                scopes,
+                file_info_chart,
+                error_system,
+                release_build,
             )?;
-            total_locals = max(total_locals, exp_locals);
-
-            let (outside_label, lg2) = lg.next();
-            code.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Jump),
-                Value::Label(outside_label),
-                *loc,
-            ));
-            code.push(Instruction::from_opcode(Opcode::Label(after_label), *loc));
-            code.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::Pop),
-                *loc,
-            ));
-            if let Some(else_block) = else_block {
-                let (lg3, else_locals, else_can_continue, _) = mavm_codegen_statements(
-                    else_block.clone(),
-                    code,
-                    num_locals,
-                    &locals,
-                    lg2,
-                    string_table,
-                    import_func_map,
-                    global_var_map,
-                )?;
-                can_continue |= else_can_continue;
-                total_locals = max(total_locals, else_locals);
-                label_gen = lg3;
-            } else {
-                can_continue = true;
-                label_gen = lg2;
-            };
-            code.push(Instruction::from_opcode(Opcode::Label(outside_label), *loc));
-            Ok((label_gen, total_locals, !can_continue, HashMap::new()))
+            Ok((lg, exp_locals, HashMap::new()))
         }
     }
 }
 
-///Generates code for assigning the contents of a tuple on the top of the stack to a sequential set
+/// Generates code for assigning the contents of a tuple on the top of the stack to a sequential set
 /// of locals.  code represents previously generated code, pattern is a slice of match patterns
 /// corresponding to the structure of the tuple, local_slot_num_base is the slot of the first local
 /// being assigned to, and loc is the location the operation originates from in the source code.
@@ -667,179 +724,183 @@ fn mavm_codegen_statement(
 /// Nothing is returned directly, and the generated code can be accessed through the code reference.
 fn mavm_codegen_tuple_pattern(
     code: &mut Vec<Instruction>,
-    pattern: &[TypeCheckedMatchPattern],
+    pattern: &TypeCheckedMatchPattern,
     local_slot_num_base: usize,
-    loc: Option<Location>,
-) {
-    let pat_size = pattern.len();
-    for (i, pat) in pattern.iter().enumerate() {
-        if i < pat_size - 1 {
-            code.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::Dup0),
-                loc,
+    locals: &HashMap<usize, usize>,
+    global_var_map: &HashMap<StringId, usize>,
+    string_table: &StringTable,
+    debug_info: DebugInfo,
+) -> Result<(usize, HashMap<usize, usize>, HashSet<usize>), CompileError> {
+    match &pattern.kind {
+        MatchPatternKind::Bind(name) => {
+            let mut bindings = HashMap::new();
+            bindings.insert(*name, local_slot_num_base);
+            code.push(Instruction::from_opcode_imm(
+                Opcode::SetLocal,
+                Value::Int(Uint256::from_usize(local_slot_num_base)),
+                debug_info,
             ));
+            Ok((1, bindings, HashSet::new()))
         }
-        match pat {
-            TypeCheckedMatchPattern::Simple(_, _) => {
+        MatchPatternKind::Assign(id) => {
+            if let Some(val) = locals.get(id) {
+                code.push(Instruction::from_opcode_imm(
+                    Opcode::SetLocal,
+                    Value::Int(Uint256::from_usize(*val)),
+                    debug_info,
+                ))
+            } else {
+                code.push(Instruction::from_opcode(
+                    Opcode::SetGlobalVar(*global_var_map.get(id).ok_or_else(|| {
+                        CompileError::new_codegen_error(
+                            "assigned to non-existent variable in mixed let".to_string(),
+                            debug_info.location,
+                        )
+                    })?),
+                    debug_info,
+                ))
+            }
+            let mut assignments = HashSet::new();
+            assignments.insert(*id);
+            Ok((0, HashMap::new(), assignments))
+        }
+        MatchPatternKind::Tuple(sub_pats) => {
+            let mut num_bindings = 0;
+            let mut bindings = HashMap::new();
+            let mut assignments = HashSet::new();
+            let pat_size = sub_pats.len();
+            for (i, pat) in sub_pats.iter().enumerate() {
+                if i < pat_size - 1 {
+                    code.push(Instruction::from_opcode(
+                        Opcode::AVMOpcode(AVMOpcode::Dup0),
+                        debug_info,
+                    ));
+                }
                 code.push(Instruction::from_opcode_imm(
                     Opcode::TupleGet(pat_size),
                     Value::Int(Uint256::from_usize(i)),
-                    loc,
+                    debug_info,
                 ));
-                code.push(Instruction::from_opcode_imm(
-                    Opcode::SetLocal,
-                    Value::Int(Uint256::from_usize(local_slot_num_base + i)),
-                    loc,
-                ));
+                let (num_new_bindings, new_bindings, new_assignments) = mavm_codegen_tuple_pattern(
+                    code,
+                    pat,
+                    local_slot_num_base + num_bindings,
+                    locals,
+                    global_var_map,
+                    string_table,
+                    debug_info,
+                )?;
+                num_bindings += num_new_bindings;
+                bindings.extend(new_bindings);
+                for name in new_assignments {
+                    if !assignments.insert(name) {
+                        return Err(CompileError::new_codegen_error(
+                            format!(
+                                "assigned to variable {} in mixed let multiple times",
+                                string_table.name_from_id(name)
+                            ),
+                            debug_info.location,
+                        ));
+                    }
+                }
             }
-            TypeCheckedMatchPattern::Tuple(_, _) => {
-                panic!("Can't yet generate code for pattern-match let with nested tuples");
-            }
+            Ok((num_bindings, bindings, assignments))
         }
     }
 }
 
-///Generates code for if arm specified by arm, end_label is the label jumped to when exiting the if
-/// else chain, code is the previously generated code, num_locals is the maximum number of locals
-/// used at any point previously in this call frame, locals is a table of names to variable slot
-/// numbers, label_gen points to the next available local slot, string_table is used to look up
-/// builtins, import_func_map maps IDs to the associated label, and global_var_map maps IDs to
-/// global variables.
-fn mavm_codegen_if_arm(
-    arm: &TypeCheckedIfArm,
-    end_label: Label,
-    mut code: &mut Vec<Instruction>, // accumulates the code as it's generated
-    num_locals: usize,               // num locals that have been allocated
-    locals: &CopyingSymTable<usize>, // lookup local variable slot number by name
-    mut label_gen: LabelGenerator,
-    string_table: &StringTable,
-    import_func_map: &HashMap<StringId, Label>,
-    global_var_map: &HashMap<StringId, usize>,
-) -> Result<(LabelGenerator, usize, bool), CodegenError> {
-    // (label_gen, num_labels, execution_might_continue)
-    match arm {
-        TypeCheckedIfArm::Cond(cond, body, orest, loc) => {
-            let (after_label, lg) = label_gen.next();
-            let (lg, c, cond_locals) = mavm_codegen_expr(
-                cond,
-                code,
-                num_locals,
-                &locals,
-                lg,
-                string_table,
-                import_func_map,
-                global_var_map,
-                0,
-            )?;
-            label_gen = lg;
-            code = c;
-            code.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::IsZero),
-                *loc,
-            ));
-            code.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Cjump),
-                Value::Label(after_label),
-                *loc,
-            ));
-            let (lg, nl1, might_continue_here, _) = mavm_codegen_statements(
-                body.to_vec(),
-                code,
-                num_locals,
-                locals,
-                label_gen,
-                string_table,
-                import_func_map,
-                global_var_map,
-            )?;
-            label_gen = lg;
-            if might_continue_here {
-                code.push(Instruction::from_opcode_imm(
-                    Opcode::AVMOpcode(AVMOpcode::Jump),
-                    Value::Label(end_label),
-                    *loc,
-                ));
-            }
-            code.push(Instruction::from_opcode(Opcode::Label(after_label), *loc));
-            let nl1 = max(nl1, cond_locals);
-            match orest {
-                Some(inner_arm) => {
-                    let (lg, nl2, inner_might_continue) = mavm_codegen_if_arm(
-                        inner_arm,
-                        end_label,
-                        code,
-                        num_locals,
-                        locals,
-                        label_gen,
-                        string_table,
-                        import_func_map,
-                        global_var_map,
-                    )?;
-                    Ok((
-                        lg,
-                        if nl1 > nl2 { nl1 } else { nl2 },
-                        inner_might_continue || might_continue_here,
-                    ))
-                }
-                None => {
-                    code.push(Instruction::from_opcode(Opcode::Label(end_label), *loc));
-                    Ok((label_gen, nl1, true))
-                }
-            }
-        }
-        TypeCheckedIfArm::Catchall(body, loc) => {
-            let (lg, nl, might_continue, _) = mavm_codegen_statements(
-                body.to_vec(),
-                code,
-                num_locals,
-                locals,
-                label_gen,
-                string_table,
-                import_func_map,
-                global_var_map,
-            )?;
-            code.push(Instruction::from_opcode(Opcode::Label(end_label), *loc));
-            Ok((lg, nl, might_continue))
-        }
-    }
-}
-
-///Generates code for the expression expr.
+/// Generates code for the expression expr.
 ///
 /// code represents the previously generated code, num_locals is the maximum number of locals used
 /// at any previous point in the callframe, locals is the table of local variable names to slot
 /// numbers, label_gen points to the first available locals slot, string_table is used to get
-/// builtins, import_func_map maps stringIDs for imported function to their associated labels,
+/// builtins, func_labels maps stringIDs for imported function to their associated labels,
 /// global_var_map maps stringIDs to their associated slot numbers, and prepushed_vals indicates the
 /// number of items on the stack at the start of the call, this is needed for early returns.
 ///
 /// If successful this function returns a tuple containing the updated label_gen, a mutable
 /// reference to the generated code, and a usize containing the number of locals used by the
-/// expression, otherwise it returns a CodegenError.
+/// expression, otherwise it returns a `CompileError`.
 fn mavm_codegen_expr<'a>(
     expr: &TypeCheckedExpr,
     mut code: &'a mut Vec<Instruction>,
     num_locals: usize,
-    locals: &CopyingSymTable<usize>,
+    locals: &HashMap<usize, usize>,
     mut label_gen: LabelGenerator,
     string_table: &StringTable,
-    import_func_map: &HashMap<StringId, Label>,
+    func_labels: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
     prepushed_vals: usize,
-) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
-    match expr {
-        TypeCheckedExpr::UnaryOp(op, tce, _, loc) => {
-            let (lg, c, exp_locals) = mavm_codegen_expr(
-                tce,
-                code,
+    scopes: &mut Vec<(String, Label, Option<Type>)>,
+    file_info_chart: &mut BTreeMap<u64, FileInfo>,
+    error_system: &mut ErrorSystem,
+    release_build: bool,
+) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CompileError> {
+    macro_rules! expr {
+        ($expr:expr) => {
+            expr!($expr, code, label_gen, 0)
+        };
+        ($expr:expr, $code:expr, $label_gen:expr, $prepushed:expr) => {
+            mavm_codegen_expr(
+                $expr,
+                $code,
                 num_locals,
                 locals,
-                label_gen,
+                $label_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
-                prepushed_vals,
-            )?;
+                prepushed_vals + $prepushed,
+                scopes,
+                file_info_chart,
+                error_system,
+                release_build,
+            )
+        };
+    }
+
+    let debug = expr.debug_info;
+    let loc = expr.debug_info.location;
+
+    macro_rules! opcode {
+        ($opcode:ident) => {
+            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), debug)
+        };
+        ($opcode:ident, $immediate:expr) => {
+            Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::$opcode), $immediate, debug)
+        };
+    }
+
+    match &expr.kind {
+        TypeCheckedExprKind::NewBuffer => {
+            code.push(opcode!(NewBuffer));
+            Ok((label_gen, code, num_locals))
+        }
+        TypeCheckedExprKind::Quote(bytes) => {
+            code.push(opcode!(
+                Noop,
+                Value::new_tuple(vec![
+                    Value::Int(Uint256::from_usize(bytes.len())),
+                    Value::Buffer(Buffer::from_bytes(bytes.clone())),
+                ])
+            ));
+            Ok((label_gen, code, num_locals))
+        }
+        TypeCheckedExprKind::Error => {
+            code.push(opcode!(Error));
+            Ok((label_gen, code, num_locals))
+        }
+        TypeCheckedExprKind::GetGas => {
+            code.push(opcode!(PushGas));
+            Ok((label_gen, code, num_locals))
+        }
+        TypeCheckedExprKind::SetGas(tce) => {
+            let (lg, c, exp_locals) = expr!(tce, code, label_gen, 0)?;
+            c.push(opcode!(SetGas));
+            Ok((lg, c, max(num_locals, exp_locals)))
+        }
+        TypeCheckedExprKind::UnaryOp(op, tce, _) => {
+            let (lg, c, exp_locals) = expr!(tce, code, label_gen, 0)?;
             label_gen = lg;
             code = c;
             let (maybe_opcode, maybe_imm) = match op {
@@ -854,7 +915,12 @@ fn mavm_codegen_expr<'a>(
                     let mask = Uint256::from_usize(2)
                         .exp(&Uint256::from_usize(160))
                         .sub(&Uint256::one())
-                        .ok_or_else(|| new_codegen_error("Underflow on substraction", *loc))?;
+                        .ok_or_else(|| {
+                            CompileError::new_codegen_error(
+                                "Underflow on subtraction".to_string(),
+                                loc,
+                            )
+                        })?;
                     (
                         Some(Opcode::AVMOpcode(AVMOpcode::BitwiseAnd)),
                         Some(Value::Int(mask)),
@@ -863,62 +929,30 @@ fn mavm_codegen_expr<'a>(
                 UnaryOp::Len => (Some(Opcode::TupleGet(3)), Some(Value::Int(Uint256::zero()))),
             };
             if let Some(opcode) = maybe_opcode {
-                code.push(Instruction::new(opcode, maybe_imm, *loc));
+                code.push(Instruction::new(opcode, maybe_imm, debug));
             }
             Ok((label_gen, code, max(num_locals, exp_locals)))
         }
-        TypeCheckedExpr::Variant(inner, loc) => {
-            let (lg, c, exp_locals) = mavm_codegen_expr(
-                inner,
-                code,
-                num_locals,
-                locals,
-                label_gen,
-                string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals,
-            )?;
-            c.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Noop),
-                Value::new_tuple(vec![Value::Int(Uint256::from_usize(1)), Value::none()]),
-                *loc,
+        TypeCheckedExprKind::Variant(inner) => {
+            let (lg, c, exp_locals) = expr!(inner, code, label_gen, 0)?;
+            c.push(opcode!(
+                Noop,
+                Value::new_tuple(vec![Value::Int(Uint256::from_usize(1)), Value::none()])
             ));
-            c.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Tset),
-                Value::Int(Uint256::from_u64(1)),
-                *loc,
-            ));
+            c.push(opcode!(Tset, Value::Int(Uint256::from_u64(1))));
             Ok((lg, c, max(num_locals, exp_locals)))
         }
-        TypeCheckedExpr::Binary(op, tce1, tce2, _, loc) => {
-            let (lg, c, left_locals) = mavm_codegen_expr(
-                tce2,
-                code,
-                num_locals,
-                locals,
-                label_gen,
-                string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals,
-            )?;
-            let (lg, c, right_locals) = mavm_codegen_expr(
-                tce1,
-                c,
-                num_locals,
-                locals,
-                lg,
-                string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals + 1,
-            )?;
+        TypeCheckedExprKind::Binary(op, tce1, tce2, _) => {
+            let (lg, c, left_locals) = expr!(tce2, code, label_gen, 0)?;
+            let (lg, c, right_locals) = expr!(tce1, c, lg, 1)?;
             label_gen = lg;
             code = c;
             let opcode = match op {
-                BinaryOp::Plus => Opcode::AVMOpcode(AVMOpcode::Plus),
-                BinaryOp::Minus => Opcode::AVMOpcode(AVMOpcode::Minus),
+                BinaryOp::GetBuffer8 => Opcode::AVMOpcode(AVMOpcode::GetBuffer8),
+                BinaryOp::GetBuffer64 => Opcode::AVMOpcode(AVMOpcode::GetBuffer64),
+                BinaryOp::GetBuffer256 => Opcode::AVMOpcode(AVMOpcode::GetBuffer256),
+                BinaryOp::Plus => Opcode::AVMOpcode(AVMOpcode::Add),
+                BinaryOp::Minus => Opcode::AVMOpcode(AVMOpcode::Sub),
                 BinaryOp::Times => Opcode::AVMOpcode(AVMOpcode::Mul),
                 BinaryOp::Div => Opcode::AVMOpcode(AVMOpcode::Div),
                 BinaryOp::Mod => Opcode::AVMOpcode(AVMOpcode::Mod),
@@ -936,23 +970,20 @@ fn mavm_codegen_expr<'a>(
                 BinaryOp::NotEqual => Opcode::AVMOpcode(AVMOpcode::Equal), // will negate
                 BinaryOp::BitwiseAnd => Opcode::AVMOpcode(AVMOpcode::BitwiseAnd),
                 BinaryOp::BitwiseOr => Opcode::AVMOpcode(AVMOpcode::BitwiseOr),
+                BinaryOp::ShiftLeft => Opcode::AVMOpcode(AVMOpcode::ShiftLeft),
+                BinaryOp::ShiftRight => Opcode::AVMOpcode(AVMOpcode::ShiftRight),
                 BinaryOp::BitwiseXor => Opcode::AVMOpcode(AVMOpcode::BitwiseXor),
                 BinaryOp::_LogicalAnd => Opcode::LogicalAnd,
                 BinaryOp::LogicalOr => Opcode::LogicalOr,
-                BinaryOp::Hash => Opcode::AVMOpcode(AVMOpcode::Hash2),
+                BinaryOp::Hash => Opcode::AVMOpcode(AVMOpcode::EthHash2),
             };
-            code.push(Instruction::from_opcode(opcode, *loc));
+            code.push(Instruction::from_opcode(opcode, debug));
             match op {
                 BinaryOp::NotEqual
                 | BinaryOp::LessEq
                 | BinaryOp::GreaterEq
                 | BinaryOp::SLessEq
-                | BinaryOp::SGreaterEq => {
-                    code.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::IsZero),
-                        *loc,
-                    ));
-                }
+                | BinaryOp::SGreaterEq => code.push(opcode!(IsZero)),
                 _ => {}
             }
             Ok((
@@ -961,419 +992,316 @@ fn mavm_codegen_expr<'a>(
                 max(num_locals, max(left_locals, right_locals)),
             ))
         }
-        TypeCheckedExpr::ShortcutOr(tce1, tce2, loc) => {
-            let (lg, c, left_locals) = mavm_codegen_expr(
-                tce1,
-                code,
-                num_locals,
-                locals,
+        TypeCheckedExprKind::Trinary(op, tce1, tce2, tce3, _) => {
+            let (lg, c, locals3) = expr!(tce3, code, label_gen, 0)?;
+            let (lg, c, locals2) = expr!(tce2, c, lg, 1)?;
+            let (lg, c, locals1) = expr!(tce1, c, lg, 2)?;
+            label_gen = lg;
+            code = c;
+            let opcode = match op {
+                TrinaryOp::SetBuffer8 => Opcode::AVMOpcode(AVMOpcode::SetBuffer8),
+                TrinaryOp::SetBuffer64 => Opcode::AVMOpcode(AVMOpcode::SetBuffer64),
+                TrinaryOp::SetBuffer256 => Opcode::AVMOpcode(AVMOpcode::SetBuffer256),
+            };
+            code.push(Instruction::from_opcode(opcode, debug));
+            Ok((
                 label_gen,
-                string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals,
-            )?;
+                code,
+                max(num_locals, max(locals1, max(locals2, locals3))),
+            ))
+        }
+        TypeCheckedExprKind::ShortcutOr(tce1, tce2) => {
+            let (lg, c, left_locals) = expr!(tce1, code, label_gen, 0)?;
             let (lab, lg) = lg.next();
-            c.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::Dup0),
-                *loc,
-            ));
-            c.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Cjump),
-                Value::Label(lab),
-                *loc,
-            ));
-            c.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::Pop),
-                *loc,
-            ));
-            let (lg, c, right_locals) = mavm_codegen_expr(
-                tce2,
-                c,
-                num_locals,
-                locals,
-                lg,
-                string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals,
-            )?;
-            c.push(Instruction::from_opcode(Opcode::Label(lab), *loc));
+            c.push(opcode!(Dup0));
+            c.push(opcode!(Cjump, Value::Label(lab)));
+            c.push(opcode!(Pop));
+            let (lg, c, right_locals) = expr!(tce2, c, lg, 0)?;
+            c.push(Instruction::from_opcode(Opcode::Label(lab), debug));
             Ok((lg, c, max(num_locals, max(left_locals, right_locals))))
         }
-        TypeCheckedExpr::ShortcutAnd(tce1, tce2, loc) => {
-            let (lg, c, left_locals) = mavm_codegen_expr(
-                tce1,
-                code,
-                num_locals,
-                locals,
-                label_gen,
-                string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals,
-            )?;
+        TypeCheckedExprKind::ShortcutAnd(tce1, tce2) => {
+            let (lg, c, left_locals) = expr!(tce1, code, label_gen, 0)?;
             let (lab, lg) = lg.next();
-            c.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::Dup0),
-                *loc,
-            ));
-            c.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::IsZero),
-                *loc,
-            ));
-            c.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Cjump),
-                Value::Label(lab),
-                *loc,
-            ));
-            c.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::Pop),
-                *loc,
-            ));
-            let (lg, c, right_locals) = mavm_codegen_expr(
-                tce2,
-                c,
-                num_locals,
-                locals,
-                lg,
-                string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals,
-            )?;
-            c.push(Instruction::from_opcode(Opcode::Label(lab), *loc));
+            c.push(opcode!(Dup0));
+            c.push(opcode!(IsZero));
+            c.push(opcode!(Cjump, Value::Label(lab)));
+            c.push(opcode!(Pop));
+            let (lg, c, right_locals) = expr!(tce2, c, lg, 0)?;
+            c.push(Instruction::from_opcode(Opcode::Label(lab), debug));
             Ok((lg, c, max(num_locals, max(left_locals, right_locals))))
         }
-        TypeCheckedExpr::LocalVariableRef(name, _, loc) => match locals.get(*name) {
+        TypeCheckedExprKind::LocalVariableRef(name, _) => match locals.get(name) {
             Some(n) => {
                 code.push(Instruction::from_opcode_imm(
                     Opcode::GetLocal,
-                    Value::Int(Uint256::from_usize(n)),
-                    *loc,
+                    Value::Int(Uint256::from_usize(*n)),
+                    debug,
                 ));
                 Ok((label_gen, code, num_locals))
             }
             None => {
                 println!("local: {:?}", *name);
-                Err(new_codegen_error(
-                    "tried to access non-existent local variable",
-                    *loc,
+                Err(CompileError::new_codegen_error(
+                    "tried to access non-existent local variable".to_string(),
+                    loc,
                 ))
             }
         },
-        TypeCheckedExpr::GlobalVariableRef(idx, _, loc) => {
-            code.push(Instruction::from_opcode(Opcode::GetGlobalVar(*idx), *loc));
+        TypeCheckedExprKind::ClosureLoad(id, nargs, local_space, captures, _) => {
+            // The closure ABI is based around the idea that a closure pointer is essentially an updatable
+            // function frame passed around and copied for each of its invocations. This means space is reserved
+            // for the args, which are dynamically written to at the time of a call. We'll call these "blanks",
+            // since as the closure is passed around, the values are not yet known. This yeilds the format:
+            //
+            //            ( codepoint, ( blank_arg1, blank_arg2, ..., blank_argN ) )
+            //
+            // Closures may also have local variables. Space for these is reserved after the args. These are
+            // read and written to during the execution of the closure's code.
+            //
+            //            ( codepoint, ( <blank_args>, local1, local2, ... localN ) )
+            //
+            // Closures may also have captures. These are placed after the args and are written to exactly
+            // once at the time of creation. They are effectively read-only, and by being at the end
+            // remove any type distinction between closures of different captures.
+            //
+            //            ( codepoint, ( <blank_args>, capture1, capture2, ..., captureN, <locals> ) )
+            //
+            // For efficiency, when a closure has no captures, we actually express it like a func pointer
+            // and then use code at runtime that checks the type.
+            //
+            //              codepoint
+            //
+            // In this manner, a function pointer is equivalent to a closure with 0 captures, which is
+            // why they are said to be the same type. Lastly, in the rare case a single item is present
+            // in the tuple, we de-tuplify for efficiency.
+            //
+            //            ( codepoint, ( item ) )   === becomes ===>   ( codepoint, item )
+            //
+
+            let label = Value::Label(*func_labels.get(id).unwrap());
+
+            if captures.is_empty() {
+                code.push(opcode!(Noop, label)); // Equivalent to a function call
+            } else {
+                for capture in captures {
+                    match locals.get(capture) {
+                        Some(slot) => code.push(Instruction::from_opcode_imm(
+                            Opcode::GetLocal,
+                            Value::Int(Uint256::from_usize(*slot)),
+                            debug,
+                        )),
+                        None => {
+                            return Err(CompileError::new_codegen_error(
+                                "capture doesn't exist".to_string(),
+                                loc,
+                            ))
+                        }
+                    }
+                }
+
+                let tree = TupleTree::new(*local_space, false);
+                code.push(opcode!(Noop, TupleTree::make_empty(&tree)));
+
+                for (index, capture) in captures.iter().enumerate().rev() {
+                    if let Some(_) = locals.get(capture) {
+                        code.push(Instruction::from_opcode_imm(
+                            Opcode::TupleSet(*local_space),
+                            Value::from(index + nargs),
+                            debug,
+                        ))
+                    }
+                }
+
+                let container = Value::new_tuple(vec![label, Value::none()]);
+
+                code.push(opcode!(Noop, container));
+                code.push(opcode!(Tset, Value::from(1u64)));
+            }
+
             Ok((label_gen, code, num_locals))
         }
-        TypeCheckedExpr::FuncRef(name, _, loc) => {
-            let the_label = match import_func_map.get(name) {
+        TypeCheckedExprKind::GlobalVariableRef(idx, _) => {
+            code.push(Instruction::from_opcode(Opcode::GetGlobalVar(*idx), debug));
+            Ok((label_gen, code, num_locals))
+        }
+        TypeCheckedExprKind::FuncRef(name, _) => {
+            let the_label = match func_labels.get(name) {
                 Some(label) => *label,
-                None => Label::Func(*name),
+                None => {
+                    return Err(CompileError::new_codegen_error(
+                        format!("No label for func ref {}", Color::red(name)),
+                        debug.location,
+                    ))
+                }
             };
-            code.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Noop),
-                Value::Label(the_label),
-                *loc,
-            ));
+            code.push(opcode!(Noop, Value::Label(the_label)));
             Ok((label_gen, code, num_locals))
         }
-        TypeCheckedExpr::TupleRef(tce, idx, _, loc) => {
+        TypeCheckedExprKind::TupleRef(tce, idx, _) => {
             let tce_type = tce.get_type();
             let tuple_size = if let Type::Tuple(fields) = tce_type {
                 fields.len()
             } else {
-                panic!("type-checking bug: tuple lookup in non-tuple type");
+                return Err(CompileError::new_codegen_error(
+                    format!(
+                        "type-checking bug: tuple lookup in non-tuple type {}",
+                        Color::red(tce_type.display())
+                    ),
+                    loc,
+                ));
             };
-            let (lg, c, exp_locals) = mavm_codegen_expr(
-                tce,
-                code,
-                num_locals,
-                locals,
-                label_gen,
-                string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals,
-            )?;
+            let (lg, c, exp_locals) = expr!(tce, code, label_gen, 0)?;
             c.push(Instruction::from_opcode_imm(
                 Opcode::TupleGet(tuple_size),
                 Value::Int(idx.clone()),
-                *loc,
+                debug,
             ));
             Ok((lg, c, max(num_locals, exp_locals)))
         }
-        TypeCheckedExpr::DotRef(tce, name, _, loc) => {
-            let tce_type = tce.get_type();
-            let struct_size = match tce_type.clone() {
-                Type::Struct(fields) => fields.len(),
-                _ => panic!("type-checking bug: struct lookup in non-struct type"),
-            };
-            let (lg, c, exp_locals) = mavm_codegen_expr(
-                tce,
-                code,
-                num_locals,
-                locals,
-                label_gen,
-                string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals,
-            )?;
+        TypeCheckedExprKind::DotRef(tce, slot_num, s_size, _) => {
+            let (lg, c, exp_locals) = expr!(tce, code, label_gen, 0)?;
             label_gen = lg;
             code = c;
-            match tce_type.get_struct_slot_by_name(*name) {
-                Some(slot_num) => {
-                    code.push(Instruction::from_opcode_imm(
-                        Opcode::TupleGet(struct_size),
-                        Value::Int(Uint256::from_usize(slot_num)),
-                        *loc,
-                    ));
-                    Ok((label_gen, code, max(num_locals, exp_locals)))
-                }
-                None => Err(new_codegen_error(
-                    "tried to get non-existent struct field",
-                    *loc,
-                )),
-            }
-        }
-        TypeCheckedExpr::Const(val, _, loc) => {
             code.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Noop),
-                val.clone(),
-                *loc,
+                Opcode::TupleGet(*s_size),
+                Value::Int(Uint256::from_usize(*slot_num)),
+                debug,
             ));
+            Ok((label_gen, code, max(num_locals, exp_locals)))
+        }
+        TypeCheckedExprKind::Const(val, _) => {
+            code.push(opcode!(Noop, val.clone()));
             Ok((label_gen, code, num_locals))
         }
-        TypeCheckedExpr::FunctionCall(fexpr, args, _, _, loc) => {
+        TypeCheckedExprKind::FunctionCall(fexpr, args, func_type, _) => {
             let n_args = args.len();
             let (ret_label, lg) = label_gen.next();
             label_gen = lg;
             let mut args_locals = 0;
             for i in 0..n_args {
-                let (lg, c, arg_locals) = mavm_codegen_expr(
-                    &args[n_args - 1 - i],
-                    code,
-                    num_locals,
-                    locals,
-                    label_gen,
-                    string_table,
-                    import_func_map,
-                    global_var_map,
-                    prepushed_vals + i,
-                )?;
+                let (lg, c, arg_locals) = expr!(&args[n_args - 1 - i], code, label_gen, i)?;
                 args_locals = max(args_locals, arg_locals);
                 label_gen = lg;
                 code = c;
             }
-            code.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Noop),
-                Value::Label(ret_label),
-                *loc,
-            ));
-            let (lg, c, fexpr_locals) = mavm_codegen_expr(
-                fexpr,
-                code,
-                num_locals,
-                locals,
-                label_gen,
-                string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals + n_args + 1,
-            )?;
+            // this is the thing that pushes the address to the stack
+            if &Type::Every != func_type {
+                code.push(opcode!(Noop, Value::Label(ret_label)));
+            }
+            let (lg, c, fexpr_locals) = expr!(fexpr, code, label_gen, n_args + 1)?;
+
+            // could be a closure, so let's check for the right interface
+            //   func vs (closure, frame)
+
+            let (codepoint_call, lg) = lg.next();
+
+            // check whether we're calling on a codepoint or closure tuple
+            c.push(opcode!(Dup0));
+            c.push(opcode!(Type));
+            c.push(opcode!(Equal, Value::from(1u64))); // 1 for codepoint
+            c.push(opcode!(Cjump, Value::Label(codepoint_call)));
+
+            // not a codepoint, let's unpack
+            c.push(opcode!(Dup0)); // return (closure, frame) (closure, frame)
+            c.push(opcode!(Tget, Value::from(1u64))); // return (closure, frame) frame
+            c.push(opcode!(Swap2)); // frame (closure, frame) return
+            c.push(opcode!(Swap1)); // frame return (closure, frame)
+            c.push(opcode!(Tget, Value::from(0u64))); // frame return closure
+
             c.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::Jump),
-                *loc,
+                Opcode::Label(codepoint_call),
+                debug,
             ));
-            c.push(Instruction::from_opcode(Opcode::Label(ret_label), *loc));
+            c.push(opcode!(Jump));
+            c.push(Instruction::from_opcode(Opcode::Label(ret_label), debug));
             Ok((lg, c, max(num_locals, max(fexpr_locals, args_locals))))
         }
-        TypeCheckedExpr::CodeBlock(body, ret_expr, loc) => {
-            let (lab_gen, nl, _cont, block_locals) = mavm_codegen_statements(
-                body.to_vec(),
-                code,
-                num_locals,
-                locals,
-                label_gen,
-                string_table,
-                import_func_map,
-                global_var_map,
-            )?;
-            if let Some(ret_expr) = ret_expr {
-                let new_locals = locals.push_multi(block_locals);
-                mavm_codegen_expr(
-                    ret_expr,
-                    code,
-                    num_locals,
-                    &new_locals,
-                    lab_gen,
-                    string_table,
-                    import_func_map,
-                    global_var_map,
-                    prepushed_vals,
-                )
-                .map(|(lg, code, exp_locals)| (lg, code, max(num_locals, max(exp_locals, nl))))
-            } else {
-                code.push(Instruction::from_opcode_imm(
-                    Opcode::AVMOpcode(AVMOpcode::Noop),
-                    Value::new_tuple(vec![]),
-                    *loc,
-                ));
-                Ok((lab_gen, code, max(num_locals, nl)))
-            }
-        }
-        TypeCheckedExpr::StructInitializer(fields, _, loc) => {
+        TypeCheckedExprKind::CodeBlock(block) => mavm_codegen_code_block(
+            block,
+            code,
+            num_locals,
+            locals,
+            label_gen,
+            string_table,
+            func_labels,
+            global_var_map,
+            prepushed_vals,
+            scopes,
+            file_info_chart,
+            error_system,
+            debug,
+            release_build,
+        ),
+        TypeCheckedExprKind::StructInitializer(fields, _) => {
             let fields_len = fields.len();
             let mut struct_locals = 0;
             for i in 0..fields_len {
                 let field = &fields[fields_len - 1 - i];
-                let (lg, c, field_locals) = mavm_codegen_expr(
-                    &field.value,
-                    code,
-                    num_locals,
-                    locals,
-                    label_gen,
-                    string_table,
-                    import_func_map,
-                    global_var_map,
-                    prepushed_vals + i,
-                )?;
+                let (lg, c, field_locals) = expr!(&field.value, code, label_gen, i)?;
                 struct_locals = max(struct_locals, field_locals);
                 label_gen = lg;
                 code = c;
             }
             let empty_vec = TupleTree::new(fields_len, false).make_empty();
-            code.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Noop),
-                empty_vec,
-                *loc,
-            ));
+            code.push(opcode!(Noop, empty_vec));
             for i in 0..fields_len {
                 code.push(Instruction::from_opcode_imm(
                     Opcode::TupleSet(fields_len),
                     Value::Int(Uint256::from_usize(i)),
-                    *loc,
+                    debug,
                 ));
             }
             Ok((label_gen, code, max(num_locals, struct_locals)))
         }
-        TypeCheckedExpr::Tuple(fields, _, loc) => {
+        TypeCheckedExprKind::Tuple(fields, _) => {
             let fields_len = fields.len();
             let mut tuple_locals = 0;
             for i in 0..fields_len {
                 let field = &fields[fields_len - 1 - i];
-                let (lg, c, field_locals) = mavm_codegen_expr(
-                    &field,
-                    code,
-                    num_locals,
-                    locals,
-                    label_gen,
-                    string_table,
-                    import_func_map,
-                    global_var_map,
-                    prepushed_vals + i,
-                )?;
+                let (lg, c, field_locals) = expr!(&field, code, label_gen, i)?;
                 tuple_locals = max(field_locals, tuple_locals);
                 label_gen = lg;
                 code = c;
             }
             let empty_vec = vec![Value::none(); fields_len];
-            code.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Noop),
-                Value::new_tuple(empty_vec),
-                *loc,
-            ));
+            code.push(opcode!(Noop, Value::new_tuple(empty_vec)));
             for i in 0..fields_len {
                 code.push(Instruction::from_opcode_imm(
                     Opcode::TupleSet(fields_len),
                     Value::Int(Uint256::from_usize(i)),
-                    *loc,
+                    debug,
                 ));
             }
             Ok((label_gen, code, max(num_locals, tuple_locals)))
         }
-        TypeCheckedExpr::ArrayRef(expr1, expr2, t, loc) => {
-            let call_type = Type::Func(
-                false,
-                vec![Type::Array(Box::new(Type::Any)), Type::Uint],
-                Box::new(t.clone()),
-            );
-            let the_expr = TypeCheckedExpr::FunctionCall(
-                Box::new(TypeCheckedExpr::FuncRef(
-                    *string_table.get_if_exists("builtin_arrayGet").unwrap(),
-                    call_type.clone(),
-                    *loc,
-                )),
-                vec![*expr1.clone(), *expr2.clone()],
-                call_type,
-                PropertiesList { pure: true },
-                *loc,
-            );
-            mavm_codegen_expr(
-                &the_expr,
-                code,
-                num_locals,
-                locals,
-                label_gen,
+        TypeCheckedExprKind::ArrayRef(expr1, expr2, t) => {
+            expr!(&TypeCheckedExpr::builtin(
+                "builtin_arrayGet",
+                vec![expr1, expr2],
+                t,
                 string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals,
-            )
+                DebugInfo::from(loc)
+            ))
         }
-        TypeCheckedExpr::FixedArrayRef(expr1, expr2, size, _, loc) => {
-            let (lg, c, exp1_locals) = mavm_codegen_expr(
-                expr1,
-                code,
-                num_locals,
-                locals,
-                label_gen,
-                string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals,
-            )?;
-            let (lg, c, exp2_locals) = mavm_codegen_expr(
-                expr2,
-                c,
-                num_locals,
-                locals,
-                lg,
-                string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals + 1,
-            )?;
+        TypeCheckedExprKind::FixedArrayRef(expr1, expr2, size, _) => {
+            let (lg, c, exp1_locals) = expr!(expr1)?;
+            let (lg, c, exp2_locals) = expr!(expr2, c, lg, 1)?;
             label_gen = lg;
             code = c;
             if *size != 8 {
                 //TODO: also skip check if size is larger power of 8
                 let (cont_label, lg) = label_gen.next();
                 label_gen = lg;
-                code.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Dup0),
-                    *loc,
-                ));
-                code.push(Instruction::from_opcode_imm(
-                    Opcode::AVMOpcode(AVMOpcode::GreaterThan),
-                    Value::Int(Uint256::from_usize(*size)),
-                    *loc,
-                ));
-                code.push(Instruction::from_opcode_imm(
-                    Opcode::AVMOpcode(AVMOpcode::Cjump),
-                    Value::Label(cont_label),
-                    *loc,
-                ));
-                code.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Panic),
-                    *loc,
-                ));
-                code.push(Instruction::from_opcode(Opcode::Label(cont_label), *loc));
+                code.push(opcode!(Dup0));
+                code.push(opcode!(GreaterThan, Value::Int(Uint256::from_usize(*size))));
+                code.push(opcode!(Cjump, Value::Label(cont_label)));
+                code.push(opcode!(Error));
+                code.push(Instruction::from_opcode(Opcode::Label(cont_label), debug));
             }
             code.push(Instruction::from_opcode(
                 Opcode::UncheckedFixedArrayGet(*size),
-                *loc,
+                debug,
             ));
             Ok((
                 label_gen,
@@ -1381,195 +1309,100 @@ fn mavm_codegen_expr<'a>(
                 max(num_locals, max(exp1_locals, exp2_locals)),
             ))
         }
-        TypeCheckedExpr::MapRef(map_expr, key_expr, _, loc) => {
-            let call_type = Type::Func(
-                false,
-                vec![Type::Any, Type::Any],
-                Box::new(Type::Option(Box::new(Type::Any))),
-            );
-            let the_expr = TypeCheckedExpr::FunctionCall(
-                Box::new(TypeCheckedExpr::FuncRef(
-                    *string_table.get_if_exists("builtin_kvsGet").unwrap(),
-                    call_type.clone(),
-                    *loc,
-                )),
-                vec![*map_expr.clone(), *key_expr.clone()],
-                call_type,
-                PropertiesList { pure: true },
-                *loc,
-            );
-            mavm_codegen_expr(
-                &the_expr,
-                code,
-                num_locals,
-                locals,
-                label_gen,
+        TypeCheckedExprKind::MapRef(map_expr, key_expr, t) => {
+            expr!(&TypeCheckedExpr::builtin(
+                "builtin_kvsGet",
+                vec![map_expr, key_expr],
+                t,
                 string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals,
-            )
+                DebugInfo::from(loc)
+            ))
         }
-        TypeCheckedExpr::NewArray(sz_expr, base_type, array_type, loc) => {
+        TypeCheckedExprKind::NewArray(sz_expr, base_type, array_type) => {
             let call_type = Type::Func(
-                false,
+                FuncProperties::pure(),
                 vec![Type::Uint, Type::Any],
                 Box::new(array_type.clone()),
             );
-            let default_val = base_type.default_value();
-            let the_expr = TypeCheckedExpr::FunctionCall(
-                Box::new(TypeCheckedExpr::FuncRef(
-                    *string_table.get_if_exists("builtin_arrayNew").unwrap(),
-                    call_type.clone(),
-                    *loc,
-                )),
-                vec![
-                    *sz_expr.clone(),
-                    TypeCheckedExpr::Const(default_val, Type::Any, *loc),
-                ],
-                call_type,
-                PropertiesList { pure: true },
-                *loc,
-            );
-            mavm_codegen_expr(
-                &the_expr,
-                code,
-                num_locals,
-                locals,
-                label_gen,
-                string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals,
-            )
+            let (default_val, _is_safe) = base_type.default_value();
+            let the_expr = TypeCheckedExpr {
+                kind: TypeCheckedExprKind::FunctionCall(
+                    Box::new(TypeCheckedExpr::new(
+                        TypeCheckedExprKind::FuncRef(
+                            string_table.get_if_exists("builtin_arrayNew").unwrap(),
+                            call_type.clone(),
+                        ),
+                        DebugInfo::from(loc),
+                    )),
+                    vec![
+                        *sz_expr.clone(),
+                        TypeCheckedExpr::new(
+                            TypeCheckedExprKind::Const(default_val, Type::Any),
+                            DebugInfo::from(loc),
+                        ),
+                    ],
+                    call_type,
+                    FuncProperties::pure(),
+                ),
+                debug_info: DebugInfo::from(loc),
+            };
+            expr!(&the_expr, code, label_gen, 0)
         }
-        TypeCheckedExpr::NewFixedArray(sz, bo_expr, _, loc) => {
+        TypeCheckedExprKind::NewFixedArray(sz, bo_expr, _) => {
             let mut expr_locals = 0;
             match bo_expr {
                 Some(expr) => {
-                    let (lg, c, some_locals) = mavm_codegen_expr(
-                        expr,
-                        code,
-                        num_locals,
-                        locals,
-                        label_gen,
-                        string_table,
-                        import_func_map,
-                        global_var_map,
-                        prepushed_vals,
-                    )?;
+                    let (lg, c, some_locals) = expr!(expr, code, label_gen, 0)?;
                     expr_locals = some_locals;
                     label_gen = lg;
                     code = c;
                     for _i in 0..7 {
-                        code.push(Instruction::from_opcode(
-                            Opcode::AVMOpcode(AVMOpcode::Dup0),
-                            *loc,
-                        ));
+                        code.push(opcode!(Dup0));
                     }
                     let empty_tuple = vec![Value::new_tuple(Vec::new()); 8];
-                    code.push(Instruction::from_opcode_imm(
-                        Opcode::AVMOpcode(AVMOpcode::Noop),
-                        Value::new_tuple(empty_tuple),
-                        *loc,
-                    ));
+                    code.push(opcode!(Noop, Value::new_tuple(empty_tuple)));
                     for i in 0..8 {
-                        code.push(Instruction::from_opcode_imm(
-                            Opcode::AVMOpcode(AVMOpcode::Tset),
-                            Value::Int(Uint256::from_usize(i)),
-                            *loc,
-                        ));
+                        code.push(opcode!(Tset, Value::Int(Uint256::from_usize(i))));
                     }
                 }
                 None => {
                     let empty_tuple = vec![Value::new_tuple(Vec::new()); 8];
-                    code.push(Instruction::from_opcode_imm(
-                        Opcode::AVMOpcode(AVMOpcode::Noop),
-                        Value::new_tuple(empty_tuple),
-                        *loc,
-                    ));
+                    code.push(opcode!(Noop, Value::new_tuple(empty_tuple)));
                 }
             }
             let mut tuple_size: usize = 8;
             while tuple_size < *sz {
                 for _i in 0..7 {
-                    code.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::Dup0),
-                        *loc,
-                    ));
+                    code.push(opcode!(Dup0));
                 }
                 let empty_tuple = vec![Value::new_tuple(Vec::new()); 8];
-                code.push(Instruction::from_opcode_imm(
-                    Opcode::AVMOpcode(AVMOpcode::Noop),
-                    Value::new_tuple(empty_tuple),
-                    *loc,
-                ));
+                code.push(opcode!(Noop, Value::new_tuple(empty_tuple)));
                 for i in 0..8 {
-                    code.push(Instruction::from_opcode_imm(
-                        Opcode::AVMOpcode(AVMOpcode::Tset),
-                        Value::Int(Uint256::from_usize(i)),
-                        *loc,
-                    ));
+                    code.push(opcode!(Tset, Value::Int(Uint256::from_usize(i))));
                 }
                 tuple_size *= 8;
             }
             Ok((label_gen, code, max(num_locals, expr_locals)))
         }
-        TypeCheckedExpr::NewMap(_, loc) => {
-            let call_type = Type::Func(false, vec![], Box::new(Type::Any));
-            let the_expr = TypeCheckedExpr::FunctionCall(
-                Box::new(TypeCheckedExpr::FuncRef(
-                    *string_table.get_if_exists("builtin_kvsNew").unwrap(),
-                    call_type.clone(),
-                    *loc,
-                )),
+        TypeCheckedExprKind::NewMap(t) => {
+            expr!(&TypeCheckedExpr::builtin(
+                "builtin_kvsNew",
                 vec![],
-                call_type,
-                PropertiesList { pure: true },
-                *loc,
-            );
-            mavm_codegen_expr(
-                &the_expr,
-                code,
-                num_locals,
-                locals,
-                label_gen,
+                t,
                 string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals,
-            )
+                DebugInfo::from(loc)
+            ))
         }
-        TypeCheckedExpr::ArrayMod(arr, index, val, _, loc) => {
-            let call_type = Type::Func(
-                false,
-                vec![arr.get_type(), index.get_type(), val.get_type()],
-                Box::new(arr.get_type()),
-            );
-            let the_expr = TypeCheckedExpr::FunctionCall(
-                Box::new(TypeCheckedExpr::FuncRef(
-                    *string_table.get_if_exists("builtin_arraySet").unwrap(),
-                    call_type.clone(),
-                    *loc,
-                )),
-                vec![*arr.clone(), *index.clone(), *val.clone()],
-                call_type,
-                PropertiesList { pure: true },
-                *loc,
-            );
-            mavm_codegen_expr(
-                &the_expr,
-                code,
-                num_locals,
-                locals,
-                label_gen,
+        TypeCheckedExprKind::ArrayMod(arr, index, val, t) => {
+            expr!(&TypeCheckedExpr::builtin(
+                "builtin_arraySet",
+                vec![arr, index, val],
+                t,
                 string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals,
-            )
+                DebugInfo::from(loc)
+            ))
         }
-        TypeCheckedExpr::FixedArrayMod(arr, index, val, size, _, loc) => codegen_fixed_array_mod(
+        TypeCheckedExprKind::FixedArrayMod(arr, index, val, size, _) => codegen_fixed_array_mod(
             arr,
             index,
             val,
@@ -1579,66 +1412,27 @@ fn mavm_codegen_expr<'a>(
             locals,
             label_gen,
             string_table,
-            import_func_map,
+            func_labels,
             global_var_map,
-            *loc,
+            debug,
+            prepushed_vals,
+            scopes,
+            file_info_chart,
+            error_system,
+            release_build,
         ),
-        TypeCheckedExpr::MapMod(map_expr, key_expr, val_expr, _, loc) => {
-            let call_type = Type::Func(
-                false,
-                vec![
-                    map_expr.get_type(),
-                    key_expr.get_type(),
-                    val_expr.get_type(),
-                ],
-                Box::new(map_expr.get_type()),
-            );
-            let the_expr = TypeCheckedExpr::FunctionCall(
-                Box::new(TypeCheckedExpr::FuncRef(
-                    *string_table.get_if_exists("builtin_kvsSet").unwrap(),
-                    call_type.clone(),
-                    *loc,
-                )),
-                vec![*map_expr.clone(), *key_expr.clone(), *val_expr.clone()],
-                call_type,
-                PropertiesList { pure: true },
-                *loc,
-            );
-            mavm_codegen_expr(
-                &the_expr,
-                code,
-                num_locals,
-                locals,
-                label_gen,
+        TypeCheckedExprKind::MapMod(map, key, val, t) => {
+            expr!(&TypeCheckedExpr::builtin(
+                "builtin_kvsSet",
+                vec![map, key, val],
+                t,
                 string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals,
-            )
+                DebugInfo::from(loc)
+            ))
         }
-        TypeCheckedExpr::StructMod(struc, index, val, t, loc) => {
-            let (lg, c, val_locals) = mavm_codegen_expr(
-                val,
-                code,
-                num_locals,
-                locals,
-                label_gen,
-                string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals,
-            )?;
-            let (lg, c, struc_locals) = mavm_codegen_expr(
-                struc,
-                c,
-                num_locals,
-                locals,
-                lg,
-                string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals + 1,
-            )?;
+        TypeCheckedExprKind::StructMod(struc, index, val, t) => {
+            let (lg, c, val_locals) = expr!(val, code, label_gen, 0)?;
+            let (lg, c, struc_locals) = expr!(struc, c, lg, 1)?;
             label_gen = lg;
             code = c;
             if let Type::Struct(v) = t {
@@ -1646,7 +1440,7 @@ fn mavm_codegen_expr<'a>(
                 code.push(Instruction::from_opcode_imm(
                     Opcode::TupleSet(struct_len),
                     Value::Int(Uint256::from_usize(*index)),
-                    *loc,
+                    debug,
                 ));
             } else {
                 panic!("impossible value in TypeCheckedExpr::StructMod");
@@ -1657,32 +1451,12 @@ fn mavm_codegen_expr<'a>(
                 max(num_locals, max(val_locals, struc_locals)),
             ))
         }
-        TypeCheckedExpr::Cast(expr, _, _) => mavm_codegen_expr(
-            expr,
-            code,
-            num_locals,
-            locals,
-            label_gen,
-            string_table,
-            import_func_map,
-            global_var_map,
-            prepushed_vals,
-        ),
-        TypeCheckedExpr::Asm(_, insns, args, _) => {
+        TypeCheckedExprKind::Cast(expr, _) => expr!(expr, code, label_gen, 0),
+        TypeCheckedExprKind::Asm(_, insns, args) => {
             let n_args = args.len();
             let mut args_locals = 0;
             for i in 0..n_args {
-                let (lg, c, arg_locals) = mavm_codegen_expr(
-                    &args[n_args - 1 - i],
-                    code,
-                    num_locals,
-                    locals,
-                    label_gen,
-                    string_table,
-                    import_func_map,
-                    global_var_map,
-                    prepushed_vals + i,
-                )?;
+                let (lg, c, arg_locals) = expr!(&args[n_args - 1 - i], code, label_gen, i)?;
                 args_locals = max(args_locals, arg_locals);
                 label_gen = lg;
                 code = c;
@@ -1692,61 +1466,200 @@ fn mavm_codegen_expr<'a>(
             }
             Ok((label_gen, code, max(num_locals, args_locals)))
         }
-        TypeCheckedExpr::Try(exp, _, loc) => {
-            let (label_gen, code, exp_locals) = mavm_codegen_expr(
-                exp,
+        TypeCheckedExprKind::Try(exp, _) => {
+            let (label_gen, code, exp_locals) = expr!(exp, code, label_gen, 0)?;
+            let (extract, label_gen) = label_gen.next();
+            code.push(opcode!(Dup0));
+            code.push(opcode!(Tget, Value::Int(Uint256::zero())));
+            code.push(opcode!(Cjump, Value::Label(extract)));
+            // We use the auxstack here to temporarily store the return value while we clear the temp values on the stack
+            if prepushed_vals > 0 {
+                code.push(opcode!(AuxPush));
+                for _ in 0..prepushed_vals {
+                    code.push(opcode!(Pop));
+                }
+                code.push(opcode!(AuxPop));
+            }
+            code.push(Instruction::from_opcode(Opcode::Return, debug));
+            code.push(Instruction::from_opcode(Opcode::Label(extract), debug));
+            code.push(opcode!(Tget, Value::Int(Uint256::one())));
+            Ok((label_gen, code, max(num_locals, exp_locals)))
+        }
+        TypeCheckedExprKind::If(cond, block, else_block, _) => {
+            let (lab_gen, code, cond_locals) = expr!(cond, code, label_gen, 0)?;
+            let (after_label, lab_gen) = lab_gen.next();
+            let (end_label, lab_gen) = lab_gen.next();
+            code.push(opcode!(IsZero));
+            code.push(opcode!(Cjump, Value::Label(after_label)));
+            let (block_lab_gen, code, block_locals) = mavm_codegen_code_block(
+                block,
                 code,
                 num_locals,
                 locals,
-                label_gen,
+                lab_gen,
                 string_table,
-                import_func_map,
+                func_labels,
                 global_var_map,
                 prepushed_vals,
+                scopes,
+                file_info_chart,
+                error_system,
+                debug,
+                release_build,
             )?;
-            let (extract, label_gen) = label_gen.next();
-            code.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::Dup0),
-                *loc,
-            ));
-            code.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Tget),
-                Value::Int(Uint256::zero()),
-                *loc,
-            ));
-            code.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Cjump),
-                Value::Label(extract),
-                *loc,
-            ));
-            // We use the auxstack here to temporarily store the return value while we clear the temp values on the stack
-            code.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                *loc,
-            ));
-            for _ in 0..prepushed_vals {
-                code.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Pop),
-                    *loc,
-                ));
+            if else_block.is_some() {
+                code.push(opcode!(Jump, Value::Label(end_label)));
             }
-            code.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                *loc,
-            ));
-            code.push(Instruction::from_opcode(Opcode::Return, *loc));
-            code.push(Instruction::from_opcode(Opcode::Label(extract), *loc));
+            code.push(Instruction::from_opcode(Opcode::Label(after_label), debug));
+            let (lg, code, else_locals) = if let Some(block) = else_block {
+                let (lg, code, else_locals) = mavm_codegen_code_block(
+                    block,
+                    code,
+                    num_locals,
+                    locals,
+                    block_lab_gen,
+                    string_table,
+                    func_labels,
+                    global_var_map,
+                    prepushed_vals,
+                    scopes,
+                    file_info_chart,
+                    error_system,
+                    debug,
+                    release_build,
+                )?;
+                (lg, code, else_locals)
+            } else {
+                (block_lab_gen, code, 0)
+            };
+            code.push(Instruction::from_opcode(Opcode::Label(end_label), debug));
+            Ok((lg, code, max(cond_locals, max(block_locals, else_locals))))
+        }
+        TypeCheckedExprKind::IfLet(name, expr, block, else_block, _) => {
+            let (after_label, lgg) = label_gen.next();
+            let slot_num = num_locals;
+            let mut new_locals = locals.clone();
+            new_locals.insert(*name, slot_num);
+            let (lg, c, exp_locals) = mavm_codegen_expr(
+                expr,
+                code,
+                num_locals,
+                &locals,
+                lgg,
+                string_table,
+                func_labels,
+                global_var_map,
+                prepushed_vals,
+                scopes,
+                file_info_chart,
+                error_system,
+                release_build,
+            )?;
+            label_gen = lg;
+            code = c;
+            code.push(opcode!(Dup0));
+            code.push(opcode!(Tget, Value::Int(Uint256::from_usize(0))));
+            code.push(opcode!(IsZero));
+            code.push(opcode!(Cjump, Value::Label(after_label)));
+            code.push(opcode!(Tget, Value::Int(Uint256::from_usize(1))));
             code.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Tget),
-                Value::Int(Uint256::one()),
-                *loc,
+                Opcode::SetLocal,
+                Value::Int(Uint256::from_usize(slot_num)),
+                debug,
             ));
-            Ok((label_gen, code, max(num_locals, exp_locals)))
+            let (lg, code, mut total_locals) = mavm_codegen_code_block(
+                &block,
+                code,
+                num_locals + 1,
+                &new_locals,
+                label_gen,
+                string_table,
+                func_labels,
+                global_var_map,
+                prepushed_vals,
+                scopes,
+                file_info_chart,
+                error_system,
+                debug,
+                release_build,
+            )?;
+            total_locals = max(total_locals, exp_locals);
+
+            let (outside_label, lg2) = lg.next();
+            code.push(opcode!(Jump, Value::Label(outside_label)));
+            code.push(Instruction::from_opcode(Opcode::Label(after_label), debug));
+            code.push(opcode!(Pop));
+            if let Some(else_block) = else_block {
+                let (lg3, _, else_locals) = mavm_codegen_code_block(
+                    &else_block,
+                    code,
+                    num_locals,
+                    &locals,
+                    lg2,
+                    string_table,
+                    func_labels,
+                    global_var_map,
+                    prepushed_vals,
+                    scopes,
+                    file_info_chart,
+                    error_system,
+                    debug,
+                    release_build,
+                )?;
+                total_locals = max(total_locals, else_locals);
+                label_gen = lg3;
+            } else {
+                label_gen = lg2;
+            };
+            code.push(Instruction::from_opcode(
+                Opcode::Label(outside_label),
+                debug,
+            ));
+            Ok((label_gen, code, total_locals))
+        }
+        TypeCheckedExprKind::Loop(body) => {
+            let slot_num = Value::Int(Uint256::from_usize(num_locals));
+            let (top_label, lgtop) = label_gen.next();
+            let (bottom_label, lg) = lgtop.next();
+            scopes.push(("_".to_string(), bottom_label, Some(Type::Tuple(vec![]))));
+            label_gen = lg;
+            code.push(opcode!(Noop, Value::Label(top_label)));
+            code.push(Instruction::from_opcode_imm(
+                Opcode::SetLocal,
+                slot_num.clone(),
+                debug,
+            ));
+            code.push(Instruction::from_opcode(Opcode::Label(top_label), debug));
+            let (lg, nl, _) = mavm_codegen_statements(
+                body.to_vec(),
+                code,
+                num_locals + 1,
+                locals,
+                label_gen,
+                string_table,
+                func_labels,
+                global_var_map,
+                prepushed_vals,
+                scopes,
+                file_info_chart,
+                error_system,
+                release_build,
+            )?;
+            scopes.pop();
+            label_gen = lg;
+            code.push(Instruction::from_opcode_imm(
+                Opcode::GetLocal,
+                slot_num,
+                debug,
+            ));
+            code.push(opcode!(Jump));
+            code.push(Instruction::from_opcode(Opcode::Label(bottom_label), debug));
+            Ok((label_gen, code, max(num_locals + 1, nl)))
         }
     }
 }
 
-///Used to codegen the FixedArrayMod variant of TypeCheckedExpr.
+/// Used to codegen the FixedArrayMod variant of TypeCheckedExpr.
 fn codegen_fixed_array_mod<'a>(
     arr_expr: &TypeCheckedExpr,
     idx_expr: &TypeCheckedExpr,
@@ -1754,13 +1667,18 @@ fn codegen_fixed_array_mod<'a>(
     size: usize,
     code_in: &'a mut Vec<Instruction>,
     num_locals: usize,
-    locals: &CopyingSymTable<usize>,
+    locals: &HashMap<usize, usize>,
     label_gen_in: LabelGenerator,
     string_table: &StringTable,
-    import_func_map: &HashMap<StringId, Label>,
+    func_labels: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
-    location: Option<Location>,
-) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
+    debug_info: DebugInfo,
+    prepushed_vals: usize,
+    scopes: &mut Vec<(String, Label, Option<Type>)>,
+    file_info_chart: &mut BTreeMap<u64, FileInfo>,
+    error_system: &mut ErrorSystem,
+    release_build: bool,
+) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CompileError> {
     let (label_gen, code, val_locals) = mavm_codegen_expr(
         val_expr,
         code_in,
@@ -1768,9 +1686,13 @@ fn codegen_fixed_array_mod<'a>(
         locals,
         label_gen_in,
         string_table,
-        import_func_map,
+        func_labels,
         global_var_map,
-        0,
+        prepushed_vals,
+        scopes,
+        file_info_chart,
+        error_system,
+        release_build,
     )?;
     let (label_gen, code, arr_locals) = mavm_codegen_expr(
         arr_expr,
@@ -1779,9 +1701,13 @@ fn codegen_fixed_array_mod<'a>(
         locals,
         label_gen,
         string_table,
-        import_func_map,
+        func_labels,
         global_var_map,
-        1,
+        prepushed_vals + 1,
+        scopes,
+        file_info_chart,
+        error_system,
+        release_build,
     )?;
     let (mut label_gen, code, idx_locals) = mavm_codegen_expr(
         idx_expr,
@@ -1790,9 +1716,13 @@ fn codegen_fixed_array_mod<'a>(
         locals,
         label_gen,
         string_table,
-        import_func_map,
+        func_labels,
         global_var_map,
-        2,
+        prepushed_vals + 2,
+        scopes,
+        file_info_chart,
+        error_system,
+        release_build,
     )?;
     if size != 8 {
         // TODO: safe for if-condition to say size does not equal any power of 8
@@ -1800,23 +1730,26 @@ fn codegen_fixed_array_mod<'a>(
         label_gen = lg;
         code.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::Dup0),
-            location,
+            debug_info,
         ));
         code.push(Instruction::from_opcode_imm(
             Opcode::AVMOpcode(AVMOpcode::GreaterThan),
             Value::Int(Uint256::from_usize(size)),
-            location,
+            debug_info,
         ));
         code.push(Instruction::from_opcode_imm(
             Opcode::AVMOpcode(AVMOpcode::Cjump),
             Value::Label(ok_label),
-            location,
+            debug_info,
         ));
         code.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Panic),
-            location,
+            Opcode::AVMOpcode(AVMOpcode::Error),
+            debug_info,
         ));
-        code.push(Instruction::from_opcode(Opcode::Label(ok_label), location));
+        code.push(Instruction::from_opcode(
+            Opcode::Label(ok_label),
+            debug_info,
+        ));
     }
     let exp_locals = max(val_locals, max(arr_locals, idx_locals));
     codegen_fixed_array_mod_2(
@@ -1827,94 +1760,68 @@ fn codegen_fixed_array_mod<'a>(
         locals,
         label_gen,
         string_table,
-        import_func_map,
+        func_labels,
         global_var_map,
-        location,
+        debug_info,
     )
     .map(|(lg, code, num_locals)| (lg, code, max(num_locals, exp_locals)))
 }
 
-///Used by codegen_fixed_array_mod, you should not call this directly.
+/// Used by codegen_fixed_array_mod, you should not call this directly.
 fn codegen_fixed_array_mod_2<'a>(
     val_expr: &TypeCheckedExpr,
     size: usize,
     code_in: &'a mut Vec<Instruction>,
     num_locals: usize,
-    locals: &CopyingSymTable<usize>,
+    locals: &HashMap<usize, usize>,
     label_gen_in: LabelGenerator,
     string_table: &StringTable,
-    import_func_map: &HashMap<StringId, Label>,
+    func_labels: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
-    location: Option<Location>,
-) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
+    debug_info: DebugInfo,
+) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CompileError> {
+    macro_rules! opcode {
+        ($opcode:ident) => {
+            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), debug_info)
+        };
+        ($opcode:ident, $immediate:expr) => {
+            Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::$opcode),
+                $immediate,
+                debug_info,
+            )
+        };
+    }
+
     if size <= 8 {
         // stack: idx tuple val
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Tset),
-            location,
-        ));
+        code_in.push(opcode!(Tset));
         Ok((label_gen_in, code_in, num_locals))
     } else {
         let tuple_size = Value::Int(Uint256::from_usize(TUPLE_SIZE));
         // stack: idx tupletree val
-        code_in.push(Instruction::from_opcode_imm(
-            Opcode::AVMOpcode(AVMOpcode::Dup2),
-            tuple_size.clone(),
-            location,
-        ));
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::AuxPush),
-            location,
-        ));
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Dup1),
-            location,
-        ));
+        code_in.push(opcode!(Dup2, tuple_size.clone()));
+        code_in.push(opcode!(AuxPush));
+        code_in.push(opcode!(Dup1));
+
         // stack: idx TUPLE_SIZE idx tupletree val; aux: tupletree
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Mod),
-            location,
-        ));
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Dup0),
-            location,
-        ));
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::AuxPush),
-            location,
-        ));
+        code_in.push(opcode!(Mod));
+        code_in.push(opcode!(Dup0));
+        code_in.push(opcode!(AuxPush));
+
         // stack: slot idx tupletree val; aux: slot tupletree
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Swap1),
-            location,
-        ));
-        code_in.push(Instruction::from_opcode_imm(
-            Opcode::AVMOpcode(AVMOpcode::Swap1),
-            tuple_size,
-            location,
-        ));
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Div),
-            location,
-        ));
+        code_in.push(opcode!(Swap1));
+        code_in.push(opcode!(Swap1, tuple_size));
+        code_in.push(opcode!(Div));
+
         // stack: subidx slot tupletree val; aux: slot tupletree
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Swap2),
-            location,
-        ));
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Swap1),
-            location,
-        ));
+        code_in.push(opcode!(Swap2));
+        code_in.push(opcode!(Swap1));
+
         // stack: slot tupletree subidx val; aux: slot tupletree
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Tget),
-            location,
-        ));
-        code_in.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Swap1),
-            location,
-        ));
+        code_in.push(opcode!(Tget));
+        code_in.push(opcode!(Swap1));
+
         // stack: subidx subtupletree val; aux: slot tupletree
 
         let (label_gen, code, inner_locals) = codegen_fixed_array_mod_2(
@@ -1925,29 +1832,18 @@ fn codegen_fixed_array_mod_2<'a>(
             locals,
             label_gen_in,
             string_table,
-            import_func_map,
+            func_labels,
             global_var_map,
-            location,
+            debug_info,
         )?;
 
         // stack: newsubtupletree; aux: slot tupletree
-        code.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::AuxPop),
-            location,
-        ));
-        code.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::AuxPop),
-            location,
-        ));
-        code.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Swap1),
-            location,
-        ));
+        code.push(opcode!(AuxPop));
+        code.push(opcode!(AuxPop));
+        code.push(opcode!(Swap1));
+
         // stack: slot tupletree newsubtupletree
-        code.push(Instruction::from_opcode(
-            Opcode::AVMOpcode(AVMOpcode::Tset),
-            location,
-        ));
+        code.push(opcode!(Tset));
 
         Ok((label_gen, code, max(num_locals, inner_locals)))
     }

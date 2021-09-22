@@ -2,16 +2,18 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::mavm::Value;
-use crate::run::load_from_file;
+use crate::mavm::{Buffer, Value};
+use crate::run::{load_from_file_and_env, ProfilerMode};
 use crate::uint256::Uint256;
-use ethers_core::rand::thread_rng;
+use ethers_core::rand::rngs::StdRng;
+use ethers_core::rand::SeedableRng;
 use ethers_core::types::TransactionRequest;
 use ethers_core::utils::keccak256;
 use ethers_signers::{Signer, Wallet};
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::io::Read;
+use std::sync::Arc;
 use std::{collections::HashMap, fs::File, io, path::Path};
 
 #[derive(Debug, Clone)]
@@ -21,21 +23,58 @@ pub struct RuntimeEnvironment {
     pub current_block_num: Uint256,
     pub current_timestamp: Uint256,
     pub logs: Vec<Value>,
-    pub sends: Vec<Value>,
+    pub sends: Vec<Vec<u8>>,
     pub next_inbox_seq_num: Uint256,
     pub caller_seq_nums: HashMap<Uint256, Uint256>,
     next_id: Uint256, // used to assign unique (but artificial) txids to messages
     pub recorder: RtEnvRecorder,
     compressor: TxCompressor,
+    charging_policy: Option<(Uint256, Uint256, Uint256)>,
+    num_wallets: u64,
+    chain_init_message: Vec<u8>,
+    pub force_zero_gas_price: bool,
 }
 
 impl RuntimeEnvironment {
-    pub fn new(chain_address: Uint256) -> Self {
+    pub fn new(charging_policy: Option<(Uint256, Uint256, Uint256)>) -> Self {
+        RuntimeEnvironment::new_with_blocknum_timestamp(
+            Uint256::from_u64(100_000),
+            Uint256::from_u64(10_000_000),
+            charging_policy,
+            None,
+        )
+    }
+
+    pub fn _new_options() -> Self {
+        RuntimeEnvironment::new_with_blocknum_timestamp(
+            Uint256::from_u64(100_000),
+            Uint256::from_u64(10_000_000),
+            None,
+            None,
+        )
+    }
+
+    pub fn _new_with_owner(owner: Option<Uint256>) -> Self {
+        RuntimeEnvironment::new_with_blocknum_timestamp(
+            Uint256::from_u64(100_000),
+            Uint256::from_u64(10_000_000),
+            None,
+            owner,
+        )
+    }
+
+    pub fn new_with_blocknum_timestamp(
+        blocknum: Uint256,
+        timestamp: Uint256,
+        charging_policy: Option<(Uint256, Uint256, Uint256)>,
+        owner: Option<Uint256>,
+    ) -> Self {
+        let chain_id = 42161;
         let mut ret = RuntimeEnvironment {
-            chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
+            chain_id,
             l1_inbox: vec![],
-            current_block_num: Uint256::zero(),
-            current_timestamp: Uint256::zero(),
+            current_block_num: blocknum,
+            current_timestamp: timestamp,
             logs: Vec::new(),
             sends: Vec::new(),
             next_inbox_seq_num: Uint256::zero(),
@@ -43,24 +82,63 @@ impl RuntimeEnvironment {
             next_id: Uint256::zero(),
             recorder: RtEnvRecorder::new(),
             compressor: TxCompressor::new(),
+            charging_policy: charging_policy.clone(),
+            num_wallets: 0,
+            chain_init_message: RuntimeEnvironment::get_params_bytes(owner, chain_id),
+            force_zero_gas_price: false,
         };
-        ret.insert_l1_message(4, chain_address, &RuntimeEnvironment::get_params_bytes());
+
+        ret.send_chain_init_message();
         ret
     }
 
-    fn get_params_bytes() -> Vec<u8> {
+    pub fn send_chain_init_message(&mut self) {
+        self.insert_l1_message(
+            4,
+            Uint256::zero(),
+            &self.chain_init_message.clone(),
+            None,
+            None,
+        );
+    }
+
+    fn get_params_bytes(owner: Option<Uint256>, chain_id: u64) -> Vec<u8> {
         let mut buf = Vec::new();
-        buf.extend(Uint256::from_u64(3 * 60 * 60 * 1000).to_bytes_be()); // grace period in ticks
-        buf.extend(Uint256::from_u64(100_000_000 / 1000).to_bytes_be()); // arbgas speed limit per tick
-        buf.extend(Uint256::from_u64(10_000_000_000).to_bytes_be()); // max execution steps
-        buf.extend(Uint256::from_u64(1000).to_bytes_be()); // base stake amount in wei
-        buf.extend(Uint256::zero().to_bytes_be()); // staking token address (zero means ETH)
-        buf.extend(Uint256::zero().to_bytes_be()); // owner address
+        let params_to_set = if let Some(the_owner) = owner {
+            vec![
+                ("ChainOwner", the_owner),
+                ("ChainID", Uint256::from_u64(chain_id)),
+            ]
+        } else {
+            vec![("ChainID", Uint256::from_u64(chain_id))]
+        };
+        for (name, val) in params_to_set {
+            buf.extend(&keccak256(name.as_bytes()));
+            buf.extend(val.to_bytes_be());
+        }
+
         buf
     }
 
-    pub fn new_wallet(&self) -> Wallet {
-        Wallet::new(&mut thread_rng()).set_chain_id(self.get_chain_id())
+    pub fn _advance_time(
+        &mut self,
+        delta_blocks: Uint256,
+        delta_timestamp: Option<Uint256>,
+        send_heartbeat_message: bool,
+    ) {
+        self.current_block_num = self.current_block_num.add(&delta_blocks);
+        self.current_timestamp = self
+            .current_timestamp
+            .add(&delta_timestamp.unwrap_or(Uint256::from_u64(13).mul(&delta_blocks)));
+        if send_heartbeat_message {
+            self.insert_l2_message(Uint256::zero(), &[6u8]);
+        }
+    }
+
+    pub fn new_wallet(&mut self) -> Wallet {
+        let mut r = StdRng::seed_from_u64(42 + self.num_wallets);
+        self.num_wallets = self.num_wallets + 1;
+        Wallet::new(&mut r).set_chain_id(self.get_chain_id())
     }
 
     pub fn get_chain_id(&self) -> u64 {
@@ -71,14 +149,23 @@ impl RuntimeEnvironment {
         self.l1_inbox = contents;
     }
 
-    pub fn insert_l1_message(&mut self, msg_type: u8, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
+    pub fn insert_l1_message(
+        &mut self,
+        msg_type: u8,
+        sender_addr: Uint256,
+        msg: &[u8],
+        block_num: Option<Uint256>,
+        timestamp: Option<Uint256>,
+    ) -> Uint256 {
         let l1_msg = Value::new_tuple(vec![
             Value::Int(Uint256::from_usize(msg_type as usize)),
-            Value::Int(self.current_block_num.clone()),
-            Value::Int(self.current_timestamp.clone()),
+            Value::Int(block_num.unwrap_or(self.current_block_num.clone())),
+            Value::Int(timestamp.unwrap_or(self.current_timestamp.clone())),
             Value::Int(sender_addr),
             Value::Int(self.next_inbox_seq_num.clone()),
-            bytestack_from_bytes(msg),
+            Value::Int(self.get_gas_price()),
+            Value::Int(Uint256::from_usize(msg.len())),
+            Value::new_buffer(msg.to_vec()),
         ]);
         let msg_id =
             Uint256::avm_hash2(&Uint256::from_u64(self.chain_id), &self.next_inbox_seq_num);
@@ -89,23 +176,86 @@ impl RuntimeEnvironment {
         msg_id
     }
 
-    pub fn insert_l2_message(
+    pub fn _insert_retryable_tx_message(
         &mut self,
-        sender_addr: Uint256,
-        msg: &[u8],
-        is_buddy_deploy: bool,
-    ) -> Uint256 {
-        let default_id = self.insert_l1_message(
-            if is_buddy_deploy { 5 } else { 3 },
-            sender_addr.clone(),
-            msg,
-        );
+        sender: Uint256,
+        destination: Uint256,
+        callvalue: Uint256,
+        deposit: Uint256,
+        max_submission_cost: Uint256,
+        credit_back_address: Uint256,
+        beneficiary: Uint256,
+        max_gas_immed: Uint256,
+        gas_price_immed: Uint256,
+        calldata: &[u8],
+    ) -> (Uint256, Uint256, Option<Uint256>) {
+        let mut msg = vec![];
+        msg.extend(destination.to_bytes_be());
+        msg.extend(callvalue.to_bytes_be());
+        msg.extend(deposit.to_bytes_be());
+        msg.extend(max_submission_cost.to_bytes_be());
+        msg.extend(credit_back_address.to_bytes_be());
+        msg.extend(beneficiary.to_bytes_be());
+        msg.extend(max_gas_immed.to_bytes_be());
+        msg.extend(gas_price_immed.to_bytes_be());
+        msg.extend(Uint256::from_usize(calldata.len()).to_bytes_be());
+        msg.extend(calldata);
+
+        let submit_req_id = self.insert_l1_message(9u8, sender, &msg, None, None);
+        let mut buf = submit_req_id.to_bytes_be();
+        let mut buf2 = buf.clone();
+        buf.extend(&[0u8; 32]);
+        buf2.extend(Uint256::one().to_bytes_be());
+        (
+            submit_req_id,
+            Uint256::from_bytes(&keccak256(&buf)),
+            if max_gas_immed != Uint256::zero() {
+                Some(Uint256::from_bytes(&keccak256(&buf2)))
+            } else {
+                None
+            },
+        )
+    }
+
+    pub fn get_gas_price(&self) -> Uint256 {
+        if self.force_zero_gas_price {
+            Uint256::zero()
+        } else {
+            Uint256::_from_gwei(2)
+        }
+    }
+
+    pub fn insert_l2_message(&mut self, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
+        let default_id = self.insert_l1_message(3, sender_addr.clone(), msg, None, None);
         if msg[0] == 0 {
             Uint256::avm_hash2(
                 &sender_addr,
                 &Uint256::avm_hash2(
                     &Uint256::from_u64(self.chain_id),
-                    &hash_bytestack(bytestack_from_bytes(msg)).unwrap(),
+                    &Uint256::from_bytes(&keccak256(msg)),
+                ),
+            )
+        } else {
+            default_id
+        }
+    }
+
+    #[cfg(test)]
+    pub fn insert_l2_message_for_gas_estimation(&mut self, sender_addr: Uint256, msg: &[u8]) {
+        let _ = self.insert_l1_message(10u8, sender_addr, msg, None, None);
+    }
+
+    pub fn insert_l2_message_with_deposit(&mut self, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
+        if (msg[0] != 0u8) && (msg[0] != 1u8) {
+            panic!();
+        }
+        let default_id = self.insert_l1_message(7, sender_addr.clone(), msg, None, None);
+        if msg[0] == 0 {
+            Uint256::avm_hash2(
+                &sender_addr,
+                &Uint256::avm_hash2(
+                    &Uint256::from_u64(self.chain_id),
+                    &hash_bytestack(_bytestack_from_bytes(msg)).unwrap(),
                 ),
             )
         } else {
@@ -117,84 +267,124 @@ impl RuntimeEnvironment {
         &mut self,
         sender_addr: Uint256,
         max_gas: Uint256,
-        gas_price_bid: Uint256,
+        gas_price_bid: Option<Uint256>,
         to_addr: Uint256,
         value: Uint256,
         data: &[u8],
+        with_deposit: bool,
     ) -> Uint256 {
         let mut buf = vec![0u8];
-        let seq_num = self.get_and_incr_seq_num(&sender_addr.clone());
+        let seq_num = self.get_seq_num(&sender_addr.clone(), true);
         buf.extend(max_gas.to_bytes_be());
-        buf.extend(gas_price_bid.to_bytes_be());
+        buf.extend(gas_price_bid.unwrap_or(self.get_gas_price()).to_bytes_be());
         buf.extend(seq_num.to_bytes_be());
         buf.extend(to_addr.to_bytes_be());
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr.clone(), &buf, false)
+        if with_deposit {
+            self.insert_l2_message_with_deposit(sender_addr.clone(), &buf)
+        } else {
+            self.insert_l2_message(sender_addr.clone(), &buf)
+        }
     }
 
-    pub fn insert_buddy_deploy_message(
+    #[cfg(test)]
+    pub fn insert_gas_estimation_message(
+        &mut self,
+        max_gas: Uint256,
+        gas_price_bid: Option<Uint256>,
+        to_addr: Uint256,
+        value: Uint256,
+        data: &[u8],
+        aggregator: Uint256,
+        wallet: &Wallet,
+    ) {
+        let mut buf = vec![3u8];
+        buf.extend(aggregator.to_bytes_be());
+        buf.extend(max_gas.clone().to_bytes_be());
+
+        let _ = self._append_compressed_and_signed_tx_message_to_batch(
+            &mut buf,
+            max_gas,
+            gas_price_bid,
+            to_addr,
+            value,
+            Vec::from(data),
+            wallet,
+            true,
+        );
+
+        self.insert_l2_message_for_gas_estimation(aggregator, &buf)
+    }
+
+    pub fn insert_tx_message_from_contract(
         &mut self,
         sender_addr: Uint256,
         max_gas: Uint256,
-        gas_price_bid: Uint256,
+        gas_price_bid: Option<Uint256>,
+        to_addr: Uint256,
         value: Uint256,
         data: &[u8],
+        with_deposit: bool,
     ) -> Uint256 {
         let mut buf = vec![1u8];
         buf.extend(max_gas.to_bytes_be());
-        buf.extend(gas_price_bid.to_bytes_be());
-        buf.extend(Uint256::zero().to_bytes_be()); // destination address 0
+        buf.extend(gas_price_bid.unwrap_or(self.get_gas_price()).to_bytes_be());
+        buf.extend(to_addr.to_bytes_be());
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr.clone(), &buf, true)
+        if with_deposit {
+            self.insert_l2_message_with_deposit(sender_addr.clone(), &buf)
+        } else {
+            self.insert_l2_message(sender_addr.clone(), &buf)
+        }
     }
 
     pub fn new_batch(&self) -> Vec<u8> {
         vec![3u8]
     }
 
-    pub fn make_signed_l2_message(
-        &mut self,
-        sender_addr: Uint256,
-        max_gas: Uint256,
-        gas_price_bid: Uint256,
-        to_addr: Uint256,
-        value: Uint256,
-        calldata: Vec<u8>,
-        wallet: &Wallet,
-    ) -> (Vec<u8>, Vec<u8>) {
-        let seq_num = self.get_and_incr_seq_num(&sender_addr);
-        let tx_for_signing = TransactionRequest::new()
-            .from(sender_addr.to_h160())
-            .to(to_addr.to_h160())
-            .gas(max_gas.to_u256())
-            .gas_price(gas_price_bid.to_u256())
-            .value(value.to_u256())
-            .data(calldata)
-            .nonce(seq_num.to_u256());
-        let tx = wallet.sign_transaction(tx_for_signing).unwrap();
-
-        let rlp_buf = tx.rlp().as_ref().to_vec();
-        let mut buf = vec![4u8];
-        buf.extend(rlp_buf.clone());
-        (buf, keccak256(&rlp_buf).to_vec())
+    pub fn _new_sequencer_batch(&self, delay: Option<(Uint256, Uint256)>) -> Vec<u8> {
+        let (delay_blocks, delay_seconds) = delay.unwrap_or((Uint256::one(), Uint256::one()));
+        let (release_block_num, release_timestamp) = if (self.current_block_num <= delay_blocks)
+            || (self.current_timestamp <= delay_seconds)
+        {
+            (Uint256::zero(), Uint256::zero())
+        } else {
+            (
+                self.current_block_num.sub(&delay_blocks).unwrap(),
+                self.current_timestamp.sub(&delay_seconds).unwrap(),
+            )
+        };
+        let low_order_bnum = release_block_num.trim_to_u64() & 0xffff;
+        let low_order_ts = release_timestamp.trim_to_u64() & 0xffffff;
+        let ret = vec![
+            5u8,
+            (low_order_bnum >> 8) as u8,
+            (low_order_bnum & 0xff) as u8,
+            (low_order_ts >> 16) as u8,
+            ((low_order_ts >> 8) & 0xff) as u8,
+            (low_order_ts & 0xff) as u8,
+        ];
+        ret
     }
 
     pub fn make_compressed_and_signed_l2_message(
         &mut self,
-        gas_price: Uint256,
+        gas_price: Option<Uint256>,
         gas_limit: Uint256,
         to_addr: Uint256,
         value: Uint256,
         calldata: &[u8],
         wallet: &Wallet,
+        is_gas_estimation: bool,
     ) -> (Vec<u8>, Vec<u8>) {
         let sender = Uint256::from_bytes(wallet.address().as_bytes());
-        let mut result = vec![7u8];
-        let seq_num = self.get_and_incr_seq_num(&sender);
+        let mut result = vec![7u8, 0xffu8];
+        let seq_num = self.get_seq_num(&sender, !is_gas_estimation);
+        let gas_price = gas_price.unwrap_or(self.get_gas_price());
         result.extend(seq_num.rlp_encode());
         result.extend(gas_price.rlp_encode());
         result.extend(gas_limit.rlp_encode());
@@ -214,54 +404,84 @@ impl RuntimeEnvironment {
 
         result.extend(Uint256::from_u256(&tx.r).to_bytes_be());
         result.extend(Uint256::from_u256(&tx.s).to_bytes_be());
-        result.extend(vec![(tx.v.as_u64() & 0xff) as u8]);
+        result.extend(vec![(tx.v.as_u64() % 2) as u8]);
 
         (result, keccak256(tx.rlp().as_ref()).to_vec())
     }
 
-    pub fn append_signed_tx_message_to_batch(
+    /*
+    pub fn _make_compressed_tx_for_bls(
         &mut self,
-        batch: &mut Vec<u8>,
-        sender_addr: Uint256,
-        max_gas: Uint256,
-        gas_price_bid: Uint256,
+        sender: &Uint256,
+        gas_price: Option<Uint256>,
+        gas_limit: Uint256,
         to_addr: Uint256,
         value: Uint256,
-        calldata: Vec<u8>,
-        wallet: &Wallet,
-    ) -> Vec<u8> {
-        let (msg, tx_id_bytes) = self.make_signed_l2_message(
-            sender_addr,
-            max_gas,
-            gas_price_bid,
-            to_addr,
-            value,
-            calldata,
-            wallet,
-        );
-        let msg_size: u64 = msg.len().try_into().unwrap();
-        let rlp_encoded_len = Uint256::from_u64(msg_size).rlp_encode();
-        batch.extend(rlp_encoded_len.clone());
-        println!(
-            "batch item size {}, RLP(size).len {}, RLP-encoded: {:?}",
-            msg_size,
-            rlp_encoded_len.len(),
-            rlp_encoded_len
-        );
-        batch.extend(msg);
-        tx_id_bytes
+        calldata: &[u8],
+    ) -> (Vec<u8>, Vec<u8>) {
+        // returns (compressed tx to send, hash to sign)
+        let mut result = self.compressor.compress_address(sender.clone());
+        let gas_price = gas_price.unwrap_or(self.get_gas_price());
+
+        let mut buf = vec![0xffu8];
+        let seq_num = self.get_seq_num(&sender);
+
+        buf.extend(seq_num.rlp_encode());
+        buf.extend(gas_price.rlp_encode());
+        buf.extend(gas_limit.rlp_encode());
+        buf.extend(self.compressor.compress_address(to_addr.clone()));
+        buf.extend(self.compressor.compress_token_amount(value.clone()));
+        buf.extend(calldata);
+
+        result.extend(Uint256::from_usize(buf.len()).rlp_encode());
+        result.extend(buf);
+
+        (
+            result,
+            TransactionRequest::new()
+                .from(sender.to_h160())
+                .to(to_addr.to_h160())
+                .gas(gas_limit.to_u256())
+                .gas_price(gas_price.to_u256())
+                .value(value.to_u256())
+                .data(calldata.to_vec())
+                .nonce(seq_num.to_u256())
+                .sighash(Some(self.chain_id))
+                .as_bytes()
+                .to_vec(),
+        )
+    }
+     */
+
+    pub fn _insert_bls_batch(
+        &mut self,
+        senders: &[&Uint256],
+        msgs: &[Vec<u8>],
+        aggregated_sig: &[u8],
+        batch_sender: &Uint256,
+    ) {
+        assert_eq!(senders.len(), msgs.len());
+        let mut buf = vec![8u8];
+        buf.extend(Uint256::from_usize(senders.len()).rlp_encode());
+        assert_eq!(aggregated_sig.len(), 64);
+        buf.extend(aggregated_sig);
+        for i in 0..senders.len() {
+            buf.extend(msgs[i].clone());
+        }
+
+        self.insert_l2_message(batch_sender.clone(), &buf);
     }
 
-    #[cfg(test)]
-    pub fn append_compressed_and_signed_tx_message_to_batch(
+    pub fn _append_compressed_and_signed_tx_message_to_batch(
         &mut self,
         batch: &mut Vec<u8>,
         max_gas: Uint256,
-        gas_price_bid: Uint256,
+        gas_price_bid: Option<Uint256>,
         to_addr: Uint256,
         value: Uint256,
         calldata: Vec<u8>,
         wallet: &Wallet,
+        is_gas_estimation: bool,
     ) -> Vec<u8> {
         let (msg, tx_id_bytes) = self.make_compressed_and_signed_l2_message(
             gas_price_bid,
@@ -270,6 +490,7 @@ impl RuntimeEnvironment {
             value,
             &calldata,
             wallet,
+            is_gas_estimation,
         );
         let msg_size: u64 = msg.len().try_into().unwrap();
         let rlp_encoded_len = Uint256::from_u64(msg_size).rlp_encode();
@@ -279,7 +500,7 @@ impl RuntimeEnvironment {
     }
 
     pub fn insert_batch_message(&mut self, sender_addr: Uint256, batch: &[u8]) {
-        self.insert_l2_message(sender_addr, batch, false);
+        self.insert_l2_message(sender_addr, batch);
     }
 
     pub fn _insert_nonmutating_call_message(
@@ -295,35 +516,7 @@ impl RuntimeEnvironment {
         buf.extend(to_addr.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr, &buf, false);
-    }
-
-    pub fn insert_erc20_deposit_message(
-        &mut self,
-        sender_addr: Uint256,
-        token_addr: Uint256,
-        payee: Uint256,
-        amount: Uint256,
-    ) {
-        let mut buf = token_addr.to_bytes_be();
-        buf.extend(payee.to_bytes_be());
-        buf.extend(amount.to_bytes_be());
-
-        self.insert_l1_message(1, sender_addr, &buf);
-    }
-
-    pub fn insert_erc721_deposit_message(
-        &mut self,
-        sender_addr: Uint256,
-        token_addr: Uint256,
-        payee: Uint256,
-        amount: Uint256,
-    ) {
-        let mut buf = token_addr.to_bytes_be();
-        buf.extend(payee.to_bytes_be());
-        buf.extend(amount.to_bytes_be());
-
-        self.insert_l1_message(2, sender_addr, &buf);
+        self.insert_l2_message(sender_addr, &buf);
     }
 
     pub fn insert_eth_deposit_message(
@@ -331,20 +524,36 @@ impl RuntimeEnvironment {
         sender_addr: Uint256,
         payee: Uint256,
         amount: Uint256,
+        adjust_payee_address: bool,
     ) {
-        let mut buf = payee.to_bytes_be();
-        buf.extend(amount.to_bytes_be());
-
-        self.insert_l1_message(0, sender_addr, &buf);
+        self.insert_tx_message_from_contract(
+            sender_addr,
+            Uint256::from_u64(100_000_000),
+            None,
+            {
+                let x = if adjust_payee_address {
+                    remap_l1_sender_address(payee)
+                } else {
+                    payee
+                };
+                println!("eth deposit to {}", x);
+                x
+            },
+            amount,
+            &[],
+            true,
+        );
     }
 
-    pub fn get_and_incr_seq_num(&mut self, addr: &Uint256) -> Uint256 {
+    pub fn get_seq_num(&mut self, addr: &Uint256, do_increment: bool) -> Uint256 {
         let cur_seq_num = match self.caller_seq_nums.get(&addr) {
             Some(sn) => sn.clone(),
             None => Uint256::zero(),
         };
-        self.caller_seq_nums
-            .insert(addr.clone(), cur_seq_num.add(&Uint256::one()));
+        if do_increment {
+            self.caller_seq_nums
+                .insert(addr.clone(), cur_seq_num.add(&Uint256::one()));
+        }
         cur_seq_num
     }
 
@@ -383,16 +592,93 @@ impl RuntimeEnvironment {
             .collect()
     }
 
-    pub fn push_send(&mut self, send_item: Value) {
-        self.sends.push(send_item.clone());
-        self.recorder.add_send(send_item);
+    pub fn _get_all_block_summary_logs(&self) -> Vec<_ArbosBlockSummaryLog> {
+        self.logs
+            .clone()
+            .into_iter()
+            .map(|log| _ArbosBlockSummaryLog::_new(log))
+            .filter(|r| r.is_some())
+            .map(|r| r.unwrap())
+            .collect()
     }
 
-    pub fn get_all_sends(&self) -> Vec<Value> {
-        self.sends.clone()
+    pub fn push_send(&mut self, size: Uint256, buf: Buffer) {
+        let contents = buf.as_bytes(size.to_usize().unwrap());
+        self.sends.push(contents.clone());
+        self.recorder.add_send(contents);
+    }
+
+    pub fn get_all_sends(&self) -> Vec<Vec<u8>> {
+        self.logs
+            .clone()
+            .into_iter()
+            .map(|log| get_send_contents(log))
+            .filter(|r| r.is_some())
+            .map(|r| r.unwrap())
+            .collect()
+    }
+
+    pub fn _get_last_send(&self) -> Option<Vec<u8>> {
+        let sends = self.get_all_sends();
+        if sends.len() == 0 {
+            None
+        } else {
+            Some(sends[0].clone())
+        }
     }
 }
 
+impl Default for RuntimeEnvironment {
+    fn default() -> Self {
+        RuntimeEnvironment::new(None)
+    }
+}
+
+fn get_send_contents(log: Value) -> Option<Vec<u8>> {
+    if let Value::Tuple(tup) = log {
+        if let Value::Int(kind) = &tup[0] {
+            if kind == &Uint256::from_u64(2) {
+                let sz = if let Value::Int(usz) = &tup[3] {
+                    usz.to_usize().unwrap()
+                } else {
+                    panic!()
+                };
+                let buf = if let Value::Buffer(buf) = &tup[4] {
+                    buf
+                } else {
+                    panic!()
+                };
+                Some(buf.as_bytes(sz))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+pub fn remap_l1_sender_address(addr: Uint256) -> Uint256 {
+    if addr.is_zero() {
+        addr
+    } else {
+        addr.add(&Uint256::from_string_hex("1111000000000000000000000000000000001111").unwrap())
+            .modulo(&Uint256::one().shift_left(160))
+            .unwrap()
+    }
+}
+
+pub fn _inverse_remap_l1_sender_address(addr: Uint256) -> Uint256 {
+    let two_to_the_160 = Uint256::one().shift_left(160);
+
+    addr.add(&two_to_the_160)
+        .sub(&Uint256::from_string_hex("1111000000000000000000000000000000001111").unwrap())
+        .unwrap()
+        .modulo(&two_to_the_160)
+        .unwrap()
+}
 
 // TxCompressor assumes that all client traffic uses it.
 // For example, it assumes nobody else affects ArbOS's address compression table.
@@ -407,7 +693,7 @@ impl TxCompressor {
     pub fn new() -> Self {
         TxCompressor {
             address_map: HashMap::new(),
-            next_index: 0,
+            next_index: 1,
         }
     }
 
@@ -427,21 +713,25 @@ impl TxCompressor {
         }
     }
 
-    pub fn compress_token_amount(&self, mut amt: Uint256) -> Vec<u8> {
-        if amt.is_zero() {
-            amt.rlp_encode()
-        } else {
-            let mut num_zeroes = 0;
-            let ten = Uint256::from_u64(10);
-            loop {
-                if amt.modulo(&ten).unwrap().is_zero() {
-                    num_zeroes = 1 + num_zeroes;
-                    amt = amt.div(&ten).unwrap();
-                } else {
-                    let mut result = amt.rlp_encode();
-                    result.extend(vec![num_zeroes as u8]);
-                    return result;
-                }
+    pub fn compress_token_amount(&self, amt: Uint256) -> Vec<u8> {
+        generic_compress_token_amount(amt)
+    }
+}
+
+pub fn generic_compress_token_amount(mut amt: Uint256) -> Vec<u8> {
+    if amt.is_zero() {
+        amt.rlp_encode()
+    } else {
+        let mut num_zeroes = 0;
+        let ten = Uint256::from_u64(10);
+        loop {
+            if amt.modulo(&ten).unwrap().is_zero() {
+                num_zeroes = 1 + num_zeroes;
+                amt = amt.div(&ten).unwrap();
+            } else {
+                let mut result = amt.rlp_encode();
+                result.extend(vec![num_zeroes as u8]);
+                return result;
             }
         }
     }
@@ -453,12 +743,21 @@ pub struct ArbosReceipt {
     request_id: Uint256,
     return_code: Uint256,
     return_data: Vec<u8>,
-    evm_logs: Value,
+    evm_logs: Vec<EvmLog>,
     gas_used: Uint256,
     gas_price_wei: Uint256,
+    pub provenance: ArbosRequestProvenance,
     gas_so_far: Uint256,     // gas used so far in L1 block, including this tx
     index_in_block: Uint256, // index of this tx in L1 block
     logs_so_far: Uint256,    // EVM logs emitted so far in L1 block, NOT including this tx
+    fee_stats: Vec<Vec<Uint256>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ArbosRequestProvenance {
+    l1_sequence_num: Uint256,
+    parent_request_id: Option<Uint256>,
+    index_in_parent: Option<Uint256>,
 }
 
 impl ArbosReceipt {
@@ -475,7 +774,7 @@ impl ArbosReceipt {
             Some(ArbosReceipt {
                 request: tup[1].clone(),
                 request_id: if let Value::Tuple(subtup) = &tup[1] {
-                    if let Value::Int(ui) = &subtup[4] {
+                    if let Value::Int(ui) = &subtup[5] {
                         ui.clone()
                     } else {
                         panic!()
@@ -485,12 +784,94 @@ impl ArbosReceipt {
                 },
                 return_code,
                 return_data,
-                evm_logs,
+                evm_logs: EvmLog::new_vec(evm_logs),
                 gas_used,
                 gas_price_wei,
+                provenance: if let Value::Tuple(stup) = &tup[1] {
+                    if let Value::Tuple(subtup1) = &stup[7] {
+                        if let Value::Tuple(subtup) = &subtup1[0] {
+                            ArbosRequestProvenance {
+                                l1_sequence_num: if let Value::Int(ui) = &subtup[0] {
+                                    ui.clone()
+                                } else {
+                                    panic!();
+                                },
+                                parent_request_id: if let Value::Int(ui) = &subtup[1] {
+                                    if ui.is_zero() {
+                                        Some(ui.clone())
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    panic!();
+                                },
+                                index_in_parent: if let Value::Int(ui) = &subtup[2] {
+                                    if ui.is_zero() {
+                                        Some(ui.clone())
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    panic!();
+                                },
+                            }
+                        } else {
+                            panic!();
+                        }
+                    } else {
+                        panic!();
+                    }
+                } else {
+                    panic!();
+                },
                 gas_so_far,
                 index_in_block,
                 logs_so_far,
+                fee_stats: if let Value::Tuple(t2) = &tup[5] {
+                    vec![
+                        if let Value::Tuple(t3) = &t2[0] {
+                            t3.iter()
+                                .map(|v| {
+                                    if let Value::Int(ui) = v {
+                                        ui.clone()
+                                    } else {
+                                        panic!()
+                                    }
+                                })
+                                .collect()
+                        } else {
+                            panic!()
+                        },
+                        if let Value::Tuple(t3) = &t2[1] {
+                            t3.iter()
+                                .map(|v| {
+                                    if let Value::Int(ui) = v {
+                                        ui.clone()
+                                    } else {
+                                        panic!()
+                                    }
+                                })
+                                .collect()
+                        } else {
+                            panic!()
+                        },
+                        if let Value::Tuple(t3) = &t2[2] {
+                            t3.iter()
+                                .map(|v| {
+                                    if let Value::Int(ui) = v {
+                                        ui.clone()
+                                    } else {
+                                        panic!()
+                                    }
+                                })
+                                .collect()
+                        } else {
+                            panic!()
+                        },
+                    ]
+                } else {
+                    panic!()
+                },
             })
         } else {
             panic!("ArbOS log item was not a Tuple");
@@ -504,7 +885,7 @@ impl ArbosReceipt {
             } else {
                 return None;
             };
-            let return_data = bytes_from_bytestack(tup[1].clone())?;
+            let return_data = size_buffer_tuple_to_bytes(&tup[1])?;
             Some((return_code.clone(), return_data, tup[2].clone()))
         } else {
             None
@@ -575,12 +956,39 @@ impl ArbosReceipt {
         self.return_code.clone()
     }
 
+    pub fn _get_return_code_text(&self) -> String {
+        match self.get_return_code().to_u64().unwrap() {
+            0 => "success",
+            1 => "transaction reverted",
+            2 => "dropped due to L2 congestion",
+            3 => "insufficient funds for ArbGas",
+            4 => "insufficient balance for callvalue",
+            5 => "bad sequence number",
+            6 => "message format error",
+            7 => "cannot deploy at address",
+            8 => "exceeded tx gas limit",
+            9 => "insufficient gas for base fee",
+            10 => "below minimum ArbGas for contract tx",
+            11 => "gas price too low",
+            12 => "no gas for auto-redeem",
+            13 => "sender not permitted",
+            14 => "sequence number too low",
+            15 => "sequence number too high",
+            _ => "unknown error",
+        }
+        .to_string()
+    }
+
     pub fn succeeded(&self) -> bool {
         self.get_return_code() == Uint256::zero()
     }
 
     pub fn get_return_data(&self) -> Vec<u8> {
         self.return_data.clone()
+    }
+
+    pub fn _get_evm_logs(&self) -> Vec<EvmLog> {
+        self.evm_logs.clone()
     }
 
     pub fn get_gas_used(&self) -> Uint256 {
@@ -590,28 +998,200 @@ impl ArbosReceipt {
     pub fn get_gas_used_so_far(&self) -> Uint256 {
         self.gas_so_far.clone()
     }
-}
 
-pub fn bytestack_from_bytes(b: &[u8]) -> Value {
-    Value::new_tuple(vec![
-        Value::Int(Uint256::from_usize(b.len())),
-        bytestack_from_bytes_2(b, Value::none()),
-    ])
-}
-
-fn bytestack_from_bytes_2(b: &[u8], so_far: Value) -> Value {
-    let size = b.len();
-    if size > 32 {
-        bytestack_from_bytes_2(
-            &b[32..],
-            Value::new_tuple(vec![bytestack_build_uint(&b[..32]), so_far]),
-        )
-    } else {
-        Value::new_tuple(vec![bytestack_build_uint(b), so_far])
+    pub fn _get_fee_stats(&self) -> Vec<Vec<Uint256>> {
+        self.fee_stats.clone()
     }
 }
 
-fn bytestack_build_uint(b: &[u8]) -> Value {
+fn size_buffer_tuple_to_bytes(val: &Value) -> Option<Vec<u8>> {
+    if let Value::Tuple(tup) = val {
+        if let (Value::Int(usz), Value::Buffer(buf)) = (&tup[0], &tup[1]) {
+            Some(buf.as_bytes(usz.to_usize().unwrap()))
+        } else {
+            println!("sizebuffertuple got {}", val);
+            None
+        }
+    } else {
+        println!("sizebuffertuple got {}", val);
+        None
+    }
+}
+
+pub struct _ArbosBlockSummaryLog {
+    pub block_num: Uint256,
+    pub timestamp: Uint256,
+    pub gas_limit: Uint256,
+    stats_this_block: Arc<Vec<Value>>,
+    stats_all_time: Arc<Vec<Value>>,
+    gas_summary: _BlockGasAccountingSummary,
+}
+
+impl _ArbosBlockSummaryLog {
+    pub fn _new(arbos_log: Value) -> Option<Self> {
+        if let Value::Tuple(tup) = arbos_log {
+            if tup[0] != Value::Int(Uint256::one()) {
+                return None;
+            }
+            let block_num = if let Value::Int(bn) = &tup[1] {
+                bn
+            } else {
+                return None;
+            };
+            let timestamp = if let Value::Int(ts) = &tup[2] {
+                ts
+            } else {
+                return None;
+            };
+            let gas_limit = if let Value::Int(gl) = &tup[3] {
+                gl
+            } else {
+                return None;
+            };
+            let stats_this_block = if let Value::Tuple(t2) = &tup[4] {
+                t2
+            } else {
+                return None;
+            };
+            let stats_all_time = if let Value::Tuple(t2) = &tup[5] {
+                t2
+            } else {
+                return None;
+            };
+            let gas_summary = if let Value::Tuple(t2) = &tup[6] {
+                t2
+            } else {
+                return None;
+            };
+            Some(_ArbosBlockSummaryLog {
+                block_num: block_num.clone(),
+                timestamp: timestamp.clone(),
+                gas_limit: gas_limit.clone(),
+                stats_this_block: stats_this_block.clone(),
+                stats_all_time: stats_all_time.clone(),
+                gas_summary: _BlockGasAccountingSummary::_new(gas_summary.to_vec()),
+            })
+        } else {
+            None
+        }
+    }
+}
+
+pub struct _BlockGasAccountingSummary {
+    gas_price_estimate: Uint256,
+    gas_pool: Uint256,
+    wei_pool: Uint256,
+    wei_shortfall: Uint256,
+    total_wei_paid_to_validators: Uint256,
+    payout_address: Uint256,
+}
+
+impl _BlockGasAccountingSummary {
+    pub fn _new(tup: Vec<Value>) -> Self {
+        _BlockGasAccountingSummary {
+            gas_price_estimate: if let Value::Int(ui) = &tup[0] {
+                ui.clone()
+            } else {
+                panic!();
+            },
+            gas_pool: if let Value::Int(ui) = &tup[1] {
+                ui.clone()
+            } else {
+                panic!();
+            },
+            wei_pool: if let Value::Int(ui) = &tup[2] {
+                ui.clone()
+            } else {
+                panic!();
+            },
+            wei_shortfall: if let Value::Int(ui) = &tup[3] {
+                ui.clone()
+            } else {
+                panic!();
+            },
+            total_wei_paid_to_validators: if let Value::Int(ui) = &tup[4] {
+                ui.clone()
+            } else {
+                panic!();
+            },
+            payout_address: if let Value::Int(ui) = &tup[5] {
+                ui.clone()
+            } else {
+                panic!();
+            },
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct EvmLog {
+    pub addr: Uint256,
+    pub data: Vec<u8>,
+    pub vals: Vec<Uint256>,
+}
+
+impl EvmLog {
+    pub fn new(val: Value) -> Self {
+        if let Value::Tuple(tup) = val {
+            EvmLog {
+                addr: if let Value::Int(ui) = &tup[0] {
+                    ui.clone()
+                } else {
+                    panic!()
+                },
+                data: size_buffer_tuple_to_bytes(&tup[1]).unwrap(),
+                vals: tup[2..]
+                    .iter()
+                    .map(|v| {
+                        if let Value::Int(ui) = v {
+                            ui.clone()
+                        } else {
+                            panic!()
+                        }
+                    })
+                    .collect(),
+            }
+        } else {
+            panic!("invalid EVM log format");
+        }
+    }
+
+    pub fn new_vec(val: Value) -> Vec<Self> {
+        if let Value::Tuple(tup) = val {
+            if tup.len() == 0 {
+                vec![]
+            } else {
+                let mut rest = EvmLog::new_vec(tup[1].clone());
+                let last = EvmLog::new(tup[0].clone());
+                rest.push(last);
+                rest
+            }
+        } else {
+            panic!()
+        }
+    }
+}
+
+pub fn _bytestack_from_bytes(b: &[u8]) -> Value {
+    Value::new_tuple(vec![
+        Value::Int(Uint256::from_usize(b.len())),
+        _bytestack_from_bytes_2(b, Value::none()),
+    ])
+}
+
+fn _bytestack_from_bytes_2(b: &[u8], so_far: Value) -> Value {
+    let size = b.len();
+    if size > 32 {
+        _bytestack_from_bytes_2(
+            &b[32..],
+            Value::new_tuple(vec![_bytestack_build_uint(&b[..32]), so_far]),
+        )
+    } else {
+        Value::new_tuple(vec![_bytestack_build_uint(b), so_far])
+    }
+}
+
+fn _bytestack_build_uint(b: &[u8]) -> Value {
     let mut ui = Uint256::zero();
     for j in (0..32) {
         if j < b.len() {
@@ -654,7 +1234,7 @@ pub fn hash_bytestack(bs: Value) -> Option<Uint256> {
 #[test]
 fn test_hash_bytestack() {
     let buf = hex::decode("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142").unwrap();
-    let h = hash_bytestack(bytestack_from_bytes(&buf)).unwrap();
+    let h = hash_bytestack(_bytestack_from_bytes(&buf)).unwrap();
     assert_eq!(
         h,
         Uint256::from_string_hex(
@@ -664,18 +1244,18 @@ fn test_hash_bytestack() {
     );
 }
 
-pub fn bytes_from_bytestack(bs: Value) -> Option<Vec<u8>> {
+pub fn _bytes_from_bytestack(bs: Value) -> Option<Vec<u8>> {
     if let Value::Tuple(tup) = bs {
         if let Value::Int(ui) = &tup[0] {
             if let Some(nbytes) = ui.to_usize() {
-                return bytes_from_bytestack_2(tup[1].clone(), nbytes);
+                return _bytes_from_bytestack_2(tup[1].clone(), nbytes);
             }
         }
     }
     None
 }
 
-fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
+fn _bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
     if nbytes == 0 {
         Some(vec![])
     } else if let Value::Tuple(tup) = cell {
@@ -683,7 +1263,7 @@ fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
         if let Value::Int(mut int_val) = tup[0].clone() {
             let _256 = Uint256::from_usize(256);
             if (nbytes % 32) == 0 {
-                let mut sub_arr = match bytes_from_bytestack_2(tup[1].clone(), nbytes - 32) {
+                let mut sub_arr = match _bytes_from_bytestack_2(tup[1].clone(), nbytes - 32) {
                     Some(arr) => arr,
                     None => {
                         return None;
@@ -698,7 +1278,8 @@ fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
                 sub_arr.append(&mut this_arr);
                 Some(sub_arr)
             } else {
-                let mut sub_arr = match bytes_from_bytestack_2(tup[1].clone(), 32 * (nbytes / 32)) {
+                let mut sub_arr = match _bytes_from_bytestack_2(tup[1].clone(), 32 * (nbytes / 32))
+                {
                     Some(arr) => arr,
                     None => {
                         return None;
@@ -730,7 +1311,8 @@ pub struct RtEnvRecorder {
     format_version: u64,
     inbox: Vec<Value>,
     logs: Vec<Value>,
-    sends: Vec<Value>,
+    sends: Vec<Vec<u8>>,
+    total_gas: u64,
 }
 
 impl RtEnvRecorder {
@@ -740,6 +1322,7 @@ impl RtEnvRecorder {
             inbox: vec![],
             logs: Vec::new(),
             sends: Vec::new(),
+            total_gas: 0,
         }
     }
 
@@ -751,7 +1334,7 @@ impl RtEnvRecorder {
         self.logs.push(log_item);
     }
 
-    fn add_send(&mut self, send_item: Value) {
+    fn add_send(&mut self, send_item: Vec<u8>) {
         self.sends.push(send_item);
     }
 
@@ -759,7 +1342,8 @@ impl RtEnvRecorder {
         serde_json::to_string(self)
     }
 
-    pub fn to_file(&self, path: &Path) -> Result<(), io::Error> {
+    pub fn to_file(&mut self, path: &Path, total_gas: u64) -> Result<(), io::Error> {
+        self.total_gas = total_gas;
         let mut file = File::create(path).map(|f| Box::new(f) as Box<dyn io::Write>)?;
         writeln!(file, "{}", self.to_json_string()?)
     }
@@ -768,21 +1352,21 @@ impl RtEnvRecorder {
         &self,
         require_same_gas: bool,
         debug: bool,
-        profiler: bool,
+        profiler_mode: ProfilerMode,
         trace_file: Option<&str>,
     ) -> bool {
         // returns true iff result matches
-        let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+        let mut rt_env = RuntimeEnvironment::default();
         rt_env.insert_full_inbox_contents(self.inbox.clone());
-        let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+        let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
         if let Some(trace_file_name) = trace_file {
             machine.add_trace_writer(trace_file_name);
         }
-        machine.start_at_zero();
+        machine.start_at_zero(false);
         if debug {
             let _ = machine.debug(None);
-        } else if profiler {
-            let profile_data = machine.profile_gen(vec![]);
+        } else if (profiler_mode != ProfilerMode::Never) {
+            let profile_data = machine.profile_gen(vec![], profiler_mode);
             profile_data.profiler_session();
         } else {
             let _ = machine.run(None);
@@ -793,7 +1377,7 @@ impl RtEnvRecorder {
             self.logs
                 .clone()
                 .into_iter()
-                .map(strip_var_from_log)
+                .filter_map(strip_var_from_log)
                 .collect()
         };
         let logs_seen = if require_same_gas {
@@ -805,7 +1389,7 @@ impl RtEnvRecorder {
                 .logs
                 .clone()
                 .into_iter()
-                .map(strip_var_from_log)
+                .filter_map(strip_var_from_log)
                 .collect()
         };
         if !(logs_expected == logs_seen) {
@@ -813,40 +1397,46 @@ impl RtEnvRecorder {
             return false;
         }
         if !(self.sends == machine.runtime_env.recorder.sends) {
-            print_output_differences(
+            print_output_differences_bytevec(
                 "send",
                 machine.runtime_env.recorder.sends,
                 self.sends.clone(),
             );
             return false;
         }
+
         return true;
     }
 }
 
-fn strip_var_from_log(log: Value) -> Value {
+fn strip_var_from_log(log: Value) -> Option<Value> {
     // strip from a log item all info that might legitimately vary as ArbOS evolves (e.g. gas usage)
-    if let Value::Tuple(tup) = log {
+    if let Value::Tuple(tup) = log.clone() {
         if let Value::Int(item_type) = tup[0].clone() {
             if item_type == Uint256::zero() {
                 // Tx receipt log item
-                Value::new_tuple(vec![
+                Some(Value::new_tuple(vec![
                     tup[0].clone(),
                     tup[1].clone(),
                     tup[2].clone(),
+                    tup[3].clone(),
                     // skip tup[3] because it's all about gas usage
-                    zero_item_in_tuple(tup[4].clone(), 0),
-                ])
+                    zero_item_in_tuple(tup[5].clone(), 0),
+                ]))
             } else if item_type == Uint256::one() {
                 // block summary log item
-                Value::new_tuple(vec![
+                Some(Value::new_tuple(vec![
                     tup[0].clone(),
                     tup[1].clone(),
                     tup[2].clone(),
-                    // skip tup[3] because it's all about gas usage
-                    zero_item_in_tuple(tup[4].clone(), 0),
-                    zero_item_in_tuple(tup[5].clone(), 0),
-                ])
+                    tup[3].clone(),
+                    // skip tup[4] thru tup[5] because they're all about gas usage
+                    tup[6].clone(),
+                ]))
+            } else if item_type == Uint256::from_u64(2) {
+                Some(log)
+            } else if item_type == Uint256::from_u64(3) {
+                None
             } else {
                 panic!("unrecognized log item type {}", item_type);
             }
@@ -898,11 +1488,32 @@ fn print_output_differences(kind: &str, seen: Vec<Value>, expected: Vec<Value>) 
     }
 }
 
+fn print_output_differences_bytevec(kind: &str, seen: Vec<Vec<u8>>, expected: Vec<Vec<u8>>) {
+    if seen.len() != expected.len() {
+        println!(
+            "{} mismatch: expected {}, got {}",
+            kind,
+            expected.len(),
+            seen.len()
+        );
+        return;
+    } else {
+        for i in 0..(seen.len()) {
+            if !(seen[i] == expected[i]) {
+                println!("{} {} mismatch:", kind, i);
+                println!("expected: {:?}", expected[i]);
+                println!("seen: {:?}", seen[i]);
+                return;
+            }
+        }
+    }
+}
+
 pub fn replay_from_testlog_file(
     filename: &str,
     require_same_gas: bool,
     debug: bool,
-    profiler: bool,
+    profiler_mode: ProfilerMode,
     trace_file: Option<&str>,
 ) -> std::io::Result<bool> {
     let mut file = File::open(filename)?;
@@ -919,7 +1530,7 @@ pub fn replay_from_testlog_file(
     match res {
         Ok(recorder) => {
             let success =
-                recorder.replay_and_compare(require_same_gas, debug, profiler, trace_file);
+                recorder.replay_and_compare(require_same_gas, debug, profiler_mode, trace_file);
             println!("{}", if success { "success" } else { "mismatch " });
             Ok(success)
         }
@@ -928,29 +1539,10 @@ pub fn replay_from_testlog_file(
 }
 
 #[test]
-fn logfile_replay_tests() {
-    for entry in std::fs::read_dir(Path::new("./replayTests")).unwrap() {
-        let path = entry.unwrap().path();
-        let name = path.file_name().unwrap();
-        assert_eq!(
-            replay_from_testlog_file(
-                &("./replayTests/".to_owned() + name.to_str().unwrap()),
-                false,
-                false,
-                false,
-                None,
-            )
-            .unwrap(),
-            true
-        );
-    }
-}
-
-#[test]
 fn test_rust_bytestacks() {
     let before =
         "The quick brown fox jumped over the lazy dog. Lorem ipsum and all that.".as_bytes();
-    let bs = bytestack_from_bytes(before);
-    let after = bytes_from_bytestack(bs);
+    let bs = _bytestack_from_bytes(before);
+    let after = _bytes_from_bytestack(bs);
     assert_eq!(after, Some(before.to_vec()));
 }

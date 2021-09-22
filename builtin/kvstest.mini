@@ -2,40 +2,46 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import func builtin_kvsDelete(kvs: any, key: any) -> any;
-import func builtin_kvsForall(kvs: any, cb: func(any, any, any) -> any, state: any) -> any;
-import func builtin_kvsSize(kvs: any) -> uint;
+use core::kvs::Kvs;
+use core::kvs::builtin_kvsNew;
+use core::kvs::builtin_kvsGet;
+use core::kvs::builtin_kvsSet;
+use core::kvs::builtin_kvsHasKey;
+use core::kvs::builtin_kvsDelete;
+use core::kvs::builtin_kvsForall;
+use core::kvs::builtin_kvsSize;
 
-impure func main() {
-	asm(tests(),) { log };
+write func main() {
+	asm(tests().1) { log };
 }
 
-func tests() -> uint {
+func tests() -> (uint, buffer) {
 	let s = builtin_kvsNew();
 	if (builtin_kvsGet(s, 17) != None<any>) {
-		return 1;
+		return "new map isn't empty";
 	}
+    s = builtin_kvsDelete(s, 17);
 	if (builtin_kvsSize(s) != 0) {
-	    return 101;
+	    return "map delete doesn't preserve size";
 	}
 
 	s = builtin_kvsNew();
 	s = builtin_kvsSet(s, 42, 42);
 	if (builtin_kvsGet(s, 42) != Some(unsafecast<any>(42))) {
-		return 2;
+		return "map set-get doesn't work";
 	}
 	if (builtin_kvsSize(s) != 1) {
-	    return 102;
+	    return "map set doesn't increase size";
 	}
 	s = builtin_kvsNew();
 	s = builtin_kvsSet(s, 42, 43);
 	s = builtin_kvsSet(s, 55, 56);
 	s = builtin_kvsSet(s, 42, 99);
 	if (builtin_kvsGet(s, 42) != Some(unsafecast<any>(99))) {
-		return 3;
+		return "map overwrite doesn't work";
 	}
 	if (builtin_kvsSize(s) != 2) {
-	    return 103;
+	    return "map overwrite doesn't preserve size";
 	}
 
 	s = builtin_kvsNew();
@@ -43,10 +49,10 @@ func tests() -> uint {
 	s = builtin_kvsSet(s, 55, 56);
 	s = builtin_kvsSet(s, 42, 99);
 	if (builtin_kvsGet(s, 55) != Some(unsafecast<any>(56))) {
-		return 4;
+		return "map overwrite affects other keys";
 	}
 	if (builtin_kvsSize(s) != 2) {
-	    return 104;
+	    return "map overwrite doesn't preserve size";
 	}
 
 	s = builtin_kvsNew();
@@ -56,10 +62,10 @@ func tests() -> uint {
 		i = i+1;
 	}
 	if (builtin_kvsGet(s, 17) != Some(unsafecast<any>(1017))) {
-		return 5;
+		return "writing many times corrupted map";
 	}
 	if (builtin_kvsSize(s) != 41) {
-	    return 105;
+	    return "writing many times corrupted size";
 	}
 
 	s = builtin_kvsNew();
@@ -67,13 +73,21 @@ func tests() -> uint {
 	while (i < 27) {
 		s = builtin_kvsSet(s, i, 1000+i);
 		i = i+1;
+        if (!builtin_kvsHasKey(s, i-1)) {
+            return "key existence check is wrong";
+        }
 	}
 	s = builtin_kvsDelete(s, 17);
 	if (builtin_kvsGet(s, 17) != None<any>) {
-		return 6;
+		return "map deletion didn't remove value";
 	}
+    if (builtin_kvsHasKey(s, 17)) {
+        return "map deletion looks like it didn't remove value";
+    }
+    s = builtin_kvsDelete(s, 17);
+    s = builtin_kvsDelete(s, 1000);
 	if (builtin_kvsSize(s) != 26) {
-	    return 106;
+	    return "map delete corrupts size";
 	}
 
 	s = builtin_kvsNew();
@@ -81,10 +95,10 @@ func tests() -> uint {
 	s = builtin_kvsSet(s, 55, 56);
 	s = builtin_kvsSet(s, 42, 99);
 	if (builtin_kvsGet(s, 42) != Some(unsafecast<any>(99))) {
-		return 7;
+		return "map overwrite doesn't work #2";
 	}
 	if (builtin_kvsSize(s) != 2) {
-	    return 107;
+	    return "map overwrite doesn't preserve size #2";
 	}
 
 	s = builtin_kvsNew();
@@ -92,10 +106,10 @@ func tests() -> uint {
 	s = builtin_kvsSet(s, 55, 56);
 	s = builtin_kvsSet(s, 42, 99);
 	if (builtin_kvsGet(s, 3) != None<any>) {
-		return 8;
+		return "map overwrite affects other entries";
 	}
 	if (builtin_kvsSize(s) != 2) {
-	    return 108;
+	    return "getting nonexistent value changed size after overwrite";
 	}
 
 	s = builtin_kvsNew();
@@ -104,10 +118,10 @@ func tests() -> uint {
 	s = builtin_kvsSet(s, 42, 99);
 	let rawResult = builtin_kvsForall(s, sumForKvsIterator, 0);
 	if (unsafecast<uint>(rawResult) != 155) {
-		return 9;
+		return "map forall did not compute correctly";
 	}
 	if (builtin_kvsSize(s) != 2) {
-	    return 109;
+	    return "map forall did not preserve size";
 	}
 
     // regression test for bug #73
@@ -118,31 +132,15 @@ func tests() -> uint {
     s = builtin_kvsSet(s, 55, 100);
     s = builtin_kvsDelete(s, 55);
     if (builtin_kvsGet(s, 55) != None<any>) {
-        return 10;
+        return "bug #73 is back (data)";
     }
 	if (builtin_kvsSize(s) != 0) {
-	    return 110;
+	    return "bug #73 is back (size)";
 	}
 
-	return 0;
+	return "";
 }
 
-func isSome(x: option<any>) -> bool {
-	if let Some(unused) = x {
-		return true;
-	} else {
-		return false;
-	}
-}
-
-func getSomeOr(x: option<any>, backupVal: any) -> any {
-	if let Some(val) = x {
-		return val;
-	} else {
-		return backupVal;
-	}
-}
-
-func sumForKvsIterator(key: any, value: any, state: any) -> any {
+func sumForKvsIterator(_key: any, value: any, state: any) -> any {
 	return unsafecast<uint>(value) + unsafecast<uint>(state);
 }

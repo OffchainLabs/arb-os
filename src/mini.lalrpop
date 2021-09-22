@@ -1,30 +1,84 @@
 //
-// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
 //
 
-use crate::compile::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, ImportFuncDecl, ImportTypeDecl, Type,
-StructField, FuncArg, Statement, StatementKind, DebugInfo, MatchPattern, IfArm, Expr, BinaryOp, UnaryOp, Constant,
-OptionConst, FieldInitializer, new_func_arg, new_type_decl};
+
+use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVarDecl, Type, CodeBlock, StructField, FuncArg, FuncProperties, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant, OptionConst, FieldInitializer, new_func_arg, new_type_decl};
+use crate::compile::{InliningMode, ErrorSystem, CompileError};
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
-use crate::pos::BytePos;
+use crate::link::Import;
+use crate::pos::{BytePos, Location};
 use crate::mavm::{Value, Instruction, Opcode};
 use crate::uint256::Uint256;
+use crate::console::Color;
+use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
+use regex::Regex;
 
+grammar(
+    stringtable: &mut StringTable,                      // map of ids to strings
+    file_info: &Lines,                                  // the lines of source code
+    filename: u64,                                      // filename hash
+    current_path: &[String],                            // path to what's being parsed
+    constants: &mut HashMap<String, Uint256>,           // all constants (local *and* global)
+    local_constants: &mut HashMap<String, Location>,    // constants created
+    used_constants: &mut HashSet<String>,               // constants used
+    closures: &mut BTreeMap<StringId, Func>,            // closures found
+    error_system: &mut ErrorSystem,                     // mechanism for delaying errors
+);
 
-grammar(stringtable: &mut StringTable, file_info: &Lines, filename: u64);
-
-pub Decls: Vec<TopLevelDecl> = {
-	<mut i:ImportDecl*> <mut n:NonImportDecl+> => {i.append(&mut n);i},
+extern {
+    type Error = CompileError;
 }
 
-ImportDecl: TopLevelDecl = {
-    "use" <mut p: PathDecl> ";" => {
+match {
+    r"\s*" => { },                                                                 // Skip whitespace
+    r"/\*(([^*/]|\n)|(\*+([^*/]|\n)|/([^*/]|\n)*|/\*([^*/]|\n)*))*\**\*/" => { },  // Skip multi-line comments
+    r"//[^\n\r]*[\n\r]*" => { },                                                   // Skip single-line comments
+    _
+}
+
+pub Decls: Vec<TopLevelDecl> = {
+	<a: ("#![" <Attributes> "]")?><mut i:HeadDecl*> <mut n:BodyDecl+> => {
+        i.append(&mut n);
+        for decl in &mut i {
+            if let (TopLevelDecl::FuncDecl(func), Some(attr)) = (decl, a) {
+                func.debug_info.attributes.inline = func.debug_info.attributes.inline.and(&attr.inline);
+            }
+        };
+        i
+        },
+}
+
+HeadDecl: TopLevelDecl = {
+    <lno: @L> "use" <mut p: PathDecl> ";" => {
         let file = p.pop().expect("Internal error: Path vector was empty");
-        TopLevelDecl::UseDecl(p, file)
+        let id = stringtable.get(file.clone());
+        TopLevelDecl::UseDecl(Import::new(
+            p, file, Some(id), file_info.location(BytePos::from(lno), filename),
+        ))
     },
-	ImportFuncDecl => TopLevelDecl::ImpFuncDecl(<>),
-	ImportTypeDecl => TopLevelDecl::ImpTypeDecl(<>),	
+    <lno: @L> "const" <n: IdentString> "=" <u: UnsignedInteger> ";" => { 
+        
+        if let Some(_) = constants.get(&n) {
+            error_system.errors.push(
+                CompileError::new(
+                    String::from("Parser error"),
+                    format!(
+                        "Constant {}{}{} is declared twice",
+                        CompileError::RED,
+                        n,
+                        CompileError::RESET,
+                    ),
+                    file_info.location(BytePos::from(lno), filename).into_iter().collect()
+                )
+            )
+        }
+        
+        constants.insert(n.clone(), u);
+        local_constants.insert(n, file_info.location(BytePos::from(lno), filename).unwrap());
+        TopLevelDecl::ConstDecl
+    },
 }
 
 PathDecl: Vec<String> = {
@@ -35,27 +89,31 @@ PathDecl: Vec<String> = {
     },
 }
 
-ImportFuncDecl: ImportFuncDecl = {
-	"import" <imp: "impure"?> "func" <i:Ident> "(" <fa:FuncArgs> ")" <t: ("->" <Type>)?> ";" => ImportFuncDecl::new(i, imp.is_some(), fa, t.unwrap_or(Type::Void)),
-}
-
-ImportTypeDecl: ImportTypeDecl = {
-	"import" "type" <Ident> ";" => ImportTypeDecl::new(<>),
-}
-
-NonImportDecl: TopLevelDecl = {
+BodyDecl: TopLevelDecl = {
 	TypeDecl => TopLevelDecl::TypeDecl(<>),
 	FuncDecl => TopLevelDecl::FuncDecl(<>),
 	GlobalVarDecl => TopLevelDecl::VarDecl(<>),
 }
 
 TypeDecl: TypeDecl = {
-	"type" <Ident> "=" <Type> => new_type_decl(<>),
+    "type" <Ident> "=" <Type> ";" => new_type_decl(<>),
 }
 
-FuncDecl: FuncDecl = {
-	<lno: @L> <p: "public"?> <imp: "impure"?> "func" <i:Ident> "(" <fa:FuncArgs> ")" <t: ("->" <Type>)?> <cb:CodeBlock> =>
-	        FuncDecl::new(i, imp.is_some(), fa, t.unwrap_or(Type::Void), cb, p.is_some(), file_info.location(BytePos::from(lno),filename)),
+FuncDecl: Func = {
+	<attribs: ("#[" <Attributes> "]")?> <qualifiers: (<Qualifier>)*> "func" <lno: @L> <i:Ident> "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> => {
+        let public = qualifiers.contains(&"public");
+        let view = qualifiers.contains(&"view");
+        let write = qualifiers.contains(&"write");
+        let debug = DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default());
+        let name = stringtable.name_from_id(i).clone();
+        
+	    Func::new(name, i, public, view, write, false, fa, t, cb, BTreeSet::new(), 0, debug)
+    }
+}
+
+Return: Type = {
+    "->" <Type> => <>,
+    "noreturn" => Type::Every,
 }
 
 FuncArgs: Vec<FuncArg> = {
@@ -63,50 +121,146 @@ FuncArgs: Vec<FuncArg> = {
 }
 
 FuncArg: FuncArg = {
-	<i:Ident> ":" <t:Type> => new_func_arg(i, t),
+	<lno: @L> <i:Ident> ":" <t:Type> => new_func_arg(i, t, DebugInfo::from(file_info.location(BytePos::from(lno), filename))),
 }
 
 GlobalVarDecl: GlobalVarDecl = {
-	<lno: @L> "var" <i:Ident> ":" <t:Type> ";" => GlobalVarDecl::new(i, t, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "var" <i:Ident> ":" <t:Type> ";" => GlobalVarDecl::new(i, stringtable.name_from_id(i).clone(), t, file_info.location(BytePos::from(lno),filename)),
 }
 
 CodeBlock: Vec<Statement> = {
 	"{" <Statement*> "}" => <>
 }
 
+CodeBlockNew: CodeBlock = {
+    "{" <stats: Statement*> <expr: Expr?> "}" => CodeBlock::new(stats, expr.map(Box::new)),
+}
+
 Statement: Statement = {
-	<lno: @L> <kind:StatementKind> => Statement {kind, debug_info: DebugInfo { location: file_info.location(BytePos::from(lno), filename)}},
+	<lno: @L> <attribs: ("#[" <Attributes> "]")?> <kind:StatementKind> => Statement {kind, debug_info: DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default())},
+}
+
+Attributes: Attributes = {
+    <lno: @L> <names: (<IdentString> ",")*> <last: IdentString?> => {
+        let mut attribs = Attributes::default();
+        for name in names.into_iter().chain(last.into_iter()) {
+            match name.as_ref() {
+                "breakpoint" => attribs.breakpoint = true,
+                "inline" => attribs.inline = InliningMode::Always,
+                "noinline" => attribs.inline = InliningMode::Never,
+                "print" => attribs.codegen_print = true,
+                unrecognized => error_system.errors.push(
+                    CompileError::new(
+                        String::from("Lexer error"),
+                        format!(
+                            "Unrecognized attribute {}{}{}",
+                            CompileError::RED,
+                            unrecognized,
+                            CompileError::RESET,
+                        ),
+                        file_info.location(BytePos::from(lno), filename).into_iter().collect()
+                    )
+                ),
+            }
+        }; 
+        attribs
+    },
 }
 
 StatementKind: StatementKind = {
-	"while" "(" <e: Expr> ")" <cb: CodeBlock> => StatementKind::While(e, cb),
-	"loop" <cb: CodeBlock> => StatementKind::Loop(cb),
-	"if" "let" "Some(" <l: Ident> ")" "=" <r:Expr> <t: CodeBlock> <e: ("else" <CodeBlock>)?> => StatementKind::IfLet(l,r,t,e),
-	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> <r: IfArm?> => StatementKind::If(IfArm::Cond(c, t, r.map(|m|Box::new(m)), file_info.location(BytePos::from(lno),filename))),
-	"let" <p: MatchPattern> "=" <e: Expr> ";" => StatementKind::Let(p, e),
-	<e: Expr> ";" => StatementKind::Expression(e),
-	<i: Ident> "=" <e: Expr> ";" => StatementKind::Assign(i, e),
-	"return" <e: Expr> ";" => StatementKind::Return(e),
-	"return" ";" => StatementKind::ReturnVoid(),
-	<lno: @L> "return" "None" ";" => StatementKind::Return(Expr::Constant(Constant::Option(OptionConst::None(Type::Every)),file_info.location(BytePos::from(lno),filename))),
-	"panic" ";" => StatementKind::Panic(),
-	"debug" "(" <e: Expr> ")" ";" => StatementKind::DebugPrint(e),
-	"asm" "(" <a:CommaedExprs?> ")" "{" <body:AsmInsn*> "}" ";" => StatementKind::Asm(body, a.unwrap_or(vec![])),
-	";" => StatementKind::Noop(),
+    "while" "(" <e: Expr> ")" <cb: CodeBlock> => StatementKind::While(e, cb),
+    <lno: @L> "loop" <cb: CodeBlock> => StatementKind::Expression(Expr { kind: ExprKind::Loop(cb), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename)), }),
+    <lno: @L> "if" "let" "Some(" <l: Ident> ")" "=" <r:Expr> <t: CodeBlock> <e: ElseIf?> => StatementKind::Expression( Expr { kind: ExprKind::IfLet(l,Box::new(r),CodeBlock::new(t,None),e), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno),filename))}),
+    <lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> <r: ElseIf?> => StatementKind::Expression( Expr { kind: ExprKind::If(Box::new(c), CodeBlock::new(t, None), r), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno),filename))}),
+    "let" <p: MatchPattern> "=" <e: Expr> ";" => StatementKind::Let(p, e),
+    <e: Expr> ";" => StatementKind::Expression(e),
+    <i: Ident> "=" <e: Expr> ";" => StatementKind::Assign(i, e),
+    "return" <e: Expr> ";" => StatementKind::Return(e),
+    "return" ";" => StatementKind::ReturnVoid(),
+    <lno: @L> "return" "None" ";" => StatementKind::Return(Expr{ kind: ExprKind::Constant(Constant::Option(OptionConst::None(Type::Every))), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))}),
+    "break" <e: Expr?> ";" => StatementKind::Break(e, None),
+    "debug" "(" <e: Expr> ")" ";" => StatementKind::DebugPrint(e),
+    "assert" "(" <e: Expr> ")" ";" => StatementKind::Assert(e),
+    "asm" "(" <e: Expr> ")" "{" <body:AsmInsn*> "}" ";" => StatementKind::Asm(body, vec![e]),
+    "asm" "(" <a:CommaedExprs?> ")" "{" <body:AsmInsn*> "}" ";" => StatementKind::Asm(body, a.unwrap_or(vec![])),
+    <lno: @L> "set" <i:Ident> <s: SubData+> "=" <e: Expr> ";" => {
+
+        // This routine manually derives a series of nested with-statements to build an interior assignment.
+        
+        let debug_info = DebugInfo::from(file_info.location(BytePos::from(lno), filename));
+        
+        // the withs we assign at the end
+        let mut withs = Expr {
+            kind: ExprKind::VariableRef(i),
+            debug_info: debug_info,
+        };
+        
+        // the intereior site we expand to right-derive the next step, taking the form
+        //   a with { expr }
+        //   a with { a.b with { expr } }
+        //   a with { a.b with { a.b.c with { expr } }         and so on
+        let mut build = &mut withs;
+        
+        // a nested set of sub-value identifier ops that lets us build up nodes for those like a.b.c by going through
+        // each of those for a, a.b, a.b.c, etc
+        let mut nest = Expr {
+            kind: ExprKind::VariableRef(i),
+            debug_info: debug_info,
+        };
+        
+        for inner in s {
+            match inner {
+                SubData::ArrayOrMap(index) => {
+                    let inside = e.clone();
+                    *build = Expr {
+                        kind: ExprKind::ArrayOrMapMod(Box::new(nest.clone()), Box::new(index.clone()), Box::new(inside)),
+                        debug_info: index.debug_info,
+                    };
+                    build = match &mut build.kind {
+                        ExprKind::ArrayOrMapMod(_, _, ref mut build) => build,
+                        _ => unreachable!(),
+                    };
+                    nest = Expr {
+                        kind: ExprKind::ArrayOrMapRef(Box::new(nest), Box::new(index.clone())),
+                        debug_info: index.debug_info,
+                    };
+                }
+                SubData::Dot(id) => {
+                    let inside = e.clone();
+                    let name = stringtable.name_from_id(id).to_string();
+                    *build = Expr {
+                        kind: ExprKind::StructMod(Box::new(nest.clone()), name.clone(), Box::new(inside)),
+                        debug_info,
+                    };
+                    build = match &mut build.kind {
+                        ExprKind::StructMod(_, _, ref mut build) => build,
+                        _ => unreachable!(),
+                    };
+                    nest = Expr {
+                        kind: ExprKind::DotRef(Box::new(nest), name),
+                        debug_info: debug_info,
+                    };
+                }
+            }
+        }
+        
+        StatementKind::Assign(i, withs)
+    }
+}
+
+SubData: SubData = {
+    "." <i:Ident> => SubData::Dot(i),
+    "[" <e: Expr> "]" => SubData::ArrayOrMap(e),
 }
 
 MatchPattern: MatchPattern = {
-	<Ident> => MatchPattern::Simple(<>),
-	"(" <CommaedMatchPatterns> ")" => MatchPattern::Tuple(<>),
+    <lno: @L> <i: Ident> => MatchPattern::new_bind(i, DebugInfo::from(file_info.location(BytePos::from(lno), filename)), ()),
+    <lno: @L> "*"<i: Ident> => MatchPattern::new_assign(i, DebugInfo::from(file_info.location(BytePos::from(lno), filename)), ()),
+    <lno: @L> "(" <c: CommaedMatchPatterns> ")" => MatchPattern::new_tuple(c, DebugInfo::from(file_info.location(BytePos::from(lno), filename)), ()),
 }
 
 CommaedMatchPatterns: Vec<MatchPattern> = {
 	<mut a: ( <MatchPattern> "," )+> <b: MatchPattern?> => {if let Some(c) = b {a.push(c)}a},
-}
-
-IfArm: IfArm = {
-	<lno: @L> "else" <cb: CodeBlock> => IfArm::Catchall(cb, file_info.location(BytePos::from(lno), filename)),
-	<lno: @L> "elseif" "(" <c: Expr> ")" <cb: CodeBlock> <r: IfArm?> => IfArm::Cond(c, cb, r.map(|m| Box::new(m)), file_info.location(BytePos::from(lno),filename)),
 }
 
 StructFields: Vec<StructField> = {
@@ -114,27 +268,39 @@ StructFields: Vec<StructField> = {
 }
 
 StructField: StructField = {
-	<Ident> ":" <Type> => StructField::new(<>),
+	<i: Ident> ":" <t: Type> => StructField::new(stringtable.name_from_id(i).to_string(), t),
 }
 
 Type: Type = {
 	"uint" => Type::Uint,
 	"int" => Type::Int,
 	"bool" => Type::Bool,
+	"buffer" => Type::Buffer,
 	"bytes32" => Type::Bytes32,
 	"address" => Type::EthAddress,
 	"struct" "{" <StructFields> "}" => Type::Struct(<>),
 	<CommaedTypesInParens> => Type::Tuple(<>),
 	"[" "]" <Type> => Type::Array(Box::new(<>)),
 	"[" <s:UnsignedInteger> "]" <t:Type> => Type::FixedArray(
-		Box::new(t), 
+		Box::new(t),
 		s.to_usize().unwrap(),
 	),
 	"map" "<" <t1:Type> "," <t2:Type> ","? ">" => Type::Map(Box::new(t1), Box::new(t2)),
-	<i: "impure"?> "func" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => Type::Func(i.is_some(), a, Box::new(r.unwrap_or(Type::Void))),
 	"any" => Type::Any,
 	"option<" <t1:Type> ">" => Type::Option(Box::new(t1)),
-	Ident => Type::Named(<>),
+	"every" => Type::Every,
+	"union<" <t1:CommaedTypes> ">" => Type::Union(t1),
+    <q: Qualifier*> "func" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => {
+        let view = q.contains(&"view");
+        let write = q.contains(&"write");
+        Type::Func(FuncProperties::new(view, write, false), a, Box::new(r.unwrap_or(Type::Void)))
+    },
+    <q: Qualifier*> "closure" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => {
+        let view = q.contains(&"view");
+        let write = q.contains(&"write");
+        Type::Func(FuncProperties::new(view, write, true), a, Box::new(r.unwrap_or(Type::Void)))
+    },
+    Ident => Type::Nominal(current_path.to_owned(), <>),
 };
 
 CommaedTypesInParens: Vec<Type> = {
@@ -154,29 +320,34 @@ Ident: StringId = {
 };
 
 Expr: Expr = {
-	<lno: @L> <t:Expr> "with" "{" "[" <i:Expr> "]" "=" <v:Expr> "}" => Expr::ArrayOrMapMod(
-		Box::new(t), 
-		Box::new(i), 
-		Box::new(v),
-		file_info.location(BytePos::from(lno),filename),
-	),
-	<lno: @L> <t: Expr> "with" "{" <i:Ident> ":" <e: Expr> "}" => Expr::StructMod(Box::new(t), i, Box::new(e), file_info.location(BytePos::from(lno),filename)),
-	Expr1,
+    <lno: @L> <t:Expr> "with" "{" "[" <i:Expr> "]" "=" <v:Expr> "}" => Expr {
+        kind: ExprKind::ArrayOrMapMod(
+	    Box::new(t),
+	    Box::new(i),
+	    Box::new(v),
+        ),
+	debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))
+    },
+    <lno: @L> <t: Expr> "with" "{" <i:Ident> ":" <e: Expr> "}" => Expr {
+        kind: ExprKind::StructMod(Box::new(t), stringtable.name_from_id(i).to_string(), Box::new(e)),
+        debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename)),
+    },
+    Expr1,
 }
 
 Expr1: Expr = {
-	<lno: @L> <l:Expr1> "||" <r:Expr2> => Expr::ShortcutOr(Box::new(l), Box::new(r), file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> <l:Expr1> "||" <r:Expr2> => Expr { kind: ExprKind::ShortcutOr(Box::new(l), Box::new(r)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	Expr2,
 };
 
 Expr2: Expr = {
-	<lno: @L> <l:Expr2> "&&" <r:Expr3> => Expr::ShortcutAnd(Box::new(l), Box::new(r), file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> <l:Expr2> "&&" <r:Expr3> => Expr { kind: ExprKind::ShortcutAnd(Box::new(l), Box::new(r)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	Expr3,
 };
 
 Expr3: Expr = {
 	<lno: @L> <l:Expr3> <op: BinaryOpMidfix3> <r:Expr4> => Expr::new_binary(op, l, r, file_info.location(BytePos::from(lno),filename)),
-	Expr4,	
+	Expr4,
 }
 
 BinaryOpMidfix3: BinaryOp = {
@@ -190,6 +361,8 @@ BinaryOpMidfix3: BinaryOp = {
 
 Expr4: Expr = {
 	<lno: @L> <l:Expr4> "|" <r:Expr5> => Expr::new_binary(BinaryOp::BitwiseOr, l, r, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> <l:Expr4> "<<" <r:Expr5> => Expr::new_binary(BinaryOp::ShiftLeft, r, l, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> <l:Expr4> ">>" <r:Expr5> => Expr::new_binary(BinaryOp::ShiftRight, r, l, file_info.location(BytePos::from(lno),filename)),
 	Expr5,
 };
 
@@ -217,7 +390,7 @@ Expr8: Expr = {
 };
 
 Expr9: Expr = {
-	<lno: @L> <e: Expr9> "?" => Expr::Try(Box::new(e), file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> <e: Expr9> "?" => Expr { kind: ExprKind::Try(Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	Expr10,
 }
 
@@ -229,14 +402,30 @@ Expr10: Expr = {
 };
 
 Expr11: Expr = {
-	<lno: @L> <c: Const> => Expr::Constant(c, file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> "Some(" <e: Expr> ")" => Expr::OptionInitializer(Box::new(e), file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> <f: Expr11> "(" <e: Expr> ")" => Expr::FunctionCall(Box::new(f), vec![e], file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> <f: Expr11> "(" <c: CommaedExprs?> ")" => Expr::FunctionCall(Box::new(f), c.unwrap_or(vec![]), file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> <e1:Expr11> "[" <e2:Expr> "]" => Expr::ArrayOrMapRef(Box::new(e1), Box::new(e2), file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> <e:Expr11> "." <i:Ident> => Expr::DotRef(Box::new(e), i, file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> <e:Expr11> "." <u:UnsignedInteger> => Expr::TupleRef(Box::new(e), u, file_info.location(BytePos::from(lno),filename)),
-	Expr12,
+    <lno: @L> <c: Const> => Expr { kind: ExprKind::Constant(c), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+    <lno: @L> "Some(" <e: Expr> ")" => Expr { kind: ExprKind::OptionInitializer(Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+    <lno: @L> <f: Expr11> "(" <e: Expr> ")" => Expr { kind: ExprKind::FunctionCall(Box::new(f), vec![e]), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+    <lno: @L> <f: Expr11> "(" <c: CommaedExprs?> ")" => Expr { kind: ExprKind::FunctionCall(Box::new(f), c.unwrap_or(vec![])), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+    <lno: @L> <e1:Expr11> "[" <e2:Expr> "]" => Expr {
+        kind: ExprKind::ArrayOrMapRef(Box::new(e1), Box::new(e2)),
+        debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))
+    },
+    <lno: @L> <e:Expr11> "." <i:Ident> => Expr {
+        kind: ExprKind::DotRef(Box::new(e), stringtable.name_from_id(i).to_string()),
+        debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))
+    },
+    <lno: @L> <e:Expr11> "." <u:UnsignedInteger> => Expr { kind: ExprKind::TupleRef(Box::new(e), u), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+    <lno: @L> "xif" <cond: Expr> <cb: CodeBlockNew> <el: ElseIf?> => Expr { kind: ExprKind::If(Box::new(cond), cb, el), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+    <lno: @L> "xif" "let" "Some(" <l: Ident> ")" "=" <r:Expr> <t: CodeBlockNew> <el: ElseIf?> => Expr { kind: ExprKind::IfLet(l, Box::new(r), t, el), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+    <lno: @L> "xloop" <cb: CodeBlock> => Expr { kind: ExprKind::Loop(cb), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+    Expr12,
+}
+
+ElseIf: CodeBlock = {
+    ("else" <CodeBlockNew>) => <>,
+    <lno: @L> "elseif" <cond: Expr> <cb: CodeBlockNew> <el: ElseIf?> => CodeBlock::new(vec![], Some(Box::new(Expr { kind: ExprKind::If(Box::new(cond), cb, el), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))}))),
+    <lno: @L> "elseif" "let" "Some(" <l: Ident> ")" "=" <r:Expr> <t: CodeBlockNew> <el: ElseIf?> => CodeBlock::new(vec![], Some(Box::new(
+                                Expr { kind: ExprKind::IfLet(l, Box::new(r), t, el), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))}))),
 }
 
 Expr12: Expr = {
@@ -247,29 +436,68 @@ Expr12: Expr = {
 	<lno: @L> "int" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToInt, e, file_info.location(BytePos::from(lno),filename)),
 	<lno: @L> "bytes32" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToBytes32, e, file_info.location(BytePos::from(lno),filename)),
 	<lno: @L> "address" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToAddress, e, file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> "newarray" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::NewArray(Box::new(e), t, file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ","? ")" => Expr::NewFixedArray(
+	<lno: @L> "newbuffer" "(" ")" => Expr { kind: ExprKind::NewBuffer, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "getbuffer8" "(" <e: Expr> "," <f:Expr> ")" => Expr::new_binary(BinaryOp::GetBuffer8, f, e, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "getbuffer64" "(" <e: Expr> "," <f:Expr> ")" => Expr::new_binary(BinaryOp::GetBuffer64, f, e, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "getbuffer256" "(" <e: Expr> "," <f:Expr> ")" => Expr::new_binary(BinaryOp::GetBuffer256, f, e, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "setbuffer8" "(" <e: Expr> "," <f:Expr> "," <g:Expr> ")" => Expr::new_trinary(TrinaryOp::SetBuffer8, f, g, e, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "setbuffer64" "(" <e: Expr> "," <f:Expr> "," <g:Expr> ")" => Expr::new_trinary(TrinaryOp::SetBuffer64, f, g, e, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "setbuffer256" "(" <e: Expr> "," <f:Expr> "," <g:Expr> ")" => Expr::new_trinary(TrinaryOp::SetBuffer256, f, g, e, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "newarray" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::NewArray(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ","? ")" => Expr { kind: ExprKind::NewFixedArray(
 		s.to_usize().unwrap(),
-		Some(Box::new(e)),
-		file_info.location(BytePos::from(lno),filename),
-	),
-	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> ")" => Expr::NewFixedArray(
+		Some(Box::new(e))),
+		debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))
+	},
+	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> ")" => Expr { kind: ExprKind::NewFixedArray(
 		s.to_usize().unwrap(),
-		None,
-		file_info.location(BytePos::from(lno),filename),
-	),
-	<lno: @L> "newmap" "<" <k:Type> "," <v:Type> ","? ">" => Expr::NewMap(k, v, file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> "unsafecast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::UnsafeCast(Box::new(e), t, file_info.location(BytePos::from(lno),filename)),
+		None),
+		debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename)),
+	},
+	<lno: @L> "newmap" "<" <k:Type> "," <v:Type> ","? ">" => Expr { kind: ExprKind::NewMap(k, v), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "newunion" "<" <t: CommaedTypes> ">" "(" <e: Expr> ")" => Expr { kind: ExprKind::NewUnion(t, Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "unsafecast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::UnsafeCast(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "cast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::Cast(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "covariantcast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::CovariantCast(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "weakcast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::WeakCast(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "unioncast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::UnionCast(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+    
+    <qualifiers: (<Qualifier>)*> <lno: @L> <u: ClosureUsage> "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> => {
+        let view = qualifiers.contains(&"view");
+        let write = qualifiers.contains(&"write");
+        let debug = DebugInfo::here(file_info, lno, filename);
+        
+        let name = match u {
+            true => format!("closure #{}", closures.len() + 1),
+            false => format!("_closure #{}", closures.len() + 1),
+        };
+        let id = stringtable.get(name.clone());
+        let closure = Func::new(name, id, false, view, write, true, fa, t, cb, BTreeSet::new(), 0, debug);
+        
+	    closures.insert(id, closure.clone());
+        
+        Expr::new(ExprKind::Closure(closure), debug)
+    },
 	Expr13,
 }
 
+ClosureUsage: bool = {
+    "closure" => true,
+    "_closure" => false,
+}
+
 Expr13: Expr = {
-	<lno: @L> "asm" "(" <a:CommaedExprs?> ")" <rt:Type> "{" <body:AsmInsn*> "}" => Expr::Asm(rt, body, a.unwrap_or(vec![]), file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> "struct" "{" <fi: FieldInitializers> "}" => Expr::StructInitializer(fi, file_info.location(BytePos::from(lno),filename)),
+    <lno: @L> "asm" "(" <e:Expr> ")" <rt:Type> "{" <body:AsmInsn*> "}" => Expr { kind: ExprKind::Asm(rt, body, vec![e]), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "asm" "(" <a:CommaedExprs?> ")" <rt:Type> "{" <body:AsmInsn*> "}" => Expr { kind: ExprKind::Asm(rt, body, a.unwrap_or(vec![])), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "struct" "{" <fi: FieldInitializers> "}" => Expr { kind: ExprKind::StructInitializer(fi), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	"(" <e: Expr> ")" => <>,
-	<lno: @L> "{" <cb: Statement*> <e: Expr?> "}" => Expr::CodeBlock(cb, e.map(|x| Box::new(x)), file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> "(" <c: CommaedExprs?> ")" => Expr::Tuple(c.unwrap_or(vec![]), file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> <i: Ident> => Expr::VariableRef(i, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> <cb: CodeBlockNew> => Expr { kind: ExprKind::CodeBlock(cb), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "(" <c: CommaedExprs?> ")" => Expr { kind: ExprKind::Tuple(c.unwrap_or(vec![])), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+        <lno: @L> "error" => Expr { kind: ExprKind::Error, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+        <lno: @L> "getGas" "(" ")" => Expr { kind: ExprKind::GetGas, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+        <lno: @L> "setGas" "(" <e:Expr> ")" => Expr { kind: ExprKind::SetGas(Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> <i: Ident> => Expr { kind: ExprKind::VariableRef(i), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+    <lno: @L> <q: QuoteString> => Expr::lno(ExprKind::Quote(q), file_info, lno, filename),
 }
 
 Const: Constant = {
@@ -286,7 +514,7 @@ FieldInitializers: Vec<FieldInitializer> = {
 }
 
 FieldInitializer: FieldInitializer = {
-	<Ident> ":" <Expr> => FieldInitializer::new(<>),
+	<i: Ident> ":" <e: Expr> => FieldInitializer::new(stringtable.name_from_id(i).to_string(), e),
 }
 
 CommaedExprs: Vec<Expr> = {
@@ -299,8 +527,8 @@ CommaedExprs: Vec<Expr> = {
 }
 
 AsmInsn: Instruction = {
-	<lno: @L> <o: AsmOpcode> => Instruction::from_opcode(o, file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> "[" <v:AsmVal> "]" <o:AsmOpcode> => Instruction::from_opcode_imm(o, v, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> <o: AsmOpcode> => Instruction::from_opcode(o, DebugInfo::from(file_info.location(BytePos::from(lno),filename))),
+	<lno: @L> "[" <v:AsmVal> "]" <o:AsmOpcode> => Instruction::from_opcode_imm(o, v, DebugInfo::from(file_info.location(BytePos::from(lno),filename))),
 }
 
 AsmOpcode: Opcode = {
@@ -312,6 +540,12 @@ AsmVal: Value = {
 	"(" <mut l: (<AsmVal> ",")*> <v: AsmVal> ","? ")" => Value::new_tuple({l.push(v);l}),
 }
 
+Qualifier: &'input str = {
+    "view" => <>,
+    "write" => <>,
+    "public" => <>,
+};
+
 IdentStr: &'input str = {
 	r"[a-zA-Z_][a-zA-Z_01-9]*" => <>,
 };
@@ -320,10 +554,82 @@ IdentString: String = {
 	r"[a-zA-Z_][a-zA-Z_01-9]*" => <>.to_string(),
 };
 
+QuoteString: Vec<u8> = {
+    <lno: @L> <q: r#"s?"[a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~-]*""#> => {
+        let re = Regex::new(r#"s?"(0x)?[a-fA-F0-9]+""#).unwrap();
+        if re.is_match(q) {
+            error_system.warnings.push(
+                CompileError::new_warning(
+                    String::from("Parser warning"),
+                    format!(
+                        "String {} looks like hex but will be treated as a string",
+                        Color::color(error_system.warn_color, &q),
+                    ),
+                    file_info.location(BytePos::from(lno) + BytePos::from(1), filename).into_iter().collect()
+                )
+            );
+        }
+        let re = Regex::new(r#"s?"([a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~-]*)""#).unwrap();
+        let string = re.captures(q).unwrap().get(1).map_or(String::new(), |m| m.as_str().to_string());
+        string.as_bytes().to_vec()
+    },
+    <lno: @L> <q: r#"h"(0x)?[a-fA-F0-9]*""#> => {
+        let re = Regex::new(r#"h"(0x)?([a-fA-F0-9]*)""#).unwrap();
+        let mut string = re.captures(q).unwrap().get(2).map_or(String::new(), |m| m.as_str().to_string());
+        if string.len() % 2 == 1 {
+            string = "0".to_owned() + &string;
+        }
+        hex::decode(string).unwrap()
+    },
+};
+
 UnsignedInteger: Uint256 = {
 	"0" => Uint256::from_usize(0),
 	r"[1-9][0-9]*" => Uint256::from_string(<>).unwrap(),
-	r"0x[0-9a-fA-F]+" => Uint256::from_string_hex(&<>[2..]).unwrap()
+	r"0x[0-9a-fA-F]+" => Uint256::from_string_hex(&<>[2..]).unwrap(),
+    <ConstVal> => <>,
+}
+
+ConstVal: Uint256 = {
+    <lno: @L> "const" "::" <c: IdentString> =>? {
+        let loc = file_info.location(BytePos::from(lno) + BytePos::from(7), filename).into_iter().collect();
+        match constants.get(&c) {
+            Some(i) => {
+                if c.starts_with('_') {
+                    error_system.warnings.push(
+                        CompileError::new_warning(
+                            String::from("Parser warning"),
+                            format!(
+                                "Constant {}{}{} was used despite being marked as intentionally unused",
+                                error_system.warn_color,
+                                &c,
+                                CompileError::RESET,
+                            ),
+                            loc
+                        )
+                    );
+                }
+                used_constants.insert(c.clone());
+                Ok(i.clone())
+            }
+            None => {
+                error_system.errors.push(
+                    CompileError::new(
+                        String::from("Parser error"),
+                        format!(
+                            "Unrecognized constant {}{}{}",
+                            CompileError::RED,
+                            &c,
+                            CompileError::RESET,
+                        ),
+                        loc
+                    )
+                );
+                // intentionally skip error so as to not halt compilation
+                Ok(Uint256::from_usize(0))
+            }
+        }
+    }
 }
 
 SignedInteger: Uint256 = {

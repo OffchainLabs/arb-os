@@ -2,14 +2,12 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type Queue;
+use std::queue::queue_new;
+use std::queue::queue_isEmpty;
+use std::queue::queue_put;
+use std::queue::queue_get;
 
-import func queue_new() -> Queue;
-import func queue_isEmpty(q: Queue) -> bool;
-import func queue_put(q: Queue, val: any) -> Queue;
-import func queue_get(q: Queue) -> option<(Queue, any)>;
-
-impure func main() {
+write func main() {
     if let Some(res) = tests() {
 	    asm(res,) { log };
 	} else {

@@ -2,122 +2,18 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ByteArray;
-import type ByteStream;
-import type MarshalledBytes;
+use std::rlp::rlp_encodeAndHashMessageInfoForSignature;
+use std::rlp::SignedTx;
 
-import func bytearray_new(capacityHint: uint) -> ByteArray;
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
-import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
-import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
-import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
-import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
-import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
-import func bytearray_copy(
-    from: ByteArray,
-    fromOffset: uint,
-    to: ByteArray,
-    toOffset: uint,
-    nbytes: uint,
-) -> ByteArray;
-
-import func bytestream_new(ba: ByteArray) -> ByteStream;
-import func bytestream_skipBytes(ba: ByteStream, nbytes: uint) -> option<ByteStream>;
-
-import func rlp_encodeAndHashMessageInfo(tx: SignedTx) -> bytes32;
-import func rlp_decodeMessageInfo(inStream: ByteStream) -> option<(ByteStream, SignedTx)>;
-
-import impure func chainParams_chainId() -> uint;
-
-import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
+use chainParameters::chainParams_chainId;
 
 
-// This structure defines an incoming request.
-// It is defined identically in inbox.mini and elsewhere.
-type IncomingRequest = struct {
-    kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
-    timestamp: uint,          // timestamp of the L1 block
-    sender: address,          // address of the sender
-    requestId: uint,
-    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
-}
-
-// TxRequestData is declared identically in message.mini and elsewhere.
-type TxRequestData = struct {
-    maxGas: uint,
-    gasPrice: uint,
-    seqNum: option<uint>,
-    caller: address,
-    calleeAddr: address,
-    value: uint,
-    calldata: ByteArray,
-    nonMutating: bool,
-    incomingRequest: IncomingRequest,
-}
-
-// A copy of this struct is defined in stdlib/rlp.mini.
-// The declaration there must remain consistent with the one here.
-type SignedTx = struct {
-    seqNum: uint,
-    gasPrice: uint,
-    gasLimit: uint,
-    to: address,
-    value: uint,
-    data: ByteArray,
-    v: uint,
-    r: uint,
-    s: uint
-}
-
-public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestData> {
-    // Given an IncomingRequest that contains an L2 signed tx message, translate the
-    //    L2 message from the RLP-encoded form it arrived in, into the old format which downstream code expects.
-    // Also, check the signature on the tx, and set:
-    //      - the sender field in the request equal to signer, and
-    //      - the requestID field in the request equal to the Ethereum-compatible tx id,
-    // Return the result, or None if message is malformed or the signature is invalid.
-
-    let rlpData = bytearray_unmarshalBytes(req.msgData);
-    rlpData = bytearray_extract(rlpData, 1, bytearray_size(rlpData)-1);
-    let (_, signedTx) = rlp_decodeMessageInfo(bytestream_new(rlpData))?;
-    let signer = recoverSigner(signedTx)?;
-    let rlpHash = keccak256(rlpData, 0, bytearray_size(rlpData));
-
-    let newL2message = signedTxToUnsignedBytes(signedTx);
-
-    return Some(
-        struct {
-            maxGas: signedTx.gasLimit,
-            gasPrice: signedTx.gasPrice,
-            seqNum: Some(signedTx.seqNum),
-            caller: signer,
-            calleeAddr: signedTx.to,
-            value: signedTx.value,
-            calldata: signedTx.data,
-            nonMutating: false,
-            incomingRequest: req with {
-                sender: signer
-            } with {
-                requestId: uint(rlpHash)
-            },
-        }
-    );
-}
-
-public impure func recoverSigner(tx: SignedTx) -> option<address> {
-    let rlpHashForSig = rlp_encodeAndHashMessageInfo(
-        tx with {
-            r: 0
-        } with {
-            s: 0
-        } with {
-            v: chainParams_chainId()
-        }
-    );
+public view func recoverSigner(tx: SignedTx) -> option<address> {
+    let rlpHashForSig = xif ( (tx.v == 27) || (tx.v == 28) ) {
+        rlp_encodeAndHashMessageInfoForSignature(tx, None<uint>)  // non-EIP155 signature
+    } else {
+        rlp_encodeAndHashMessageInfoForSignature(tx, Some(chainParams_chainId()))  // EIP155 signature
+    };
 
     let signer = asm(
         tx.r,
@@ -126,32 +22,9 @@ public impure func recoverSigner(tx: SignedTx) -> option<address> {
         rlpHashForSig,
     ) address { ecrecover };
 
-    if (signer == address(0)) {
-        return None;
+    return xif (signer == address(0)) {
+        None<address>
     } else {
-        return Some(signer);
-    }
-}
-
-func signedTxToUnsignedBytes(tx: SignedTx) -> ByteArray {
-    let dataSize = bytearray_size(tx.data);
-    let ret = bytearray_new(0);
-    ret = bytearray_setByte(ret, 0, 0);  // L2 subtype for signed tx
-    ret = bytearray_set256(ret, 1, tx.gasLimit);
-    ret = bytearray_set256(ret, 1+32, tx.gasPrice);
-    ret = bytearray_set256(ret, 1+2*32, tx.seqNum);
-    ret = bytearray_set256(ret, 1+3*32, uint(tx.to));
-    ret = bytearray_set256(ret, 1+4*32, tx.value);
-    ret = bytearray_copy(tx.data, 0, ret, 1+5*32, dataSize);
-    return ret;
-}
-
-public func hashUnsignedL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32 {
-    return hash(
-        bytes32(sender),
-        hash(
-            bytes32(chainId),
-            marshalledBytes_hash(l2msg),
-        )
-    );
+        Some(signer)
+    };
 }

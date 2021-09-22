@@ -1,0 +1,115 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::fixedpoint::fixedPoint_new;
+use std::fixedpoint::fixedPoint_fromUintMatch;
+use std::fixedpoint::fixedPoint_integerPart;
+use std::fixedpoint::fixedPoint_add;
+use std::fixedpoint::fixedPoint_sub;
+use std::fixedpoint::fixedPoint_mul;
+use std::fixedpoint::fixedPoint_div;
+use std::fixedpoint::fixedPoint_equal;
+use std::fixedpoint::fixedPoint_compare;
+use std::fixedpoint::fixedPoint_zero;
+use std::fixedpoint::fixedPoint_isZero;
+use std::fixedpoint::fixedPoint_getNum;
+use std::fixedpoint::fixedPoint_getDenom;
+use std::fixedpoint::fixedPoint_mulByUint;
+use std::fixedpoint::fixedPoint_plusOne;
+use std::fixedpoint::fixedPoint_fractionalPart;
+
+write func main() {
+	asm(tests(),) { log };
+}
+
+func tests() -> uint {
+    let s9292 = fixedPoint_new(179292, 9292);
+    let s1000 = fixedPoint_new(17820, 1000);
+
+    if (fixedPoint_integerPart(s9292) != 179292/9292) {
+        return 1;
+    }
+
+    if let Some(_) = fixedPoint_add(s9292, s1000) {
+        return 2;
+    }
+
+    if let Some(sum) = fixedPoint_add(s1000, s1000) {
+        if (!fixedPoint_equal(sum, fixedPoint_new(17820*2, 1000))) {
+            return 3;
+        }
+    } else {
+        return 4;
+    }
+
+    if let Some(_) = fixedPoint_mul(s9292, s1000) {
+        return 5;
+    }
+
+    if let Some(prod) = fixedPoint_mul(s1000, s1000) {
+        if (!fixedPoint_equal(prod, fixedPoint_new(17820*17820/1000, 1000))) {
+            return 6;
+        }
+    } else {
+        return 7;
+    }
+
+    if let Some(prod) = fixedPoint_mul(s9292, fixedPoint_fromUintMatch(970000, s9292)) {
+        if (!fixedPoint_equal(prod, fixedPoint_new(179292*970000, 9292))) {
+            return 8;
+        }
+    } else {
+        return 9;
+    }
+
+    let zero  = fixedPoint_zero();
+    let zero2 = fixedPoint_mulByUint(zero, 9292);
+
+    if let Some(diff) = fixedPoint_sub(zero, zero2) {
+        if (fixedPoint_getNum(diff) != 0) {
+            return 11;
+        }
+        if (fixedPoint_getDenom(diff) != fixedPoint_getDenom(zero)) {
+            return 11;
+        }
+        if (!fixedPoint_isZero(diff)) {
+            return 11;
+        }
+    } else {
+        return 10;
+    }
+
+    let slope   = fixedPoint_new(9, 5);
+    let inverse = fixedPoint_new(5, 9);
+
+    if (fixedPoint_compare(inverse, slope) != -int(1)) {
+        return 12;
+    }
+    if (fixedPoint_compare(slope, inverse) != int(1)) {
+        return 12;
+    }
+    if let Some(issue) = fixedPoint_sub(slope, inverse) {
+        return 13;
+    }
+    if let Some(quotient) = fixedPoint_div(slope, inverse) {
+        if (!fixedPoint_equal(quotient, fixedPoint_new(81, 25))) {
+            return 14;
+        }
+    } else {
+        return 14;
+    }
+
+    let frac = fixedPoint_fractionalPart(slope);
+    let expected_frac = fixedPoint_new(4, 5);
+    let improper_frac = fixedPoint_plusOne(frac);
+
+    if (fixedPoint_compare(frac, expected_frac) != int(0)) {
+        return 15;
+    }
+    if (fixedPoint_compare(slope, improper_frac) != int(0)) {
+        return 15;
+    }
+
+    return 0;
+}

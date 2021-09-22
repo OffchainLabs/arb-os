@@ -1,0 +1,221 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_copy;
+
+use std::bytestream::bytestream_new;
+
+use std::storageMap::storageMap_serialize;
+use std::storageMap::storageMap_deserialize;
+
+use accounts::pristineAccount;
+use accounts::account_setContractInfo;
+use accounts::account_getAllStorage;
+use accounts::account_getNextSeqNum;
+use accounts::account_getEthBalance;
+use accounts::account_setNextSeqNum;
+
+use chainParameters::chainParams_getOrDie;
+
+use std::codeSegment::translateEvmCodeSegment;
+
+use evmOps::evmOp_return;
+use evmOps::evmOp_revert_knownPc;
+use evmOps::evmOp_revert_knownCodePc;
+use evmOps::evmOp_revertIfStatic;
+
+use evmCallStack::EvmCallFrame;
+use evmCallStack::evmCallStack_callHitError;
+use evmCallStack::evmCallStack_topFrame;
+use evmCallStack::evmCallFrame_getCalldata;
+use evmCallStack::evmCallStack_setTopFrameMemory;
+use evmCallStack::evmCallStack_setAccount;
+use evmCallStack::evmCallFrame_getCaller;
+use evmCallStack::evmCallFrame_getAccount;
+use evmCallStack::evmCallStack_getAccountInCurrentContext;
+use evmCallStack::evmCallStack_setAccountInCurrentContext;
+
+
+public view write func arbosTest_txcall() {
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        if (bytearray_size(calldata) < 4) {
+            evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 1, 0, 0);
+        }
+        let funcCode = getFuncCode(calldata);
+        if (funcCode == const::funcCode_ArbosTest_installAccount) {
+            arbosTest_installAccount(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbosTest_getMarshalledStorage) {
+            arbosTest_getMarshalledStorage(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbosTest_getAccountInfo) {
+            arbosTest_getAccountInfo(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbosTest_burnArbGas) {
+            arbosTest_burnArbGas(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbosTest_setNonce) {
+            arbosTest_setNonce(topFrame, calldata);
+        } else {
+            // unrecognized function code
+            evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 2, 0, 0);
+        }
+    } else {
+        // this shouldn't happen -- should always be called in an EVM tx
+        evmCallStack_callHitError(19);
+    }
+}
+
+func getFuncCode(ba: ByteArray) -> uint {
+    return bytearray_get256(ba, 0) >> 224;
+}
+
+view write func arbosTest_installAccount(topFrame: EvmCallFrame, calldata: ByteArray) { // (bool, uint, uint, bytes, bytes)
+    evmOp_revertIfStatic();
+
+    // Verify that this has been called by address zero.
+    // This ensures that this method can only be called (1) in testing, or (2) by the EthBridge.
+    let caller = evmCallFrame_getCaller(topFrame);
+    if (caller != address(0)) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 10, 0, 0);
+    }
+
+    if (bytearray_size(calldata) <= 4+5*32) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 11, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let isEOA = bytearray_get256(calldata, 4+32) != 0;
+    let balance = bytearray_get256(calldata, 4+2*32);
+    let nonce = bytearray_get256(calldata, 4+3*32);
+
+    let acct = pristineAccount(addr) with {
+        ethBalance: balance
+    } with {
+        nextSeqNum: nonce
+    };
+
+    if( ! isEOA) {
+        let codeSize = bytearray_get256(calldata, 4+6*32);
+        let code = bytearray_extract(calldata, 4+7*32, codeSize);
+        let storageOffset = 4 + 7*32 + 32*((codeSize+31)/32);
+        let storageSize = bytearray_get256(calldata, storageOffset);
+        let marshalledStorage = bytearray_extract(calldata, storageOffset+32, storageSize);
+
+        if let Some(initStorage) = storageMap_deserialize(marshalledStorage) {
+            let (startCodePoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(code), false);
+            acct = account_setContractInfo(
+                acct,
+                code,
+                evmJumpTable,
+                startCodePoint,
+                initStorage,
+                false,
+            );
+        } else {
+            evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 12, 0, 0);
+        }
+    }
+
+    if (evmCallStack_setAccount(addr, acct)) {
+        evmOp_return(0, 0);
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 13, 0, 0);
+    }
+}
+
+view write func arbosTest_getMarshalledStorage(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> bytes
+    // Return the marshalled storage for the contract at addr. Revert if no contract at that address.
+    let caller = evmCallFrame_getCaller(topFrame);
+    if (caller != address(0)) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 20, 0, 0);
+    }
+
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 21, 0, 0);
+    }
+
+    let addr = address(bytearray_get256(calldata, 4));
+    if let Some(storage) = account_getAllStorage(evmCallFrame_getAccount(topFrame, addr)) {
+        let marshalledStorage = storageMap_serialize(storage);
+        let msSize = bytearray_size(marshalledStorage);
+        let mem = bytearray_set256(
+            bytearray_set256(bytearray_new(0), 0, 64),
+            32,
+            msSize
+        );
+        mem = bytearray_copy(marshalledStorage, 0, mem, 64, msSize);
+        if (evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_return(0, 64+msSize);
+        } else {
+            evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 22, 0, 0);
+        }
+    } else {
+        evmOp_return(0, 0);  // tests expect a report of empty storage if there is no storage
+    }
+}
+
+view write func arbosTest_getAccountInfo(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> bytes
+    // Return the balance, nonce, and marshalled storage for the contract at addr. Revert if no contract at that address.
+    if (evmCallFrame_getCaller(topFrame) != address(0)) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 20, 0, 0);
+    }
+
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 21, 0, 0);
+    }
+
+    let addr = address(bytearray_get256(calldata, 4));
+    let acct = evmCallFrame_getAccount(topFrame, addr);
+    let mem = bytearray_set256(
+        bytearray_set256(bytearray_new(0), 0, account_getEthBalance(acct)),
+        32,
+        account_getNextSeqNum(acct),
+    );
+    if let Some(storage) = account_getAllStorage(acct) {
+        let marshalledStorage = storageMap_serialize(storage);
+        let msSize = bytearray_size(marshalledStorage);
+        mem = bytearray_copy(marshalledStorage, 0, mem, 64, msSize);
+    }
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, bytearray_size(mem));
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 22, 0, 0);
+    }
+}
+
+view write func arbosTest_burnArbGas(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    // Burn a specified amount of ArbGas
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 30, 0, 0);
+    }
+    let gasToBurn = bytearray_get256(calldata, 4) * chainParams_getOrDie(const::Atom_Param_AvmGasPerArbGas);
+    let gasLeft = getGas();
+    if (gasToBurn >= gasLeft) {
+        gasToBurn = gasLeft - 1;
+    }
+    setGas(gasLeft - gasToBurn);
+    evmOp_return(0, 0);
+}
+
+view write func arbosTest_setNonce(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (evmCallFrame_getCaller(topFrame) != address(0)) {
+        evmOp_revert_knownPc(40, 0, 0);
+    }
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownPc(41, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let newNonce = bytearray_get256(calldata, 36);
+    evmCallStack_setAccountInCurrentContext(
+        addr,
+        account_setNextSeqNum(
+            evmCallStack_getAccountInCurrentContext(addr),
+            newNonce,
+        ),
+    );
+    evmOp_return(0, 0);
+}

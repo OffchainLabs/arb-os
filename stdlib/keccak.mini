@@ -2,16 +2,13 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ByteArray;
-import func bytearray_new(size: uint) -> ByteArray;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
-import func bytearray_get64(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_set64(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
-import func bytearray_copy(src: ByteArray, srcOffset: uint, dest: ByteArray, destOffset: uint, nbytes: uint) -> ByteArray;
-
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_fromSizeAndBuffer;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_get64;
+use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_copy;
 
 
 public func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32 {
@@ -36,8 +33,7 @@ public func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32 {
     }
 
     // Build a bytearray to hold the final block
-    let lastBlock = bytearray_new(136);
-    lastBlock = bytearray_copy(ba, offset, lastBlock, 0, nbytes);
+    let lastBlock = bytearray_copy(ba, offset, bytearray_new(0), 0, nbytes);
 
     // Add padding to fill the final block
     if (nbytes == 135) {
@@ -60,6 +56,10 @@ public func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32 {
     return bytes32(flipEndian256(accumulator[0]));
 }
 
+public func keccak256_sizedBuffer(size: uint, buf: buffer) -> bytes32 {
+    return keccak256(bytearray_fromSizeAndBuffer(size, buf), 0, size);
+}
+
 func keccak_xorblock(accumulator: [7]uint, ba: ByteArray, offset: uint) -> [7]uint {
     return accumulator with {
         [0] = accumulator[0] ^ flipEndian256(bytearray_get256(ba, offset))
@@ -78,28 +78,31 @@ public func keccak_permutation(s: [7]uint) -> [7]uint {
     return asm(s,) [7]uint { keccakf };
 }
 
-func flipEndian64(x: uint) -> uint {
-    x = ((x & 0xffffffff) * 0x100000000) | ((x / 0x100000000) & 0xffffffff);
-    x = ((x & 0xffff0000ffff) * 0x10000) | ((x / 0x10000) & 0xffff0000ffff);
-    x = ((x & 0xff00ff00ff00ff) * 0x100) | ((x / 0x100) & 0xff00ff00ff00ff);
+public func flipEndian64(x: uint) -> uint {
+    x = (0xff00ff00ff00ff00 & (x << 8)) | (0x00ff00ff00ff00ff & (x >> 8));
+    x = (0xffff0000ffff0000 & (x << 16)) | (0x0000ffff0000ffff & (x >> 16));
+    x = (0xffffffff00000000 & (x << 32)) | (0x00000000ffffffff & (x >> 32));
     return x;
 }
 
-func flipEndian256(x: uint) -> uint {
-    let acc = 0;
-    let i = 0;
-    while (i < 4) {
-        acc = 0x10000000000000000 * acc + flipEndian64(x & 0xffffffffffffffff);
-        x = x / 0x10000000000000000;
-        i = i+1;
-    }
-    return acc;
+public func flipEndian256(x: uint) -> uint {
+    x =   (0xff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00 & (x << 8))
+        | (0x00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff & (x >> 8));
+    x =   (0xffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000 & (x << 16))
+        | (0x0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff & (x >> 16));
+    x =   (0xffffffff00000000ffffffff00000000ffffffff00000000ffffffff00000000 & (x << 32))
+        | (0x00000000ffffffff00000000ffffffff00000000ffffffff00000000ffffffff & (x >> 32));
+    x =   (0xffffffffffffffff0000000000000000ffffffffffffffff0000000000000000 & (x << 64))
+        | (0x0000000000000000ffffffffffffffff0000000000000000ffffffffffffffff & (x >> 64));
+    x =   (0xffffffffffffffffffffffffffffffff00000000000000000000000000000000 & (x << 128))
+        | (0x00000000000000000000000000000000ffffffffffffffffffffffffffffffff & (x >> 128));
+    return x;
 }
 
 type Hasher = struct {
     accumulator: [7]uint,
     offset: uint,
-}
+};
 
 public func hasher_new() -> Hasher {
     return struct {
@@ -109,26 +112,26 @@ public func hasher_new() -> Hasher {
 }
 
 public func hasher_pushByte(h: Hasher, b: uint) -> Hasher {
-    if (h.offset == 135) {
-        return h with {
+    return xif (h.offset == 135) {
+        h with {
             accumulator: asm(
                 h.accumulator with {
-                    [4] = h.accumulator[4] ^ asm(8*7, b & 0xff) uint { shl }
+                    [4] = h.accumulator[4] ^ ((b & 0xff) << (8*7))
                 },
             ) [7]uint { keccakf }
         } with {
             offset: 0
-        };
+        }
     } else {
         let word = h.offset / 32;
-        return h with {
+        h with {
             accumulator: h.accumulator with {
-                [word] = h.accumulator[word] ^ asm(8*(h.offset&0x1f), b&0xff) uint { shl }
+                [word] = h.accumulator[word] ^ ((b&0xff) << (8*(h.offset&0x1f)))
             }
         } with {
             offset: h.offset+1
-        };
-    }
+        }
+    };
 }
 
 public func hasher_pushN_be(h: Hasher, val: uint, nbytes: uint) -> Hasher {
@@ -141,17 +144,17 @@ public func hasher_pushN_le(h: Hasher, val: uint, nbytes: uint) -> Hasher {
     if (nbytes > 32) {
         nbytes = 32;
     } elseif (nbytes < 32) {
-        val = val & (asm(8*nbytes, 1) uint { shl } - 1);
+        val = val & ((1 << (8*nbytes)) - 1);
     }
     let accum = h.accumulator;
     let offset = h.offset;
-    loop {  // need to loop because data might cross word/block boundary
+    return xloop {  // need to loop because data might cross word/block boundary
         let word = offset / 32;
         let align = offset & 0x1f;
         if ( (align+nbytes <= 8) || ((word < 4) && (align+nbytes <= 32)) ){
             // can complete our work in a single push
             accum = accum with {
-                [word] = accum[word] ^ asm(8*align, val) uint { shl }
+                [word] = accum[word] ^ (val << (8*align))
             };
             offset = offset + nbytes;
             if (offset == 136) {
@@ -169,24 +172,24 @@ public func hasher_pushN_le(h: Hasher, val: uint, nbytes: uint) -> Hasher {
             // can't push it all because of word/block boundary; do as much as possible
             if (word == 4) {
                 accum = accum with {
-                    [4] = accum[4] ^ (asm(8*align, val) uint { shl } & 0xffffffffffffffff)
+                    [4] = accum[4] ^ ((val << (8*align)) & 0xffffffffffffffff)
                 };
                 accum = asm(accum,) [7]uint { keccakf };
                 offset = 0;
                 let nb = 8-align;
-                val = asm(8*nb, val) uint { shr };
+                val = val >> (8*nb);
                 nbytes = nbytes - nb;
             } else {
                 let acc = accum[word];
-                acc = acc ^ asm(8*align, val) uint { shl };
+                acc = acc ^ (val << (8*align));
                 accum = accum with { [word] = acc };
                 let nb = 32-align;
                 offset = offset + nb;
-                val = asm(8*nb, val) uint { shr };
+                val = val >> (8*nb);
                 nbytes = nbytes - nb;
             }
         }
-    }
+    };
 }
 
 public func hasher_finish(h: Hasher) -> bytes32 {
@@ -195,7 +198,7 @@ public func hasher_finish(h: Hasher) -> bytes32 {
 
     // write the two padding bits (these might both modify the same byte)
     accum = accum with {
-        [word] = accum[word] ^ asm(8*(h.offset&0x1f), 0x01) uint { shl }
+        [word] = accum[word] ^ (0x01 << (8*(h.offset&0x1f)))
     };
     accum = accum with { [4] = accum[4] ^ 0x8000000000000000 };
 

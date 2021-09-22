@@ -2,7 +2,7 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-type RandomGenerator = bytes32
+type RandomGenerator = bytes32;
 
 public func random_new(seed: bytes32) -> RandomGenerator {
     return seed;

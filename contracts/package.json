@@ -1,0 +1,18 @@
+{
+  "name": "arbos-contracts",
+  "version": "1.0.0",
+  "author": "Offchain Labs, Inc.",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@typechain/ethers-v5": "^7.0.1",
+    "@typechain/hardhat": "^2.3.0",
+    "hardhat": "^2.0.11",
+    "ts-generator": "^0.1.1",
+    "typechain": "^5.1.2"
+  },
+  "scripts": {
+    "build": "hardhat compile",
+    "typechain": "hardhat typechain",
+    "deploy:test": "hardhat run --network localhost scripts/deploy-test.js"
+  }
+}

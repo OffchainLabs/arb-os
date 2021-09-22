@@ -2,12 +2,11 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-//!Provides functions for modifying a sequence of Instructions to improve performance and lower gas
-//! costs.
+//! Provides functions for modifying a sequence of Instructions to improve performance and lower gas costs.
 
 use crate::mavm::{AVMOpcode, Instruction, Opcode};
 
-///Removes instructions that have no effect on the output of the program.
+/// Removes instructions that have no effect on the output of the program.
 fn useless_opcodes_layer<'a, I>(iter: I) -> impl Iterator<Item = &'a Instruction>
 where
     I: Iterator<Item = &'a Instruction>,
@@ -18,7 +17,7 @@ where
     })
 }
 
-///Takes a slice of `Instruction`s and returns a vector of instructions with certain combinations of
+/// Takes a slice of `Instruction`s and returns a vector of instructions with certain combinations of
 /// instructions recursively either removed or replaced by simpler instructions.
 ///
 /// These combinations are:
@@ -48,12 +47,12 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                 Instruction {
                     opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
                     immediate: None,
-                    location: _,
+                    debug_info: _,
                 } => {
                     if let Instruction {
                         opcode: Opcode::AVMOpcode(AVMOpcode::Dup0),
                         immediate: None,
-                        location: _,
+                        debug_info: _,
                     } = code_out[code_out.len() - 2]
                     {
                         code_out.pop();
@@ -65,13 +64,13 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                 Instruction {
                     opcode: Opcode::AVMOpcode(AVMOpcode::AuxPush),
                     immediate: None,
-                    location: loc1,
+                    debug_info: loc1,
                 } => {
                     let insn2 = code_out[code_out.len() - 2].clone();
                     if let Instruction {
                         opcode: Opcode::AVMOpcode(AVMOpcode::AuxPop),
                         immediate: imm,
-                        location: loc2,
+                        debug_info: loc2,
                     } = insn2
                     {
                         code_out.pop();
@@ -86,7 +85,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                     } else if let Instruction {
                         opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
                         immediate: Some(val),
-                        location: _,
+                        debug_info: _,
                     } = insn2
                     {
                         code_out.pop();
@@ -103,14 +102,14 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                 Instruction {
                     opcode: Opcode::AVMOpcode(AVMOpcode::AuxPop),
                     immediate: Some(_),
-                    location: loc1,
+                    debug_info: loc1,
                 } => {
                     let insn1 = code_out[code_out.len() - 1].clone();
                     let insn2 = code_out[code_out.len() - 2].clone();
                     if let Instruction {
                         opcode: Opcode::AVMOpcode(AVMOpcode::AuxPush),
                         immediate: None,
-                        location: _,
+                        debug_info: _,
                     } = insn2
                     {
                         code_out.pop();
@@ -127,13 +126,13 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                 Instruction {
                     opcode: Opcode::AVMOpcode(AVMOpcode::AuxPop),
                     immediate: None,
-                    location: loc1,
+                    debug_info: loc1,
                 } => {
                     let insn2 = code_out[code_out.len() - 2].clone();
                     if let Instruction {
                         opcode: Opcode::AVMOpcode(AVMOpcode::AuxPush),
                         immediate: imm,
-                        location: loc2,
+                        debug_info: loc2,
                     } = insn2
                     {
                         code_out.pop();
@@ -150,7 +149,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                         if let Instruction {
                             opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
                             immediate: Some(val),
-                            location: _,
+                            debug_info: _,
                         } = insn2
                         {
                             code_out.pop();
@@ -168,14 +167,14 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                 Instruction {
                     opcode: Opcode::AVMOpcode(AVMOpcode::IsZero),
                     immediate: None,
-                    location: _,
+                    debug_info: _,
                 } => {
                     let insn2 = code_out[code_out.len() - 2].clone();
                     match insn2 {
                         Instruction {
                             opcode: Opcode::AVMOpcode(AVMOpcode::IsZero),
                             immediate: imm,
-                            location: loc2,
+                            debug_info: loc2,
                         } => {
                             code_out.pop();
                             code_out.pop();
@@ -195,13 +194,13 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                 Instruction {
                     opcode: Opcode::AVMOpcode(avm_opcode),
                     immediate: None,
-                    location: loc1,
+                    debug_info: loc1,
                 } => {
                     let insn2 = code_out[code_out.len() - 2].clone();
                     if let Instruction {
                         opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
                         immediate: Some(val),
-                        location: _,
+                        debug_info: _,
                     } = insn2
                     {
                         code_out.pop();

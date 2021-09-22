@@ -2,49 +2,42 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::compile::MiniProperties;
-use crate::pos::Location;
-use crate::stringtable::StringId;
+use crate::compile::{DebugInfo, TypeTree};
+use crate::console::Color;
 use crate::uint256::Uint256;
-use serde::{Deserialize, Serialize};
+use crate::upload::CodeUploader;
+use ethers_core::utils::keccak256;
+use serde::de::Visitor;
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use std::{collections::HashMap, fmt, rc::Rc};
+use std::{collections::HashMap, fmt, sync::Arc};
+
+pub type LabelId = u64;
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Label {
-    Func(StringId),
+    Func(LabelId),    // these are the same,
+    Closure(LabelId), // it's just for printing & debug purposes
     Anon(usize),
-    External(usize), // slot in imported funcs list
-    Evm(usize),      // program counter in EVM contract
+    Evm(usize), // program counter in EVM contract
 }
 
 impl Label {
-    pub fn relocate(
-        self,
-        int_offset: usize,
-        ext_offset: usize,
-        func_offset: usize,
-    ) -> (Self, usize) {
+    pub fn relocate(self, int_offset: usize, func_offset: usize) -> (Self, usize) {
         match self {
-            Label::Func(sid) => (Label::Func(sid + func_offset), sid + func_offset),
             Label::Anon(pc) => (Label::Anon(pc + int_offset), func_offset),
-            Label::External(slot) => (Label::External(slot + ext_offset), func_offset),
-            Label::Evm(_) => (self, func_offset),
+            _ => (self, func_offset),
         }
     }
 
     pub fn avm_hash(&self) -> Value {
         match self {
-            Label::Func(sid) => Value::avm_hash2(
+            Label::Func(id) | Label::Closure(id) => Value::avm_hash2(
                 &Value::Int(Uint256::from_usize(4)),
-                &Value::Int(Uint256::from_usize(*sid)),
+                &Value::Int(Uint256::from_u64(*id)),
             ),
             Label::Anon(n) => Value::avm_hash2(
                 &Value::Int(Uint256::from_usize(5)),
-                &Value::Int(Uint256::from_usize(*n)),
-            ),
-            Label::External(n) => Value::avm_hash2(
-                &Value::Int(Uint256::from_usize(6)),
                 &Value::Int(Uint256::from_usize(*n)),
             ),
             Label::Evm(_) => {
@@ -58,8 +51,8 @@ impl fmt::Display for Label {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Label::Func(sid) => write!(f, "function_{}", sid),
+            Label::Closure(sid) => write!(f, "closure_{}", sid),
             Label::Anon(n) => write!(f, "label_{}", n),
-            Label::External(slot) => write!(f, "external_{}", slot),
             Label::Evm(pc) => write!(f, "EvmPC({})", pc),
         }
     }
@@ -85,41 +78,44 @@ impl LabelGenerator {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Instruction {
-    pub opcode: Opcode,
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Instruction<T = Opcode> {
+    pub opcode: T,
     pub immediate: Option<Value>,
-    pub location: Option<Location>,
+    #[serde(default)]
+    pub debug_info: DebugInfo,
 }
 
-impl MiniProperties for Instruction {
-    fn is_pure(&self) -> bool {
-        self.opcode.is_pure()
+impl From<Instruction<AVMOpcode>> for Instruction {
+    fn from(from: Instruction<AVMOpcode>) -> Self {
+        let Instruction {
+            opcode,
+            immediate,
+            debug_info,
+        } = from;
+        Self {
+            opcode: opcode.into(),
+            immediate,
+            debug_info,
+        }
     }
 }
 
-impl Instruction {
-    pub fn new(opcode: Opcode, immediate: Option<Value>, location: Option<Location>) -> Self {
+impl<T> Instruction<T> {
+    pub fn new(opcode: T, immediate: Option<Value>, debug_info: DebugInfo) -> Self {
         Instruction {
             opcode,
             immediate,
-            location,
+            debug_info,
         }
     }
 
-    pub fn from_opcode(opcode: Opcode, location: Option<Location>) -> Self {
-        Instruction::new(opcode, None, location)
+    pub fn from_opcode(opcode: T, debug_info: DebugInfo) -> Self {
+        Instruction::new(opcode, None, debug_info)
     }
 
-    pub fn from_opcode_imm(opcode: Opcode, immediate: Value, location: Option<Location>) -> Self {
-        Instruction::new(opcode, Some(immediate), location)
-    }
-
-    pub fn get_label(&self) -> Option<&Label> {
-        match &self.opcode {
-            Opcode::Label(label) => Some(label),
-            _ => None,
-        }
+    pub fn from_opcode_imm(opcode: T, immediate: Value, debug_info: DebugInfo) -> Self {
+        Instruction::new(opcode, Some(immediate), debug_info)
     }
 
     pub fn replace_labels(self, label_map: &HashMap<Label, CodePt>) -> Result<Self, Label> {
@@ -127,25 +123,50 @@ impl Instruction {
             Some(val) => Ok(Instruction::from_opcode_imm(
                 self.opcode,
                 val.replace_labels(label_map)?,
-                self.location,
+                self.debug_info,
             )),
             None => Ok(self),
+        }
+    }
+}
+
+impl Instruction<AVMOpcode> {
+    pub fn _upload(&self, u: &mut CodeUploader) {
+        u.push_byte(self.opcode.to_number());
+        if let Some(val) = &self.immediate {
+            u.push_byte(1u8);
+            val.upload(u);
+        } else {
+            u.push_byte(0u8);
+        }
+    }
+}
+
+impl Instruction {
+    pub fn is_view(&self, type_tree: &TypeTree) -> bool {
+        self.opcode.is_view(type_tree)
+    }
+    pub fn is_write(&self, type_tree: &TypeTree) -> bool {
+        self.opcode.is_write(type_tree)
+    }
+    pub fn get_label(&self) -> Option<&Label> {
+        match &self.opcode {
+            Opcode::Label(label) => Some(label),
+            _ => None,
         }
     }
 
     pub fn relocate(
         self,
         int_offset: usize,
-        ext_offset: usize,
         func_offset: usize,
         globals_offset: usize,
     ) -> (Self, usize) {
         let mut max_func_offset = func_offset;
         let opcode = match self.opcode {
-            Opcode::PushExternal(off) => Opcode::PushExternal(off + ext_offset),
+            Opcode::PushExternal(off) => Opcode::PushExternal(off),
             Opcode::Label(label) => {
-                let (new_label, new_func_offset) =
-                    label.relocate(int_offset, ext_offset, func_offset);
+                let (new_label, new_func_offset) = label.relocate(int_offset, func_offset);
                 if max_func_offset < new_func_offset {
                     max_func_offset = new_func_offset;
                 }
@@ -157,7 +178,7 @@ impl Instruction {
         };
         let imm = match self.immediate {
             Some(imm) => {
-                let (new_imm, new_func_offset) = imm.relocate(int_offset, ext_offset, func_offset);
+                let (new_imm, new_func_offset) = imm.relocate(int_offset, func_offset);
                 if max_func_offset < new_func_offset {
                     max_func_offset = new_func_offset;
                 }
@@ -166,39 +187,40 @@ impl Instruction {
             None => None,
         };
         (
-            Instruction::new(opcode, imm, self.location),
+            Instruction::new(opcode, imm, self.debug_info),
             max_func_offset,
         )
     }
 
-    pub fn xlate_labels(self, xlate_map: &HashMap<Label, &Label>) -> Self {
-        match self.immediate {
-            Some(val) => Instruction::from_opcode_imm(
-                self.opcode,
-                val.xlate_labels(xlate_map),
-                self.location,
+    pub fn pretty_print(&self, highlight: &str) -> String {
+        let label_color = Color::PINK;
+        match &self.immediate {
+            Some(value) => format!(
+                "{} {}",
+                self.opcode.pretty_print(label_color),
+                value.pretty_print(highlight)
             ),
-            None => self,
+            None => format!("{}", self.opcode.pretty_print(label_color)),
         }
     }
 }
 
-impl fmt::Display for Instruction {
+impl<T> fmt::Display for Instruction<T>
+where
+    T: fmt::Display,
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.immediate {
-            Some(v) => match self.location {
-                Some(loc) => write!(f, "[{}] {}\t\t{}", v, self.opcode, loc),
-                None => write!(f, "[{}] {}\t\t[no location]", v, self.opcode),
+            Some(value) => match value {
+                Value::Tuple(_) => write!(f, "[{}]\n        {}", value, self.opcode),
+                _ => write!(f, "{} {}", self.opcode, value),
             },
-            None => match self.location {
-                Some(loc) => write!(f, "{}\t\t{}", self.opcode, loc),
-                None => write!(f, "{}", self.opcode),
-            },
+            None => write!(f, "{}", self.opcode),
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum CodePt {
     Internal(usize),
     External(usize),         // slot in imported funcs list
@@ -211,12 +233,20 @@ impl CodePt {
         CodePt::Internal(pc)
     }
 
-    pub fn new_external(name: StringId) -> Self {
-        CodePt::External(name)
-    }
-
     pub fn new_in_segment(seg_num: usize, offset: usize) -> Self {
         CodePt::InSegment(seg_num, offset)
+    }
+
+    pub fn upload(&self, u: &mut CodeUploader) {
+        match self {
+            CodePt::Internal(pc) => {
+                u.push_byte(1);
+                u.push_bytes(&Uint256::from_usize(u._translate_pc(*pc)).rlp_encode());
+            }
+            _ => {
+                panic!();
+            }
+        }
     }
 
     pub fn incr(&self) -> Option<Self> {
@@ -234,10 +264,10 @@ impl CodePt {
         }
     }
 
-    pub fn relocate(self, int_offset: usize, ext_offset: usize) -> Self {
+    pub fn relocate(self, int_offset: usize) -> Self {
         match self {
             CodePt::Internal(pc) => CodePt::Internal(pc + int_offset),
-            CodePt::External(off) => CodePt::External(off + ext_offset),
+            CodePt::External(off) => CodePt::External(off),
             CodePt::InSegment(_, _) => {
                 panic!("tried to relocate/link code at runtime");
             }
@@ -254,10 +284,10 @@ impl CodePt {
                 &Value::Int(Uint256::from_usize(*sz)),
             ),
             CodePt::External(_) => {
-                panic!("tried to avm_hash unlinked codepoint");
+                Value::Int(Uint256::zero()) // never gets called when it matters
             }
             CodePt::InSegment(_, _) => {
-                unimplemented!("avm_hash for in-module codepoints");
+                Value::Int(Uint256::zero()) // never gets called when it matters
             }
             CodePt::Null => Value::Int(Uint256::zero()),
         }
@@ -275,29 +305,393 @@ impl fmt::Display for CodePt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum Value {
-    Int(Uint256),
-    Tuple(Rc<Vec<Value>>),
-    CodePoint(CodePt),
-    Label(Label),
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Buffer {
+    root: Arc<BufferNode>,
+    size: u128,
 }
 
-impl Value {
-    pub fn none() -> Self {
-        Value::Tuple(Rc::new(vec![]))
-    }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BufferNode {
+    Leaf(Vec<u8>),
+    Internal(BufferInternal),
+}
 
-    pub fn _is_none(&self) -> bool {
-        if let Value::Tuple(v) = self {
-            v.is_empty()
-        } else {
-            false
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BufferInternal {
+    height: usize,
+    capacity: u128,
+    left: Arc<BufferNode>,
+    right: Arc<BufferNode>,
+    hash_val: Uint256,
+}
+
+impl Buffer {
+    pub fn new_empty() -> Self {
+        Buffer {
+            root: Arc::new(BufferNode::new_empty()),
+            size: 0,
         }
     }
 
+    pub fn from_bytes(contents: Vec<u8>) -> Self {
+        let mut ret = Buffer::new_empty();
+        for i in 0..contents.len() {
+            ret = ret.set_byte(i as u128, contents[i]);
+        }
+        ret
+    }
+
+    pub fn as_bytes(&self, nbytes: usize) -> Vec<u8> {
+        // TODO: make this more efficient
+        let mut ret = vec![];
+        for i in 0..nbytes {
+            ret.push(self.read_byte(i as u128));
+        }
+        ret
+    }
+
+    pub fn max_size(&self) -> u128 {
+        self.size
+    }
+
+    fn avm_hash(&self) -> Uint256 {
+        self.root.hash()
+    }
+
+    pub fn hex_encode(&self) -> String {
+        self.root.hex_encode(self.size as usize)
+    }
+
+    pub fn read_byte(&self, offset: u128) -> u8 {
+        if offset >= self.size {
+            0u8
+        } else {
+            self.root.read_byte(offset)
+        }
+    }
+
+    pub fn set_byte(&self, offset: u128, val: u8) -> Self {
+        Buffer {
+            root: Arc::new(self.root.set_byte(offset, val)),
+            size: if offset >= self.size {
+                offset + 1
+            } else {
+                self.size
+            },
+        }
+    }
+}
+
+struct BufferVisitor;
+
+impl<'de> Visitor<'de> for BufferVisitor {
+    type Value = Buffer;
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("Expected hex string")
+    }
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(Buffer::from_bytes(hex::decode(v).map_err(|_| {
+            E::custom("Could not buffer as hex string".to_string())
+        })?))
+    }
+}
+
+impl Serialize for Buffer {
+    fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&*format!(
+            "{}",
+            hex::encode(self.as_bytes(self.size as usize))
+        ))
+    }
+}
+
+impl<'de> Deserialize<'de> for Buffer {
+    fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_str(BufferVisitor)
+    }
+}
+
+impl BufferNode {
+    pub fn new_empty() -> Self {
+        BufferNode::Leaf(vec![0u8; 32])
+    }
+
+    pub fn _leaf_from_bytes(v: &[u8]) -> Self {
+        assert!(v.len() <= 32);
+        let mut buf = vec![0u8; 32];
+        for i in 0..v.len() {
+            buf[i] = v[i]
+        }
+        BufferNode::Leaf(buf)
+    }
+
+    fn _minimal_internal_from_bytes(v: &[u8]) -> Self {
+        assert!(v.len() > 32);
+        let (height, size) = _levels_needed(v.len() as u128);
+        BufferNode::_internal_from_bytes(height, size, v)
+    }
+
+    fn _internal_from_bytes(height: usize, capacity: u128, v: &[u8]) -> Self {
+        if height == 1 {
+            BufferNode::_leaf_from_bytes(v)
+        } else if v.len() == 0 {
+            BufferNode::new_empty_internal(height, capacity)
+        } else if v.len() as u128 <= capacity / 2 {
+            let left = Arc::new(BufferNode::_internal_from_bytes(
+                height - 1,
+                capacity / 2,
+                v,
+            ));
+            let right = Arc::new(BufferNode::new_empty_internal(height - 1, capacity / 2));
+            BufferNode::Internal(BufferInternal {
+                height,
+                capacity,
+                left: left.clone(),
+                right: right.clone(),
+                hash_val: {
+                    let mut b = left.hash().to_bytes_be();
+                    b.extend(right.hash().to_bytes_be());
+                    Uint256::from_bytes(&keccak256(&b))
+                },
+            })
+        } else {
+            let mid = (capacity / 2) as usize;
+            let left = Arc::new(BufferNode::_internal_from_bytes(
+                height - 1,
+                capacity / 2,
+                &v[0..mid],
+            ));
+            let right = Arc::new(BufferNode::_internal_from_bytes(
+                height - 1,
+                capacity / 2,
+                &v[mid..],
+            ));
+            BufferNode::Internal(BufferInternal {
+                height,
+                capacity,
+                left: left.clone(),
+                right: right.clone(),
+                hash_val: {
+                    let mut b = left.hash().to_bytes_be();
+                    b.extend(right.hash().to_bytes_be());
+                    Uint256::from_bytes(&keccak256(&b))
+                },
+            })
+        }
+    }
+
+    fn new_empty_internal(height: usize, capacity: u128) -> Self {
+        let child = Arc::new(if height == 1 {
+            BufferNode::new_empty()
+        } else {
+            BufferNode::new_empty_internal(height - 1, capacity / 2)
+        });
+        BufferNode::Internal(BufferInternal {
+            height,
+            capacity,
+            left: child.clone(),
+            right: child.clone(),
+            hash_val: {
+                let a = child.hash().to_bytes_be();
+                let mut b = a.clone();
+                b.extend(a);
+                Uint256::from_bytes(&keccak256(&b))
+            },
+        })
+    }
+
+    fn hash(&self) -> Uint256 {
+        match self {
+            BufferNode::Leaf(b) => Uint256::from_bytes(&keccak256(&b[..])),
+            BufferNode::Internal(x) => x.hash_val.clone(),
+        }
+    }
+
+    fn hex_encode(&self, size: usize) -> String {
+        match self {
+            BufferNode::Leaf(b) => hex::encode(b)[0..(2 * size)].to_string(),
+            BufferNode::Internal(node) => node.hex_encode(size),
+        }
+    }
+
+    fn read_byte(&self, offset: u128) -> u8 {
+        match self {
+            BufferNode::Leaf(b) => b[offset as usize],
+            BufferNode::Internal(node) => node.read_byte(offset),
+        }
+    }
+
+    fn set_byte(&self, offset: u128, val: u8) -> Self {
+        match self {
+            BufferNode::Leaf(b) => {
+                if (offset < 32) {
+                    let mut bb = b.clone();
+                    bb[offset as usize] = val;
+                    BufferNode::Leaf(bb)
+                } else {
+                    BufferNode::Internal(
+                        BufferInternal::grow_from_leaf(self.clone()).set_byte(offset, val),
+                    )
+                }
+            }
+            BufferNode::Internal(node) => BufferNode::Internal(node.set_byte(offset, val)),
+        }
+    }
+}
+
+impl BufferInternal {
+    fn new(height: usize, capacity: u128, left: BufferNode, right: BufferNode) -> Self {
+        BufferInternal {
+            height,
+            capacity,
+            left: Arc::new(left.clone()),
+            right: Arc::new(right.clone()),
+            hash_val: {
+                let mut b = left.hash().to_bytes_be();
+                b.extend(right.hash().to_bytes_be());
+                Uint256::from_bytes(&keccak256(&b))
+            },
+        }
+    }
+
+    fn grow(&self) -> Self {
+        BufferInternal::new(
+            self.height + 1,
+            self.capacity * 2,
+            BufferNode::Internal(self.clone()),
+            BufferNode::new_empty_internal(self.height, self.capacity),
+        )
+    }
+
+    fn grow_from_leaf(leaf: BufferNode) -> Self {
+        BufferInternal::new(2, 2 * 32, leaf, BufferNode::new_empty())
+    }
+
+    fn hex_encode(&self, size: usize) -> String {
+        let half_capacity = (self.capacity / 2) as usize;
+        if size == 0 {
+            "".to_string()
+        } else if size <= half_capacity {
+            self.left.hex_encode(size)
+        } else {
+            let mut left_str = self.left.hex_encode(half_capacity);
+            let right_str = self.right.hex_encode(size - half_capacity);
+            left_str.push_str(&right_str);
+            left_str
+        }
+    }
+
+    fn read_byte(&self, offset: u128) -> u8 {
+        if offset < self.capacity / 2 {
+            self.left.read_byte(offset)
+        } else {
+            self.right.read_byte(offset - self.capacity / 2)
+        }
+    }
+
+    fn set_byte(&self, offset: u128, val: u8) -> BufferInternal {
+        if offset < self.capacity / 2 {
+            BufferInternal::new(
+                self.height,
+                self.capacity,
+                self.left.set_byte(offset, val),
+                (*self.right).clone(),
+            )
+        } else if offset < self.capacity {
+            BufferInternal::new(
+                self.height,
+                self.capacity,
+                (*self.left).clone(),
+                self.right.set_byte(offset - self.capacity / 2, val),
+            )
+        } else {
+            self.grow().set_byte(offset, val)
+        }
+    }
+}
+
+fn _levels_needed(x: u128) -> (usize, u128) {
+    let mut height = 1;
+    let mut size = 32u128;
+    while (size < x) {
+        height = height + 1;
+        size = size * 2;
+    }
+    (height, size)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Value {
+    Int(Uint256),
+    Tuple(Arc<Vec<Value>>),
+    CodePoint(CodePt),
+    Label(Label),
+    Buffer(Buffer),
+}
+
+impl Value {
+    /// Returns a value containing no data, a zero sized tuple.
+    pub fn none() -> Self {
+        Value::Tuple(Arc::new(vec![]))
+    }
+
+    /// Creates a single tuple `Value` from a `Vec<Value>`
     pub fn new_tuple(v: Vec<Value>) -> Self {
-        Value::Tuple(Rc::new(v))
+        Value::Tuple(Arc::new(v))
+    }
+
+    pub fn new_buffer(v: Vec<u8>) -> Self {
+        Value::Buffer(Buffer::from_bytes(v))
+    }
+
+    pub fn copy_buffer(v: Buffer) -> Self {
+        Value::Buffer(v)
+    }
+
+    pub fn upload(&self, u: &mut CodeUploader) {
+        match self {
+            Value::Int(ui) => {
+                u.push_byte(0u8); // type code for uint
+                u.push_bytes(&ui.rlp_encode());
+            }
+            Value::Tuple(tup) => {
+                u.push_byte((10 + tup.len()) as u8);
+                for subval in &**tup {
+                    subval.upload(u);
+                }
+            }
+            Value::CodePoint(cp) => {
+                cp.upload(u);
+            }
+            Value::Buffer(buf) => {
+                if buf.size == 0 {
+                    u.push_byte(2u8);
+                } else {
+                    u.push_byte(3u8);
+                    let size = buf.max_size() as usize;
+                    u.push_bytes(&Uint256::from_usize(size).rlp_encode());
+                    u.push_bytes(&buf.as_bytes(size));
+                }
+            }
+            _ => {
+                println!("unable to upload value: {}", self);
+                panic!();
+            } // other types should never be encountered here
+        }
+    }
+
+    pub fn is_none(&self) -> bool {
+        self == &Value::none()
     }
 
     pub fn type_insn_result(&self) -> usize {
@@ -305,6 +699,7 @@ impl Value {
             Value::Int(_) => 0,
             Value::CodePoint(_) => 1,
             Value::Tuple(_) => 3,
+            Value::Buffer(_) => 4,
             Value::Label(_) => {
                 panic!("tried to run type instruction on a label");
             }
@@ -315,6 +710,7 @@ impl Value {
         match self {
             Value::Int(_) => Ok(self),
             Value::CodePoint(_) => Ok(self),
+            Value::Buffer(_) => Ok(self),
             Value::Label(label) => {
                 let maybe_pc = label_map.get(&label);
                 match maybe_pc {
@@ -333,20 +729,30 @@ impl Value {
         }
     }
 
-    pub fn relocate(
-        self,
-        int_offset: usize,
-        ext_offset: usize,
-        func_offset: usize,
-    ) -> (Self, usize) {
+    pub fn replace_last_none(&self, val: &Value) -> Self {
+        if self.is_none() {
+            return val.clone();
+        }
+        if let Value::Tuple(tup) = self {
+            let tlen = tup.len();
+            let mut mut_tup = tup.clone();
+            let new_tup = Arc::<Vec<Value>>::make_mut(&mut mut_tup);
+            new_tup[tlen - 1] = new_tup[tlen - 1].replace_last_none(val);
+            Value::new_tuple(new_tup.to_vec())
+        } else {
+            panic!();
+        }
+    }
+
+    pub fn relocate(self, int_offset: usize, func_offset: usize) -> (Self, usize) {
         match self {
             Value::Int(_) => (self, 0),
+            Value::Buffer(_) => (self, 0),
             Value::Tuple(v) => {
                 let mut rel_v = Vec::new();
                 let mut max_func_offset = 0;
                 for val in &*v {
-                    let (new_val, new_func_offset) =
-                        val.clone().relocate(int_offset, ext_offset, func_offset);
+                    let (new_val, new_func_offset) = val.clone().relocate(int_offset, func_offset);
                     rel_v.push(new_val);
                     if (max_func_offset < new_func_offset) {
                         max_func_offset = new_func_offset;
@@ -354,32 +760,15 @@ impl Value {
                 }
                 (Value::new_tuple(rel_v), max_func_offset)
             }
-            Value::CodePoint(cpt) => (Value::CodePoint(cpt.relocate(int_offset, ext_offset)), 0),
+            Value::CodePoint(cpt) => (Value::CodePoint(cpt.relocate(int_offset)), 0),
             Value::Label(label) => {
-                let (new_label, new_func_offset) =
-                    label.relocate(int_offset, ext_offset, func_offset);
+                let (new_label, new_func_offset) = label.relocate(int_offset, func_offset);
                 (Value::Label(new_label), new_func_offset)
             }
         }
     }
 
-    pub fn xlate_labels(self, label_map: &HashMap<Label, &Label>) -> Self {
-        match self {
-            Value::Int(_) | Value::CodePoint(_) => self,
-            Value::Tuple(v) => {
-                let mut newv = Vec::new();
-                for val in &*v {
-                    newv.push(val.clone().xlate_labels(label_map));
-                }
-                Value::new_tuple(newv)
-            }
-            Value::Label(label) => match label_map.get(&label) {
-                Some(label2) => Value::Label(**label2),
-                None => self,
-            },
-        }
-    }
-
+    /// Converts `Value` to usize if possible, otherwise returns `None`.
     pub fn to_usize(&self) -> Option<usize> {
         match self {
             Value::Int(i) => i.to_usize(),
@@ -391,14 +780,14 @@ impl Value {
         //BUGBUG: should do same hash as AVM
         match self {
             Value::Int(ui) => Value::Int(ui.avm_hash()),
+            Value::Buffer(buf) => Value::Int(buf.avm_hash()),
             Value::Tuple(v) => {
                 let mut acc = Uint256::zero();
-                for val in &*v.clone() {
-                    let vhash = val.avm_hash();
-                    if let Value::Int(ui) = vhash {
+                for val in v.to_vec() {
+                    if let Value::Int(ui) = val.avm_hash() {
                         acc = Uint256::avm_hash2(&acc, &ui);
                     } else {
-                        panic!("avm_hash returned wrong datatype")
+                        panic!("Invalid value type from hash");
                     }
                 }
                 Value::Int(acc)
@@ -411,7 +800,69 @@ impl Value {
     }
 
     pub fn avm_hash2(v1: &Self, v2: &Self) -> Value {
-        Value::new_tuple(vec![v1.clone(), v2.clone()]).avm_hash()
+        if let Value::Int(ui) = v1 {
+            if let Value::Int(ui2) = v2 {
+                let mut buf = ui.to_bytes_be();
+                buf.extend(ui2.to_bytes_be());
+                Value::Int(Uint256::from_bytes(&keccak256(&buf)))
+            } else {
+                panic!();
+            }
+        } else {
+            panic!();
+        }
+    }
+
+    pub fn pretty_print(&self, highlight: &str) -> String {
+        match self {
+            Value::Int(i) => Color::color(highlight, i),
+            Value::CodePoint(pc) => Color::color(highlight, pc),
+            Value::Label(label) => Color::color(highlight, label),
+            Value::Buffer(buf) => {
+                let mut text = String::from_utf8_lossy(&hex::decode(buf.hex_encode()).unwrap())
+                    .chars()
+                    .filter(|c| !c.is_ascii_control())
+                    .collect::<String>();
+                text.truncate(100);
+                Color::lavender(format!("\"{}\"", text))
+            }
+            Value::Tuple(tup) => match tup.is_empty() {
+                true => Color::grey("_"),
+                false => {
+                    let mut s = Color::color(highlight, "(");
+                    for (i, value) in tup.iter().enumerate() {
+                        let child = value.pretty_print(highlight);
+                        match i == 0 {
+                            true => {
+                                s = format!("{}{}", s, child);
+                            }
+                            false => {
+                                s = format!("{}{} {}", s, Color::grey(","), child);
+                            }
+                        }
+                    }
+                    format!("{}{}", s, Color::color(highlight, ")"))
+                }
+            },
+        }
+    }
+}
+
+impl From<usize> for Value {
+    fn from(v: usize) -> Self {
+        Self::Int(Uint256::from_usize(v))
+    }
+}
+
+impl From<u64> for Value {
+    fn from(v: u64) -> Self {
+        Self::Int(Uint256::from_u64(v))
+    }
+}
+
+impl From<u8> for Value {
+    fn from(v: u8) -> Self {
+        Self::Int(Uint256::from_usize(v.into()))
     }
 }
 
@@ -419,6 +870,7 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Int(i) => i.fmt(f),
+            Value::Buffer(buf) => write!(f, "Buffer({})", buf.hex_encode()),
             Value::CodePoint(pc) => write!(f, "CodePoint({})", pc),
             Value::Label(label) => write!(f, "Label({})", label),
             Value::Tuple(tup) => {
@@ -444,7 +896,7 @@ impl fmt::Display for Value {
 pub enum Opcode {
     GetLocal,
     SetLocal,
-    MakeFrame(usize, usize),
+    MakeFrame(usize, usize, bool, bool),
     Label(Label),
     PushExternal(usize), // push codeptr of external function -- index in imported_funcs
     TupleGet(usize),     // arg is size of anysize_tuple
@@ -464,9 +916,10 @@ pub enum Opcode {
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, Eq, PartialEq, Hash)]
 #[repr(u8)]
 pub enum AVMOpcode {
-    Plus = 0x01,
+    Zero = 0x00,
+    Add = 0x01,
     Mul,
-    Minus,
+    Sub,
     Div,
     Sdiv,
     Mod,
@@ -491,17 +944,19 @@ pub enum AVMOpcode {
     ShiftArith,
     Hash = 0x20,
     Type,
-    Hash2,
+    EthHash2,
     Keccakf,
     Sha256f,
+    Ripemd160f,
+    Blake2f,
     Pop = 0x30,
-    PushStatic,
-    Rget,
+    Spush,
+    Rpush,
     Rset,
     Jump,
     Cjump,
     StackEmpty,
-    GetPC,
+    PCpush,
     AuxPush,
     AuxPop,
     AuxStackEmpty,
@@ -523,10 +978,10 @@ pub enum AVMOpcode {
     Send = 0x70,
     InboxPeek,
     Inbox,
-    Panic,
+    Error,
     Halt,
     SetGas,
-    GetGas,
+    PushGas,
     ErrCodePoint,
     PushInsn,
     PushInsnImm,
@@ -537,28 +992,62 @@ pub enum AVMOpcode {
     EcMul,
     EcPairing,
     DebugPrint = 0x90,
+    NewBuffer = 0xa0,
+    GetBuffer8,
+    GetBuffer64,
+    GetBuffer256,
+    SetBuffer8,
+    SetBuffer64,
+    SetBuffer256,
 }
 
-impl MiniProperties for Opcode {
-    fn is_pure(&self) -> bool {
+impl Opcode {
+    pub fn is_view(&self, _: &TypeTree) -> bool {
+        match self {
+            Opcode::AVMOpcode(AVMOpcode::Inbox)
+            | Opcode::AVMOpcode(AVMOpcode::InboxPeek)
+            | Opcode::AVMOpcode(AVMOpcode::Rpush)
+            | Opcode::AVMOpcode(AVMOpcode::PushInsn)
+            | Opcode::AVMOpcode(AVMOpcode::PushInsnImm)
+            | Opcode::AVMOpcode(AVMOpcode::ErrCodePoint)
+            | Opcode::AVMOpcode(AVMOpcode::ErrPush)
+            | Opcode::AVMOpcode(AVMOpcode::PushGas)
+            | Opcode::AVMOpcode(AVMOpcode::Sideload)
+            | Opcode::AVMOpcode(AVMOpcode::Jump)
+            | Opcode::AVMOpcode(AVMOpcode::Cjump)
+            | Opcode::AVMOpcode(AVMOpcode::AuxPop)
+            | Opcode::AVMOpcode(AVMOpcode::AuxPush) => true,
+            _ => false,
+        }
+    }
+    pub fn is_write(&self, _: &TypeTree) -> bool {
         match self {
             Opcode::AVMOpcode(AVMOpcode::Log)
             | Opcode::AVMOpcode(AVMOpcode::Inbox)
             | Opcode::AVMOpcode(AVMOpcode::InboxPeek)
             | Opcode::AVMOpcode(AVMOpcode::Send)
             | Opcode::AVMOpcode(AVMOpcode::Rset)
-            | Opcode::AVMOpcode(AVMOpcode::Rget)
             | Opcode::AVMOpcode(AVMOpcode::PushInsn)
             | Opcode::AVMOpcode(AVMOpcode::PushInsnImm)
-            | Opcode::AVMOpcode(AVMOpcode::ErrCodePoint)
             | Opcode::AVMOpcode(AVMOpcode::ErrSet)
-            | Opcode::AVMOpcode(AVMOpcode::ErrPush)
             | Opcode::AVMOpcode(AVMOpcode::SetGas)
-            | Opcode::AVMOpcode(AVMOpcode::GetGas)
+            | Opcode::AVMOpcode(AVMOpcode::Sideload)    // this is special-cased, so we can't reorder these
             | Opcode::AVMOpcode(AVMOpcode::Jump)
             | Opcode::AVMOpcode(AVMOpcode::Cjump)
-            | Opcode::AVMOpcode(AVMOpcode::Sideload) => false,
-            _ => true,
+            | Opcode::AVMOpcode(AVMOpcode::AuxPop)
+            | Opcode::AVMOpcode(AVMOpcode::AuxPush) => true,
+            _ => false,
+        }
+    }
+
+    pub fn pretty_print(&self, label_color: &str) -> String {
+        match self {
+            Opcode::MakeFrame(nargs, space, prebuilt, return_address) => match prebuilt {
+                true => format!("MakeFrame<{}, {}, {}>", nargs, space, return_address),
+                false => format!("MakeFrame({}, {}, {})", nargs, space, return_address),
+            },
+            Opcode::Label(label) => Value::Label(*label).pretty_print(label_color),
+            _ => format!("{}", self.to_name()),
         }
     }
 }
@@ -566,11 +1055,12 @@ impl MiniProperties for Opcode {
 impl Opcode {
     pub fn from_name(name: &str) -> Self {
         match name {
-            "rget" => Opcode::AVMOpcode(AVMOpcode::Rget),
+            "rget" => Opcode::AVMOpcode(AVMOpcode::Rpush),
             "rset" => Opcode::AVMOpcode(AVMOpcode::Rset),
-            "pushstatic" => Opcode::AVMOpcode(AVMOpcode::PushStatic),
+            "spush" => Opcode::AVMOpcode(AVMOpcode::Spush),
             "tset" => Opcode::AVMOpcode(AVMOpcode::Tset),
             "tget" => Opcode::AVMOpcode(AVMOpcode::Tget),
+            "tlen" => Opcode::AVMOpcode(AVMOpcode::Tlen),
             "pop" => Opcode::AVMOpcode(AVMOpcode::Pop),
             "stackempty" => Opcode::AVMOpcode(AVMOpcode::StackEmpty),
             "auxpush" => Opcode::AVMOpcode(AVMOpcode::AuxPush),
@@ -586,12 +1076,14 @@ impl Opcode {
             "unaryminus" => Opcode::UnaryMinus,
             "bitwiseneg" => Opcode::AVMOpcode(AVMOpcode::BitwiseNeg),
             "hash" => Opcode::AVMOpcode(AVMOpcode::Hash),
-            "hash2" => Opcode::AVMOpcode(AVMOpcode::Hash2),
+            "ethhash2" => Opcode::AVMOpcode(AVMOpcode::EthHash2),
             "keccakf" => Opcode::AVMOpcode(AVMOpcode::Keccakf),
             "sha256f" => Opcode::AVMOpcode(AVMOpcode::Sha256f),
+            "ripemd160f" => Opcode::AVMOpcode(AVMOpcode::Ripemd160f),
+            "blake2f" => Opcode::AVMOpcode(AVMOpcode::Blake2f),
             "length" => Opcode::AVMOpcode(AVMOpcode::Tlen),
-            "plus" => Opcode::AVMOpcode(AVMOpcode::Plus),
-            "minus" => Opcode::AVMOpcode(AVMOpcode::Minus),
+            "add" => Opcode::AVMOpcode(AVMOpcode::Add),
+            "sub" => Opcode::AVMOpcode(AVMOpcode::Sub),
             "mul" => Opcode::AVMOpcode(AVMOpcode::Mul),
             "div" => Opcode::AVMOpcode(AVMOpcode::Div),
             "mod" => Opcode::AVMOpcode(AVMOpcode::Mod),
@@ -619,175 +1111,320 @@ impl Opcode {
             "jump" => Opcode::AVMOpcode(AVMOpcode::Jump),
             "log" => Opcode::AVMOpcode(AVMOpcode::Log),
             "send" => Opcode::AVMOpcode(AVMOpcode::Send),
+            "errpush" => Opcode::AVMOpcode(AVMOpcode::ErrPush),
             "errcodept" => Opcode::AVMOpcode(AVMOpcode::ErrCodePoint),
             "pushinsn" => Opcode::AVMOpcode(AVMOpcode::PushInsn),
             "pushinsnimm" => Opcode::AVMOpcode(AVMOpcode::PushInsnImm),
             "openinsn" => Opcode::AVMOpcode(AVMOpcode::OpenInsn),
             "debugprint" => Opcode::AVMOpcode(AVMOpcode::DebugPrint),
             "setgas" => Opcode::AVMOpcode(AVMOpcode::SetGas),
-            "getgas" => Opcode::AVMOpcode(AVMOpcode::GetGas),
+            "pushgas" => Opcode::AVMOpcode(AVMOpcode::PushGas),
             "errset" => Opcode::AVMOpcode(AVMOpcode::ErrSet),
             "sideload" => Opcode::AVMOpcode(AVMOpcode::Sideload),
             "ecrecover" => Opcode::AVMOpcode(AVMOpcode::EcRecover),
             "ecadd" => Opcode::AVMOpcode(AVMOpcode::EcAdd),
             "ecmul" => Opcode::AVMOpcode(AVMOpcode::EcMul),
             "ecpairing" => Opcode::AVMOpcode(AVMOpcode::EcPairing),
+            "addmod" => Opcode::AVMOpcode(AVMOpcode::AddMod),
+            "mulmod" => Opcode::AVMOpcode(AVMOpcode::MulMod),
             _ => {
                 panic!("opcode not supported in asm segment: {}", name);
             }
         }
     }
 
+    pub fn to_name(&self) -> &str {
+        match self {
+            Opcode::AVMOpcode(avm) => avm.to_name(),
+            Opcode::GetLocal => "GetLocal",
+            Opcode::SetLocal => "SetLocal",
+            Opcode::GetGlobalVar(_) => "GetGlobal",
+            Opcode::SetGlobalVar(_) => "SetGlobal",
+            Opcode::Label(_) => "Label",
+            Opcode::PushExternal(_) => "PushExternal",
+            Opcode::TupleGet(_) => "TupleGet",
+            Opcode::TupleSet(_) => "TupleSet",
+            Opcode::ArrayGet => "ArrayGet",
+            Opcode::UncheckedFixedArrayGet(_) => "UncheckedFixedArrayGet",
+            Opcode::Return => "return",
+            Opcode::UnaryMinus => "unaryminus",
+            Opcode::LogicalAnd => "logicaland",
+            Opcode::LogicalOr => "logicalor",
+            Opcode::Len => "len",
+            _ => "to_name() not implemented",
+        }
+    }
+}
+
+impl From<AVMOpcode> for Opcode {
+    fn from(from: AVMOpcode) -> Self {
+        Opcode::AVMOpcode(from)
+    }
+}
+
+impl AVMOpcode {
+    fn to_name(&self) -> &str {
+        match self {
+            AVMOpcode::Rpush => "rpush",
+            AVMOpcode::Rset => "rset",
+            AVMOpcode::Spush => "spush",
+            AVMOpcode::Tset => "tset",
+            AVMOpcode::Tget => "tget",
+            AVMOpcode::Pop => "pop",
+            AVMOpcode::StackEmpty => "stackempty",
+            AVMOpcode::AuxPush => "auxpush",
+            AVMOpcode::AuxPop => "auxpop",
+            AVMOpcode::AuxStackEmpty => "auxstackempty",
+            AVMOpcode::Xget => "xget",
+            AVMOpcode::Xset => "xset",
+            AVMOpcode::Dup0 => "dup0",
+            AVMOpcode::Dup1 => "dup1",
+            AVMOpcode::Dup2 => "dup2",
+            AVMOpcode::Swap1 => "swap1",
+            AVMOpcode::Swap2 => "swap2",
+            AVMOpcode::BitwiseNeg => "bitwiseneg",
+            AVMOpcode::Hash => "hash",
+            AVMOpcode::EthHash2 => "ethhash2",
+            AVMOpcode::Type => "type",
+            AVMOpcode::Keccakf => "keccakf",
+            AVMOpcode::Sha256f => "sha256f",
+            AVMOpcode::Ripemd160f => "ripemd160f",
+            AVMOpcode::Blake2f => "blake2f",
+            AVMOpcode::Tlen => "length",
+            AVMOpcode::Add => "add",
+            AVMOpcode::Sub => "sub",
+            AVMOpcode::Mul => "mul",
+            AVMOpcode::Div => "div",
+            AVMOpcode::Mod => "mod",
+            AVMOpcode::Sdiv => "sdiv",
+            AVMOpcode::Smod => "smod",
+            AVMOpcode::AddMod => "addmod",
+            AVMOpcode::MulMod => "mulmod",
+            AVMOpcode::Exp => "exp",
+            AVMOpcode::LessThan => "lt",
+            AVMOpcode::GreaterThan => "gt",
+            AVMOpcode::SLessThan => "slt",
+            AVMOpcode::SGreaterThan => "sgt",
+            AVMOpcode::Equal => "eq",
+            AVMOpcode::IsZero => "iszero",
+            AVMOpcode::Byte => "byte",
+            AVMOpcode::SignExtend => "signextend",
+            AVMOpcode::ShiftLeft => "shl",
+            AVMOpcode::ShiftRight => "shr",
+            AVMOpcode::ShiftArith => "sar",
+            AVMOpcode::BitwiseAnd => "bitwiseand",
+            AVMOpcode::BitwiseOr => "bitwiseor",
+            AVMOpcode::BitwiseXor => "bitwisexor",
+            AVMOpcode::Noop => "noop",
+            AVMOpcode::ErrPush => "errpush",
+            AVMOpcode::Inbox => "inbox",
+            AVMOpcode::Error => "error",
+            AVMOpcode::Zero => "zero",
+            AVMOpcode::Halt => "halt",
+            AVMOpcode::InboxPeek => "inboxpeek",
+            AVMOpcode::Jump => "jump",
+            AVMOpcode::Cjump => "cjump",
+            AVMOpcode::PCpush => "pcpush",
+            AVMOpcode::Breakpoint => "breakpoint",
+            AVMOpcode::Log => "log",
+            AVMOpcode::Send => "send",
+            AVMOpcode::ErrCodePoint => "errcodept",
+            AVMOpcode::PushInsn => "pushinsn",
+            AVMOpcode::PushInsnImm => "pushinsnimm",
+            AVMOpcode::OpenInsn => "openinsn",
+            AVMOpcode::DebugPrint => "debugprint",
+            AVMOpcode::SetGas => "setgas",
+            AVMOpcode::PushGas => "pushgas",
+            AVMOpcode::ErrSet => "errset",
+            AVMOpcode::Sideload => "sideload",
+            AVMOpcode::EcRecover => "ecrecover",
+            AVMOpcode::EcAdd => "ecadd",
+            AVMOpcode::EcMul => "ecmul",
+            AVMOpcode::EcPairing => "ecpairing",
+            AVMOpcode::NewBuffer => "newbuffer",
+            AVMOpcode::GetBuffer8 => "getbuffer8",
+            AVMOpcode::GetBuffer64 => "getbuffer64",
+            AVMOpcode::GetBuffer256 => "getbuffer256",
+            AVMOpcode::SetBuffer8 => "setbuffer8",
+            AVMOpcode::SetBuffer64 => "setbuffer64",
+            AVMOpcode::SetBuffer256 => "setbuffer256",
+        }
+    }
+
     pub fn from_number(num: usize) -> Option<Self> {
         match num {
-            0x01 => Some(Opcode::AVMOpcode(AVMOpcode::Plus)),
-            0x02 => Some(Opcode::AVMOpcode(AVMOpcode::Mul)),
-            0x03 => Some(Opcode::AVMOpcode(AVMOpcode::Minus)),
-            0x04 => Some(Opcode::AVMOpcode(AVMOpcode::Div)),
-            0x05 => Some(Opcode::AVMOpcode(AVMOpcode::Sdiv)),
-            0x06 => Some(Opcode::AVMOpcode(AVMOpcode::Mod)),
-            0x07 => Some(Opcode::AVMOpcode(AVMOpcode::Smod)),
-            0x08 => Some(Opcode::AVMOpcode(AVMOpcode::AddMod)),
-            0x09 => Some(Opcode::AVMOpcode(AVMOpcode::MulMod)),
-            0x0a => Some(Opcode::AVMOpcode(AVMOpcode::Exp)),
-            0x0b => Some(Opcode::AVMOpcode(AVMOpcode::SignExtend)),
-            0x10 => Some(Opcode::AVMOpcode(AVMOpcode::LessThan)),
-            0x11 => Some(Opcode::AVMOpcode(AVMOpcode::GreaterThan)),
-            0x12 => Some(Opcode::AVMOpcode(AVMOpcode::SLessThan)),
-            0x13 => Some(Opcode::AVMOpcode(AVMOpcode::SGreaterThan)),
-            0x14 => Some(Opcode::AVMOpcode(AVMOpcode::Equal)),
-            0x15 => Some(Opcode::AVMOpcode(AVMOpcode::IsZero)),
-            0x16 => Some(Opcode::AVMOpcode(AVMOpcode::BitwiseAnd)),
-            0x17 => Some(Opcode::AVMOpcode(AVMOpcode::BitwiseOr)),
-            0x18 => Some(Opcode::AVMOpcode(AVMOpcode::BitwiseXor)),
-            0x19 => Some(Opcode::AVMOpcode(AVMOpcode::BitwiseNeg)),
-            0x1a => Some(Opcode::AVMOpcode(AVMOpcode::Byte)),
-            0x20 => Some(Opcode::AVMOpcode(AVMOpcode::Hash)),
-            0x21 => Some(Opcode::AVMOpcode(AVMOpcode::Type)),
-            0x22 => Some(Opcode::AVMOpcode(AVMOpcode::Hash2)),
-            0x23 => Some(Opcode::AVMOpcode(AVMOpcode::Keccakf)),
-            0x30 => Some(Opcode::AVMOpcode(AVMOpcode::Pop)),
-            0x31 => Some(Opcode::AVMOpcode(AVMOpcode::PushStatic)),
-            0x32 => Some(Opcode::AVMOpcode(AVMOpcode::Rget)),
-            0x33 => Some(Opcode::AVMOpcode(AVMOpcode::Rset)),
-            0x34 => Some(Opcode::AVMOpcode(AVMOpcode::Jump)),
-            0x35 => Some(Opcode::AVMOpcode(AVMOpcode::Cjump)),
-            0x36 => Some(Opcode::AVMOpcode(AVMOpcode::StackEmpty)),
-            0x37 => Some(Opcode::AVMOpcode(AVMOpcode::GetPC)),
-            0x38 => Some(Opcode::AVMOpcode(AVMOpcode::AuxPush)),
-            0x39 => Some(Opcode::AVMOpcode(AVMOpcode::AuxPop)),
-            0x3a => Some(Opcode::AVMOpcode(AVMOpcode::AuxStackEmpty)),
-            0x3b => Some(Opcode::AVMOpcode(AVMOpcode::Noop)),
-            0x3c => Some(Opcode::AVMOpcode(AVMOpcode::ErrPush)),
-            0x3d => Some(Opcode::AVMOpcode(AVMOpcode::ErrSet)),
-            0x40 => Some(Opcode::AVMOpcode(AVMOpcode::Dup0)),
-            0x41 => Some(Opcode::AVMOpcode(AVMOpcode::Dup1)),
-            0x42 => Some(Opcode::AVMOpcode(AVMOpcode::Dup2)),
-            0x43 => Some(Opcode::AVMOpcode(AVMOpcode::Swap1)),
-            0x44 => Some(Opcode::AVMOpcode(AVMOpcode::Swap2)),
-            0x50 => Some(Opcode::AVMOpcode(AVMOpcode::Tget)),
-            0x51 => Some(Opcode::AVMOpcode(AVMOpcode::Tset)),
-            0x52 => Some(Opcode::AVMOpcode(AVMOpcode::Tlen)),
-            0x53 => Some(Opcode::AVMOpcode(AVMOpcode::Xget)),
-            0x54 => Some(Opcode::AVMOpcode(AVMOpcode::Xset)),
-            0x60 => Some(Opcode::AVMOpcode(AVMOpcode::Breakpoint)),
-            0x61 => Some(Opcode::AVMOpcode(AVMOpcode::Log)),
-            0x70 => Some(Opcode::AVMOpcode(AVMOpcode::Send)),
-            0x71 => Some(Opcode::AVMOpcode(AVMOpcode::InboxPeek)),
-            0x72 => Some(Opcode::AVMOpcode(AVMOpcode::Inbox)),
-            0x73 => Some(Opcode::AVMOpcode(AVMOpcode::Panic)),
-            0x74 => Some(Opcode::AVMOpcode(AVMOpcode::Halt)),
-            0x75 => Some(Opcode::AVMOpcode(AVMOpcode::SetGas)),
-            0x76 => Some(Opcode::AVMOpcode(AVMOpcode::GetGas)),
-            0x77 => Some(Opcode::AVMOpcode(AVMOpcode::ErrCodePoint)),
-            0x78 => Some(Opcode::AVMOpcode(AVMOpcode::PushInsn)),
-            0x79 => Some(Opcode::AVMOpcode(AVMOpcode::PushInsnImm)),
-            0x7a => Some(Opcode::AVMOpcode(AVMOpcode::OpenInsn)),
-            0x7b => Some(Opcode::AVMOpcode(AVMOpcode::Sideload)),
-            0x80 => Some(Opcode::AVMOpcode(AVMOpcode::EcRecover)),
-            0x81 => Some(Opcode::AVMOpcode(AVMOpcode::EcAdd)),
-            0x82 => Some(Opcode::AVMOpcode(AVMOpcode::EcMul)),
-            0x83 => Some(Opcode::AVMOpcode(AVMOpcode::EcPairing)),
-            0x90 => Some(Opcode::AVMOpcode(AVMOpcode::DebugPrint)),
+            0x00 => Some(AVMOpcode::Zero),
+            0x01 => Some(AVMOpcode::Add),
+            0x02 => Some(AVMOpcode::Mul),
+            0x03 => Some(AVMOpcode::Sub),
+            0x04 => Some(AVMOpcode::Div),
+            0x05 => Some(AVMOpcode::Sdiv),
+            0x06 => Some(AVMOpcode::Mod),
+            0x07 => Some(AVMOpcode::Smod),
+            0x08 => Some(AVMOpcode::AddMod),
+            0x09 => Some(AVMOpcode::MulMod),
+            0x0a => Some(AVMOpcode::Exp),
+            0x0b => Some(AVMOpcode::SignExtend),
+            0x10 => Some(AVMOpcode::LessThan),
+            0x11 => Some(AVMOpcode::GreaterThan),
+            0x12 => Some(AVMOpcode::SLessThan),
+            0x13 => Some(AVMOpcode::SGreaterThan),
+            0x14 => Some(AVMOpcode::Equal),
+            0x15 => Some(AVMOpcode::IsZero),
+            0x16 => Some(AVMOpcode::BitwiseAnd),
+            0x17 => Some(AVMOpcode::BitwiseOr),
+            0x18 => Some(AVMOpcode::BitwiseXor),
+            0x19 => Some(AVMOpcode::BitwiseNeg),
+            0x1a => Some(AVMOpcode::Byte),
+            0x1b => Some(AVMOpcode::ShiftLeft),
+            0x1c => Some(AVMOpcode::ShiftRight),
+            0x1d => Some(AVMOpcode::ShiftArith),
+            0x20 => Some(AVMOpcode::Hash),
+            0x21 => Some(AVMOpcode::Type),
+            0x22 => Some(AVMOpcode::EthHash2),
+            0x23 => Some(AVMOpcode::Keccakf),
+            0x24 => Some(AVMOpcode::Sha256f),
+            0x25 => Some(AVMOpcode::Ripemd160f),
+            0x26 => Some(AVMOpcode::Blake2f),
+            0x30 => Some(AVMOpcode::Pop),
+            0x31 => Some(AVMOpcode::Spush),
+            0x32 => Some(AVMOpcode::Rpush),
+            0x33 => Some(AVMOpcode::Rset),
+            0x34 => Some(AVMOpcode::Jump),
+            0x35 => Some(AVMOpcode::Cjump),
+            0x36 => Some(AVMOpcode::StackEmpty),
+            0x37 => Some(AVMOpcode::PCpush),
+            0x38 => Some(AVMOpcode::AuxPush),
+            0x39 => Some(AVMOpcode::AuxPop),
+            0x3a => Some(AVMOpcode::AuxStackEmpty),
+            0x3b => Some(AVMOpcode::Noop),
+            0x3c => Some(AVMOpcode::ErrPush),
+            0x3d => Some(AVMOpcode::ErrSet),
+            0x40 => Some(AVMOpcode::Dup0),
+            0x41 => Some(AVMOpcode::Dup1),
+            0x42 => Some(AVMOpcode::Dup2),
+            0x43 => Some(AVMOpcode::Swap1),
+            0x44 => Some(AVMOpcode::Swap2),
+            0x50 => Some(AVMOpcode::Tget),
+            0x51 => Some(AVMOpcode::Tset),
+            0x52 => Some(AVMOpcode::Tlen),
+            0x53 => Some(AVMOpcode::Xget),
+            0x54 => Some(AVMOpcode::Xset),
+            0x60 => Some(AVMOpcode::Breakpoint),
+            0x61 => Some(AVMOpcode::Log),
+            0x70 => Some(AVMOpcode::Send),
+            0x71 => Some(AVMOpcode::InboxPeek),
+            0x72 => Some(AVMOpcode::Inbox),
+            0x73 => Some(AVMOpcode::Error),
+            0x74 => Some(AVMOpcode::Halt),
+            0x75 => Some(AVMOpcode::SetGas),
+            0x76 => Some(AVMOpcode::PushGas),
+            0x77 => Some(AVMOpcode::ErrCodePoint),
+            0x78 => Some(AVMOpcode::PushInsn),
+            0x79 => Some(AVMOpcode::PushInsnImm),
+            0x7a => Some(AVMOpcode::OpenInsn),
+            0x7b => Some(AVMOpcode::Sideload),
+            0x80 => Some(AVMOpcode::EcRecover),
+            0x81 => Some(AVMOpcode::EcAdd),
+            0x82 => Some(AVMOpcode::EcMul),
+            0x83 => Some(AVMOpcode::EcPairing),
+            0x90 => Some(AVMOpcode::DebugPrint),
+            0xa0 => Some(AVMOpcode::NewBuffer),
+            0xa1 => Some(AVMOpcode::GetBuffer8),
+            0xa2 => Some(AVMOpcode::GetBuffer64),
+            0xa3 => Some(AVMOpcode::GetBuffer256),
+            0xa4 => Some(AVMOpcode::SetBuffer8),
+            0xa5 => Some(AVMOpcode::SetBuffer64),
+            0xa6 => Some(AVMOpcode::SetBuffer256),
             _ => None,
         }
     }
 
-    pub fn to_number(&self) -> Option<u8> {
+    pub fn to_number(&self) -> u8 {
         match self {
-            Opcode::AVMOpcode(AVMOpcode::Plus) => Some(0x01),
-            Opcode::AVMOpcode(AVMOpcode::Mul) => Some(0x02),
-            Opcode::AVMOpcode(AVMOpcode::Minus) => Some(0x03),
-            Opcode::AVMOpcode(AVMOpcode::Div) => Some(0x04),
-            Opcode::AVMOpcode(AVMOpcode::Sdiv) => Some(0x05),
-            Opcode::AVMOpcode(AVMOpcode::Mod) => Some(0x06),
-            Opcode::AVMOpcode(AVMOpcode::Smod) => Some(0x07),
-            Opcode::AVMOpcode(AVMOpcode::AddMod) => Some(0x08),
-            Opcode::AVMOpcode(AVMOpcode::MulMod) => Some(0x09),
-            Opcode::AVMOpcode(AVMOpcode::Exp) => Some(0x0a),
-            Opcode::AVMOpcode(AVMOpcode::SignExtend) => Some(0x0b),
-            Opcode::AVMOpcode(AVMOpcode::LessThan) => Some(0x10),
-            Opcode::AVMOpcode(AVMOpcode::GreaterThan) => Some(0x11),
-            Opcode::AVMOpcode(AVMOpcode::SLessThan) => Some(0x012),
-            Opcode::AVMOpcode(AVMOpcode::SGreaterThan) => Some(0x13),
-            Opcode::AVMOpcode(AVMOpcode::Equal) => Some(0x14),
-            Opcode::AVMOpcode(AVMOpcode::IsZero) => Some(0x15),
-            Opcode::AVMOpcode(AVMOpcode::BitwiseAnd) => Some(0x16),
-            Opcode::AVMOpcode(AVMOpcode::BitwiseOr) => Some(0x17),
-            Opcode::AVMOpcode(AVMOpcode::BitwiseXor) => Some(0x18),
-            Opcode::AVMOpcode(AVMOpcode::BitwiseNeg) => Some(0x19),
-            Opcode::AVMOpcode(AVMOpcode::Byte) => Some(0x1a),
-            Opcode::AVMOpcode(AVMOpcode::ShiftLeft) => Some(0x1b),
-            Opcode::AVMOpcode(AVMOpcode::ShiftRight) => Some(0x1c),
-            Opcode::AVMOpcode(AVMOpcode::ShiftArith) => Some(0x1d),
-            Opcode::AVMOpcode(AVMOpcode::Hash) => Some(0x20),
-            Opcode::AVMOpcode(AVMOpcode::Type) => Some(0x21),
-            Opcode::AVMOpcode(AVMOpcode::Hash2) => Some(0x22),
-            Opcode::AVMOpcode(AVMOpcode::Keccakf) => Some(0x23),
-            Opcode::AVMOpcode(AVMOpcode::Pop) => Some(0x30),
-            Opcode::AVMOpcode(AVMOpcode::PushStatic) => Some(0x31),
-            Opcode::AVMOpcode(AVMOpcode::Rget) => Some(0x32),
-            Opcode::AVMOpcode(AVMOpcode::Rset) => Some(0x33),
-            Opcode::AVMOpcode(AVMOpcode::Jump) => Some(0x34),
-            Opcode::AVMOpcode(AVMOpcode::Cjump) => Some(0x35),
-            Opcode::AVMOpcode(AVMOpcode::StackEmpty) => Some(0x36),
-            Opcode::AVMOpcode(AVMOpcode::GetPC) => Some(0x37),
-            Opcode::AVMOpcode(AVMOpcode::AuxPush) => Some(0x38),
-            Opcode::AVMOpcode(AVMOpcode::AuxPop) => Some(0x39),
-            Opcode::AVMOpcode(AVMOpcode::AuxStackEmpty) => Some(0x3a),
-            Opcode::AVMOpcode(AVMOpcode::Noop) => Some(0x3b),
-            Opcode::AVMOpcode(AVMOpcode::ErrPush) => Some(0x3c),
-            Opcode::AVMOpcode(AVMOpcode::ErrSet) => Some(0x3d),
-            Opcode::AVMOpcode(AVMOpcode::Dup0) => Some(0x40),
-            Opcode::AVMOpcode(AVMOpcode::Dup1) => Some(0x41),
-            Opcode::AVMOpcode(AVMOpcode::Dup2) => Some(0x42),
-            Opcode::AVMOpcode(AVMOpcode::Swap1) => Some(0x43),
-            Opcode::AVMOpcode(AVMOpcode::Swap2) => Some(0x44),
-            Opcode::AVMOpcode(AVMOpcode::Tget) => Some(0x50),
-            Opcode::AVMOpcode(AVMOpcode::Tset) => Some(0x51),
-            Opcode::AVMOpcode(AVMOpcode::Tlen) => Some(0x52),
-            Opcode::AVMOpcode(AVMOpcode::Xget) => Some(0x53),
-            Opcode::AVMOpcode(AVMOpcode::Xset) => Some(0x54),
-            Opcode::AVMOpcode(AVMOpcode::Breakpoint) => Some(0x60),
-            Opcode::AVMOpcode(AVMOpcode::Log) => Some(0x61),
-            Opcode::AVMOpcode(AVMOpcode::Send) => Some(0x70),
-            Opcode::AVMOpcode(AVMOpcode::InboxPeek) => Some(0x71),
-            Opcode::AVMOpcode(AVMOpcode::Inbox) => Some(0x72),
-            Opcode::AVMOpcode(AVMOpcode::Panic) => Some(0x73),
-            Opcode::AVMOpcode(AVMOpcode::Halt) => Some(0x74),
-            Opcode::AVMOpcode(AVMOpcode::SetGas) => Some(0x75),
-            Opcode::AVMOpcode(AVMOpcode::GetGas) => Some(0x76),
-            Opcode::AVMOpcode(AVMOpcode::ErrCodePoint) => Some(0x77),
-            Opcode::AVMOpcode(AVMOpcode::PushInsn) => Some(0x78),
-            Opcode::AVMOpcode(AVMOpcode::PushInsnImm) => Some(0x79),
-            Opcode::AVMOpcode(AVMOpcode::OpenInsn) => Some(0x7a),
-            Opcode::AVMOpcode(AVMOpcode::Sideload) => Some(0x7b),
-            Opcode::AVMOpcode(AVMOpcode::EcRecover) => Some(0x80),
-            Opcode::AVMOpcode(AVMOpcode::EcAdd) => Some(0x81),
-            Opcode::AVMOpcode(AVMOpcode::EcMul) => Some(0x82),
-            Opcode::AVMOpcode(AVMOpcode::EcPairing) => Some(0x83),
-            Opcode::AVMOpcode(AVMOpcode::DebugPrint) => Some(0x90),
-            _ => None,
+            AVMOpcode::Zero => 0,
+            AVMOpcode::Add => 0x01,
+            AVMOpcode::Mul => 0x02,
+            AVMOpcode::Sub => 0x03,
+            AVMOpcode::Div => 0x04,
+            AVMOpcode::Sdiv => 0x05,
+            AVMOpcode::Mod => 0x06,
+            AVMOpcode::Smod => 0x07,
+            AVMOpcode::AddMod => 0x08,
+            AVMOpcode::MulMod => 0x09,
+            AVMOpcode::Exp => 0x0a,
+            AVMOpcode::SignExtend => 0x0b,
+            AVMOpcode::LessThan => 0x10,
+            AVMOpcode::GreaterThan => 0x11,
+            AVMOpcode::SLessThan => 0x12,
+            AVMOpcode::SGreaterThan => 0x13,
+            AVMOpcode::Equal => 0x14,
+            AVMOpcode::IsZero => 0x15,
+            AVMOpcode::BitwiseAnd => 0x16,
+            AVMOpcode::BitwiseOr => 0x17,
+            AVMOpcode::BitwiseXor => 0x18,
+            AVMOpcode::BitwiseNeg => 0x19,
+            AVMOpcode::Byte => 0x1a,
+            AVMOpcode::ShiftLeft => 0x1b,
+            AVMOpcode::ShiftRight => 0x1c,
+            AVMOpcode::ShiftArith => 0x1d,
+            AVMOpcode::Hash => 0x20,
+            AVMOpcode::Type => 0x21,
+            AVMOpcode::EthHash2 => 0x22,
+            AVMOpcode::Keccakf => 0x23,
+            AVMOpcode::Sha256f => 0x24,
+            AVMOpcode::Ripemd160f => 0x25,
+            AVMOpcode::Blake2f => 0x26,
+            AVMOpcode::Pop => 0x30,
+            AVMOpcode::Spush => 0x31,
+            AVMOpcode::Rpush => 0x32,
+            AVMOpcode::Rset => 0x33,
+            AVMOpcode::Jump => 0x34,
+            AVMOpcode::Cjump => 0x35,
+            AVMOpcode::StackEmpty => 0x36,
+            AVMOpcode::PCpush => 0x37,
+            AVMOpcode::AuxPush => 0x38,
+            AVMOpcode::AuxPop => 0x39,
+            AVMOpcode::AuxStackEmpty => 0x3a,
+            AVMOpcode::Noop => 0x3b,
+            AVMOpcode::ErrPush => 0x3c,
+            AVMOpcode::ErrSet => 0x3d,
+            AVMOpcode::Dup0 => 0x40,
+            AVMOpcode::Dup1 => 0x41,
+            AVMOpcode::Dup2 => 0x42,
+            AVMOpcode::Swap1 => 0x43,
+            AVMOpcode::Swap2 => 0x44,
+            AVMOpcode::Tget => 0x50,
+            AVMOpcode::Tset => 0x51,
+            AVMOpcode::Tlen => 0x52,
+            AVMOpcode::Xget => 0x53,
+            AVMOpcode::Xset => 0x54,
+            AVMOpcode::Breakpoint => 0x60,
+            AVMOpcode::Log => 0x61,
+            AVMOpcode::Send => 0x70,
+            AVMOpcode::InboxPeek => 0x71,
+            AVMOpcode::Inbox => 0x72,
+            AVMOpcode::Error => 0x73,
+            AVMOpcode::Halt => 0x74,
+            AVMOpcode::SetGas => 0x75,
+            AVMOpcode::PushGas => 0x76,
+            AVMOpcode::ErrCodePoint => 0x77,
+            AVMOpcode::PushInsn => 0x78,
+            AVMOpcode::PushInsnImm => 0x79,
+            AVMOpcode::OpenInsn => 0x7a,
+            AVMOpcode::Sideload => 0x7b,
+            AVMOpcode::EcRecover => 0x80,
+            AVMOpcode::EcAdd => 0x81,
+            AVMOpcode::EcMul => 0x82,
+            AVMOpcode::EcPairing => 0x83,
+            AVMOpcode::DebugPrint => 0x90,
+            AVMOpcode::NewBuffer => 0xa0,
+            AVMOpcode::GetBuffer8 => 0xa1,
+            AVMOpcode::GetBuffer64 => 0xa2,
+            AVMOpcode::GetBuffer256 => 0xa3,
+            AVMOpcode::SetBuffer8 => 0xa4,
+            AVMOpcode::SetBuffer64 => 0xa5,
+            AVMOpcode::SetBuffer256 => 0xa6,
         }
     }
 }
@@ -795,8 +1432,8 @@ impl Opcode {
 #[test]
 fn test_consistent_opcode_numbers() {
     for i in 0..256 {
-        if let Some(op) = Opcode::from_number(i) {
-            assert_eq!(i as u8, op.to_number().unwrap());
+        if let Some(op) = AVMOpcode::from_number(i) {
+            assert_eq!(i as u8, op.to_number());
         }
     }
 }
@@ -804,9 +1441,17 @@ fn test_consistent_opcode_numbers() {
 impl fmt::Display for Opcode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Opcode::MakeFrame(s1, s2) => write!(f, "MakeFrame({}, {})", s1, s2),
+            Opcode::MakeFrame(s1, s2, pre, ret) => {
+                write!(f, "MakeFrame({}, {}, {}, {})", s1, s2, pre, ret)
+            }
             Opcode::Label(label) => label.fmt(f),
-            _ => write!(f, "{:?}", self),
+            _ => write!(f, "{}", self.to_name()),
         }
+    }
+}
+
+impl fmt::Display for AVMOpcode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.to_name())
     }
 }

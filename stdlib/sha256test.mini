@@ -2,35 +2,18 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ByteArray;
-import type MarshalledBytes;
-import type Hasher;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_get256;
 
-import func bytearray_new(size: uint) -> ByteArray;
-import func bytearray_unmarshalBytes(mbytes: MarshalledBytes) -> ByteArray;
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_getByte(ba: ByteArray, idx: uint) -> uint;
-import func bytearray_setByte(ba: ByteArray, idx: uint, val: uint) -> ByteArray;
-import func bytearray_get64(ba: ByteArray, idx: uint) -> uint;
-import func bytearray_set64(ba: ByteArray, idx: uint, val: uint) -> ByteArray;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
-import func bytearray_copy(
-    from: ByteArray,
-    fromOffset: uint,
-    to: ByteArray,
-    toOffset: uint,
-    nbytes: uint,
-) -> ByteArray;
+use std::sha256::sha256hasher_new;
+use std::sha256::sha256hasher_finish;
+use std::sha256::sha256_byteArray;
+use std::sha256::sha256hasher_pushByte;
+use std::sha256::sha256hasher_push256;
 
-import type Sha256Hasher;
-import func sha256hasher_new() -> Sha256Hasher;
-import func sha256hasher_finish(h: Sha256Hasher) -> bytes32;
-import func sha256_byteArray(ba: ByteArray) -> bytes32;
-import func sha256hasher_pushByte(h: Sha256Hasher, b: uint) -> Sha256Hasher;
-import func sha256hasher_push256(h: Sha256Hasher, b: uint) -> Sha256Hasher;
-
-impure func main() {
+write func main() {
     if let Some(x) = tests() {
 	    asm(x,) { log };
 	} else {

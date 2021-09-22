@@ -1,181 +1,197 @@
 
-CARGORUN = cargo run --release
-BUILTINDIR = builtin
-STDDIR = stdlib
+# Add your new mexe here
+minitest_outputs = codeloadtest simple-closure closure
+upgrade_outputs = regcopy_new regcopy_old upgrade1_new upgrade1_old
+looptest_outputs = upgrade2_new upgrade2_old
+builtin_outputs = arraytest globaltest kvstest maptest
+stdlib_outputs = addressSetTest biguinttest blstest bytearraytest expandingIntArrayTest fixedpointtest keccaktest priorityqtest queuetest ripemd160test rlptest storageMapTest sha256test
 
-test: all
+builtin_mexes = $(patsubst %,builtin/%.mexe, $(builtin_outputs))
+stdlib_mexes = $(patsubst %,stdlib/%.mexe, $(stdlib_outputs))
+minitest_mexes = $(patsubst %,minitests/%.mexe, $(minitest_outputs))
+upgrade_mexes = $(patsubst %,upgradetests/%.mexe, $(upgrade_outputs))
+looptest_mexes = $(patsubst %,looptest/%.mexe, $(looptest_outputs))
+
+test_mexes = $(builtin_mexes) $(stdlib_mexes) $(minitest_mexes) $(upgrade_mexes) $(looptest_mexes)
+
+compile = ./target/release/mini compile $(compile_options)
+upgrade = ./target/release/mini gen-upgrade-code
+run     = ./target/release/mini
+
+mini_files = */*.mini
+
+consts = arb_os/constants.json
+done = "\e[38;5;161;1mdone!\e[0;0m\n"
+
+# user targets
+
+.make/all: always arb_os/arbos.mexe $(test_mexes) arb_os/arbos-upgrade.mexe arb_os/upgrade.json .make/test
+	@printf "\e[38;5;161;1mdone building %s\e[0;0m\n" $$(expr $$(echo $? | wc -w) - 1)
+	@touch .make/all
+
+arbos: arb_os/arbos.mexe
+	@printf $(done)
+
+upgrade: arb_os/arbos-upgrade.mexe arb_os/upgrade.json
+	@printf $(done)
+
+contracts: .make/solidity
+	@printf $(done)
+
+paramslist: parameters.json
+	@printf $(done)
+
+evmtest: arb_os/arbos.mexe .make/tools
+	$(run) evm-tests
+
+evmlogs: evm-test-logs
+	@printf $(done)
+
+evmdebug: arb_os/arbos.mexe .make/tools
+	$(run) evm-debug
+
+replay: replayTests
+	@printf $(done)
+
+coverage: always lcov-mini.info
+	@printf $(done)
+
+benchmark: arb_os/arbos.mexe .make/tools
+	$(run) make-benchmarks
+
+test: .make/test
 	cargo test --release
 
-testlogs: all
-	rm -rf testlogs
-	mkdir testlogs
-	$(CARGORUN) maketestlogs >/dev/null
+push: .make/push
+	@printf "\e[38;5;161;1mReady for push!\e[0;0m\n"
 
-evmdebug: all
-	$(CARGORUN) evmdebug
+ci: .make/all replayTests lcov-mini.info
+	@printf "Made ci products\n"
 
-benchmarks: arbos
-	$(CARGORUN) makebenchmarks
+clean:
+	@rm -f {builtin,stdlib,upgradetests,minitests,looptest}/*.mexe arb_os/{arbos,arbos-upgrade}.mexe
+	@rm -f arbos/{upgrade.json,contractTemplates.mini}
+	@rm -rf contracts/artifacts contracts/cache
+	@rm -f */*.cov lcov.info lcov-mini.info .make/*
 
-TESTEXES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/sha256test.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
-BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao
-STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/sha256.mao $(STDDIR)/bytestream.mao $(STDDIR)/stack.mao $(STDDIR)/rlp.mao $(STDDIR)/storageMap.mao $(STDDIR)/expandingIntArray.mao
-STDLIB = $(STDLIBMAOS)
 
-all: $(TESTEXES) arbos
+# pattern rules
 
-$(BUILTINDIR)/kvstest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/kvstest.mini
-	$(CARGORUN) compile $(BUILTINDIR)/kvstest.mini -o $(BUILTINDIR)/kvstest.mexe
+builtin/%.mexe: builtin/%.mini builtin/*.mini $(consts) .make/tools
+	$(compile) -c $(consts) $< -o $@ -t
 
-$(STDDIR)/queuetest.mexe: $(BUILTINMAOS) $(STDDIR)/queuetest.mini $(STDLIB)
-	$(CARGORUN) compile $(STDDIR)/queuetest.mini $(STDLIB) -o $(STDDIR)/queuetest.mexe
+stdlib/%.mexe: stdlib/%.mini stdlib/*.mini builtin/*.mini $(consts) .make/tools
+	$(compile) -c $(consts) $< -o $@ -t
 
-$(BUILTINDIR)/arraytest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/arraytest.mini
-	$(CARGORUN) compile $(BUILTINDIR)/arraytest.mini -o $(BUILTINDIR)/arraytest.mexe
+minitests/%.mexe: minitests/%.mini minitests/*.mini stdlib/*.mini builtin/*.mini $(consts) .make/tools
+	$(compile) -c $(consts) $< -o $@ -t
 
-$(BUILTINDIR)/globaltest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/globaltest.mini
-	$(CARGORUN) compile $(BUILTINDIR)/globaltest.mini -o $(BUILTINDIR)/globaltest.mexe
+upgradetests/%.mexe: upgradetests/%.mini upgradetests/*.mini stdlib/*.mini builtin/*.mini $(consts) .make/tools
+	$(compile) -c $(consts) $< -o $@ -t
 
-$(STDDIR)/priorityqtest.mexe: $(BUILTINMAOS) $(STDDIR)/priorityqtest.mini $(STDLIB)
-	$(CARGORUN) compile $(STDDIR)/priorityqtest.mini $(STDLIB) -o $(STDDIR)/priorityqtest.mexe
+arb_os/arbos.mexe: arb_os/*.mini arb_os/bridge_arbos_versions.mini arb_os/contractTemplates.mini stdlib/*.mini builtin/*.mini $(consts) .make/tools
+	$(compile) arb_os -o $@ -m
 
-$(STDDIR)/storageMapTest.mexe: $(BUILTINMAOS) $(STDDIR)/storageMapTest.mini $(STDLIB)
-	$(CARGORUN) compile $(STDDIR)/storageMapTest.mini $(STDLIB) -o $(STDDIR)/storageMapTest.mexe
+parameters.json: arb_os/constants.json .make/tools
+	$(run) make-parameters-list -c arb_os/constants.json > $<
 
-$(STDDIR)/bytearraytest.mexe: $(BUILTINMAOS) $(STDDIR)/bytearraytest.mini $(STDLIB)
-	$(CARGORUN) compile $(STDDIR)/bytearraytest.mini $(STDLIB) -o $(STDDIR)/bytearraytest.mexe
+replayTests: arb_os/arbos.mexe .make/tools
+	mkdir -p testlogs replayTests
+	$(run) make-test-logs > /dev/null
+	mv testlogs/* replayTests/
 
-minitests/codeloadtest.mexe: minitests/codeloadtest.mini
-	$(CARGORUN) compile minitests/codeloadtest.mini -o minitests/codeloadtest.mexe
+evm-test-logs: arb_os/arbos.mexe .make/tools
+	rm -rf evm-test-logs
+	mkdir -p evm-test-logs
+	$(run) evm-tests --savelogs
 
-$(STDDIR)/keccaktest.mexe: $(BUILTINMAOS) $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mao $(STDDIR)/bytearray.mao
-	$(CARGORUN) compile $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mao $(STDDIR)/bytearray.mao $(STDDIR)/expandingIntArray.mao -o $(STDDIR)/keccaktest.mexe
+arb_os/contractTemplates.mini: .make/tools
+	$(run) make-templates
 
-$(STDDIR)/sha256test.mexe: $(BUILTINMAOS) $(STDDIR)/sha256test.mini $(STDDIR)/sha256.mao $(STDDIR)/bytearray.mao
-	$(CARGORUN) compile $(STDDIR)/sha256test.mini $(STDDIR)/sha256.mao $(STDDIR)/bytearray.mao $(STDDIR)/expandingIntArray.mao -o $(STDDIR)/sha256test.mexe
 
-$(STDDIR)/rlptest.mexe: $(BUILTINMAOS) $(STDDIR)/rlptest.mini $(STDLIB)
-	$(CARGORUN) compile $(STDDIR)/rlptest.mini $(STDLIB) -o $(STDDIR)/rlptest.mexe
+# Upgrade tests
 
-$(STDDIR)/priorityq.mao: $(BUILTINMAOS) $(STDDIR)/priorityq.mini
-	$(CARGORUN) compile $(STDDIR)/priorityq.mini -c -o $(STDDIR)/priorityq.mao
+upgradetests/upgrade1_new.mexe: upgradetests/upgrade1_new.mini $(consts) .make/tools
+	$(compile) -c $(consts) $< -o $@
 
-$(STDDIR)/queue.mao: $(BUILTINMAOS) $(STDDIR)/queue.mini
-	$(CARGORUN) compile $(STDDIR)/queue.mini -c -o $(STDDIR)/queue.mao
+looptest/upgrade2_new.mexe: looptest/upgrade2_new.mini looptest/*.mini looptest/upgrade2.toml .make/tools
+	$(compile) looptest/upgrade2_new.mini -c $(consts) -o $@
 
-$(STDDIR)/bytearray.mao: $(BUILTINMAOS) $(STDDIR)/bytearray.mini
-	$(CARGORUN) compile $(STDDIR)/bytearray.mini -c -o $(STDDIR)/bytearray.mao
+looptest/bridge2.mini upgradetests/impl2.mini &: looptest/upgrade2_base.mexe looptest/upgrade2_old.mexe looptest/upgrade2.toml .make/tools
+	$(upgrade) looptest/upgrade2_old.mexe $< looptest/bridge2.mini impl2 looptest/upgrade2.toml
 
-$(STDDIR)/bytestream.mao: $(BUILTINMAOS) $(STDDIR)/bytestream.mini
-	$(CARGORUN) compile $(STDDIR)/bytestream.mini -c -o $(STDDIR)/bytestream.mao
+looptest/upgrade2_base.mexe: looptest/upgrade2_new.mini .make/tools
+	$(compile) $< -c arb_os/constants.json -o looptest/upgrade2_base.mexe
 
-$(STDDIR)/random.mao: $(STDDIR)/random.mini
-	$(CARGORUN) compile $(STDDIR)/random.mini -c -o $(STDDIR)/random.mao
+looptest/upgrade2_old.mexe: looptest/upgrade2_old.mini stdlib/*.mini builtin/*.mini .make/tools
+	$(compile) -c $(consts) $< -o $@ -t
 
-$(STDDIR)/stack.mao: $(STDDIR)/stack.mini
-	$(CARGORUN) compile $(STDDIR)/stack.mini -c -o $(STDDIR)/stack.mao
 
-$(STDDIR)/keccak.mao: $(STDDIR)/keccak.mini		
-	$(CARGORUN) compile $(STDDIR)/keccak.mini -c -o $(STDDIR)/keccak.mao
+# ArbOS upgrade
+arbos_source_all = $(wildcard arb_os/*.mini) $(consts) stdlib/*.mini builtin/*.mini arb_os/contractTemplates.mini
+arbos_source_no_bridge = $(filter-out arb_os/bridge_arbos_versions.mini, $(arbos_source_all))
 
-$(STDDIR)/sha256.mao: $(STDDIR)/sha256.mini
-	$(CARGORUN) compile $(STDDIR)/sha256.mini -c -o $(STDDIR)/sha256.mao
+arb_os/upgrade.json: arb_os/arbos-upgrade.mexe .make/tools
+	$(run) serialize-upgrade arb_os/arbos-upgrade.mexe > $@
 
-$(STDDIR)/rlp.mao: $(STDDIR)/rlp.mini
-	$(CARGORUN) compile $(STDDIR)/rlp.mini -c -o $(STDDIR)/rlp.mao
+arb_os/arbos-upgrade.mexe: arb_os/arbos-upgrade-base.mexe arb_os/bridge_arbos_versions.mini .make/tools
+	$(compile) arb_os -o $@ -m
 
-$(STDDIR)/storageMap.mao: $(STDDIR)/storageMap.mini
-	$(CARGORUN) compile $(STDDIR)/storageMap.mini -c -o $(STDDIR)/storageMap.mao
+arb_os/bridge_arbos_versions.mini: arb_os/arbos-upgrade-base.mexe arb_os/arbos_before.mexe arb_os/customize_arbos_bridge_versions.mini arb_os/upgrade.toml .make/tools
+	$(upgrade) arb_os/arbos_before.mexe $< $@ customize_arbos_bridge_versions arb_os/upgrade.toml
 
-$(STDDIR)/expandingIntArray.mao: $(STDDIR)/expandingIntArray.mini
-	$(CARGORUN) compile $(STDDIR)/expandingIntArray.mini -c -o $(STDDIR)/expandingIntArray.mao
+arb_os/arbos-upgrade-base.mexe: $(arbos_source_no_bridge) .make/tools
+	cp arb_os/dummy_version_bridge.mini arb_os/bridge_arbos_versions.mini
+	$(compile) arb_os -o $@ -m
 
-$(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
-	$(CARGORUN) compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe
 
-$(BUILTINDIR)/array.mao: $(BUILTINDIR)/array.mini
-	$(CARGORUN) compile $(BUILTINDIR)/array.mini -c -o $(BUILTINDIR)/array.mao
+# strategic rules to minimize dependency building
 
-$(BUILTINDIR)/kvs.mao: $(BUILTINDIR)/kvs.mini
-	$(CARGORUN) compile $(BUILTINDIR)/kvs.mini -c -o $(BUILTINDIR)/kvs.mao
+.make/tools: .make/solidity .make/compiler .make/install
+	@touch .make/tools
 
-ARBOSDIR = arb_os
-ARBOSAOS = $(ARBOSDIR)/main.mao $(ARBOSDIR)/accounts.mao $(ARBOSDIR)/messages.mao $(ARBOSDIR)/inbox.mao $(ARBOSDIR)/evmCallStack.mao $(ARBOSDIR)/evmOps.mao $(ARBOSDIR)/codeSegment.mao $(ARBOSDIR)/evmlogs.mao $(ARBOSDIR)/errorHandler.mao $(ARBOSDIR)/gasAccounting.mao $(ARBOSDIR)/contractTemplates.mao $(ARBOSDIR)/tokens.mao $(ARBOSDIR)/arbsys.mao $(ARBOSDIR)/messageBatch.mao $(ARBOSDIR)/chainParameters.mao $(ARBOSDIR)/precompiles.mao $(ARBOSDIR)/signedTx.mao $(ARBOSDIR)/output.mao $(ARBOSDIR)/decompression.mao
-ARBOS = $(ARBOSDIR)/arbos.mexe
+.make/test: arb_os/arbos.mexe $(test_mexes) arb_os/arbos-upgrade.mexe arb_os/upgrade.json
+	cargo test --release
+	@touch .make/test
 
-arbos: $(ARBOS)
+.make/fmt: src/*.rs src/*/*.rs Cargo.* .make/install $(mini_files)
+	cargo fmt
+	@touch .make/fmt
 
-$(ARBOSDIR)/accounts.mao: $(ARBOSDIR)/accounts.mini
-	$(CARGORUN) compile $(ARBOSDIR)/accounts.mini -c -o $(ARBOSDIR)/accounts.mao
+.make/push: .make/fmt
+	make $(MAKEFLAGS) compile_options="$(compile_options)" replayTests .make/test
+	@touch .make/push
 
-$(ARBOSDIR)/messages.mao: $(ARBOSDIR)/messages.mini
-	$(CARGORUN) compile $(ARBOSDIR)/messages.mini -c -o $(ARBOSDIR)/messages.mao
+.make/compiler: src/*.rs src/*/*.rs Cargo.* .make/install
+	cargo build --release
+	@touch .make/compiler
 
-$(ARBOSDIR)/main.mao: $(ARBOSDIR)/main.mini
-	$(CARGORUN) compile $(ARBOSDIR)/main.mini -c -o $(ARBOSDIR)/main.mao
+.make/solidity: contracts/arbos/*/*.sol .make/install
+	yarn --cwd contracts build
+	@touch .make/solidity
 
-$(ARBOSDIR)/inbox.mao: $(ARBOSDIR)/inbox.mini
-	$(CARGORUN) compile $(ARBOSDIR)/inbox.mini -c -o $(ARBOSDIR)/inbox.mao
+.make/install:
+	mkdir -p .make
+	yarn --cwd contracts install
+	@touch .make/install
 
-$(ARBOSDIR)/evmCallStack.mao: $(ARBOSDIR)/evmCallStack.mini
-	$(CARGORUN) compile $(ARBOSDIR)/evmCallStack.mini -c -o $(ARBOSDIR)/evmCallStack.mao
 
-$(ARBOSDIR)/evmOps.mao: $(ARBOSDIR)/evmOps.mini
-	$(CARGORUN) compile $(ARBOSDIR)/evmOps.mini -c -o $(ARBOSDIR)/evmOps.mao
+# CLI tooling
+cov_files = $(wildcard coverage/*.cov)
+cov_files_no_upgrade = $(filter-out coverage/test_upgrade_arbos_to_different_version.cov, $(cov_files))
 
-$(ARBOSDIR)/codeSegment.mao: $(ARBOSDIR)/codeSegment.mini
-	$(CARGORUN) compile $(ARBOSDIR)/codeSegment.mini -c -o $(ARBOSDIR)/codeSegment.mao
+lcov-mini.info: coverage/alltests.all ./coverage/mini-coverage.sh
+	./coverage/mini-coverage.sh $< > $@
 
-$(ARBOSDIR)/evmlogs.mao: $(ARBOSDIR)/evmlogs.mini
-	$(CARGORUN) compile $(ARBOSDIR)/evmlogs.mini -c -o $(ARBOSDIR)/evmlogs.mao
+coverage/alltests.all: coverage/avmcodebuilder.partial $(cov_files_no_upgrade) .make/test
+	cat $^ | sort -r | uniq | sort | uniq -f 1 | sort -k2,2 -k3,3n | grep -v test | grep -v Test > $@
 
-$(ARBOSDIR)/errorHandler.mao: $(ARBOSDIR)/errorHandler.mini
-	$(CARGORUN) compile $(ARBOSDIR)/errorHandler.mini -c -o $(ARBOSDIR)/errorHandler.mao
+coverage/avmcodebuilder.partial: coverage/test_upgrade_arbos_to_different_version.cov
+	grep avmcodebuilder $< > $@
 
-$(ARBOSDIR)/gasAccounting.mao: $(ARBOSDIR)/gasAccounting.mini
-	$(CARGORUN) compile $(ARBOSDIR)/gasAccounting.mini -c -o $(ARBOSDIR)/gasAccounting.mao
+coverage/test_upgrade_arbos_to_different_version.cov: .make/test
 
-$(ARBOSDIR)/contractTemplates.mao: $(ARBOSDIR)/contractTemplates.mini
-	$(CARGORUN) compile $(ARBOSDIR)/contractTemplates.mini -c -o $(ARBOSDIR)/contractTemplates.mao
+# Makefile settings
 
-$(ARBOSDIR)/contractTemplates.mini: src/contracttemplates.rs
-	$(CARGORUN) maketemplates
-
-$(ARBOSDIR)/tokens.mao: $(ARBOSDIR)/tokens.mini
-	$(CARGORUN) compile $(ARBOSDIR)/tokens.mini -c -o $(ARBOSDIR)/tokens.mao
-
-$(ARBOSDIR)/arbsys.mao: $(ARBOSDIR)/arbsys.mini
-	$(CARGORUN) compile $(ARBOSDIR)/arbsys.mini -c -o $(ARBOSDIR)/arbsys.mao
-
-$(ARBOSDIR)/messageBatch.mao: $(ARBOSDIR)/messageBatch.mini
-	$(CARGORUN) compile $(ARBOSDIR)/messageBatch.mini -c -o $(ARBOSDIR)/messageBatch.mao
-
-$(ARBOSDIR)/chainParameters.mao: $(ARBOSDIR)/chainParameters.mini
-	$(CARGORUN) compile $(ARBOSDIR)/chainParameters.mini -c -o $(ARBOSDIR)/chainParameters.mao
-
-$(ARBOSDIR)/precompiles.mao: $(ARBOSDIR)/precompiles.mini
-	$(CARGORUN) compile $(ARBOSDIR)/precompiles.mini -c -o $(ARBOSDIR)/precompiles.mao
-
-$(ARBOSDIR)/signedTx.mao: $(ARBOSDIR)/signedTx.mini
-	$(CARGORUN) compile $(ARBOSDIR)/signedTx.mini -c -o $(ARBOSDIR)/signedTx.mao
-
-$(ARBOSDIR)/output.mao: $(ARBOSDIR)/output.mini
-	$(CARGORUN) compile $(ARBOSDIR)/output.mini -c -o $(ARBOSDIR)/output.mao
-
-$(ARBOSDIR)/decompression.mao: $(ARBOSDIR)/decompression.mini
-	$(CARGORUN) compile $(ARBOSDIR)/decompression.mini -c -o $(ARBOSDIR)/decompression.mao
-
-$(ARBOS): $(ARBOSAOS) $(STDLIB) $(BUILTINMAOS)
-	$(CARGORUN) compile $(ARBOSAOS) $(STDLIB) -o $(ARBOS)
-
-arbos.pretty: $(ARBOSAOS) $(STDLIB) $(BUILTINMAOS)
-	$(CARGORUN) compile $(ARBOSAOS) $(STDLIB) -f pretty >arbos.pretty
-
-run: arbos
-	$(CARGORUN) run $(ARBOS)
-
-compiler: 
-	cargo build
-
-clean: 
-	rm -f $(BUILTINMAOS) $(TESTEXES) $(STDLIBMAOS) $(ARBOSAOS) $(ARBOSDIR)/*.mexe minitests/*.mao $(ARBOSDIR)/contractTemplates.mini
+always:              # use this to force other rules to always build
+.DELETE_ON_ERROR:    # causes a failure to delete its target

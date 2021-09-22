@@ -7,13 +7,12 @@ use ethers_core::utils::keccak256;
 use num_bigint::{BigInt, BigUint, Sign, ToBigInt};
 use num_traits::cast::ToPrimitive;
 use num_traits::identities::{One, Zero};
-use num_traits::pow::Pow;
 use num_traits::sign::Signed;
 use num_traits::CheckedSub;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp::Ordering;
 use std::fmt;
-use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
+use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Rem, Shl, Sub};
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, Hash)]
 pub struct Uint256 {
@@ -88,6 +87,14 @@ impl Uint256 {
         let mut val = BigUint::from(0u64);
         val.assign_from_slice(b);
         Uint256 { val }
+    }
+
+    pub fn _from_gwei(num_gwei: u64) -> Self {
+        Uint256::from_u64(num_gwei).mul(&Uint256::from_u64(1_000_000_000))
+    }
+
+    pub fn _from_eth(num_eth: u64) -> Self {
+        Uint256::from_u64(num_eth).mul(&Uint256::from_u64(1_000_000_000_000_000_000))
     }
 
     pub fn to_usize(&self) -> Option<usize> {
@@ -186,7 +193,7 @@ impl Uint256 {
         }
     }
 
-    pub fn max_int() -> Self {
+    pub fn max_uint() -> Self {
         Uint256 {
             val: BigUint::new(vec![0xffff_ffff; 8]),
         }
@@ -201,13 +208,10 @@ impl Uint256 {
     }
 
     pub fn unary_minus(&self) -> Option<Self> {
-        let s = self.to_signed();
-        if s == BigInt::new(Sign::Minus, vec![0, 0, 0, 0, 0, 0, 0, 0x8000_0000]) {
-            None
+        if self.val == BigUint::new(vec![0, 0, 0, 0, 0, 0, 0, 0x8000_0000]) {
+            Some(self.clone())
         } else {
-            Some(Uint256 {
-                val: Uint256::bigint_to_biguint(s.neg()),
-            })
+            Some(self.bitwise_neg().add(&Uint256::one()))
         }
     }
 
@@ -328,7 +332,7 @@ impl Uint256 {
 
     pub fn exp(&self, other: &Self) -> Self {
         Uint256 {
-            val: Uint256::trim(&self.val.pow(&other.val)).0,
+            val: self.val.modpow(&other.val, &BigUint::one().shl(256)),
         }
     }
 
@@ -353,7 +357,7 @@ impl Uint256 {
         let num = if raw_num > 256 { 256 } else { raw_num };
         let mut val = (self.val.clone() >> num);
         if need_fill {
-            val = val + (Uint256::max_int().val << (256 - num))
+            val = val + (Uint256::max_uint().val << (256 - num))
         }
         Uint256 {
             val: Uint256::trim(&val).0,
@@ -379,7 +383,7 @@ impl Uint256 {
         } else {
             let unshifted = self.val.to_bigint().unwrap();
             let shift = BigInt::new(Sign::Plus, vec![0, 0, 0, 0, 0, 0, 0, 0, 1]);
-            shift.sub(unshifted)
+            unshifted.sub(shift)
         }
     }
 

@@ -1,222 +1,143 @@
 //
-// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
 //
 
-use accounts::foo;
-use arbsys::foo;
-use chainParameters::foo;
-use codeSegment::foo;
-use contractTemplates::foo;
-use errorHandler::foo;
-use evmCallStack::foo;
-use evmLogs::foo;
-use evmOps::foo;
-use gasAccounting::foo;
-use inbox::foo;
-use messageBatch::foo;
-use messages::foo;
-use output::foo;
-use precompiles::foo;
-use signedTx::foo;
-use tokens::foo;
 
-use std::bytearray::foo;
-use std::bytestream::foo;
-use std::keccak::foo;
-use std::queue::foo;
-use std::rlp::foo;
-use std::stack::foo;
-use std::storageMap::foo;
+use accounts::AccountStore;
+use accounts::accountStore_init;
+use accounts::safeGetGlobalAccountStore;
+use accounts::safeSetGlobalAccountStore;
+use accounts::accountStore_createAccountFromEvmCode;
+use accounts::accountStore_upgradeContractFromEvmCode;
 
-import type AccountStore;
-import type MarshalledBytes;
-import type ByteArray;
-import type ByteStream;
-import type EvmLogs;
-import type GasUsage;
-import type StorageMap;
-import type Decompressor;
+use arbstatistics::arbStatistics_init;
+use arbowner::arbowner_init;
 
-import impure func errorHandler_init();
-import impure func chainParams_init();
-import impure func decompression_init();
-import impure func gasAccounting_init();
-import impure func evmCallStack_init();
-import impure func inbox_init();
-import impure func accountStore_init();
-import impure func precompiles_init(acctStore: AccountStore) -> option<AccountStore>;
-import impure func txReceipts_init();
+use blockhash::blockhash_init;
 
-import impure func getGlobalAccountStore() -> AccountStore;
-import impure func setGlobalAccountStore(acctStore: AccountStore);
-import func accountStore_createAccountFromEvmCode(
-    store: AccountStore,
-    newAddr: address,
-    code: ByteArray,
-    evmJumpTable: map<uint, impure func()>,
-    initCodePt: impure func(),
-    storageMap: StorageMap
-) -> option<AccountStore>;
-import impure func translateEvmCodeSegment(
-    bs: ByteStream
-) -> option<(impure func(), map<uint, impure func()>)>;
-import func bytearray_new(capacityHint: uint) -> ByteArray;
-import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
-import func bytestream_new(ba: ByteArray) -> ByteStream;
-import func getErc20code() -> MarshalledBytes;
-import func getErc721code() -> MarshalledBytes;
-import func getArbInfoCode() -> MarshalledBytes;
-import func getErc20address() -> address;
-import func getErc721address() -> address;
-import func getArbInfoAddress() -> address;
-import func getErc20storage() -> StorageMap;
-import func getErc721storage() -> StorageMap;
-import func getArbInfoStorage() -> StorageMap;
+use chainParameters::chainParams_init;
+use chainParameters::notifyParamsChanged;
 
-import impure func inbox_get() -> IncomingRequest;
-import impure func getNextRequestFromCongestionAuction() -> (
-    bool,           // was it approved for execution
-    option<IncomingRequest>,  // if it was an L1 message
-    option<TxRequestData>,    // if it was an L2 tx message
-);
-import impure func handleL1Request(
-    msg: IncomingRequest,
-) -> option<()>; // return None if message format error; Some(()) if other error; if no error, never return
-import impure func handleL2Request(
-    inStream: ByteStream,
-    request: TxRequestData
-) -> option<()>; // return None if message format error; Some(()) if other error; if no error, never return
-import impure func emitLog(
-    l1message: IncomingRequest,
-    resultCode: uint,
-    maybeReturnData: option<ByteArray>,
-    maybeEvmLogs: option<EvmLogs>,
-    gasUsage: option<GasUsage>,
-);
-import impure func arbsys_txcall();
+use std::codeSegment::codeSegment_init;
+use std::codeSegment::translateEvmCodeSegment;
 
-// This structure defines an incoming request.
-// It is declared identically in inbox.mini and elsewhere.
-type IncomingRequest = struct {
-    kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
-    timestamp: uint,          // timestamp of the L1 block
-    sender: address,          // address of the sender
-    requestId: uint,
-    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
-}
+use contractTemplates::getArbInfoCode;
+use contractTemplates::getArbInfoAddress;
+use contractTemplates::getArbInfoStorage;
 
-// TxRequestData is declared identically in message.mini and elsewhere.
-type TxRequestData = struct {
-    maxGas: uint,
-    gasPrice: uint,
-    seqNum: option<uint>,
-    caller: address,
-    calleeAddr: address,
-    value: uint,
-    calldata: ByteArray,
-    nonMutating: bool,
-    incomingRequest: IncomingRequest,
-}
+use decompression::decompression_init;
 
+use errorHandler::errorHandler_init;
+use errorHandler::errorHandler_setUpgradeProtector;
 
-impure func main() {
-    errorHandler_init();
-    chainParams_init();
-    decompression_init();
-    gasAccounting_init();
-    evmCallStack_init();
-    inbox_init();
-    accountStore_init();
-    txReceipts_init();
-    if (initializeContractTemplates() == None<()>) {
-        panic;   // don't try to run without contract templates
+use evmCallStack::evmCallStack_init;
+
+use evmOps::evmOps_init;
+use evmOps::dispatchForEvmOp;
+
+use gasAccounting::gasAccounting_init;
+
+use inbox::inbox_init;
+use inbox::mainRunLoop;
+use inbox::emitGenesisBlockReceipt;
+
+use output::output_init;
+use output::txReceipts_init;
+
+use precompiles::precompiles_init;
+
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytestream::bytestream_new;
+
+use bridge_arbos_versions::GlobalsBeforeUpgrade;
+use bridge_arbos_versions::remapGlobalsForUpgrade;
+
+// The compiler will always put __fixedLocationGlobal in slot 0 of the AVM Register,
+//     so we can rely on it not moving across upgrades.
+var __fixedLocationGlobal: view write func(uint);    // points to EVM op dispatch function
+
+view write func main(oldGlobals: GlobalsBeforeUpgrade) {
+    if (unsafecast<any>(oldGlobals) != ()) {
+        // this is an upgrade; we're inheriting the state of a previous ArbOS instance
+
+        // create an upgrade-only error handler that saves and restores the contents of the register
+        errorHandler_setUpgradeProtector(oldGlobals);
+
+        let (newGlobals, _oldArbosVersion) = remapGlobalsForUpgrade(oldGlobals);
+
+        asm(newGlobals) { rset };
+
+        // now re-do the initializations that set up pointers into the ArbOS code
+        errorHandler_init();
+        evmOps_init();
+        __fixedLocationGlobal = dispatchForEvmOp;
+        codeSegment_init();
+
+        if (initializePreinstalls(true) == None<()>) {
+            error;   // don't try to run without preinstalls and precompiles
+        }
+
+        notifyParamsChanged();   // call this in case parameters changed during upgrade
+    } else {
+        // this is a clean start, not an upgrade
+        errorHandler_init();
+        chainParams_init();
+        arbStatistics_init();
+
+        codeSegment_init();
+        output_init();
+        decompression_init();
+        inbox_init();
+        gasAccounting_init();
+        evmCallStack_init();
+        evmOps_init();
+        __fixedLocationGlobal = dispatchForEvmOp;
+        blockhash_init();
+        accountStore_init();
+        arbowner_init();
+        txReceipts_init();
+        if (initializePreinstalls(false) == None<()>) {
+            error;   // don't try to run without preinstalls and precompiles
+        }
+
+        // advance the Arbitrum block number, and emit a block receipt
+        emitGenesisBlockReceipt();
     }
-
-    // initialize any customizations here
 
     mainRunLoop();
 }
 
-public impure func mainRunLoop() {
-    loop {
-        let (approved, maybeL1, maybeL2) = getNextRequestFromCongestionAuction();
-        if let Some(msg) = maybeL1 {
-            if (approved) {
-                if(handleL1Request(msg) == None<()>) {
-                    // reject for message format error
-                    emitLog(msg, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
-                }
-            } else {
-                // reject for congestion error
-                emitLog(msg, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
-            }
-        } else {
-            if let Some(request) = maybeL2 {
-                if (approved) {
-                    if (handleL2Request(
-                        bytestream_new(bytearray_unmarshalBytes(request.incomingRequest.msgData)),
-                        request
-                    ) == None<()>) {
-                        // reject for message format error
-                        emitLog(request.incomingRequest, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
-                    }
-                } else {
-                    // reject for congestion error
-                    emitLog(request.incomingRequest, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
-                }
-            } // else request was not identified as either L1 or L2, which should be impossible
-        }
-        // if we reach here, message has already been handled and log already sent
-    }
-}
+view write func initializePreinstalls(isUpgrade: bool) -> option<()> {
+    let acctStore = safeGetGlobalAccountStore();
 
-impure func initializeContractTemplates() -> option<()> {
-    let acctStore = getGlobalAccountStore();
-
-    let code = bytearray_unmarshalBytes(getErc20code());
-    let (initCodePt, evmJumpTable) = translateEvmCodeSegment(
-        bytestream_new(code)
-    )?;
-    acctStore = accountStore_createAccountFromEvmCode(
-        acctStore,
-        getErc20address(),
-        code,
-        evmJumpTable,
-        initCodePt,
-        getErc20storage()
-    )?;
-
-    let code = bytearray_unmarshalBytes(getErc721code());
-    let (initCodePt, evmJumpTable) = translateEvmCodeSegment(
-        bytestream_new(code)
-    )?;
-    acctStore = accountStore_createAccountFromEvmCode(
-        acctStore,
-        getErc721address(),
-        code,
-        evmJumpTable,
-        initCodePt,
-        getErc721storage()
-    )?;
-
-    let code = bytearray_unmarshalBytes(getArbInfoCode());
-    let (initCodePt, evmJumpTable) = translateEvmCodeSegment(
-        bytestream_new(code)
-    )?;
-    acctStore = accountStore_createAccountFromEvmCode(
-        acctStore,
-        getArbInfoAddress(),
-        code,
-        evmJumpTable,
-        initCodePt,
-        getArbInfoStorage()
-    )?;
+    let code = bytearray_unmarshalBytes(getArbInfoCode())?;
+    let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
+        bytestream_new(code),
+        false
+    );
+    acctStore = xif (isUpgrade) {
+        accountStore_upgradeContractFromEvmCode(
+            acctStore,
+            getArbInfoAddress(),
+            code,
+            evmJumpTable,
+            initCodePt,
+        )
+    } else {
+        accountStore_createAccountFromEvmCode(
+            acctStore,
+            getArbInfoAddress(),
+            code,
+            evmJumpTable,
+            initCodePt,
+            getArbInfoStorage()
+        )?
+    };
 
     // set up precompiled contracts
-    acctStore = precompiles_init(acctStore)?;
+    acctStore = precompiles_init(acctStore, isUpgrade)?;
 
-    setGlobalAccountStore(acctStore);
+    safeSetGlobalAccountStore(acctStore);
+
     return Some(());
 }
-

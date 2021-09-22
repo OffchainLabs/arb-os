@@ -1,204 +1,43 @@
 //
-// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ByteArray;
-import type ByteStream;
-import type MarshalledBytes;
-import type AccountStore;
-import type Account;
-import type EvmLogs;
-import type StorageMap;
 
-import impure func getGlobalAccountStore() -> AccountStore;
-import impure func setGlobalAccountStore(acctStore: AccountStore);
-import func accountStore_get(acctStore: AccountStore, addr: address) -> Account;
-import func accountStore_set(acctStore: AccountStore, addr: address, acct: Account) -> AccountStore;
-import func accountStore_transferEthBalance(
-    acctStore: AccountStore,
-    from: address, 
-    to: address, 
-    amount: uint
-) -> option<AccountStore>;
-import func accountStore_createAccountFromEvmCode(
-    acctStore: AccountStore,
-    newAddr: address,
-    evmCode: ByteArray,
-    evmJumpTable: map<uint, impure func()>,
-    startCodePt: impure func(),
-    storageMap: StorageMap
-) -> option<AccountStore>;
-import func account_checkAndIncrSeqNum(
-    account: Account, 
-    seqNumRecvd: uint
-) -> option<Account>;
-import func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account);
-import func account_incrSeqNum(account: Account) -> Account;
-import func account_getNextSeqNum(account: Account) -> uint;
-import func account_addToEthBalance(account: Account, addition: uint) -> Account;
-import func account_getStartCodePoint(acct: Account) -> option<impure func()>;
+use std::bytearray::ByteArray;
+use evmlogs::EvmLogs;
 
-import impure func initEvmCallStack(
-    callKind: uint,
-    request: TxRequestData
-);
-import impure func initEvmCallStackForConstructor(
-    code: ByteArray,
-    evmJumpTable: map<uint, impure func()>,
-    startPoint: impure func(),
-    request: TxRequestData
-);
-import func evmCallStack_runningCodeFromAccount() -> option<Account>;
-import impure func emitLog(
-    l1message: IncomingRequest,
-    resultCode: uint,
-    maybeReturnData: option<ByteArray>,
-    maybeEvmLogs: option<EvmLogs>,
-    maybeGasUsage: option<GasUsage>
-);
+use accounts::safeGetGlobalAccountStore;
+use accounts::safeSetGlobalAccountStore;
+use accounts::accountStore_get;
+use accounts::accountStore_set;
+use accounts::account_fetchAndIncrSeqNum;
+use accounts::account_hasContract;
+use accounts::account_getNextSeqNum;
 
-import impure func tokens_erc20deposit(
-    tokenAddr: address,
-    payee: address,
-    amount: uint,
-    msg: IncomingRequest
-) -> option<()>;
-import impure func tokens_erc721deposit(
-    tokenAddr: address,
-    payee: address,
-    id: uint,
-    msg: IncomingRequest
-) -> option<()>;
+use evmCallStack::initEvmCallStack;
+use evmCallStack::initEvmCallStackForConstructor;
 
-import func bytearray_new(capacity: uint) -> ByteArray;
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
-import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
-import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
+use gasAccounting::GasUsage;
+use gasAccounting::TxFeeStats;
 
-import func bytestream_new(ba: ByteArray) -> ByteStream;
-import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
-import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
+use output::emitTxReceipt;
 
-import func keccakOfRlpEncodedUintPair(ui1: uint, ui2: uint) -> bytes32;
+use retrybuffer::RetryableTx;
 
-import func translateEvmCodeSegment(bs: ByteStream) -> option<(impure func(), map<uint, impure func()>)>;
+use std::bytearray::bytearray_new;
+
+use std::rlp::keccakOfRlpEncodedUintPair;
+
+use inbox::IncomingRequest;
 
 
-// This structure defines an incoming request.
-// It is declared identically in inbox.mini and elsewhere.
-type IncomingRequest = struct {
-    kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
-    timestamp: uint,          // timestamp of the L1 block
-    sender: address,          // address of the sender
-    requestId: uint,
-    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
-}
-
-// This is declared identically in gasAccounting.mini
-type GasUsage = struct {
-    gasUsed: uint,
-    gasPriceWei: uint,
-}
-
-public impure func handleL1Request(
-    msg: IncomingRequest
-) -> option<()> {   // return None if error; otherwise return Some(()) or do a tx and never return from here
-    // Parse an incoming message and do appropriate computations
-    let inStream = bytestream_new(bytearray_unmarshalBytes(msg.msgData));
-
-    if (msg.kind == 0) {
-        // ethdeposit message
-        let (bs, destination) = bytestream_get256(inStream)?;
-        inStream = bs;
-
-        let (bs, amount) = bytestream_get256(inStream)?;
-        inStream = bs;
-
-        let globalAS = getGlobalAccountStore();
-        let destAccount = accountStore_get(globalAS, address(destination));
-        destAccount = account_addToEthBalance(destAccount, amount);
-        setGlobalAccountStore(
-            accountStore_set(
-                globalAS,
-                address(destination),
-                destAccount
-            )
-        );
-        return Some(());
-    } elseif (msg.kind == 1) {
-        // ERC20 deposit message
-        let (bs, tokenAddress) = bytestream_get256(inStream)?;
-        inStream = bs;
-
-        let (bs, payeeAddress) = bytestream_get256(inStream)?;
-        inStream = bs;
-
-        let (bs, amount) = bytestream_get256(inStream)?;
-        inStream = bs;
-
-        tokens_erc20deposit(
-            address(tokenAddress),
-            address(payeeAddress),
-            amount,
-            msg
-        )?;  // should never return
-
-        return None;
-    } elseif (msg.kind == 2) {
-         // ERC721 deposit message
-         let (bs, tokenAddress) = bytestream_get256(inStream)?;
-         inStream = bs;
-
-         let (bs, payeeAddress) = bytestream_get256(inStream)?;
-         inStream = bs;
-
-         let (bs, id) = bytestream_get256(inStream)?;
-         inStream = bs;
-
-         tokens_erc721deposit(
-             address(tokenAddress),
-             address(payeeAddress),
-             id,
-             msg
-         )?;  // should never return
-
-         return None;
-    } else {
-        // not a valid message type
-        // (This should not have been called if msg.kind == 3.)
-        return None;
-    }
-}
-
-impure func verifyAndIncrSequenceNum(addr: address, seqNum: uint) -> option<()> {
-    // Verify the sequence number on a message.
-    // If it matches, increment the next expected seq num, and return Some(()).
-    // Else, change nothing and return None.
-    let globalAS = getGlobalAccountStore();
-    setGlobalAccountStore(
-        accountStore_set(
-            globalAS,
-            addr,
-            account_checkAndIncrSeqNum(
-                accountStore_get(globalAS, addr),
-                seqNum
-            )?
-        )
-    );
-    return Some(());
-}
-
-impure func fetchAndIncrSequenceNum(addr: address) -> uint {
+view write func fetchAndIncrSequenceNum(addr: address) -> uint {
     // Fetch sequence number, and increment it
-    let globalAS = getGlobalAccountStore();
+    let globalAS = safeGetGlobalAccountStore();
     let (ret, updatedAcct) = account_fetchAndIncrSeqNum(
         accountStore_get(globalAS, addr)
     );
-    setGlobalAccountStore(
+    safeSetGlobalAccountStore(
         accountStore_set(
             globalAS,
             addr,
@@ -209,86 +48,107 @@ impure func fetchAndIncrSequenceNum(addr: address) -> uint {
 }
 
 type TxRequestData = struct {
-    maxGas: uint,
-    gasPrice: uint,
-    seqNum: option<uint>,
+    maxGas: uint,                           // max gas amount remaining from original request
+    gasPrice: uint,                         // max gas price sender is willing to pay
+    seqNum: option<uint>,                   // sequence number, or None if tx doesn't have one
     caller: address,
     calleeAddr: address,
-    value: uint,
+    gasPayer: address,                      // who is paying for gas for this tx
+    value: uint,                            // ETH amount passed with call
     calldata: ByteArray,
     nonMutating: bool,
+    isConstructor: bool,
     incomingRequest: IncomingRequest,
-}
+    feeStats: TxFeeStats,
+    fromRetryable: option<RetryableTx>,
+    originalCaller: address,
+};
 
-public impure func handleL2Request(
-    inStream: ByteStream,
-    request: TxRequestData
-) -> option<()> {   // return None if message is malformatted; otherwise handle errors and return Some(()); if no error, never return
+// Process a request.
+// Return None if message is malformatted; otherwise handle errors and return Some(()); if no error, never return
+public view write func processL2Request(request: TxRequestData) -> option<()> {
     if let Some(sequenceNum) = request.seqNum {
-        if (account_getNextSeqNum(
-                accountStore_get(getGlobalAccountStore(), request.caller)
-            ) != sequenceNum) {
+        let expectedSeqNum = account_getNextSeqNum(accountStore_get(safeGetGlobalAccountStore(), request.caller));
+        if (sequenceNum != expectedSeqNum) {
             // bad sequence number error
-            emitLog(request.incomingRequest, 5, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            emitTxReceipt(
+                request.incomingRequest,
+                xif (sequenceNum < expectedSeqNum) {
+                    const::TxResultCode_sequenceNumberTooLow
+                } else {
+                    const::TxResultCode_sequenceNumberTooHigh
+                },
+                None<ByteArray>,
+                None<EvmLogs>,
+                None<GasUsage>,
+                request.feeStats,
+                true,
+                request.originalCaller,
+            );
             return Some(());
         }
     }
 
     if (request.calleeAddr == address(0)) {
         // this is a constructor call
-        if (request.incomingRequest.kind == 2) {
+        if (request.nonMutating) {
             // revert error (tried to call constructor in a non-mutating call)
-            emitLog(request.incomingRequest, 1, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            emitTxReceipt(
+                request.incomingRequest,
+                const::TxResultCode_revert,
+                None<ByteArray>,
+                None<EvmLogs>,
+                None<GasUsage>,
+                request.feeStats,
+                true,
+                request.originalCaller,
+            );
             return Some(());
         }
 
-        // increment the caller's sequence number, unconditionally
-        let acctStore = getGlobalAccountStore();
-        setGlobalAccountStore(
-            accountStore_set(
-                acctStore,
-                request.caller,
-                account_incrSeqNum(
-                    accountStore_get(acctStore, request.caller)
-                )
-            )
-        );
-
         let codeBytes = request.calldata;
-        request = request with { calldata: bytearray_new(0) };
-        let (codept, evmJumpTable) = translateEvmCodeSegment(bytestream_new(codeBytes))?;
+        set request.calldata = bytearray_new(0);
 
         if (request.seqNum == None<uint>) {
-            request = request with { seqNum: Some(fetchAndIncrSequenceNum(request.caller)) };
-        }
-        if (request.incomingRequest.kind == 5) {
-            // it's a buddy contract deployment; hardwire the new contract address
-            request = request with { calleeAddr: request.caller };
-        } else {
-            // ordinary contract deploy; use the standard formula to calculate new contract address
-            request = request with {
-                calleeAddr: address(keccakOfRlpEncodedUintPair(uint(request.caller), request.seqNum?))
-            };
+            // constructor always increments the caller's sequence number
+            set request.seqNum = Some(fetchAndIncrSequenceNum(request.caller));
         }
 
-        initEvmCallStackForConstructor(
-            codeBytes,
-            evmJumpTable,
-            codept,
-            request
-        );  // should never return
+        set request.calleeAddr = address(keccakOfRlpEncodedUintPair(uint(request.caller), request.seqNum?));
+
+        if (account_hasContract(accountStore_get(safeGetGlobalAccountStore(), request.calleeAddr))) {
+            // there's already an account at that address, revert the call
+            // should never happen -- this is just defensive code
+            emitTxReceipt(
+                request.incomingRequest,
+                const::TxResultCode_cannotDeployAtAddress,
+                None<ByteArray>,
+                None<EvmLogs>,
+                None<GasUsage>,
+                request.feeStats,
+                true,
+                request.originalCaller,
+            );
+            return Some(());
+        } else {
+            initEvmCallStackForConstructor(
+                codeBytes,
+                request,
+                None<uint>,
+            );
+            //NOTREACHED
+        }
     } else {
         // this is a non-constructor call
-        let callKind = 0;
-        if (request.nonMutating) {
-            callKind = 3;  // staticcall
-        }
+        let callKind = xif (request.nonMutating) {
+            const::EVMCallType_staticcall
+        } else {
+            const::EVMCallType_call
+        };
 
-        initEvmCallStack(
-            callKind,
-            request
-        );  // should never return
+        initEvmCallStack(callKind, request, None<ByteArray>, None<uint>);  // should never return
     }
 
-    panic;   // this should never be reached
+    //NOTREACHED
+    return error;
 }

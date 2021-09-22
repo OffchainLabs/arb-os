@@ -2,16 +2,13 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type PriorityQ;
-
-import func priorityq_new() -> PriorityQ;
-import func priorityq_isEmpty(pq: PriorityQ) -> bool;
-import func priorityq_insert(pq: PriorityQ, item: any, priority: uint) -> PriorityQ;
-import func priorityq_get(pq: PriorityQ) -> option<(any, PriorityQ)>;
-import func priorityq_printAsArray(pq: PriorityQ) -> uint;
+use std::priorityq::priorityq_new;
+use std::priorityq::priorityq_isEmpty;
+use std::priorityq::priorityq_insert;
+use std::priorityq::priorityq_get;
 
 
-impure func main() {
+write func main() {
 	asm(tests(),) { log };
 }
 
@@ -38,7 +35,7 @@ func tests() -> uint {
 	q = priorityq_insert(q, 98, 2);
 	q = priorityq_insert(q, 96, 4);
 	if let Some(res) = priorityq_get(q) {
-	    let (ret, pq) = res;
+	    let (ret, _pq) = res;
 	    if (ret != unsafecast<any>(96)) {
 		    return 4;
 	    }
@@ -56,7 +53,7 @@ func tests() -> uint {
 	q = priorityq_insert(q, 98, 292);
 	q = priorityq_insert(q, 96, 294);
 	if let Some(res) = priorityq_get(q) {
-	    let (ret, pq,) = res;
+	    let (ret, _pq,) = res;
 	    if (ret != unsafecast<any>(96)) {
 		    return 5;
 	    }

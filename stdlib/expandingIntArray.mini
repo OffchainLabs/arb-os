@@ -2,12 +2,13 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+use std::bytearray::opClosure;
 
 type ExpandingIntArray = struct {
     size: uint,
     chunk: uint,
     contents: [8]any,
-}
+};
 
 public func expandingIntArray_new() -> ExpandingIntArray {
     return struct {
@@ -71,8 +72,8 @@ func ear_get_2(tree: [8]any, chunk: uint, index: uint) -> uint {
 type Unwinder = struct {
     tree: [8]any,
     slot: uint,
-    next: option<any>,  // really option<Unwinder>, but compiler doesn't allow recursive types
-}
+    next: option<Unwinder>,
+};
 
 public func expandingIntArray_set(arr: ExpandingIntArray, index: uint, value: uint) -> ExpandingIntArray {
     return expandingIntArray_setN(arr, 1, index, value);
@@ -95,13 +96,13 @@ public func expandingIntArray_setN(
     let chunk = arr.chunk;
     let tree = arr.contents;
     let unwinder = None<Unwinder>;
-    loop {
+    return xloop {
         if (chunk <= inChunk) {
             tree = tree with { [index/chunk] = value };
             loop {
                 if let Some(unw) = unwinder {
                     tree = unw.tree with { [unw.slot] = tree };
-                    unwinder = unsafecast<option<Unwinder>>(unw.next);
+                    unwinder = unw.next;
                 } else {
                     return arr with { contents: tree };
                 }
@@ -116,28 +117,19 @@ public func expandingIntArray_setN(
         tree = unsafecast<[8]any>(tree[slot]);
         index = index % chunk;
         chunk = chunk / 8;
-    }
+    };
 }
-
-type opClosureFunc = func(any, uint) -> (uint, any)
-
-type opClosure = struct {
-	f: opClosureFunc,
-	val: any,
-} // usage: (newSlotContents, returnValue) = closure.f(closure.val, oldSlotContents)
 
 public func expandingIntArray_op(
     arr: ExpandingIntArray,
     index: uint,
-    closure: opClosure
+    applicator: opClosure
 ) -> (ExpandingIntArray, any) {
     while (index >= arr.size) {
         arr = expandingIntArray_grow(arr);
     }
-    let tree = arr.contents;
-    let chunk = arr.chunk;
 
-    let (tree, retVal) = ear_op2(arr.contents, arr.chunk, index, closure);
+    let (tree, retVal) = ear_op2(arr.contents, arr.chunk, index, applicator);
     return (
         arr with { contents: tree },
         retVal,
@@ -148,27 +140,27 @@ func ear_op2(
     tree: [8]any,
     chunk: uint,
     index: uint,
-    closure: opClosure
+    applicator: opClosure
 ) -> ([8]any, any) {
-    if (chunk == 1) {
-        let (newSlotContents, retVal) = closure.f(closure.val, unsafecast<uint>(tree[index]));
-        return (
+    return xif (chunk == 1) {
+        let (newSlotContents, retVal) = applicator.f(applicator.val, unsafecast<uint>(tree[index]));
+        (
             tree with { [index] = newSlotContents },
             retVal,
-        );
+        )
     } else {
         let slot = index / chunk;
         let (newSlotContents, retVal) = ear_op2(
             unsafecast<[8]any>(tree[slot]),
             chunk/8,
             index%chunk,
-            closure
+            applicator
         );
-        return (
+        (
             tree with { [slot] = newSlotContents },
             retVal,
-        );
-    }
+        )
+    };
 }
 
 public func expandingIntArray_opConsecutive(
