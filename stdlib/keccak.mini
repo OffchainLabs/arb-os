@@ -12,10 +12,10 @@ use std::bytearray::bytearray_copy;
 
 
 public func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32 {
-    if (nbytes == 32) {
+    if nbytes == 32 {
         return hash(bytearray_get256(ba, offset));
     }
-    if (nbytes == 64) {
+    if nbytes == 64 {
         return hash(
             bytes32(bytearray_get256(ba, offset)),
             bytes32(bytearray_get256(ba, offset+32))
@@ -25,7 +25,7 @@ public func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32 {
     let accumulator = unsafecast<[7]uint>((0,0,0,0,0,0,0));
 
     // Process as many complete 136-byte blocks as we can
-    while (nbytes >= 136) {
+    while nbytes >= 136 {
         // Process one complete block
         accumulator = asm(keccak_xorblock(accumulator, ba, offset),) [7]uint { keccakf };
         offset = offset+136;
@@ -36,7 +36,7 @@ public func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32 {
     let lastBlock = bytearray_copy(ba, offset, bytearray_new(0), 0, nbytes);
 
     // Add padding to fill the final block
-    if (nbytes == 135) {
+    if nbytes == 135 {
         // only one byte of padding needed
         lastBlock = bytearray_setByte(lastBlock, 135, 0x81);
     } else {
@@ -112,7 +112,7 @@ public func hasher_new() -> Hasher {
 }
 
 public func hasher_pushByte(h: Hasher, b: uint) -> Hasher {
-    return xif (h.offset == 135) {
+    if h.offset == 135 {
         h with {
             accumulator: asm(
                 h.accumulator with {
@@ -131,7 +131,7 @@ public func hasher_pushByte(h: Hasher, b: uint) -> Hasher {
         } with {
             offset: h.offset+1
         }
-    };
+    }
 }
 
 public func hasher_pushN_be(h: Hasher, val: uint, nbytes: uint) -> Hasher {
@@ -141,23 +141,23 @@ public func hasher_pushN_be(h: Hasher, val: uint, nbytes: uint) -> Hasher {
 public func hasher_pushN_le(h: Hasher, val: uint, nbytes: uint) -> Hasher {
     // push N <= 32 bytes of data into h
     // data is assumed to be little-endian
-    if (nbytes > 32) {
+    if nbytes > 32 {
         nbytes = 32;
-    } elseif (nbytes < 32) {
+    } else if nbytes < 32 {
         val = val & ((1 << (8*nbytes)) - 1);
     }
     let accum = h.accumulator;
     let offset = h.offset;
-    return xloop {  // need to loop because data might cross word/block boundary
+    loop<Hasher> {  // need to loop because data might cross word/block boundary
         let word = offset / 32;
         let align = offset & 0x1f;
-        if ( (align+nbytes <= 8) || ((word < 4) && (align+nbytes <= 32)) ){
+        if (align+nbytes <= 8) || ((word < 4) && (align+nbytes <= 32)) {
             // can complete our work in a single push
             accum = accum with {
                 [word] = accum[word] ^ (val << (8*align))
             };
             offset = offset + nbytes;
-            if (offset == 136) {
+            if offset == 136 {
                 return struct {
                     accumulator: asm(accum,) [7]uint { keccakf },
                     offset: 0
@@ -170,7 +170,7 @@ public func hasher_pushN_le(h: Hasher, val: uint, nbytes: uint) -> Hasher {
             }
         } else {
             // can't push it all because of word/block boundary; do as much as possible
-            if (word == 4) {
+            if word == 4 {
                 accum = accum with {
                     [4] = accum[4] ^ ((val << (8*align)) & 0xffffffffffffffff)
                 };
@@ -189,7 +189,7 @@ public func hasher_pushN_le(h: Hasher, val: uint, nbytes: uint) -> Hasher {
                 nbytes = nbytes - nb;
             }
         }
-    };
+    }
 }
 
 public func hasher_finish(h: Hasher) -> bytes32 {

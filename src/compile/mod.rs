@@ -110,6 +110,14 @@ struct TypeCheckedModule {
 
 impl CompileStruct {
     pub fn invoke(&self) -> Result<(LinkedProgram, ErrorSystem), ErrorSystem> {
+        // Initialize rayon with a large stack size. We do this here rather than
+        // main() so tests do this too.
+        drop(
+            rayon::ThreadPoolBuilder::new()
+                .stack_size(8192 * 1024)
+                .build_global(),
+        );
+
         let mut error_system = ErrorSystem {
             errors: vec![],
             warnings: vec![],

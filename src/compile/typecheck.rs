@@ -2020,7 +2020,6 @@ fn typecheck_expr(
                 }
                 Constant::Option(o) => TypeCheckedExprKind::Const(o.value(), o.type_of()),
                 Constant::Value(v) => TypeCheckedExprKind::Const(v.clone(), Type::Every),
-                Constant::Null => TypeCheckedExprKind::Const(Value::none(), Type::Any),
             }),
             ExprKind::FunctionCall(expr, args) => {
                 let expr = typecheck_expr(
@@ -2423,7 +2422,7 @@ fn typecheck_expr(
                             *inner_type,
                         ))
                     }
-                    Type::Array(_) => {
+                    Type::Array(inner_type) => {
                         // The compiler doesn't know that `[]entry` here is the same as `array`.
                         // We could cast to `array`, but we'd need to have the type imported.
                         // So we cast to `every` to satisfy the function argument.
@@ -2439,8 +2438,14 @@ fn typecheck_expr(
                             debug_info,
                         )?;
 
+                        // Make the compiler *smarter* by tagging the value with the right type
+                        let value_cast = Expr::new(
+                            ExprKind::UnsafeCast(Box::new(call), *inner_type),
+                            debug_info,
+                        );
+
                         let expr = typecheck_expr(
-                            &call,
+                            &value_cast,
                             type_table,
                             global_vars,
                             func_table,

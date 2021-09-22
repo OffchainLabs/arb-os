@@ -87,7 +87,7 @@ public func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32 {
 
     let ret = bytes32(mb.nbytes);
     let x = mb.contents;
-    while cast<any>(x) != () {
+    while x != unsafecast<MarshalledBytesCell>(()) {
         let cell = x;
         ret = hash(ret, bytes32(cell.first));
         x = cell.rest;
@@ -280,7 +280,7 @@ public func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteAr
     }
     if offset + ba.sliceOffset >= const::MaxByteArraySize - 31 {
         ba = bytearray_copy(ba, 0, bytearray_new(0), 0, ba.size);
-        if (offset+32 > ba.size) {
+        if offset+32 > ba.size {
             ba = ba with { size: offset+32 };
         }
     } else {
@@ -406,11 +406,10 @@ public func buffer_getCalldataUnits(buf: buffer, offset: uint, nbytes: uint) -> 
         i = i+32;
     }
     while i < nbytes {
-        if (getbuffer8(buf, offset+i) != 0) {
+        if getbuffer8(buf, offset+i) != 0 {
             nonzeroes = nonzeroes + 1;
         }
         i = i+1;
     }
     4*nbytes + 12*nonzeroes
 }
-

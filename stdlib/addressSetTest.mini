@@ -16,7 +16,7 @@ use std::addressSet::addressPairSet_lookup;
 
 
 write func main() {
-    asm(tests(),) { log };
+    asm(tests()) { log };
 }
 
 func tests() -> uint {

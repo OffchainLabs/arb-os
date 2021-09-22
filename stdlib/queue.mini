@@ -42,7 +42,7 @@ public func boundedQueue_put(q: BoundedQueue, val: any) -> BoundedQueue {
 
 public func boundedQueue_get(q: BoundedQueue) -> option<(BoundedQueue, any)> {
     if boundedQueue_isEmpty(q) {
-        None<(BoundedQueue, any)>
+        None
     } else {
         Some((
             q with { nextGet: (q.nextGet+1) % q.capacity }
@@ -56,7 +56,7 @@ public func boundedQueue_nth(q: BoundedQueue, n: uint) -> option<any> {
     if n < boundedQueue_size(q) {
         Some(q.contents[(q.nextGet + n) % q.capacity])
     } else {
-        None<any>
+        None
     }
 }
 
@@ -64,7 +64,7 @@ public func boundedQueue_set_nth(q: BoundedQueue, n: uint, value: any) -> option
     if n < boundedQueue_size(q) {
         Some(q with { contents: q.contents with { [(q.nextGet + n) % q.capacity] = value } })
     } else {
-        None<BoundedQueue>
+        None
     }
 }
 
@@ -156,7 +156,7 @@ type QueueStackCell = struct {
 };
 
 public func queuestack_new() -> QueueStack {
-    None<QueueStackCell>
+    None
 }
 
 public func queuestack_push(qs: QueueStack, q: Queue) -> QueueStack {

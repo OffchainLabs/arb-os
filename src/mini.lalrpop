@@ -577,8 +577,9 @@ Expr12: Expr = {
         Expr::lno(ExprKind::NewFixedArray(s.to_usize().unwrap(), Box::new(e)), file_info, lno, filename)
     },
     <lno: @L> "newfixedarray" "(" <lno2: @L> <s:UnsignedInteger> ")" => {
-        let default = Expr::lno(ExprKind::Constant(Constant::Null), file_info, lno2, filename);
-        Expr::lno(ExprKind::NewFixedArray(s.to_usize().unwrap(), Box::new(default)), file_info, lno, filename)
+        let default = Expr::lno(ExprKind::Tuple(vec![]), file_info, lno2, filename);
+        let any_cast = Expr::lno(ExprKind::UnsafeCast(Box::new(default), Type::Any), file_info, lno2, filename);
+        Expr::lno(ExprKind::NewFixedArray(s.to_usize().unwrap(), Box::new(any_cast)), file_info, lno, filename)
     },
     <lno: @L> "newmap" "<" <k:Type> "," <v:Type> ","? ">" => {
         Expr::lno(ExprKind::NewMap(k, v), file_info, lno, filename)
@@ -594,6 +595,9 @@ Expr12: Expr = {
     },
     <lno: @L> "unioncast" "<" <t:Type> ">" "(" <e:Expr> ")" => {
         Expr::lno(ExprKind::UnionCast(Box::new(e), t), file_info, lno, filename)
+    },
+    <lno: @L> "any" "(" <e:Expr> ")" => {
+        Expr::lno(ExprKind::UnsafeCast(Box::new(e), Type::Any), file_info, lno, filename)
     },
     <qualifiers: (<Qualifier>)*> <lno: @L> "closure" "(" <fa:FuncArgs> ")" <t: (Return)?> "{" <cb:Statement*> "}" => {
         let view = qualifiers.contains(&"view");
@@ -647,7 +651,6 @@ Const: Constant = {
     "None<" <t: Type> ">" => Constant::Option(OptionConst::None(t)),
     "false" => Constant::Bool(false),
     "true" => Constant::Bool(true),
-    "null" => Constant::Null,
 }
 
 FieldInitializers: Vec<FieldInitializer> = {
@@ -678,7 +681,7 @@ AsmOpcode: Opcode = {
 
 AsmVal: Value = {
     <UnsignedInteger> => Value::Int(<>),
-    "(" <mut l: (<AsmVal> ",")*> <v: AsmVal> ","? ")" => Value::new_tuple({l.push(v);l}),
+    "(" <mut l: (<AsmVal> ",")*> <v: AsmVal> ","? ")" => Value::new_tuple({ l.push(v); l }),
 }
 
 Qualifier: &'input str = {

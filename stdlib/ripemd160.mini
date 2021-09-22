@@ -18,12 +18,12 @@ type Ripemd160Hasher = struct {
 };
 
 public func ripemd160hasher_new() -> Ripemd160Hasher {
-    return struct {
+    struct {
         accumulator: bytes32(0x67452301EFCDAB8998BADCFE10325476C3D2E1F0),
         buf: unsafecast<[2]uint>((0,0)),
         offset: 0,
         totalSizeBytes: 0,
-    };
+    }
 }
 
 public func ripemd160hasher_pushByte(h: Ripemd160Hasher, b: uint) -> Ripemd160Hasher {
@@ -31,7 +31,7 @@ public func ripemd160hasher_pushByte(h: Ripemd160Hasher, b: uint) -> Ripemd160Ha
     let newBuffer = h.buf with {
         [word] = h.buf[word] ^ (b&0xff << (248-8*(h.offset % 32)))
     };
-    return xif (h.offset >= 63) {
+    if h.offset >= 63 {
         h with {
             accumulator: asm(h.accumulator, newBuffer[0], newBuffer[1]) bytes32 { ripemd160f }
         } with {
@@ -49,12 +49,12 @@ public func ripemd160hasher_pushByte(h: Ripemd160Hasher, b: uint) -> Ripemd160Ha
         } with {
             totalSizeBytes: 1 + h.totalSizeBytes
         }
-    };
+    }
 }
 
 public func ripemd160hasher_push256(h: Ripemd160Hasher, val: uint) -> Ripemd160Hasher {
     let offset = h.offset;
-    return xif (offset == 0) {
+    if offset == 0 {
         h with {
             buf: h.buf with { [0] = val }
         } with {
@@ -62,7 +62,7 @@ public func ripemd160hasher_push256(h: Ripemd160Hasher, val: uint) -> Ripemd160H
         } with {
             totalSizeBytes: 32+h.totalSizeBytes
         }
-    } elseif (offset == 32) {
+    } else if offset == 32 {
         h with {
             accumulator: asm(h.accumulator, h.buf[0], val) bytes32 { ripemd160f }
         } with {
@@ -72,7 +72,7 @@ public func ripemd160hasher_push256(h: Ripemd160Hasher, val: uint) -> Ripemd160H
         } with {
             totalSizeBytes: 32+h.totalSizeBytes
         }
-    } elseif (offset < 32) {
+    } else if offset < 32 {
         h with {
             buf: h.buf with {
                 [0] = h.buf[0] | (val >> (8*offset))
@@ -102,7 +102,7 @@ public func ripemd160hasher_push256(h: Ripemd160Hasher, val: uint) -> Ripemd160H
         } with {
             totalSizeBytes: 32+h.totalSizeBytes
         }
-    };
+    }
 }
 
 public func ripemd160hasher_finish(h: Ripemd160Hasher) -> bytes32 {
@@ -112,7 +112,7 @@ public func ripemd160hasher_finish(h: Ripemd160Hasher) -> bytes32 {
     };
 
     // make sure there is space for the 64-bit total length
-    if (h.offset > 56) {
+    if h.offset > 56 {
         h = h with {
             accumulator: asm(h.accumulator, h.buf[0], h.buf[1]) bytes32 { ripemd160f }
         } with {
@@ -121,26 +121,26 @@ public func ripemd160hasher_finish(h: Ripemd160Hasher) -> bytes32 {
     }
 
     // insert the total size, and invoke the compression function
-    return asm(
+    asm(
         h.accumulator,
         h.buf[0],
         h.buf[1] | flipEndian64(8*h.totalSizeBytes),  //TODO: check endianness
-    ) bytes32 { ripemd160f };
+    ) bytes32 { ripemd160f }
 }
 
 public func ripemd160_byteArray(ba: ByteArray) -> bytes32 {
     let hasher = ripemd160hasher_new();
     let i = 0;
     let sz = bytearray_size(ba);
-    while (i+32 < sz) {
+    while i+32 < sz {
         hasher = ripemd160hasher_push256(hasher, bytearray_get256(ba, i));
         i = i+32;
     }
-    while (i < sz) {
+    while i < sz {
         hasher = ripemd160hasher_pushByte(hasher, bytearray_getByte(ba, i));
         i = i+1;
     }
-    return ripemd160hasher_finish(hasher);
+    ripemd160hasher_finish(hasher)
 }
 
 

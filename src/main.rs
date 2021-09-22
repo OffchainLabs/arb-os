@@ -139,11 +139,6 @@ fn main() -> Result<(), CompileError> {
 
     match matches {
         Args::Compile(compile) => {
-            rayon::ThreadPoolBuilder::new()
-                .stack_size(8192 * 1024)
-                .build_global()
-                .expect("failed to initialize rayon thread pool");
-
             let mut output = match compile.output {
                 Some(ref path) => File::create(path)
                     .map(|f| Box::new(f) as Box<dyn io::Write>)

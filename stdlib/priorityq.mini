@@ -107,11 +107,11 @@ public func priorityq_insert(pq: PriorityQ, item: any, priority: uint) -> Priori
     if pq.size == pq.capacity {
         let newCapacity = 8*pq.capacity;
         pq = pq with { capacity: newCapacity }
-                with { contents: unsafecast<[]PqItem>(array_resize(unsafecast<array>(pq.contents), newCapacity, null)) };
+                with { contents: unsafecast<[]PqItem>(array_resize(unsafecast<array>(pq.contents), newCapacity, ())) };
     }
     let index = pq.size;
     let newpq = pq with { size: index+1 }
-                   with { contents: pq.contents with { [index] = struct { priority: priority, item: item, } } };
+                   with { contents: pq.contents with { [index] = struct { priority: priority, item: item } } };
     pq_pushUp(newpq, index)
 }
 

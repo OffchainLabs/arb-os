@@ -39,7 +39,6 @@ func tests() -> uint {
 
     // check that this wont error
     let _ = setbuffer8(buf2, 10000, 1234);
-
     let ba = bytearray_new(33);
     if bytearray_size(ba) != 0 {
 	return 1;
@@ -50,8 +49,6 @@ func tests() -> uint {
     if bytearray_getByte(ba, 33) != 42 {
 	return 2;
     }
-
-    return 0;
 
     ba = bytearray_new(117);
     ba = bytearray_setByte(ba, 33000, 42);
@@ -96,9 +93,7 @@ func tests() -> uint {
 	return 7;
     }
     
-    return 0;
-
-    /*let marshalledStruct = unsafecast<MarshalledBytes>((
+    let marshalledStruct = unsafecast<MarshalledBytes>((
 	67,
 	(
 	    0x4041420000000000000000000000000000000000000000000000000000000000,
@@ -106,7 +101,7 @@ func tests() -> uint {
 		0x202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f,
 		(
 		    0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f,
-		    null,
+		    (),
 		),
 	    ),
 	),
@@ -311,7 +306,7 @@ func setupFromUnmarshal() -> ByteArray {
 		0x202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f,
 		(
 		    0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f,
-		    null,
+		    (),
 		),
 	    ),
 	),
@@ -320,7 +315,7 @@ func setupFromUnmarshal() -> ByteArray {
 	ba
     } else {
 	error
-    }*/
+    }
 }
 
 func testCalldataUnitCounting() -> uint {
