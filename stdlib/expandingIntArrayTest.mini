@@ -1,5 +1,4 @@
 
-use std::expandingIntArray::ExpandingIntArray;
 use std::expandingIntArray::expandingIntArray_new;
 use std::expandingIntArray::expandingIntArray_get;
 use std::expandingIntArray::expandingIntArray_set;
