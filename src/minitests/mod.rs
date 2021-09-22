@@ -1158,3 +1158,82 @@ fn call_deplete_gas(machine: &mut Machine, contract: &AbiForContract, gas: u64) 
     assert_eq!(receipts.len(), 1);
     receipts[0].get_return_code()
 }
+
+#[test]
+fn test_gas_refunds() {
+    let index1 = Uint256::from_u64(73);
+    let index2 = Uint256::from_u64(99);
+    let zero = Uint256::zero();
+    let one = Uint256::one();
+
+    let cost_zeroes = measure_gas_for_alloc_dealloc(vec![&index1, &zero, &index1, &zero, &index1, &zero]);
+
+    let cost_one_alloc = measure_gas_for_alloc_dealloc(vec![&index2, &one, &index1, &zero, &index1, &zero]);
+    assert_close(&cost_one_alloc, &cost_zeroes.add(&Uint256::from_u64(200_000)));
+
+    let cost_alloc_dealloc = measure_gas_for_alloc_dealloc(vec![&index2, &one, &index2, &zero, &index1, &zero]);
+    assert_close(&cost_zeroes, &cost_alloc_dealloc);
+
+    let cost_alloc_realloc = measure_gas_for_alloc_dealloc(vec![&index2, &one, &index2, &zero, &index2, &one]);
+    assert_close(&cost_alloc_realloc, &cost_one_alloc);
+}
+
+#[cfg(test)]
+fn assert_close(x: &Uint256, y: &Uint256) {
+    println!("====== {} {}", x, y);
+    if x > y {
+        assert!(x < &y.add(&Uint256::from_u64(200)));
+    } else {
+        assert!(y < &x.add(&Uint256::from_u64(200)));
+    }
+}
+
+#[cfg(test)]
+fn measure_gas_for_alloc_dealloc(args: Vec<&Uint256>) -> Uint256 {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = wallet.address();
+    let my_addr256 = Uint256::from_bytes(&my_addr.to_fixed_bytes());
+
+    let mut contract = AbiForContract::new_from_file(&test_contract_path("BlockNum")).unwrap();
+    if let Err(receipt) = contract.deploy(&[], &mut machine, Uint256::zero(), None, false) {
+        if !receipt.unwrap().succeeded() {
+            panic!("unexpected failure deploying BlockNum contract");
+        }
+    }
+
+    machine.runtime_env.insert_eth_deposit_message(
+        Uint256::zero(),
+        my_addr256.clone(),
+        Uint256::_from_eth(1000),
+        false,
+    );
+    let _ = machine.run(None);
+
+    let arbowner = _ArbOwner::_new(&wallet, false);
+    arbowner._set_fees_enabled(&mut machine, true, true).unwrap();
+    let _ = machine.run(None);
+
+    let (receipts, _) = contract.call_function_compressed(
+        my_addr256.clone(),
+        "rewriteStorage",
+        &[
+            ethabi::Token::Uint(args[0].to_u256()),
+            ethabi::Token::Uint(args[1].to_u256()),
+            ethabi::Token::Uint(args[2].to_u256()),
+            ethabi::Token::Uint(args[3].to_u256()),
+            ethabi::Token::Uint(args[4].to_u256()),
+            ethabi::Token::Uint(args[5].to_u256()),
+        ],
+        &mut machine,
+        Uint256::zero(),
+        &wallet,
+        false
+    ).unwrap();
+    assert_eq!(receipts.len(), 1);
+    assert!(receipts[0].succeeded());
+
+    receipts[0].get_gas_used()
+}
