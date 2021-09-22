@@ -426,7 +426,6 @@ Expr: Expr = {
         let kind = ExprKind::StructMod(Box::new(t), string_table.name_from_id(i).to_string(), Box::new(e));
         Expr::lno(kind, file_info, lno, filename)
     },
-    IfExpr => <>,
     Expr1,
 }
 
@@ -497,6 +496,7 @@ Expr10: Expr = {
 }
 
 Expr11: Expr = {
+    IfExpr => <>,
     <lno: @L> <c: Const> => {
         Expr::lno(ExprKind::Constant(c), file_info, lno, filename)
     },
@@ -519,7 +519,7 @@ Expr11: Expr = {
         Expr::lno(ExprKind::TupleRef(Box::new(e), u), file_info, lno, filename)
     },
     <lno: @L> "loop" <block: CodeBlockStat> => {
-        Expr::lno(ExprKind::Loop(block, Type::Void), file_info, lno, filename)
+        Expr::lno(ExprKind::Loop(block, Type::Every), file_info, lno, filename)
     },
     <lno: @L> "loop" "<" <tipe: Type> ">" <block: CodeBlockStat> => {
         Expr::lno(ExprKind::Loop(block, tipe), file_info, lno, filename)

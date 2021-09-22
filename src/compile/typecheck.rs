@@ -757,6 +757,39 @@ impl TypeCheckedExpr {
         Self { kind, debug_info }
     }
 
+    /// Make a reference to to a builtin func with the types altered for safety.
+    pub fn builtin_ref(
+        name: &str,
+        args: Vec<&Type>,
+        ret: &Type,
+        func_table: &HashMap<usize, Type>,
+        string_table: &StringTable,
+        debug_info: DebugInfo,
+    ) -> Result<Self, CompileError> {
+        let args = args.into_iter().cloned().collect();
+        let ret = ret.clone();
+
+        let error_msg = Err(CompileError::new(
+            "Internal Error",
+            format!("Builtin {} does not exist", name),
+            debug_info.locs(),
+        ));
+
+        let builtin_id = match string_table.get_if_exists(name) {
+            Some(id) => id,
+            none => return error_msg,
+        };
+
+        let mut builtin_type = match func_table.get(&builtin_id) {
+            Some(Type::Func(prop, ..)) => Type::Func(prop.clone(), args, Box::new(ret)),
+            _ => return error_msg,
+        };
+        Ok(TypeCheckedExpr::new(
+            TypeCheckedExprKind::FuncRef(builtin_id, builtin_type),
+            debug_info,
+        ))
+    }
+
     /// Extracts the type returned from the expression.
     pub fn get_type(&self) -> Type {
         match &self.kind {
@@ -2035,68 +2068,25 @@ fn typecheck_expr(
                     scopes,
                 )?;
 
-                let func_name = match &expr.kind {
-                    TypeCheckedExprKind::FuncRef(id, _) => {
-                        format!(" {}", string_table.name_from_id(*id))
-                    }
-                    _ => String::new(),
-                };
+                let args = args
+                    .iter()
+                    .map(|arg| {
+                        typecheck_expr(
+                            arg,
+                            type_table,
+                            global_vars,
+                            func_table,
+                            func,
+                            type_tree,
+                            string_table,
+                            undefinable_ids,
+                            closures,
+                            scopes,
+                        )
+                    })
+                    .collect::<Result<_, _>>()?;
 
-                let expr_type = expr.get_type().rep(type_tree)?;
-
-                match expr_type.clone() {
-                    Type::Func(prop, arg_types, ret_type) => {
-                        if args.len() == arg_types.len() {
-                            let mut tc_args = Vec::new();
-                            for i in 0..args.len() {
-                                let tc_arg = typecheck_expr(
-                                    &args[i],
-                                    type_table,
-                                    global_vars,
-                                    func_table,
-                                    func,
-                                    type_tree,
-                                    string_table,
-                                    undefinable_ids,
-                                    closures,
-                                    scopes,
-                                )?;
-                                tc_args.push(tc_arg);
-
-                                let resolved_arg_type = arg_types[i].clone();
-
-                                if !resolved_arg_type.assignable(
-                                    &tc_args[i].get_type().rep(type_tree)?,
-                                    type_tree,
-                                    HashSet::new(),
-                                ) {
-                                    return Err(CompileError::new_type_error(
-                                        format!(
-                                            "func{}'s {} arg has wrong type:\nencountered {}\ninstead of  {}",
-                                            Color::red(func_name),
-                                            Color::red(human_readable_index(i + 1)),
-                                            Color::red(&tc_args[i].get_type().print(type_tree)),
-                                            Color::red(resolved_arg_type.print(type_tree)),
-                                        ),
-                                        tc_args[i].debug_info.locs(),
-                                    ));
-                                }
-                            }
-                            Ok(TypeCheckedExprKind::FunctionCall(
-                                Box::new(expr),
-                                tc_args,
-                                *ret_type,
-                                prop,
-                            ))
-                        } else {
-                            error!("wrong number of args passed to function")
-                        }
-                    }
-                    _ => error!(
-                        "tried to call a {}, which is not a function",
-                        expr_type.print(type_tree)
-                    ),
-                }
+                Ok(build_function_call(expr, args, string_table, type_tree)?)
             }
             ExprKind::CodeBlock(block) => Ok(TypeCheckedExprKind::CodeBlock(typecheck_codeblock(
                 block,
@@ -2353,28 +2343,25 @@ fn typecheck_expr(
                 Ok(TypeCheckedExprKind::Tuple(fields, Type::Struct(types)))
             }
             ExprKind::NewMap(key_type, value_type) => {
-                let call = Expr::build_call("builtin_kvsNew", vec![], string_table, debug_info)?;
+                // In order to best simulate a call to the builtin, we alter the signature
+                //   In kvs.mini   func builtin_kvsNew() -> Kvs
+                //   Best effort   func builtin_kvsNew() -> map<k,v>
 
-                // The compiler doesn't know that `Kvs` here is the same as `map<k,v>`,
-                // so we trick it into thinking we have a `map<k,v>`.
-                let map_type = Type::Map(Box::new(key_type.clone()), Box::new(value_type.clone()));
-                let call_cast =
-                    Expr::new(ExprKind::UnsafeCast(Box::new(call), map_type), debug_info);
-
-                let expr = typecheck_expr(
-                    &call_cast,
-                    type_table,
-                    global_vars,
+                let builtin_ref = TypeCheckedExpr::builtin_ref(
+                    "builtin_kvsNew",
+                    vec![],
+                    &Type::Map(Box::new(key_type.clone()), Box::new(value_type.clone())),
                     func_table,
-                    func,
-                    type_tree,
                     string_table,
-                    undefinable_ids,
-                    closures,
-                    scopes,
+                    debug_info,
                 )?;
 
-                Ok(expr.kind)
+                Ok(build_function_call(
+                    builtin_ref,
+                    vec![],
+                    string_table,
+                    type_tree,
+                )?)
             }
             ExprKind::ArrayOrMapRef(unchecked_store, unchecked_key) => {
                 let store = typecheck_expr(
@@ -2405,7 +2392,7 @@ fn typecheck_expr(
                 let store_type = store.get_type().rep(type_tree)?;
                 let key_type = key.get_type().rep(type_tree)?;
 
-                match store_type {
+                match store_type.clone() {
                     Type::FixedArray(inner_type, size) => {
                         if key_type != Type::Uint {
                             error!(
@@ -2423,40 +2410,25 @@ fn typecheck_expr(
                         ))
                     }
                     Type::Array(inner_type) => {
-                        // The compiler doesn't know that `[]entry` here is the same as `array`.
-                        // We could cast to `array`, but we'd need to have the type imported.
-                        // So we cast to `every` to satisfy the function argument.
-                        let array_cast = Expr::new(
-                            ExprKind::UnsafeCast(Box::new(*unchecked_store.clone()), Type::Every),
-                            debug_info,
-                        );
+                        // In order to best simulate a call to the builtin, we alter the signature
+                        //   In array.mini   func builtin_arrayGet(Array, uint) -> any
+                        //   Best effort     func builtin_arrayGet([]v, uint) -> v
 
-                        let call = Expr::build_call(
+                        let builtin_ref = TypeCheckedExpr::builtin_ref(
                             "builtin_arrayGet",
-                            vec![&array_cast, unchecked_key],
-                            string_table,
-                            debug_info,
-                        )?;
-
-                        // Make the compiler *smarter* by tagging the value with the right type
-                        let value_cast = Expr::new(
-                            ExprKind::UnsafeCast(Box::new(call), *inner_type),
-                            debug_info,
-                        );
-
-                        let expr = typecheck_expr(
-                            &value_cast,
-                            type_table,
-                            global_vars,
+                            vec![&store_type, &Type::Uint],
+                            &*inner_type,
                             func_table,
-                            func,
-                            type_tree,
                             string_table,
-                            undefinable_ids,
-                            closures,
-                            scopes,
+                            debug_info,
                         )?;
-                        Ok(expr.kind)
+
+                        Ok(build_function_call(
+                            builtin_ref,
+                            vec![store, key],
+                            string_table,
+                            type_tree,
+                        )?)
                     }
                     Type::Map(store_key_type, store_value_type) => {
                         if !store_key_type.assignable(&key_type, type_tree, HashSet::new()) {
@@ -2468,43 +2440,25 @@ fn typecheck_expr(
                             );
                         }
 
-                        // The compiler doesn't know that `map<k,v>` here is the same as `Kvs`.
-                        // We could cast to `Kvs`, but we'd need to have the type imported.
-                        // So we cast to `every` to satisfy the function argument.
-                        let kvs_cast = Expr::new(
-                            ExprKind::UnsafeCast(Box::new(*unchecked_store.clone()), Type::Every),
-                            debug_info,
-                        );
+                        // In order to best simulate a call to the builtin, we alter the signature
+                        //   In array.mini   func builtin_kvsGet(Kvs, k') -> option<any>
+                        //   Best effort     func builtin_kvsGet(map<k,v>, k) -> option<v>
 
-                        let call = Expr::build_call(
+                        let builtin_ref = TypeCheckedExpr::builtin_ref(
                             "builtin_kvsGet",
-                            vec![&kvs_cast, unchecked_key],
-                            string_table,
-                            debug_info,
-                        )?;
-
-                        // Make the compiler *smarter* by tagging the value with the right type
-                        let value_cast = Expr::new(
-                            ExprKind::UnsafeCast(
-                                Box::new(call),
-                                Type::Option(store_value_type.clone()),
-                            ),
-                            debug_info,
-                        );
-
-                        let expr = typecheck_expr(
-                            &value_cast,
-                            type_table,
-                            global_vars,
+                            vec![&store_type, &*store_key_type],
+                            &Type::Option(store_value_type),
                             func_table,
-                            func,
-                            type_tree,
                             string_table,
-                            undefinable_ids,
-                            closures,
-                            scopes,
+                            debug_info,
                         )?;
-                        Ok(expr.kind)
+
+                        Ok(build_function_call(
+                            builtin_ref,
+                            vec![store, key],
+                            string_table,
+                            type_tree,
+                        )?)
                     }
                     _ => error!(
                         "{} lookup in non-array & non-map type {}",
@@ -2555,7 +2509,7 @@ fn typecheck_expr(
                 let key_type = key.get_type().rep(type_tree)?;
                 let item_type = item.get_type().rep(type_tree)?;
 
-                match store_type {
+                match store_type.clone() {
                     Type::FixedArray(inner_type, size) => {
                         if key_type != Type::Uint {
                             error!(
@@ -2590,40 +2544,25 @@ fn typecheck_expr(
                             );
                         }
 
-                        // The compiler doesn't know that `[]entry` here is the same as `array`.
-                        // We could cast to `array`, but we'd need to have the type imported.
-                        // So we cast to `every` to satisfy the function argument.
-                        let array_cast = Expr::new(
-                            ExprKind::UnsafeCast(Box::new(*unchecked_store.clone()), Type::Every),
-                            unchecked_store.debug_info,
-                        );
+                        // In order to best simulate a call to the builtin, we alter the signature
+                        //   In array.mini   func builtin_arraySet(Array, uint, any) -> Array
+                        //   Best effort     func builtin_arraySet([]v, uint, v) -> []v
 
-                        let call = Box::new(Expr::build_call(
+                        let builtin_ref = TypeCheckedExpr::builtin_ref(
                             "builtin_arraySet",
-                            vec![&array_cast, unchecked_key, unchecked_item],
+                            vec![&store_type, &Type::Uint, &*inner_type],
+                            &store_type,
+                            func_table,
                             string_table,
                             debug_info,
-                        )?);
-
-                        // The compiler doesn't know that `array` here is the same as `[]item`,
-                        // so we trick it into thinking we have an `[]item`.
-                        let array_type = Type::Array(Box::new(*inner_type.clone()));
-                        let call_cast =
-                            Expr::new(ExprKind::UnsafeCast(call, array_type), debug_info);
-
-                        let expr = typecheck_expr(
-                            &call_cast,
-                            type_table,
-                            global_vars,
-                            func_table,
-                            func,
-                            type_tree,
-                            string_table,
-                            undefinable_ids,
-                            closures,
-                            scopes,
                         )?;
-                        Ok(expr.kind)
+
+                        Ok(build_function_call(
+                            builtin_ref,
+                            vec![store, key, item],
+                            string_table,
+                            type_tree,
+                        )?)
                     }
                     Type::Map(store_key_type, store_value_type) => {
                         if !store_key_type.assignable(&key_type, type_tree, HashSet::new()) {
@@ -2644,39 +2583,25 @@ fn typecheck_expr(
                             );
                         }
 
-                        // The compiler doesn't know that `map<k,v>` here is the same as `Kvs`.
-                        // We could cast to `Kvs`, but we'd need to have the type imported.
-                        // So we cast to `every` to satisfy the function argument.
-                        let kvs_cast = Expr::new(
-                            ExprKind::UnsafeCast(Box::new(*unchecked_store.clone()), Type::Every),
-                            debug_info,
-                        );
+                        // In order to best simulate a call to the builtin, we alter the signature
+                        //   In kvs.mini   func builtin_kvsSet(Kvs, any, any) -> Kvs
+                        //   Best effort   func builtin_kvsSet(Map<k,v>, k', v') -> Map<k,v>
 
-                        let call = Box::new(Expr::build_call(
+                        let builtin_ref = TypeCheckedExpr::builtin_ref(
                             "builtin_kvsSet",
-                            vec![&kvs_cast, unchecked_key, unchecked_item],
+                            vec![&store_type, &*store_key_type, &*store_value_type],
+                            &store_type,
+                            func_table,
                             string_table,
                             debug_info,
-                        )?);
-
-                        // The compiler doesn't know that `Kvs` here is the same as `map<k,v>`,
-                        // so we trick it into thinking we have an `map<k,v>`.
-                        let map_type = Type::Map(store_key_type, store_value_type);
-                        let call_cast = Expr::new(ExprKind::UnsafeCast(call, map_type), debug_info);
-
-                        let expr = typecheck_expr(
-                            &call_cast,
-                            type_table,
-                            global_vars,
-                            func_table,
-                            func,
-                            type_tree,
-                            string_table,
-                            undefinable_ids,
-                            closures,
-                            scopes,
                         )?;
-                        Ok(expr.kind)
+
+                        Ok(build_function_call(
+                            builtin_ref,
+                            vec![store, key, item],
+                            string_table,
+                            type_tree,
+                        )?)
                     }
                     other => error!(
                         "{} mod must operate on array or block, found {}",
@@ -4001,4 +3926,69 @@ fn typecheck_codeblock(
             .map(Box::new),
         scope: None,
     })
+}
+
+fn build_function_call(
+    func_expr: TypeCheckedExpr,
+    args: Vec<TypeCheckedExpr>,
+    string_table: &StringTable,
+    type_tree: &TypeTree,
+) -> Result<TypeCheckedExprKind, CompileError> {
+    let func_name = match &func_expr.kind {
+        TypeCheckedExprKind::FuncRef(id, _) => {
+            format!(" {}", string_table.name_from_id(*id))
+        }
+        _ => String::new(),
+    };
+
+    let func_expr_type = func_expr.get_type().rep(type_tree)?;
+
+    let (prop, arg_types, ret_type) = match func_expr_type {
+        Type::Func(prop, arg_types, ret_type) => (prop, arg_types, ret_type),
+        wrong => {
+            return Err(CompileError::new(
+                "Typecheck Error",
+                format!(
+                    "tried to call non-func {}",
+                    Color::red(wrong.print(type_tree))
+                ),
+                func_expr.debug_info.locs(),
+            ));
+        }
+    };
+
+    if args.len() != arg_types.len() {
+        return Err(CompileError::new(
+            "Typecheck Error",
+            format!(
+                "wrong number of args passed to func{}",
+                Color::red(func_name)
+            ),
+            func_expr.debug_info.locs(),
+        ));
+    }
+
+    for (index, (arg, tipe)) in args.iter().zip(arg_types).enumerate() {
+        let arg_type = arg.get_type();
+
+        if !tipe.assignable(&arg_type, type_tree, HashSet::new()) {
+            return Err(CompileError::new_type_error(
+                format!(
+                    "func{}'s {} arg has wrong type:\nencountered {}\ninstead of  {}",
+                    Color::red(func_name),
+                    Color::red(human_readable_index(index + 1)),
+                    Color::red(arg_type.print(type_tree)),
+                    Color::red(tipe.print(type_tree)),
+                ),
+                arg.debug_info.locs(),
+            ));
+        }
+    }
+
+    Ok(TypeCheckedExprKind::FunctionCall(
+        Box::new(func_expr),
+        args,
+        *ret_type,
+        prop,
+    ))
 }

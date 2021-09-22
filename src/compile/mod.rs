@@ -114,7 +114,7 @@ impl CompileStruct {
         // main() so that tests are affected.
         drop(
             rayon::ThreadPoolBuilder::new()
-                .stack_size(8192 * 1024)
+                .stack_size(4 * 8192 * 1024)
                 .build_global(),
         );
 
