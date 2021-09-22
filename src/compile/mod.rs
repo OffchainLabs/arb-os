@@ -8,7 +8,7 @@ use crate::console::Color;
 use crate::link::{link, postlink_compile, Import, LinkedProgram};
 use crate::mavm::{Instruction, Label, LabelId};
 use crate::pos::{BytePos, Location};
-use crate::stringtable::{StringId, StringTable};
+use crate::stringtable::StringId;
 use ast::Func;
 use clap::Clap;
 use lalrpop_util::lalrpop_mod;
@@ -95,8 +95,6 @@ struct Module {
     global_vars: Vec<GlobalVar>,
     /// List of imported constructs within this file.
     imports: Vec<Import>,
-    /// Map from `StringId`s to the names they derived from.
-    string_table: StringTable,
     /// Map from `StringId`s to the types of the functions they represent.
     func_table: HashMap<StringId, Type>,
     /// The path to the module
@@ -111,8 +109,6 @@ struct TypeCheckedModule {
     /// Collection of functions defined locally within the source file that have been validated by
     /// typechecking
     checked_funcs: BTreeMap<StringId, TypeCheckedFunc>,
-    /// Map from `StringId`s to the names they derived from.
-    string_table: StringTable,
     /// Map from `StringId`s in this file to the `Type`s they represent.
     named_types: HashMap<StringId, Type>,
     /// List of constants used in this file.
@@ -221,7 +217,6 @@ impl Module {
         constants: HashSet<String>,
         global_vars: Vec<GlobalVar>,
         imports: Vec<Import>,
-        string_table: StringTable,
         func_table: HashMap<StringId, Type>,
         path: Vec<String>,
         name: String,
@@ -232,7 +227,6 @@ impl Module {
             constants,
             global_vars,
             imports,
-            string_table,
             func_table,
             path,
             name,
@@ -243,7 +237,6 @@ impl Module {
 impl TypeCheckedModule {
     fn new(
         checked_funcs: BTreeMap<StringId, TypeCheckedFunc>,
-        string_table: StringTable,
         named_types: HashMap<StringId, Type>,
         constants: HashSet<String>,
         global_vars: Vec<GlobalVar>,
@@ -253,7 +246,6 @@ impl TypeCheckedModule {
     ) -> Self {
         Self {
             checked_funcs,
-            string_table,
             constants,
             named_types,
             global_vars,
@@ -268,11 +260,7 @@ impl TypeCheckedModule {
     fn inline(&mut self, heuristic: &InliningHeuristic) {
         let mut new_funcs = self.checked_funcs.clone();
         for (_id, func) in &mut new_funcs {
-            func.inline(
-                &self.checked_funcs.values().cloned().collect(),
-                &self.string_table,
-                heuristic,
-            )
+            func.inline(&self.checked_funcs.values().cloned().collect(), heuristic)
         }
         self.checked_funcs = new_funcs;
     }
@@ -292,7 +280,7 @@ impl TypeCheckedModule {
         let mut imports: BTreeMap<StringId, Import> = BTreeMap::new();
 
         for import in self.imports.iter() {
-            let id = self.string_table.get_if_exists(&import.name).unwrap();
+            let id = import.id.clone().unwrap();
 
             if let Some(prior) = imports.get(&id) {
                 flow_warnings.push(CompileError::new_warning(
@@ -329,7 +317,6 @@ impl TypeCheckedModule {
         for (_id, func) in &mut self.checked_funcs {
             flow_warnings.extend(func.flowcheck(
                 &mut imports, // will remove from imports everything used
-                &mut self.string_table,
                 error_system,
             ));
         }
@@ -569,7 +556,7 @@ pub fn compile_from_folder(
         builtins,
     )?;
 
-    resolve_imports(&mut programs, &mut import_map, error_system)?;
+    resolve_imports(&mut programs, &mut import_map)?;
 
     // Conversion of programs from `HashMap` to `Vec` for typechecking
     let type_tree = create_type_tree(&programs);
@@ -704,7 +691,6 @@ fn create_program_tree(
             },
         );
 
-        let mut string_table = StringTable::new(path.clone());
         let mut used_constants = HashSet::new();
         let (imports, funcs, named_types, global_vars, func_table) =
             typecheck::sort_top_level_decls(
@@ -712,13 +698,11 @@ fn create_program_tree(
                     source,
                     file_id,
                     &path,
-                    &mut string_table,
                     constants_path,
                     &mut used_constants,
                     error_system,
                 )?,
                 path.clone(),
-                &mut string_table,
                 builtins,
             );
         paths.append(&mut imports.iter().map(|imp| imp.path.clone()).collect());
@@ -731,7 +715,6 @@ fn create_program_tree(
                 used_constants,
                 global_vars,
                 imports,
-                string_table,
                 func_table,
                 path,
                 name,
@@ -744,25 +727,12 @@ fn create_program_tree(
 fn resolve_imports(
     modules: &mut HashMap<Vec<String>, Module>,
     import_map: &mut HashMap<Vec<String>, Vec<Import>>,
-    error_system: &mut ErrorSystem,
 ) -> Result<(), CompileError> {
     for (name, imports) in import_map {
         for import in imports {
             let import_path = import.path.clone();
             let (named_type, imp_func) = if let Some(module) = modules.get_mut(&import_path) {
-                // Looks up info from target module
-                let string_id = module
-                    .string_table
-                    .get_if_exists(&import.name.clone())
-                    .ok_or(CompileError::new(
-                        "Import Error",
-                        format!(
-                            "Symbol {} does not exist in {}",
-                            Color::red(&import.name),
-                            Color::red(&import.path.join("/"))
-                        ),
-                        import.location.into_iter().collect(),
-                    ))?;
+                let string_id = StringId::new(import_path, import.name.clone());
                 let named_type = module.named_types.get(&string_id).cloned();
                 let imp_func = module.func_table.get(&string_id).cloned();
                 (named_type, imp_func)
@@ -791,7 +761,7 @@ fn resolve_imports(
                 )
             })?;
 
-            let string_id = match origin_module.string_table.get_if_exists(&import.name) {
+            let string_id = match import.id.clone() {
                 Some(string_id) => string_id,
                 None => {
                     return Err(CompileError::new(
@@ -829,8 +799,7 @@ fn resolve_imports(
                     }
                 }
             } else {
-                error_system.warnings.push(CompileError::new_warning(
-                    String::from("Compile warning"),
+                return Err(CompileError::new_type_error(
                     format!(
                         "import \"{}::{}\" does not correspond to a type or function",
                         import.path.get(0).cloned().unwrap_or_else(String::new),
@@ -852,18 +821,7 @@ fn create_type_tree(program_tree: &HashMap<Vec<String>, Module>) -> TypeTree {
             program
                 .named_types
                 .iter()
-                .map(|(id, tipe)| {
-                    (
-                        (path.clone(), id.clone()),
-                        (
-                            tipe.clone(),
-                            program_tree
-                                .get(path)
-                                .map(|module| module.string_table.name_from_id(id.clone()).clone())
-                                .unwrap(),
-                        ),
-                    )
-                })
+                .map(|(id, tipe)| ((path.clone(), id.clone()), (tipe.clone(), id.id.clone())))
                 .collect::<Vec<_>>()
         })
         .flatten()
@@ -885,35 +843,30 @@ fn typecheck_programs(
                  constants,
                  global_vars,
                  imports,
-                 string_table,
                  func_table,
                  path,
                  name,
              }| {
                 let mut typecheck_issues = vec![];
-                let (mut checked_funcs, global_vars, string_table) =
-                    typecheck::typecheck_top_level_decls(
-                        funcs,
-                        &named_types,
-                        global_vars,
-                        &imports,
-                        string_table,
-                        func_table,
-                        type_tree,
-                        &path,
-                    )?;
+                let (mut checked_funcs, global_vars) = typecheck::typecheck_top_level_decls(
+                    funcs,
+                    &named_types,
+                    global_vars,
+                    &imports,
+                    func_table,
+                    type_tree,
+                    &path,
+                )?;
 
                 checked_funcs.iter_mut().for_each(|(id, func)| {
                     let detected_view = func.is_view(type_tree);
                     let detected_write = func.is_write(type_tree);
 
-                    let name = string_table.name_from_id(id.clone());
-
                     if detected_view && !func.properties.view {
                         typecheck_issues.push(CompileError::new_type_error(
                             format!(
                                 "Func {} is {} but was not declared so",
-                                Color::red(name),
+                                Color::red(&id.id),
                                 Color::red("view")
                             ),
                             func.debug_info.locs(),
@@ -924,7 +877,7 @@ fn typecheck_programs(
                         typecheck_issues.push(CompileError::new_type_error(
                             format!(
                                 "Func {} is {} but was not declared so",
-                                Color::red(name),
+                                Color::red(&id.id),
                                 Color::red("write")
                             ),
                             func.debug_info.locs(),
@@ -936,7 +889,7 @@ fn typecheck_programs(
                             String::from("Typecheck warning"),
                             format!(
                                 "Func {} is marked {} but isn't",
-                                Color::color(error_system.warn_color, name),
+                                Color::color(error_system.warn_color, &id.id),
                                 Color::color(error_system.warn_color, "view")
                             ),
                             func.debug_info.locs(),
@@ -948,7 +901,7 @@ fn typecheck_programs(
                             String::from("Typecheck warning"),
                             format!(
                                 "Func {} is marked {} but isn't",
-                                Color::color(error_system.warn_color, name),
+                                Color::color(error_system.warn_color, &id.id),
                                 Color::color(error_system.warn_color, "write")
                             ),
                             func.debug_info.locs(),
@@ -958,7 +911,6 @@ fn typecheck_programs(
                 Ok((
                     TypeCheckedModule::new(
                         checked_funcs,
-                        string_table,
                         named_types,
                         constants,
                         global_vars,
@@ -1071,7 +1023,6 @@ fn codegen_programs(
             work_list.push((
                 func,
                 func_labels.clone(),
-                module.string_table.clone(),
                 global_vars.clone(),
                 module.name.clone(),
                 module.path.clone(),
@@ -1083,42 +1034,39 @@ fn codegen_programs(
 
     let (progs, issues) = work_list
         .into_par_iter()
-        .map(
-            |(func, func_labels, string_table, globals, module_name, module_path)| {
-                let mut codegen_issues = vec![];
-                let func_name = func.name.clone();
-                let debug_info = func.debug_info;
+        .map(|(func, func_labels, globals, module_name, module_path)| {
+            let mut codegen_issues = vec![];
+            let func_name = func.name.clone();
+            let debug_info = func.debug_info;
 
-                let code = codegen::mavm_codegen_func(
-                    func,
-                    &string_table,
-                    &globals,
-                    &func_labels,
-                    &mut codegen_issues,
-                    release_build,
-                )?;
+            let code = codegen::mavm_codegen_func(
+                func,
+                &globals,
+                &func_labels,
+                &mut codegen_issues,
+                release_build,
+            )?;
 
-                let source = Some(SourceFileMap::new(
-                    code.len(),
-                    folder.join(module_name.clone()).display().to_string(),
-                ));
+            let source = Some(SourceFileMap::new(
+                code.len(),
+                folder.join(module_name.clone()).display().to_string(),
+            ));
 
-                let globals: Vec<_> = globals.into_iter().map(|g| g.1).collect();
+            let globals: Vec<_> = globals.into_iter().map(|g| g.1).collect();
 
-                let prog = CompiledProgram::new(
-                    func_name,
-                    module_path,
-                    code,
-                    globals,
-                    source,
-                    HashMap::new(),
-                    type_tree.clone(),
-                    debug_info,
-                );
+            let prog = CompiledProgram::new(
+                func_name,
+                module_path,
+                code,
+                globals,
+                source,
+                HashMap::new(),
+                type_tree.clone(),
+                debug_info,
+            );
 
-                Ok((prog, codegen_issues))
-            },
-        )
+            Ok((prog, codegen_issues))
+        })
         .collect::<Result<(Vec<CompiledProgram>, Vec<Vec<CompileError>>), CompileError>>()?;
 
     for issue in issues.into_iter().flatten() {
@@ -1166,7 +1114,6 @@ pub fn parse_from_source(
     source: String,
     file_id: u64,
     file_path: &[String],
-    string_table: &mut StringTable,
     constants_path: Option<&Path>,
     used_constants: &mut HashSet<String>,
     error_system: &mut ErrorSystem,
@@ -1178,7 +1125,6 @@ pub fn parse_from_source(
 
     let parsed = DeclsParser::new()
         .parse(
-            string_table,
             &lines,
             file_id,
             file_path,

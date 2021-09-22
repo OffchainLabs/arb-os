@@ -15,7 +15,7 @@ use crate::console::Color;
 use crate::link::Import;
 use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
 use crate::pos::{Column, Location};
-use crate::stringtable::{StringId, StringTable};
+use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -251,7 +251,7 @@ impl InliningMode {
 /// Used to inline an AST node
 fn inline(
     to_do: &mut TypeCheckedNode,
-    state: &(&Vec<TypeCheckedFunc>, &StringTable, &InliningHeuristic),
+    state: &(&Vec<TypeCheckedFunc>, &InliningHeuristic),
     _mut_state: &mut (InliningMode, Vec<StringId>),
 ) -> bool {
     if let TypeCheckedNode::Statement(stat) = to_do {
@@ -270,7 +270,7 @@ fn inline(
             {
                 let found_func = state.0.iter().find(|func| func.id == id);
                 if let Some(func) = found_func {
-                    if match state.2 {
+                    if match state.1 {
                         InliningHeuristic::All => {
                             _mut_state.0.and(&func.debug_info.attributes.inline)
                                 == InliningMode::Never
@@ -707,15 +707,10 @@ fn flowcheck_liveliness(
 }
 
 impl TypeCheckedFunc {
-    pub fn inline(
-        &mut self,
-        funcs: &Vec<TypeCheckedFunc>,
-        string_table: &StringTable,
-        heuristic: &InliningHeuristic,
-    ) {
+    pub fn inline(&mut self, funcs: &Vec<TypeCheckedFunc>, heuristic: &InliningHeuristic) {
         self.recursive_apply(
             inline,
-            &(funcs, string_table, heuristic),
+            &(funcs, heuristic),
             &mut (InliningMode::Auto, vec![]),
         );
     }
@@ -723,7 +718,6 @@ impl TypeCheckedFunc {
     pub fn flowcheck(
         &mut self,
         imports: &mut BTreeMap<StringId, Import>,
-        string_table: &mut StringTable,
         error_system: &ErrorSystem,
     ) -> Vec<CompileError> {
         let mut flowcheck_warnings = vec![];
@@ -743,17 +737,14 @@ impl TypeCheckedFunc {
 
         for arg in self.args.iter() {
             // allow intentional lack of use
-            if !string_table.name_from_id(arg.name.clone()).starts_with('_') {
+            if !arg.name.id.starts_with('_') {
                 if !killed.contains(&arg.name) {
                     flowcheck_warnings.push(CompileError::new_warning(
                         String::from("Compile warning"),
                         format!(
                             "func {}'s argument {} is declared but never used",
                             Color::color(error_system.warn_color, &self.name),
-                            Color::color(
-                                error_system.warn_color,
-                                string_table.name_from_id(arg.name.clone())
-                            ),
+                            Color::color(error_system.warn_color, &arg.name.id),
                         ),
                         arg.debug_info.location.into_iter().collect(),
                     ));
@@ -765,10 +756,7 @@ impl TypeCheckedFunc {
                         format!(
                             "func {}'s argument {} is assigned but never used",
                             Color::color(error_system.warn_color, &self.name),
-                            Color::color(
-                                error_system.warn_color,
-                                string_table.name_from_id(arg.name.clone())
-                            ),
+                            Color::color(error_system.warn_color, &arg.name.id),
                         ),
                         vec![*loc],
                     ));
@@ -778,15 +766,12 @@ impl TypeCheckedFunc {
 
         for (loc, id) in unused_assignments.iter() {
             // allow intentional lack of use
-            if !string_table.name_from_id(id.clone()).starts_with('_') {
+            if !id.id.starts_with('_') {
                 flowcheck_warnings.push(CompileError::new_warning(
                     String::from("Compile warning"),
                     format!(
                         "value {} is assigned but never used",
-                        Color::color(
-                            error_system.warn_color,
-                            string_table.name_from_id(id.clone())
-                        ),
+                        Color::color(error_system.warn_color, id),
                     ),
                     vec![*loc],
                 ));
@@ -1114,10 +1099,10 @@ impl TypeCheckedExpr {
 
     /// Creates a type-aware builtin function call based on its sub expressions
     pub fn builtin(
+        path: &[String],
         name: &str,
         args: Vec<&TypeCheckedExpr>,
         ret: &Type,
-        string_table: &StringTable,
         debug_info: DebugInfo,
     ) -> Self {
         let mut arg_types = vec![];
@@ -1132,9 +1117,7 @@ impl TypeCheckedExpr {
             TypeCheckedExprKind::FunctionCall(
                 Box::new(TypeCheckedExpr::new(
                     TypeCheckedExprKind::FuncRef(
-                        string_table
-                            .get_if_exists(name)
-                            .expect(&format!("builtin {} does not exist", Color::red(name))),
+                        StringId::new(path.to_vec(), name.to_string()),
                         call_type.clone(),
                     ),
                     debug_info,
@@ -1226,7 +1209,6 @@ fn builtin_func_decls() -> Vec<Import> {
 pub fn sort_top_level_decls(
     parsed: (Vec<TopLevelDecl>, BTreeMap<StringId, Func>),
     file_path: Vec<String>,
-    string_table: &mut StringTable,
     builtins: bool,
 ) -> (
     Vec<Import>,
@@ -1245,11 +1227,6 @@ pub fn sort_top_level_decls(
     } else {
         vec![]
     };
-
-    // we wait till now to assign stringIDs to keep the upgrade loop happy
-    for import in &mut imports {
-        import.id = Some(string_table.get(import.name.clone()));
-    }
 
     //let mut imports = vec![];
     let mut funcs = vec![];
@@ -1290,18 +1267,10 @@ pub fn typecheck_top_level_decls(
     named_types: &HashMap<StringId, Type>,
     mut global_vars: Vec<GlobalVar>,
     imports: &Vec<Import>,
-    string_table: StringTable,
     func_table: HashMap<StringId, Type>,
     type_tree: &TypeTree,
     path: &Vec<String>,
-) -> Result<
-    (
-        BTreeMap<StringId, TypeCheckedFunc>,
-        Vec<GlobalVar>,
-        StringTable,
-    ),
-    CompileError,
-> {
+) -> Result<(BTreeMap<StringId, TypeCheckedFunc>, Vec<GlobalVar>), CompileError> {
     if let Some(var) = global_vars
         .iter()
         .position(|var| &var.name == "__fixedLocationGlobal")
@@ -1318,7 +1287,10 @@ pub fn typecheck_top_level_decls(
     let mut undefinable_ids = HashMap::new(); // ids no one is allowed to define
     for import in imports {
         undefinable_ids.insert(
-            string_table.get_if_exists(&import.name).unwrap(),
+            import
+                .id
+                .clone()
+                .expect("internal error: import id was not filled"),
             import.location,
         );
     }
@@ -1331,10 +1303,7 @@ pub fn typecheck_top_level_decls(
         for (index, generic) in func.generics.iter().enumerate() {
             type_tree.insert(
                 (path.clone(), generic.clone()),
-                (
-                    Type::Generic(index),
-                    string_table.name_from_id(generic.clone()).clone(),
-                ),
+                (Type::Generic(index), generic.id.clone()),
             );
         }
         checked_funcs.insert(
@@ -1345,7 +1314,6 @@ pub fn typecheck_top_level_decls(
                 &global_vars_map,
                 &func_table,
                 &type_tree,
-                &string_table,
                 &mut checked_closures,
                 &mut undefinable_ids,
             )?,
@@ -1359,7 +1327,7 @@ pub fn typecheck_top_level_decls(
         res_global_vars.push(global_var);
     }
 
-    Ok((checked_funcs, res_global_vars, string_table))
+    Ok((checked_funcs, res_global_vars))
 }
 
 /// If successful, produces a `TypeCheckedFunc` from `FuncDecl` reference fd, according to global
@@ -1372,7 +1340,6 @@ pub fn typecheck_function(
     global_vars: &HashMap<StringId, Type>,
     func_table: &TypeTable,
     type_tree: &TypeTree,
-    string_table: &StringTable,
     closures: &mut BTreeMap<StringId, TypeCheckedFunc>,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
 ) -> Result<TypeCheckedFunc, CompileError> {
@@ -1389,7 +1356,7 @@ pub fn typecheck_function(
         return Err(CompileError::new_type_error(
             format!(
                 "Func {} has the same name as another top-level symbol",
-                Color::red(string_table.name_from_id(func.id)),
+                Color::red(func.id),
             ),
             location_option
                 .iter()
@@ -1405,8 +1372,8 @@ pub fn typecheck_function(
             CompileError::new_type_error(
                 format!(
                     "Func {}'s argument {} has the unknown type {}",
-                    Color::red(string_table.name_from_id(func.id.clone())),
-                    Color::red(string_table.name_from_id(arg.name.clone())),
+                    Color::red(&func.id.id),
+                    Color::red(&arg.name.id),
                     Color::red(arg.tipe.print(type_tree)),
                 ),
                 arg.debug_info.location.into_iter().collect(),
@@ -1416,8 +1383,8 @@ pub fn typecheck_function(
             return Err(CompileError::new_type_error(
                 format!(
                     "Func {}'s argument {} has the same name as a top-level symbol",
-                    Color::red(string_table.name_from_id(func.id.clone())),
-                    Color::red(string_table.name_from_id(arg.name.clone())),
+                    Color::red(func.id.id),
+                    Color::red(&arg.name.id),
                 ),
                 location_option
                     .iter()
@@ -1438,7 +1405,6 @@ pub fn typecheck_function(
         global_vars,
         func_table,
         type_tree,
-        string_table,
         undefinable_ids,
         closures,
         &mut vec![],
@@ -1455,10 +1421,7 @@ pub fn typecheck_function(
     } else {
         if func.code.len() == 0 {
             return Err(CompileError::new_type_error(
-                format!(
-                    "Func {} never returns",
-                    Color::red(string_table.name_from_id(func.id))
-                ),
+                format!("Func {} never returns", Color::red(&func.id.id)),
                 func.debug_info.locs(),
             ));
         }
@@ -1469,7 +1432,7 @@ pub fn typecheck_function(
                     return Err(CompileError::new_type_error(
                         format!(
                             "Func {}'s last statement is not a return",
-                            Color::red(string_table.name_from_id(func.id)),
+                            Color::red(func.id.id),
                         ),
                         func.debug_info
                             .location
@@ -1517,7 +1480,6 @@ fn typecheck_statement_sequence(
     global_vars: &HashMap<StringId, Type>,
     func_table: &TypeTable,
     type_tree: &TypeTree,
-    string_table: &StringTable,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
     closures: &mut BTreeMap<StringId, TypeCheckedFunc>,
     scopes: &mut Vec<(String, Option<Type>)>,
@@ -1530,7 +1492,6 @@ fn typecheck_statement_sequence(
         func_table,
         &[],
         type_tree,
-        string_table,
         undefinable_ids,
         closures,
         scopes,
@@ -1547,7 +1508,6 @@ fn typecheck_statement_sequence_with_bindings<'a>(
     func_table: &TypeTable,
     bindings: &[(StringId, Type)],
     type_tree: &TypeTree,
-    string_table: &StringTable,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
     closures: &mut BTreeMap<StringId, TypeCheckedFunc>,
     scopes: &mut Vec<(String, Option<Type>)>,
@@ -1565,7 +1525,6 @@ fn typecheck_statement_sequence_with_bindings<'a>(
             global_vars,
             func_table,
             type_tree,
-            string_table,
             undefinable_ids,
             closures,
             scopes,
@@ -1591,7 +1550,6 @@ fn typecheck_statement<'a>(
     global_vars: &'a HashMap<StringId, Type>,
     func_table: &TypeTable,
     type_tree: &TypeTree,
-    string_table: &StringTable,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
     closures: &mut BTreeMap<StringId, TypeCheckedFunc>,
     scopes: &mut Vec<(String, Option<Type>)>,
@@ -1620,7 +1578,6 @@ fn typecheck_statement<'a>(
                 func_table,
                 func,
                 type_tree,
-                string_table,
                 undefinable_ids,
                 closures,
                 scopes,
@@ -1654,7 +1611,6 @@ fn typecheck_statement<'a>(
                             func_table,
                             func,
                             type_tree,
-                            string_table,
                             undefinable_ids,
                             closures,
                             scopes,
@@ -1709,7 +1665,6 @@ fn typecheck_statement<'a>(
                                 func_table,
                                 func,
                                 type_tree,
-                                string_table,
                                 undefinable_ids,
                                 closures,
                                 scopes,
@@ -1729,7 +1684,6 @@ fn typecheck_statement<'a>(
                 func_table,
                 func,
                 type_tree,
-                string_table,
                 undefinable_ids,
                 closures,
                 scopes,
@@ -1744,7 +1698,6 @@ fn typecheck_statement<'a>(
                 func_table,
                 func,
                 type_tree,
-                string_table,
                 undefinable_ids,
                 closures,
                 scopes,
@@ -1805,7 +1758,6 @@ fn typecheck_statement<'a>(
                 func_table,
                 func,
                 type_tree,
-                string_table,
                 undefinable_ids,
                 closures,
                 scopes,
@@ -1873,7 +1825,6 @@ fn typecheck_statement<'a>(
                 func_table,
                 func,
                 type_tree,
-                string_table,
                 undefinable_ids,
                 closures,
                 scopes,
@@ -1887,7 +1838,6 @@ fn typecheck_statement<'a>(
                         global_vars,
                         func_table,
                         type_tree,
-                        string_table,
                         undefinable_ids,
                         closures,
                         scopes,
@@ -1913,7 +1863,6 @@ fn typecheck_statement<'a>(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -1932,7 +1881,6 @@ fn typecheck_statement<'a>(
                 func_table,
                 func,
                 type_tree,
-                string_table,
                 undefinable_ids,
                 closures,
                 scopes,
@@ -1947,7 +1895,6 @@ fn typecheck_statement<'a>(
                 func_table,
                 func,
                 type_tree,
-                string_table,
                 undefinable_ids,
                 closures,
                 scopes,
@@ -2057,7 +2004,6 @@ fn typecheck_expr(
     func_table: &TypeTable,
     func: &Func,
     type_tree: &TypeTree,
-    string_table: &StringTable,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
     closures: &mut BTreeMap<StringId, TypeCheckedFunc>,
     scopes: &mut Vec<(String, Option<Type>)>,
@@ -2077,7 +2023,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2092,7 +2037,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2104,7 +2048,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2119,7 +2062,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2131,7 +2073,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2143,7 +2084,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2158,7 +2098,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2170,7 +2109,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2198,7 +2136,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2210,7 +2147,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2238,7 +2174,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2254,7 +2189,7 @@ fn typecheck_expr(
                             "Generics error",
                             format!(
                                 "Func {} has {} generic args but was passed {}",
-                                Color::red(string_table.name_from_id(id.clone())),
+                                Color::red(&id.id),
                                 Color::red(num_generic_params),
                                 Color::red(spec.len()),
                             ),
@@ -2270,7 +2205,7 @@ fn typecheck_expr(
                             "Generics error",
                             format!(
                                 "Variable {} doesn't need specialization",
-                                Color::red(string_table.name_from_id(id.clone())),
+                                Color::red(&id.id),
                             ),
                             debug_info.locs(),
                         ));
@@ -2286,7 +2221,7 @@ fn typecheck_expr(
                             "Generics error",
                             format!(
                                 "Global variable {} doesn't need specialization",
-                                Color::red(string_table.name_from_id(id.clone())),
+                                Color::red(id),
                             ),
                             debug_info.locs(),
                         ));
@@ -2295,10 +2230,7 @@ fn typecheck_expr(
                     Ok(TypeCheckedExprKind::GlobalVariableRef(id.clone(), tipe))
                 } else {
                     Err(CompileError::new_type_error(
-                        format!(
-                            "reference to unrecognized identifier {}",
-                            Color::red(string_table.name_from_id(id.clone()))
-                        ),
+                        format!("reference to unrecognized identifier {}", Color::red(id)),
                         loc.into_iter().collect(),
                     ))
                 }
@@ -2311,7 +2243,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2348,7 +2279,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2406,7 +2336,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2426,7 +2355,6 @@ fn typecheck_expr(
                                     func_table,
                                     func,
                                     type_tree,
-                                    string_table,
                                     undefinable_ids,
                                     closures,
                                     scopes,
@@ -2480,7 +2408,6 @@ fn typecheck_expr(
                 func_table,
                 func,
                 type_tree,
-                string_table,
                 undefinable_ids,
                 closures,
                 scopes,
@@ -2504,7 +2431,6 @@ fn typecheck_expr(
                     global_vars,
                     func_table,
                     type_tree,
-                    string_table,
                     closures,
                     undefinable_ids,
                 )?;
@@ -2622,7 +2548,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2634,7 +2559,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2710,7 +2634,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2727,7 +2650,6 @@ fn typecheck_expr(
                         func_table,
                         func,
                         type_tree,
-                        string_table,
                         undefinable_ids,
                         closures,
                         scopes,
@@ -2756,7 +2678,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2792,7 +2713,6 @@ fn typecheck_expr(
                         func_table,
                         func,
                         type_tree,
-                        string_table,
                         undefinable_ids,
                         closures,
                         scopes,
@@ -2819,7 +2739,6 @@ fn typecheck_expr(
                         func_table,
                         func,
                         type_tree,
-                        string_table,
                         undefinable_ids,
                         closures,
                         scopes,
@@ -2837,7 +2756,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2849,7 +2767,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2861,7 +2778,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2967,7 +2883,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -2979,7 +2894,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -3036,7 +2950,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -3062,7 +2975,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -3088,7 +3000,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -3114,7 +3025,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -3137,7 +3047,6 @@ fn typecheck_expr(
                         func_table,
                         func,
                         type_tree,
-                        string_table,
                         undefinable_ids,
                         closures,
                         scopes,
@@ -3170,7 +3079,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -3195,7 +3103,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -3220,7 +3127,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -3232,7 +3138,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -3247,7 +3152,6 @@ fn typecheck_expr(
                             func_table,
                             func,
                             type_tree,
-                            string_table,
                             undefinable_ids,
                             closures,
                             scopes,
@@ -3308,7 +3212,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -3334,7 +3237,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -3349,7 +3251,6 @@ fn typecheck_expr(
                             func_table,
                             func,
                             type_tree,
-                            string_table,
                             undefinable_ids,
                             closures,
                             scopes,
@@ -3396,7 +3297,6 @@ fn typecheck_expr(
                 global_vars,
                 func_table,
                 type_tree,
-                string_table,
                 undefinable_ids,
                 closures,
                 scopes,
@@ -3409,7 +3309,6 @@ fn typecheck_expr(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,
@@ -4432,7 +4331,6 @@ fn typecheck_codeblock(
     func_table: &TypeTable,
     func: &Func,
     type_tree: &TypeTree,
-    string_table: &StringTable,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
     closures: &mut BTreeMap<StringId, TypeCheckedFunc>,
     scopes: &mut Vec<(String, Option<Type>)>,
@@ -4455,7 +4353,6 @@ fn typecheck_codeblock(
             global_vars,
             func_table,
             type_tree,
-            string_table,
             undefinable_ids,
             closures,
             scopes,
@@ -4485,7 +4382,6 @@ fn typecheck_codeblock(
                     func_table,
                     func,
                     type_tree,
-                    string_table,
                     undefinable_ids,
                     closures,
                     scopes,

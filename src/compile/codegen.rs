@@ -16,7 +16,7 @@ use crate::compile::CompileError;
 use crate::console::Color;
 use crate::link::{TupleTree, TUPLE_SIZE};
 use crate::mavm::{AVMOpcode, Buffer, Instruction, Label, LabelGenerator, Opcode, Value};
-use crate::stringtable::{StringId, StringTable};
+use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use std::collections::HashSet;
 use std::{cmp::max, collections::HashMap};
@@ -30,7 +30,6 @@ use std::{cmp::max, collections::HashMap};
 /// two labels are the same iff they point to the same destination.
 pub fn mavm_codegen_func(
     func: TypeCheckedFunc,
-    string_table: &StringTable,
     globals: &HashMap<StringId, GlobalVar>,
     func_labels: &HashMap<StringId, Label>,
     issues: &mut Vec<CompileError>,
@@ -80,7 +79,6 @@ pub fn mavm_codegen_func(
         locals.len(),
         &locals,
         &mut LabelGenerator::new(unique_id + 1),
-        string_table,
         func_labels,
         globals,
         0,
@@ -124,7 +122,6 @@ fn mavm_codegen_code_block(
     num_locals: usize,
     locals: &HashMap<StringId, usize>,
     label_gen: &mut LabelGenerator,
-    string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
     global_vars: &HashMap<StringId, GlobalVar>,
     prepushed_vals: usize,
@@ -145,7 +142,6 @@ fn mavm_codegen_code_block(
         num_locals,
         locals,
         label_gen,
-        string_table,
         func_labels,
         global_vars,
         prepushed_vals,
@@ -162,7 +158,6 @@ fn mavm_codegen_code_block(
             nl,
             &new_locals,
             label_gen,
-            string_table,
             func_labels,
             global_vars,
             prepushed_vals,
@@ -200,7 +195,6 @@ fn mavm_codegen_statements(
     mut num_locals: usize,                 // num locals that have been allocated
     locals: &HashMap<StringId, usize>,     // lookup local variable slot number by name
     label_gen: &mut LabelGenerator,
-    string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
     global_vars: &HashMap<StringId, GlobalVar>,
     prepushed_vals: usize,
@@ -218,7 +212,6 @@ fn mavm_codegen_statements(
             num_locals,
             &new_locals,
             label_gen,
-            string_table,
             func_labels,
             global_vars,
             prepushed_vals,
@@ -247,7 +240,6 @@ fn mavm_codegen_statement(
     mut num_locals: usize,             // num locals that have been allocated
     locals: &HashMap<StringId, usize>, // lookup local variable slot number by name
     label_gen: &mut LabelGenerator,
-    string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
     globals: &HashMap<StringId, GlobalVar>,
     prepushed_vals: usize,
@@ -263,7 +255,6 @@ fn mavm_codegen_statement(
                 num_locals,
                 &locals,
                 label_gen,
-                string_table,
                 func_labels,
                 globals,
                 prepushed_vals,
@@ -347,7 +338,6 @@ fn mavm_codegen_statement(
                     num_locals,
                     locals,
                     label_gen,
-                    string_table,
                     func_labels,
                     globals,
                     prepushed_vals,
@@ -380,15 +370,8 @@ fn mavm_codegen_statement(
         }
         TypeCheckedStatementKind::Let(pat, expr) => {
             let exp_locals = expr!(expr);
-            let (new_locals, bindings, _assignments) = mavm_codegen_tuple_pattern(
-                code,
-                &pat,
-                num_locals,
-                locals,
-                globals,
-                string_table,
-                debug,
-            )?;
+            let (new_locals, bindings, _assignments) =
+                mavm_codegen_tuple_pattern(code, &pat, num_locals, locals, globals, debug)?;
             num_locals += new_locals;
             num_locals = max(num_locals, exp_locals);
             Ok((num_locals, bindings))
@@ -440,7 +423,6 @@ fn mavm_codegen_statement(
                 num_locals,
                 locals,
                 label_gen,
-                string_table,
                 func_labels,
                 globals,
                 prepushed_vals,
@@ -469,7 +451,6 @@ fn mavm_codegen_statement(
                     num_locals,
                     locals,
                     label_gen,
-                    string_table,
                     func_labels,
                     globals,
                     prepushed_vals + i,
@@ -505,7 +486,10 @@ fn mavm_codegen_statement(
                 kind: TypeCheckedExprKind::FunctionCall(
                     Box::new(TypeCheckedExpr {
                         kind: TypeCheckedExprKind::FuncRef(
-                            string_table.get_if_exists("builtin_assert").unwrap(),
+                            StringId::new(
+                                vec!["core".to_string(), "assert".to_string()],
+                                "builtin_assert".to_string(),
+                            ),
                             call_type.clone(),
                         ),
                         debug_info: DebugInfo::from(loc),
@@ -533,7 +517,6 @@ fn mavm_codegen_tuple_pattern(
     local_slot_num_base: usize,
     locals: &HashMap<StringId, usize>,
     globals: &HashMap<StringId, GlobalVar>,
-    string_table: &StringTable,
     debug_info: DebugInfo,
 ) -> Result<(usize, HashMap<StringId, usize>, HashSet<StringId>), CompileError> {
     match &pattern.kind {
@@ -598,7 +581,6 @@ fn mavm_codegen_tuple_pattern(
                     local_slot_num_base + num_bindings,
                     locals,
                     globals,
-                    string_table,
                     debug_info,
                 )?;
                 num_bindings += num_new_bindings;
@@ -606,10 +588,7 @@ fn mavm_codegen_tuple_pattern(
                 for name in new_assignments {
                     if !assignments.insert(name.clone()) {
                         return Err(CompileError::new_codegen_error(
-                            format!(
-                                "assigned to variable {} in mixed let multiple times",
-                                string_table.name_from_id(name)
-                            ),
+                            format!("assigned to variable {} in mixed let multiple times", name),
                             debug_info.location,
                         ));
                     }
@@ -637,7 +616,6 @@ fn mavm_codegen_expr(
     num_locals: usize,
     locals: &HashMap<StringId, usize>,
     label_gen: &mut LabelGenerator,
-    string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
     globals: &HashMap<StringId, GlobalVar>,
     prepushed_vals: usize,
@@ -656,7 +634,6 @@ fn mavm_codegen_expr(
                 num_locals,
                 locals,
                 label_gen,
-                string_table,
                 func_labels,
                 globals,
                 prepushed_vals + $prepushed,
@@ -1026,7 +1003,6 @@ fn mavm_codegen_expr(
             num_locals,
             locals,
             label_gen,
-            string_table,
             func_labels,
             globals,
             prepushed_vals,
@@ -1075,10 +1051,10 @@ fn mavm_codegen_expr(
         }
         TypeCheckedExprKind::ArrayRef(expr1, expr2, t) => {
             expr!(&TypeCheckedExpr::builtin(
+                &["core".to_string(), "array".to_string()],
                 "builtin_arrayGet",
                 vec![expr1, expr2],
                 t,
-                string_table,
                 DebugInfo::from(loc)
             ))
         }
@@ -1102,10 +1078,10 @@ fn mavm_codegen_expr(
         }
         TypeCheckedExprKind::MapRef(map_expr, key_expr, t) => {
             expr!(&TypeCheckedExpr::builtin(
+                &["core".to_string(), "kvs".to_string()],
                 "builtin_kvsGet",
                 vec![map_expr, key_expr],
                 t,
-                string_table,
                 DebugInfo::from(loc)
             ))
         }
@@ -1119,7 +1095,10 @@ fn mavm_codegen_expr(
                 kind: TypeCheckedExprKind::FunctionCall(
                     Box::new(TypeCheckedExpr::new(
                         TypeCheckedExprKind::FuncRef(
-                            string_table.get_if_exists("builtin_arrayNew").unwrap(),
+                            StringId::new(
+                                vec!["core".to_string(), "array".to_string()],
+                                "builtin_arrayNew".to_string(),
+                            ),
                             call_type.clone(),
                         ),
                         DebugInfo::from(loc),
@@ -1174,19 +1153,19 @@ fn mavm_codegen_expr(
         }
         TypeCheckedExprKind::NewMap(t) => {
             expr!(&TypeCheckedExpr::builtin(
+                &["core".to_string(), "kvs".to_string()],
                 "builtin_kvsNew",
                 vec![],
                 t,
-                string_table,
                 DebugInfo::from(loc)
             ))
         }
         TypeCheckedExprKind::ArrayMod(arr, index, val, t) => {
             expr!(&TypeCheckedExpr::builtin(
+                &["core".to_string(), "array".to_string()],
                 "builtin_arraySet",
                 vec![arr, index, val],
                 t,
-                string_table,
                 DebugInfo::from(loc)
             ))
         }
@@ -1199,7 +1178,6 @@ fn mavm_codegen_expr(
             num_locals,
             locals,
             label_gen,
-            string_table,
             func_labels,
             globals,
             debug,
@@ -1210,10 +1188,10 @@ fn mavm_codegen_expr(
         ),
         TypeCheckedExprKind::MapMod(map, key, val, t) => {
             expr!(&TypeCheckedExpr::builtin(
+                &["core".to_string(), "kvs".to_string()],
                 "builtin_kvsSet",
                 vec![map, key, val],
                 t,
-                string_table,
                 DebugInfo::from(loc)
             ))
         }
@@ -1276,7 +1254,6 @@ fn mavm_codegen_expr(
                 num_locals,
                 locals,
                 label_gen,
-                string_table,
                 func_labels,
                 globals,
                 prepushed_vals,
@@ -1296,7 +1273,6 @@ fn mavm_codegen_expr(
                     num_locals,
                     locals,
                     label_gen,
-                    string_table,
                     func_labels,
                     globals,
                     prepushed_vals,
@@ -1323,7 +1299,6 @@ fn mavm_codegen_expr(
                 num_locals,
                 &locals,
                 label_gen,
-                string_table,
                 func_labels,
                 globals,
                 prepushed_vals,
@@ -1347,7 +1322,6 @@ fn mavm_codegen_expr(
                 num_locals + 1,
                 &new_locals,
                 label_gen,
-                string_table,
                 func_labels,
                 globals,
                 prepushed_vals,
@@ -1369,7 +1343,6 @@ fn mavm_codegen_expr(
                     num_locals,
                     &locals,
                     label_gen,
-                    string_table,
                     func_labels,
                     globals,
                     prepushed_vals,
@@ -1404,7 +1377,6 @@ fn mavm_codegen_expr(
                 num_locals + 1,
                 locals,
                 label_gen,
-                string_table,
                 func_labels,
                 globals,
                 prepushed_vals,
@@ -1435,7 +1407,6 @@ fn codegen_fixed_array_mod(
     num_locals: usize,
     locals: &HashMap<StringId, usize>,
     label_gen: &mut LabelGenerator,
-    string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
     globals: &HashMap<StringId, GlobalVar>,
     debug_info: DebugInfo,
@@ -1450,7 +1421,6 @@ fn codegen_fixed_array_mod(
         num_locals,
         locals,
         label_gen,
-        string_table,
         func_labels,
         globals,
         prepushed_vals,
@@ -1464,7 +1434,6 @@ fn codegen_fixed_array_mod(
         num_locals,
         locals,
         label_gen,
-        string_table,
         func_labels,
         globals,
         prepushed_vals + 1,
@@ -1478,7 +1447,6 @@ fn codegen_fixed_array_mod(
         num_locals,
         locals,
         label_gen,
-        string_table,
         func_labels,
         globals,
         prepushed_vals + 2,
@@ -1520,7 +1488,6 @@ fn codegen_fixed_array_mod(
         num_locals,
         locals,
         label_gen,
-        string_table,
         func_labels,
         globals,
         debug_info,
@@ -1536,7 +1503,6 @@ fn codegen_fixed_array_mod_2(
     num_locals: usize,
     locals: &HashMap<StringId, usize>,
     label_gen: &mut LabelGenerator,
-    string_table: &StringTable,
     func_labels: &HashMap<StringId, Label>,
     globals: &HashMap<StringId, GlobalVar>,
     debug_info: DebugInfo,
@@ -1592,7 +1558,6 @@ fn codegen_fixed_array_mod_2(
             num_locals,
             locals,
             label_gen,
-            string_table,
             func_labels,
             globals,
             debug_info,

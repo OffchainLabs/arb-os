@@ -161,10 +161,10 @@ impl Import {
         let name = name.to_string();
         let unique_id = Import::unique_id(&path, &name);
         Import {
+            id: Some(StringId::new(path.clone(), name.clone())),
             path,
             name,
             unique_id,
-            id: None,
             location: None,
         }
     }

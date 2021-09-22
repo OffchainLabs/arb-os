@@ -4,7 +4,6 @@
 
 use serde::de::{Error, MapAccess, Visitor};
 use serde::{de, Deserialize, Deserializer, Serialize};
-use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -64,52 +63,5 @@ impl<'de> Deserialize<'de> for StringId {
 impl StringId {
     pub(crate) fn new(path: Vec<String>, id: String) -> Self {
         Self { path, id }
-    }
-}
-
-/// Maps `String`s to `usize` IDs.
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct StringTable {
-    next_id: usize,
-    table: HashMap<String, StringId>,
-    by_id: HashMap<StringId, String>,
-    path: Vec<String>,
-}
-
-impl StringTable {
-    pub fn new(path: Vec<String>) -> Self {
-        let table: HashMap<String, StringId> = HashMap::new();
-        let by_id = HashMap::new();
-        StringTable {
-            next_id: 0,
-            table,
-            by_id,
-            path,
-        }
-    }
-
-    /// Returns the `StringID` associated with `name` if it exists, if not creates a new entry and
-    /// returns the newly created ID.
-    pub fn get(&mut self, name: String) -> StringId {
-        match self.table.get(&name) {
-            Some(id) => id.clone(),
-            None => {
-                self.next_id += 1;
-                let new_full_id = StringId::new(self.path.clone(), name.clone());
-                self.table.insert(name.clone(), new_full_id.clone());
-                self.by_id.insert(new_full_id.clone(), name);
-                new_full_id
-            }
-        }
-    }
-
-    /// If an ID exists, returns it, if not returns `None`.
-    pub fn get_if_exists(&self, name: &str) -> Option<StringId> {
-        self.table.get(name).cloned()
-    }
-
-    /// Takes a `usize` ID and returns the associated `String`
-    pub fn name_from_id(&self, name: StringId) -> &String {
-        self.by_id.get(&name).unwrap()
     }
 }

@@ -10,7 +10,7 @@ use crate::console::{human_readable_index, Color};
 use crate::link::{Import, TupleTree};
 use crate::mavm::{CodePt, Instruction, LabelId, Value};
 use crate::pos::{BytePos, Location};
-use crate::stringtable::{StringId, StringTable};
+use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use derivative::Derivative;
 use serde::{Deserialize, Serialize};
@@ -1240,17 +1240,13 @@ impl Type {
 /// Checks generic parameter names for those that may be duplicates or unused.
 pub fn check_generic_parameters(
     params: Vec<(StringId, DebugInfo)>,
-    string_table: &StringTable,
 ) -> Result<Vec<StringId>, CompileError> {
     let mut seen = HashSet::new();
     for (id, debug) in params.iter() {
         if !seen.insert(id) {
             return Err(CompileError::new(
                 "Parser error",
-                format!(
-                    "Duplicate generic parameter {}",
-                    Color::red(string_table.name_from_id(id.clone()))
-                ),
+                format!("Duplicate generic parameter {}", Color::red(id)),
                 debug.locs(),
             ));
         }

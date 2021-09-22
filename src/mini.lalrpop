@@ -5,7 +5,7 @@
 
 use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVar, Type, CodeBlock, StructField, FuncArg, FuncProperties, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant, OptionConst, FieldInitializer, new_func_arg, new_type_decl, check_generic_parameters};
 use crate::compile::{InliningMode, ErrorSystem, CompileError};
-use crate::stringtable::{StringTable, StringId};
+use crate::stringtable::{StringId};
 use crate::compile::Lines;
 use crate::link::Import;
 use crate::pos::{BytePos, Location};
@@ -16,7 +16,6 @@ use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
 use regex::Regex;
 
 grammar(
-    string_table: &mut StringTable,                     // map of ids to strings
     file_info: &Lines,                                  // the lines of source code
     filename: u64,                                      // filename hash
     current_path: &[String],                            // path to what's being parsed
@@ -60,7 +59,7 @@ pub Decls: Vec<TopLevelDecl> = {
 HeadDecl: TopLevelDecl = {
     <lno: @L> "use" <mut p: PathDecl> ";" => {
         let file = p.pop().expect("Internal error: Path vector was empty");
-        let id = string_table.get(file.clone());
+        let id = StringId::new(current_path.to_vec(), file.clone());
         TopLevelDecl::UseDecl(Import::new(
             p, file, Some(id), file_info.location(BytePos::from(lno), filename),
         ))
@@ -100,7 +99,7 @@ BodyDecl: TopLevelDecl = {
 TypeDecl: TypeDecl = {
     "type" <i: Ident> <g: Generalization?> "=" <t: Type> ";" =>? {
         let params: Vec<_> = g.into_iter().flatten().collect();
-        let names = check_generic_parameters(params.clone(), &string_table)?;
+        let names = check_generic_parameters(params.clone())?;
         let tipe = t.make_generic(&names);
         
         for (index, (name, debug_info)) in params.into_iter().enumerate() {
@@ -110,8 +109,8 @@ TypeDecl: TypeDecl = {
                     "Generics error",
                     format!(
                         "Type {}'s generic arg {} isn't used",
-                        Color::red(string_table.name_from_id(i.clone())),
-                        Color::red(string_table.name_from_id(name)),
+                        Color::red(&i),
+                        Color::red(name),
                     ),
                     debug_info.locs(),
                 ))?;
@@ -127,11 +126,11 @@ FuncDecl: Func = {
         let view = qualifiers.contains(&"view");
         let write = qualifiers.contains(&"write");
         let debug = DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default());
-        let name = string_table.name_from_id(i.clone()).clone();
+        let name = i.id.clone();
 
         // Generalize over the generic parameters
         let params: Vec<_> = g.into_iter().flatten().collect();
-        let generic_ids = check_generic_parameters(params.clone(), &string_table)?;
+        let generic_ids = check_generic_parameters(params.clone())?;
         args.iter_mut().for_each(|arg| arg.tipe = arg.tipe.make_generic(&generic_ids));
         if let Some(ref mut tipe) = ret {
             *tipe = tipe.make_generic(&generic_ids);
@@ -155,8 +154,8 @@ FuncDecl: Func = {
                     "Generics error",
                     format!(
                         "Func {}'s generic arg {} isn't in the signature",
-                        Color::red(string_table.name_from_id(i.clone())),
-                        Color::red(string_table.name_from_id(name)),
+                        Color::red(&i.id),
+                        Color::red(name.id),
                     ),
                     debug_info.locs(),
                 ))?;
@@ -185,7 +184,7 @@ GlobalVarDecl: GlobalVar = {
         let mut debug_info = DebugInfo::here(file_info, lno, filename);
         debug_info.attributes = attribs.unwrap_or_default();
         GlobalVar::new(
-            i.clone(), string_table.name_from_id(i.clone()).clone(), t, debug_info
+            i.clone(), i.id.clone(), t, debug_info
         )
     },
 }
@@ -284,7 +283,7 @@ StatementKind: StatementKind = {
                 }
                 SubData::Dot(id) => {
                     let inside = e.clone();
-                    let name = string_table.name_from_id(id).to_string();
+                    let name = id.id;
                     *build = Expr {
                         kind: ExprKind::StructMod(Box::new(nest.clone()), name.clone(), Box::new(inside)),
                         debug_info,
@@ -325,7 +324,7 @@ StructFields: Vec<StructField> = {
 }
 
 StructField: StructField = {
-	<i: Ident> ":" <t: Type> => StructField::new(string_table.name_from_id(i).to_string(), t),
+	<i: Ident> ":" <t: Type> => StructField::new(i.id.clone(), t),
 }
 
 Type: Type = {
@@ -386,7 +385,7 @@ CommaedTypes: Vec<Type> = {
 };
 
 Ident: StringId = {
-	IdentString => string_table.get(<>),
+	IdentString => StringId::new(current_path.to_vec(), <>),
 };
 
 Expr: Expr = {
@@ -399,7 +398,7 @@ Expr: Expr = {
 	debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))
     },
     <lno: @L> <t: Expr> "with" "{" <i:Ident> ":" <e: Expr> "}" => Expr {
-        kind: ExprKind::StructMod(Box::new(t), string_table.name_from_id(i).to_string(), Box::new(e)),
+        kind: ExprKind::StructMod(Box::new(t), i.id, Box::new(e)),
         debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename)),
     },
     Expr1,
@@ -485,7 +484,7 @@ Expr11: Expr = {
         debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))
     },
     <lno: @L> <e:Expr11> "." <i:Ident> => Expr {
-        kind: ExprKind::DotRef(Box::new(e), string_table.name_from_id(i).to_string()),
+        kind: ExprKind::DotRef(Box::new(e), i.id),
         debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))
     },
     <lno: @L> <e:Expr11> "." <u:UnsignedInteger> => Expr { kind: ExprKind::TupleRef(Box::new(e), u), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
@@ -542,10 +541,10 @@ Expr12: Expr = {
         let debug = DebugInfo::here(file_info, lno, filename);
         
         let name = format!("closure #{}", closures.len() + 1);
-        let id = string_table.get(name.clone());
-        let closure = Func::new(name, id.clone(), false, view, write, true, fa, t, cb, BTreeSet::new(), vec![], 0, debug);
+        let id = name.clone();
+        let closure = Func::new(name, StringId::new(current_path.to_vec(), id.clone()), false, view, write, true, fa, t, cb, BTreeSet::new(), vec![], 0, debug);
         
-	    closures.insert(id, closure.clone());
+	    closures.insert(StringId::new(current_path.to_vec(), id), closure.clone());
         
         Expr::new(ExprKind::Closure(closure), debug)
     },
@@ -583,7 +582,7 @@ FieldInitializers: Vec<FieldInitializer> = {
 }
 
 FieldInitializer: FieldInitializer = {
-	<i: Ident> ":" <e: Expr> => FieldInitializer::new(string_table.name_from_id(i).to_string(), e),
+	<i: Ident> ":" <e: Expr> => FieldInitializer::new(i.id, e),
 }
 
 CommaedExprs: Vec<Expr> = {
