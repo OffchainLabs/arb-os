@@ -2052,7 +2052,6 @@ fn typecheck_expr(
                     TypeCheckedExprKind::Const(Value::Int(Uint256::from_bool(*b)), Type::Bool)
                 }
                 Constant::Option(o) => TypeCheckedExprKind::Const(o.value(), o.type_of()),
-                Constant::Value(v) => TypeCheckedExprKind::Const(v.clone(), Type::Every),
             }),
             ExprKind::FunctionCall(expr, args) => {
                 let expr = typecheck_expr(
@@ -2215,28 +2214,8 @@ fn typecheck_expr(
                 ))
             }
             ExprKind::NewArray(size_expr, tipe) => {
-                let fill = Expr::new(
-                    ExprKind::Constant(Constant::Value(tipe.default_value(type_tree))),
-                    debug_info,
-                );
-
-                let id = string_table.get_if_exists("builtin_arrayNew").unwrap();
-                let builtin = Box::new(Expr::new(ExprKind::VariableRef(id, vec![]), debug_info));
-
-                let call = Expr::new(
-                    ExprKind::FunctionCall(builtin, vec![*size_expr.clone(), fill]),
-                    debug_info,
-                );
-
-                // The compiler doesn't know that `array` here is the same as `[]any`,
-                // so we trick it into thinking we have an `[]any`.
-                let cast = Expr::new(
-                    ExprKind::UnsafeCast(Box::new(call), Type::Array(Box::new(tipe.clone()))),
-                    debug_info,
-                );
-
-                let expr = typecheck_expr(
-                    &cast,
+                let size_expr = typecheck_expr(
+                    &size_expr,
                     type_table,
                     global_vars,
                     func_table,
@@ -2248,7 +2227,30 @@ fn typecheck_expr(
                     scopes,
                 )?;
 
-                Ok(expr.kind)
+                let fill = TypeCheckedExpr::new(
+                    TypeCheckedExprKind::Const(tipe.default_value(type_tree), tipe.clone()),
+                    debug_info,
+                );
+
+                // In order to best simulate a call to the builtin, we alter the signature
+                //   In array.mini   func builtin_arrayNew(uint, any) -> Array
+                //   Best effort     func builtin_arrayNew(uint, v) -> []v
+
+                let builtin_ref = TypeCheckedExpr::builtin_ref(
+                    "builtin_arrayNew",
+                    vec![],
+                    &Type::Array(Box::new(tipe.clone())),
+                    func_table,
+                    string_table,
+                    debug_info,
+                )?;
+
+                Ok(build_function_call(
+                    builtin_ref,
+                    vec![size_expr, fill],
+                    string_table,
+                    type_tree,
+                )?)
             }
             ExprKind::NewFixedArray(size, expr) => {
                 let expr = typecheck_expr(

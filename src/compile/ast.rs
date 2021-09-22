@@ -1630,7 +1630,6 @@ pub enum Constant {
     Int(Uint256),
     Bool(bool),
     Option(OptionConst),
-    Value(Value),
 }
 
 impl OptionConst {
@@ -1661,7 +1660,6 @@ impl Constant {
             Constant::Int(_) => Type::Int,
             Constant::Bool(_) => Type::Bool,
             Constant::Option(inner) => inner.type_of(),
-            Constant::Value(_) => Type::Every,
         }
     }
 
@@ -1672,7 +1670,6 @@ impl Constant {
             Constant::Int(i) => Value::Int(i.clone()),
             Constant::Bool(b) => Value::Int(Uint256::from_bool(*b)),
             Constant::Option(c) => c.value(),
-            Constant::Value(value) => value.clone(),
         }
     }
 }
