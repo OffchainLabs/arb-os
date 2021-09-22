@@ -23,6 +23,7 @@ use rlp::RlpStream;
 use std::convert::TryInto;
 use std::option::Option::None;
 use std::path::Path;
+use ethereum_types::U256;
 
 mod integration;
 
@@ -1236,4 +1237,79 @@ fn measure_gas_for_alloc_dealloc(args: Vec<&Uint256>) -> Uint256 {
     assert!(receipts[0].succeeded());
 
     receipts[0].get_gas_used()
+}
+
+#[test]
+fn test_no_refund_across_txs() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = wallet.address();
+    let my_addr256 = Uint256::from_bytes(&my_addr.to_fixed_bytes());
+
+    let mut contract = AbiForContract::new_from_file(&test_contract_path("BlockNum")).unwrap();
+    if let Err(receipt) = contract.deploy(&[], &mut machine, Uint256::zero(), None, false) {
+        if !receipt.unwrap().succeeded() {
+            panic!("unexpected failure deploying BlockNum contract");
+        }
+    }
+
+    machine.runtime_env.insert_eth_deposit_message(
+        Uint256::zero(),
+        my_addr256.clone(),
+        Uint256::_from_eth(1000),
+        false,
+    );
+    let _ = machine.run(None);
+
+    let arbowner = _ArbOwner::_new(&wallet, false);
+    arbowner._set_fees_enabled(&mut machine, true, true).unwrap();
+    let _ = machine.run(None);
+
+    let index = U256::from(73);
+    let zero = U256::zero();
+    let nonzero = U256::from(1);
+
+    let (receipts, _) = contract.call_function_compressed(
+        my_addr256.clone(),
+        "rewriteStorage",
+        &[
+            ethabi::Token::Uint(index),
+            ethabi::Token::Uint(nonzero),
+            ethabi::Token::Uint(index),
+            ethabi::Token::Uint(nonzero),
+            ethabi::Token::Uint(index),
+            ethabi::Token::Uint(nonzero),
+        ],
+        &mut machine,
+        Uint256::zero(),
+        &wallet,
+        false
+    ).unwrap();
+    assert_eq!(receipts.len(), 1);
+    assert!(receipts[0].succeeded());
+    let first_gas = receipts[0].get_gas_used();
+
+    let (receipts, _) = contract.call_function_compressed(
+        my_addr256.clone(),
+        "rewriteStorage",
+        &[
+            ethabi::Token::Uint(index),
+            ethabi::Token::Uint(zero),
+            ethabi::Token::Uint(index),
+            ethabi::Token::Uint(zero),
+            ethabi::Token::Uint(index),
+            ethabi::Token::Uint(zero),
+        ],
+        &mut machine,
+        Uint256::zero(),
+        &wallet,
+        false
+    ).unwrap();
+    assert_eq!(receipts.len(), 1);
+    assert!(receipts[0].succeeded());
+    let second_gas = receipts[0].get_gas_used();
+
+    assert_close(&first_gas, &second_gas.add(&Uint256::from_u64(200_000)));
 }
