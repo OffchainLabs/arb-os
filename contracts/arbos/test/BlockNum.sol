@@ -49,4 +49,10 @@ contract BlockNum {
         this.setMap(index2, val2);
         this.setMap(index3, val3);
     }
+
+    function rewriteThenRevert(uint index1, uint val1, uint index2, uint val2) public {
+        this.setMap(index1, val1);
+        this.setMap(index2, val2);
+        require(false);
+    }
 }
