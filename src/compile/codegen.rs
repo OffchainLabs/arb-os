@@ -573,7 +573,6 @@ fn codegen(
                             UnaryOp::BitwiseNeg => opcode!(BitwiseNeg),
                             UnaryOp::Not => opcode!(IsZero),
                             UnaryOp::Hash => opcode!(Hash),
-                            UnaryOp::Len => opcode!(Tlen),
                             UnaryOp::ToAddress => {
                                 let mask = Uint256::from_usize(2)
                                     .exp(&Uint256::from_usize(160))
@@ -583,6 +582,11 @@ fn codegen(
                             }
                             UnaryOp::Minus => {
                                 opcode!(Sub, Value::from(0))
+                            }
+                            UnaryOp::Len => {
+                                // The op-version of len() only applies to arrays, for which
+                                // we need the first tuple item
+                                opcode!(@TupleGet(0, 3))
                             }
                             UnaryOp::ToUint | UnaryOp::ToInt | UnaryOp::ToBytes32 => opcode!(Noop),
                         });

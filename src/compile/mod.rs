@@ -110,8 +110,8 @@ struct TypeCheckedModule {
 
 impl CompileStruct {
     pub fn invoke(&self) -> Result<(LinkedProgram, ErrorSystem), ErrorSystem> {
-        // Initialize rayon with a large stack size. We do this here rather than
-        // main() so tests do this too.
+        // Initialize rayon to use a large stack size. We do this here rather than
+        // main() so that tests are affected.
         drop(
             rayon::ThreadPoolBuilder::new()
                 .stack_size(8192 * 1024)

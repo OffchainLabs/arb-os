@@ -58,7 +58,7 @@ type BLSKey = struct {
 // ==================================================================
 
 public func bls_defaultDomain(sender: address) -> bytes32 {
-    return hash(bytes32(const::BLSSignatureDomainBase), bytes32(sender));
+    hash(bytes32(const::BLSSignatureDomainBase), bytes32(sender))
 }
 
 public func bls_hashAndVerifySingleSig(
@@ -68,7 +68,7 @@ public func bls_hashAndVerifySingleSig(
     signature: BLSSignature
 ) -> option<()> {
     let hashedMessage = bls_hashToPoint(domain, message)?;
-    return bls_verifySingleSig(hashedMessage, key, signature);
+    bls_verifySingleSig(hashedMessage, key, signature)
 }
 
 public func bls_hashAndVerifySignature(
@@ -81,12 +81,12 @@ public func bls_hashAndVerifySignature(
     let hashedMessages = newarray<BLSHashedMessage>(numMsgs);
 
     let i = 0;
-    while (i < numMsgs) {
+    while i < numMsgs {
         set hashedMessages[i] = bls_hashToPoint(domain, messages[i])?;
         i = i + 1;
     }
 
-    return bls_verifySignature(hashedMessages, keys, signature);
+    bls_verifySignature(hashedMessages, keys, signature)
 }
 
 // ==================================================================
@@ -100,15 +100,15 @@ public func bls_verifySingleSig(
 ) -> option<()> {
     let messages = newarray<BLSHashedMessage>(1) with { [0] = message };
     let keys = newarray<BLSKey>(1) with { [0] = key };
-    return bls_verifySignature(messages, keys, signature);
+    bls_verifySignature(messages, keys, signature)
 }
 
 public func bls_makeKey(x0: uint, x1: uint, y0: uint, y1: uint) -> option<BLSKey> {
-    return Some(struct { ax: x0, ay: x1, bx: y0, by: y1 });
+    Some(struct { ax: x0, ay: x1, bx: y0, by: y1 })
 }
 
 public func bls_marshalPublicKey(key: BLSKey, ba: ByteArray, offset: uint) -> ByteArray {
-    return bytearray_set256(
+    bytearray_set256(
         bytearray_set256(
             bytearray_set256(
                 bytearray_set256(
@@ -124,7 +124,7 @@ public func bls_marshalPublicKey(key: BLSKey, ba: ByteArray, offset: uint) -> By
         ),
         offset+3*32,
         key.by
-    );
+    )
 }
 
 public func bls_verifySignature(
@@ -166,12 +166,12 @@ public func bls_verifySignature(
         i = i + 1;
     }
 
-    let result = asm(acc,) bool { ecpairing };
-    return xif (result) {
+    let result = asm(acc) bool { ecpairing };
+    if (result) {
         Some(())
     } else {
-        None<()>
-    };
+        None
+    }
 }
 
 // ==================================================================
@@ -190,11 +190,11 @@ public func bls_hashToPoint(
     let x = asm(p0.0, p0.1, p1.0, p1.1) uint { ecadd };
     let y = asm() uint { };  // pick up the second return value
 
-    return Some(struct { x: x, y: y });
+    Some(struct { x: x, y: y })
 }
 
 func mapToPoint(x:  uint) -> option<(uint, uint)> {
-    if(x >= const::N) {
+    if x >= const::N {
         return None;
     }
    
@@ -254,30 +254,30 @@ func mapToPoint(x:  uint) -> option<(uint, uint)> {
     a1 = asm(a1, x, const::N) uint { mulmod };
     a1 = asm(a1, 3, const::N) uint { addmod };
 
-    return xif let Some(squa1) = sqrt(a1) {
-        xif (foundFirstSqrt) {
+    if let Some(squa1) = sqrt(a1) {
+        if (foundFirstSqrt) {
             Some((x, squa1))
         } else {
             Some((x, const::N - squa1))
         }
     } else {
-        None<(uint, uint)> // BLS: bad ft mapping implementation
-    };
+        None // BLS: bad ft mapping implementation
+    }
 }
 
 func sqrt(xx: uint) ->option<uint> {
     let x = modexp_c191_3f52(xx);
 
     let square = asm(x, x, const::N) uint { mulmod };
-    return xif(square == xx) {
+    if square == xx {
         Some(x)
     } else {
-        None<uint>
-    };
+        None
+    }
 }
 
 func inverse(a: uint) -> uint {
-    return modexp_3064_fd54(a);
+    modexp_3064_fd54(a)
 }
 
 func hashToField(
@@ -301,7 +301,7 @@ func hashToField(
         const::N
     ) uint { addmod };
 
-    return (a0, a1);
+    (a0, a1)
 }
 
 func expandMsgTo96(
@@ -345,7 +345,7 @@ func expandMsgTo96(
     msg0 = bytearray_setByte(msg0, 65, 32);
     bi = sha256_byteArray(msg0);
 
-    return bytearray_set256(out, 64, uint(bi));
+    bytearray_set256(out, 64, uint(bi))
 }
 
 
@@ -659,7 +659,7 @@ func modexp_3064_fd54(t2: uint) -> uint {
     t0 = asm(t0, t0, const::n_modexp_3064_fd54) uint { mulmod };
     t0 = asm(t0, t1, const::n_modexp_3064_fd54) uint { mulmod };
 
-    return t0;
+    t0
 }
 
 func modexp_c191_3f52(t6: uint) -> uint {
@@ -969,5 +969,5 @@ func modexp_c191_3f52(t6: uint) -> uint {
     t0 = asm(t0, t1, const::n_modexp_c191_3f52) uint { mulmod };
     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
 
-    return t0;
+    t0
 }
