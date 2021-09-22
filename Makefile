@@ -10,7 +10,7 @@ minitest_outputs = arithmetic codeloadtest globaltest simple-closure closure qui
 upgrade_outputs = regcopy_new regcopy_old upgrade1_new upgrade1_old
 looptest_outputs = upgrade2_new upgrade2_old
 builtin_outputs = arraytest kvstest maptest
-stdlib_outputs = biguinttest blstest bytearraytest expandingIntArrayTest fixedpointtest keccaktest priorityqtest queuetest ripemd160test rlptest storageMapTest sha256test
+stdlib_outputs = addressSetTest biguinttest blstest bytearraytest expandingIntArrayTest fixedpointtest keccaktest priorityqtest queuetest ripemd160test rlptest storageMapTest sha256test
 stdlib2_outputs = arraytest priorityqtest
 
 builtin_mexes = $(patsubst %,builtin/%.mexe, $(builtin_outputs))

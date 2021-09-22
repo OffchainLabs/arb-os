@@ -3,8 +3,16 @@
  */
 
 
-func main(arg: [8]uint) {
+write func main() {
     
-    let _ = arg with { [0] = "" };
+    if let Some(issue) = test_1() {
+        asm(issue.1) { log };
+    } else {
+        asm("".1) { log };
+    }
+}
+
+func test_1() -> option<string> {
+    None
 }
 
