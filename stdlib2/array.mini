@@ -13,62 +13,62 @@ type array<T> = struct {
 
 public func array_new<T>(size: uint, base_val: T) -> array<T> {
     let chunk = 1;
-    while (8*chunk < size) {
+    while 8*chunk < size {
 	chunk = 8*chunk;
 	base_val = unsafecast<T>(newfixedarray(8, base_val));
     }
-    return struct {
+    struct {
         size: size,
         topstep: chunk,
         contents: newfixedarray(8, base_val),
         access: array_get::<T>,
-    };
+    }
 }
 
 public func array_get<T>(arr: array<T>, index: uint) -> T {
-    if (index >= arr.size) {
+    if index >= arr.size {
 	error;  // out of bounds access
     }
     let res = arr.contents;
     let chunk = arr.topstep;
-    while (1 <= chunk) {
+    while 1 <= chunk {
 	res = unsafecast<block<T> >(res[index/chunk]);
 	index = index % chunk;
 	chunk = chunk / 8;
     }
-    return unsafecast<T>(res);
+    unsafecast<T>(res)
 }
 
 public func array_get_consecutive<T>(arr: array<T>, index: uint) -> (T, T) {
     // Get two consecutive items at [index] and [index+1]
     // This will be faster than two separate arrayGets, in the common case.
-    if (index+1 >= arr.size) {
+    if index+1 >= arr.size {
 	error;
     }
-    return xif ((index % 8) == 7) {
+    if index % 8 == 7 {
 	// leaves are not in same bottom-level block, do it the slow way
 	(array_get::<T>(arr, index), array_get::<T>(arr, index+1))
     } else {
 	let res = arr.contents;
 	let chunk = arr.topstep;
-	while (8 <= chunk) {
+	while 8 <= chunk {
 	    res = unsafecast<block<T> >(res[index/chunk]);
 	    index = index % chunk;
 	    chunk = chunk / 8;
 	}
 	(res[index], res[index+1])
-    };
+    }
 }
 
 public func array_set<T>(arr: array<T>, index: uint, value: T) -> array<T> {
-    if (index >= arr.size) {
+    if index >= arr.size {
 	error;
     }
-    return arr with { contents: arraySetInternal::<T>(arr.contents, arr.topstep, index, value) };
+    arr with { contents: arraySetInternal::<T>(arr.contents, arr.topstep, index, value) }
 }
 
 func arraySetInternal<T>(b: block<T>, chunkSize: uint, index: uint, value: T) -> block<T> {
-    return xif (1 == chunkSize) {
+    if 1 == chunkSize {
 	// at a leaf of the tree
 	b with {[index] = value}
     } else {
@@ -79,19 +79,19 @@ func arraySetInternal<T>(b: block<T>, chunkSize: uint, index: uint, value: T) ->
 	    index % chunkSize,
 	    value
 	))}
-    };
+    }
 }
 
 public func array_swap<T>(a: array<T>, index: uint, value: T) -> (array<T>, T) {
     // Write a new value into a slot of the array, returning the old value that was in that slot
-    if (index >= a.size) {
+    if index >= a.size {
 	error;
     }
     let sub = arraySwapInternal::<T>(a.contents, a.topstep, index, value);
-    return (
+    (
 	a with { contents: sub.bloc },
 	sub.val,
-    );
+    )
 }
 
 type arraySwapSubResult<T> = struct {
@@ -100,7 +100,7 @@ type arraySwapSubResult<T> = struct {
 };
 
 func arraySwapInternal<T>(b: block<T>, chunk: uint, index: uint, value: T) -> arraySwapSubResult<T> {
-    return xif (1 == chunk) {
+    if 1 == chunk {
 	struct {
 	    bloc: b with {[index] = value},
 	    val: b[index],
@@ -109,12 +109,12 @@ func arraySwapInternal<T>(b: block<T>, chunk: uint, index: uint, value: T) -> ar
         let subIndex = index/chunk;
 	let sub = arraySwapInternal::<T>(
 	    unsafecast<block<T> >(b[subIndex]),
-	    chunk/8,
-	    index%chunk,
+	    chunk / 8,
+	    index % chunk,
 	    value
 	);
-	sub with { bloc: b with {[subIndex] = sub.bloc} }
-    };
+	sub with { bloc: b with {[subIndex] = unsafecast<T>(sub.bloc) } }
+    }
 }
 
 public func array_resize<T>(a: array<T>, newSize: uint, baseVal: T) -> array<T> {
@@ -124,44 +124,44 @@ public func array_resize<T>(a: array<T>, newSize: uint, baseVal: T) -> array<T> 
     
     // TODO: make this more efficient by reusing more of the tree-structure of a
     let minSize = a.size;
-    if (minSize > newSize) {
+    if minSize > newSize {
 	minSize = newSize;
     }
     let ret = array_new::<T>(newSize, baseVal);
     let i = 0;
-    while (i < minSize) {
+    while i < minSize {
 	ret = array_set::<T>(ret, i, array_get::<T>(a, i));
 	i = i+1;
     }
-    return ret;
+    ret
 }
 
 public func array_get_safe<T>(arr: array<T>, index: uint) -> option<T> {
-    if (index >= arr.size) {
+    if index >= arr.size {
 	return None;
     }
-    return Some(array_get::<T>(arr, index));  // won't error, because we bounds-checked
+    Some(array_get::<T>(arr, index))  // won't error, because we bounds-checked
 }
 
 public func array_set_safe<T>(arr: array<T>, index: uint, value: T) -> option<array<T> > {
-    if (index >= arr.size) {
+    if index >= arr.size {
 	return None;
     }
-    return Some(array_set::<T>(arr, index, value));
+    Some(array_set::<T>(arr, index, value))
 }
 
 public func array_get_consecutive_safe<T>(arr: array<T>, index: uint) -> option<(T, T)> {
     // Return Non if access is out-of-bounds, otherwise return Some((result, result'))
-    if (index+1 >= arr.size) {
+    if index+1 >= arr.size {
 	return None;
     }
-    return Some(array_get_consecutive::<T>(arr, index));
+    Some(array_get_consecutive::<T>(arr, index))
 }
 
 public func array_swap_safe<T>(a: array<T>, index: uint, value: T) -> option<(array<T>, T)> {
-    if (index >= a.size) {
+    if index >= a.size {
 	return None;
     }
     let (aOut, valOut) = array_swap::<T>(a, index, value);
-    return Some((aOut, valOut));
+    Some((aOut, valOut))
 }

@@ -1,7 +1,7 @@
 /**
  * @type import('hardhat/config').HardhatUserConfig
  */
-require("hardhat-typechain");
+require("@typechain/hardhat");
 
 module.exports = {
   solidity: "0.6.11",

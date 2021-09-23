@@ -1570,11 +1570,11 @@ fn typecheck_statement<'a>(
                 )),
             }
         }
-        StatementKind::Asm(insns, args) => {
-            let mut tc_args = Vec::new();
-            for arg in args {
-                tc_args.push(typecheck_expr(
-                    arg,
+        StatementKind::Asm(insns, unchecked_args) => {
+            let mut args = vec![];
+            for (index, unchecked) in unchecked_args.into_iter().enumerate() {
+                let arg = typecheck_expr(
+                    unchecked,
                     type_table,
                     global_vars,
                     func_table,
@@ -1584,10 +1584,16 @@ fn typecheck_statement<'a>(
                     undefinable_ids,
                     closures,
                     scopes,
-                )?);
+                )?;
+
+                if arg.get_type().rep(type_tree)? == Type::Void {
+                    error!("Asm's {} arg is void", human_readable_index(index + 1));
+                }
+                
+                args.push(arg);
             }
             Ok((
-                TypeCheckedStatementKind::Asm(insns.to_vec(), tc_args),
+                TypeCheckedStatementKind::Asm(insns.to_vec(), args),
                 vec![],
             ))
         }
@@ -2238,7 +2244,7 @@ fn typecheck_expr(
 
                 let builtin_ref = TypeCheckedExpr::builtin_ref(
                     "builtin_arrayNew",
-                    vec![],
+                    vec![&Type::Uint, tipe],
                     &Type::Array(Box::new(tipe.clone())),
                     func_table,
                     string_table,
@@ -2522,10 +2528,10 @@ fn typecheck_expr(
                         }
                         if !inner_type.assignable(&item_type, type_tree, HashSet::new()) {
                             error!(
-                                "mismatched types in fixed-array modifier, {}",
+                                "fixed array doesn't have this type, {}",
                                 inner_type
                                     .mismatch_string(&item_type, type_tree)
-                                    .unwrap_or("Did not find type mismatch".to_string())
+                                    .unwrap_or("Did not find type mismatch".to_string()),
                             );
                         }
                         Ok(TypeCheckedExprKind::FixedArrayMod(

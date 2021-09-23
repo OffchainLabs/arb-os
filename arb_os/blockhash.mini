@@ -15,7 +15,7 @@ public write func blockhash_init() {
 }
 
 public view func blockhash_getForBlock(blockNum: uint) -> option<bytes32> {
-    return xif ( (blockNum > blockhashes.latestBlockNum) || (blockNum < blockhashes.latestBlockNum-255) ) {
+    return if ( (blockNum > blockhashes.latestBlockNum) || (blockNum < blockhashes.latestBlockNum-255) ) {
         None<bytes32>
     } else {
         Some(blockhashes.oldHashes[blockNum % 256])
@@ -23,7 +23,7 @@ public view func blockhash_getForBlock(blockNum: uint) -> option<bytes32> {
 }
 
 public view write func blockhash_submitHash(ethBlockNum: uint, inboxAccumHash: bytes32) {
-    let b = xif(ethBlockNum+255 > blockhashes.latestBlockNum) {
+    let b = if(ethBlockNum+255 > blockhashes.latestBlockNum) {
         blockhashes.latestBlockNum - 255
     } else {
         ethBlockNum

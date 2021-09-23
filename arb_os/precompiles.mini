@@ -286,7 +286,7 @@ public view write func precompile_0x05() {  // modexp
             let memSize = bytearray_size(mem);
             if (memSize > modLen) {
                 mem = bytearray_extract(mem, memSize-modLen, modLen);
-            } elseif (memSize < modLen) {
+            } else if (memSize < modLen) {
                 mem = bytearray_copy(   // pad result with leading zeroes up to size of modLen
                     mem,
                     0,

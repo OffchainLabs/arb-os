@@ -37,6 +37,7 @@ use gasAccounting::feesEnabled;
 use inbox::IncomingRequest;
 use inbox::GasEstimationParams;
 use inbox::inbox_currentTimestamp;
+use inbox::mapL1SenderAddress;
 
 use messages::TxRequestData;
 
@@ -55,6 +56,9 @@ use std::queue::Queue;
 use std::queue::queue_new;
 use std::queue::queue_put;
 use std::queue::queue_get;
+
+use std::safeMath::safeAdd;
+use std::safeMath::safeMul;
 
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsDelete;
@@ -76,6 +80,7 @@ type RetryableTx = struct {
     calldata: ByteArray,
     expiryTime: uint,             // timestamp when the retryable becomes eligible for removal, if nobody does a keepalive
     l1Message: IncomingRequest,   // deemed incoming message, for use in the tx receipt
+    originalSender: address,
 };
 
 // RetryQueueItem records the fact that we want to check, at a given time, whether a given RetryableTx has expired.
@@ -124,8 +129,8 @@ public view func retryBuffer_setDefaultLifetime(rbuf: RetryBuffer) -> RetryBuffe
 // We also trim two items whenever we create or update a new item.
 public view write func retryBuffer_trimTwo(rbuf: RetryBuffer) -> RetryBuffer {
     // remove up to 2 aged-out items from the retryBuffer
-    return xif let Some(rb) = retryBuffer_trimOne(rbuf) {
-        xif let Some(rb2) = retryBuffer_trimOne(rb) {
+    return if let Some(rb) = retryBuffer_trimOne(rbuf) {
+        if let Some(rb2) = retryBuffer_trimOne(rb) {
             rb2
         } else {
             rb
@@ -170,7 +175,7 @@ func retryBuffer_insert(rbuf: RetryBuffer, rtx: RetryableTx) -> RetryBuffer {
 view func retryBuffer_insertNew(
     rbuf: RetryBuffer,
     txId: uint,
-    sender: address,
+    originalSender: address,
     destination: address,
     callvalue: uint,
     callvalueEscrowKey: uint,
@@ -178,9 +183,10 @@ view func retryBuffer_insertNew(
     calldata: ByteArray,
     l1Message: IncomingRequest,
 ) -> (RetryBuffer, uint) {
+    let updatedSender = mapL1SenderAddress(originalSender, Some(destination));
     let newTx = struct {
         txId: uint(hash(bytes32(txId), bytes32(0))),
-        sender: sender,
+        sender: updatedSender,
         destination: destination,
         callvalue: callvalue,
         callvalueEscrowKey: callvalueEscrowKey,
@@ -191,7 +197,7 @@ view func retryBuffer_insertNew(
            l1Message.arbBlockNumber,
            l1Message.ethBlockNumber,
            l1Message.timestamp,
-           sender,
+           updatedSender,
            uint(hash(bytes32(l1Message.requestId), bytes32(0))),
            0,    // maxGas will be filled in when ticket is redeemed
            0,    // gasPrice will be filled in when ticket is redeemed
@@ -199,6 +205,7 @@ view func retryBuffer_insertNew(
            callvalue,
            calldata,
         ),
+        originalSender: originalSender,
     };
 
     return (retryBuffer_insert(rbuf, newTx), newTx.txId);
@@ -209,7 +216,7 @@ public func retryBuffer_get(rbuf: RetryBuffer, txId: uint) -> option<RetryableTx
 }
 
 public func retryBuffer_getTxTimeout(rbuf: RetryBuffer, txId: uint) -> uint {
-    return xif let Some(rtx) = retryBuffer_get(rbuf, txId) {
+    return if let Some(rtx) = retryBuffer_get(rbuf, txId) {
         rtx.expiryTime
     } else {
         0
@@ -235,7 +242,7 @@ public view write func retryBuffer_keepalive(rbuf: RetryBuffer, txId: uint) -> o
     rbuf = retryBuffer_trimTwo(rbuf);
     let rtx = retryBuffer_get(rbuf, txId)?;
     let newExpiryTime = rtx.expiryTime + rbuf.txLifetimeSeconds;
-    return xif (newExpiryTime > inbox_currentTimestamp() + 2 * rbuf.txLifetimeSeconds) {
+    return if (newExpiryTime > inbox_currentTimestamp() + 2 * rbuf.txLifetimeSeconds) {
         None<(RetryBuffer, uint)>
     } else {
         Some((
@@ -249,7 +256,7 @@ public view write func retryBuffer_keepalive(rbuf: RetryBuffer, txId: uint) -> o
 public view write func retryBuffer_delete(rbuf: RetryBuffer, txId: uint, withRefund: bool) -> option<RetryBuffer> {
     // don't call retryBuffer_trimTwo here, because this is called by retryBuffer_trimOne, and we don't want to recurse
 
-    return xif let Some(rtx) = retryBuffer_get(rbuf, txId) {
+    return if let Some(rtx) = retryBuffer_get(rbuf, txId) {
         // delete the tx
         set rbuf.byTxId = unsafecast<map<uint, RetryableTx> >(
             builtin_kvsDelete(unsafecast<Kvs>(rbuf.byTxId), txId)
@@ -281,6 +288,10 @@ public view write func retryBuffer_delete(rbuf: RetryBuffer, txId: uint, withRef
     };
 }
 
+public func retryableTx_getOriginalSender(rtx: RetryableTx) -> address {
+    return rtx.originalSender;
+}
+
 // Process a newly submitted retryable.
 // This must be called outside of a transaction.
 public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequestData> {
@@ -299,8 +310,14 @@ public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequ
 
     if (creditBack == address(0)) { creditBack = sender; }
 
+    let originalSender = sender;
+    sender = mapL1SenderAddress(sender, Some(destination));
+    req = req with { sender: sender };
+
+    // We double fetch the global account store as retrybuffer_trimTwo modifies it via retrybuffer_delete
+    let newRetryBuffer = retryBuffer_trimTwo(safeGetGlobalAccountStore().retryBuffer);
     let acctStore = safeGetGlobalAccountStore();
-    set acctStore.retryBuffer = retryBuffer_trimTwo(acctStore.retryBuffer);
+    set acctStore.retryBuffer = newRetryBuffer;
 
     // deposited funds from L1 go into the sender's account
     if (deposit > 0) {
@@ -314,10 +331,10 @@ public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequ
     // charge for injecting this message
     let (submissionFee, subFeeRecipient, feeStats) = getFeesForRetryableTx(calldataSize);
 
-    let ret = xif (submissionFee <= maxSubmissionCost) {
-        let totalDue = callvalue + maxSubmissionCost;
+    let ret = if (submissionFee <= maxSubmissionCost) {
+        let totalDue = safeAdd(callvalue, maxSubmissionCost);
 
-        xif let Some(res) = accountStore_newEscrow(acctStore, sender, totalDue) {
+        if let Some(res) = accountStore_newEscrow(acctStore, sender, totalDue) {
             let (*acctStore, escrowKey) = res;
 
             // We took maxSubmissionCost + callvalue from the sender.
@@ -338,7 +355,7 @@ public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequ
             let (rbuf, txId) = retryBuffer_insertNew(
                 accountStore_getRetryBuffer(acctStore),
                 req.requestId,
-                sender,
+                originalSender,
                 destination,
                 callvalue,
                 escrowKey,
@@ -357,7 +374,7 @@ public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequ
                    const::eventTopic_ArbRetryableTx_TicketCreated,
                    txId,
                ),
-           );
+            );
             emitTxReceipt(
                 req,
                 const::TxResultCode_success,
@@ -366,17 +383,16 @@ public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequ
                 None<GasUsage>,
                 feeStats,
                 true,
+                originalSender,
             );
 
-            xif (    (maxGasForImmediate > 0)
-                  &&  ( (gasPriceForImmediate > 0) || !feesEnabled())
-                  && (maxGasForImmediate*gasPriceForImmediate >= gasPriceForImmediate)) { // the last check avoids overflow
-                xif let Some(rtx) =  retryBuffer_get(accountStore_getRetryBuffer(acctStore), txId) {
-                    let tryAutoRedeem = xif let Some(uaStore) = accountStore_transferEthBalance(
+            if ( (maxGasForImmediate > 0) && ( (gasPriceForImmediate > 0) || !feesEnabled())) {
+                if let Some(rtx) =  retryBuffer_get(accountStore_getRetryBuffer(acctStore), txId) {
+                    let tryAutoRedeem = if let Some(uaStore) = accountStore_transferEthBalance(
                         acctStore,
                         sender,
                         creditBack,
-                        maxGasForImmediate * gasPriceForImmediate,
+                        safeMul(maxGasForImmediate, gasPriceForImmediate),
                     ) {
                         acctStore = uaStore;
                         true
@@ -419,9 +435,10 @@ public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequ
                         incomingRequest: autoRedeemIncoming,
                         feeStats: txFeeStats_zero(),
                         fromRetryable: Some(rtx),
+                        originalCaller: originalSender,
                     };
 
-                    xif (tryAutoRedeem) {
+                    if (tryAutoRedeem) {
                         Some(autoRedeemRequest)
                     } else {
                         emitTxReceipt(
@@ -432,6 +449,7 @@ public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequ
                             None<GasUsage>,
                             txFeeStats_zero(),
                             false,
+                            originalSender,
                         );
                         None<TxRequestData>
                     }
@@ -450,6 +468,7 @@ public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequ
                 None<GasUsage>,
                 feeStats,
                 true,
+                originalSender,
             );
             None<TxRequestData>
         }
@@ -457,12 +476,13 @@ public view write func processRetryableTx(req: IncomingRequest) -> option<TxRequ
         // submission cost was higher than the maximum allowed by the request
         emitTxReceipt(
             req,
-            const::TxResultCode_noGasFunds,
+            const::TxResultCode_insufficientGasFunds,
             None<ByteArray>,
             None<EvmLogs>,
             None<GasUsage>,
             feeStats,
             true,
+            originalSender,
         );
         None<TxRequestData>
     };
@@ -553,8 +573,8 @@ func adjustGasInfoInFakeIncomingRequest(req: IncomingRequest, maxGas: uint, gasP
 // Returns (success, returndata) for the "inner" retryable
 public view write func redeemRetryableTxInTx(txToRedeem: uint) -> (bool, ByteArray) {
     let rbuf = retryBuffer_trimTwo(getRetryBufferInCurrentContext());
-    return xif let Some(rtx) = retryBuffer_get(rbuf, txToRedeem) {
-        xif let Some(rb) = retryBuffer_delete(rbuf, txToRedeem, false) {
+    return if let Some(rtx) = retryBuffer_get(rbuf, txToRedeem) {
+        if let Some(rb) = retryBuffer_delete(rbuf, txToRedeem, false) {
             // we just deleted the retryable, without a credit-back to the beneficiary
             // note that the AccountStore where we recorded the delete will be discarded if the tx reverts,
             //       so if the tx reverts the retryable will still exist

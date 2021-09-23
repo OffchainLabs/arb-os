@@ -9,7 +9,7 @@ use chainParameters::chainParams_chainId;
 
 
 public view func recoverSigner(tx: SignedTx) -> option<address> {
-    let rlpHashForSig = xif ( (tx.v == 27) || (tx.v == 28) ) {
+    let rlpHashForSig = if ( (tx.v == 27) || (tx.v == 28) ) {
         rlp_encodeAndHashMessageInfoForSignature(tx, None<uint>)  // non-EIP155 signature
     } else {
         rlp_encodeAndHashMessageInfoForSignature(tx, Some(chainParams_chainId()))  // EIP155 signature
@@ -22,7 +22,7 @@ public view func recoverSigner(tx: SignedTx) -> option<address> {
         rlpHashForSig,
     ) address { ecrecover };
 
-    return xif (signer == address(0)) {
+    return if (signer == address(0)) {
         None<address>
     } else {
         Some(signer)

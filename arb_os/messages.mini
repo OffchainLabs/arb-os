@@ -58,9 +58,10 @@ type TxRequestData = struct {
     calldata: ByteArray,
     nonMutating: bool,
     isConstructor: bool,
-    incomingRequest: IncomingRequest,       // original request that led to this; used for making tx receipt
-    feeStats: TxFeeStats,                   // info about the fees paid by this tx
-    fromRetryable: option<RetryableTx>,     // if this is redeeming a retryable, this references the retryable
+    incomingRequest: IncomingRequest,
+    feeStats: TxFeeStats,
+    fromRetryable: option<RetryableTx>,
+    originalCaller: address,
 };
 
 // Process a request.
@@ -72,7 +73,7 @@ public view write func processL2Request(request: TxRequestData) -> option<()> {
             // bad sequence number error
             emitTxReceipt(
                 request.incomingRequest,
-                xif (sequenceNum < expectedSeqNum) {
+                if (sequenceNum < expectedSeqNum) {
                     const::TxResultCode_sequenceNumberTooLow
                 } else {
                     const::TxResultCode_sequenceNumberTooHigh
@@ -82,6 +83,7 @@ public view write func processL2Request(request: TxRequestData) -> option<()> {
                 None<GasUsage>,
                 request.feeStats,
                 true,
+                request.originalCaller,
             );
             return Some(());
         }
@@ -99,6 +101,7 @@ public view write func processL2Request(request: TxRequestData) -> option<()> {
                 None<GasUsage>,
                 request.feeStats,
                 true,
+                request.originalCaller,
             );
             return Some(());
         }
@@ -124,6 +127,7 @@ public view write func processL2Request(request: TxRequestData) -> option<()> {
                 None<GasUsage>,
                 request.feeStats,
                 true,
+                request.originalCaller,
             );
             return Some(());
         } else {
@@ -136,7 +140,7 @@ public view write func processL2Request(request: TxRequestData) -> option<()> {
         }
     } else {
         // this is a non-constructor call
-        let callKind = xif (request.nonMutating) {
+        let callKind = if (request.nonMutating) {
             const::EVMCallType_staticcall
         } else {
             const::EVMCallType_call

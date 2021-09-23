@@ -3,45 +3,89 @@
 //
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
+use bridge_arbos_versions::before__accounts_Account;
+
+use core::kvs::Kvs;
+use core::kvs::builtin_kvsForall;
 
 use accounts::AccountStore;
+use accounts::Account;
+use accounts::AccountContractInfo;
 
 use evmCallStack::EvmCallFrame;
-use evmCallStack::IncomingRequestAndLogs;
 
-use output::PerBlockReceiptData;
-use output::OutputStatistics;
-
+use gasAccounting::GasAccountingInfo;
+use gasAccounting::TxGasState;
 
 public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> map<uint, uint> {
-    return oldGlobals.globalChainParameters
-        with { [const::Atom_Param_GasPriceOracle] = const::Default_Param_GasPriceOracle }
-        with { [const::Atom_Param_AvmGasPerArbGas] = const::Default_Param_AvmGasPerArbGas }
-    ;
+    return oldGlobals.globalChainParameters;
+}
+
+public func set_returnFromCallNestingDepth_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> uint {
+    return 0;
 }
 
 public func set_globalCallStack_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
     return None<EvmCallFrame>;
 }
 
-public func set_globalCurrentRetryableRequest_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<IncomingRequestAndLogs> {
-    return None<IncomingRequestAndLogs>;
+public func set_gasAccountingInfo_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> GasAccountingInfo {
+    let old = oldGlobals.gasAccountingInfo;
+    return struct {
+        txState: None<TxGasState>,
+        feeConfig: old.feeConfig,
+        currentPrices: old.currentPrices,
+        gasRemainingThisBlock: old.gasRemainingThisBlock,
+        congestionState: old.congestionState,
+        speedLimitPerSecond: old.speedLimitPerSecond,
+        pricingParams: old.pricingParams,
+        gasAllocatedToThisBlock: old.gasAllocatedToThisBlock,
+        retryablePrices: old.retryablePrices,
+        allowedSenders: old.allowedSenders,
+    };
 }
 
-public func set_globalBlockReceiptData_onUpgrade(oldGlobals: GlobalsBeforeUpgrade
-) -> struct {
-    data: PerBlockReceiptData,
-    statsThisBlock: OutputStatistics,
-    statsAllTime: OutputStatistics,
-    lastArbBlockNum: uint,
-    nextSendTimestamp: uint,
-} {
-    let old = oldGlobals.globalBlockReceiptData;
-    return struct {
-        data: old.data,
-        statsThisBlock: old.statsThisBlock,
-        statsAllTime: old.statsAllTime,
-        lastArbBlockNum: old.lastBlockNum,
-        nextSendTimestamp: old.nextSendTime,
-    };
+public func set_globalAccountStore_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> AccountStore {
+    let old = oldGlobals.globalAccountStore;
+    return unsafecast<every>(old);
+    /*return struct {
+        accounts: {
+            let oldKvs = unsafecast<Kvs>(old.accounts);
+            unsafecast<map<address, Account> >(
+                builtin_kvsForall(
+                    oldKvs,
+                    closure(rawKey: any, rawValue: any, rawState: any) -> any {
+                        let key = unsafecast<address>(rawKey);
+                        let value = unsafecast<before__accounts_Account>(rawValue);
+                        let state = unsafecast<map<address, Account> >(rawState);
+                        set state[key] = struct {
+                            addr: value.addr,
+                            blsKey: value.blsKey,
+                            nextSeqNum: value.nextSeqNum,
+                            ethBalance: value.ethBalance,
+                            contractInfo: if let Some(oldContractInfo) = value.contractInfo {
+                                Some(struct {
+                                    contractStateVersion: const::ContractStateVersion_original,
+                                    code: oldContractInfo.code,
+                                    evmJumpTable: oldContractInfo.evmJumpTable,
+                                    startCodePoint: oldContractInfo.startCodePoint,
+                                    storage: oldContractInfo.storage,
+                                })
+                            } else {
+                                None<AccountContractInfo>
+                            },
+                            aggregatorInfo: value.aggregatorInfo,
+                            aggregatorToPay: value.aggregatorToPay,
+                        };
+                        return state;
+                    },
+                    newmap<address, Account>,
+                )
+            )
+        },
+        retryBuffer: old.retryBuffer,
+        numContracts: old.numContracts,
+        codeRefTable: old.codeRefTable,
+        escrowStore: old.escrowStore,
+    };*/
 }

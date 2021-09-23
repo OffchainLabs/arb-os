@@ -274,6 +274,11 @@ fn test_globals() {
 }
 
 #[test]
+fn test_stack_safety() {
+    test_for_error_string(Path::new("minitests/stack-safety.mexe"));
+}
+
+#[test]
 fn test_quick() {
     test_for_error_string(Path::new("minitests/quick.mexe"));
 }

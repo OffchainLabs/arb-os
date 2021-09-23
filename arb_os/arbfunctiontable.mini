@@ -18,6 +18,7 @@ use evmCallStack::evmCallFrame_getCaller;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownCodePc;
+use evmOps::evmOp_revertIfStatic;
 
 use accounts::account_setAggregatorDecompressionState;
 
@@ -42,9 +43,9 @@ public view write func arbFunctionTable_txcall() {
         let funcCode = getFuncCode(calldata);
         if (funcCode == 0xce2ae159) {
             arbFunctionTable_upload(topFrame, calldata);
-        } elseif(funcCode == 0x88987068) {
+        } else if(funcCode == 0x88987068) {
             arbFunctionTable_size(topFrame, calldata);
-        } elseif(funcCode == 0xb464631b) {
+        } else if(funcCode == 0xb464631b) {
             arbFunctionTable_get(topFrame, calldata);
         } else {
             // unrecognized function code
@@ -62,6 +63,7 @@ func getFuncCode(ba: ByteArray) -> uint {
 
 // function upload(bytes calldata buf) external;
 view write func arbFunctionTable_upload(topFrame: EvmCallFrame, calldata: ByteArray) {
+    evmOp_revertIfStatic();
     if (bytearray_size(calldata) < (4+2*32)) {
         evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 190, 0, 0);
     }

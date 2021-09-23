@@ -16,6 +16,7 @@ use arbowner::arbowner_init;
 use blockhash::blockhash_init;
 
 use chainParameters::chainParams_init;
+use chainParameters::notifyParamsChanged;
 
 use std::codeSegment::codeSegment_init;
 use std::codeSegment::translateEvmCodeSegment;
@@ -56,7 +57,7 @@ use bridge_arbos_versions::remapGlobalsForUpgrade;
 var __fixedLocationGlobal: view write func(uint);    // points to EVM op dispatch function
 
 view write func main(oldGlobals: GlobalsBeforeUpgrade) {
-    if (unsafecast<any>(oldGlobals) != ()) {
+    if (unsafecast<any>(oldGlobals) != any(())) {
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
 
         // create an upgrade-only error handler that saves and restores the contents of the register
@@ -75,6 +76,8 @@ view write func main(oldGlobals: GlobalsBeforeUpgrade) {
         if (initializePreinstalls(true) == None<()>) {
             error;   // don't try to run without preinstalls and precompiles
         }
+
+        notifyParamsChanged();   // call this in case parameters changed during upgrade
     } else {
         // this is a clean start, not an upgrade
         errorHandler_init();
@@ -90,7 +93,6 @@ view write func main(oldGlobals: GlobalsBeforeUpgrade) {
         evmOps_init();
         __fixedLocationGlobal = dispatchForEvmOp;
         blockhash_init();
-        inbox_init();
         accountStore_init();
         arbowner_init();
         txReceipts_init();
@@ -113,7 +115,7 @@ view write func initializePreinstalls(isUpgrade: bool) -> option<()> {
         bytestream_new(code),
         false
     );
-    acctStore = xif (isUpgrade) {
+    acctStore = if (isUpgrade) {
         accountStore_upgradeContractFromEvmCode(
             acctStore,
             getArbInfoAddress(),

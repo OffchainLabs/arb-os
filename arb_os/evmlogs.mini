@@ -29,7 +29,7 @@ public func evmlogs_appendAny(logs: EvmLogs, item: any) -> EvmLogs {
 
 public func evmlogs_numLogs(logs: EvmLogs) -> uint {
     let ret = 0;
-    return xloop {
+    return loop {
         if (evmlogs_isEmpty(logs )) {
             return ret;
         } else {

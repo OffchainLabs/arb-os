@@ -29,6 +29,7 @@ use std::codeSegment::translateEvmCodeSegment;
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
 use evmOps::evmOp_revert_knownCodePc;
+use evmOps::evmOp_revertIfStatic;
 
 use evmCallStack::EvmCallFrame;
 use evmCallStack::evmCallStack_callHitError;
@@ -51,13 +52,13 @@ public view write func arbosTest_txcall() {
         let funcCode = getFuncCode(calldata);
         if (funcCode == const::funcCode_ArbosTest_installAccount) {
             arbosTest_installAccount(topFrame, calldata);
-        } elseif (funcCode == const::funcCode_ArbosTest_getMarshalledStorage) {
+        } else if (funcCode == const::funcCode_ArbosTest_getMarshalledStorage) {
             arbosTest_getMarshalledStorage(topFrame, calldata);
-        } elseif (funcCode == const::funcCode_ArbosTest_getAccountInfo) {
+        } else if (funcCode == const::funcCode_ArbosTest_getAccountInfo) {
             arbosTest_getAccountInfo(topFrame, calldata);
-        } elseif (funcCode == const::funcCode_ArbosTest_burnArbGas) {
+        } else if (funcCode == const::funcCode_ArbosTest_burnArbGas) {
             arbosTest_burnArbGas(topFrame, calldata);
-        } elseif (funcCode == const::funcCode_ArbosTest_setNonce) {
+        } else if (funcCode == const::funcCode_ArbosTest_setNonce) {
             arbosTest_setNonce(topFrame, calldata);
         } else {
             // unrecognized function code
@@ -74,9 +75,12 @@ func getFuncCode(ba: ByteArray) -> uint {
 }
 
 view write func arbosTest_installAccount(topFrame: EvmCallFrame, calldata: ByteArray) { // (bool, uint, uint, bytes, bytes)
+    evmOp_revertIfStatic();
+
     // Verify that this has been called by address zero.
     // This ensures that this method can only be called (1) in testing, or (2) by the EthBridge.
-    if (evmCallFrame_getCaller(topFrame) != address(0)) {
+    let caller = evmCallFrame_getCaller(topFrame);
+    if (caller != address(0)) {
         evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 10, 0, 0);
     }
 
@@ -125,7 +129,8 @@ view write func arbosTest_installAccount(topFrame: EvmCallFrame, calldata: ByteA
 
 view write func arbosTest_getMarshalledStorage(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> bytes
     // Return the marshalled storage for the contract at addr. Revert if no contract at that address.
-    if (evmCallFrame_getCaller(topFrame) != address(0)) {
+    let caller = evmCallFrame_getCaller(topFrame);
+    if (caller != address(0)) {
         evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 20, 0, 0);
     }
 

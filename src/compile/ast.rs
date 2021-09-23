@@ -532,23 +532,23 @@ impl Type {
                 }
             }
             Type::Func(prop, args, ret) => {
-                if let Type::Func(prop2, args2, ret2) = rhs {
+                if let Ok(Type::Func(prop2, args2, ret2)) = rhs.rep(type_tree) {
                     //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
                     let (view1, write1) = prop.purity();
                     let (view2, write2) = prop2.purity();
 
                     (view1 || !view2)
                         && (write1 || !write2)
-                        && arg_vectors_assignable(args2, args, type_tree, seen.clone())
-                        && (ret.assignable(ret2, type_tree, seen))
+                        && arg_vectors_assignable(&args2, args, type_tree, seen.clone())
+                        && (ret.assignable(&ret2, type_tree, seen))
                 } else {
                     false
                 }
             }
             Type::Map(key1, val1) => {
-                if let Type::Map(key2, val2) = rhs {
+                if let Ok(Type::Map(key2, val2)) = rhs.rep(type_tree) {
                     if let Ok(val2) = val2.rep(type_tree) {
-                        key1.assignable(key2, type_tree, seen.clone())
+                        key1.assignable(&key2, type_tree, seen.clone())
                             && (val1.assignable(&val2, type_tree, seen))
                     } else {
                         false
@@ -619,17 +619,13 @@ impl Type {
                     Some(TypeMismatch::Type(self.clone(), rhs.clone()))
                 }
             }
-            Type::GenericSlot(slot) => match rhs {
-                Type::GenericSlot(slot2) if slot == slot2 => {
-                    Some(TypeMismatch::Type(self.clone(), rhs.clone()))
-                }
-                _ => None,
+            Type::GenericSlot(slot) => match rhs.rep(type_tree) {
+                Ok(Type::GenericSlot(slot2)) if *slot == slot2 => None,
+                _ => Some(TypeMismatch::Type(self.clone(), rhs.clone())),
             },
-            Type::Generic(slot) => match rhs {
-                Type::Generic(slot2) if slot == slot2 => {
-                    Some(TypeMismatch::Type(self.clone(), rhs.clone()))
-                }
-                _ => None,
+            Type::Generic(slot) => match rhs.rep(type_tree) {
+                Ok(Type::Generic(slot2)) if *slot == slot2 => None,
+                _ => Some(TypeMismatch::Type(self.clone(), rhs.clone()))
             },
             Type::Tuple(tvec) => {
                 if let Ok(Type::Tuple(tvec2)) = rhs.rep(type_tree) {

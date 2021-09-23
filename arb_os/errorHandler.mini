@@ -41,12 +41,12 @@ public view write func errorHandler() {
     // That's OK, because the only "harm" done is that the double-error situation of application error plus gas
     //      underflow gets detected as just a gas underflow. The effect on the application will be the same either way.
 
-    let outOfGas = xif (inErrorHandler) {
+    let outOfGas = if (inErrorHandler) {
         debug(666);
         false
     } else {
         inErrorHandler = true;
-        xif (getGas() > (~0 - 500)) {
+        if (getGas() > (~0 - 500)) {
             // application ran out of gas
             // duplicate stackInfo call inside both arms of loop, to make sure it happens after the gas check
             let (txid, addrs, parentAddrs) = evmCallStack_stackInfo();
@@ -71,7 +71,7 @@ public view write func errorHandler() {
         // Application code must have hit an error.
         inErrorHandler = false;
         let _ = evmCallStack_returnFromCall(
-            xif (outOfGas) { const::TxResultCode_executionRanOutOfGas } else { const::TxResultCode_revert },
+            if (outOfGas) { const::TxResultCode_executionRanOutOfGas } else { const::TxResultCode_revert },
             0,
             0,
             None<view write func()>

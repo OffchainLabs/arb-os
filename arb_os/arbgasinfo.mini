@@ -6,6 +6,8 @@ use chainParameters::chainParams_get;
 use chainParameters::chainParams_getOrDie;
 use accounts::account_getAggregatorToPay;
 
+use chainParameters::hasChainOwnerPrivileges;
+
 use evmCallStack::EvmCallFrame;
 use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallStack_callHitError;
@@ -16,6 +18,7 @@ use evmCallStack::evmCallFrame_getCaller;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
+use evmOps::evmOp_revertIfStatic;
 
 use gasAccounting::gasAccounting_getPricesInWei;
 use gasAccounting::gasAccounting_getPricesInArbGas;
@@ -39,17 +42,17 @@ public view write func arbgasinfo_txcall() {
         let funcCode = (bytearray_get256(calldata, 0) >> 224);
         if (funcCode == const::funcCode_ArbGasInfo_getPricesInWei) {
             arbgasinfo_getPricesInWei(topFrame, calldata);
-        } elseif (funcCode == const::funcCode_ArbGasInfo_getPricesInWeiWithAggregator) {
+        } else if (funcCode == const::funcCode_ArbGasInfo_getPricesInWeiWithAggregator) {
             arbgasinfo_getPricesInWeiWithAggregator(topFrame, calldata);
-        } elseif (funcCode == const::funcCode_ArbGasInfo_getPricesInArbGas) {
+        } else if (funcCode == const::funcCode_ArbGasInfo_getPricesInArbGas) {
             arbgasinfo_getPricesInArbGas(topFrame, calldata);
-        } elseif (funcCode == const::funcCode_ArbGasInfo_getPricesInArbGasWithAggregator) {
+        } else if (funcCode == const::funcCode_ArbGasInfo_getPricesInArbGasWithAggregator) {
             arbgasinfo_getPricesInArbGasWithAggregator(topFrame, calldata);
-        } elseif (funcCode == const::funcCode_ArbGasInfo_getGasAccountingParams) {
+        } else if (funcCode == const::funcCode_ArbGasInfo_getGasAccountingParams) {
             arbgasinfo_getGasAccountingParams(topFrame, calldata);
-        } elseif (funcCode == const::funcCode_ArbGasInfo_setL1GasPriceEstimate) {
+        } else if (funcCode == const::funcCode_ArbGasInfo_setL1GasPriceEstimate) {
             arbgasinfo_setL1GasPriceEstimate(topFrame, calldata);
-        } elseif (funcCode == const::funcCode_ArbGasInfo_getL1GasPriceEstimate) {
+        } else if (funcCode == const::funcCode_ArbGasInfo_getL1GasPriceEstimate) {
             arbgasinfo_getL1GasPriceEstimate(topFrame, calldata);
         } else {
             // unrecognized function code
@@ -158,13 +161,14 @@ view write func arbgasinfo_getL1GasPriceEstimate(_topFrame: EvmCallFrame, callda
 
 // function setL1GasPriceEstimate(uint priceInWei) external;
 view write func arbgasinfo_setL1GasPriceEstimate(topFrame: EvmCallFrame, calldata: ByteArray) {
+    evmOp_revertIfStatic();
     let caller = evmCallFrame_getCaller(topFrame);
-    let oracle = xif let Some(addrAsUint) = chainParams_get(const::Atom_Param_GasPriceOracle) {
+    let oracle = if let Some(addrAsUint) = chainParams_get(const::Atom_Param_GasPriceOracle) {
         address(addrAsUint)
     } else {
         address(0)
     };
-    if ((caller != address(0)) && (caller != address(chainParams_getOrDie(const::Atom_Param_ChainOwner))) && (caller != oracle)) {
+    if ( (! hasChainOwnerPrivileges(caller)) && (caller != oracle)) {
         evmOp_revert_knownPc(50, 0, 0);
     }
     if (bytearray_size(calldata) != 36) {

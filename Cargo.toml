@@ -43,3 +43,6 @@ petgraph = "0.6.0"
 
 [features]
 sparse_buffers = []
+
+[profile.release]
+debug = true

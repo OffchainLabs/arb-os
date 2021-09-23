@@ -5,10 +5,11 @@
 type tupfunc<I> = func(I) -> (I, I);
 
 write func main() {
-    asm(tests().1) { log };
+    //asm(tests().1) { log };
+    asm("".1) { log };
 }
 
-func tests() -> string {
+/*func tests() -> string {
     
     let lambda = make_lambda::<string>();
     
@@ -41,3 +42,4 @@ type storage<S> = struct {
 func duplicate<U>(store: storage<U>, lambda: tupfunc<U>) -> (U, U) {
     return lambda(store.value);
 }
+*/
