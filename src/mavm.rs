@@ -819,8 +819,8 @@ impl Value {
                 let mut text = String::from_utf8_lossy(&hex::decode(buf.hex_encode()).unwrap())
                     .chars()
                     .filter(|c| !c.is_ascii_control())
+                    .take(100)
                     .collect::<String>();
-                text.truncate(100);
                 Color::lavender(format!("\"{}\"", text))
             }
             Value::Tuple(tup) => match tup.is_empty() {

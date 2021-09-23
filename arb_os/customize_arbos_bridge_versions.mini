@@ -47,38 +47,13 @@ public func set_gasAccountingInfo_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) ->
 
 public func set_globalAccountStore_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> AccountStore {
     let old = oldGlobals.globalAccountStore;
-    return unsafecast<every>(old);
-    /*return struct {
+    return struct {
         accounts: {
             let oldKvs = unsafecast<Kvs>(old.accounts);
             unsafecast<map<address, Account> >(
                 builtin_kvsForall(
                     oldKvs,
-                    closure(rawKey: any, rawValue: any, rawState: any) -> any {
-                        let key = unsafecast<address>(rawKey);
-                        let value = unsafecast<before__accounts_Account>(rawValue);
-                        let state = unsafecast<map<address, Account> >(rawState);
-                        set state[key] = struct {
-                            addr: value.addr,
-                            blsKey: value.blsKey,
-                            nextSeqNum: value.nextSeqNum,
-                            ethBalance: value.ethBalance,
-                            contractInfo: if let Some(oldContractInfo) = value.contractInfo {
-                                Some(struct {
-                                    contractStateVersion: const::ContractStateVersion_original,
-                                    code: oldContractInfo.code,
-                                    evmJumpTable: oldContractInfo.evmJumpTable,
-                                    startCodePoint: oldContractInfo.startCodePoint,
-                                    storage: oldContractInfo.storage,
-                                })
-                            } else {
-                                None<AccountContractInfo>
-                            },
-                            aggregatorInfo: value.aggregatorInfo,
-                            aggregatorToPay: value.aggregatorToPay,
-                        };
-                        return state;
-                    },
+                    upgrade_closure,
                     newmap<address, Account>,
                 )
             )
@@ -87,5 +62,32 @@ public func set_globalAccountStore_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -
         numContracts: old.numContracts,
         codeRefTable: old.codeRefTable,
         escrowStore: old.escrowStore,
-    };*/
+    };
 }
+
+func upgrade_closure(rawKey: any, rawValue: any, rawState: any) -> any {
+    let key = unsafecast<address>(rawKey);
+    let value = unsafecast<before__accounts_Account>(rawValue);
+    let state = unsafecast<map<address, Account> >(rawState);
+    set state[key] = struct {
+        addr: value.addr,
+        blsKey: value.blsKey,
+        nextSeqNum: value.nextSeqNum,
+        ethBalance: value.ethBalance,
+        contractInfo: if let Some(oldContractInfo) = value.contractInfo {
+            Some(struct {
+                contractStateVersion: const::ContractStateVersion_original,
+                code: oldContractInfo.code,
+                evmJumpTable: oldContractInfo.evmJumpTable,
+                startCodePoint: oldContractInfo.startCodePoint,
+                storage: oldContractInfo.storage,
+            })
+        } else {
+            None<AccountContractInfo>
+        },
+        aggregatorInfo: value.aggregatorInfo,
+        aggregatorToPay: value.aggregatorToPay,
+    };
+    return state;
+}
+
