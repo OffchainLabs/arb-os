@@ -1011,10 +1011,11 @@ view write func evmCallStack_returnFromCall_impl(
             } else {
                 (errorHandler, newmap<uint, func()>)   // these won't be used
             };
+
             let (completed, gasUsage, feeStats, deferredPayments) = gasAccounting_endTxCharges(
                 topFrame.storageAllocations,
                 globalCurrentTxRequest.feeStats,
-                Some(topFrame.accountStore),
+                Some(accountStore_set(topFrame.accountStore, topFrame.runningAs, topFrame.runningAsAccount)),
             )?;
 
             if (completed) {
@@ -1204,7 +1205,7 @@ view write func evmCallStack_returnFromCall_impl(
             let (_, gasUsage, feeStats, payments) = gasAccounting_endTxCharges(
                 topFrame.storageAllocations,
                 globalCurrentTxRequest.feeStats,
-                Some(getGlobalAccountStore()),
+                Some(getGlobalAccountStore()),   // base refunds on pre-tx state because we are reverting any changes
             )?;
             if let Some(uas) = deferredPayments_apply(getGlobalAccountStore(), payments) {
                 setGlobalAccountStore(uas);
