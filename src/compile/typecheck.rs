@@ -663,7 +663,6 @@ fn flowcheck_liveliness(
                 },
                 TypeCheckedNode::Expression(expr) => match &mut expr.kind {
                     TypeCheckedExprKind::Loop(..) => true,
-                    //TODO: Dot refs are broken
                     TypeCheckedExprKind::LocalVariableRef(id, ..) => {
                         // a variable born in this scope shouldn't get a second chance when unrolling
                         if !born.contains(id) {
