@@ -977,14 +977,17 @@ fn codegen_programs(
             .position(|(id, _func)| id.id == "main")
             .ok_or_else(|| {
                 CompileError::new(
-                    format!("Compile error"),
-                    format!("No \"main\" function found in \"{}\"", main_module.name),
+                    "Compile error",
+                    Color::red(format!(
+                        "No test \"main\" function found in \"{}\"",
+                        main_module.name
+                    )),
                     vec![],
                 )
             })
     } else {
         Err(CompileError::new(
-            format!("Internal Error"),
+            "Internal Error",
             format!("Found empty module list at codegen"),
             vec![],
         ))
