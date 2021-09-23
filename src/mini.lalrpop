@@ -5,7 +5,7 @@
 
 use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVar, Type, CodeBlock, StructField, FuncArg, FuncProperties, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant, OptionConst, FieldInitializer, new_func_arg, new_type_decl, check_generic_parameters};
 use crate::compile::{InliningMode, ErrorSystem, CompileError};
-use crate::stringtable::{StringId};
+use crate::stringtable::StringId;
 use crate::compile::Lines;
 use crate::link::Import;
 use crate::pos::{BytePos, Location};
@@ -541,10 +541,12 @@ Expr12: Expr = {
         let debug = DebugInfo::here(file_info, lno, filename);
         
         let name = format!("closure #{}", closures.len() + 1);
-        let id = name.clone();
-        let closure = Func::new(name, StringId::new(current_path.to_vec(), id.clone()), false, view, write, true, fa, t, cb, BTreeSet::new(), vec![], 0, debug);
+        let id = StringId::new(current_path.to_vec(), name.clone());
+        let closure = Func::new(
+            name, id.clone(), false, view, write, true, fa, t, cb, BTreeSet::new(), vec![], 0, debug
+        );
         
-	    closures.insert(StringId::new(current_path.to_vec(), id), closure.clone());
+	closures.insert(id, closure.clone());
         
         Expr::new(ExprKind::Closure(closure), debug)
     },
