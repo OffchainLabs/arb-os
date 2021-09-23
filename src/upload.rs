@@ -57,11 +57,11 @@ impl CodeUploader {
         }
     }
 
-    pub fn _push_byte(&mut self, b: u8) {
+    pub fn push_byte(&mut self, b: u8) {
         self.build_buffer.push(b);
     }
 
-    pub fn _push_bytes(&mut self, b: &[u8]) {
+    pub fn push_bytes(&mut self, b: &[u8]) {
         self.build_buffer.extend(b);
     }
 

@@ -137,7 +137,7 @@ public func queue_discardOne(q: Queue) -> Queue {
 public func queue_map(q: Queue, clo: func(any, any) -> any, data: any) -> Queue {
     // for every item in q, calls clo(item, data) and builds a new queue of the return values
     let ret = queue_new();
-    loop<Queue> {
+    loop {
         if let Some(res) = queue_get(q) {
             let (uq, item) = res;
             q = uq;

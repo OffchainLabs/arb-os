@@ -69,7 +69,7 @@ public func setOfAddresses_contains(sa: SetOfAddresses, addr: address) -> bool {
 
 public func setOfAddresses_serialize(sa: SetOfAddresses) -> option<ByteArray> {
     if sa.inverted {
-        None<ByteArray>
+        None
     } else {
         Some(storageMap_serializeListOfNonzeros(sa.contents))
     }
@@ -110,9 +110,9 @@ public func addressPairSet_set(
 
 public func addressPairSet_lookup(aps: AddressPairSet, addr1: address, addr2: address) -> bool {
     let cont = aps.contents;
-    (cont[(uint(addr1), const::WildcardForAddress)] == Some(true))
+    return (cont[(uint(addr1), const::WildcardForAddress)] == Some(true))
         || (cont[(const::WildcardForAddress, uint(addr2))] == Some(true))
-        || (cont[(uint(addr1), uint(addr2))] == Some(true))
+        || (cont[(uint(addr1), uint(addr2))] == Some(true));
 }
 
 public func addressPairSet_lookup_options(
@@ -161,3 +161,9 @@ func apss_closure(key:(uint, uint), value: uint, state: ByteArray) -> ByteArray 
         )
     }
 }
+
+
+
+
+
+

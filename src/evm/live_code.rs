@@ -64,6 +64,7 @@ impl ArbosTest {
             Uint256::zero(),
             caller_addr.clone(),
             callvalue.clone(),
+            false,
         );
         let _tx_id = machine.runtime_env.insert_tx_message(
             caller_addr,
@@ -129,11 +130,8 @@ impl ArbosTest {
             Err(ethabi::Error::from("reverted"))
         }
     }
-}
 
-#[cfg(test)]
-impl ArbosTest {
-    pub fn install_account_and_call(
+    pub fn _install_account_and_call(
         &self,
         machine: &mut Machine,
         addr: Uint256,
@@ -151,13 +149,13 @@ impl ArbosTest {
             Some(code),
             Some(storage),
         )?;
-        let _ = machine.runtime_env.get_and_incr_seq_num(&Uint256::zero());
-        let _ = machine.runtime_env.get_and_incr_seq_num(&Uint256::zero());
+        let _ = machine.runtime_env.get_seq_num(&Uint256::zero(), true);
+        let _ = machine.runtime_env.get_seq_num(&Uint256::zero(), true);
         self.call(machine, Uint256::zero(), addr.clone(), calldata, balance)?;
-        self.get_marshalled_storage(machine, addr)
+        self._get_marshalled_storage(machine, addr)
     }
 
-    pub fn get_marshalled_storage(
+    pub fn _get_marshalled_storage(
         &self,
         machine: &mut Machine,
         addr: Uint256,
@@ -184,7 +182,7 @@ impl ArbosTest {
         }
     }
 
-    pub fn burn_arb_gas(
+    pub fn _burn_arb_gas(
         &self,
         machine: &mut Machine,
         sender_addr: Uint256,
@@ -202,7 +200,7 @@ impl ArbosTest {
         Ok(receipts[0].get_return_code().to_u64().unwrap())
     }
 
-    pub fn set_nonce(
+    pub fn _set_nonce(
         &self,
         machine: &mut Machine,
         addr: Uint256,

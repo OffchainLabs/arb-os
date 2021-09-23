@@ -553,7 +553,7 @@ view write func _validateStackAtRuntime(origCode: AvmCodePoint, pc: uint, jumpTa
     code = pushInstructionImm(const::AVM_cjump, origCode, code);
     code = pushInstruction(0x36, code); // stackempty
 
-    (code, jumpTable)
+    return (code, jumpTable);
 }
 
 public view write func translateEvmCodeSegment(

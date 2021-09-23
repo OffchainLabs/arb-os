@@ -599,7 +599,7 @@ Expr12: Expr = {
     <lno: @L> "any" "(" <e:Expr> ")" => {
         Expr::lno(ExprKind::UnsafeCast(Box::new(e), Type::Any), file_info, lno, filename)
     },
-    <qualifiers: (<Qualifier>)*> <lno: @L> "closure" "(" <fa:FuncArgs> ")" <t: (Return)?> <block: CodeBlock> => {
+    <qualifiers: (<Qualifier>)*> <lno: @L> <u: ClosureUsage> "(" <fa:FuncArgs> ")" <t: (Return)?> <block:CodeBlock> => {
         let view = qualifiers.contains(&"view");
         let write = qualifiers.contains(&"write");
         let debug = DebugInfo::here(file_info, lno, filename);
@@ -611,7 +611,10 @@ Expr12: Expr = {
             stats.push(Statement::new(stat, debug_info));
         }
         
-        let name = format!("closure #{}", closures.len() + 1);
+        let name = match u {
+            true => format!("closure #{}", closures.len() + 1),
+            false => format!("_closure #{}", closures.len() + 1),
+        };
         let id = string_table.get(name.clone());
         let closure = Func::new(name, id, false, view, write, true, fa, t, stats, BTreeSet::new(), vec![], 0, debug);
         
@@ -620,6 +623,11 @@ Expr12: Expr = {
         Expr::new(ExprKind::Closure(closure), debug)
     },
     Expr13,
+}
+
+ClosureUsage: bool = {
+    "closure" => true,
+    "_closure" => false,
 }
 
 Expr13: Expr = {

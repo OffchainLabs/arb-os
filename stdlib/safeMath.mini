@@ -116,7 +116,7 @@ public func safeMulInt(x: int, y: int) -> int {
 
 public func trySafeMulInt(x: int, y: int) -> option<int> {
     let ret = x * y;
-    if ((x != int(0)) && (y != (ret/x))) {
+    if (x != int(0)) && (y != (ret/x)) {
         None
     } else {
         Some(ret)
@@ -124,7 +124,7 @@ public func trySafeMulInt(x: int, y: int) -> option<int> {
 }
 
 public func safeToUint(x: int) -> uint {
-    if (x < int(0)) {
+    if x < int(0) {
         error;
     }
     uint(x)

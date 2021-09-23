@@ -16,17 +16,16 @@ Every Arbitrum chain has a 48-bit chain ID, which is the low-order 48 bits of th
 
 Incoming messages are put into a chain's EthBridge-managed inbox, and received by a chain's instance of ArbOS.
 
-An incoming message is a 6-tuple:
+An incoming message is an 8-tuple:
 
-* message type (uint)
-* L1 block number (uint): L1 block number when this message was inserted into the inbox 
-* L1 timestamp (uint): timestamp of L1 block when this message was inserted into the inbox
-* Sender (address encoded as uint)
-* RequestID: 0 for the first message inserted into the inbox; otherwise 1 + the requestID of the previous message inserted into the inbox
-* Size of type-specific data (uint)
-* Type-specific data: (buffer)
-
-The L1 block number and/or L1 timestamp fields can be set to zero. Zero values in these fields will be replaced, by ArbOS, with the value of the same field in the previous message. If there was no previous message, ArbOS will leave these values as zero. (Note that the EthBridge will never create messages with zeroed block number or timestamp fields. The treatment of zero block number and timestamp values exists only as a convenience for use in private executions of a chain.)
+* Message type (uint)
+* L1 block number (uint) -- L1 block number when this message was inserted into the inbox 
+* L1 timestamp (uint) -- timestamp of L1 block when this message was inserted into the inbox
+* Sender (address)
+* RequestID (uint) -- 0 for the first message inserted into the inbox; otherwise 1 + the requestID of the previous message inserted into the inbox
+* Gas price (uint) -- the price in wei paid when to place this message into the inbox
+* Payload size (uint) -- the length of the payload
+* Payload (buffer) -- the type-specific payload this message carries
 
 Each message type is associated with rules, imposed by the Arbitrum protocol, regarding which properties the EthBridge must verify before sending a specific message type. These rules are not described here because they are not a part of the data format.
 

@@ -54,10 +54,10 @@ func tests() -> uint {
     if setOfAddresses_contains(set1, addr3) {
         return 7;
     }
-    if !setOfAddresses_contains(set1, addr1) {
+    if ! setOfAddresses_contains(set1, addr1) {
         return 8;
     }
-    if !setOfAddresses_contains(set1, addr2) {
+    if ! setOfAddresses_contains(set1, addr2) {
         return 9;
     }
 
@@ -73,13 +73,14 @@ func tests() -> uint {
     }
 
     set1 = setOfAddresses_remove(set1, addr1);
+
     if setOfAddresses_contains(set1, addr3) {
         return 13;
     }
     if setOfAddresses_contains(set1, addr1) {
         return 14;
     }
-    if !setOfAddresses_contains(set1, addr2) {
+    if ! setOfAddresses_contains(set1, addr2) {
         return 15;
     }
 
