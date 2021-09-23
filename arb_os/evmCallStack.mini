@@ -969,7 +969,7 @@ view write func evmCallStack_returnFromCall_impl(
         // if the call reverted, keep all of the storage gas, because callee's storage allocations were reverted
         gasAccounting_resumeTxCharges(
             resumeInfo.savedAPGas + leftoverAPGas,
-            resumeInfo.savedStorageGas + xif(resultCode == const::TxResultCode_success) { leftoverStorageGas } else { resumeInfo.givenStorageGas },
+            resumeInfo.savedStorageGas + leftoverStorageGas,
         )?;
 
         returnFromCallNestingDepth = 0;
