@@ -295,6 +295,7 @@ public view write func initEvmCallStack(
             	request.gasPrice, 
             	request.gasPayer, 
             	safeGetGlobalAccountStore(),
+            	xif let Some(_) = request.incomingRequest.gasEstimationParams { true } else { false },
             );
             safeSetGlobalAccountStore(astore);
             (result, astore)
@@ -532,6 +533,7 @@ public view write func initEvmCallStackForConstructor(
                 request.gasPrice, 
                 request.gasPayer, 
                 acctStore,
+                xif let Some(_) = request.incomingRequest.gasEstimationParams { true } else { false },
             )
         };
 

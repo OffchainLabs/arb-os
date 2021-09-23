@@ -119,6 +119,7 @@ type TxGasState = struct {        // this is the gas state of the currently runn
     weiHeldForGas: uint,          // amount of currency we're holding to cover the current tx's gas use
     refundTo: address,            // who gets a refund for any unused gas when current tx is finished
     refundTracker: GasRefundTracker,
+    gasEstimationMode: bool,
 };
 
 type GasUsage = struct {
@@ -433,6 +434,7 @@ public view write func gasAccounting_startTxCharges(
     gasPrice: uint,
     payer: address,
     acctStore: AccountStore,
+    gasEstimationMode: bool,
 ) -> (
     uint,          // const::TxResultCode_success if success, otherwise an error code
     AccountStore,  // acctStore, with payments deducted
@@ -476,6 +478,7 @@ public view write func gasAccounting_startTxCharges(
         weiHeldForGas: weiToHold,
         refundTo: payer,
         refundTracker: gasRefundTracker_new(),
+        gasEstimationMode: gasEstimationMode,
     });
     set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(gasUsedByOS));
 
@@ -506,13 +509,15 @@ public view write func gasAccounting_endTxCharges(
     let txState = gasAccountingInfo.txState?;
 
     let arbGasPerStorage = gasAccounting_getStoragePriceInArbGas();
-    if let Some(astore) = acctStore {
-        let refunds = gasRefundTracker_allocationsToRefund(txState.refundTracker, astore);
-        if (refunds > storageAllocations) {
-            refunds = storageAllocations;
+    if (!txState.gasEstimationMode) {
+        if let Some(astore) = acctStore {
+            let refunds = gasRefundTracker_allocationsToRefund(txState.refundTracker, astore);
+            if (refunds > storageAllocations) {
+                refunds = storageAllocations;
+            }
+            storageAllocations = storageAllocations - refunds;
+            set txState.currentStorageOnlyGas = txState.currentStorageOnlyGas + arbGasPerStorage * refunds;
         }
-        storageAllocations = storageAllocations - refunds;
-        set txState.currentStorageOnlyGas = txState.currentStorageOnlyGas + arbGasPerStorage * refunds;
     }
 
     let computeGasRemaining = switchToChargingOS();
