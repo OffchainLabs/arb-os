@@ -41,12 +41,12 @@ public view write func errorHandler() {
     // That's OK, because the only "harm" done is that the double-error situation of application error plus gas
     //      underflow gets detected as just a gas underflow. The effect on the application will be the same either way.
 
-    let outOfGas = if (inErrorHandler) {
+    let outOfGas = if inErrorHandler {
         debug(666);
         false
     } else {
         inErrorHandler = true;
-        if (getGas() > (~0 - 500)) {
+        if getGas() > (~0 - 500) {
             // application ran out of gas
             // duplicate stackInfo call inside both arms of loop, to make sure it happens after the gas check
             let (txid, addrs, parentAddrs) = evmCallStack_stackInfo();
@@ -60,7 +60,7 @@ public view write func errorHandler() {
         }
     };
 
-    if (evmCallStack_isEmpty()) {
+    if evmCallStack_isEmpty() {
         // Oh no, we must have hit an unexpected error in ArbOS.
         // That shouldn't have happened, but we have to make the best of the situation.
         // So we'll clean up our stacks, then jump back to the main run loop.
@@ -71,10 +71,10 @@ public view write func errorHandler() {
         // Application code must have hit an error.
         inErrorHandler = false;
         let _ = evmCallStack_returnFromCall(
-            if (outOfGas) { const::TxResultCode_executionRanOutOfGas } else { const::TxResultCode_revert },
+            if outOfGas { const::TxResultCode_executionRanOutOfGas } else { const::TxResultCode_revert },
             0,
             0,
-            None<view write func()>
+            None
         );
 
         // throw a soft error, in case _returnFromCall didn't resolve the problem
@@ -101,14 +101,14 @@ public view write func errorHandler_setUpgradeProtector(oldGlobals: any) {
     let protector = asm() func() { errcodept };
 
     // End the error handler protector by jumping to the old error handler
-    protector = asm(const::AVM_jump, oldErrorHandler, protector,) func() { pushinsnimm };
+    protector = asm(const::AVM_jump, oldErrorHandler, protector) func() { pushinsnimm };
 
     // Before we jump back, switch back to the error handler being the old one
-    protector = asm(const::AVM_errset, oldErrorHandler, protector,) func() { pushinsnimm };
+    protector = asm(const::AVM_errset, oldErrorHandler, protector) func() { pushinsnimm };
 
     // Before handling the error, revert to the old globals
-    protector = asm(const::AVM_rset, oldGlobals, protector,) func() { pushinsnimm };
+    protector = asm(const::AVM_rset, oldGlobals, protector) func() { pushinsnimm };
 
     // Set the upgrade error handler
-    asm(protector,) { errset };
+    asm(protector) { errset };
 }

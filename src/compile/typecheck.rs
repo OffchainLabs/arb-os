@@ -1589,13 +1589,10 @@ fn typecheck_statement<'a>(
                 if arg.get_type().rep(type_tree)? == Type::Void {
                     error!("Asm's {} arg is void", human_readable_index(index + 1));
                 }
-                
+
                 args.push(arg);
             }
-            Ok((
-                TypeCheckedStatementKind::Asm(insns.to_vec(), args),
-                vec![],
-            ))
+            Ok((TypeCheckedStatementKind::Asm(insns.to_vec(), args), vec![]))
         }
         StatementKind::DebugPrint(e) => {
             let tce = typecheck_expr(

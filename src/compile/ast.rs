@@ -625,7 +625,7 @@ impl Type {
             },
             Type::Generic(slot) => match rhs.rep(type_tree) {
                 Ok(Type::Generic(slot2)) if *slot == slot2 => None,
-                _ => Some(TypeMismatch::Type(self.clone(), rhs.clone()))
+                _ => Some(TypeMismatch::Type(self.clone(), rhs.clone())),
             },
             Type::Tuple(tvec) => {
                 if let Ok(Type::Tuple(tvec2)) = rhs.rep(type_tree) {

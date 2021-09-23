@@ -57,7 +57,7 @@ use bridge_arbos_versions::remapGlobalsForUpgrade;
 var __fixedLocationGlobal: view write func(uint);    // points to EVM op dispatch function
 
 view write func main(oldGlobals: GlobalsBeforeUpgrade) {
-    if (unsafecast<any>(oldGlobals) != any(())) {
+    if unsafecast<any>(oldGlobals) != any(()) {
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
 
         // create an upgrade-only error handler that saves and restores the contents of the register
@@ -96,7 +96,7 @@ view write func main(oldGlobals: GlobalsBeforeUpgrade) {
         accountStore_init();
         arbowner_init();
         txReceipts_init();
-        if (initializePreinstalls(false) == None<()>) {
+        if initializePreinstalls(false) == None<()> {
             error;   // don't try to run without preinstalls and precompiles
         }
 
@@ -115,7 +115,7 @@ view write func initializePreinstalls(isUpgrade: bool) -> option<()> {
         bytestream_new(code),
         false
     );
-    acctStore = if (isUpgrade) {
+    acctStore = if isUpgrade {
         accountStore_upgradeContractFromEvmCode(
             acctStore,
             getArbInfoAddress(),
@@ -139,5 +139,5 @@ view write func initializePreinstalls(isUpgrade: bool) -> option<()> {
 
     safeSetGlobalAccountStore(acctStore);
 
-    return Some(());
+    Some(())
 }

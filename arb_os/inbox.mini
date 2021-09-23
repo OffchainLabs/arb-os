@@ -115,8 +115,8 @@ public view write func inbox_get() -> IncomingRequest {
     // This is a loop because some events don't generate a message that we can return,
     //       so we keep trying until we find something we can return.
 
-    return loop {
-        while (incomingRequestQueue_isEmpty(globalInbox.queue)) {
+    loop {
+        while incomingRequestQueue_isEmpty(globalInbox.queue) {
             globalInbox = getFromL1Inbox(globalInbox);
         }
 
@@ -130,8 +130,8 @@ public view write func inbox_get() -> IncomingRequest {
         //TODO: Here we check for two message types, for compatibility.
         //      This is only needed in the first ArbOS upgrade version after the type-code was remapped.
         //      In future versions, where all test code sends the non-legacy type code, we can just use the new type code.
-        if ((ebMsg.kind == const::L1MessageType_setChainParameters) || (ebMsg.kind == const::L1MessageType_setChainParameters_v36_and_below) ){
-            if (ebMsg.sender == address(0)) {
+        if (ebMsg.kind == const::L1MessageType_setChainParameters) || (ebMsg.kind == const::L1MessageType_setChainParameters_v36_and_below) {
+            if ebMsg.sender == address(0) {
                 chainParams_gotParamsMessage(ebMsg.msgData);
             }   // ignore this message if it didn't come from address zero
             // loop back to get the next message
@@ -139,25 +139,25 @@ public view write func inbox_get() -> IncomingRequest {
             set ebMsg.requestId = uint(hash(bytes32(chainParams_chainId()), bytes32(ebMsg.requestId)));
             return ebMsg;
         }
-    };
+    }
 }
 
 // translate a newly arrived message from the incoming format into the format we'll use internally
 view write func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, fromSideload: bool) -> IncomingRequest {
-    if (! fromSideload) {
+    if ! fromSideload {
         updateL1GasPriceEstimate(newMsgRaw.sender, newMsgRaw.gasPriceL1);
     }
 
-    if (newMsgRaw.ethBlockNumber < globalInbox.ethBlockNum) {
+    if newMsgRaw.ethBlockNumber < globalInbox.ethBlockNum {
         // enforce non-decreasing property of Ethereum block numbers on incoming messages
         set newMsgRaw.ethBlockNumber = globalInbox.ethBlockNum;
     }
-    if (newMsgRaw.timestamp < globalInbox.timestamp) {
+    if newMsgRaw.timestamp < globalInbox.timestamp {
         // enforce non-decreasing property of timestamps on incoming messages
         set newMsgRaw.timestamp = globalInbox.timestamp;
     }
 
-    return struct {
+    struct {
         kind: newMsgRaw.kind,
         arbBlockNumber: globalInbox.arbBlockNum,    // assign the current Arbitrum block number
         ethBlockNumber: newMsgRaw.ethBlockNumber,
@@ -173,7 +173,7 @@ view write func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, from
         aggregator: None<AggregatorInfo>,
         adminMode: fromSideload && (newMsgRaw.kind != const::L1MessageType_L2ForGasEstimation),
         gasEstimationParams: None<GasEstimationParams>,
-    };
+    }
 }
 
 view write func getFromL1Inbox(inbox: Inbox) -> Inbox {
@@ -189,7 +189,7 @@ view write func getFromL1Inbox(inbox: Inbox) -> Inbox {
         // At the end of each block, ArbOS will process as many sideloaded messages as it is given, until a sideload
         //      returns (). Then ArbOS will go on to process the messages from the new L1 block.
         let rawSideloadMsg = asm(inbox.arbBlockNum) any { sideload };
-        if (rawSideloadMsg != any(())) {
+        if rawSideloadMsg != any(()) {
             // a sideloaded message was received, so enqueue it for processing
             let newMsg = incomingRequestFromRaw(unsafecast<IncomingRequestFromInbox>(rawSideloadMsg), true);
             return inbox with {
@@ -206,7 +206,7 @@ view write func getFromL1Inbox(inbox: Inbox) -> Inbox {
         set inbox.ethBlockNum = pendingMsg.ethBlockNumber;
         set inbox.timestamp = pendingMsg.timestamp;
 
-        return if (pendingMsg.kind != const::L1MessageType_endOfBlock) {
+        return if pendingMsg.kind != const::L1MessageType_endOfBlock {
             // enqueue the pending message for processing
             inbox with {
                 queue: incomingRequestQueue_put(
@@ -222,10 +222,10 @@ view write func getFromL1Inbox(inbox: Inbox) -> Inbox {
     }
 
     let newMsg = incomingRequestFromRaw(asm() IncomingRequestFromInbox { inbox }, false);
-    if ( (!inbox.atStartOfBlock) && ((newMsg.ethBlockNumber > inbox.ethBlockNum) || (newMsg.timestamp > inbox.timestamp)) ){
+    if (!inbox.atStartOfBlock) && ((newMsg.ethBlockNumber > inbox.ethBlockNum) || (newMsg.timestamp > inbox.timestamp)) {
         set inbox.pendingMessage = Some(newMsg);
-    } else if (newMsg.kind == const::L1MessageType_endOfBlock) {
-        if ( ! inbox.atStartOfBlock) {
+    } else if newMsg.kind == const::L1MessageType_endOfBlock {
+        if ! inbox.atStartOfBlock {
             set inbox.pendingMessage = Some(newMsg);
         }
     } else {
@@ -336,7 +336,7 @@ public view write func mainRunLoop() {
                 // it's a batch message, so unpack all of its component requests and put them in the batchQ
                 let moreToDo = true;
                 let queue = incomingRequestQueue_new();
-                while (moreToDo) {
+                while moreToDo {
                     if let Some(res) = messageBatch_get(batch) {
                         let (newMsg, *batch) = res;
                         queue = incomingRequestQueue_put(queue, newMsg);
@@ -495,7 +495,7 @@ public view write func inbox_getNextUnpackedRequest() -> TxRequestData {
 */
 
 view write func handleUnpackedMessage(msg: IncomingRequest) {
-    if (msg.kind == const::L1MessageType_L2FundedByL1) {
+    if msg.kind == const::L1MessageType_L2FundedByL1 {
         // record the calldata usage, so it can be reported in tx receipt
         set msg.aggregator = Some(struct {
             aggregator: None<address>,
@@ -505,7 +505,7 @@ view write func handleUnpackedMessage(msg: IncomingRequest) {
         // the message carries an ETH deposit
         // verify the validity of the message, process the deposit, then process the tx
         let firstByte = bytearray_getByte(msg.msgData, 0);
-        if (firstByte == const::L2MessageType_unsignedEOATx) {
+        if firstByte == const::L2MessageType_unsignedEOATx {
             let callvalue = bytearray_get256(msg.msgData, 1+4*32);
             let gAcctStore = safeGetGlobalAccountStore();
             if let Some(txRequest) = translateUnsignedTx(msg) {
@@ -527,7 +527,7 @@ view write func handleUnpackedMessage(msg: IncomingRequest) {
                     )
                 );
             }
-        } else if (firstByte == const::L2MessageType_unsignedContractTx) {
+        } else if firstByte == const::L2MessageType_unsignedContractTx {
             let callvalue = bytearray_get256(msg.msgData, 1+3*32);
             let gAcctStore = safeGetGlobalAccountStore();
             if let Some(txRequest) = translateUnsignedTx(msg) {
@@ -552,12 +552,12 @@ view write func handleUnpackedMessage(msg: IncomingRequest) {
         }
         // else L2 msg type is invalid in ETH deposit message, ignore msg
         //      note that deposit doesn't happen in this case
-    } else if (msg.kind == const::L1MessageType_endOfBlock) {
+    } else if msg.kind == const::L1MessageType_endOfBlock {
         // it's an end-of-block message, so just trigger end-of-block processing
         outputStats_endOfBlock(msg.arbBlockNumber, msg.ethBlockNumber, msg.timestamp);
         blockhash_submitHash(msg.ethBlockNumber, globalInbox.inboxHashAccumulator);
         set globalInbox.arbBlockNum = globalInbox.arbBlockNum + 1;
-    } else if (msg.kind == const::L1MessageType_L2 || msg.kind == const::L1MessageType_L2ForGasEstimation) {
+    } else if msg.kind == const::L1MessageType_L2 || msg.kind == const::L1MessageType_L2ForGasEstimation {
         // record the calldata usage, so it can be reported in tx receipt
         set msg.aggregator = Some(struct {
             aggregator: if let Some(aggInfo) = msg.aggregator { aggInfo.aggregator } else { None<address> },
@@ -566,9 +566,9 @@ view write func handleUnpackedMessage(msg: IncomingRequest) {
 
         // it's an L2 message, so switch based on the L2 type
         let firstByte = bytearray_getByte(msg.msgData, 0);
-        if (firstByte == const::L2MessageType_heartbeat) {
+        if firstByte == const::L2MessageType_heartbeat {
             // it's a heartbeat message, don't do anything
-        } else if (firstByte == const::L2MessageType_signedCompressedTx) {
+        } else if firstByte == const::L2MessageType_signedCompressedTx {
             // it's a single message with compressed headers
             if let Some(txRequest) = decompressAndVerifyEcdsaSignedTx(msg.msgData, msg) {
                 handleArrivingTx(txRequest);
@@ -581,9 +581,9 @@ view write func handleUnpackedMessage(msg: IncomingRequest) {
             }
             // else request was malformatted, ignore it
         }
-    } else if (msg.kind == const::L1MessageType_rollupProtocolEvent) {
+    } else if msg.kind == const::L1MessageType_rollupProtocolEvent {
         // ignore this message type
-    } else if (msg.kind == const::L1MessageType_submitRetryableTx) {
+    } else if msg.kind == const::L1MessageType_submitRetryableTx {
         if let Some(txRequest) = processRetryableTx(msg) {
             handleArrivingTx(txRequest);
         }
@@ -594,14 +594,14 @@ view write func handleUnpackedMessage(msg: IncomingRequest) {
 }
 
 view write func handleArrivingTx(tx: TxRequestData) {
-    let (resultCode, request) = if (allowedSenders_contains(tx.caller) || tx.incomingRequest.adminMode) {
+    let (resultCode, request) = if allowedSenders_contains(tx.caller) || tx.incomingRequest.adminMode {
         gasAccounting_prepareTx(tx)
     } else {
         (const::TxResultCode_senderNotPermitted, tx)
     };
 
-    if (resultCode == const::TxResultCode_success) {
-        if (processL2Request(request) == None<()>) {
+    if resultCode == const::TxResultCode_success {
+        if processL2Request(request) == None<()> {
             // reject for message format error
             emitTxReceipt(
                 request.incomingRequest,
@@ -616,7 +616,7 @@ view write func handleArrivingTx(tx: TxRequestData) {
         }
     } else {
         // before emitting a failure receipt, try to increment caller's sequence number
-        if ((resultCode != const::TxResultCode_sequenceNumberTooLow) && (resultCode != const::TxResultCode_sequenceNumberTooHigh)) {
+        if (resultCode != const::TxResultCode_sequenceNumberTooLow) && (resultCode != const::TxResultCode_sequenceNumberTooHigh) {
             if let Some(seqNum) = request.seqNum {
                 let gAcctStore = safeGetGlobalAccountStore();
                 if let Some(acct) = account_checkAndIncrSeqNum(accountStore_get(gAcctStore, request.caller), seqNum) {
@@ -644,7 +644,7 @@ view func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData>
     let (*inStream, maxGas) = bytestream_get256(inStream)?;
     let (*inStream, gasPrice) = bytestream_get256(inStream)?;
 
-    let seqNum = if (subtype == const::L2MessageType_unsignedEOATx) {
+    let seqNum = if subtype == const::L2MessageType_unsignedEOATx {
         let (*inStream, sn) = bytestream_get256(inStream)?;
         Some(sn)
     } else {
@@ -655,7 +655,7 @@ view func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData>
     let (*inStream, value) = bytestream_get256(inStream)?;
     let calldata = bytestream_getRemainingBytes(inStream);
 
-    if (subtype == const::L2MessageType_unsignedEOATx) {
+    if subtype == const::L2MessageType_unsignedEOATx {
         set request.requestId = uint(hash(
             bytes32(request.sender),
             hash(bytes32(chainParams_chainId()), keccak256(request.msgData, 0, bytearray_size(request.msgData))),
@@ -749,21 +749,21 @@ func txRequestQueue_get(q: TxRequestQueue) -> option<(TxRequestQueue, TxRequestD
 var addressRemapExceptions: AddressPairSet;
 
 public view func mapL1SenderAddress(callerAddr: address, maybeCallee: option<address>) -> address {
-    return if (chainParams_getOrDie(const::Atom_Param_EnableL1ContractAddressAliasing) == 0) {
+    if chainParams_getOrDie(const::Atom_Param_EnableL1ContractAddressAliasing) == 0 {
         callerAddr
-    } else if (addressPairSet_lookup_options(addressRemapExceptions, Some(callerAddr), maybeCallee)) {
+    } else if addressPairSet_lookup_options(addressRemapExceptions, Some(callerAddr), maybeCallee) {
         callerAddr
-    } else if (uint(callerAddr) == 0) {
+    } else if uint(callerAddr) == 0 {
         // zero maps to zero
         callerAddr
     } else {
         // deliberately allow overflow, address(.) will truncate
         address(uint(callerAddr) + const::L1ToL2MapConstant)
-    };
+    }
 }
 
 public view func isL1MappingException(from: option<address>, to: option<address>) -> bool {
-    return addressPairSet_lookup_strict(addressRemapExceptions, from, to);
+    addressPairSet_lookup_strict(addressRemapExceptions, from, to)
 }
 
 public view write func addressRemapExceptions_set(sender: option<address>, dest: option<address>, value: bool) {
@@ -771,5 +771,5 @@ public view write func addressRemapExceptions_set(sender: option<address>, dest:
 }
 
 public view func serializeAllRemapExceptions() -> ByteArray {
-    return addressPairSet_serialize(addressRemapExceptions);
+    addressPairSet_serialize(addressRemapExceptions)
 }
