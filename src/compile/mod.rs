@@ -1088,7 +1088,7 @@ fn codegen_programs(
 
     let mut globals: Vec<_> = globals.into_iter().map(|x| x.1).collect();
     globals.push(GlobalVar::new(
-        StringId::new(vec![], String::new()),
+        StringId::new(vec!["/meta".to_string()], String::new()),
         "_jump_table".to_string(),
         Type::Any,
         DebugInfo::default(),

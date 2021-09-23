@@ -328,7 +328,7 @@ fn get_globals_and_version_from_file(
 
     let mut old_state = state.clone();
     for global in globals.globals {
-        if global.id != StringId::new(vec![], String::new()) {
+        if global.id != StringId::new(vec!["/meta".to_string()], String::new()) {
             let mut tipe = global.tipe;
             if let Type::Nominal(file_path, id, _) = tipe {
                 tipe = type_tree
