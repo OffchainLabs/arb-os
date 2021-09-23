@@ -130,18 +130,13 @@ pub struct Import {
     /// Unique global id this import refers to
     pub unique_id: LabelId,
     /// `StringId` of the use-statement from parsing according to the containing module's `StringTable`
-    pub id: Option<StringId>,
+    pub id: StringId,
     /// Location of the use-statement in code
     pub location: Option<Location>,
 }
 
 impl Import {
-    pub fn new(
-        path: Vec<String>,
-        name: String,
-        id: Option<StringId>,
-        location: Option<Location>,
-    ) -> Self {
+    pub fn new(path: Vec<String>, name: String, id: StringId, location: Option<Location>) -> Self {
         let unique_id = Import::unique_id(&path, &name);
         Import {
             path,
@@ -161,7 +156,7 @@ impl Import {
         let name = name.to_string();
         let unique_id = Import::unique_id(&path, &name);
         Import {
-            id: Some(StringId::new(path.clone(), name.clone())),
+            id: StringId::new(path.clone(), name.clone()),
             path,
             name,
             unique_id,

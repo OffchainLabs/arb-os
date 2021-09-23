@@ -1285,13 +1285,7 @@ pub fn typecheck_top_level_decls(
 
     let mut undefinable_ids = HashMap::new(); // ids no one is allowed to define
     for import in imports {
-        undefinable_ids.insert(
-            import
-                .id
-                .clone()
-                .expect("internal error: import id was not filled"),
-            import.location,
-        );
+        undefinable_ids.insert(import.id.clone(), import.location);
     }
 
     let mut checked_funcs = BTreeMap::new();

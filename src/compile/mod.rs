@@ -280,7 +280,7 @@ impl TypeCheckedModule {
         let mut imports: BTreeMap<StringId, Import> = BTreeMap::new();
 
         for import in self.imports.iter() {
-            let id = import.id.clone().unwrap();
+            let id = import.id.clone();
 
             if let Some(prior) = imports.get(&id) {
                 flow_warnings.push(CompileError::new_warning(
@@ -761,16 +761,7 @@ fn resolve_imports(
                 )
             })?;
 
-            let string_id = match import.id.clone() {
-                Some(string_id) => string_id,
-                None => {
-                    return Err(CompileError::new(
-                        format!("Internal error"),
-                        format!("Import {} has no string id", import.name),
-                        import.loc(),
-                    ))
-                }
-            };
+            let string_id = import.id.clone();
 
             if let Some(named_type) = named_type {
                 origin_module
@@ -1016,10 +1007,7 @@ fn codegen_programs(
             };
         }
         for import in &module.imports {
-            match import.id.clone() {
-                Some(id) => drop(func_labels.insert(id, Label::Func(import.unique_id))),
-                None => panic!("Import without id {:#?}", &import),
-            }
+            drop(func_labels.insert(import.id.clone(), Label::Func(import.unique_id)));
         }
 
         for (_, func) in module.checked_funcs {

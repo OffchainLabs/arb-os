@@ -61,7 +61,7 @@ HeadDecl: TopLevelDecl = {
         let file = p.pop().expect("Internal error: Path vector was empty");
         let id = StringId::new(current_path.to_vec(), file.clone());
         TopLevelDecl::UseDecl(Import::new(
-            p, file, Some(id), file_info.location(BytePos::from(lno), filename),
+            p, file, id, file_info.location(BytePos::from(lno), filename),
         ))
     },
     <lno: @L> "const" <n: IdentString> "=" <u: UnsignedInteger> ";" => { 
