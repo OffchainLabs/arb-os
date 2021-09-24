@@ -1403,12 +1403,6 @@ impl Machine {
     fn run_one_dont_catch_errors(&mut self, _debug: bool) -> Result<bool, ExecutionError> {
         if let MachineState::Running(pc) = self.state {
             if let Some(insn) = self.code.get_insn(pc) {
-                let line = match insn.debug_info.location {
-                    Some(loc) => format!("{} {}", loc.line.clone(), loc.file_id),
-                    None => format!("unknown"),
-                };
-                println!("{} {} {}", self.arb_gas_remaining, insn.opcode, line);
-
                 if let Some(val) = &insn.immediate {
                     self.stack.push(val.clone());
                 }
