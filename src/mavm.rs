@@ -1084,7 +1084,7 @@ impl Opcode {
             "swap1" => Opcode::AVMOpcode(AVMOpcode::Swap1),
             "swap2" => Opcode::AVMOpcode(AVMOpcode::Swap2),
             "unaryminus" => Opcode::UnaryMinus,
-            "bitewiseneg" => Opcode::AVMOpcode(AVMOpcode::BitwiseNeg),
+            "bitwiseneg" => Opcode::AVMOpcode(AVMOpcode::BitwiseNeg),
             "hash" => Opcode::AVMOpcode(AVMOpcode::Hash),
             "ethhash2" => Opcode::AVMOpcode(AVMOpcode::EthHash2),
             "keccakf" => Opcode::AVMOpcode(AVMOpcode::Keccakf),
