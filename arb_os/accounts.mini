@@ -558,7 +558,7 @@ public func accountStore_sumOfAllEscrowBalances(acctStore: AccountStore) -> uint
     )
 }
 
-public func test_func(k: uint, v: uint, state: any) -> any {
+public func test_func(_: uint, v: uint, state: any) -> any {
     unsafecast<uint>(state) + v
 }
 

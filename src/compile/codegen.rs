@@ -118,11 +118,15 @@ pub fn mavm_codegen_func(
         next_slot: locals.len(),
     };
 
-    //let _ = codegen_statements(func.code, &mut cgen, &locals, 0)?;
-
     codegen(func.child_nodes(), &mut cgen, 0, true)?;
 
-    let mut space_for_locals = cgen.next_slot + 128;
+    if func.name == "tests" {
+        println!("{}", cgen.next_slot);
+        println!("{:?}", &cgen.locals);
+        println!("{:?}", &cgen.aliases);
+    }
+
+    let mut space_for_locals = cgen.next_slot;
 
     match func.tipe {
         Type::Func(_prop, _, ret) => {
@@ -242,16 +246,17 @@ fn codegen(
                         }
 
                         for (index, local) in assigned.into_iter().enumerate() {
-                            let slot = if local.shadow {
-                                cgen.next_slot()
-                            } else {
-                                match cgen.locals.get(&local.id) {
-                                    Some(slot) => *slot,
-                                    None => {
-                                        error!(@"No slot has been assigned", local.debug_info)
+                            /*let slot = if local.shadow {
+                                    cgen.next_slot()
+                                } else {
+                                    match cgen.locals.get(&local.id) {
+                                        Some(slot) => *slot,
+                                        None => {
+                                            error!(@"No slot has been assigned", local.debug_info)
+                                        }
                                     }
-                                }
-                            };
+                            };*/
+                            let slot = cgen.next_slot();
                             cgen.locals.insert(local.id, slot);
 
                             if count > 1 {
@@ -266,7 +271,7 @@ fn codegen(
                     }
                     TypeCheckedStatementKind::AssignGlobal(id, expr) => {
                         expr!(expr);
-                        let global = cgen.globals.get(id).expect("No global exists for stringID");
+                        let global = cgen.globals.get(id).expect("No global exists for stringId");
                         let offset = global.offset.unwrap();
                         cgen.code.push(opcode!(@SetGlobalVar(offset)));
                     }
@@ -698,7 +703,7 @@ fn codegen(
     if scope {
         for (id, slot) in saved_locals {
             if let Some(alias) = cgen.locals.get(&id) {
-                cgen.aliases.entry(id).or_insert(vec![]).push(*alias);
+                cgen.aliases.entry(slot).or_insert(vec![]).push(*alias);
                 cgen.locals.insert(id, slot);
             }
         }
