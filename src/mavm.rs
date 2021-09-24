@@ -782,15 +782,25 @@ impl Value {
             Value::Int(ui) => Value::Int(ui.avm_hash()),
             Value::Buffer(buf) => Value::Int(buf.avm_hash()),
             Value::Tuple(v) => {
-                let mut acc = Uint256::zero();
+                let total_size = v.len() as u8; // we assume tuples only contain ints for now
+                let outer_size = v.len() as u8;
+
+                let mut all_bytes = vec![3u8, total_size];
+                let mut content_bytes = vec![outer_size];
+
                 for val in v.to_vec() {
                     if let Value::Int(ui) = val.avm_hash() {
-                        acc = Uint256::avm_hash2(&acc, &ui);
+                        let child_hash = Uint256::avm_hash(&ui);
+                        content_bytes.extend(child_hash.to_bytes_be());
                     } else {
                         panic!("Invalid value type from hash");
                     }
                 }
-                Value::Int(acc)
+                let content_hash = keccak256(&content_bytes);
+                all_bytes.extend(content_hash);
+
+                let hash = Uint256::from_bytes(&keccak256(&all_bytes));
+                Value::Int(hash)
             }
             Value::CodePoint(cp) => Value::avm_hash2(&Value::Int(Uint256::one()), &cp.avm_hash()),
             Value::Label(label) => {
@@ -1074,7 +1084,7 @@ impl Opcode {
             "swap1" => Opcode::AVMOpcode(AVMOpcode::Swap1),
             "swap2" => Opcode::AVMOpcode(AVMOpcode::Swap2),
             "unaryminus" => Opcode::UnaryMinus,
-            "bitwiseneg" => Opcode::AVMOpcode(AVMOpcode::BitwiseNeg),
+            "not" => Opcode::AVMOpcode(AVMOpcode::BitwiseNeg),
             "hash" => Opcode::AVMOpcode(AVMOpcode::Hash),
             "ethhash2" => Opcode::AVMOpcode(AVMOpcode::EthHash2),
             "keccakf" => Opcode::AVMOpcode(AVMOpcode::Keccakf),
@@ -1101,9 +1111,9 @@ impl Opcode {
             "shl" => Opcode::AVMOpcode(AVMOpcode::ShiftLeft),
             "shr" => Opcode::AVMOpcode(AVMOpcode::ShiftRight),
             "sar" => Opcode::AVMOpcode(AVMOpcode::ShiftArith),
-            "bitwiseand" => Opcode::AVMOpcode(AVMOpcode::BitwiseAnd),
-            "bitwiseor" => Opcode::AVMOpcode(AVMOpcode::BitwiseOr),
-            "bitwisexor" => Opcode::AVMOpcode(AVMOpcode::BitwiseXor),
+            "and" => Opcode::AVMOpcode(AVMOpcode::BitwiseAnd),
+            "or" => Opcode::AVMOpcode(AVMOpcode::BitwiseOr),
+            "xor" => Opcode::AVMOpcode(AVMOpcode::BitwiseXor),
             "logicaland" => Opcode::LogicalAnd,
             "logicalor" => Opcode::LogicalOr,
             "inbox" => Opcode::AVMOpcode(AVMOpcode::Inbox),
@@ -1182,7 +1192,7 @@ impl AVMOpcode {
             AVMOpcode::Dup2 => "dup2",
             AVMOpcode::Swap1 => "swap1",
             AVMOpcode::Swap2 => "swap2",
-            AVMOpcode::BitwiseNeg => "bitwiseneg",
+            AVMOpcode::BitwiseNeg => "not",
             AVMOpcode::Hash => "hash",
             AVMOpcode::EthHash2 => "ethhash2",
             AVMOpcode::Type => "type",
@@ -1212,9 +1222,9 @@ impl AVMOpcode {
             AVMOpcode::ShiftLeft => "shl",
             AVMOpcode::ShiftRight => "shr",
             AVMOpcode::ShiftArith => "sar",
-            AVMOpcode::BitwiseAnd => "bitwiseand",
-            AVMOpcode::BitwiseOr => "bitwiseor",
-            AVMOpcode::BitwiseXor => "bitwisexor",
+            AVMOpcode::BitwiseAnd => "and",
+            AVMOpcode::BitwiseOr => "or",
+            AVMOpcode::BitwiseXor => "xor",
             AVMOpcode::Noop => "noop",
             AVMOpcode::ErrPush => "errpush",
             AVMOpcode::Inbox => "inbox",

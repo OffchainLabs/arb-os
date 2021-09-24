@@ -420,12 +420,12 @@ impl PartialOrd for Uint256 {
 
 impl fmt::Display for Uint256 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let cutoff: usize = 1 << 32;
+        /*let cutoff: usize = 1 << 32;
         if self.val < BigUint::from(cutoff) {
             write!(f, "{}", self.val)
-        } else {
-            write!(f, "{:#x}", self.val)
-        }
+        } else {*/
+        write!(f, "{:#x}", self.val)
+        //}
     }
 }
 
