@@ -5,7 +5,7 @@
 //! Contains utilities for generating instructions from AST structures.
 
 use super::ast::{BinaryOp, DebugInfo, GlobalVar, TrinaryOp, Type, UnaryOp};
-use super::typecheck::{TypeCheckedExpr, TypeCheckedFunc, TypeCheckedNode};
+use super::typecheck::{TypeCheckedFunc, TypeCheckedNode};
 use crate::compile::typecheck::{
     AbstractSyntaxTree, TypeCheckedExprKind, TypeCheckedStatementKind,
 };
@@ -38,7 +38,6 @@ struct Codegen<'a> {
     release_build: bool,
 
     scopes: Vec<Scope>,
-    aliases: HashMap<SlotNum, Vec<SlotNum>>,
     next_slot: SlotNum,
 }
 
@@ -178,7 +177,6 @@ pub fn mavm_codegen_func(
         issues,
         release_build,
         scopes: vec![Scope::default()],
-        aliases: HashMap::new(),
         next_slot: 0,
     };
 
@@ -188,27 +186,17 @@ pub fn mavm_codegen_func(
 
     let detail = func.name == "tests";
 
-    codegen(
-        func.child_nodes(),
-        &mut cgen,
-        0,
-        true,
-        false,
-        declare,
-        detail,
-        0,
-    )?;
+    codegen(func.child_nodes(), &mut cgen, 0, declare, detail, 0)?;
 
     if detail {
-        println!("{}", cgen.next_slot);
-        /*println!("{:?}", &cgen.locals);
-        println!("{:?}", &cgen.aliases);*/
+        //println!("{}", cgen.next_slot);
+        /*println!("{:?}", &cgen.locals);*/
     }
 
     let mut space_for_locals = cgen.next_slot;
 
     if space_for_locals > 8 {
-        println!("{} {}", func.name, Color::red(space_for_locals));
+        //println!("{} {}", func.name, Color::red(space_for_locals));
     }
 
     match func.tipe {
@@ -244,27 +232,19 @@ fn codegen(
     nodes: Vec<TypeCheckedNode>,
     cgen: &mut Codegen,
     stack_items: usize,
-    new_scope: bool,
-    loops: bool,
     declare: Vec<StringId>,
     detail: bool,
     depth: usize,
 ) -> Result<(), CompileError> {
-    if new_scope {
-        cgen.open_scope();
+    cgen.open_scope();
 
-        for id in declare {
-            let slot = cgen.next_slot();
-            cgen.shadow(id, slot);
-            if detail {
-                //println!("shadowing {} {} {}", id, cgen.string_table.name_from_id(id), slot);
-            }
-        }
+    for id in declare {
+        let slot = cgen.next_slot();
+        cgen.shadow(id, slot);
+    }
 
-        let scope = cgen.scopes.last().unwrap();
-        if detail {
-            cgen.print_locals("Open", depth);
-        }
+    if detail {
+        //cgen.print_locals("Open", depth);
     }
 
     macro_rules! expr {
@@ -273,8 +253,6 @@ fn codegen(
                 vec![TypeCheckedNode::Expression($expr)],
                 cgen,
                 stack_items + $push,
-                false,
-                false,
                 vec![],
                 detail,
                 depth + 1,
@@ -326,21 +304,19 @@ fn codegen(
         }
 
         macro_rules! block {
-            ($block:expr, $loops:expr, $declare:expr) => {{
+            ($block:expr, $declare:expr) => {
                 codegen(
                     $block.child_nodes(),
                     cgen,
                     stack_items,
-                    true,
-                    $loops,
                     $declare,
                     detail,
                     depth + 1,
                 )?
-            }};
-            ($block:expr, $loops:expr) => {{
-                block!($block, $loops, vec![])
-            }};
+            };
+            ($block:expr) => {
+                block!($block, vec![])
+            };
         }
 
         match node {
@@ -413,7 +389,7 @@ fn codegen(
                         cgen.code.push(opcode!(@SetLocal(slot_num)));
                         cgen.code.push(opcode!(Jump, Value::Label(cond_label)));
                         cgen.code.push(opcode!(@Label(top_label)));
-                        block!(body, true);
+                        block!(body);
                         cgen.code.push(opcode!(@Label(cond_label)));
                         expr!(cond);
                         cgen.code.push(opcode!(@GetLocal(slot_num)));
@@ -432,8 +408,6 @@ fn codegen(
                             block.child_nodes(),
                             cgen,
                             stack_items,
-                            true,
-                            false,
                             vec![],
                             detail,
                             depth + 1,
@@ -445,15 +419,12 @@ fn codegen(
                         let else_label = cgen.label_gen.next();
                         cgen.code.push(opcode!(IsZero));
                         cgen.code.push(opcode!(Cjump, Value::Label(else_label)));
-                        block!(block, false);
+                        block!(block);
                         cgen.code.push(opcode!(Jump, Value::Label(end_label)));
-                        // TODO: alias
-
                         cgen.code.push(opcode!(@Label(else_label)));
                         if let Some(else_block) = else_block {
-                            block!(else_block, false);
+                            block!(else_block);
                         }
-                        // TODO: alias
                         cgen.code.push(opcode!(@Label(end_label)));
                     }
                     TypeCheckedExprKind::IfLet(id, right, block, else_block, _) => {
@@ -473,14 +444,14 @@ fn codegen(
                         // not actually *calling* next_slot().
                         let slot = cgen.next_slot;
                         cgen.code.push(opcode!(@SetLocal(slot)));
-                        block!(block, false, vec![*id]);
+                        block!(block, vec![*id]);
                         cgen.code.push(opcode!(Jump, Value::Label(end_label)));
 
                         // None case
                         cgen.code.push(opcode!(@Label(else_label)));
                         cgen.code.push(opcode!(Pop));
                         if let Some(else_block) = else_block {
-                            block!(else_block, false);
+                            block!(else_block);
                         }
                         cgen.code.push(opcode!(@Label(end_label)));
                     }
@@ -490,7 +461,7 @@ fn codegen(
                         cgen.code.push(opcode!(Noop, Value::Label(top)));
                         cgen.code.push(opcode!(@SetLocal(slot)));
                         cgen.code.push(opcode!(@Label(top)));
-                        block!(body, true);
+                        block!(body);
                         cgen.code.push(opcode!(@GetLocal(slot)));
                         cgen.code.push(opcode!(Jump));
                     }
@@ -812,35 +783,31 @@ fn codegen(
         }
     }
 
-    if new_scope {
-        // make move instructions
+    if detail {
+        //cgen.print_locals("Close", depth);
+    }
 
-        if detail {
-            cgen.print_locals("Close", depth);
+    let debug = cgen.code.last().unwrap().debug_info;
+
+    let scope = cgen.scopes.pop().expect("No scope");
+
+    for (local, mut slot) in scope.locals {
+        // We're closing a scope, so any final assignments need to be phi'd
+
+        if let Some(alias) = scope.shadows.get(&local) {
+            slot = *alias;
         }
 
-        let debug = cgen.code.last().unwrap().debug_info;
-
-        let scope = cgen.scopes.pop().expect("No scope");
-
-        for (local, mut slot) in scope.locals {
-            // We're closing a scope, so any final assignments need to be moved
-
-            if let Some(alias) = scope.shadows.get(&local) {
-                slot = *alias;
-            }
-
-            if let Some(old) = cgen.get_local(&local) {
-                if old != slot {
-                    /*cgen.code.push(Instruction::from_opcode(
-                            Opcode::MoveLocal(old, slot),
-                            debug
-                    ));*/
-                    cgen.code
-                        .push(Instruction::from_opcode(Opcode::GetLocal(slot), debug));
-                    cgen.code
-                        .push(Instruction::from_opcode(Opcode::SetLocal(old), debug));
-                }
+        if let Some(old) = cgen.get_local(&local) {
+            if old != slot {
+                /*cgen.code.push(Instruction::from_opcode(
+                    Opcode::MoveLocal(old, slot),
+                    debug
+                ));*/
+                cgen.code
+                    .push(Instruction::from_opcode(Opcode::GetLocal(slot), debug));
+                cgen.code
+                    .push(Instruction::from_opcode(Opcode::SetLocal(old), debug));
             }
         }
     }
