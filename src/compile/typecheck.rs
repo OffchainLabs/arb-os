@@ -830,14 +830,12 @@ impl AbstractSyntaxTree for TypeCheckedFieldInitializer {
 /// if they are not defined in string_table, they are inserted.
 fn builtin_func_decls() -> Vec<Import> {
     vec![
-        Import::new_builtin("assert", "builtin_assert"),
         Import::new_builtin("array", "builtin_arrayNew"),
         Import::new_builtin("array", "builtin_arrayGet"),
         Import::new_builtin("array", "builtin_arraySet"),
         Import::new_builtin("kvs", "builtin_kvsNew"),
         Import::new_builtin("kvs", "builtin_kvsGet"),
         Import::new_builtin("kvs", "builtin_kvsSet"),
-        Import::new_builtin("assert", "builtin_assert"),
     ]
 }
 

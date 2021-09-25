@@ -367,6 +367,28 @@ fn codegen(
                             // Release builds don't include asserts
                             continue;
                         }
+                        expr!(expr);
+
+                        let ok_label = cgen.label_gen.next();
+
+                        // Test the condition
+                        cgen.code.push(opcode!(Dup0));
+                        cgen.code.push(opcode!(Tget, Value::from(0)));
+                        cgen.code.push(opcode!(Cjump, Value::Label(ok_label)));
+
+                        // failure state
+                        let line = debug.location.expect("no location").line;
+                        let text = format!("assert on line {} failed with", line);
+                        let tuple = Value::new_tuple(vec![Value::from(text.as_ref()), Value::none()]);
+                        cgen.code.push(opcode!(Tget, Value::from(1)));
+                        cgen.code.push(opcode!(Noop, tuple));
+                        cgen.code.push(opcode!(Tset, Value::from(1)));
+                        cgen.code.push(opcode!(DebugPrint));
+                        cgen.code.push(opcode!(Error));
+
+                        // passing state
+                        cgen.code.push(opcode!(@Label(ok_label)));
+                        cgen.code.push(opcode!(Pop));
                     }
                     TypeCheckedStatementKind::While(cond, body) => {
                         let loop_slot = cgen.next_slot();
