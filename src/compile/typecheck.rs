@@ -3808,17 +3808,6 @@ pub struct TypeCheckedCodeBlock {
 }
 
 impl TypeCheckedCodeBlock {
-    fn new(
-        body: Vec<TypeCheckedStatement>,
-        ret_expr: Option<Box<TypeCheckedExpr>>,
-        scope: Option<String>,
-    ) -> Self {
-        Self {
-            body,
-            ret_expr,
-            scope,
-        }
-    }
     pub fn get_type(&self) -> Type {
         self.ret_expr
             .clone()

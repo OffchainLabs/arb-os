@@ -81,7 +81,9 @@ impl BasicGraph {
                     block_data = vec![curr];
                     label_to_block.insert(label, block);
                 }
-                Opcode::Return | Opcode::AVMOpcode(AVMOpcode::Cjump | AVMOpcode::Jump) => {
+                Opcode::Return
+                | Opcode::CjumpTo(_)
+                | Opcode::AVMOpcode(AVMOpcode::Cjump | AVMOpcode::Jump) => {
                     block_data.push(curr);
                     let block = graph.add_node(BasicBlock::Code(block_data));
                     graph.add_edge(last_block, block, BasicEdge::Forward);
@@ -118,6 +120,16 @@ impl BasicGraph {
             match &last.opcode {
                 Opcode::Return => {
                     graph.add_edge(node, output, BasicEdge::Jump);
+                }
+                Opcode::CjumpTo(label) => {
+                    let dest = match label_to_block.get(label) {
+                        Some(dest) => *dest,
+                        _ => {
+                            complete = false;
+                            continue;
+                        }
+                    };
+                    graph.add_edge(node, dest, BasicEdge::Jump);
                 }
                 Opcode::AVMOpcode(AVMOpcode::Jump | AVMOpcode::Cjump) => {
                     let label = match &last.immediate {

@@ -924,8 +924,9 @@ pub enum Opcode {
     SetGlobalVar(usize),                 // sets a global variable at a global index
     BackwardLabelTarget(usize),          // sets up a backward label as indexed by the jump table
     UncheckedFixedArrayGet(usize),       // arg is size of array
-    Return,                              // return from a func, popping the frame
     Label(Label),                        // a location in code
+    CjumpTo(Label),                      // Like a Cjump, but with info about where it'll go
+    Return,                              // return from a func, popping the frame
     AVMOpcode(AVMOpcode),                // a non-virtual, AVM opcode
 }
 
@@ -1078,6 +1079,9 @@ impl Opcode {
                 format!("TupleSet {} {}", Color::pink(slot), Color::grey(size))
             }
             Opcode::Label(label) => Value::Label(*label).pretty_print(label_color),
+            Opcode::CjumpTo(label) => {
+                format!("CjumpTo {}", Value::Label(*label).pretty_print(label_color))
+            }
             Opcode::Capture(id) => format!("Capture λ_{}", id % 256),
             Opcode::FuncCall(prop) => format!(
                 "FuncCall {}{}{} {}{}",
@@ -1189,6 +1193,7 @@ impl Opcode {
             Opcode::GetGlobalVar(_) => "GetGlobal",
             Opcode::SetGlobalVar(_) => "SetGlobal",
             Opcode::Label(_) => "Label",
+            Opcode::CjumpTo(_) => "CjumpTo",
             Opcode::TupleGet(_, _) => "TupleGet",
             Opcode::TupleSet(_, _) => "TupleSet",
             Opcode::UncheckedFixedArrayGet(_) => "UncheckedFixedArrayGet",

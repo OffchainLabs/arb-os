@@ -382,18 +382,18 @@ fn codegen(
                         }
                     }
                     TypeCheckedStatementKind::While(cond, body) => {
-                        let slot_num = cgen.next_slot();
+                        let loop_slot = cgen.next_slot();
                         let top_label = cgen.label_gen.next();
                         let cond_label = cgen.label_gen.next();
                         cgen.code.push(opcode!(Noop, Value::Label(top_label)));
-                        cgen.code.push(opcode!(@SetLocal(slot_num)));
+                        cgen.code.push(opcode!(@SetLocal(loop_slot)));
                         cgen.code.push(opcode!(Jump, Value::Label(cond_label)));
                         cgen.code.push(opcode!(@Label(top_label)));
                         block!(body);
                         cgen.code.push(opcode!(@Label(cond_label)));
                         expr!(cond);
-                        cgen.code.push(opcode!(@GetLocal(slot_num)));
-                        cgen.code.push(opcode!(Cjump));
+                        cgen.code.push(opcode!(@GetLocal(loop_slot)));
+                        cgen.code.push(opcode!(@CjumpTo(top_label)));
                     }
                     TypeCheckedStatementKind::Break(..) => {
                         panic!("Encountered a break node");
@@ -800,14 +800,10 @@ fn codegen(
 
         if let Some(old) = cgen.get_local(&local) {
             if old != slot {
-                /*cgen.code.push(Instruction::from_opcode(
+                cgen.code.push(Instruction::from_opcode(
                     Opcode::MoveLocal(old, slot),
-                    debug
-                ));*/
-                cgen.code
-                    .push(Instruction::from_opcode(Opcode::GetLocal(slot), debug));
-                cgen.code
-                    .push(Instruction::from_opcode(Opcode::SetLocal(old), debug));
+                    debug,
+                ));
             }
         }
     }

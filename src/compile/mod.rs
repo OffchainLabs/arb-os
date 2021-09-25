@@ -1043,6 +1043,8 @@ fn codegen_programs(
                 graph.color();
 
                 let code = translate::expand_calls(graph.flatten(), &mut label_gen);
+                let code = translate::untag_jumps(code);
+                let code = translate::replace_phi_nodes(code);
 
                 let source = Some(SourceFileMap::new(
                     code.len(),

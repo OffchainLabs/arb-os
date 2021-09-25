@@ -1,7 +1,14 @@
+/*
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
+ */
+
+//! Provides routines for substituting instructions
+
 use crate::mavm::{AVMOpcode, Instruction, LabelGenerator, Opcode, Value};
 
+/// De-virtualizes FuncCall opcodes into the AVM function call ABI
 pub fn expand_calls(code: Vec<Instruction>, label_gen: &mut LabelGenerator) -> Vec<Instruction> {
-    let mut out = vec![];
+    let mut out = Vec::with_capacity(code.len());
 
     for curr in code {
         let debug = curr.debug_info;
@@ -47,6 +54,42 @@ pub fn expand_calls(code: Vec<Instruction>, label_gen: &mut LabelGenerator) -> V
                 ));
                 out.push(opcode!(Jump));
                 out.push(Instruction::from_opcode(Opcode::Label(return_label), debug));
+            }
+            _ => out.push(curr),
+        }
+    }
+    out
+}
+
+/// De-virtualizes CjumpTo opcodes into simple Cjumps
+pub fn untag_jumps(code: Vec<Instruction>) -> Vec<Instruction> {
+    let mut out = Vec::with_capacity(code.len());
+
+    for curr in code {
+        match curr.opcode {
+            Opcode::CjumpTo(..) => {
+                let mut jump = curr.clone();
+                jump.opcode = Opcode::AVMOpcode(AVMOpcode::Cjump);
+                out.push(jump);
+            }
+            _ => out.push(curr),
+        }
+    }
+    out
+}
+
+/// Translates MoveLocal phi-joins into equivalent gets and sets
+pub fn replace_phi_nodes(code: Vec<Instruction>) -> Vec<Instruction> {
+    let mut out = Vec::with_capacity(code.len());
+
+    for curr in code {
+        match curr.opcode {
+            Opcode::MoveLocal(dest, source) => {
+                let mut get_local = curr.clone();
+                let mut set_local = curr.clone();
+                get_local.opcode = Opcode::GetLocal(source);
+                set_local.opcode = Opcode::SetLocal(dest);
+                out.extend(vec![get_local, set_local]);
             }
             _ => out.push(curr),
         }
