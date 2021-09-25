@@ -261,7 +261,10 @@ pub fn link(
         ]
     };
 
-    let main = NodeIndex::from(0);
+    let main = graph
+        .node_indices()
+        .find(|node| graph[*node].name == "main")
+        .unwrap_or(NodeIndex::from(0));
     let mut dfs = DfsPostOrder::new(&graph, main);
     let mut traversal = vec![];
     while let Some(node) = dfs.next(&graph) {

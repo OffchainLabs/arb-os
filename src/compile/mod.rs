@@ -970,29 +970,6 @@ fn codegen_programs(
     let mut work_list = vec![];
     let mut globals_so_far = 0;
 
-    let main_func_index = if let Some(main_module) = typechecked_modules.get(0) {
-        main_module
-            .checked_funcs
-            .iter()
-            .position(|(id, _func)| id.id == "main")
-            .ok_or_else(|| {
-                CompileError::new(
-                    "Compile error",
-                    Color::red(format!(
-                        "No test \"main\" function found in \"{}\"",
-                        main_module.name
-                    )),
-                    vec![],
-                )
-            })
-    } else {
-        Err(CompileError::new(
-            "Internal Error",
-            format!("Found empty module list at codegen"),
-            vec![],
-        ))
-    }?;
-
     for mut module in typechecked_modules {
         // assign globals to the right of all prior
         let mut global_vars = HashMap::new();
@@ -1032,8 +1009,6 @@ fn codegen_programs(
             ));
         }
     }
-
-    work_list.swap(0, main_func_index);
 
     let (progs, issues) = work_list
         .into_par_iter()
