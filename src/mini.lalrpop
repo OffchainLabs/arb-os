@@ -233,8 +233,6 @@ StatementKind: StatementKind = {
     "break" <e: Expr?> ";" => StatementKind::Break(e, None),
     "debug" "(" <e: Expr> ")" ";" => StatementKind::DebugPrint(e),
     "assert" "(" <e: Expr> ")" ";" => StatementKind::Assert(e),
-    "asm" "(" <e: Expr> ")" "{" <body:AsmInsn*> "}" ";" => StatementKind::Asm(body, vec![e]),
-    "asm" "(" <a:CommaedExprs?> ")" "{" <body:AsmInsn*> "}" ";" => StatementKind::Asm(body, a.unwrap_or(vec![])),
     <p: StatementExpr> => p,
     <lno: @L> "set" <i:Ident> <s: SubData+> "=" <e: Expr> ";" => {
 
@@ -631,11 +629,8 @@ ClosureUsage: bool = {
 }
 
 Expr13: Expr = {
-    <lno: @L> "asm" "(" <e:Expr> ")" <rt:Type> "{" <body:AsmInsn*> "}" => {
-        Expr::lno(ExprKind::Asm(rt, body, vec![e]), file_info, lno, filename)
-    },
-    <lno: @L> "asm" "(" <a:CommaedExprs?> ")" <rt:Type> "{" <body:AsmInsn*> "}" => {
-        Expr::lno(ExprKind::Asm(rt, body, a.unwrap_or(vec![])), file_info, lno, filename)
+    <lno: @L> "asm" "(" <exprs: Comma<Expr>> ")" <rt: Type?> "{" <body:AsmInsn*> "}" => {
+        Expr::lno(ExprKind::Asm(rt.unwrap_or(Type::Void), body, exprs), file_info, lno, filename)
     },
     <lno: @L> "struct" "{" <fi: FieldInitializers> "}" => {
         Expr::lno(ExprKind::StructInitializer(fi), file_info, lno, filename)

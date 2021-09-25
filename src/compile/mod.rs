@@ -28,6 +28,7 @@ use std::path::Path;
 use typecheck::TypeCheckedFunc;
 
 pub use ast::{DebugInfo, FuncProperties, GlobalVar, StructField, TopLevelDecl, Type, TypeTree};
+pub use codegen::SlotNum;
 pub use source::Lines;
 pub use typecheck::{AbstractSyntaxTree, TypeCheckedNode};
 
@@ -570,13 +571,7 @@ pub fn compile_from_folder(
         module.propagate_attributes();
     }
 
-    let (progs, globals) = codegen_programs(
-        typechecked_modules,
-        error_system,
-        type_tree,
-        folder,
-        release_build,
-    )?;
+    let (progs, globals) = codegen_programs(typechecked_modules, type_tree, folder, release_build)?;
     Ok((progs, globals))
 }
 
@@ -972,7 +967,6 @@ fn check_global_constants(
 
 fn codegen_programs(
     typechecked_modules: Vec<TypeCheckedModule>,
-    error_system: &mut ErrorSystem,
     type_tree: TypeTree,
     folder: &Path,
     release_build: bool,
@@ -1021,11 +1015,10 @@ fn codegen_programs(
         }
     }
 
-    let (progs, issues) = work_list
+    let progs = work_list
         .into_par_iter()
         .map(
             |(func, func_labels, string_table, globals, module_name, module_path)| {
-                let mut codegen_issues = vec![];
                 let func_name = func.name.clone();
                 let debug_info = func.debug_info;
 
@@ -1034,7 +1027,6 @@ fn codegen_programs(
                     &string_table,
                     &globals,
                     &func_labels,
-                    &mut codegen_issues,
                     release_build,
                 )?;
 
@@ -1064,17 +1056,10 @@ fn codegen_programs(
                     debug_info,
                 );
 
-                Ok((prog, codegen_issues))
+                Ok(prog)
             },
         )
-        .collect::<Result<(Vec<CompiledProgram>, Vec<Vec<CompileError>>), CompileError>>()?;
-
-    for issue in issues.into_iter().flatten() {
-        match issue.is_warning {
-            true => error_system.warnings.push(issue),
-            false => error_system.errors.push(issue),
-        }
-    }
+        .collect::<Result<Vec<CompiledProgram>, CompileError>>()?;
 
     let mut globals = BTreeMap::new();
     for prog in &progs {

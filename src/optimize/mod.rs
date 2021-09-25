@@ -2,6 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
+use crate::compile::SlotNum;
 use crate::console::Color;
 use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
 use petgraph::algo::is_cyclic_directed;
@@ -37,41 +38,40 @@ pub enum BasicEdge {
     Jump,
 }
 
+/// Represents control flow about basic blocks
 pub struct BasicGraph {
+    /// Basic blocks and the edges that connect them
     graph: StableGraph<BasicBlock, BasicEdge>,
-    output: NodeIndex,
-    complete: bool,
+    /// Whether this graph includes a jump to some unknown place
+    wild: bool,
+    /// Whether this graph contains a cycle
     cyclic: bool,
-    source: Vec<Instruction>,
 }
 
 impl BasicGraph {
+    /// Creates a `BasicGraph` from a list of `Instruction`s.
     pub fn new(code: Vec<Instruction>) -> Self {
+        // Algorithm:
+        //   Create a control flow graph by walking the instructions in two passes.
+        //     Split on labels & jumps to form sequentially-connected basic-blocks.
+        //     Drop sequential jumps for instructions that unconditionally branch elsewhere.
+        //     Add edges for jump targets. If the target is unknown, declare the graph wild.
+        //
+        // Assumptions:
+        //   We assume the first instruction is the entry point.
+        //   We assume all Return opcodes jump to the same location.
+
         let mut graph: StableGraph<BasicBlock, BasicEdge> = StableGraph::new();
-        let mut complete = true;
-        let entry = graph.add_node(BasicBlock::Meta("Entry")); // entry point to the graph
-        let output = graph.add_node(BasicBlock::Meta("Output")); // output of the graph
+        let entry = graph.add_node(BasicBlock::Meta("Entry"));
 
-        let should_print = code.iter().any(|x| x.debug_info.attributes.codegen_print);
-        for (index, curr) in code.iter().enumerate() {
-            if curr.debug_info.attributes.codegen_print {
-                println!(
-                    "{}  {}",
-                    Color::grey(format!("{:04}", index)),
-                    curr.pretty_print(Color::PINK)
-                );
-            }
-        }
-        if should_print {
-            println!("");
-        }
+        let mut wild = false; // not wild until proven otherwise
 
-        // first pass: create the nodes, connecting each to its successor with Forward edges.
-
+        // First pass
+        //   make blocks and connect them sequentially.
+        //
         let mut last_block = entry;
         let mut block_data = vec![];
         let mut label_to_block = HashMap::new();
-
         for curr in code.clone() {
             match curr.opcode {
                 Opcode::Label(label) => {
@@ -94,13 +94,14 @@ impl BasicGraph {
             }
         }
         let tail = graph.add_node(BasicBlock::Code(block_data));
+        let output = graph.add_node(BasicBlock::Meta("Output"));
         graph.add_edge(last_block, tail, BasicEdge::Forward);
         graph.add_edge(tail, output, BasicEdge::Forward);
 
-        // second pass: add jump edges and prune forward Edges that shouldn't exist
-
+        // Second pass
+        //   add jump edges and prune forward Edges that shouldn't exist
+        //
         let nodes: Vec<_> = graph.node_indices().collect();
-
         for node in nodes {
             let last = match &graph[node] {
                 BasicBlock::Code(code) => match code.iter().last().cloned() {
@@ -125,7 +126,7 @@ impl BasicGraph {
                     let dest = match label_to_block.get(label) {
                         Some(dest) => *dest,
                         _ => {
-                            complete = false;
+                            wild = true;
                             continue;
                         }
                     };
@@ -135,14 +136,14 @@ impl BasicGraph {
                     let label = match &last.immediate {
                         Some(Value::Label(label)) => label,
                         _ => {
-                            complete = false;
+                            wild = true;
                             continue;
                         }
                     };
                     let dest = match label_to_block.get(label) {
                         Some(dest) => *dest,
                         _ => {
-                            complete = false;
+                            wild = true;
                             continue;
                         }
                     };
@@ -156,12 +157,11 @@ impl BasicGraph {
 
         let graph = BasicGraph {
             graph,
-            output,
-            complete,
+            wild,
             cyclic,
-            source: code,
         };
 
+        let should_print = code.iter().any(|x| x.debug_info.attributes.codegen_print);
         if should_print {
             graph.print();
         }
@@ -170,10 +170,6 @@ impl BasicGraph {
     }
 
     pub fn flatten(self) -> Vec<Instruction> {
-        if !self.complete {
-            return self.source;
-        }
-
         let mut code = vec![];
         for node in self.graph.node_indices() {
             let block = &self.graph[node];
@@ -194,7 +190,7 @@ impl BasicGraph {
                 "{}",
                 match &graph[node] {
                     BasicBlock::Code(_) => Color::blue(format!("Block {}", block_num)),
-                    BasicBlock::Meta(text) => Color::mint(text),
+                    BasicBlock::Meta(text) => Color::blue(format!("{} Block", text)),
                 }
             );
 
@@ -214,16 +210,25 @@ impl BasicGraph {
                 insn_num += 1;
             }
         }
-        println!("is dag:   {}", !self.cyclic);
-        println!("complete: {}\n", self.complete);
+        println!(
+            "{} {}",
+            Color::grey("cyclic:"),
+            Color::color_if(self.cyclic, Color::MINT, Color::GREY)
+        );
+        println!(
+            "{} {}\n",
+            Color::grey("wild:  "),
+            Color::color_if(self.wild, Color::MINT, Color::GREY)
+        );
     }
 
     pub fn color(&mut self) {
-        if self.cyclic {
-            // loops are rare and algos analyzing them must track stack
-            // differentials. We'll just skip the ~11 of them in ArbOS.
+        if self.wild {
+            // For now, don't try to be smart about funcs with wild jumps.
             return;
         }
+
+        let joined: DiGraph<SlotNum, ()> = DiGraph::new();
 
         let mut _lifetimes: DiGraph<usize, ()> = DiGraph::new(); // the actual values (line #)
 

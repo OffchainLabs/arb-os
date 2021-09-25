@@ -3,7 +3,7 @@
  */
 
 
-func test_if_else() -> uint {
+func main() -> uint {
     let x = if true == false {
         1
     } else if let Some(thing) = None<uint> {

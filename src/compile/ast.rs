@@ -1599,7 +1599,6 @@ pub enum StatementKind {
     Assign(StringId, Expr),
     Let(Vec<AssignRef>, Expr),
     While(Expr, CodeBlock),
-    Asm(Vec<Instruction>, Vec<Expr>),
     DebugPrint(Expr),
     Assert(Expr),
 }

@@ -18,7 +18,7 @@ use crate::uint256::Uint256;
 use std::collections::HashMap;
 
 /// Represents a slot number in a locals tuple
-type SlotNum = usize;
+pub type SlotNum = usize;
 
 /// Represents the code generation process for a function.
 struct Codegen<'a> {
@@ -32,8 +32,6 @@ struct Codegen<'a> {
     func_labels: &'a HashMap<StringId, Label>,
     /// List of globals this func has access to.
     globals: &'a HashMap<StringId, GlobalVar>,
-    /// Compiler issues discovered during codegen that needn't halt compilation.
-    issues: &'a mut Vec<CompileError>,
     /// Whether to elide debug-only constructs like assert().
     release_build: bool,
 
@@ -90,7 +88,7 @@ impl Codegen<'_> {
         self.scopes[len - 1].locals.get(local).cloned()
     }
 
-    fn print_locals(&self, title: &str, depth: usize) {
+    fn _print_locals(&self, title: &str, depth: usize) {
         let len = self.scopes.len();
         let scope = &self.scopes[len - 1];
 
@@ -135,7 +133,6 @@ pub fn mavm_codegen_func(
     string_table: &StringTable,
     globals: &HashMap<StringId, GlobalVar>,
     func_labels: &HashMap<StringId, Label>,
-    issues: &mut Vec<CompileError>,
     release_build: bool,
 ) -> Result<(Vec<Instruction>, LabelGenerator), CompileError> {
     let mut code = vec![];
@@ -174,7 +171,6 @@ pub fn mavm_codegen_func(
         string_table,
         func_labels,
         globals,
-        issues,
         release_build,
         scopes: vec![Scope::default()],
         next_slot: 0,
@@ -361,15 +357,6 @@ fn codegen(
                     }
                     TypeCheckedStatementKind::Expression(expr) => {
                         expr!(expr);
-                    }
-                    TypeCheckedStatementKind::Asm(payload, args) => {
-                        let nargs = args.len();
-                        for i in 0..nargs {
-                            expr!(&mut args[nargs - 1 - i], i);
-                        }
-                        for insn in payload {
-                            cgen.code.push(insn.clone());
-                        }
                     }
                     TypeCheckedStatementKind::DebugPrint(expr) => {
                         expr!(expr);

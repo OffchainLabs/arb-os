@@ -816,7 +816,7 @@ impl Value {
                 _ => Color::color(highlight, label),
             },
             Value::Buffer(buf) => {
-                let mut text = String::from_utf8_lossy(&hex::decode(buf.hex_encode()).unwrap())
+                let text = String::from_utf8_lossy(&hex::decode(buf.hex_encode()).unwrap())
                     .chars()
                     .filter(|c| !c.is_ascii_control())
                     .take(100)

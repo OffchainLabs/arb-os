@@ -90,19 +90,19 @@ impl<'a> TypeCheckedNode<'a> {
                         stat.debug_info.attributes.codegen_print || attributes.codegen_print;
                     let child_attributes = stat.debug_info.attributes.clone();
                     TypeCheckedNode::propagate_attributes(stat.child_nodes(), &child_attributes);
-                    if let TypeCheckedStatementKind::Asm(ref mut vec, _) = stat.kind {
-                        for insn in vec {
-                            insn.debug_info.attributes.codegen_print =
-                                stat.debug_info.attributes.codegen_print
-                                    || attributes.codegen_print;
-                        }
-                    }
                 }
                 TypeCheckedNode::Expression(expr) => {
                     expr.debug_info.attributes.codegen_print =
                         expr.debug_info.attributes.codegen_print || attributes.codegen_print;
                     let child_attributes = expr.debug_info.attributes.clone();
                     TypeCheckedNode::propagate_attributes(expr.child_nodes(), &child_attributes);
+                    if let TypeCheckedExprKind::Asm(_, ref mut vec, _) = expr.kind {
+                        for insn in vec {
+                            insn.debug_info.attributes.codegen_print =
+                                expr.debug_info.attributes.codegen_print
+                                    || attributes.codegen_print;
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -513,7 +513,6 @@ pub enum TypeCheckedStatementKind {
     SetLocals(Vec<AssignRef>, TypeCheckedExpr),
     AssignGlobal(StringId, TypeCheckedExpr),
     While(TypeCheckedExpr, TypeCheckedCodeBlock),
-    Asm(Vec<Instruction>, Vec<TypeCheckedExpr>),
     DebugPrint(TypeCheckedExpr),
     Assert(TypeCheckedExpr),
 }
@@ -532,34 +531,19 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
                 .into_iter()
                 .chain(block.child_nodes())
                 .collect(),
-            TypeCheckedStatementKind::Asm(_, exps) => exps
-                .iter_mut()
-                .map(|exp| TypeCheckedNode::Expression(exp))
-                .collect(),
             TypeCheckedStatementKind::Break(oexp, _) => {
                 oexp.iter_mut().flat_map(|exp| exp.child_nodes()).collect()
             }
         }
     }
     fn is_view(&mut self, type_tree: &TypeTree) -> bool {
-        match &mut self.kind {
-            TypeCheckedStatementKind::Asm(insns, args) => {
-                insns.iter().any(|insn| insn.is_view(type_tree))
-                    || args.iter_mut().any(|expr| expr.is_view(type_tree))
-            }
-            _ => self
-                .child_nodes()
-                .iter_mut()
-                .any(|node| node.is_view(type_tree)),
-        }
+        self.child_nodes()
+            .iter_mut()
+            .any(|node| node.is_view(type_tree))
     }
     fn is_write(&mut self, type_tree: &TypeTree) -> bool {
         match &mut self.kind {
             TypeCheckedStatementKind::AssignGlobal(_, _) => true,
-            TypeCheckedStatementKind::Asm(insns, args) => {
-                insns.iter().any(|insn| insn.is_write(type_tree))
-                    || args.iter_mut().any(|expr| expr.is_write(type_tree))
-            }
             _ => self
                 .child_nodes()
                 .iter_mut()
@@ -777,10 +761,10 @@ impl TypeCheckedExpr {
 
         let builtin_id = match string_table.get_if_exists(name) {
             Some(id) => id,
-            none => return error_msg,
+            _ => return error_msg,
         };
 
-        let mut builtin_type = match func_table.get(&builtin_id) {
+        let builtin_type = match func_table.get(&builtin_id) {
             Some(Type::Func(prop, ..)) => Type::Func(prop.clone(), args, Box::new(ret)),
             _ => return error_msg,
         };
@@ -1569,30 +1553,6 @@ fn typecheck_statement<'a>(
                     debug_info.location.into_iter().collect(),
                 )),
             }
-        }
-        StatementKind::Asm(insns, unchecked_args) => {
-            let mut args = vec![];
-            for (index, unchecked) in unchecked_args.into_iter().enumerate() {
-                let arg = typecheck_expr(
-                    unchecked,
-                    type_table,
-                    global_vars,
-                    func_table,
-                    func,
-                    type_tree,
-                    string_table,
-                    undefinable_ids,
-                    closures,
-                    scopes,
-                )?;
-
-                if arg.get_type().rep(type_tree)? == Type::Void {
-                    error!("Asm's {} arg is void", human_readable_index(index + 1));
-                }
-
-                args.push(arg);
-            }
-            Ok((TypeCheckedStatementKind::Asm(insns.to_vec(), args), vec![]))
         }
         StatementKind::DebugPrint(e) => {
             let tce = typecheck_expr(
@@ -2653,14 +2613,11 @@ fn typecheck_expr(
                 )?),
                 t.clone(),
             )),
-            ExprKind::Asm(ret_type, insns, args) => {
-                if *ret_type == Type::Void {
-                    error!("asm expression cannot return void");
-                }
-                let mut tc_args = Vec::new();
-                for arg in args {
-                    tc_args.push(typecheck_expr(
-                        arg,
+            ExprKind::Asm(ret_type, insns, unchecked_args) => {
+                let mut args = vec![];
+                for (index, unchecked) in unchecked_args.into_iter().enumerate() {
+                    let arg = typecheck_expr(
+                        unchecked,
                         type_table,
                         global_vars,
                         func_table,
@@ -2670,12 +2627,16 @@ fn typecheck_expr(
                         undefinable_ids,
                         closures,
                         scopes,
-                    )?);
+                    )?;
+                    if arg.get_type().rep(type_tree)? == Type::Void {
+                        error!("Asm's {} arg is void", human_readable_index(index + 1));
+                    }
+                    args.push(arg);
                 }
                 Ok(TypeCheckedExprKind::Asm(
                     ret_type.clone(),
                     insns.to_vec(),
-                    tc_args,
+                    args,
                 ))
             }
             ExprKind::Try(inner) => {

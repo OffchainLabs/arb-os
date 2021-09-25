@@ -3,12 +3,8 @@
  */
 
 
-write func main() {
-    asm("".1) { log };
-}
-
 #[print]
-func tests(arg: uint) -> uint {
+func main(arg: uint) -> uint {
 
     if let Some(c) = Some(32) {
         arg = c;

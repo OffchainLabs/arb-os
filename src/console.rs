@@ -71,6 +71,14 @@ impl Color {
     pub fn maroon<S: fmt::Display>(text: S) -> String {
         Color::color(Color::MAROON, text)
     }
+
+    /// Color a bool one of two colors depending on its value.
+    pub fn color_if(cond: bool, true_color: &str, false_color: &str) -> String {
+        match cond {
+            true => Color::color(true_color, &format!("{}", cond)),
+            false => Color::color(false_color, &format!("{}", cond)),
+        }
+    }
 }
 
 pub fn human_readable_index(index: usize) -> String {

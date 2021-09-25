@@ -13,7 +13,7 @@ use crate::mavm::{AVMOpcode, Instruction, LabelId, Opcode, Value};
 use crate::pos::{try_display_location, Location};
 use crate::stringtable::StringId;
 use petgraph::dot::{Config, Dot};
-use petgraph::graph::{DiGraph, NodeIndex};
+use petgraph::graph::DiGraph;
 use petgraph::visit::DfsPostOrder;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::{DefaultHasher, HashMap};
@@ -264,7 +264,10 @@ pub fn link(
         ]
     };
 
-    let main = NodeIndex::from(0);
+    let main = graph
+        .node_indices()
+        .find(|node| graph[*node].name == "main")
+        .expect("no main func");
     let mut dfs = DfsPostOrder::new(&graph, main);
     let mut traversal = vec![];
     while let Some(node) = dfs.next(&graph) {
@@ -310,7 +313,7 @@ pub fn link(
 
     CompiledProgram::new(
         String::from("entry_point"),
-        vec![String::from("meta"), String::from("link")],
+        vec![String::from("/meta"), String::from("link")],
         linked_code,
         globals,
         Some(merged_source_file_map),
