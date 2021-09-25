@@ -917,6 +917,7 @@ pub enum Opcode {
     Capture(LabelId),                    // create a callable closure capture
     GetLocal(usize),                     // get a local variable within a func frame
     SetLocal(usize),                     // set a local variable within a func frame
+    MoveLocal(usize, usize),             // move into arg1 arg2 within a func frame
     TupleGet(usize, usize),              // args are offset and size for the anysize_tuple
     TupleSet(usize, usize),              // args are offset and size for the anysize_tuple
     GetGlobalVar(usize),                 // gets a global variable at a global index
@@ -1065,6 +1066,9 @@ impl Opcode {
             },
             Opcode::GetLocal(slot) => format!("GetLocal {}", Color::pink(slot)),
             Opcode::SetLocal(slot) => format!("SetLocal {}", Color::pink(slot)),
+            Opcode::MoveLocal(dest, source) => {
+                format!("φ({}, {})", Color::pink(dest), Color::pink(source))
+            }
             Opcode::SetGlobalVar(id) => format!("SetGlobal {}", Color::pink(id)),
             Opcode::GetGlobalVar(id) => format!("GetGlobal {}", Color::pink(id)),
             Opcode::TupleGet(slot, size) => {
@@ -1182,6 +1186,7 @@ impl Opcode {
             Opcode::AVMOpcode(avm) => avm.to_name(),
             Opcode::GetLocal(_) => "GetLocal",
             Opcode::SetLocal(_) => "SetLocal",
+            Opcode::MoveLocal(_, _) => "MoveLocal",
             Opcode::GetGlobalVar(_) => "GetGlobal",
             Opcode::SetGlobalVar(_) => "SetGlobal",
             Opcode::Label(_) => "Label",

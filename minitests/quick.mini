@@ -4,42 +4,38 @@
 
 
 write func main() {
-    asm(tests().1) { log };
+    asm("".1) { log };
 }
 
-func tests() -> string {
-    
-    asm("on stack") { noop };
-    
-    let _ = smash_stack();
-    smash_stack2();
-    smash_stack3();
-    smash_stack4();
-    
-    let top = asm() string { noop };
-    
-    if (top != "on stack") {
-        return "broke the stack";
+#[print]
+func tests(arg: uint) -> uint {
+
+    if let Some(c) = Some(32) {
+        arg = c;
+        arg = arg;
+        let arg = 8;
+        // mov 0 2
+    } else {
+        arg = arg;
     }
-    
-    return "";
-}
 
-func load(_: uint, __: uint) {}
+    let a = arg;
 
-func smash_stack() -> uint {
-    asm({ return 4; 4 }, {4}) { noop };
-    return 8;
-}
+    if true {
+        let b = 32;
+        a = b;
+    }
 
-func smash_stack2() {
-    asm({ return; 4 }, {4}) { noop };
-}
+    while a > 4 {
+        a = a - 1;
+        a = a - 1;
+        let a = 0;
+    }
 
-func smash_stack3() {
-    load({ return; 8 }, { 8 });
-}
+    let a = {
+        a = a + 1;
+        a
+    };
 
-func smash_stack4() {
-    load({ 8 }, { return; 8 });
+    return a;
 }

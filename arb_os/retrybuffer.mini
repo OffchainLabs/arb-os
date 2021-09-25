@@ -24,18 +24,15 @@ use evmCallStack::evmCallStack_currentTxRequestGasBid;
 use evmCallStack::evmCallStack_getAccountStoreInCurrentContext;
 use evmCallStack::evmCallStack_setAccountStoreInCurrentContext;
 
-use evmlogs::EvmLogs;
 use evmlogs::evmlogs_empty;
 use evmlogs::evmlogs_appendAny;
 
-use gasAccounting::GasUsage;
 use gasAccounting::txFeeStats_zero;
 use gasAccounting::getFeesForRetryableTx;
 use gasAccounting::getRetryableTxPrice;
 use gasAccounting::feesEnabled;
 
 use inbox::IncomingRequest;
-use inbox::GasEstimationParams;
 use inbox::inbox_currentTimestamp;
 use inbox::mapL1SenderAddress;
 

@@ -37,9 +37,17 @@ struct Codegen<'a> {
     /// Whether to elide debug-only constructs like assert().
     release_build: bool,
 
-    locals: HashMap<StringId, SlotNum>,
+    scopes: Vec<Scope>,
     aliases: HashMap<SlotNum, Vec<SlotNum>>,
     next_slot: SlotNum,
+}
+
+#[derive(Clone, Debug, Default)]
+struct Scope {
+    /// A variable's current slot
+    locals: HashMap<StringId, SlotNum>,
+    /// A variable's slot just before its first shadow
+    shadows: HashMap<StringId, SlotNum>,
 }
 
 impl Codegen<'_> {
@@ -47,6 +55,72 @@ impl Codegen<'_> {
         let next = self.next_slot;
         self.next_slot += 1;
         next
+    }
+
+    /// Create a new scope, inheriting the locals of the one prior
+    fn open_scope(&mut self) {
+        let mut scope = match self.scopes.last() {
+            Some(scope) => scope.clone(),
+            None => Scope::default(),
+        };
+        scope.shadows = HashMap::new();
+        self.scopes.push(scope);
+    }
+
+    fn set_local(&mut self, local: StringId, slot: SlotNum) {
+        let len = self.scopes.len();
+        self.scopes[len - 1].locals.insert(local, slot);
+    }
+
+    fn shadow(&mut self, local: StringId, slot: SlotNum) {
+        let len = self.scopes.len();
+
+        // for the first time shadowing, we save the old value if it exists
+        if let Some(old) = self.scopes[len - 1].locals.get(&local) {
+            let old = *old;
+            if !self.scopes[len - 1].shadows.contains_key(&local) {
+                self.scopes[len - 1].shadows.insert(local, old);
+            }
+        }
+
+        self.scopes[len - 1].locals.insert(local, slot);
+    }
+
+    fn get_local(&mut self, local: &StringId) -> Option<SlotNum> {
+        let len = self.scopes.len();
+        self.scopes[len - 1].locals.get(local).cloned()
+    }
+
+    fn print_locals(&self, title: &str, depth: usize) {
+        let len = self.scopes.len();
+        let scope = &self.scopes[len - 1];
+
+        let spacing = " ".repeat(8 * depth);
+
+        println!("{}{}", spacing, Color::grey(title));
+        println!("{}{}", spacing, Color::grey("  locals"));
+        for (local, slot) in &scope.locals {
+            println!(
+                "{}    {} {} {}",
+                spacing,
+                Color::grey(local),
+                self.string_table.name_from_id(*local),
+                slot
+            );
+        }
+        if scope.shadows.len() > 0 {
+            println!("{}{}", spacing, Color::grey("  shadows"));
+            for (local, slot) in &scope.shadows {
+                println!(
+                    "{}    {} {} {}",
+                    spacing,
+                    Color::grey(local),
+                    self.string_table.name_from_id(*local),
+                    slot
+                );
+            }
+        }
+        println!();
     }
 }
 
@@ -85,23 +159,13 @@ pub fn mavm_codegen_func(
 
     code.push(Instruction::from_opcode(Opcode::Label(label), debug_info));
 
-    let num_args = func.args.len();
-    let mut locals = HashMap::new();
-
     let make_frame_slot = code.len();
     code.push(Instruction::from_opcode(
         Opcode::AVMOpcode(AVMOpcode::Noop),
         debug_info,
     )); // placeholder; will replace this later
 
-    for arg in func.args.clone() {
-        let next_slot = locals.len();
-        locals.insert(arg.name, next_slot);
-    }
-    for capture in func.captures.clone() {
-        let next_slot = locals.len();
-        locals.insert(capture, next_slot);
-    }
+    let num_args = func.args.len();
 
     let mut label_gen = LabelGenerator::new(unique_id + 1);
 
@@ -113,20 +177,39 @@ pub fn mavm_codegen_func(
         globals,
         issues,
         release_build,
-        locals: locals.clone(),
+        scopes: vec![Scope::default()],
         aliases: HashMap::new(),
-        next_slot: locals.len(),
+        next_slot: 0,
     };
 
-    codegen(func.child_nodes(), &mut cgen, 0, true)?;
+    let mut declare = vec![];
+    declare.extend(func.args.clone().into_iter().map(|x| x.name));
+    declare.extend(func.captures.clone().into_iter().map(|x| x));
 
-    if func.name == "tests" {
+    let detail = func.name == "tests";
+
+    codegen(
+        func.child_nodes(),
+        &mut cgen,
+        0,
+        true,
+        false,
+        declare,
+        detail,
+        0,
+    )?;
+
+    if detail {
         println!("{}", cgen.next_slot);
-        println!("{:?}", &cgen.locals);
-        println!("{:?}", &cgen.aliases);
+        /*println!("{:?}", &cgen.locals);
+        println!("{:?}", &cgen.aliases);*/
     }
 
     let mut space_for_locals = cgen.next_slot;
+
+    if space_for_locals > 8 {
+        println!("{} {}", func.name, Color::red(space_for_locals));
+    }
 
     match func.tipe {
         Type::Func(_prop, _, ret) => {
@@ -161,10 +244,28 @@ fn codegen(
     nodes: Vec<TypeCheckedNode>,
     cgen: &mut Codegen,
     stack_items: usize,
-    scope: bool,
+    new_scope: bool,
+    loops: bool,
+    declare: Vec<StringId>,
+    detail: bool,
+    depth: usize,
 ) -> Result<(), CompileError> {
-    // The *current* assignment for each local variable when entering the scope.
-    let saved_locals = cgen.locals.clone();
+    if new_scope {
+        cgen.open_scope();
+
+        for id in declare {
+            let slot = cgen.next_slot();
+            cgen.shadow(id, slot);
+            if detail {
+                //println!("shadowing {} {} {}", id, cgen.string_table.name_from_id(id), slot);
+            }
+        }
+
+        let scope = cgen.scopes.last().unwrap();
+        if detail {
+            cgen.print_locals("Open", depth);
+        }
+    }
 
     macro_rules! expr {
         ($expr:expr, $push:expr) => {
@@ -173,6 +274,10 @@ fn codegen(
                 cgen,
                 stack_items + $push,
                 false,
+                false,
+                vec![],
+                detail,
+                depth + 1,
             )?
         };
         ($expr:expr) => {
@@ -221,17 +326,20 @@ fn codegen(
         }
 
         macro_rules! block {
-            ($expr:expr) => {{
+            ($block:expr, $loops:expr, $declare:expr) => {{
                 codegen(
-                    vec![TypeCheckedNode::Expression(&mut TypeCheckedExpr::new(
-                        TypeCheckedExprKind::CodeBlock($expr.clone()),
-                        debug,
-                    ))],
+                    $block.child_nodes(),
                     cgen,
                     stack_items,
-                    false,
-                )?;
-                // TODO: Alias
+                    true,
+                    $loops,
+                    $declare,
+                    detail,
+                    depth + 1,
+                )?
+            }};
+            ($block:expr, $loops:expr) => {{
+                block!($block, $loops, vec![])
             }};
         }
 
@@ -246,24 +354,15 @@ fn codegen(
                         }
 
                         for (index, local) in assigned.into_iter().enumerate() {
-                            /*let slot = if local.shadow {
-                                    cgen.next_slot()
-                                } else {
-                                    match cgen.locals.get(&local.id) {
-                                        Some(slot) => *slot,
-                                        None => {
-                                            error!(@"No slot has been assigned", local.debug_info)
-                                        }
-                                    }
-                            };*/
                             let slot = cgen.next_slot();
-                            cgen.locals.insert(local.id, slot);
+
+                            match local.shadow {
+                                true => cgen.shadow(local.id, slot),
+                                false => cgen.set_local(local.id, slot),
+                            }
 
                             if count > 1 {
-                                cgen.code.push(Instruction::from_opcode(
-                                    Opcode::TupleGet(index, count),
-                                    debug,
-                                ));
+                                cgen.code.push(opcode!(@TupleGet(index, count)));
                             }
 
                             cgen.code.push(opcode!(@SetLocal(slot)));
@@ -314,7 +413,7 @@ fn codegen(
                         cgen.code.push(opcode!(@SetLocal(slot_num)));
                         cgen.code.push(opcode!(Jump, Value::Label(cond_label)));
                         cgen.code.push(opcode!(@Label(top_label)));
-                        block!(body);
+                        block!(body, true);
                         cgen.code.push(opcode!(@Label(cond_label)));
                         expr!(cond);
                         cgen.code.push(opcode!(@GetLocal(slot_num)));
@@ -328,7 +427,17 @@ fn codegen(
             TypeCheckedNode::Expression(expr) => {
                 match &mut expr.kind {
                     TypeCheckedExprKind::CodeBlock(block) => {
-                        codegen(block.child_nodes(), cgen, stack_items, true)?;
+                        // THINK: Should we treat this as being flat?
+                        codegen(
+                            block.child_nodes(),
+                            cgen,
+                            stack_items,
+                            true,
+                            false,
+                            vec![],
+                            detail,
+                            depth + 1,
+                        )?;
                     }
                     TypeCheckedExprKind::If(cond, block, else_block, _) => {
                         expr!(cond);
@@ -336,13 +445,13 @@ fn codegen(
                         let else_label = cgen.label_gen.next();
                         cgen.code.push(opcode!(IsZero));
                         cgen.code.push(opcode!(Cjump, Value::Label(else_label)));
-                        block!(block);
+                        block!(block, false);
                         cgen.code.push(opcode!(Jump, Value::Label(end_label)));
                         // TODO: alias
 
                         cgen.code.push(opcode!(@Label(else_label)));
                         if let Some(else_block) = else_block {
-                            block!(else_block);
+                            block!(else_block, false);
                         }
                         // TODO: alias
                         cgen.code.push(opcode!(@Label(end_label)));
@@ -357,18 +466,21 @@ fn codegen(
                         cgen.code.push(opcode!(Cjump, Value::Label(else_label)));
 
                         // Some(_) case
-                        let slot = cgen.next_slot();
-                        cgen.locals.insert(*id, slot);
                         cgen.code.push(opcode!(Tget, Value::from(1)));
+
+                        // if-let is tricky since the local variable isn't defined in the same scope.
+                        // To work around this, we get the next slot without advancing. This means
+                        // not actually *calling* next_slot().
+                        let slot = cgen.next_slot;
                         cgen.code.push(opcode!(@SetLocal(slot)));
-                        block!(block);
+                        block!(block, false, vec![*id]);
                         cgen.code.push(opcode!(Jump, Value::Label(end_label)));
 
                         // None case
                         cgen.code.push(opcode!(@Label(else_label)));
                         cgen.code.push(opcode!(Pop));
                         if let Some(else_block) = else_block {
-                            block!(else_block);
+                            block!(else_block, false);
                         }
                         cgen.code.push(opcode!(@Label(end_label)));
                     }
@@ -378,7 +490,7 @@ fn codegen(
                         cgen.code.push(opcode!(Noop, Value::Label(top)));
                         cgen.code.push(opcode!(@SetLocal(slot)));
                         cgen.code.push(opcode!(@Label(top)));
-                        block!(body);
+                        block!(body, true);
                         cgen.code.push(opcode!(@GetLocal(slot)));
                         cgen.code.push(opcode!(Jump));
                     }
@@ -402,17 +514,17 @@ fn codegen(
                             ])
                         ));
                     }
-                    TypeCheckedExprKind::LocalVariableRef(id, _) => match cgen.locals.get(id) {
-                        Some(slot) => {
-                            cgen.code.push(opcode!(@GetLocal(*slot)));
-                        }
-                        None => {
-                            error!(
-                                "Variable {} doesn't have an assigned slot",
-                                cgen.string_table.name_from_id(*id)
-                            )
-                        }
-                    },
+                    TypeCheckedExprKind::LocalVariableRef(id, _) => {
+                        let slot = match cgen.get_local(id) {
+                            Some(slot) => slot,
+                            None => error!(
+                                "no slot assigned for {} {}",
+                                cgen.string_table.name_from_id(*id),
+                                id
+                            ),
+                        };
+                        cgen.code.push(opcode!(@GetLocal(slot)));
+                    }
                     TypeCheckedExprKind::FuncRef(id, _) => {
                         let func_label = match cgen.func_labels.get(id) {
                             Some(label) => *label,
@@ -700,11 +812,35 @@ fn codegen(
         }
     }
 
-    if scope {
-        for (id, slot) in saved_locals {
-            if let Some(alias) = cgen.locals.get(&id) {
-                cgen.aliases.entry(slot).or_insert(vec![]).push(*alias);
-                cgen.locals.insert(id, slot);
+    if new_scope {
+        // make move instructions
+
+        if detail {
+            cgen.print_locals("Close", depth);
+        }
+
+        let debug = cgen.code.last().unwrap().debug_info;
+
+        let scope = cgen.scopes.pop().expect("No scope");
+
+        for (local, mut slot) in scope.locals {
+            // We're closing a scope, so any final assignments need to be moved
+
+            if let Some(alias) = scope.shadows.get(&local) {
+                slot = *alias;
+            }
+
+            if let Some(old) = cgen.get_local(&local) {
+                if old != slot {
+                    /*cgen.code.push(Instruction::from_opcode(
+                            Opcode::MoveLocal(old, slot),
+                            debug
+                    ));*/
+                    cgen.code
+                        .push(Instruction::from_opcode(Opcode::GetLocal(slot), debug));
+                    cgen.code
+                        .push(Instruction::from_opcode(Opcode::SetLocal(old), debug));
+                }
             }
         }
     }

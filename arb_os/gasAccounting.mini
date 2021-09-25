@@ -533,7 +533,7 @@ public view write func gasAccounting_endTxCharges(
     } else {
         0
     };
-    set gasAccountingInfo.txState = None;
+    set gasAccountingInfo.txState = None<TxGasState>;
 
     arbStatistics_addToStorage(storageAllocations);
     arbStatistics_addToGasUsed(gasUsedForCompute);
