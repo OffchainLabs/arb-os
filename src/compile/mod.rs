@@ -28,7 +28,7 @@ use std::path::Path;
 use typecheck::TypeCheckedFunc;
 
 pub use ast::{DebugInfo, FuncProperties, GlobalVar, StructField, TopLevelDecl, Type, TypeTree};
-pub use codegen::{SlotNum, FrameSize};
+pub use codegen::{FrameSize, SlotNum};
 pub use source::Lines;
 pub use typecheck::{AbstractSyntaxTree, TypeCheckedNode};
 

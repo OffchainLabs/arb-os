@@ -9,9 +9,9 @@ use super::ast::{
     GlobalVar, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp, Type, TypeTree,
     UnaryOp,
 };
-use crate::compile::{CompileError, ErrorSystem};
 use crate::compile::ast::{FieldInitializer, FuncProperties};
 use crate::compile::codegen::FrameSize;
+use crate::compile::{CompileError, ErrorSystem};
 use crate::console::{human_readable_index, Color};
 use crate::link::Import;
 use crate::mavm::{Instruction, Value};
@@ -1229,13 +1229,10 @@ fn typecheck_statement<'a>(
             if Type::Void.assignable(&func.ret_type, type_tree, HashSet::new()) {
                 Ok((TypeCheckedStatementKind::ReturnVoid(), vec![]))
             } else {
-                Err(CompileError::new_type_error(
-                    format!(
-                        "Tried to return without type in function that returns {}",
-                        Color::red(&func.ret_type.print(type_tree))
-                    ),
-                    debug_info.location.into_iter().collect(),
-                ))
+                error!(
+                    "Tried to return without type in function that returns {}",
+                    &func.ret_type.print(type_tree)
+                );
             }
         }
         StatementKind::Return(expr) => {
@@ -1258,95 +1255,16 @@ fn typecheck_statement<'a>(
             if ret_type.assignable(&tipe, type_tree, HashSet::new()) {
                 Ok((TypeCheckedStatementKind::Return(expr), vec![]))
             } else {
-                Err(CompileError::new_type_error(
-                    format!(
-                        "return statement has wrong type:\nencountered {}\ninstead of  {}",
-                        Color::red(tipe.print(type_tree)),
-                        Color::red(ret_type.print(type_tree)),
-                    ),
-                    debug_info.locs(),
-                ))
+                error!(
+                    "return statement has wrong type:\nencountered {}\ninstead of  {}",
+                    tipe.print(type_tree),
+                    ret_type.print(type_tree),
+                );
             }
         }
-        StatementKind::Break(exp, scope) => Ok((
-            {
-                let te = exp
-                    .clone()
-                    .map(|expr| {
-                        typecheck_expr(
-                            &expr,
-                            type_table,
-                            global_vars,
-                            func_table,
-                            func,
-                            type_tree,
-                            string_table,
-                            undefinable_ids,
-                            closures,
-                            scopes,
-                        )
-                    })
-                    .transpose()?;
-                let key = scope.clone().unwrap_or("_".to_string());
-                let (_name, tipe) = scopes
-                    .iter_mut()
-                    .rev()
-                    .find(|(s, _)| key == *s)
-                    .ok_or_else(|| {
-                        CompileError::new_type_error(
-                            "No valid scope to break from".to_string(),
-                            debug_info.location.into_iter().collect(),
-                        )
-                    })?;
-                if let Some(t) = tipe {
-                    if *t
-                        != te
-                            .clone()
-                            .map(|te| te.get_type())
-                            .unwrap_or(Type::Tuple(vec![]))
-                    {
-                        return Err(CompileError::new_type_error(
-                            format!(
-                                "mismatched types in break statement {}",
-                                te.map(|te| te.get_type())
-                                    .unwrap_or(Type::Tuple(vec![]))
-                                    .mismatch_string(
-                                        &tipe.clone().unwrap_or(Type::Tuple(vec![])),
-                                        type_tree
-                                    )
-                                    .expect("Did not find type mismatch")
-                            ),
-                            debug_info.locs(),
-                        ));
-                    } else {
-                        *t = te
-                            .clone()
-                            .map(|te| te.get_type())
-                            .unwrap_or(Type::Tuple(vec![]));
-                    }
-                }
-                TypeCheckedStatementKind::Break(
-                    exp.clone()
-                        .map(|expr| {
-                            typecheck_expr(
-                                &expr,
-                                type_table,
-                                global_vars,
-                                func_table,
-                                func,
-                                type_tree,
-                                string_table,
-                                undefinable_ids,
-                                closures,
-                                scopes,
-                            )
-                        })
-                        .transpose()?,
-                    scope.clone().unwrap_or("_".to_string()),
-                )
-            },
-            vec![],
-        )),
+        StatementKind::Break(exp, scope) => {
+            error!("Break is not yet supported");
+        }
         StatementKind::Expression(expr) => {
             let expr = typecheck_expr(
                 expr,
@@ -1386,14 +1304,11 @@ fn typecheck_statement<'a>(
             };
 
             if types.len() != assigned.len() {
-                return Err(CompileError::new_type_error(
-                    format!(
-                        "Left side needs {} items but right has {}",
-                        Color::red(assigned.len()),
-                        Color::red(types.len()),
-                    ),
-                    locs,
-                ));
+                error!(
+                    "Left side needs {} items but right has {}",
+                    assigned.len(),
+                    types.len()
+                );
             }
 
             let mut bindings = vec![];
@@ -1481,38 +1396,29 @@ fn typecheck_statement<'a>(
                     let assigned = vec![AssignRef::new(*id, false, debug_info)];
                     Ok((TypeCheckedStatementKind::SetLocals(assigned, expr), vec![]))
                 } else {
-                    Err(CompileError::new_type_error(
-                        format!(
-                            "mismatched types in assignment statement {}",
-                            var_type
-                                .mismatch_string(&tipe, type_tree)
-                                .unwrap_or("Did not find mismatch".to_string())
-                        ),
-                        locs,
-                    ))
+                    error!(
+                        "mismatched types in assignment statement {}",
+                        var_type
+                            .mismatch_string(&tipe, type_tree)
+                            .unwrap_or("Did not find mismatch".to_string())
+                    );
                 }
             } else if let Some(var_type) = global_vars.get(id) {
                 if var_type.assignable(&tipe, type_tree, HashSet::new()) {
                     Ok((TypeCheckedStatementKind::AssignGlobal(*id, expr), vec![]))
                 } else {
-                    Err(CompileError::new_type_error(
-                        format!(
-                            "mismatched types in assignment statement {}",
-                            var_type
-                                .mismatch_string(&tipe, type_tree)
-                                .unwrap_or("Did not find mismatch".to_string())
-                        ),
-                        locs,
-                    ))
+                    error!(
+                        "mismatched types in assignment statement {}",
+                        var_type
+                            .mismatch_string(&tipe, type_tree)
+                            .unwrap_or("Did not find mismatch".to_string())
+                    );
                 }
             } else {
-                Err(CompileError::new_type_error(
-                    format!(
-                        "assignment to undeclared variable {}",
-                        Color::red(string_table.name_from_id(*id))
-                    ),
-                    locs,
-                ))
+                error!(
+                    "assignment to undeclared variable {}",
+                    string_table.name_from_id(*id)
+                );
             }
         }
         StatementKind::While(cond, body) => {
@@ -1544,13 +1450,10 @@ fn typecheck_statement<'a>(
                     )?;
                     Ok((TypeCheckedStatementKind::While(tc_cond, tc_body), vec![]))
                 }
-                _ => Err(CompileError::new_type_error(
-                    format!(
-                        "while condition must be bool, found {}",
-                        Color::red(tc_cond.get_type().print(type_tree))
-                    ),
-                    debug_info.location.into_iter().collect(),
-                )),
+                _ => error!(
+                    "while condition must be bool, found {}",
+                    tc_cond.get_type().print(type_tree)
+                ),
             }
         }
         StatementKind::DebugPrint(e) => {
@@ -1585,13 +1488,10 @@ fn typecheck_statement<'a>(
                 Type::Tuple(vec) if vec.len() == 2 && vec[0] == Type::Bool => {
                     Ok((TypeCheckedStatementKind::Assert(tce), vec![]))
                 }
-                _ => Err(CompileError::new_type_error(
-                    format!(
-                        "assert condition must be of type (bool, any), found {}",
-                        Color::red(tce.get_type().print(type_tree))
-                    ),
-                    debug_info.location.into_iter().collect(),
-                )),
+                _ => error!(
+                    "assert condition must be of type (bool, any), found {}",
+                    tce.get_type().print(type_tree)
+                ),
             }
         }
     }?;

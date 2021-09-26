@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::compile::{DebugInfo, FuncProperties, TypeTree, SlotNum};
+use crate::compile::{DebugInfo, FuncProperties, SlotNum, TypeTree};
 use crate::console::Color;
 use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
@@ -912,22 +912,22 @@ impl fmt::Display for Value {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub enum Opcode {
-    MakeFrame(usize, u32, bool, bool),   // make a func frame: args, space, closure, returns
-    FuncCall(FuncProperties),            // make a function call: nargs, nouts, and view/write-props
-    Capture(LabelId),                    // create a callable closure capture
-    GetLocal(SlotNum),                   // get a local variable within a func frame
-    SetLocal(SlotNum),                   // set a local variable within a func frame
-    MoveLocal(SlotNum, SlotNum),         // move into arg1 arg2 within a func frame
-    TupleGet(usize, usize),              // args are offset and size for the anysize_tuple
-    TupleSet(usize, usize),              // args are offset and size for the anysize_tuple
-    GetGlobalVar(usize),                 // gets a global variable at a global index
-    SetGlobalVar(usize),                 // sets a global variable at a global index
-    BackwardLabelTarget(usize),          // sets up a backward label as indexed by the jump table
-    UncheckedFixedArrayGet(usize),       // arg is size of array
-    Label(Label),                        // a location in code
-    CjumpTo(Label),                      // Like a Cjump, but with info about where it'll go
-    Return,                              // return from a func, popping the frame
-    AVMOpcode(AVMOpcode),                // a non-virtual, AVM opcode
+    MakeFrame(usize, u32, bool, bool), // make a func frame: args, space, closure, returns
+    FuncCall(FuncProperties),          // make a function call: nargs, nouts, and view/write-props
+    Capture(LabelId),                  // create a callable closure capture
+    GetLocal(SlotNum),                 // get a local variable within a func frame
+    SetLocal(SlotNum),                 // set a local variable within a func frame
+    MoveLocal(SlotNum, SlotNum),       // move into arg1 arg2 within a func frame
+    TupleGet(usize, usize),            // args are offset and size for the anysize_tuple
+    TupleSet(usize, usize),            // args are offset and size for the anysize_tuple
+    GetGlobalVar(usize),               // gets a global variable at a global index
+    SetGlobalVar(usize),               // sets a global variable at a global index
+    BackwardLabelTarget(usize),        // sets up a backward label as indexed by the jump table
+    UncheckedFixedArrayGet(usize),     // arg is size of array
+    Label(Label),                      // a location in code
+    CjumpTo(Label),                    // Like a Cjump, but with info about where it'll go
+    Return,                            // return from a func, popping the frame
+    AVMOpcode(AVMOpcode),              // a non-virtual, AVM opcode
 }
 
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, Eq, PartialEq, Hash)]

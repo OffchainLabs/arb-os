@@ -5,7 +5,7 @@
 //! Contains types and utilities for constructing the mini AST
 
 use crate::compile::typecheck::{AbstractSyntaxTree, TypeCheckedNode};
-use crate::compile::{CompileError, Lines, FrameSize};
+use crate::compile::{CompileError, FrameSize, Lines};
 use crate::console::{human_readable_index, Color};
 use crate::link::{Import, TupleTree};
 use crate::mavm::{CodePt, Instruction, LabelId, Value};

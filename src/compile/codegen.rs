@@ -380,7 +380,8 @@ fn codegen(
                         // failure state
                         let line = debug.location.expect("no location").line;
                         let text = format!("assert on line {} failed with", line);
-                        let tuple = Value::new_tuple(vec![Value::from(text.as_ref()), Value::none()]);
+                        let tuple =
+                            Value::new_tuple(vec![Value::from(text.as_ref()), Value::none()]);
                         cgen.code.push(opcode!(Tget, Value::from(1)));
                         cgen.code.push(opcode!(Noop, tuple));
                         cgen.code.push(opcode!(Tset, Value::from(1)));
