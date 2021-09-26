@@ -28,7 +28,7 @@ use std::path::Path;
 use typecheck::TypeCheckedFunc;
 
 pub use ast::{DebugInfo, FuncProperties, GlobalVar, StructField, TopLevelDecl, Type, TypeTree};
-pub use codegen::SlotNum;
+pub use codegen::{SlotNum, FrameSize};
 pub use source::Lines;
 pub use typecheck::{AbstractSyntaxTree, TypeCheckedNode};
 
@@ -1022,7 +1022,7 @@ fn codegen_programs(
                 let func_name = func.name.clone();
                 let debug_info = func.debug_info;
 
-                let (code, mut label_gen) = codegen::mavm_codegen_func(
+                let (code, mut label_gen, frame_size) = codegen::mavm_codegen_func(
                     func,
                     &string_table,
                     &globals,
@@ -1032,7 +1032,7 @@ fn codegen_programs(
 
                 let mut graph = BasicGraph::new(code);
 
-                graph.color();
+                graph.color(frame_size);
 
                 let code = translate::expand_calls(graph.flatten(), &mut label_gen);
                 let code = translate::untag_jumps(code);

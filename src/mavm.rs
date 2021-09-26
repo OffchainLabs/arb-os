@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::compile::{DebugInfo, FuncProperties, TypeTree};
+use crate::compile::{DebugInfo, FuncProperties, TypeTree, SlotNum};
 use crate::console::Color;
 use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
@@ -912,12 +912,12 @@ impl fmt::Display for Value {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub enum Opcode {
-    MakeFrame(usize, usize, bool, bool), // make a func frame: args, space, closure, returns
+    MakeFrame(usize, u32, bool, bool),   // make a func frame: args, space, closure, returns
     FuncCall(FuncProperties),            // make a function call: nargs, nouts, and view/write-props
     Capture(LabelId),                    // create a callable closure capture
-    GetLocal(usize),                     // get a local variable within a func frame
-    SetLocal(usize),                     // set a local variable within a func frame
-    MoveLocal(usize, usize),             // move into arg1 arg2 within a func frame
+    GetLocal(SlotNum),                   // get a local variable within a func frame
+    SetLocal(SlotNum),                   // set a local variable within a func frame
+    MoveLocal(SlotNum, SlotNum),         // move into arg1 arg2 within a func frame
     TupleGet(usize, usize),              // args are offset and size for the anysize_tuple
     TupleSet(usize, usize),              // args are offset and size for the anysize_tuple
     GetGlobalVar(usize),                 // gets a global variable at a global index

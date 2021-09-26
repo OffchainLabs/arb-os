@@ -18,7 +18,8 @@ use crate::uint256::Uint256;
 use std::collections::HashMap;
 
 /// Represents a slot number in a locals tuple
-pub type SlotNum = usize;
+pub type FrameSize = u32;
+pub type SlotNum = u32;
 
 /// Represents the code generation process for a function.
 struct Codegen<'a> {
@@ -134,7 +135,7 @@ pub fn mavm_codegen_func(
     globals: &HashMap<StringId, GlobalVar>,
     func_labels: &HashMap<StringId, Label>,
     release_build: bool,
-) -> Result<(Vec<Instruction>, LabelGenerator), CompileError> {
+) -> Result<(Vec<Instruction>, LabelGenerator, u32), CompileError> {
     let mut code = vec![];
     let debug_info = func.debug_info;
 
@@ -221,7 +222,7 @@ pub fn mavm_codegen_func(
         }
     }
 
-    Ok((code, label_gen))
+    Ok((code, label_gen, space_for_locals))
 }
 
 fn codegen(

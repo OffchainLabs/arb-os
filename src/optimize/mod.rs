@@ -2,9 +2,9 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::compile::SlotNum;
 use crate::console::Color;
 use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
+use crate::compile::SlotNum;
 use petgraph::algo::is_cyclic_directed;
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::stable_graph::StableGraph;
@@ -222,16 +222,30 @@ impl BasicGraph {
         );
     }
 
-    pub fn color(&mut self) {
+    pub fn color(&mut self, frame_size: u32) {
         if self.wild {
             // For now, don't try to be smart about funcs with wild jumps.
             return;
         }
-
-        let joined: DiGraph<SlotNum, ()> = DiGraph::new();
-
-        let mut _lifetimes: DiGraph<usize, ()> = DiGraph::new(); // the actual values (line #)
-
+        
+        let mut lifetimes: DiGraph<SlotNum, ()> = DiGraph::new();
+        let mut phi_graph: DiGraph<SlotNum, ()> = DiGraph::new();
+        
+        for slot in 0..frame_size {
+            lifetimes.add_node(slot);
+            phi_graph.add_node(slot);
+        }
+        
+        for node in self.graph.node_indices() {
+            for curr in self.graph[node].get_code() {
+                if let Opcode::MoveLocal(dest, source) = &curr.opcode {
+                    phi_graph.add_edge(NodeIndex::from(*dest), NodeIndex::from(*source), ());
+                }
+            }
+        }
+        
+        
+        
         let nodes: Vec<_> = self.graph.node_indices().rev().collect();
 
         for node in nodes {

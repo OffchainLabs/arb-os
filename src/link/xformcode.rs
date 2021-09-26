@@ -43,7 +43,7 @@ pub fn fix_tuple_size(
                 if return_address {
                     code_out.push(opcode!(AuxPush)); // move return address to aux stack
                 }
-                locals_tree = TupleTree::new(space, true);
+                locals_tree = TupleTree::new(space as usize, true);
                 if let Some(imm) = &insn.immediate {
                     panic!(
                         "{} somehow has an immediate {}",
@@ -71,10 +71,10 @@ pub fn fix_tuple_size(
                 ttree.write_code(false, offset, &mut code_out, debug_info)?;
             }
             Opcode::SetLocal(offset) => {
-                locals_tree.write_code(true, offset, &mut code_out, debug_info)?;
+                locals_tree.write_code(true, offset as usize, &mut code_out, debug_info)?;
             }
             Opcode::GetLocal(offset) => {
-                locals_tree.read_code(true, offset, &mut code_out, debug_info)?;
+                locals_tree.read_code(true, offset as usize, &mut code_out, debug_info)?;
             }
             Opcode::SetGlobalVar(idx) => {
                 code_out.push(opcode!(Rpush));

@@ -9,8 +9,9 @@ use super::ast::{
     GlobalVar, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp, Type, TypeTree,
     UnaryOp,
 };
-use crate::compile::ast::{FieldInitializer, FuncProperties};
 use crate::compile::{CompileError, ErrorSystem};
+use crate::compile::ast::{FieldInitializer, FuncProperties};
+use crate::compile::codegen::FrameSize;
 use crate::console::{human_readable_index, Color};
 use crate::link::Import;
 use crate::mavm::{Instruction, Value};
@@ -2164,7 +2165,7 @@ fn typecheck_expr(
                 // So, for the very short term, we'll just take the maximum use possible.
                 let frame_size = arg_count + all_idents(closure.child_nodes()).len() + 1;
 
-                closure.frame_size = frame_size;
+                closure.frame_size = frame_size as FrameSize;
                 closure.captures = captures.clone();
                 closures.insert(id, closure);
 
