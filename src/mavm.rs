@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::compile::{DebugInfo, FuncProperties, SlotNum, TypeTree};
+use crate::compile::{DebugInfo, FrameSize, FuncProperties, SlotNum, TypeTree};
 use crate::console::Color;
 use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
@@ -912,22 +912,23 @@ impl fmt::Display for Value {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub enum Opcode {
-    MakeFrame(usize, u32, bool, bool), // make a func frame: args, space, closure, returns
-    FuncCall(FuncProperties),          // make a function call: nargs, nouts, and view/write-props
-    Capture(LabelId),                  // create a callable closure capture
-    GetLocal(SlotNum),                 // get a local variable within a func frame
-    SetLocal(SlotNum),                 // set a local variable within a func frame
-    MoveLocal(SlotNum, SlotNum),       // move into arg1 arg2 within a func frame
-    TupleGet(usize, usize),            // args are offset and size for the anysize_tuple
-    TupleSet(usize, usize),            // args are offset and size for the anysize_tuple
-    GetGlobalVar(usize),               // gets a global variable at a global index
-    SetGlobalVar(usize),               // sets a global variable at a global index
-    BackwardLabelTarget(usize),        // sets up a backward label as indexed by the jump table
-    UncheckedFixedArrayGet(usize),     // arg is size of array
-    Label(Label),                      // a location in code
-    CjumpTo(Label),                    // Like a Cjump, but with info about where it'll go
-    Return,                            // return from a func, popping the frame
-    AVMOpcode(AVMOpcode),              // a non-virtual, AVM opcode
+    MakeFrame(FrameSize, bool),    // make a func frame: space, closure
+    FuncCall(FuncProperties),      // make a function call: nargs, nouts, and view/write-props
+    Capture(LabelId),              // create a callable closure capture
+    GetLocal(SlotNum),             // get a local variable within a func frame
+    SetLocal(SlotNum),             // set a local variable within a func frame
+    MoveLocal(SlotNum, SlotNum),   // move into arg1 arg2 within a func frame
+    TupleGet(usize, usize),        // args are offset and size for the anysize_tuple
+    TupleSet(usize, usize),        // args are offset and size for the anysize_tuple
+    GetGlobalVar(usize),           // gets a global variable at a global index
+    SetGlobalVar(usize),           // sets a global variable at a global index
+    BackwardLabelTarget(usize),    // sets up a backward label as indexed by the jump table
+    UncheckedFixedArrayGet(usize), // arg is size of array
+    Label(Label),                  // a location in code
+    JumpTo(Label),                 // Like a Jump, but with info about where it'll go
+    CjumpTo(Label),                // Like a Cjump, but with info about where it'll go
+    Return,                        // return from a func, popping the frame
+    AVMOpcode(AVMOpcode),          // a non-virtual, AVM opcode
 }
 
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, Eq, PartialEq, Hash)]
@@ -1061,9 +1062,9 @@ impl Opcode {
 
     pub fn pretty_print(&self, label_color: &str) -> String {
         match self {
-            Opcode::MakeFrame(nargs, space, prebuilt, return_address) => match prebuilt {
-                true => format!("MakeFrame<{}, {}, {}>", nargs, space, return_address),
-                false => format!("MakeFrame({}, {}, {})", nargs, space, return_address),
+            Opcode::MakeFrame(space, prebuilt) => match prebuilt {
+                true => format!("MakeFrame<{}>", space),
+                false => format!("MakeFrame({})", space),
             },
             Opcode::GetLocal(slot) => format!("GetLocal {}", Color::pink(slot)),
             Opcode::SetLocal(slot) => format!("SetLocal {}", Color::pink(slot)),
@@ -1079,6 +1080,9 @@ impl Opcode {
                 format!("TupleSet {} {}", Color::pink(slot), Color::grey(size))
             }
             Opcode::Label(label) => Value::Label(*label).pretty_print(label_color),
+            Opcode::JumpTo(label) => {
+                format!("JumpTo {}", Value::Label(*label).pretty_print(label_color))
+            }
             Opcode::CjumpTo(label) => {
                 format!("CjumpTo {}", Value::Label(*label).pretty_print(label_color))
             }
@@ -1193,6 +1197,7 @@ impl Opcode {
             Opcode::GetGlobalVar(_) => "GetGlobal",
             Opcode::SetGlobalVar(_) => "SetGlobal",
             Opcode::Label(_) => "Label",
+            Opcode::JumpTo(_) => "JumpTo",
             Opcode::CjumpTo(_) => "CjumpTo",
             Opcode::TupleGet(_, _) => "TupleGet",
             Opcode::TupleSet(_, _) => "TupleSet",
@@ -1489,8 +1494,8 @@ fn test_consistent_opcode_numbers() {
 impl fmt::Display for Opcode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Opcode::MakeFrame(s1, s2, pre, ret) => {
-                write!(f, "MakeFrame({}, {}, {}, {})", s1, s2, pre, ret)
+            Opcode::MakeFrame(space, prebuilt) => {
+                write!(f, "MakeFrame({}, {})", space, prebuilt)
             }
             Opcode::Label(label) => label.fmt(f),
             _ => write!(f, "{}", self.to_name()),

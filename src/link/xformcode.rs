@@ -39,27 +39,12 @@ pub fn fix_tuple_size(
         }
 
         match insn.opcode {
-            Opcode::MakeFrame(nargs, space, prebuilt, return_address) => {
-                if return_address {
-                    code_out.push(opcode!(AuxPush)); // move return address to aux stack
-                }
+            Opcode::MakeFrame(space, prebuilt) => {
                 locals_tree = TupleTree::new(space as usize, true);
-                if let Some(imm) = &insn.immediate {
-                    panic!(
-                        "{} somehow has an immediate {}",
-                        insn.opcode,
-                        imm.pretty_print(Color::RED)
-                    );
-                }
 
                 match prebuilt {
                     false => code_out.push(opcode!(AuxPush, TupleTree::make_empty(&locals_tree))),
                     true => code_out.push(opcode!(AuxPush)),
-                }
-
-                // need to offset by nargs
-                for lnum in 0..nargs {
-                    locals_tree.write_code(true, lnum, &mut code_out, debug_info)?;
                 }
             }
             Opcode::TupleGet(offset, size) => {

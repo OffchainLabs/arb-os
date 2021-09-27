@@ -67,6 +67,11 @@ pub fn untag_jumps(code: Vec<Instruction>) -> Vec<Instruction> {
 
     for curr in code {
         match curr.opcode {
+            Opcode::JumpTo(..) => {
+                let mut jump = curr.clone();
+                jump.opcode = Opcode::AVMOpcode(AVMOpcode::Jump);
+                out.push(jump);
+            }
             Opcode::CjumpTo(..) => {
                 let mut jump = curr.clone();
                 jump.opcode = Opcode::AVMOpcode(AVMOpcode::Cjump);
@@ -85,11 +90,13 @@ pub fn replace_phi_nodes(code: Vec<Instruction>) -> Vec<Instruction> {
     for curr in code {
         match curr.opcode {
             Opcode::MoveLocal(dest, source) => {
-                let mut get_local = curr.clone();
-                let mut set_local = curr.clone();
-                get_local.opcode = Opcode::GetLocal(source);
-                set_local.opcode = Opcode::SetLocal(dest);
-                out.extend(vec![get_local, set_local]);
+                if dest != source {
+                    let mut get_local = curr.clone();
+                    let mut set_local = curr.clone();
+                    get_local.opcode = Opcode::GetLocal(source);
+                    set_local.opcode = Opcode::SetLocal(dest);
+                    out.extend(vec![get_local, set_local]);
+                }
             }
             _ => out.push(curr),
         }

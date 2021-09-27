@@ -137,14 +137,23 @@ pub fn mavm_codegen_func(
     release_build: bool,
 ) -> Result<(Vec<Instruction>, LabelGenerator, u32), CompileError> {
     let mut code = vec![];
-    let debug_info = func.debug_info;
+    let debug = func.debug_info;
+
+    macro_rules! opcode {
+        ($opcode:ident) => {
+            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), debug)
+        };
+        (@$($opcode:tt)+) => {
+            Instruction::from_opcode(Opcode::$($opcode)+, debug)
+        };
+    }
 
     let unique_id = match func.unique_id {
         Some(id) => id,
         None => {
             return Err(CompileError::new_codegen_error(
                 format!("Func {} has no id", Color::red(&func.name)),
-                func.debug_info.location,
+                debug.location,
             ))
         }
     };
@@ -154,15 +163,26 @@ pub fn mavm_codegen_func(
         false => Label::Func(unique_id),
     };
 
-    code.push(Instruction::from_opcode(Opcode::Label(label), debug_info));
+    code.push(opcode!(@Label(label)));
 
-    let make_frame_slot = code.len();
-    code.push(Instruction::from_opcode(
-        Opcode::AVMOpcode(AVMOpcode::Noop),
-        debug_info,
-    )); // placeholder; will replace this later
+    // Codegen the initial function frame
 
-    let num_args = func.args.len();
+    let prop = match &func.tipe {
+        Type::Func(prop, ..) => prop,
+        _ => panic!("not a func"),
+    };
+
+    if prop.returns {
+        code.push(opcode!(AuxPush));
+    }
+
+    let prebuilt = !func.captures.is_empty();
+    let make_frame_offset = code.len();
+    code.push(opcode!(@MakeFrame(0, prebuilt)));
+
+    for i in 0..func.args.len() {
+        code.push(opcode!(@SetLocal(i as SlotNum)));
+    }
 
     let mut label_gen = LabelGenerator::new(unique_id + 1);
 
@@ -196,31 +216,7 @@ pub fn mavm_codegen_func(
         //println!("{} {}", func.name, Color::red(space_for_locals));
     }
 
-    match func.tipe {
-        Type::Func(_prop, _, ret) => {
-            // put makeframe Instruction at beginning of function, to build the frame (replacing placeholder)
-
-            let prebuilt = !func.captures.is_empty(); // whether caller will pass in the frame
-
-            if !func.captures.is_empty() {
-                space_for_locals = func.frame_size;
-            }
-
-            code[make_frame_slot] = Instruction::from_opcode(
-                Opcode::MakeFrame(num_args, space_for_locals, prebuilt, &*ret != &Type::Every),
-                debug_info,
-            );
-        }
-        wrong => {
-            return Err(CompileError::new_codegen_error(
-                format!(
-                    "type checking bug: func with non-func type {}",
-                    Color::red(wrong.display())
-                ),
-                debug_info.location,
-            ))
-        }
-    }
+    code[make_frame_offset] = opcode!(@MakeFrame(space_for_locals, prebuilt));
 
     Ok((code, label_gen, space_for_locals))
 }
@@ -467,14 +463,14 @@ fn codegen(
                         cgen.code.push(opcode!(@Label(end_label)));
                     }
                     TypeCheckedExprKind::Loop(body, _) => {
-                        let slot = cgen.next_slot();
+                        let loop_slot = cgen.next_slot();
                         let top = cgen.label_gen.next();
                         cgen.code.push(opcode!(Noop, Value::Label(top)));
-                        cgen.code.push(opcode!(@SetLocal(slot)));
+                        cgen.code.push(opcode!(@SetLocal(loop_slot)));
                         cgen.code.push(opcode!(@Label(top)));
                         block!(body);
-                        cgen.code.push(opcode!(@GetLocal(slot)));
-                        cgen.code.push(opcode!(Jump));
+                        cgen.code.push(opcode!(@GetLocal(loop_slot)));
+                        cgen.code.push(opcode!(@JumpTo(top)));
                     }
                     TypeCheckedExprKind::Cast(expr, _) => expr!(expr),
                     TypeCheckedExprKind::Error => cgen.code.push(opcode!(Error)),
