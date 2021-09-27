@@ -110,7 +110,7 @@ pub enum Type {
     Every,
     Option(Box<Type>),
     Union(Vec<Type>),
-    Nominal(Vec<String>, StringId, #[serde(default)] Vec<Type>),
+    Nominal(StringId, #[serde(default)] Vec<Type>),
     GenericSlot(usize),
     Generic(usize),
 }
@@ -129,7 +129,7 @@ impl AbstractSyntaxTree for Type {
             | Type::Every
             | Type::GenericSlot(..)
             | Type::Generic(..)
-            | Type::Nominal(_, _, _) => vec![],
+            | Type::Nominal(_, _) => vec![],
             Type::Tuple(types) | Type::Union(types) => {
                 types.iter_mut().map(|t| TypeCheckedNode::Type(t)).collect()
             }
@@ -167,12 +167,12 @@ impl Type {
     pub fn rep(&self, type_tree: &TypeTree) -> Result<Self, CompileError> {
         let mut base_type = self.clone();
 
-        while let Type::Nominal(path, id, spec) = base_type.clone() {
+        while let Type::Nominal(id, spec) = base_type.clone() {
             base_type = type_tree
-                .get(&(path.clone(), id.clone()))
+                .get(&(id.path.clone(), id.clone()))
                 .cloned()
                 .ok_or(CompileError::new_type_error(
-                    format!("No type at {:?}, {}", path, id),
+                    format!("No type at {:?}, {}", id.path, id),
                     vec![],
                 ))?
                 .0
@@ -184,7 +184,7 @@ impl Type {
     /// Finds all nominal sub-types present under a type
     pub fn find_nominals(&self) -> Vec<StringId> {
         match self {
-            Type::Nominal(_, id, _) => {
+            Type::Nominal(id, _) => {
                 vec![id.clone()]
             }
             Type::Array(tipe) | Type::FixedArray(tipe, ..) | Type::Option(tipe) => {
@@ -234,7 +234,7 @@ impl Type {
             };
         }
         match &self {
-            Self::Tuple(contents) | Self::Union(contents) | Self::Nominal(_, _, contents) => {
+            Self::Tuple(contents) | Self::Union(contents) | Self::Nominal(_, contents) => {
                 contents.iter().for_each(|val| find!(val));
             }
             Self::Option(inner) | Self::Array(inner) | Self::FixedArray(inner, _) => {
@@ -268,7 +268,7 @@ impl Type {
         match self {
             Self::Tuple(ref mut contents)
             | Self::Union(ref mut contents)
-            | Self::Nominal(_, _, ref mut contents) => {
+            | Self::Nominal(_, ref mut contents) => {
                 contents.iter_mut().for_each(|val| val.replace(via));
             }
             Self::Option(ref mut inner)
@@ -342,7 +342,7 @@ impl Type {
 
         let mut tipe = self.clone();
         tipe.replace(&mut |tipe| {
-            if let Type::Nominal(_, id, _) = tipe {
+            if let Type::Nominal(id, _) = tipe {
                 if let Some(slot) = slots.get(&id) {
                     *tipe = Type::GenericSlot(*slot);
                 }
@@ -422,7 +422,7 @@ impl Type {
                     false
                 }
             }
-            Type::Nominal(_, _, _) => {
+            Type::Nominal(_, _) => {
                 if let (Ok(left), Ok(right)) = (self.rep(type_tree), rhs.rep(type_tree)) {
                     if seen.insert((left.clone(), right.clone())) {
                         left.covariant_castable(&right, type_tree, seen)
@@ -525,7 +525,7 @@ impl Type {
                     false
                 }
             }
-            Type::Nominal(_, _, _) => {
+            Type::Nominal(_, _) => {
                 if let (Ok(left), Ok(right)) = (self.rep(type_tree), rhs.rep(type_tree)) {
                     if seen.insert((left.clone(), right.clone())) {
                         left.castable(&right, type_tree, seen)
@@ -639,7 +639,7 @@ impl Type {
                     false
                 }
             }
-            Type::Nominal(_, _, _) => {
+            Type::Nominal(_, _) => {
                 if let (Ok(left), Ok(right)) = (self.rep(left_type_tree), rhs.rep(right_type_tree))
                 {
                     if seen.insert((left.clone(), right.clone())) {
@@ -800,7 +800,7 @@ impl Type {
                     Some(TypeMismatch::Type(self.clone(), rhs.clone()))
                 }
             }
-            Type::Nominal(_, _, _) => match (self.rep(type_tree), rhs.rep(type_tree)) {
+            Type::Nominal(_, _) => match (self.rep(type_tree), rhs.rep(type_tree)) {
                 (Ok(left), Ok(right)) => {
                     if seen.insert((self.clone(), rhs.clone())) {
                         left.first_mismatch(&right, type_tree, seen)
@@ -1097,19 +1097,20 @@ impl Type {
                 out.push('}');
                 (out, type_set)
             }
-            Type::Nominal(path, id, spec) => {
+            Type::Nominal(id, spec) => {
                 let out = format!(
                     "{}{}{}{}",
                     prefix.unwrap_or(""),
                     if include_pathname {
-                        path.iter()
+                        id.path
+                            .iter()
                             .map(|name| name.clone() + "_")
                             .collect::<String>()
                     } else {
                         format!("")
                     },
                     type_tree
-                        .get(&(path.clone(), id.clone()))
+                        .get(&(id.path.clone(), id.clone()))
                         .map(|(_, name)| name.clone())
                         .unwrap_or(format!("{}", id)),
                     match spec.len() {
@@ -1143,7 +1144,7 @@ impl Type {
                 type_set.insert((
                     self.clone(),
                     type_tree
-                        .get(&(path.clone(), id.clone()))
+                        .get(&(id.path.clone(), id.clone()))
                         .map(|d| d.1.clone())
                         .unwrap_or_else(|| "bad".to_string()),
                 ));
@@ -1395,9 +1396,7 @@ impl PartialEq for Type {
             (Type::Func(p1, a1, r1), Type::Func(p2, a2, r2)) => {
                 (p1 == p2) && type_vectors_equal(&a1, &a2) && (*r1 == *r2)
             }
-            (Type::Nominal(p1, id1, s1), Type::Nominal(p2, id2, s2)) => {
-                (p1, id1, s1) == (p2, id2, s2)
-            }
+            (Type::Nominal(id1, s1), Type::Nominal(id2, s2)) => (id1, s1) == (id2, s2),
             (Type::Option(x), Type::Option(y)) => *x == *y,
             (Type::Union(x), Type::Union(y)) => type_vectors_equal(x, y),
             (Type::GenericSlot(x), Type::GenericSlot(y)) => *x == *y,

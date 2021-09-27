@@ -9,7 +9,7 @@ use std::fmt::Formatter;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Default)]
 pub struct StringId {
-    path: Vec<String>,
+    pub path: Vec<String>,
     pub id: String,
 }
 
