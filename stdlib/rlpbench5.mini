@@ -1,0 +1,63 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::bytearray::ByteArray;
+use std::bytestream::ByteStream;
+use std::bytearray::MarshalledBytes;
+
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_copy;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_set256;
+
+use std::bytestream::bytestream_new;
+
+use std::keccak::keccak256;
+
+use std::rlp::rlp_encodeUint;
+use std::rlp::rlp_encodeAddress;
+use std::rlp::rlp_encodeBytes;
+use std::rlp::rlp_encodeList;
+use std::rlp::rlp_encodeMessageInfo;
+use std::rlp::rlp_encodeMessageInfo_old;
+use std::rlp::rlp_encodeAndHashMessageInfoForSignature;
+use std::rlp::rlp_decodeMessageInfo;
+use std::rlp::rlp_init;
+
+use std::rlp::rlp_decodeUint;
+use std::rlp::rlp_decodeAddress;
+use std::rlp::rlp_decodeBytes;
+
+use std::rlp::bytesNeededToRepresentUint;
+
+func main() {
+    let seqNum = 0;
+    let gasPrice = 31;
+    let gasLimit = uint(hash(0));
+    let to = uint(3919850193);
+    let value = uint(hash(gasLimit));
+    let data = randomByteArray();
+    let v = uint(hash(value));
+    let r = 0;
+    let s = 0;
+
+    let acc = 0;
+    while (acc < 100000) {
+        acc = acc + 1;
+        let oldBuf = rlp_encodeMessageInfo_old(seqNum, gasPrice, gasLimit, address(to), value, data, v, r, s);
+    }
+}
+
+
+func randomByteArray() -> ByteArray {
+    let ret = bytearray_new(0);
+    let i = 0;
+    while (i < 1) {
+        ret = bytearray_set256(ret, 32*i, uint(hash(i+1017)));
+        i = i+1;
+    }
+    return ret;
+}
