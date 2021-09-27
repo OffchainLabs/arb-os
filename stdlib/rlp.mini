@@ -317,7 +317,7 @@ public write func rlp_init() {
     let (ln, buf) = #include "rlp-nohash.wasm";
     debug(ln);
     debug(buf);
-    let compiled = asm(ln/2, buf,) any { compilewasm };
+    let compiled = asm(ln, buf,) any { compilewasm };
     wasm_prog = compiled;
 }
 
@@ -526,6 +526,10 @@ public func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)> {
         Some((bs, firstByte))
     } else {
         let length = firstByte - 0x80;
+        if (length > 32) {
+            // result would overflow a uint, so return failure
+            return None<(ByteStream, uint)>;
+        }
         let ret = 0;
         let i = 0;
         while (i < length) {

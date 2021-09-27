@@ -6,6 +6,8 @@ use chainParameters::chainParams_get;
 use chainParameters::chainParams_getOrDie;
 use accounts::account_getAggregatorToPay;
 
+use chainParameters::hasChainOwnerPrivileges;
+
 use evmCallStack::EvmCallFrame;
 use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallStack_callHitError;
@@ -16,6 +18,7 @@ use evmCallStack::evmCallFrame_getCaller;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
+use evmOps::evmOp_revertIfStatic;
 
 use gasAccounting::gasAccounting_getPricesInWei;
 use gasAccounting::gasAccounting_getPricesInArbGas;
@@ -158,13 +161,14 @@ view write func arbgasinfo_getL1GasPriceEstimate(_topFrame: EvmCallFrame, callda
 
 // function setL1GasPriceEstimate(uint priceInWei) external;
 view write func arbgasinfo_setL1GasPriceEstimate(topFrame: EvmCallFrame, calldata: ByteArray) {
+    evmOp_revertIfStatic();
     let caller = evmCallFrame_getCaller(topFrame);
     let oracle = xif let Some(addrAsUint) = chainParams_get(const::Atom_Param_GasPriceOracle) {
         address(addrAsUint)
     } else {
         address(0)
     };
-    if ((caller != address(0)) && (caller != address(chainParams_getOrDie(const::Atom_Param_ChainOwner))) && (caller != oracle)) {
+    if ( (! hasChainOwnerPrivileges(caller)) && (caller != oracle)) {
         evmOp_revert_knownPc(50, 0, 0);
     }
     if (bytearray_size(calldata) != 36) {

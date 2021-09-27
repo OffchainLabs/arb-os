@@ -57,7 +57,7 @@ contract EvmTests {
 
     function destructTest(address victim) public {
         uint bal = address(this).balance;
-        SelfDestructor(victim).die(address(this));
+        SelfDestructor(victim).die(payable(address(this)));
         if ((address(this).balance - bal) != 777) {
             emit TestFail(7, address(this).balance-bal);
         }

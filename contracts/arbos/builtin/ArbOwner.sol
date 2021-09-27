@@ -37,8 +37,9 @@ interface ArbOwner {
     function getLastUpgradeHash() external view returns(bytes32);
 
     // Get and set chain parameters
-    function getChainParameter(uint which) external view returns(uint);
-    function setChainParameter(uint which, uint value) external;
+    function getChainParameter(bytes32 which) external view returns(uint);
+    function setChainParameter(bytes32 which, uint value) external;     // reverts if param doesn't already exist
+    function createChainParameter(bytes32 which, uint value) external;  // sets param, even if it didn't already exist
     function serializeAllParameters() external view returns(bytes memory);
 
     // Manage the set of allowed senders
@@ -49,6 +50,18 @@ interface ArbOwner {
     function addAllowedSender(address addr) external;
     function removeAllowedSender(address addr) external;
     function getAllAllowedSenders() external view returns(bytes memory);  // reverts if all or nearly all senders are allowed
+
+    // Manage the set of chain owners
+    function addChainOwner(address newOwner) external;
+    function removeChainOwner(address ownerToRemove) external;    // revert if ownerToRemove is not an owner
+    function isChainOwner(address addr) external view returns(bool);
+    function getAllChainOwners() external view returns(bytes memory);
+
+    // Manage exceptions to L1->L2 address remapping
+    function addMappingException(uint from, uint to) external;
+    function removeMappingException(uint from, uint to) external;
+    function isMappingException(uint from, uint to) external view returns(bool);
+    function getAllMappingExceptions() external view returns (bytes memory);
 
     function getTotalOfEthBalances() external view returns(uint);
 }

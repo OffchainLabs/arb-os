@@ -164,12 +164,12 @@ impl<T> Instruction<T> {
 
 impl Instruction<AVMOpcode> {
     pub fn _upload(&self, u: &mut CodeUploader) {
-        u._push_byte(self.opcode.to_number());
+        u.push_byte(self.opcode.to_number());
         if let Some(val) = &self.immediate {
-            u._push_byte(1u8);
-            val._upload(u);
+            u.push_byte(1u8);
+            val.upload(u);
         } else {
-            u._push_byte(0u8);
+            u.push_byte(0u8);
         }
     }
 }
@@ -269,11 +269,11 @@ impl CodePt {
         CodePt::InSegment(seg_num, offset)
     }
 
-    pub fn _upload(&self, u: &mut CodeUploader) {
+    pub fn upload(&self, u: &mut CodeUploader) {
         match self {
             CodePt::Internal(pc) => {
-                u._push_byte(1);
-                u._push_bytes(&Uint256::from_usize(u._translate_pc(*pc)).rlp_encode());
+                u.push_byte(1);
+                u.push_bytes(&Uint256::from_usize(u._translate_pc(*pc)).rlp_encode());
             }
             _ => {
                 panic!();
@@ -381,6 +381,10 @@ impl Buffer {
             ret.push(self.read_byte(i as u128));
         }
         ret
+    }
+
+    pub fn max_size(&self) -> u128 {
+        self.size
     }
 
     fn avm_hash(&self) -> Uint256 {
@@ -688,34 +692,29 @@ impl Value {
         Value::Buffer(v)
     }
 
-    pub fn _upload(&self, u: &mut CodeUploader) {
+    pub fn upload(&self, u: &mut CodeUploader) {
         match self {
             Value::Int(ui) => {
-                u._push_byte(0u8); // type code for uint
-                u._push_bytes(&ui.rlp_encode());
+                u.push_byte(0u8); // type code for uint
+                u.push_bytes(&ui.rlp_encode());
             }
             Value::Tuple(tup) => {
-                u._push_byte((10 + tup.len()) as u8);
+                u.push_byte((10 + tup.len()) as u8);
                 for subval in &**tup {
-                    subval._upload(u);
+                    subval.upload(u);
                 }
             }
             Value::CodePoint(cp) => {
-                cp._upload(u);
+                cp.upload(u);
             }
             Value::Buffer(buf) => {
                 if buf.size == 0 {
-                    u._push_byte(2u8);
+                    u.push_byte(2u8);
                 } else {
-                    // println!("Hmm {}", buf.size);
-                    u._push_byte(3u8);
-                    /*
-                    u._push_byte((buf.size & 0xff) as u8);
-                    u._push_byte(((buf.size >> 8) & 0xff) as u8);
-                    // panic!();
-                    for i in 0..buf.size {
-                        u._push_byte(buf.read_byte(i))
-                    }*/
+                    u.push_byte(3u8);
+                    let size = buf.max_size() as usize;
+                    u.push_bytes(&Uint256::from_usize(size).rlp_encode());
+                    u.push_bytes(&buf.as_bytes(size));
                 }
             }
             _ => {
@@ -937,6 +936,18 @@ impl Value {
 impl From<usize> for Value {
     fn from(v: usize) -> Self {
         Self::Int(Uint256::from_usize(v))
+    }
+}
+
+impl From<u64> for Value {
+    fn from(v: u64) -> Self {
+        Self::Int(Uint256::from_u64(v))
+    }
+}
+
+impl From<u8> for Value {
+    fn from(v: u8) -> Self {
+        Self::Int(Uint256::from_usize(v.into()))
     }
 }
 
@@ -1193,6 +1204,7 @@ impl Opcode {
             "jump" => Opcode::AVMOpcode(AVMOpcode::Jump),
             "log" => Opcode::AVMOpcode(AVMOpcode::Log),
             "send" => Opcode::AVMOpcode(AVMOpcode::Send),
+            "errpush" => Opcode::AVMOpcode(AVMOpcode::ErrPush),
             "errcodept" => Opcode::AVMOpcode(AVMOpcode::ErrCodePoint),
             "pushinsn" => Opcode::AVMOpcode(AVMOpcode::PushInsn),
             "pushinsnimm" => Opcode::AVMOpcode(AVMOpcode::PushInsnImm),

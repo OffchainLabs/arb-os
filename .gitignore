@@ -19,12 +19,15 @@ arb_os/contractTemplates.mini
 evm-tests/.travis.yml
 evm-test-logs/*
 <<<<<<< HEAD
+<<<<<<< HEAD
 wasm-tests/*.wasm
 wasm-suite/*.wasm
 wasm-suite/*.json
 wasm-suite/*.wat
 =======
 **.cov
+=======
+>>>>>>> e5e299cbcc2f0bffc898469cb83e0340e64f2b6f
 **.bkp
 **~
 lcov.info
@@ -41,3 +44,13 @@ arb_os/save_bridge_for_debugging.mini
 # Tooling
 flamegraph.svg
 perf.data
+
+# coverage files
+**.all
+**.cov
+**.partial
+
+# auto-generated files
+.make/
+arb_os/bridge_arbos_versions.mini
+arb_os/arbos-upgrade-base.mexe
