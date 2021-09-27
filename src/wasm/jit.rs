@@ -78,20 +78,6 @@ fn get_tuple2_buffer(v: Value, idx: usize, idx2: usize, len: usize) -> Vec<u8> {
     buffer_bytes(get_tuple(get_tuple(v, idx), idx2), len)
 }
 
-/*
-fn in_range(memory: wasmtime::Memory, ptr: u32, sz: u32) -> bool {
-    let msz = memory.data_size();
-    msz >= (ptr+sz) as usize
-}
-
-fn safe_write(memory: wasmtime::Memory, ptr: u32, tmp: &[u8]) -> bool {
-    let msz = memory.data_size();
-    if msz >= (ptr+sz) as usize {
-        memory.write(ptr as usize, &tmp).expect("cannot write memory");
-    }
-}
-*/
-
 impl JitWasm {
     pub fn new(buffer: &[u8]) -> Self {
         use std::cell::RefCell;
@@ -148,7 +134,7 @@ impl JitWasm {
         });
 
         let uint_immed_func = Func::wrap(&store, move |ptr: i32| match &*memory_cell4.borrow() {
-            None => println!("warning, no memory"),
+            None => panic!("Wasm error: no memory"),
             Some(memory) => {
                 let mut tmp = vec![0; 32];
                 let sz = memory.data_size();
@@ -163,7 +149,6 @@ impl JitWasm {
                         .expect("cannot read memory");
                 }
                 let v = Value::Int(Uint256::from_bytes(&tmp));
-                // println!("{:?} {}", tmp, v);
                 immed3.replace_with(|_| v);
             }
         });
@@ -204,14 +189,11 @@ impl JitWasm {
             let tmp = get_tuple_bytes(v.clone(), offset as usize);
             match &*memory_cell5.borrow() {
                 Some(memory) => {
-                    println!("tuple bytes {:?}", tmp);
-                    // if range not good, write byte by byte
-                    // safe_write(memory, ptr, &tmp)
                     memory
                         .write(ptr as usize, &tmp)
                         .expect("cannot write memory");
                 }
-                _ => println!("warning, no memory"),
+                _ => panic!("Wasm error: no memory"),
             }
         });
 
@@ -220,12 +202,11 @@ impl JitWasm {
             let tmp = get_tuple2_bytes(v.clone(), offset as usize, offset2 as usize);
             match &*memory_cell6.borrow() {
                 Some(memory) => {
-                    println!("tuple2bytes {:?}", tmp);
                     memory
                         .write(ptr as usize, &tmp)
                         .expect("cannot write memory");
                 }
-                _ => println!("warning, no memory"),
+                _ => panic!("Wasm error: no memory"),
             }
         });
 
@@ -237,12 +218,11 @@ impl JitWasm {
                     get_tuple2_buffer(v.clone(), offset as usize, offset2 as usize, len as usize);
                 match &*memory_cell7.borrow() {
                     Some(memory) => {
-                        println!("tuple2 buffer {:?}", tmp);
                         memory
                             .write(ptr as usize, &tmp)
                             .expect("cannot write memory");
                     }
-                    _ => println!("warning, no memory"),
+                    _ => panic!("Wasm error: no memory"),
                 }
             },
         );
@@ -285,31 +265,27 @@ impl JitWasm {
         });
 
         let write_func = Func::wrap(&store, move |offset: i32, v: i32| {
-            // println!("write buffer {} {}", offset, v);
             cell2.replace_with(|buf| buf.set_byte(offset as u128, v as u8));
         });
 
         let extra_write_func = Func::wrap(&store, move |offset: i32, v: i32| {
-            // println!("write buffer {} {}", offset, v);
             let mut vec = extra_cell1.borrow_mut();
             let offset = offset as usize;
             if vec.len() <= offset {
                 vec.resize(offset + 1, 0)
             }
             vec[offset as usize] = v as u8;
-            // replace_with(|buf| buf.set_byte(offset as u128, v as u8));
         });
 
         let rvec_func = Func::wrap(&store, move |ptr: i32, offset: i32, len: i32| {
             let buf = cell3.borrow();
             match &*memory_cell2.borrow() {
-                None => println!("warning, no memory"),
+                None => panic!("Wasm error: no memory"),
                 Some(memory) => {
                     let mut tmp = vec![];
                     for i in offset..offset + len {
                         tmp.push(buf.read_byte(i as u128));
                     }
-                    // println!("{:?}", tmp);
                     memory
                         .write(ptr as usize, &tmp)
                         .expect("cannot write memory");
@@ -321,13 +297,12 @@ impl JitWasm {
             Func::wrap(
                 &store,
                 move |ptr: i32, offset: i32, len: i32| match &*memory_cell3.borrow() {
-                    None => println!("warning, no memory"),
+                    None => panic!("Wasm error: no memory"),
                     Some(memory) => {
                         let mut tmp = vec![0; len as usize];
                         memory
                             .read(ptr as usize, &mut tmp)
                             .expect("cannot read memory");
-                        // println!("{:?}", tmp);
 
                         cell4.replace_with(|buf| {
                             let mut res = buf.clone();
