@@ -19,7 +19,7 @@ pub enum Label {
     Func(LabelId),    // these are the same,
     Closure(LabelId), // it's just for printing & debug purposes
     Anon(usize),
-    Evm(usize),      // program counter in EVM contract
+    Evm(usize), // program counter in EVM contract
     WasmFunc(usize),
 }
 
@@ -900,8 +900,8 @@ impl Value {
         match self {
             Value::Int(i) => Color::color(highlight, i),
             Value::CodePoint(pc) => Color::color(highlight, pc),
-            Value::HashOnly(_,_) => format!(""),
-            Value::WasmCodePoint(_,_) => format!(""),
+            Value::HashOnly(_, _) => format!(""),
+            Value::WasmCodePoint(_, _) => format!(""),
             Value::Label(label) => Color::color(highlight, label),
             Value::Buffer(buf) => {
                 let mut text = String::from_utf8_lossy(&hex::decode(buf.hex_encode()).unwrap())

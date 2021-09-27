@@ -1663,7 +1663,6 @@ fn handle_function(
                 panic!("Unknown opcode {:?}", i);
             }
         }
-
     }
 
     // Function return
@@ -1898,7 +1897,6 @@ fn find_memory_max(m: &Module) -> u32 {
         }
     }
 }
-
 
 fn get_func_imports(m: &Module) -> Vec<&ImportEntry> {
     match m.import_section() {
@@ -2417,11 +2415,11 @@ fn process_wasm_inner(
             init.push(immed_op(AVMOpcode::Tget, int_from_usize(5))); // tuple, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(1)); // idx, tuple, buffer
-            // init.push(simple_op(AVMOpcode::DebugPrint));
+                                             // init.push(simple_op(AVMOpcode::DebugPrint));
             init.push(simple_op(AVMOpcode::Tget)); // int, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(0)); // address, int, buffer
-            // implement bounds checking here
+                                             // implement bounds checking here
             init.push(simple_op(AVMOpcode::Dup0)); // address, address, int, buffer
             init.push(immed_op(
                 AVMOpcode::Add,
@@ -2448,7 +2446,7 @@ fn process_wasm_inner(
             init.push(simple_op(AVMOpcode::Tget)); // int, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(0)); // address, int, buffer
-            // implement bounds checking here
+                                             // implement bounds checking here
             init.push(simple_op(AVMOpcode::Dup0)); // address, address, int, buffer
             init.push(immed_op(
                 AVMOpcode::Add,
