@@ -373,8 +373,8 @@ public view write func accountStore_createAccountFromEvmCode(
     // Create a new account for a compiled EVM contract.
     // Returns Some(updatedAccountStore), or None if something went wrong.
     let oldAcct = accountStore_get(store, newAddr);
-    return if ( ! account_hasContract(oldAcct)) {
-        evmCallStack_addStorageCharge( (bytearray_size(code) + 31) / 32 );
+    if ! account_hasContract(oldAcct) {
+        evmCallStack_addStorageCharge( (bytearray_size(code) + 31) / 32, None);
         set oldAcct.nextSeqNum = 1;
         set oldAcct.contractInfo = Some(struct {
             contractStateVersion: const::ContractStateVersion_current,
@@ -386,8 +386,8 @@ public view write func accountStore_createAccountFromEvmCode(
         Some(accountStore_set(store, newAddr, oldAcct))
     } else {
         // There was already an account at that address, so return failure.
-        None<AccountStore>
-    };
+        None
+    }
 }
 
 

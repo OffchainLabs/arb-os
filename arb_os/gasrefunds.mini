@@ -1,0 +1,66 @@
+//
+// Copyright 2021, Offchain Labs, Inc. All rights reserved.
+//
+
+use core::kvs::Kvs;
+use core::kvs::builtin_kvsForall;
+
+use accounts::AccountStore;
+use accounts::accountStore_get;
+use accounts::account_getStorageCell;
+
+
+type GasRefundTracker = struct {
+    allocations: map<(address, uint), uint>,
+};
+
+public func gasRefundTracker_new() -> GasRefundTracker {
+    return struct {
+        allocations: newmap<(address, uint), uint>,
+    };
+}
+
+public func gasRefundTracker_add(
+    tracker: GasRefundTracker,
+    addr: address,
+    storageIndex: uint,
+) -> GasRefundTracker {
+    set tracker.allocations[(addr, storageIndex)] = if let Some(old) = tracker.allocations[(addr, storageIndex)] {
+        old + 1
+    } else {
+        1
+    };
+    return tracker;
+}
+
+public func gasRefundTracker_allocationsToRefund(
+    tracker: GasRefundTracker,
+    acctStore: AccountStore,
+) -> uint {
+    return unsafecast<uint>(
+        builtin_kvsForall(
+            unsafecast<Kvs>(tracker.allocations),
+            closure(rawKey: any, rawValue: any, rawState: any) -> any {
+                let (addr, storageIndex) = unsafecast<(address, uint)>(rawKey);
+                let allocs = unsafecast<uint>(rawValue);
+                let allocsSoFar = unsafecast<uint>(rawState);
+                let newCredit = if let Some(val) = account_getStorageCell(
+                    accountStore_get(acctStore, addr),
+                    storageIndex,
+                ) {
+                    if (val == 0) {
+                        allocs
+                    } else if (allocs > 1) {
+                       allocs - 1
+                    } else {
+                        0
+                    }
+                } else {
+                    0
+                };
+                return allocsSoFar + newCredit;
+            },
+            0,
+        )
+    );
+}

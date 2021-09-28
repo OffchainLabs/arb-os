@@ -102,8 +102,6 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
         } else {
             None<(ByteStream, any)>
         }
-    } else if (kind == 2) { // empty buffer
-        Some((stream, newbuffer()))
     } else if (kind == 2) {    // empty buffer
         Some((stream, newbuffer()))
     } else if (kind == 3) {    // non-empty buffer

@@ -716,15 +716,31 @@ impl Value {
             Value::Int(ui) => Value::Int(ui.avm_hash()),
             Value::Buffer(buf) => Value::Int(buf.avm_hash()),
             Value::Tuple(v) => {
-                let mut acc = Uint256::zero();
+                // According to the C++ emulator, the AVM hash of a tuple is
+                //   H(3 || H(uint8(tlen) || A(tuple[0]) || ... || A(tuple[tlen-1])) || uint256(recursiveSize))
+                //   where A is an AVM hash & H is keccack
+
+                let total_size = 1 + v.len(); // we assume tuples only contain ints for now
+                let outer_size = v.len() as u8;
+
+                let mut all_bytes = vec![3u8];
+                let mut content_bytes = vec![outer_size];
+
                 for val in v.to_vec() {
                     if let Value::Int(ui) = val.avm_hash() {
-                        acc = Uint256::avm_hash2(&acc, &ui);
+                        let child_hash = Uint256::avm_hash(&ui);
+                        content_bytes.extend(child_hash.to_bytes_be());
                     } else {
                         panic!("Invalid value type from hash");
                     }
                 }
-                Value::Int(acc)
+
+                let content_hash = keccak256(&content_bytes);
+                all_bytes.extend(content_hash);
+                all_bytes.extend(Uint256::from_usize(total_size).to_bytes_be());
+
+                let hash = Uint256::from_bytes(&keccak256(&all_bytes));
+                Value::Int(hash)
             }
             Value::CodePoint(cp) => Value::avm_hash2(&Value::Int(Uint256::one()), &cp.avm_hash()),
             Value::Label(label) => {
