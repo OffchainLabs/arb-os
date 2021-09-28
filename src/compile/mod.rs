@@ -1034,7 +1034,6 @@ fn codegen_programs(
 
                 graph.pop_useless_locals();
                 graph.color(frame_size);
-                graph.shrink_frame();
 
                 let code = translate::expand_calls(graph.flatten(), &mut label_gen);
                 let code = translate::untag_jumps(code);

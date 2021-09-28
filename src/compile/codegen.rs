@@ -201,20 +201,9 @@ pub fn mavm_codegen_func(
     declare.extend(func.args.clone().into_iter().map(|x| x.name));
     declare.extend(func.captures.clone().into_iter().map(|x| x));
 
-    let detail = func.name == "tests";
+    codegen(func.child_nodes(), &mut cgen, 0, declare)?;
 
-    codegen(func.child_nodes(), &mut cgen, 0, declare, detail, 0)?;
-
-    if detail {
-        //println!("{}", cgen.next_slot);
-        /*println!("{:?}", &cgen.locals);*/
-    }
-
-    let mut space_for_locals = cgen.next_slot;
-
-    if space_for_locals > 8 {
-        //println!("{} {}", func.name, Color::red(space_for_locals));
-    }
+    let space_for_locals = cgen.next_slot;
 
     code[make_frame_offset] = opcode!(@MakeFrame(space_for_locals, prebuilt));
 
@@ -226,18 +215,12 @@ fn codegen(
     cgen: &mut Codegen,
     stack_items: usize,
     declare: Vec<StringId>,
-    detail: bool,
-    depth: usize,
 ) -> Result<(), CompileError> {
     cgen.open_scope();
 
     for id in declare {
         let slot = cgen.next_slot();
         cgen.shadow(id, slot);
-    }
-
-    if detail {
-        //cgen.print_locals("Open", depth);
     }
 
     macro_rules! expr {
@@ -247,8 +230,6 @@ fn codegen(
                 cgen,
                 stack_items + $push,
                 vec![],
-                detail,
-                depth + 1,
             )?
         };
         ($expr:expr) => {
@@ -298,14 +279,7 @@ fn codegen(
 
         macro_rules! block {
             ($block:expr, $declare:expr) => {
-                codegen(
-                    $block.child_nodes(),
-                    cgen,
-                    stack_items,
-                    $declare,
-                    detail,
-                    depth + 1,
-                )?
+                codegen($block.child_nodes(), cgen, stack_items, $declare)?
             };
             ($block:expr) => {
                 block!($block, vec![])
@@ -402,23 +376,13 @@ fn codegen(
                         cgen.code.push(opcode!(@GetLocal(loop_slot)));
                         cgen.code.push(opcode!(@CjumpTo(top_label)));
                     }
-                    TypeCheckedStatementKind::Break(..) => {
-                        panic!("Encountered a break node");
-                    }
                 }
             }
             TypeCheckedNode::Expression(expr) => {
                 match &mut expr.kind {
                     TypeCheckedExprKind::CodeBlock(block) => {
                         // THINK: Should we treat this as being flat?
-                        codegen(
-                            block.child_nodes(),
-                            cgen,
-                            stack_items,
-                            vec![],
-                            detail,
-                            depth + 1,
-                        )?;
+                        codegen(block.child_nodes(), cgen, stack_items, vec![])?;
                     }
                     TypeCheckedExprKind::If(cond, block, else_block, _) => {
                         expr!(cond);
@@ -781,17 +745,13 @@ fn codegen(
                         cgen.code.push(opcode!(@Label(success)));
                         cgen.code.push(opcode!(Tget, Value::from(1)));
                     }
-                    TypeCheckedExprKind::ClosureLoad(id, nargs, local_space, captures, _) => {
+                    TypeCheckedExprKind::ClosureLoad(..) => {
                         unimplemented!("Needs to happen after register coloring");
                     }
                 }
             }
             _ => {}
         }
-    }
-
-    if detail {
-        //cgen.print_locals("Close", depth);
     }
 
     let debug = cgen.code.last().unwrap().debug_info;

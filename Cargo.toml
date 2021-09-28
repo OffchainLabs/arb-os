@@ -12,8 +12,8 @@ lalrpop = { version = "0.18.1", features = ["lexer"] }
 [dependencies]
 lalrpop-util = "0.18.1"
 regex = "1"
-rand = "0.7.3"
-num-bigint = { version = "0.3", features = ["rand"] }
+rand = { version = "0.8.4", features = ["small_rng"] }
+num-bigint = { version = "0.4.2", features = ["rand"] }
 num-traits = "0.2.11"
 serde = { version = "1.0", features = ["derive", "rc"] }
 serde_repr = "0.1.6"

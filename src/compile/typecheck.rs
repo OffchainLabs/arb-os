@@ -305,17 +305,6 @@ fn flowcheck_liveliness(
                     continue;
                 }
                 TypeCheckedStatementKind::While(..) => true,
-                TypeCheckedStatementKind::Break(optional_expr, _) => {
-                    process!(
-                        optional_expr
-                            .iter_mut()
-                            .map(|x| TypeCheckedNode::Expression(x))
-                            .collect(),
-                        problems,
-                        false,
-                    );
-                    continue;
-                }
                 _ => false,
             },
 
@@ -509,7 +498,6 @@ pub struct TypeCheckedStatement {
 pub enum TypeCheckedStatementKind {
     ReturnVoid(),
     Return(TypeCheckedExpr),
-    Break(Option<TypeCheckedExpr>, String),
     Expression(TypeCheckedExpr),
     SetLocals(Vec<AssignRef>, TypeCheckedExpr),
     AssignGlobal(StringId, TypeCheckedExpr),
@@ -532,9 +520,6 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
                 .into_iter()
                 .chain(block.child_nodes())
                 .collect(),
-            TypeCheckedStatementKind::Break(oexp, _) => {
-                oexp.iter_mut().flat_map(|exp| exp.child_nodes()).collect()
-            }
         }
     }
     fn is_view(&mut self, type_tree: &TypeTree) -> bool {
@@ -1216,7 +1201,6 @@ fn typecheck_statement<'a>(
 ) -> Result<(TypeCheckedStatement, Vec<(StringId, Type)>), CompileError> {
     let kind = &statement.kind;
     let debug_info = statement.debug_info;
-    let locs = debug_info.locs();
 
     macro_rules! error {
         ($text:expr $(,$args:expr)* $(,)?) => {
@@ -1262,7 +1246,7 @@ fn typecheck_statement<'a>(
                 );
             }
         }
-        StatementKind::Break(exp, scope) => {
+        StatementKind::Break(_expr, _scope) => {
             error!("Break is not yet supported");
         }
         StatementKind::Expression(expr) => {

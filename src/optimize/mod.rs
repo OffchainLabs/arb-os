@@ -6,11 +6,13 @@ use crate::compile::{FrameSize, SlotNum};
 use crate::console::Color;
 use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
 use petgraph::algo::{is_cyclic_directed, kosaraju_scc};
-use petgraph::graph::{EdgeIndex, NodeIndex, UnGraph};
+use petgraph::graph::{NodeIndex, UnGraph};
 use petgraph::stable_graph::StableGraph;
-use petgraph::visit::{Dfs, EdgeRef, IntoNodeReferences};
+use petgraph::visit::{Dfs, IntoNodeReferences};
 use petgraph::{Direction, Undirected};
-use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
+use rand::prelude::*;
+use rand::rngs::SmallRng;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 pub enum BasicBlock {
     Code(Vec<Instruction>),
@@ -43,23 +45,26 @@ pub struct BasicGraph {
     graph: StableGraph<BasicBlock, BasicEdge>,
     /// Whether this graph contains a cycle
     cyclic: bool,
+    /// Whether this graph contains code that's been marked for printing
+    should_print: bool,
 }
 
 impl BasicGraph {
     /// Creates a `BasicGraph` from a list of `Instruction`s.
     pub fn new(code: Vec<Instruction>) -> Self {
         // Algorithm:
-        //   Create a control flow graph by walking the instructions in two passes.
-        //     Split on labels & jumps to form sequentially-connected basic-blocks.
-        //     Drop sequential jumps for instructions that unconditionally branch elsewhere.
+        //   Create a control flow graph by walking the instructions in a few passes.
+        //     Split on labels & jumps to form basic-blocks of instructions.
+        //     Add forward edges between blocks where execution flow could proceed to the next.
         //     Add edges for jump targets. If the target is unknown, treat it as a return.
         //
         // Assumptions:
         //   We assume the first instruction is the entry point.
         //   We assume all Return opcodes jump to the same location.
+        //   We assume all label-less jumps are not reentrant
 
         let mut graph: StableGraph<BasicBlock, BasicEdge> = StableGraph::new();
-        let entry = graph.add_node(BasicBlock::Meta("Entry"));
+        let _entry = graph.add_node(BasicBlock::Meta("Entry"));
 
         let should_print = code.iter().any(|x| x.debug_info.attributes.codegen_print);
 
@@ -86,7 +91,6 @@ impl BasicGraph {
                 }
             }
         }
-        let tail = graph.add_node(BasicBlock::Code(block_data));
         let output = graph.add_node(BasicBlock::Meta("Output"));
 
         // associate labels to blocks
@@ -155,9 +159,14 @@ impl BasicGraph {
         }
 
         let cyclic = is_cyclic_directed(&graph);
-        BasicGraph { graph, cyclic }
+        BasicGraph {
+            graph,
+            cyclic,
+            should_print,
+        }
     }
 
+    /// Flattens a basic graph into an equivalent vector of `Instruction`s
     pub fn flatten(self) -> Vec<Instruction> {
         let mut code = vec![];
         for node in self.graph.node_indices() {
@@ -170,6 +179,7 @@ impl BasicGraph {
         code
     }
 
+    /// Prints a basic graph with colors
     pub fn print(&self) {
         let graph = &self.graph;
         let mut block_num = 0;
@@ -248,6 +258,7 @@ impl BasicGraph {
         }
     }
 
+    /// Shrinks the frame size to elide unused frame slots.
     pub fn shrink_frame(&mut self) -> FrameSize {
         let mut locals = HashMap::new();
         let nodes: Vec<_> = self.graph.node_indices().collect();
@@ -269,12 +280,12 @@ impl BasicGraph {
 
         // Frequently used variables should get the lowest slots
         let mut locals: Vec<_> = locals.into_iter().collect();
-        locals.sort_by_key(|(slot, count)| *count);
+        locals.sort_by_key(|(_, count)| *count);
 
         let replace: HashMap<_, _> = locals
             .into_iter()
             .rev()
-            .map(|(slot, count)| slot)
+            .map(|(slot, _count)| slot)
             .enumerate()
             .map(|(new, slot)| (slot, new as u32))
             .collect();
@@ -290,9 +301,6 @@ impl BasicGraph {
                         *source = *replace.get(source).unwrap();
                     }
                     Opcode::MakeFrame(ref mut space, _) => {
-                        if *space as usize != replace.len() && *space > 8 {
-                            eprintln!("FRAME {} {}", space, replace.len());
-                        }
                         *space = replace.len() as FrameSize;
                     }
                     _ => {}
@@ -305,13 +313,6 @@ impl BasicGraph {
 
     /// Efficiently assign frame slots to minimize the frame size.
     pub fn color(&mut self, frame_size: FrameSize) {
-        let mut should_print = false;
-        for node in self.graph.node_indices() {
-            let code = self.graph[node].get_code();
-            should_print =
-                should_print || code.iter().any(|x| x.debug_info.attributes.codegen_print);
-        }
-
         let mut conflicts: StableGraph<SlotNum, (), Undirected> = StableGraph::default();
         let mut phi_graph: UnGraph<SlotNum, ()> = UnGraph::default();
 
@@ -424,32 +425,53 @@ impl BasicGraph {
             }
         }
 
-        let mut colors: HashMap<u32, usize> = HashMap::new(); // colors to usage counts
-        let mut assignments: HashMap<SlotNum, u32> = HashMap::new(); // slots to colors
+        // Coloring a graph is NP-complete
+        let mut rng = SmallRng::seed_from_u64(0);
+        let mut best_assignments = HashMap::new();
+        let mut ncolors = usize::MAX;
 
-        for node in conflicts.node_indices() {
-            let mut available = colors.clone();
+        for _ in 0..24 {
+            let mut colors: HashMap<u32, usize> = HashMap::new(); // colors to usage counts
+            let mut assignments: HashMap<SlotNum, u32> = HashMap::new(); // slots to colors
 
-            for neighbor in conflicts.neighbors_undirected(node) {
-                let slot = neighbor.index() as u32;
-                if let Some(color) = assignments.get(&slot) {
-                    available.remove(color);
+            let mut nodes: Vec<_> = conflicts.node_indices().collect();
+            nodes.shuffle(&mut rng);
+
+            for node in nodes {
+                let mut available = colors.clone();
+
+                for neighbor in conflicts.neighbors_undirected(node) {
+                    let slot = neighbor.index() as u32;
+                    if let Some(color) = assignments.get(&slot) {
+                        available.remove(color);
+                    }
                 }
+
+                if available.is_empty() {
+                    let new = colors.len() as u32;
+                    available.insert(new, 0);
+                    colors.insert(new, 0);
+                }
+
+                let best = *available.iter().min_by_key(|(_, uses)| *uses).unwrap().0;
+                assignments.insert(node.index() as u32, best);
+                colors.entry(best).or_insert(1);
             }
 
-            if available.is_empty() {
-                let new = colors.len() as u32;
-                available.insert(new, 0);
-                colors.insert(new, 0);
+            if colors.len() < ncolors {
+                ncolors = colors.len();
+                best_assignments = assignments;
             }
+        }
 
-            let best = *available.iter().min_by_key(|(_, uses)| *uses).unwrap().0;
-            assignments.insert(node.index() as u32, best);
-            colors.entry(best).or_insert(1);
+        // apply colors to phi'd slots
+        for node in conflicts.node_indices() {
+            let slot = node.index() as u32;
+            let color = *best_assignments.get(&slot).unwrap();
 
             let mut dfs = Dfs::new(&phi_graph, node);
             while let Some(alias) = dfs.next(&phi_graph) {
-                assignments.insert(alias.index() as u32, best);
+                best_assignments.insert(alias.index() as u32, color);
             }
         }
 
@@ -459,11 +481,11 @@ impl BasicGraph {
             for curr in self.graph[node].get_code_mut() {
                 match &mut curr.opcode {
                     Opcode::GetLocal(ref mut slot) | Opcode::SetLocal(ref mut slot) => {
-                        *slot = *assignments.get(slot).expect("no color!");
+                        *slot = *best_assignments.get(slot).expect("no color!");
                     }
                     Opcode::MoveLocal(ref mut dest, ref mut source) => {
-                        *dest = *assignments.get(dest).expect("no color!");
-                        *source = *assignments.get(source).expect("no color!");
+                        *dest = *best_assignments.get(dest).expect("no color!");
+                        *source = *best_assignments.get(source).expect("no color!");
                     }
                     _ => {}
                 }
@@ -472,7 +494,7 @@ impl BasicGraph {
 
         self.shrink_frame();
 
-        if should_print {
+        if self.should_print {
             self.print();
         }
     }
