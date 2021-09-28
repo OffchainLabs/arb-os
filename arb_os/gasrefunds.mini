@@ -15,9 +15,9 @@ type GasRefundTracker = struct {
 };
 
 public func gasRefundTracker_new() -> GasRefundTracker {
-    return struct {
+    struct {
         allocations: newmap<(address, uint), uint>,
-    };
+    }
 }
 
 public func gasRefundTracker_add(

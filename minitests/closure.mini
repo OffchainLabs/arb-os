@@ -8,10 +8,9 @@ var global: uint;
 type Produce = closure(uint, uint) -> string;
 
 view write func main() {
-    //asm(tests().1) { log };
-    asm("".1) { log };
+    asm(tests().1) { log };
 }
-/*
+
 view write func tests() -> string {
 
     let lambda = capture_2();
@@ -130,4 +129,3 @@ view write func test_global_capture() -> string {
     
     ""
 }
-*/

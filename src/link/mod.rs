@@ -410,7 +410,10 @@ pub fn postlink_compile(
             } else {
                 Err(CompileError::new(
                     String::from("Postlink error"),
-                    format!("In final output encountered virtual opcode {}", insn.opcode),
+                    format!(
+                        "In final output encountered virtual opcode {}",
+                        Color::red(insn.opcode.pretty_print(Color::RED))
+                    ),
                     insn.debug_info.location.into_iter().collect(),
                 ))
             }

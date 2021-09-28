@@ -266,7 +266,7 @@ fn test_codeload() {
 #[test]
 fn test_closures() {
     test_for_error_string(Path::new("minitests/simple-closure.mexe"));
-    //test_for_error_string(Path::new("minitests/closure.mexe"));
+    test_for_error_string(Path::new("minitests/closure.mexe"));
 }
 
 #[test]

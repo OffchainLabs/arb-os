@@ -41,10 +41,8 @@ pub fn fix_tuple_size(
         match insn.opcode {
             Opcode::MakeFrame(space, prebuilt) => {
                 locals_tree = TupleTree::new(space as usize, true);
-
-                match prebuilt {
-                    false => code_out.push(opcode!(AuxPush, TupleTree::make_empty(&locals_tree))),
-                    true => code_out.push(opcode!(AuxPush)),
+                if !prebuilt {
+                    code_out.push(opcode!(Noop, TupleTree::make_empty(&locals_tree)));
                 }
             }
             Opcode::TupleGet(offset, size) => {

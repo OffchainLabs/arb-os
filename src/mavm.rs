@@ -4,6 +4,7 @@
 
 use crate::compile::{DebugInfo, FrameSize, FuncProperties, SlotNum, TypeTree};
 use crate::console::Color;
+use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
 use ethers_core::utils::keccak256;
@@ -24,6 +25,13 @@ pub enum Label {
 }
 
 impl Label {
+    pub fn get_id(&self) -> LabelId {
+        match self {
+            Label::Func(id) | Label::Closure(id) | Label::Anon(id) => *id,
+            Label::Evm(n) => panic!("no unique id for evm label {}", n),
+        }
+    }
+
     pub fn avm_hash(&self) -> Value {
         match self {
             Label::Func(id) | Label::Closure(id) => Value::avm_hash2(
@@ -928,12 +936,13 @@ impl fmt::Display for Value {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub enum Opcode {
-    MakeFrame(FrameSize, bool),    // make a func frame: space, closure
-    FuncCall(FuncProperties),      // make a function call: nargs, nouts, and view/write-props
-    Capture(LabelId),              // create a callable closure capture
+    MakeFrame(FrameSize, bool),    // make a func frame: space, captures
     GetLocal(SlotNum),             // get a local variable within a func frame
     SetLocal(SlotNum),             // set a local variable within a func frame
     MoveLocal(SlotNum, SlotNum),   // move into arg1 arg2 within a func frame
+    SetCapture(SlotNum, StringId), // annotate where a capture should be placed within a func frame
+    Capture(LabelId),              // create a callable closure capture
+    FuncCall(FuncProperties),      // make a function call: nargs, nouts, and view/write-props
     TupleGet(usize, usize),        // args are offset and size for the anysize_tuple
     TupleSet(usize, usize),        // args are offset and size for the anysize_tuple
     GetGlobalVar(usize),           // gets a global variable at a global index
@@ -1087,6 +1096,17 @@ impl Opcode {
             Opcode::MoveLocal(dest, source) => {
                 format!("φ({}, {})", Color::pink(dest), Color::pink(source))
             }
+            Opcode::SetCapture(slot, id) => {
+                format!(
+                    "SetCapture {} {}",
+                    Color::pink(slot),
+                    Color::grey(format!("s{}", id))
+                )
+            }
+            Opcode::Capture(label) => {
+                let label = Value::Label(Label::Closure(*label));
+                format!("Capture {}", label.pretty_print(label_color))
+            }
             Opcode::SetGlobalVar(id) => format!("SetGlobal {}", Color::pink(id)),
             Opcode::GetGlobalVar(id) => format!("GetGlobal {}", Color::pink(id)),
             Opcode::TupleGet(slot, size) => {
@@ -1102,7 +1122,6 @@ impl Opcode {
             Opcode::CjumpTo(label) => {
                 format!("CjumpTo {}", Value::Label(*label).pretty_print(label_color))
             }
-            Opcode::Capture(id) => format!("Capture λ_{}", id % 256),
             Opcode::FuncCall(prop) => format!(
                 "FuncCall {}{}{} {}{}",
                 Color::mint(match prop.view {
@@ -1210,6 +1229,8 @@ impl Opcode {
             Opcode::GetLocal(_) => "GetLocal",
             Opcode::SetLocal(_) => "SetLocal",
             Opcode::MoveLocal(_, _) => "MoveLocal",
+            Opcode::SetCapture(_, _) => "SetCapture",
+            Opcode::Capture(_) => "Capture",
             Opcode::GetGlobalVar(_) => "GetGlobal",
             Opcode::SetGlobalVar(_) => "SetGlobal",
             Opcode::Label(_) => "Label",

@@ -179,9 +179,15 @@ pub fn mavm_codegen_func(
     let prebuilt = !func.captures.is_empty();
     let make_frame_offset = code.len();
     code.push(opcode!(@MakeFrame(0, prebuilt)));
+    code.push(opcode!(AuxPush));
 
-    for i in 0..func.args.len() {
+    let nargs = func.args.len();
+    for i in 0..nargs {
         code.push(opcode!(@SetLocal(i as SlotNum)));
+    }
+    for (index, id) in func.captures.iter().enumerate() {
+        let slot = nargs + index;
+        code.push(opcode!(@SetCapture(slot as SlotNum, *id)));
     }
 
     let mut label_gen = LabelGenerator::new(unique_id + 1);
@@ -746,16 +752,64 @@ fn codegen(
                         cgen.code.push(opcode!(Tget, Value::from(1)));
                     }
                     TypeCheckedExprKind::ClosureLoad(id, captures, _) => {
-                        let closure = match cgen.func_labels.get(id) {
-                            Some(label) => *label,
+                        // The closure ABI is based around the idea that a closure pointer is essentially
+                        // an updatable function frame passed around and copied for each of its invocations.
+                        // This means space is reserved for the args, which are dynamically written to at the
+                        // time of a call. We'll call these "blanks", since as the closure is passed around,
+                        // the values are not yet known. This yeilds the format:
+                        //
+                        //            ( codepoint, ( blank_arg1, blank_arg2, ..., blank_argN ) )
+                        //
+                        // Closures may also have local variables, for which space must be preserved. It's
+                        // up to the optimizer to determine their place within the frame.
+                        //
+                        //            ( codepoint, ( arg_or_local_1, arg_or_local_2, ..., arg_or_local_N ) )
+                        //
+                        // Closures may also have captures, which are written to exactly once at the time of
+                        // creation. It's up to the optimizer to determine their place within the frame.
+                        //
+                        //            ( codepoint, { <blank_args>, <locals>, <captures> } )
+                        //
+                        // For efficiency, when a closure has no captures, we express it like a func pointer
+                        // and then use code at runtime (or compile time when the optimizer can tell) that
+                        // checks the type. In this manner, a function pointer is equivalent to a closure
+                        // with 0 captures, which is why they are said to be the same type.
+                        //
+                        //              codepoint
+                        //
+                        // Lastly, in the rare case a single item is present in the tuple, we de-tuplify.
+                        //
+                        //             ( codepoint, ( item ) )   === becomes ===>   ( codepoint, item )
+                        //
+
+                        let (closure_id, closure) = match cgen.func_labels.get(id) {
+                            Some(label) => (label.get_id(), Value::Label(*label)),
                             None => {
                                 error!("No label for closure ref {}", id)
                             }
                         };
+
+                        for capture in captures.iter() {
+                            let slot = match cgen.get_local(capture) {
+                                Some(slot) => slot,
+                                None => error!(
+                                    "no slot assigned for capture {} {}",
+                                    cgen.string_table.name_from_id(*capture),
+                                    capture
+                                ),
+                            };
+                            cgen.code.push(opcode!(@GetLocal(slot)));
+                        }
+
                         if captures.is_empty() {
-                            cgen.code.push(opcode!(Noop, Value::Label(closure)));
+                            // Having no captures makes this equivalent to a function call
+                            cgen.code.push(opcode!(Noop, closure));
                         } else {
-                            unimplemented!("Needs to happen after register coloring");
+                            cgen.code.push(opcode!(@Capture(closure_id)));
+
+                            let container = Value::new_tuple(vec![closure, Value::none()]);
+                            cgen.code.push(opcode!(Noop, container));
+                            cgen.code.push(opcode!(@TupleSet(1, 2)));
                         }
                     }
                 }

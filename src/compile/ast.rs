@@ -5,7 +5,7 @@
 //! Contains types and utilities for constructing the mini AST
 
 use crate::compile::typecheck::{AbstractSyntaxTree, TypeCheckedNode};
-use crate::compile::{CompileError, FrameSize, Lines};
+use crate::compile::{CompileError, Lines};
 use crate::console::{human_readable_index, Color};
 use crate::link::{Import, TupleTree};
 use crate::mavm::{CodePt, Instruction, LabelId, Value};
@@ -1469,8 +1469,6 @@ pub struct Func<T = Statement> {
     pub captures: BTreeSet<StringId>,
     /// The names of this func's generic types. The order specifies which goes where.
     pub generics: Vec<StringId>,
-    /// The minimum tuple-tree size needed to generate this func
-    pub frame_size: FrameSize,
     /// A global id unique to this function used for building jump labels
     pub unique_id: Option<LabelId>,
     /// Additional properties like viewness that this func has
@@ -1491,7 +1489,6 @@ impl Func {
         code: Vec<Statement>,
         captures: BTreeSet<StringId>,
         generics: Vec<StringId>,
-        frame_size: FrameSize,
         debug_info: DebugInfo,
     ) -> Self {
         let mut arg_types = Vec::new();
@@ -1514,7 +1511,6 @@ impl Func {
             public,
             captures,
             generics,
-            frame_size,
             unique_id: None,
             properties: prop,
             debug_info,
