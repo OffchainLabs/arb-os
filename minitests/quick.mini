@@ -1,37 +1,73 @@
-/*
- * Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
- */
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
 
+use core::kvs::Kvs;
+use core::kvs::Unwinder;
+use core::kvs::KvsNode;
+use core::kvs::KvsCell;
+use core::kvs::builtin_kvsNew;
+
+write func main() {
+
+    trap_1(); // try to cause a loop failures with tricky SSA scenarios
+    trap_2(); // 
+    
+    asm("".1) { log };
+}
 
 #[print]
-func main(arg: uint) -> uint {
+func trap_1() {
+    let a = 8;
+    let b = 1;
 
-    if let Some(c) = Some(32) {
-        arg = c;
-        arg = arg;
-        let arg = 8;
-        // mov 0 2
-    } else {
-        arg = arg;
+    loop {
+        a = a - b;
+        if a > 0 {
+            let c = "hard SSA";
+            let _ = c;
+        } else {
+            return;
+        }
     }
-
-    let a = arg;
-
-    if true {
-        let b = 32;
-        a = b;
-    }
-
-    while a > 4 {
-        a = a - 1;
-        a = a - 1;
-        let a = 0;
-    }
-
-    let a = {
-        a = a + 1;
-        a
-    };
-
-    return a;
 }
+
+func trap_2() {
+    let a = 8;
+    let b = 1;
+
+    while true {
+        a = a - b;
+        if a > 0 {
+            let c = "hard SSA";
+            let _ = c;
+        } else {
+            return;
+        }
+    }
+}
+
+
+/*func test_1() -> option<string> {
+
+    let c = 8;
+    let index = 32;
+    
+    while index > 0 {
+        let b = 0;
+        index = b;
+        if true {
+            index = index;
+            let b = index;
+            index = b;
+            index = index;
+        }
+        index = index;
+    }
+
+    if c != 8 {
+        return Some("not 8");
+    }
+    
+    None
+}*/

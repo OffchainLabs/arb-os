@@ -464,13 +464,14 @@ fn codegen(
                     }
                     TypeCheckedExprKind::Loop(body, _) => {
                         let loop_slot = cgen.next_slot();
-                        let top = cgen.label_gen.next();
-                        cgen.code.push(opcode!(Noop, Value::Label(top)));
+                        let top_label = cgen.label_gen.next();
+                        let test_label = cgen.label_gen.next();
+                        cgen.code.push(opcode!(Noop, Value::Label(top_label)));
                         cgen.code.push(opcode!(@SetLocal(loop_slot)));
-                        cgen.code.push(opcode!(@Label(top)));
+                        cgen.code.push(opcode!(@Label(top_label)));
                         block!(body);
                         cgen.code.push(opcode!(@GetLocal(loop_slot)));
-                        cgen.code.push(opcode!(@JumpTo(top)));
+                        cgen.code.push(opcode!(@JumpTo(top_label)));
                     }
                     TypeCheckedExprKind::Cast(expr, _) => expr!(expr),
                     TypeCheckedExprKind::Error => cgen.code.push(opcode!(Error)),

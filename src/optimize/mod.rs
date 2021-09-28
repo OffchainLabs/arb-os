@@ -48,8 +48,6 @@ pub enum BasicEdge {
 pub struct BasicGraph {
     /// Basic blocks and the edges that connect them
     graph: StableGraph<BasicBlock, BasicEdge>,
-    /// Whether this graph includes a jump to some unknown place
-    wild: bool,
     /// Whether this graph contains a cycle
     cyclic: bool,
 }
@@ -61,7 +59,7 @@ impl BasicGraph {
         //   Create a control flow graph by walking the instructions in two passes.
         //     Split on labels & jumps to form sequentially-connected basic-blocks.
         //     Drop sequential jumps for instructions that unconditionally branch elsewhere.
-        //     Add edges for jump targets. If the target is unknown, declare the graph wild.
+        //     Add edges for jump targets. If the target is unknown, treat it as a return.
         //
         // Assumptions:
         //   We assume the first instruction is the entry point.
@@ -69,8 +67,6 @@ impl BasicGraph {
 
         let mut graph: StableGraph<BasicBlock, BasicEdge> = StableGraph::new();
         let entry = graph.add_node(BasicBlock::Meta("Entry"));
-
-        let mut wild = false; // not wild until proven otherwise
 
         // First pass
         //   make blocks and connect them sequentially.
@@ -134,10 +130,7 @@ impl BasicGraph {
                 Opcode::JumpTo(label) | Opcode::CjumpTo(label) => {
                     let dest = match label_to_block.get(label) {
                         Some(dest) => *dest,
-                        _ => {
-                            wild = true;
-                            continue;
-                        }
+                        _ => output,
                     };
                     graph.add_edge(node, dest, BasicEdge::Jump);
                 }
@@ -145,16 +138,13 @@ impl BasicGraph {
                     let label = match &last.immediate {
                         Some(Value::Label(label)) => label,
                         _ => {
-                            wild = true;
+                            graph.add_edge(node, output, BasicEdge::Jump);
                             continue;
                         }
                     };
                     let dest = match label_to_block.get(label) {
                         Some(dest) => *dest,
-                        _ => {
-                            wild = true;
-                            continue;
-                        }
+                        _ => output,
                     };
                     graph.add_edge(node, dest, BasicEdge::Jump);
                 }
@@ -166,7 +156,6 @@ impl BasicGraph {
 
         let graph = BasicGraph {
             graph,
-            wild,
             cyclic,
         };
 
@@ -220,14 +209,9 @@ impl BasicGraph {
             }
         }
         println!(
-            "{} {}",
+            "{} {}\n",
             Color::grey("cyclic:"),
             Color::color_if(self.cyclic, Color::MINT, Color::GREY)
-        );
-        println!(
-            "{} {}\n",
-            Color::grey("wild:  "),
-            Color::color_if(self.wild, Color::MINT, Color::GREY)
         );
     }
 
@@ -309,7 +293,7 @@ impl BasicGraph {
                         *source = *replace.get(source).unwrap();
                     }
                     Opcode::MakeFrame(ref mut space, _) => {
-                        if *space as usize != replace.len() {
+                        if *space as usize != replace.len() && *space > 8 {
                             eprintln!("FRAME {} {}", space, replace.len());
                         }
                         *space = replace.len() as FrameSize;
@@ -331,12 +315,6 @@ impl BasicGraph {
                 should_print || code.iter().any(|x| x.debug_info.attributes.codegen_print);
         }
 
-        /*if self.wild {
-            // For now, don't try to be smart about funcs with wild jumps.
-            println!("Found a wild frame");
-            return;
-        }*/
-
         let mut conflicts: StableGraph<SlotNum, (), Undirected> = StableGraph::default();
         let mut phi_graph: UnGraph<SlotNum, ()> = UnGraph::default();
 
@@ -354,104 +332,68 @@ impl BasicGraph {
             }
         }
 
-        let mut node_kills = HashMap::new();
-        let mut node_needs = HashMap::new();
-
-        for node in self.graph.node_indices() {
-            let code = self.graph[node].get_code();
-
-            let mut alive = HashSet::new();
-            let mut kills = HashSet::new();
-
-            macro_rules! kill {
-                ($slot:expr) => {{
-                    kills.insert($slot);
-                    for other in &alive {
-                        conflicts.update_edge(NodeIndex::from(*other), NodeIndex::from($slot), ());
-                    }
-                    //alive.remove(&$slot);
-                }};
-            }
-            macro_rules! make {
-                ($slot:expr) => {{
-                    if !alive.insert($slot) {
-                        continue;
-                    }
-                    for other in &alive {
-                        conflicts.update_edge(NodeIndex::from(*other), NodeIndex::from($slot), ());
-                    }
-                }};
-            }
-
-            for curr in code.iter().rev() {
-                match curr.opcode {
-                    Opcode::SetLocal(slot) => {
-                        kill!(slot);
-                    }
-                    Opcode::GetLocal(slot) => {
-                        make!(slot);
-                    }
-                    Opcode::MoveLocal(dest, source) => {
-                        kill!(dest);
-                        make!(source);
-                    }
-                    _ => {}
-                }
-            }
-
-            if should_print {
-                println!("kills {:?}", &kills);
-                println!("alive {:?}", &alive);
-
-                for curr in code {
-                    println!("{}", curr.pretty_print(Color::MINT));
-                }
-            }
-
-            node_kills.insert(node, kills);
-            node_needs.insert(node, alive);
-        }
 
         // Walking the graph backwards is heuristically faster.
         let mut work_list: Vec<_> = self.graph.node_indices().rev().collect();
+        let mut node_needs = HashMap::new();
 
         while let Some(node) = work_list.pop() {
             // Create conflict graph algorithm
             //   Keep updating the liveliness information for each block until all conflicts are found.
             //   At each block, check if the needs of its successors should be propagated backwards.
-            //   If so, add conflict information & place the successors to the end of the work list.
+            //   If so, add conflict information & place the predecessors to the end of the work list.
 
             let outgoing = self.graph.neighbors_directed(node, Direction::Outgoing);
             let incoming = self.graph.neighbors_directed(node, Direction::Incoming);
 
-            let my_kills = node_kills.get(&node).unwrap();
-
-            let mut successor_needs: Vec<SlotNum> = vec![];
-
+            let mut alive: HashSet<SlotNum> = HashSet::new(); // values that haven't been set yet
             for output in outgoing {
-                let output_needs = node_needs.get(&output).unwrap().into_iter();
-                successor_needs.extend(output_needs.filter(|need| !my_kills.contains(need)));
+                alive.extend(node_needs.get(&output).into_iter().flatten());
             }
 
-            let my_needs = node_needs.get_mut(&node).unwrap();
-
-            let mut changed = false;
-            for need in successor_needs {
-                if my_needs.contains(&need) {
-                    continue;
+            for curr in self.graph[node].get_code().into_iter().rev() {
+                match curr.opcode {
+                    Opcode::SetLocal(slot) => {
+                        alive.remove(&slot);
+                        for other in alive.iter().filter(|other| **other != slot) {
+                            conflicts.update_edge(NodeIndex::from(*other), NodeIndex::from(slot), ());
+                        }
+                    }
+                    Opcode::GetLocal(slot) => {
+                        if alive.insert(slot) {
+                            for other in alive.iter().filter(|other| **other != slot) {
+                                conflicts.update_edge(NodeIndex::from(*other), NodeIndex::from(slot), ());
+                            }
+                        }
+                    }
+                    Opcode::MoveLocal(dest, source) => {
+                        for slot in alive.iter() {
+                            if *slot != dest {
+                                conflicts.update_edge(NodeIndex::from(*slot), NodeIndex::from(dest), ());
+                            }
+                            if *slot != source {
+                                conflicts.update_edge(NodeIndex::from(*slot), NodeIndex::from(source), ());
+                            }
+                        }
+                        alive.insert(source);
+                        alive.remove(&dest);
+                    }
+                    _ => {}
                 }
-
-                let disallowed = NodeIndex::from(need);
-                for slot in my_needs.iter() {
-                    conflicts.update_edge(NodeIndex::from(*slot), disallowed, ());
-                }
-                for slot in my_kills {
-                    conflicts.update_edge(NodeIndex::from(*slot), disallowed, ());
-                }
-
-                my_needs.insert(need);
-                changed = true;
             }
+
+
+            let changed = match node_needs.get(&node) {
+                Some(old_needs) if old_needs != &alive => {
+                    node_needs.insert(node, alive);
+                    true
+                }
+                None if alive.len() > 0 => {
+                    node_needs.insert(node, alive);
+                    true
+                }
+                _ => false,
+            };
 
             if changed {
                 for input in incoming {
@@ -527,6 +469,8 @@ impl BasicGraph {
                 }
             }
         }
+
+        self.shrink_frame();
 
         if should_print {
             self.print();
