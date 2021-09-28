@@ -8,16 +8,9 @@ use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
 use petgraph::algo::{is_cyclic_directed, kosaraju_scc};
 use petgraph::graph::{EdgeIndex, NodeIndex, UnGraph};
 use petgraph::stable_graph::StableGraph;
-use petgraph::visit::{Dfs, EdgeRef};
+use petgraph::visit::{Dfs, EdgeRef, IntoNodeReferences};
 use petgraph::{Direction, Undirected};
 use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
-
-pub fn outgoing_edges<N, E>(graph: &StableGraph<N, E>, node: NodeIndex) -> Vec<EdgeIndex> {
-    graph
-        .edges_directed(node, Direction::Outgoing)
-        .map(|e| e.id())
-        .collect()
-}
 
 pub enum BasicBlock {
     Code(Vec<Instruction>),
@@ -68,39 +61,61 @@ impl BasicGraph {
         let mut graph: StableGraph<BasicBlock, BasicEdge> = StableGraph::new();
         let entry = graph.add_node(BasicBlock::Meta("Entry"));
 
-        // First pass: make blocks and connect them sequentially.
-        let mut last_block = entry;
+        let should_print = code.iter().any(|x| x.debug_info.attributes.codegen_print);
+
+        // Create basic blocks by splitting on jumps and labels
         let mut block_data = vec![];
-        let mut label_to_block = HashMap::new();
-        for curr in code.clone() {
+        for curr in code {
             match curr.opcode {
-                Opcode::Label(label) => {
-                    let block = graph.add_node(BasicBlock::Code(block_data));
-                    graph.add_edge(last_block, block, BasicEdge::Forward);
-                    last_block = block;
+                Opcode::Label(_) => {
+                    if block_data.len() > 0 {
+                        graph.add_node(BasicBlock::Code(block_data));
+                    }
                     block_data = vec![curr];
-                    label_to_block.insert(label, block);
                 }
                 Opcode::Return
                 | Opcode::JumpTo(_)
                 | Opcode::CjumpTo(_)
                 | Opcode::AVMOpcode(AVMOpcode::Cjump | AVMOpcode::Jump) => {
                     block_data.push(curr);
-                    let block = graph.add_node(BasicBlock::Code(block_data));
-                    graph.add_edge(last_block, block, BasicEdge::Forward);
-                    last_block = block;
+                    graph.add_node(BasicBlock::Code(block_data));
                     block_data = vec![];
                 }
-                _ => block_data.push(curr),
+                _ => {
+                    block_data.push(curr);
+                }
             }
         }
         let tail = graph.add_node(BasicBlock::Code(block_data));
         let output = graph.add_node(BasicBlock::Meta("Output"));
-        graph.add_edge(last_block, tail, BasicEdge::Forward);
-        graph.add_edge(tail, output, BasicEdge::Forward);
 
-        // Second pass: add jump edges and prune forward Edges that shouldn't exist
+        // associate labels to blocks
+        let mut label_to_block = HashMap::new();
+        for (node, block) in graph.node_references() {
+            if let Some(Opcode::Label(label)) = block.get_code().get(0).map(|x| x.opcode) {
+                label_to_block.insert(label, node);
+            }
+        }
+
+        // make forward edges
         let nodes: Vec<_> = graph.node_indices().collect();
+        let mut last_node = None;
+
+        for &node in &nodes {
+            if let Some(last) = last_node {
+                graph.add_edge(last, node, BasicEdge::Forward);
+            }
+            match &graph[node].get_code().last().map(|insn| insn.opcode) {
+                Some(Opcode::Return | Opcode::JumpTo(_) | Opcode::AVMOpcode(AVMOpcode::Jump)) => {
+                    last_node = None;
+                }
+                _ => {
+                    last_node = Some(node);
+                }
+            }
+        }
+
+        // Add jump edges
         for node in nodes {
             let last = match &graph[node] {
                 BasicBlock::Code(code) => match code.iter().last().cloned() {
@@ -110,16 +125,7 @@ impl BasicGraph {
                 _ => continue,
             };
 
-            let op = last.opcode;
-
-            if let Opcode::Return | Opcode::JumpTo(_) | Opcode::AVMOpcode(AVMOpcode::Jump) = &op {
-                // these should only point to their target destinations
-                for edge in outgoing_edges(&graph, node) {
-                    graph.remove_edge(edge);
-                }
-            }
-
-            match &op {
+            match &last.opcode {
                 Opcode::Return => {
                     graph.add_edge(node, output, BasicEdge::Jump);
                 }
@@ -149,15 +155,7 @@ impl BasicGraph {
         }
 
         let cyclic = is_cyclic_directed(&graph);
-
-        let graph = BasicGraph { graph, cyclic };
-
-        let should_print = code.iter().any(|x| x.debug_info.attributes.codegen_print);
-        if should_print {
-            graph.print();
-        }
-
-        graph
+        BasicGraph { graph, cyclic }
     }
 
     pub fn flatten(self) -> Vec<Instruction> {
@@ -411,7 +409,7 @@ impl BasicGraph {
             for alias in nodes {
                 // Contract the graph such that the neighbors of the alias are now the
                 // neighbors of the slot.
-                
+
                 let others: Vec<_> = conflicts.neighbors_undirected(alias).collect();
                 for other in others {
                     conflicts.add_edge(slot, other, ());

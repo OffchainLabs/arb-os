@@ -315,6 +315,7 @@ Type: Type = {
     "buffer" => Type::Buffer,
     "bytes32" => Type::Bytes32,
     "address" => Type::EthAddress,
+    "void" => Type::Void,
     "struct" "{" <StructFields> "}" => Type::Struct(<>),
     <CommaedTypesInParens> => Type::Tuple(<>),
     "[" "]" <Type> => Type::Array(Box::new(<>)),
