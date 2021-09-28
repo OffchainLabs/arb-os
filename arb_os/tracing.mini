@@ -29,7 +29,7 @@ public func evmTracer_new() -> EvmTracer {
 }
 
 public view func evmTracer_emit() {
-    let val = unsafecast<any>(());
+    let val = any(());
     let theStack = outbox_getEvmTracer().recordStack;
     loop {
         if let Some(res) = stack_pop(theStack) {

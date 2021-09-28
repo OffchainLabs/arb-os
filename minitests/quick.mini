@@ -2,72 +2,10 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-use core::kvs::Kvs;
-use core::kvs::Unwinder;
-use core::kvs::KvsNode;
-use core::kvs::KvsCell;
-use core::kvs::builtin_kvsNew;
-
 write func main() {
-
-    trap_1(); // try to cause a loop failures with tricky SSA scenarios
-    trap_2(); // 
-    
-    asm("".1) { log };
+    asm(tests().1) { log };
 }
 
-#[print]
-func trap_1() {
-    let a = 8;
-    let b = 1;
-
-    loop {
-        a = a - b;
-        if a > 0 {
-            let c = "hard SSA";
-            let _ = c;
-        } else {
-            return;
-        }
-    }
+func tests() -> string {
+    ""
 }
-
-func trap_2() {
-    let a = 8;
-    let b = 1;
-
-    while true {
-        a = a - b;
-        if a > 0 {
-            let c = "hard SSA";
-            let _ = c;
-        } else {
-            return;
-        }
-    }
-}
-
-
-/*func test_1() -> option<string> {
-
-    let c = 8;
-    let index = 32;
-    
-    while index > 0 {
-        let b = 0;
-        index = b;
-        if true {
-            index = index;
-            let b = index;
-            index = b;
-            index = index;
-        }
-        index = index;
-    }
-
-    if c != 8 {
-        return Some("not 8");
-    }
-    
-    None
-}*/
