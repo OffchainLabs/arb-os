@@ -249,26 +249,32 @@ impl BasicGraph {
     }
 
     pub fn shrink_frame(&mut self) -> FrameSize {
-        let mut locals = BTreeSet::new();
+        let mut locals = HashMap::new();
         let nodes: Vec<_> = self.graph.node_indices().collect();
 
         for node in &nodes {
             for curr in self.graph[*node].get_code() {
                 match curr.opcode {
                     Opcode::SetLocal(slot) | Opcode::GetLocal(slot) => {
-                        locals.insert(slot);
+                        *locals.entry(slot).or_insert(0) += 1;
                     }
                     Opcode::MoveLocal(dest, source) => {
-                        locals.insert(dest);
-                        locals.insert(source);
+                        *locals.entry(dest).or_insert(0) += 1;
+                        *locals.entry(source).or_insert(0) += 1;
                     }
                     _ => {}
                 }
             }
         }
 
+        // Frequently used variables should get the lowest slots
+        let mut locals: Vec<_> = locals.into_iter().collect();
+        locals.sort_by_key(|(slot, count)| *count);
+
         let replace: HashMap<_, _> = locals
             .into_iter()
+            .rev()
+            .map(|(slot, count)| slot)
             .enumerate()
             .map(|(new, slot)| (slot, new as u32))
             .collect();
