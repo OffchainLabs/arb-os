@@ -144,7 +144,7 @@ public view write func decompressAddress(
         if (addIfNotInTable) {
             let (giat, _, changed) = addressTable_getByAddressAlloc(globalIndexedAddressTable, addr);
             if (changed) {
-                evmCallStack_addStorageCharge(2);   // charge current tx for 2 storage cells
+                evmCallStack_addStorageCharge(2, None<(address, uint)>);   // charge current tx for 2 storage cells
                 globalIndexedAddressTable = giat;
             }
         }

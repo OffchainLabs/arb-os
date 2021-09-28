@@ -86,7 +86,7 @@ view write func arbAddressTable_register(_topFrame: EvmCallFrame, calldata: Byte
     let addr = address(bytearray_get256(calldata, 4));
     let (atab, idx, changed) = addressTable_getByAddressAlloc(getGlobalAddressTable(), addr);
     if (changed) {
-        evmCallStack_addStorageCharge(2);   // charge current tx for 2 storage cells
+        evmCallStack_addStorageCharge(2, None<(address, uint)>);   // charge current tx for 2 storage cells
         setGlobalAddressTable(atab);
     }
     if (evmCallStack_setTopFrameMemory(bytearray_set256(evmCallStack_getTopFrameMemoryOrDie(), 0, idx))) {

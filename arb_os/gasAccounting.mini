@@ -32,6 +32,11 @@ use evmCallStack::evmCallStack_getAccountInCurrentContext;
 use evmCallStack::evmCallStack_setAccountInCurrentContext;
 use evmCallStack::evmCallStack_getAccountStoreInCurrentContext;
 
+use gasrefunds::GasRefundTracker;
+use gasrefunds::gasRefundTracker_new;
+use gasrefunds::gasRefundTracker_add;
+use gasrefunds::gasRefundTracker_allocationsToRefund;
+
 use messages::TxRequestData;
 
 use std::fixedpoint::FixedPoint;
@@ -113,6 +118,8 @@ type TxGasState = struct {        // this is the gas state of the currently runn
     price: uint,                  // price of gas for this tx, in wei per unit of gas
     weiHeldForGas: uint,          // amount of currency we're holding to cover the current tx's gas use
     refundTo: address,            // who gets a refund for any unused gas when current tx is finished
+    refundTracker: GasRefundTracker,
+    gasEstimationMode: bool,
 };
 
 type GasUsage = struct {
@@ -427,6 +434,7 @@ public view write func gasAccounting_startTxCharges(
     gasPrice: uint,
     payer: address,
     acctStore: AccountStore,
+    gasEstimationMode: bool,
 ) -> (
     uint,          // const::TxResultCode_success if success, otherwise an error code
     AccountStore,  // acctStore, with payments deducted
@@ -469,6 +477,8 @@ public view write func gasAccounting_startTxCharges(
         price: gasPrice,
         weiHeldForGas: weiToHold,
         refundTo: payer,
+        refundTracker: gasRefundTracker_new(),
+        gasEstimationMode: gasEstimationMode,
     });
     set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(gasUsedByOS));
 
@@ -482,6 +492,7 @@ public view write func gasAccounting_startTxCharges(
 public view write func gasAccounting_endTxCharges(
     storageAllocations: uint,
     feeStats: TxFeeStats,
+    acctStore: option<AccountStore>,   // for determining storage refunds, if applicable
 ) -> option<(    // None if there is no active tx
     bool,        // had enough gas to complete the tx?
     GasUsage,    // total ArbGas used
@@ -497,6 +508,18 @@ public view write func gasAccounting_endTxCharges(
 
     let txState = gasAccountingInfo.txState?;
 
+    let arbGasPerStorage = gasAccounting_getStoragePriceInArbGas();
+    if (!txState.gasEstimationMode) {
+        if let Some(astore) = acctStore {
+            let refunds = gasRefundTracker_allocationsToRefund(txState.refundTracker, astore);
+            if (refunds > storageAllocations) {
+                refunds = storageAllocations;
+            }
+            storageAllocations = storageAllocations - refunds;
+            set txState.currentStorageOnlyGas = txState.currentStorageOnlyGas + arbGasPerStorage * refunds;
+        }
+    }
+
     let computeGasRemaining = switchToChargingOS();
     let confirmed = (computeGasRemaining > 0);
     let totalGasRemaining = computeGasRemaining + txState.currentStorageOnlyGas;
@@ -506,18 +529,19 @@ public view write func gasAccounting_endTxCharges(
         txState.originalMax
     };
 
-    let arbGasPerStorage = gasAccounting_getStoragePriceInArbGas();
     let gasUsedForStorage = xif let Some(x) = trySafeMul(storageAllocations, arbGasPerStorage) {
         x
     } else {
         0
     };
+
     let gasUsedForCompute = xif (gasUsedForStorage > totalGasUsed) {
         gasUsedForStorage = totalGasUsed;
         0
     } else {
         totalGasUsed - gasUsedForStorage
     };
+
     let weiForStorage = xif let Some(x) = trySafeMul(gasUsedForStorage, txState.price) { x } else { 0 };
     let weiForCompute = xif let Some(x) = trySafeMul(gasUsedForCompute, txState.price) { x } else { 0 };
 
@@ -678,19 +702,24 @@ public view write func gasAccounting_chargeCurrentTxForStorage(units: uint) -> u
     // if there is enough storage gas, return 0, otherwise return the amount of extra gas that needs to be collected
     let gasDue = units * gasAccounting_getStoragePriceInArbGas();
     return xif let Some(txState) = gasAccountingInfo.txState {
-        xif (gasDue <= txState.currentStorageOnlyGas) {
-            set txState.currentStorageOnlyGas = txState.currentStorageOnlyGas - gasDue;
-            set gasAccountingInfo.txState = Some(txState);
-            0
-        } else {
-            gasDue = gasDue - txState.currentStorageOnlyGas;
-            set txState.currentStorageOnlyGas = 0;
-            set gasAccountingInfo.txState = Some(txState);
+        let gasTakenHere = xif (gasDue <= txState.currentStorageOnlyGas) {
             gasDue
-        }
+        } else {
+            txState.currentStorageOnlyGas
+        };
+        set txState.currentStorageOnlyGas = txState.currentStorageOnlyGas - gasTakenHere;
+        set gasAccountingInfo.txState = Some(txState);
+        gasDue - gasTakenHere
     } else {
         gasDue
     };
+}
+
+public view write func gasAccounting_recordAllocationForRefund(addr: address, storageIndex: uint) {
+    if let Some(txState) = gasAccountingInfo.txState {
+        set txState.refundTracker = gasRefundTracker_add(txState.refundTracker, addr, storageIndex);
+        set gasAccountingInfo.txState = Some(txState);
+    }
 }
 
 public view write func gasAccounting_startNewBlock(arbBlockNumber: uint, timestamp: uint) {
