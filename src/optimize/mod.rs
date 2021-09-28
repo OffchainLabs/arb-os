@@ -10,7 +10,7 @@ use petgraph::graph::{EdgeIndex, NodeIndex, UnGraph};
 use petgraph::stable_graph::StableGraph;
 use petgraph::visit::{Dfs, EdgeRef};
 use petgraph::{Direction, Undirected};
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 
 pub fn outgoing_edges<N, E>(graph: &StableGraph<N, E>, node: NodeIndex) -> Vec<EdgeIndex> {
     graph
@@ -68,9 +68,7 @@ impl BasicGraph {
         let mut graph: StableGraph<BasicBlock, BasicEdge> = StableGraph::new();
         let entry = graph.add_node(BasicBlock::Meta("Entry"));
 
-        // First pass
-        //   make blocks and connect them sequentially.
-        //
+        // First pass: make blocks and connect them sequentially.
         let mut last_block = entry;
         let mut block_data = vec![];
         let mut label_to_block = HashMap::new();
@@ -101,9 +99,7 @@ impl BasicGraph {
         graph.add_edge(last_block, tail, BasicEdge::Forward);
         graph.add_edge(tail, output, BasicEdge::Forward);
 
-        // Second pass
-        //   add jump edges and prune forward Edges that shouldn't exist
-        //
+        // Second pass: add jump edges and prune forward Edges that shouldn't exist
         let nodes: Vec<_> = graph.node_indices().collect();
         for node in nodes {
             let last = match &graph[node] {
@@ -154,10 +150,7 @@ impl BasicGraph {
 
         let cyclic = is_cyclic_directed(&graph);
 
-        let graph = BasicGraph {
-            graph,
-            cyclic,
-        };
+        let graph = BasicGraph { graph, cyclic };
 
         let should_print = code.iter().any(|x| x.debug_info.attributes.codegen_print);
         if should_print {
@@ -332,12 +325,12 @@ impl BasicGraph {
             }
         }
 
-
         // Walking the graph backwards is heuristically faster.
-        let mut work_list: Vec<_> = self.graph.node_indices().rev().collect();
+        let mut work_list: VecDeque<_> = self.graph.node_indices().rev().collect();
+        let mut work_set: HashSet<_> = work_list.clone().into_iter().collect();
         let mut node_needs = HashMap::new();
 
-        while let Some(node) = work_list.pop() {
+        while let Some(node) = work_list.pop_front() {
             // Create conflict graph algorithm
             //   Keep updating the liveliness information for each block until all conflicts are found.
             //   At each block, check if the needs of its successors should be propagated backwards.
@@ -347,85 +340,88 @@ impl BasicGraph {
             let incoming = self.graph.neighbors_directed(node, Direction::Incoming);
 
             let mut alive: HashSet<SlotNum> = HashSet::new(); // values that haven't been set yet
+
+            macro_rules! conflict {
+                ($slot:expr) => {
+                    for slot in &alive {
+                        if $slot != *slot {
+                            conflicts.update_edge(
+                                NodeIndex::from($slot),
+                                NodeIndex::from(*slot),
+                                (),
+                            );
+                        }
+                    }
+                };
+            }
+
             for output in outgoing {
-                alive.extend(node_needs.get(&output).into_iter().flatten());
+                for &need in node_needs.get(&output).into_iter().flatten() {
+                    conflict!(need);
+                    alive.insert(need);
+                }
             }
 
             for curr in self.graph[node].get_code().into_iter().rev() {
                 match curr.opcode {
-                    Opcode::SetLocal(slot) => {
-                        alive.remove(&slot);
-                        for other in alive.iter().filter(|other| **other != slot) {
-                            conflicts.update_edge(NodeIndex::from(*other), NodeIndex::from(slot), ());
-                        }
+                    Opcode::SetLocal(local) => {
+                        alive.remove(&local);
+                        conflict!(local);
                     }
-                    Opcode::GetLocal(slot) => {
-                        if alive.insert(slot) {
-                            for other in alive.iter().filter(|other| **other != slot) {
-                                conflicts.update_edge(NodeIndex::from(*other), NodeIndex::from(slot), ());
-                            }
+                    Opcode::GetLocal(local) => {
+                        if alive.insert(local) {
+                            conflict!(local);
                         }
                     }
                     Opcode::MoveLocal(dest, source) => {
-                        for slot in alive.iter() {
-                            if *slot != dest {
-                                conflicts.update_edge(NodeIndex::from(*slot), NodeIndex::from(dest), ());
-                            }
-                            if *slot != source {
-                                conflicts.update_edge(NodeIndex::from(*slot), NodeIndex::from(source), ());
-                            }
-                        }
-                        alive.insert(source);
+                        conflict!(dest);
+                        conflict!(source);
                         alive.remove(&dest);
+                        alive.insert(source);
                     }
                     _ => {}
                 }
             }
 
+            let mut changed = false;
 
-            let changed = match node_needs.get(&node) {
-                Some(old_needs) if old_needs != &alive => {
-                    node_needs.insert(node, alive);
-                    true
-                }
-                None if alive.len() > 0 => {
-                    node_needs.insert(node, alive);
-                    true
-                }
-                _ => false,
-            };
+            if node_needs.get(&node) != Some(&alive) {
+                changed = alive.len() != 0;
+                node_needs.insert(node, alive);
+            }
+
+            // can't be inside if since this node could be its own successor
+            work_set.remove(&node);
 
             if changed {
                 for input in incoming {
-                    work_list.push(input);
+                    if work_set.insert(input) {
+                        work_list.push_back(input);
+                    }
                 }
             }
         }
 
         // Graph-contract all phi nodes. We can do this since mini is a scoped language.
-        // What this does is force both sides of a phi node to be colored the same way.
+        // What this does is force both sides of a phi to be colored the same way.
         for component in kosaraju_scc(&phi_graph) {
             let mut nodes = component.into_iter();
-
             let slot = nodes.next().unwrap();
 
             for alias in nodes {
                 // Contract the graph such that the neighbors of the alias are now the
                 // neighbors of the slot.
-
+                
                 let others: Vec<_> = conflicts.neighbors_undirected(alias).collect();
-
                 for other in others {
                     conflicts.add_edge(slot, other, ());
                 }
-
                 conflicts.remove_node(alias);
             }
         }
 
         let mut colors: HashMap<u32, usize> = HashMap::new(); // colors to usage counts
         let mut assignments: HashMap<SlotNum, u32> = HashMap::new(); // slots to colors
-        colors.insert(0, 0);
 
         for node in conflicts.node_indices() {
             let mut available = colors.clone();
@@ -443,7 +439,7 @@ impl BasicGraph {
                 colors.insert(new, 0);
             }
 
-            let best = available.into_keys().min().unwrap();
+            let best = *available.iter().min_by_key(|(_, uses)| *uses).unwrap().0;
             assignments.insert(node.index() as u32, best);
             colors.entry(best).or_insert(1);
 

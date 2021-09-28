@@ -465,7 +465,6 @@ fn codegen(
                     TypeCheckedExprKind::Loop(body, _) => {
                         let loop_slot = cgen.next_slot();
                         let top_label = cgen.label_gen.next();
-                        let test_label = cgen.label_gen.next();
                         cgen.code.push(opcode!(Noop, Value::Label(top_label)));
                         cgen.code.push(opcode!(@SetLocal(loop_slot)));
                         cgen.code.push(opcode!(@Label(top_label)));
