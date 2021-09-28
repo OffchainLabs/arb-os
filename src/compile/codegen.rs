@@ -745,8 +745,18 @@ fn codegen(
                         cgen.code.push(opcode!(@Label(success)));
                         cgen.code.push(opcode!(Tget, Value::from(1)));
                     }
-                    TypeCheckedExprKind::ClosureLoad(..) => {
-                        unimplemented!("Needs to happen after register coloring");
+                    TypeCheckedExprKind::ClosureLoad(id, captures, _) => {
+                        let closure = match cgen.func_labels.get(id) {
+                            Some(label) => *label,
+                            None => {
+                                error!("No label for closure ref {}", id)
+                            }
+                        };
+                        if captures.is_empty() {
+                            cgen.code.push(opcode!(Noop, Value::Label(closure)));
+                        } else {
+                            unimplemented!("Needs to happen after register coloring");
+                        }
                     }
                 }
             }

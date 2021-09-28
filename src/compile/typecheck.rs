@@ -10,7 +10,6 @@ use super::ast::{
     UnaryOp,
 };
 use crate::compile::ast::{FieldInitializer, FuncProperties};
-use crate::compile::codegen::FrameSize;
 use crate::compile::{CompileError, ErrorSystem};
 use crate::console::{human_readable_index, Color};
 use crate::link::Import;
@@ -342,7 +341,7 @@ fn flowcheck_liveliness(
                     continue;
                 }
                 TypeCheckedExprKind::Loop(_body, _) => true,
-                TypeCheckedExprKind::ClosureLoad(_, _, _, captures, _) => {
+                TypeCheckedExprKind::ClosureLoad(_, captures, _) => {
                     // In the future we'll walk into the closure in case a captured value is overwritten,
                     // but because child_nodes() requires a *mutable* reference we can't do that cheaply.
                     // Hence, we'll just claim that every captured value is used.
@@ -575,7 +574,7 @@ pub enum TypeCheckedExprKind {
     ),
     CodeBlock(TypeCheckedCodeBlock),
     FixedArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, usize, Type),
-    ClosureLoad(StringId, usize, usize, BTreeSet<StringId>, Type),
+    ClosureLoad(StringId, BTreeSet<StringId>, Type),
     Tuple(Vec<TypeCheckedExpr>, Type),
     NewFixedArray(usize, Box<TypeCheckedExpr>, Type),
     FixedArrayMod(
@@ -2006,58 +2005,15 @@ fn typecheck_expr(
                     captures
                 }
 
-                fn all_idents(
-                    mut nodes: Vec<TypeCheckedNode>, // nodes of the same scope
-                ) -> HashSet<StringId> {
-                    let mut idents = HashSet::new();
-
-                    for node in &mut nodes {
-                        match node {
-                            TypeCheckedNode::Statement(stat) => match &mut stat.kind {
-                                TypeCheckedStatementKind::SetLocals(assigned, ..) => {
-                                    let ids = assigned.iter().map(|x| x.id);
-                                    idents.extend(ids);
-                                }
-                                _ => {}
-                            },
-                            TypeCheckedNode::Expression(expr) => match &mut expr.kind {
-                                TypeCheckedExprKind::IfLet(id, ..) => {
-                                    idents.insert(*id);
-                                }
-                                TypeCheckedExprKind::LocalVariableRef(id, ..) => {
-                                    idents.insert(*id);
-                                }
-                                _ => {}
-                            },
-                            TypeCheckedNode::Type(_) => continue,
-                        }
-                        idents.extend(all_idents(node.child_nodes()));
-                    }
-                    idents
-                }
-
                 let args: HashSet<StringId> = closure.args.iter().map(|arg| arg.name).collect();
-                let arg_count = args.len();
                 let captures = find_captures(closure.child_nodes(), args);
 
-                // We don't yet have an AST-walker that efficiently assigns slot numbers.
-                // The plan is to soon do this: instead of determining slot assignments for
-                // locals, args, and captures at codegen, we'll analyze the AST to efficiently pick
-                // a position for each identifier. Then, ClosureLoad(), MakeFrame(), and non-closure
-                // functions in general will both cost less gas and pay down technical debt.
-                //
-                // So, for the very short term, we'll just take the maximum use possible.
-                let frame_size = arg_count + all_idents(closure.child_nodes()).len() + 1;
-
-                closure.frame_size = frame_size as FrameSize;
                 closure.captures = captures.clone();
                 closures.insert(id, closure);
 
                 // We only get one opportunity to load in the captured values,
                 // so we do that at declaration.
-                Ok(TypeCheckedExprKind::ClosureLoad(
-                    id, arg_count, frame_size, captures, tipe,
-                ))
+                Ok(TypeCheckedExprKind::ClosureLoad(id, captures, tipe))
             }
             ExprKind::NewArray(size_expr, tipe) => {
                 let size_expr = typecheck_expr(
