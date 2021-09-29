@@ -362,6 +362,28 @@ public func account_setBaseTxFeeL1Gas(account: Account, fee: uint) -> Account {
     };
 }
 
+func entrypoint_stub() {}
+
+public func account_setStorage(account: Account, storage: StorageMap) -> Account {
+    return account with {
+        contractInfo: Some(
+            xif let Some(contractInfo) = account.contractInfo {
+                contractInfo with {
+                    storage: storage
+                }
+            } else {
+                struct {
+                    contractStateVersion: 1,
+                    code: bytearray_new(0),
+                    evmJumpTable: newmap<uint, view write func()>,
+                    startCodePoint: entrypoint_stub,
+                    storage: storage,
+                }
+            }
+        )
+    };
+}
+
 public view write func accountStore_createAccountFromEvmCode(
     store: AccountStore,
     newAddr: address,
