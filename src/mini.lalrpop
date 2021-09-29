@@ -601,11 +601,7 @@ Expr12: Expr = {
     <qualifiers: (<Qualifier>)*> <lno: @L> <u: ClosureUsage> "(" <fa:FuncArgs> ")" <t: (Return)?> <block:CodeBlock> => {
         let view = qualifiers.contains(&"view");
         let write = qualifiers.contains(&"write");
-        let mut debug = DebugInfo::here(file_info, lno, filename);
-
-        if closures.len() == 0 {
-            debug.attributes.codegen_print = true;
-        }
+        let debug = DebugInfo::here(file_info, lno, filename);
 
         let mut stats = block.body;
         if let Some(expr) = block.ret_expr {

@@ -794,7 +794,7 @@ fn codegen(
                             }
                         };
 
-                        for capture in captures.iter() {
+                        for capture in captures.iter().rev() {
                             let slot = local!(capture);
                             cgen.code.push(opcode!(@GetLocal(slot)));
                         }
