@@ -7,18 +7,25 @@ use crate::evm::abi::{ArbAddressTable, ArbFunctionTable, ArbSys};
 use crate::evm::preinstalled_contracts::_ArbInfo;
 use crate::run::{load_from_file, load_from_file_and_env, RuntimeEnvironment};
 use crate::uint256::Uint256;
+
+#[cfg(test)]
+use crate::evm::evmtest::{serialize_storage, deserialize_storage, compare_storage};
+#[cfg(test)]
+use crate::evm::live_code::ArbosTest;
+
 use ethers_signers::Signer;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
 
 use crate::compile::miniconstants::init_constant_table;
-#[cfg(test)]
-use crate::evm::live_code::ArbosTest;
 pub use abi::{builtin_contract_path, contract_path, AbiForContract};
 pub use benchmarks::make_benchmarks;
 pub use evmtest::run_evm_tests;
 use std::option::Option::None;
+
+#[cfg(test)]
+use std::collections::HashMap;
 
 pub mod abi;
 mod benchmarks;
@@ -452,6 +459,77 @@ pub fn basic_evm_add_test(log_to: Option<&Path>, debug: bool) -> Result<(), etha
     }
 
     machine.write_coverage("test_evm_add_code".to_string());
+    Ok(())
+}
+
+#[cfg(test)]
+pub fn arbos_ethcall_test(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+
+    let arbos_test = ArbosTest::new(debug);
+    let arbinfo = _ArbInfo::_new(debug);
+    let caller_address = Uint256::from_u64(89629813089426890);
+
+    println!("Balance");
+
+    arbos_test._set_balance(&mut machine, &caller_address, &Uint256::one())?;
+    let balance_test = arbinfo._get_balance(&mut machine, &caller_address).unwrap();
+    assert_eq!(balance_test, Uint256::one());
+
+    arbos_test._set_balance(&mut machine, &caller_address, &Uint256::from_u64(2))?;
+    let balance_test = arbinfo._get_balance(&mut machine, &caller_address).unwrap();
+    assert_eq!(balance_test, Uint256::from_u64(2));
+
+    println!("set code");
+    let contract_address = Uint256::from_u64(89629813089426893);
+    // code translates to: storage[1] = storage[0] + 0x10, return (storage[1])
+    let code = hex::decode("6000546010018060015560005260206000f3").unwrap();
+
+    arbos_test._set_code(&mut machine, &contract_address, code)?;
+    let retdata = arbos_test.call(&mut machine, caller_address.clone(), contract_address.clone(), Vec::new(), Uint256::zero())?;
+    let intres = Uint256::from_bytes(&retdata[0..32]);
+    assert_eq!(intres, Uint256::from_u64(0x10));
+
+    println!("store:");
+    arbos_test._store(&mut machine, &contract_address, &Uint256::zero(), &Uint256::from_u64(0x100))?;
+
+    let retdata = arbos_test.call(&mut machine, caller_address.clone(), contract_address.clone(), Vec::new(), Uint256::zero())?;
+    let intres = Uint256::from_bytes(&retdata[0..32]);
+    assert_eq!(intres, Uint256::from_u64(0x110));
+
+    println!("set state:");
+    let mut next_storage = HashMap::<Uint256, Uint256>::new();
+    next_storage.insert(Uint256::zero(), Uint256::from_u64(0x200));
+    next_storage.insert(Uint256::from_u64(0x400), Uint256::from_u64(0x400));
+    let mut expected_storage = next_storage.clone();
+    arbos_test._set_state(&mut machine, &contract_address, serialize_storage(next_storage))?;
+
+    let retdata = arbos_test.call(&mut machine, caller_address.clone(), contract_address.clone(), Vec::new(), Uint256::zero())?;
+    let intres = Uint256::from_bytes(&retdata[0..32]);
+    assert_eq!(intres, Uint256::from_u64(0x210));
+
+    println!("set nonce:");
+    arbos_test._set_nonce(&mut machine, contract_address.clone(), Uint256::from_u64(0x20))?;
+
+    //emulate the call for comparison
+    expected_storage.insert(Uint256::one(), Uint256::from_u64(0x210));
+
+    let (_, res_nonce, res_storage_serial) =
+        arbos_test.get_account_info(&mut machine, contract_address.clone())?;
+    let res_storage = deserialize_storage(res_storage_serial);
+    assert_eq!(res_nonce, Uint256::from_u64(0x20));
+    assert!(compare_storage(&expected_storage, &res_storage));
+
+    if let Some(path) = log_to {
+        machine
+            .runtime_env
+            .recorder
+            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
+            .unwrap();
+    }
+
+    machine.write_coverage("arbos_ethcall_test".to_string());
     Ok(())
 }
 

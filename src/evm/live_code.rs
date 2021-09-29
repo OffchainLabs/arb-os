@@ -228,4 +228,123 @@ impl ArbosTest {
             Err(ethabi::Error::from("reverted"))
         }
     }
+
+    pub fn _set_balance(
+        &self,
+        machine: &mut Machine,
+        addr: &Uint256,
+        new_balance: &Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "setBalance",
+            &[
+                ethabi::Token::Address(addr.to_h160()),
+                ethabi::Token::Uint(new_balance.to_u256()),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _set_code(
+        &self,
+        machine: &mut Machine,
+        addr: &Uint256,
+        code: Vec<u8>,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "setCode",
+            &[
+                ethabi::Token::Address(addr.to_h160()),
+                ethabi::Token::Bytes(code),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _set_state(
+        &self,
+        machine: &mut Machine,
+        addr: &Uint256,
+        state: Vec<u8>,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "setState",
+            &[
+                ethabi::Token::Address(addr.to_h160()),
+                ethabi::Token::Bytes(state),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _store(
+        &self,
+        machine: &mut Machine,
+        addr: &Uint256,
+        key: &Uint256,
+        val: &Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            Uint256::zero(),
+            "store",
+            &[
+                ethabi::Token::Address(addr.to_h160()),
+                ethabi::Token::Uint(key.to_u256()),
+                ethabi::Token::Uint(val.to_u256()),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
 }
