@@ -158,9 +158,9 @@ public func pristineAccount(addr: address) -> Account {
         blsKey: None,
         nextSeqNum: 0,
         ethBalance: 0,
-        contractInfo: None<AccountContractInfo>,
-        aggregatorInfo: None<AggregatorInfo>,
-        aggregatorToPay: None<address>
+        contractInfo: None,
+        aggregatorInfo: None,
+        aggregatorToPay: None,
     }
 }
 
@@ -549,17 +549,12 @@ public func accountStore_sumOfAllEscrowBalances(acctStore: AccountStore) -> uint
     unsafecast<uint>(
         storageMap_forall(
             acctStore.escrowStore.escrowedValues,
-            /*closure(_k: uint, v: uint, state: any) -> any {
-                return unsafecast<uint>(state) + v;
-        },*/
-            test_func,
+            closure(_k: uint, v: uint, state: any) -> any {
+                unsafecast<uint>(state) + v
+            },
             0,
         )
     )
-}
-
-public func test_func(_: uint, v: uint, state: any) -> any {
-    unsafecast<uint>(state) + v
 }
 
 // Transfer funds into an existing escrow box

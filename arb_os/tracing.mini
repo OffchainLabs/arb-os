@@ -39,7 +39,7 @@ public view func evmTracer_emit() {
             debug((20000, val));
             return;
         }
-    }
+    };
 }
 
 public view write func evmTracer_emitAndClear() {

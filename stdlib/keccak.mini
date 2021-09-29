@@ -148,7 +148,7 @@ public func hasher_pushN_le(h: Hasher, val: uint, nbytes: uint) -> Hasher {
     }
     let accum = h.accumulator;
     let offset = h.offset;
-    loop<Hasher> {  // need to loop because data might cross word/block boundary
+    loop {  // need to loop because data might cross word/block boundary
         let word = offset / 32;
         let align = offset & 0x1f;
         if (align+nbytes <= 8) || ((word < 4) && (align+nbytes <= 32)) {

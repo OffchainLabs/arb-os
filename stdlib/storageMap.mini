@@ -62,7 +62,7 @@ public func storageMap_size(kvs: StorageMap) -> uint {
 public func storageMap_get(kvs: StorageMap, key: uint) -> uint {
     let s = kvs.tree;
     let reductionFactor = 1;
-    loop<uint> {
+    loop {
         if s == unsafecast<StorageMapNode>(0) {
             // empty subtree
             return 0;
@@ -93,7 +93,7 @@ type Unwinder = struct {
 
 public func storageMap_set(s: StorageMap, key: uint, value: uint) -> StorageMap {
     let (utree, maybeUnwinder, delta) = storageMap_set2(s.tree, key, value);
-    loop<StorageMap> {
+    loop {
         if let Some(unwinder) = maybeUnwinder {
             utree = unwinder.kvs with {
                 [unwinder.index] = utree
@@ -111,7 +111,7 @@ public func storageMap_set(s: StorageMap, key: uint, value: uint) -> StorageMap 
 public func storageMap_set2(s: StorageMapNode, key: uint, value: uint) -> (StorageMapNode, option<Unwinder>, int) {
     let reductionFactor = 1;
     let unwinder = None<Unwinder>;
-    loop<(StorageMapNode, option<Unwinder>, int)> {
+    loop {
         if s == unsafecast<StorageMapNode>(0) {
             if value == 0 {
                 // writing zero to an empty slot; do nothing

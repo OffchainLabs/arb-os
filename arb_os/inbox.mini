@@ -351,7 +351,7 @@ public view write func mainRunLoop() {
                 handleUnpackedMessage(msg);
             }
         }
-    }
+    };
 }
 
 /*

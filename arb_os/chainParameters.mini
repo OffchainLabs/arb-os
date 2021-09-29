@@ -115,7 +115,7 @@ public view write func chainParams_gotParamsMessage(data: ByteArray) {
         } else {
             chainParams_set(paramId, value);
         }
-    }
+    };
 }
 
 public view write func notifyParamsChanged() {

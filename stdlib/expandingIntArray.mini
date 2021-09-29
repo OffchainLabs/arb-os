@@ -96,7 +96,7 @@ public func expandingIntArray_setN(
     let chunk = arr.chunk;
     let tree = arr.contents;
     let unwinder = None<Unwinder>;
-    loop<ExpandingIntArray> {
+    loop {
         if chunk <= inChunk {
             tree = tree with { [index/chunk] = value };
             loop {

@@ -230,9 +230,7 @@ impl BasicGraph {
         }
         for node in &nodes {
             for curr in self.graph[*node].get_code() {
-                if let Opcode::GetLocal(slot)
-                | Opcode::MoveLocal(_, slot) = curr.opcode
-                {
+                if let Opcode::GetLocal(slot) | Opcode::MoveLocal(_, slot) = curr.opcode {
                     locals.remove(&slot);
                 }
             }

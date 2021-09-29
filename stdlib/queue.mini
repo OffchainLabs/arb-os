@@ -167,7 +167,7 @@ public func queuestack_push(qs: QueueStack, q: Queue) -> QueueStack {
 }
 
 func queuestack_stripEmpties(qs: QueueStack) -> QueueStack {
-    loop<QueueStack> {
+    loop {
         if let Some(cell) = unsafecast<option<QueueStackCell> >(qs) {   // cast is safe but compiler doesn't know that
             if queue_isEmpty(cell.head) {
                 qs = cell.rest;
@@ -181,7 +181,7 @@ func queuestack_stripEmpties(qs: QueueStack) -> QueueStack {
 }
 
 public func queuestack_get(qs: QueueStack) -> option<(QueueStack, any)> {
-    loop<option<(QueueStack, any)> > {
+    loop {
         let cell = qs?;
         if let Some(res) = queue_get(cell.head) {
             let (uq, item) = res;

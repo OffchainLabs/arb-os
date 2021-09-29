@@ -936,12 +936,12 @@ impl fmt::Display for Value {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub enum Opcode {
-    MakeFrame(FrameSize, bool),          // make a func frame: space, captures
-    GetLocal(SlotNum),                   // get a local variable within a func frame
-    SetLocal(SlotNum),                   // set a local variable within a func frame
-    MoveLocal(SlotNum, SlotNum),         // move into arg1 arg2 within a func frame
+    MakeFrame(FrameSize, bool),        // make a func frame: space, captures
+    GetLocal(SlotNum),                 // get a local variable within a func frame
+    SetLocal(SlotNum),                 // set a local variable within a func frame
+    MoveLocal(SlotNum, SlotNum),       // move into arg1 arg2 within a func frame
     ReserveCapture(SlotNum, StringId), // annotate where a capture should be placed within a func frame
-    Capture(LabelId, StringId), // annotate which value to retrieve for closure packing
+    Capture(LabelId, StringId),        // annotate which value to retrieve for closure packing
     MakeClosure(LabelId),              // create a callable closure frame
     FuncCall(FuncProperties),          // make a function call: nargs, nouts, and view/write-props
     TupleGet(usize, usize),            // args are offset and size for the anysize_tuple

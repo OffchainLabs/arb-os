@@ -120,12 +120,7 @@ pub fn expand_calls(code: Vec<Instruction>, label_gen: &mut LabelGenerator) -> V
 }
 
 /// Remove and save capture annotations
-pub fn read_capture_data(
-    code: Vec<Instruction>,
-) -> (
-    Vec<Instruction>,
-    ClosureAssignments,
-) {
+pub fn read_capture_data(code: Vec<Instruction>) -> (Vec<Instruction>, ClosureAssignments) {
     let mut out = Vec::with_capacity(code.len());
     let mut captures = HashMap::new();
 
@@ -179,7 +174,9 @@ pub fn pack_closures(
 
                 // make a tuple tree for a frame, but write to it on the stack
                 let tuple = TupleTree::new(size, true);
-                tuple.write_code(false, place, &mut out, curr.debug_info).unwrap();
+                tuple
+                    .write_code(false, place, &mut out, curr.debug_info)
+                    .unwrap();
             }
             Opcode::ReserveCapture(_, _) => {
                 // The closure receiving the capture doesn't need to do anything,

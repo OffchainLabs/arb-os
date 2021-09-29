@@ -45,7 +45,7 @@ public func priorityq_get(pq: PriorityQ) -> option<(any, PriorityQ)> {
 }
 
 func pq_pushDown(pq: PriorityQ, index: uint) -> PriorityQ {
-    loop<PriorityQ> {
+    loop {
         let firstKidIdx = 2*index+1;
         if firstKidIdx >= pq.size {
             return pq;
@@ -87,7 +87,7 @@ func pq_pushDown(pq: PriorityQ, index: uint) -> PriorityQ {
 
 func pq_pushUp(pq: PriorityQ, index: uint) -> PriorityQ {
     let this = pq.contents[index];
-    loop<PriorityQ> {
+    loop {
         if index == 0 {
             return pq;
         }

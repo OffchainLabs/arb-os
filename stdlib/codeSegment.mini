@@ -62,7 +62,7 @@ view func parseEvmCodeSegment(bs: ByteStream) -> EvmInstructionStack {
     let stack = evmInstructionStack_new();
     let evmPc = 0;
     let reachable = true;   // true if the next instruction is reachable
-    loop<EvmInstructionStack> {
+    loop {
         if let Some(res) = bytestream_getByte(bs) {
             let (*bs, opcode) = res;
             if opcode == const::EvmOpcode_jumpdest {
@@ -179,7 +179,7 @@ view write func generateCodeForEvmSegment(
     let evmJumpTable = newmap<uint, AvmCodePoint>;
     let pcTable = stack_new();
 
-    loop<GeneratedCode> {
+    loop {
         if let Some(res) = evmInstructionStack_pop(insns) {
             let invalidInstruction = false;
             let (*insns, insn) = res;
