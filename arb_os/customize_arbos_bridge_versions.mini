@@ -19,10 +19,6 @@ public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade
     return oldGlobals.globalChainParameters;
 }
 
-public func set_globalCallStack_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
-    return None<EvmCallFrame>;
-}
-
 public func set_gasAccountingInfo_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> GasAccountingInfo {
     let old = oldGlobals.gasAccountingInfo;
     return struct {

@@ -23,9 +23,9 @@ public view write func evmTracer_clear() {
 }
 
 public func evmTracer_new() -> EvmTracer {
-    return struct {
+    struct {
         recordStack: stack_new(),
-    };
+    }
 }
 
 public view func evmTracer_emit() {

@@ -29,19 +29,19 @@ const ChainOwnerKeccak = 0x1567aa7175e04611d194275bb504cc64e920959dd01df9d86ab04
 var globalChainParameters: map<uint, uint>;
 
 public view func chainParams_get(which: uint) -> option<uint> {
-    return globalChainParameters[which];
+    globalChainParameters[which]
 }
 
 public view func chainParams_getOrDie(which: uint) -> uint {
-    return if let Some(val) = chainParams_get(which) {
+    if let Some(val) = chainParams_get(which) {
         val
     } else {
         error
-    };
+    }
 }
 
 public view write func chainParams_set(which: uint, value: uint) {
-    if (globalChainParameters[which] == None<uint>) {
+    if globalChainParameters[which] == None<uint> {
         error;
     }
     chainParams_create(which, value);
@@ -58,7 +58,7 @@ public write func chainParams_init() {
 }
 
 public func chainParams_getDefaults() -> map<uint, uint> {
-    return newmap<uint, uint>
+    newmap<uint, uint>
         with { [const::Atom_Param_SecondsPerBlockNumerator] = const::Default_Param_SecondsPerBlockNumerator }
         with { [const::Atom_Param_SecondsPerBlockDenominator] = const::Default_Param_SecondsPerBlockDenominator }
         with { [const::Atom_Param_FeesEnabled] = const::Default_Param_FeesEnabled }
@@ -89,7 +89,6 @@ public func chainParams_getDefaults() -> map<uint, uint> {
         with { [const::Atom_Param_ArbitrumNonZeroBalanceCallStipend] = const::Default_Param_ArbitrumNonZeroBalanceCallStipend }
         with { [const::Atom_Param_GasPriceOracle] = const::Default_Param_GasPriceOracle }
         with { [const::Atom_Param_EnableL1ContractAddressAliasing] = const::Default_Param_EnableL1ContractAddressAliasing }
-    ;
 }
 
 public view write func chainParams_gotParamsMessage(data: ByteArray) {
@@ -109,7 +108,7 @@ public view write func chainParams_gotParamsMessage(data: ByteArray) {
             error   // should never have an id without a matching value
         };
 
-        if (paramId == const::ChainOwnerKeccak) {
+        if paramId == const::ChainOwnerKeccak {
             // special-case this, for backward compatibility
             // use of this is deprecated, and it will be removed in a future ArbOS upgrade
             addChainOwner(address(value));
@@ -125,11 +124,11 @@ public view write func notifyParamsChanged() {
 }
 
 public view func chainParams_chainId() -> uint {
-    return chainParams_getOrDie(const::Atom_Param_ChainID);
+    chainParams_getOrDie(const::Atom_Param_ChainID)
 }
 
 public view func chainParams_getDefaultAggregator() -> address {
-    return address(chainParams_getOrDie(const::Atom_Param_DefaultAggregator));
+    address(chainParams_getOrDie(const::Atom_Param_DefaultAggregator))
 }
 
 public view write func chainParams_setDefaultAggregator(newDefault: address) {
@@ -137,26 +136,26 @@ public view write func chainParams_setDefaultAggregator(newDefault: address) {
 }
 
 public view func chainParams_getSecondsPerSend() -> uint {
-    return chainParams_getOrDie(const::Atom_Param_SecondsPerSend);
+    chainParams_getOrDie(const::Atom_Param_SecondsPerSend)
 }
 
 public view func chainParams_serializeAllParams() -> ByteArray {
-    return unsafecast<ByteArray>(
+    unsafecast<ByteArray>(
         builtin_kvsForall(
             unsafecast<Kvs>(globalChainParameters),
             unsafecast<func(any, any, any) -> any>(sapClosure),
             bytearray_new(0),
         )
-    );
+    )
 }
 
 func sapClosure(key: uint, value: uint, ba: ByteArray) -> ByteArray {
     let sz = bytearray_size(ba);
-    return bytearray_set256(
+    bytearray_set256(
         bytearray_set256(ba, sz, key),
         sz+32,
         value,
-    );
+    )
 }
 
 var chainOwners: SetOfAddresses;
@@ -170,13 +169,13 @@ public view write func removeChainOwner(ownerToRemove: address) {
 }
 
 public view func serializedListOfChainOwners() -> ByteArray {
-    return if let Some(ba) = setOfAddresses_serialize(chainOwners) {
+    if let Some(ba) = setOfAddresses_serialize(chainOwners) {
         ba
     } else {
         error
-    };
+    }
 }
 
 public view func hasChainOwnerPrivileges(addr: address) -> bool {
-    return setOfAddresses_contains(chainOwners, addr) || (addr == address(0));
+    setOfAddresses_contains(chainOwners, addr) || (addr == address(0))
 }

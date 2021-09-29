@@ -4,7 +4,6 @@
 
 
 use std::bytearray::ByteArray;
-use evmlogs::EvmLogs;
 
 use accounts::safeGetGlobalAccountStore;
 use accounts::safeSetGlobalAccountStore;
@@ -17,7 +16,6 @@ use accounts::account_getNextSeqNum;
 use evmCallStack::initEvmCallStack;
 use evmCallStack::initEvmCallStackForConstructor;
 
-use gasAccounting::GasUsage;
 use gasAccounting::TxFeeStats;
 
 use output::emitTxReceipt;
@@ -78,9 +76,9 @@ public view write func processL2Request(request: TxRequestData) -> option<()> {
                 } else {
                     const::TxResultCode_sequenceNumberTooHigh
                 },
-                None<ByteArray>,
-                None<EvmLogs>,
-                None<GasUsage>,
+                None,
+                None,
+                None,
                 request.feeStats,
                 true,
                 request.originalCaller,
@@ -96,9 +94,9 @@ public view write func processL2Request(request: TxRequestData) -> option<()> {
             emitTxReceipt(
                 request.incomingRequest,
                 const::TxResultCode_revert,
-                None<ByteArray>,
-                None<EvmLogs>,
-                None<GasUsage>,
+                None,
+                None,
+                None,
                 request.feeStats,
                 true,
                 request.originalCaller,
@@ -122,9 +120,9 @@ public view write func processL2Request(request: TxRequestData) -> option<()> {
             emitTxReceipt(
                 request.incomingRequest,
                 const::TxResultCode_cannotDeployAtAddress,
-                None<ByteArray>,
-                None<EvmLogs>,
-                None<GasUsage>,
+                None,
+                None,
+                None,
                 request.feeStats,
                 true,
                 request.originalCaller,
@@ -134,7 +132,7 @@ public view write func processL2Request(request: TxRequestData) -> option<()> {
             initEvmCallStackForConstructor(
                 codeBytes,
                 request,
-                None<uint>,
+                None,
             );
             //NOTREACHED
         }
@@ -146,7 +144,7 @@ public view write func processL2Request(request: TxRequestData) -> option<()> {
             const::EVMCallType_call
         };
 
-        initEvmCallStack(callKind, request, None<ByteArray>, None);  // should never return
+        initEvmCallStack(callKind, request, None, None);  // should never return
     }
 
     //NOTREACHED

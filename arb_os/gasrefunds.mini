@@ -30,14 +30,14 @@ public func gasRefundTracker_add(
     } else {
         1
     };
-    return tracker;
+    tracker
 }
 
 public func gasRefundTracker_allocationsToRefund(
     tracker: GasRefundTracker,
     acctStore: AccountStore,
 ) -> uint {
-    return unsafecast<uint>(
+    unsafecast<uint>(
         builtin_kvsForall(
             unsafecast<Kvs>(tracker.allocations),
             closure(rawKey: any, rawValue: any, rawState: any) -> any {
@@ -48,9 +48,9 @@ public func gasRefundTracker_allocationsToRefund(
                     accountStore_get(acctStore, addr),
                     storageIndex,
                 ) {
-                    if (val == 0) {
+                    if val == 0 {
                         allocs
-                    } else if (allocs > 1) {
+                    } else if allocs > 1 {
                        allocs - 1
                     } else {
                         0
@@ -62,5 +62,5 @@ public func gasRefundTracker_allocationsToRefund(
             },
             0,
         )
-    );
+    )
 }

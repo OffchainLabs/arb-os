@@ -176,7 +176,7 @@ public view write func decompressAndVerifyEcdsaSignedTx(
 
     let (_, txRequest) = decompressTx(bytestream_new(body), None)?;
 
-    let (seqNum, calldataUnitsDelta) = if(originalRequest.kind == const::L1MessageType_L2ForGasEstimation) {
+    let (seqNum, calldataUnitsDelta) = if originalRequest.kind == const::L1MessageType_L2ForGasEstimation {
         let realSnum = account_getNextSeqNum(accountStore_get(safeGetGlobalAccountStore(), originalRequest.sender));
         (
             realSnum,
