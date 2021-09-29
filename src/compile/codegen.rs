@@ -805,9 +805,8 @@ fn codegen(
                         } else {
                             // We'll pack this closure later when we actually know its size and colors
                             cgen.code.push(opcode!(@MakeClosure(closure_id)));
-                            for &capture in captures.iter().rev() {
-                                let slot = local!(&capture);
-                                cgen.code.push(opcode!(@Capture(closure_id, slot, capture)));
+                            for &capture in captures.iter() {
+                                cgen.code.push(opcode!(@Capture(closure_id, capture)));
                             }
 
                             let container = Value::new_tuple(vec![closure, Value::none()]);

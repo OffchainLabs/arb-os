@@ -125,11 +125,9 @@ pub fn read_capture_data(
 ) -> (
     Vec<Instruction>,
     ClosureAssignments,
-    HashMap<LabelId, ClosureAssignments>,
 ) {
     let mut out = Vec::with_capacity(code.len());
     let mut captures = HashMap::new();
-    let mut packings = HashMap::new();
 
     for curr in code {
         match curr.opcode {
@@ -137,16 +135,11 @@ pub fn read_capture_data(
                 // Now we know the slot the optimizer set for using this capture
                 captures.insert(id, slot);
             }
-            Opcode::Capture(closure, slot, id) => {
-                // Now we know the slot the optimizer set for this closure packing item
-                let packing = packings.entry(closure).or_insert(HashMap::new());
-                packing.insert(id, slot);
-            }
             _ => {}
         }
         out.push(curr);
     }
-    (out, captures, packings)
+    (out, captures)
 }
 
 pub fn pack_closures(
@@ -179,13 +172,12 @@ pub fn pack_closures(
                 let tuple = Value::new_tuple(vec![Value::none(); size]);
                 out.push(opcode!(Noop, tuple));
             }
-            Opcode::Capture(closure, slot, id) => {
+            Opcode::Capture(closure, id) => {
                 let size = *frame_sizes.get(&closure).expect("no frame size") as usize;
                 let captures = capture_map.get(&closure).expect("no captures");
                 let place = *captures.get(&id).expect("no slot") as usize;
 
                 // get the value we wish to pack and place it into the tuple
-                out.push(opcode!(@GetLocal(slot)));
                 out.push(opcode!(Swap1));
                 out.push(opcode!(@TupleSet(place, size)));
             }

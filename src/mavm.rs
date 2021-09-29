@@ -941,7 +941,7 @@ pub enum Opcode {
     SetLocal(SlotNum),                   // set a local variable within a func frame
     MoveLocal(SlotNum, SlotNum),         // move into arg1 arg2 within a func frame
     ReserveCapture(SlotNum, StringId), // annotate where a capture should be placed within a func frame
-    Capture(LabelId, SlotNum, StringId), // annotate which value to retrieve for closure packing
+    Capture(LabelId, StringId), // annotate which value to retrieve for closure packing
     MakeClosure(LabelId),              // create a callable closure frame
     FuncCall(FuncProperties),          // make a function call: nargs, nouts, and view/write-props
     TupleGet(usize, usize),            // args are offset and size for the anysize_tuple
@@ -1100,12 +1100,11 @@ impl Opcode {
             Opcode::ReserveCapture(slot, id) => {
                 format!("ReserveCapture {} {}", Color::pink(slot), Color::grey(id))
             }
-            Opcode::Capture(label, slot, id) => {
+            Opcode::Capture(label, id) => {
                 let label = Value::Label(Label::Closure(*label));
                 format!(
-                    "Capture {} {} {}",
+                    "Capture {} {}",
                     label.pretty_print(label_color),
-                    Color::pink(slot),
                     Color::grey(id)
                 )
             }
@@ -1236,7 +1235,7 @@ impl Opcode {
             Opcode::SetLocal(_) => "SetLocal",
             Opcode::MoveLocal(_, _) => "MoveLocal",
             Opcode::ReserveCapture(_, _) => "ReserveCapture",
-            Opcode::Capture(_, _, _) => "Capture",
+            Opcode::Capture(_, _) => "Capture",
             Opcode::MakeClosure(_) => "MakeClosure",
             Opcode::GetGlobalVar(_) => "GetGlobal",
             Opcode::SetGlobalVar(_) => "SetGlobal",

@@ -231,8 +231,7 @@ impl BasicGraph {
         for node in &nodes {
             for curr in self.graph[*node].get_code() {
                 if let Opcode::GetLocal(slot)
-                | Opcode::MoveLocal(_, slot)
-                | Opcode::Capture(_, slot, _) = curr.opcode
+                | Opcode::MoveLocal(_, slot) = curr.opcode
                 {
                     locals.remove(&slot);
                 }
@@ -267,7 +266,6 @@ impl BasicGraph {
                 match curr.opcode {
                     Opcode::SetLocal(slot)
                     | Opcode::GetLocal(slot)
-                    | Opcode::Capture(_, slot, _)
                     | Opcode::ReserveCapture(slot, _) => {
                         *locals.entry(slot).or_insert(0) += 1;
                     }
@@ -297,7 +295,6 @@ impl BasicGraph {
                 match &mut curr.opcode {
                     Opcode::SetLocal(ref mut slot)
                     | Opcode::GetLocal(ref mut slot)
-                    | Opcode::Capture(_, ref mut slot, _)
                     | Opcode::ReserveCapture(ref mut slot, _) => {
                         *slot = *replace.get(slot).unwrap();
                     }
@@ -378,7 +375,7 @@ impl BasicGraph {
                         alive.remove(&local);
                         conflict!(local);
                     }
-                    Opcode::GetLocal(local) | Opcode::Capture(_, local, _) => {
+                    Opcode::GetLocal(local) => {
                         if alive.insert(local) {
                             conflict!(local);
                         }
@@ -487,7 +484,6 @@ impl BasicGraph {
                 match &mut curr.opcode {
                     Opcode::GetLocal(ref mut slot)
                     | Opcode::SetLocal(ref mut slot)
-                    | Opcode::Capture(_, ref mut slot, _)
                     | Opcode::ReserveCapture(ref mut slot, _) => {
                         *slot = *best_assignments.get(slot).expect("no color!");
                     }

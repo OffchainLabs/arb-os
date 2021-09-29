@@ -341,8 +341,6 @@ pub struct CompiledFunc {
     pub code: Vec<Instruction>,
     /// The slot assignments for any captures this func (closure) may use
     pub captures: ClosureAssignments,
-    /// The slot assignments for any captures this func packs for the closures it defines
-    pub packings: HashMap<LabelId, ClosureAssignments>,
     /// The size of the function's frame
     pub frame_size: FrameSize,
     /// All globals accessible to this func
@@ -361,7 +359,6 @@ impl CompiledFunc {
         path: Vec<String>,
         code: Vec<Instruction>,
         captures: ClosureAssignments,
-        packings: HashMap<LabelId, ClosureAssignments>,
         frame_size: FrameSize,
         globals: Vec<GlobalVar>,
         type_tree: TypeTree,
@@ -373,7 +370,6 @@ impl CompiledFunc {
             path,
             code,
             captures,
-            packings,
             frame_size,
             globals,
             type_tree,
@@ -1079,7 +1075,7 @@ fn codegen_modules(
             let code = translate::expand_calls(code, &mut label_gen);
             let code = translate::untag_jumps(code);
             let code = translate::replace_phi_nodes(code);
-            let (code, captures, packings) = translate::read_capture_data(code);
+            let (code, captures) = translate::read_capture_data(code);
 
             let globals: Vec<_> = globals.into_iter().map(|g| g.1).collect();
 
@@ -1088,7 +1084,6 @@ fn codegen_modules(
                 module_path,
                 code,
                 captures,
-                packings,
                 frame_size,
                 globals,
                 type_tree.clone(),
