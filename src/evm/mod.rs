@@ -9,7 +9,7 @@ use crate::run::{load_from_file, load_from_file_and_env, RuntimeEnvironment};
 use crate::uint256::Uint256;
 
 #[cfg(test)]
-use crate::evm::evmtest::{serialize_storage, deserialize_storage, compare_storage};
+use crate::evm::evmtest::{compare_storage, deserialize_storage, serialize_storage};
 #[cfg(test)]
 use crate::evm::live_code::ArbosTest;
 
@@ -487,14 +487,31 @@ pub fn arbos_ethcall_test(log_to: Option<&Path>, debug: bool) -> Result<(), etha
     let code = hex::decode("6000546010018060015560005260206000f3").unwrap();
 
     arbos_test._set_code(&mut machine, &contract_address, code)?;
-    let retdata = arbos_test.call(&mut machine, caller_address.clone(), contract_address.clone(), Vec::new(), Uint256::zero())?;
+    let retdata = arbos_test.call(
+        &mut machine,
+        caller_address.clone(),
+        contract_address.clone(),
+        Vec::new(),
+        Uint256::zero(),
+    )?;
     let intres = Uint256::from_bytes(&retdata[0..32]);
     assert_eq!(intres, Uint256::from_u64(0x10));
 
     println!("store:");
-    arbos_test._store(&mut machine, &contract_address, &Uint256::zero(), &Uint256::from_u64(0x100))?;
+    arbos_test._store(
+        &mut machine,
+        &contract_address,
+        &Uint256::zero(),
+        &Uint256::from_u64(0x100),
+    )?;
 
-    let retdata = arbos_test.call(&mut machine, caller_address.clone(), contract_address.clone(), Vec::new(), Uint256::zero())?;
+    let retdata = arbos_test.call(
+        &mut machine,
+        caller_address.clone(),
+        contract_address.clone(),
+        Vec::new(),
+        Uint256::zero(),
+    )?;
     let intres = Uint256::from_bytes(&retdata[0..32]);
     assert_eq!(intres, Uint256::from_u64(0x110));
 
@@ -503,14 +520,28 @@ pub fn arbos_ethcall_test(log_to: Option<&Path>, debug: bool) -> Result<(), etha
     next_storage.insert(Uint256::zero(), Uint256::from_u64(0x200));
     next_storage.insert(Uint256::from_u64(0x400), Uint256::from_u64(0x400));
     let mut expected_storage = next_storage.clone();
-    arbos_test._set_state(&mut machine, &contract_address, serialize_storage(next_storage))?;
+    arbos_test._set_state(
+        &mut machine,
+        &contract_address,
+        serialize_storage(next_storage),
+    )?;
 
-    let retdata = arbos_test.call(&mut machine, caller_address.clone(), contract_address.clone(), Vec::new(), Uint256::zero())?;
+    let retdata = arbos_test.call(
+        &mut machine,
+        caller_address.clone(),
+        contract_address.clone(),
+        Vec::new(),
+        Uint256::zero(),
+    )?;
     let intres = Uint256::from_bytes(&retdata[0..32]);
     assert_eq!(intres, Uint256::from_u64(0x210));
 
     println!("set nonce:");
-    arbos_test._set_nonce(&mut machine, contract_address.clone(), Uint256::from_u64(0x20))?;
+    arbos_test._set_nonce(
+        &mut machine,
+        contract_address.clone(),
+        Uint256::from_u64(0x20),
+    )?;
 
     //emulate the call for comparison
     expected_storage.insert(Uint256::one(), Uint256::from_u64(0x210));

@@ -346,5 +346,4 @@ impl ArbosTest {
             Err(ethabi::Error::from("reverted"))
         }
     }
-
 }
