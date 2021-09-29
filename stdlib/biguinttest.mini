@@ -26,7 +26,6 @@ write func main() {
     asm(tests()) { log };
 }
 
-#[print]
 func tests() -> uint {
     let gen = random_new(bytes32(0));
     if ! biguint_isZero(biguint_zero()) {

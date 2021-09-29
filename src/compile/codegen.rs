@@ -15,7 +15,7 @@ use crate::link::TUPLE_SIZE;
 use crate::mavm::{AVMOpcode, Buffer, Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// Represents a slot number in a locals tuple
 pub type FrameSize = u32;
@@ -43,7 +43,7 @@ struct Codegen<'a> {
 #[derive(Clone, Debug, Default)]
 struct Scope {
     /// A variable's current slot
-    locals: HashMap<StringId, SlotNum>,
+    locals: BTreeMap<StringId, SlotNum>,
     /// A variable's slot just before its first shadow
     shadows: HashMap<StringId, SlotNum>,
 }

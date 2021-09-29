@@ -12,7 +12,7 @@ use petgraph::visit::{Dfs, IntoNodeReferences};
 use petgraph::{Direction, Undirected};
 use rand::prelude::*;
 use rand::rngs::SmallRng;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
 pub enum BasicBlock {
     Code(Vec<Instruction>),
@@ -256,7 +256,7 @@ impl BasicGraph {
 
     /// Shrinks the frame size to elide unused frame slots.
     pub fn shrink_frame(&mut self) -> FrameSize {
-        let mut locals = HashMap::new();
+        let mut locals = BTreeMap::new();
         let nodes: Vec<_> = self.graph.node_indices().collect();
 
         for node in &nodes {
@@ -344,7 +344,7 @@ impl BasicGraph {
             let outgoing = self.graph.neighbors_directed(node, Direction::Outgoing);
             let incoming = self.graph.neighbors_directed(node, Direction::Incoming);
 
-            let mut alive: HashSet<SlotNum> = HashSet::new(); // values that haven't been set yet
+            let mut alive: BTreeSet<SlotNum> = BTreeSet::new(); // values that haven't been set yet
 
             macro_rules! conflict {
                 ($slot:expr) => {
@@ -431,7 +431,7 @@ impl BasicGraph {
         let mut ncolors = usize::MAX;
 
         for _ in 0..24 {
-            let mut colors: HashMap<u32, usize> = HashMap::new(); // colors to usage counts
+            let mut colors: BTreeMap<u32, usize> = BTreeMap::new(); // colors to usage counts
             let mut assignments: HashMap<SlotNum, u32> = HashMap::new(); // slots to colors
 
             let mut nodes: Vec<_> = conflicts.node_indices().collect();
