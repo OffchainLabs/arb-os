@@ -5,8 +5,8 @@
 //! Provides types and utilities for linking together compiled mini programs
 
 use crate::compile::{
-    comma_list, CompileError, CompiledProgram, DebugInfo, ErrorSystem, FileInfo, GlobalVar,
-    SourceFileMap, Type, TypeTree,
+    comma_list, CompileError, CompiledFunc, CompiledProgram, DebugInfo, ErrorSystem, FileInfo,
+    GlobalVar, Type, TypeTree,
 };
 use crate::console::Color;
 use crate::mavm::{AVMOpcode, Instruction, LabelId, Opcode, Value};
@@ -180,34 +180,24 @@ impl Import {
     }
 }
 
-pub type ProgGraph = DiGraph<CompiledProgram, usize>;
+pub type FuncGraph = DiGraph<CompiledFunc, usize>;
 
 /// Creates a graph of the `CompiledProgram`s and then combines them into a single
 /// `CompiledProgram` in such a way as to reduce the number of backward jumps.
 pub fn link(
-    progs: Vec<CompiledProgram>,
+    funcs: Vec<CompiledFunc>,
     globals: Vec<GlobalVar>,
     error_system: &mut ErrorSystem,
     test_mode: bool,
 ) -> CompiledProgram {
-    let mut merged_source_file_map = SourceFileMap::new_empty();
-    let mut merged_file_info_chart = HashMap::new();
-    let type_tree = progs[0].type_tree.clone();
+    let type_tree = funcs[0].type_tree.clone();
 
-    let mut graph = ProgGraph::new();
+    let mut graph = FuncGraph::new();
     let mut id_to_node = HashMap::new();
 
-    for prog in progs {
-        merged_source_file_map.push(
-            prog.code.len(),
-            match &prog.source_file_map {
-                Some(sfm) => sfm.get(0),
-                None => "".to_string(),
-            },
-        );
-        merged_file_info_chart.extend(prog.file_info_chart.clone());
-        let func_id = prog.unique_id;
-        let node = graph.add_node(prog);
+    for func in funcs {
+        let func_id = func.unique_id;
+        let node = graph.add_node(func);
         id_to_node.insert(func_id, node);
     }
 
@@ -316,8 +306,6 @@ pub fn link(
         vec![String::from("/meta"), String::from("link")],
         linked_code,
         globals,
-        Some(merged_source_file_map),
-        merged_file_info_chart,
         type_tree,
         DebugInfo::default(),
     )
@@ -328,8 +316,7 @@ pub fn link(
 /// table to a static value, and combining the file info chart with the associated argument.
 pub fn postlink_compile(
     program: CompiledProgram,
-    mut file_info_chart: BTreeMap<u64, FileInfo>,
-    _error_system: &mut ErrorSystem,
+    file_info_chart: BTreeMap<u64, FileInfo>,
     test_mode: bool,
     debug: bool,
 ) -> Result<LinkedProgram, CompileError> {
@@ -457,8 +444,6 @@ pub fn postlink_compile(
         let size = code_final.iter().count() as f64;
         println!("Total Instructions {}", size);
     }
-
-    file_info_chart.extend(program.file_info_chart.clone());
 
     Ok(LinkedProgram {
         arbos_version: init_constant_table(Some(Path::new("arb_os/constants.json")))

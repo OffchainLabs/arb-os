@@ -32,6 +32,7 @@ view write func tests() -> string {
     test_global_capture()
 }
 
+#[print]
 func capture_2() -> Produce {
     
     // Checks that captures work as expected

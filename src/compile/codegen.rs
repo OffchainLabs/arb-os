@@ -187,7 +187,7 @@ pub fn mavm_codegen_func(
     }
     for (index, id) in func.captures.iter().enumerate() {
         let slot = nargs + index;
-        code.push(opcode!(@SetCapture(slot as SlotNum, *id)));
+        code.push(opcode!(@ReserveCapture(slot as SlotNum, *id)));
     }
 
     let mut label_gen = LabelGenerator::new(unique_id + 1);
@@ -280,6 +280,19 @@ fn codegen(
             };
             (@$text:expr, $debug:expr) => {
                 return Err(CompileError::new("Internal error", format!($text), $debug.locs()));
+            };
+        }
+
+        macro_rules! local {
+            ($id:expr) => {
+                match cgen.get_local($id) {
+                    Some(slot) => slot,
+                    None => error!(
+                        "no slot assigned for {} {}",
+                        cgen.string_table.name_from_id(*$id),
+                        $id
+                    ),
+                }
             };
         }
 
@@ -387,7 +400,6 @@ fn codegen(
             TypeCheckedNode::Expression(expr) => {
                 match &mut expr.kind {
                     TypeCheckedExprKind::CodeBlock(block) => {
-                        // THINK: Should we treat this as being flat?
                         codegen(block.child_nodes(), cgen, stack_items, vec![])?;
                     }
                     TypeCheckedExprKind::If(cond, block, else_block, _) => {
@@ -463,14 +475,7 @@ fn codegen(
                         ));
                     }
                     TypeCheckedExprKind::LocalVariableRef(id, _) => {
-                        let slot = match cgen.get_local(id) {
-                            Some(slot) => slot,
-                            None => error!(
-                                "no slot assigned for {} {}",
-                                cgen.string_table.name_from_id(*id),
-                                id
-                            ),
-                        };
+                        let slot = local!(id);
                         cgen.code.push(opcode!(@GetLocal(slot)));
                     }
                     TypeCheckedExprKind::FuncRef(id, _) => {
@@ -790,14 +795,7 @@ fn codegen(
                         };
 
                         for capture in captures.iter() {
-                            let slot = match cgen.get_local(capture) {
-                                Some(slot) => slot,
-                                None => error!(
-                                    "no slot assigned for capture {} {}",
-                                    cgen.string_table.name_from_id(*capture),
-                                    capture
-                                ),
-                            };
+                            let slot = local!(capture);
                             cgen.code.push(opcode!(@GetLocal(slot)));
                         }
 
@@ -805,7 +803,12 @@ fn codegen(
                             // Having no captures makes this equivalent to a function call
                             cgen.code.push(opcode!(Noop, closure));
                         } else {
-                            cgen.code.push(opcode!(@Capture(closure_id)));
+                            // We'll pack this closure later when we actually know its size and colors
+                            cgen.code.push(opcode!(@MakeClosure(closure_id)));
+                            for &capture in captures.iter().rev() {
+                                let slot = local!(&capture);
+                                cgen.code.push(opcode!(@Capture(closure_id, slot, capture)));
+                            }
 
                             let container = Value::new_tuple(vec![closure, Value::none()]);
                             cgen.code.push(opcode!(Noop, container));

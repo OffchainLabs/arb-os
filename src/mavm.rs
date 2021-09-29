@@ -936,24 +936,25 @@ impl fmt::Display for Value {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub enum Opcode {
-    MakeFrame(FrameSize, bool),    // make a func frame: space, captures
-    GetLocal(SlotNum),             // get a local variable within a func frame
-    SetLocal(SlotNum),             // set a local variable within a func frame
-    MoveLocal(SlotNum, SlotNum),   // move into arg1 arg2 within a func frame
-    SetCapture(SlotNum, StringId), // annotate where a capture should be placed within a func frame
-    Capture(LabelId),              // create a callable closure capture
-    FuncCall(FuncProperties),      // make a function call: nargs, nouts, and view/write-props
-    TupleGet(usize, usize),        // args are offset and size for the anysize_tuple
-    TupleSet(usize, usize),        // args are offset and size for the anysize_tuple
-    GetGlobalVar(usize),           // gets a global variable at a global index
-    SetGlobalVar(usize),           // sets a global variable at a global index
-    BackwardLabelTarget(usize),    // sets up a backward label as indexed by the jump table
-    UncheckedFixedArrayGet(usize), // arg is size of array
-    Label(Label),                  // a location in code
-    JumpTo(Label),                 // Like a Jump, but with info about where it'll go
-    CjumpTo(Label),                // Like a Cjump, but with info about where it'll go
-    Return,                        // return from a func, popping the frame
-    AVMOpcode(AVMOpcode),          // a non-virtual, AVM opcode
+    MakeFrame(FrameSize, bool),          // make a func frame: space, captures
+    GetLocal(SlotNum),                   // get a local variable within a func frame
+    SetLocal(SlotNum),                   // set a local variable within a func frame
+    MoveLocal(SlotNum, SlotNum),         // move into arg1 arg2 within a func frame
+    ReserveCapture(SlotNum, StringId), // annotate where a capture should be placed within a func frame
+    Capture(LabelId, SlotNum, StringId), // annotate which value to retrieve for closure packing
+    MakeClosure(LabelId),              // create a callable closure frame
+    FuncCall(FuncProperties),          // make a function call: nargs, nouts, and view/write-props
+    TupleGet(usize, usize),            // args are offset and size for the anysize_tuple
+    TupleSet(usize, usize),            // args are offset and size for the anysize_tuple
+    GetGlobalVar(usize),               // gets a global variable at a global index
+    SetGlobalVar(usize),               // sets a global variable at a global index
+    BackwardLabelTarget(usize),        // sets up a backward label as indexed by the jump table
+    UncheckedFixedArrayGet(usize),     // arg is size of array
+    Label(Label),                      // a location in code
+    JumpTo(Label),                     // Like a Jump, but with info about where it'll go
+    CjumpTo(Label),                    // Like a Cjump, but with info about where it'll go
+    Return,                            // return from a func, popping the frame
+    AVMOpcode(AVMOpcode),              // a non-virtual, AVM opcode
 }
 
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, Eq, PartialEq, Hash)]
@@ -1096,16 +1097,21 @@ impl Opcode {
             Opcode::MoveLocal(dest, source) => {
                 format!("φ({}, {})", Color::pink(dest), Color::pink(source))
             }
-            Opcode::SetCapture(slot, id) => {
+            Opcode::ReserveCapture(slot, id) => {
+                format!("ReserveCapture {} {}", Color::pink(slot), Color::grey(id))
+            }
+            Opcode::Capture(label, slot, id) => {
+                let label = Value::Label(Label::Closure(*label));
                 format!(
-                    "SetCapture {} {}",
+                    "Capture {} {} {}",
+                    label.pretty_print(label_color),
                     Color::pink(slot),
-                    Color::grey(format!("s{}", id))
+                    Color::grey(id)
                 )
             }
-            Opcode::Capture(label) => {
+            Opcode::MakeClosure(label) => {
                 let label = Value::Label(Label::Closure(*label));
-                format!("Capture {}", label.pretty_print(label_color))
+                format!("MakeClosure {}", label.pretty_print(label_color))
             }
             Opcode::SetGlobalVar(id) => format!("SetGlobal {}", Color::pink(id)),
             Opcode::GetGlobalVar(id) => format!("GetGlobal {}", Color::pink(id)),
@@ -1229,8 +1235,9 @@ impl Opcode {
             Opcode::GetLocal(_) => "GetLocal",
             Opcode::SetLocal(_) => "SetLocal",
             Opcode::MoveLocal(_, _) => "MoveLocal",
-            Opcode::SetCapture(_, _) => "SetCapture",
-            Opcode::Capture(_) => "Capture",
+            Opcode::ReserveCapture(_, _) => "ReserveCapture",
+            Opcode::Capture(_, _, _) => "Capture",
+            Opcode::MakeClosure(_) => "MakeClosure",
             Opcode::GetGlobalVar(_) => "GetGlobal",
             Opcode::SetGlobalVar(_) => "SetGlobal",
             Opcode::Label(_) => "Label",

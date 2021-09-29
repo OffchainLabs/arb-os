@@ -223,33 +223,32 @@ impl BasicGraph {
 
         for node in &nodes {
             for curr in self.graph[*node].get_code() {
-                if let Opcode::SetLocal(slot) = curr.opcode {
+                if let Opcode::SetLocal(slot) | Opcode::ReserveCapture(slot, _) = curr.opcode {
                     locals.insert(slot);
                 }
             }
         }
         for node in &nodes {
             for curr in self.graph[*node].get_code() {
-                match curr.opcode {
-                    Opcode::GetLocal(slot) => {
-                        locals.remove(&slot);
-                    }
-                    Opcode::MoveLocal(_, source) => {
-                        locals.remove(&source);
-                    }
-                    _ => {}
+                if let Opcode::GetLocal(slot)
+                | Opcode::MoveLocal(_, slot)
+                | Opcode::Capture(_, slot, _) = curr.opcode
+                {
+                    locals.remove(&slot);
                 }
             }
         }
         for node in nodes {
             for curr in self.graph[node].get_code_mut() {
+                let debug = curr.debug_info;
                 match curr.opcode {
                     Opcode::SetLocal(slot) if locals.contains(&slot) => {
-                        let debug = curr.debug_info;
                         *curr = Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Pop), debug);
                     }
+                    Opcode::ReserveCapture(slot, _) if locals.contains(&slot) => {
+                        *curr = Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Noop), debug);
+                    }
                     Opcode::MoveLocal(dest, _) if locals.contains(&dest) => {
-                        let debug = curr.debug_info;
                         *curr = Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Noop), debug);
                     }
                     _ => {}
@@ -266,7 +265,10 @@ impl BasicGraph {
         for node in &nodes {
             for curr in self.graph[*node].get_code() {
                 match curr.opcode {
-                    Opcode::SetLocal(slot) | Opcode::GetLocal(slot) => {
+                    Opcode::SetLocal(slot)
+                    | Opcode::GetLocal(slot)
+                    | Opcode::Capture(_, slot, _)
+                    | Opcode::ReserveCapture(slot, _) => {
                         *locals.entry(slot).or_insert(0) += 1;
                     }
                     Opcode::MoveLocal(dest, source) => {
@@ -293,7 +295,10 @@ impl BasicGraph {
         for node in &nodes {
             for curr in self.graph[*node].get_code_mut() {
                 match &mut curr.opcode {
-                    Opcode::SetLocal(ref mut slot) | Opcode::GetLocal(ref mut slot) => {
+                    Opcode::SetLocal(ref mut slot)
+                    | Opcode::GetLocal(ref mut slot)
+                    | Opcode::Capture(_, ref mut slot, _)
+                    | Opcode::ReserveCapture(ref mut slot, _) => {
                         *slot = *replace.get(slot).unwrap();
                     }
                     Opcode::MoveLocal(ref mut dest, ref mut source) => {
@@ -369,11 +374,11 @@ impl BasicGraph {
 
             for curr in self.graph[node].get_code().into_iter().rev() {
                 match curr.opcode {
-                    Opcode::SetLocal(local) => {
+                    Opcode::SetLocal(local) | Opcode::ReserveCapture(local, _) => {
                         alive.remove(&local);
                         conflict!(local);
                     }
-                    Opcode::GetLocal(local) => {
+                    Opcode::GetLocal(local) | Opcode::Capture(_, local, _) => {
                         if alive.insert(local) {
                             conflict!(local);
                         }
@@ -480,7 +485,10 @@ impl BasicGraph {
         for node in nodes {
             for curr in self.graph[node].get_code_mut() {
                 match &mut curr.opcode {
-                    Opcode::GetLocal(ref mut slot) | Opcode::SetLocal(ref mut slot) => {
+                    Opcode::GetLocal(ref mut slot)
+                    | Opcode::SetLocal(ref mut slot)
+                    | Opcode::Capture(_, ref mut slot, _)
+                    | Opcode::ReserveCapture(ref mut slot, _) => {
                         *slot = *best_assignments.get(slot).expect("no color!");
                     }
                     Opcode::MoveLocal(ref mut dest, ref mut source) => {

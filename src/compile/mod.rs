@@ -159,10 +159,7 @@ impl CompileStruct {
 
             globals = all_globals;
 
-            for prog in progs {
-                file_info_chart.extend(prog.file_info_chart.clone());
-                unlinked_progs.push(prog);
-            }
+            unlinked_progs.extend(progs);
         }
 
         // If this condition is true it means that __fixedLocationGlobal will not be at
@@ -176,7 +173,6 @@ impl CompileStruct {
         let postlinked_prog = match postlink_compile(
             linked_prog,
             file_info_chart.clone(),
-            &mut error_system,
             self.test_mode,
             self.debug_mode,
         ) {
@@ -333,6 +329,60 @@ impl TypeCheckedModule {
     }
 }
 
+/// Maps the `StringId` of a capture to a slot in a func's frame
+pub type ClosureAssignments = HashMap<StringId, SlotNum>;
+
+pub struct CompiledFunc {
+    /// Name of the func from which it was derived
+    pub name: String,
+    /// Path of the program
+    pub path: Vec<String>,
+    /// Instructions that effect the behavior of this func's mini source code
+    pub code: Vec<Instruction>,
+    /// The slot assignments for any captures this func (closure) may use
+    pub captures: ClosureAssignments,
+    /// The slot assignments for any captures this func packs for the closures it defines
+    pub packings: HashMap<LabelId, ClosureAssignments>,
+    /// The size of the function's frame
+    pub frame_size: FrameSize,
+    /// All globals accessible to this func
+    pub globals: Vec<GlobalVar>,
+    /// Tree of the types
+    pub type_tree: TypeTree,
+    /// This func's globally-unique identifier
+    pub unique_id: LabelId,
+    /// This func's debug info
+    pub debug_info: DebugInfo,
+}
+
+impl CompiledFunc {
+    pub fn new(
+        name: String,
+        path: Vec<String>,
+        code: Vec<Instruction>,
+        captures: ClosureAssignments,
+        packings: HashMap<LabelId, ClosureAssignments>,
+        frame_size: FrameSize,
+        globals: Vec<GlobalVar>,
+        type_tree: TypeTree,
+        debug_info: DebugInfo,
+    ) -> Self {
+        let unique_id = Import::unique_id(&path, &name);
+        CompiledFunc {
+            name,
+            path,
+            code,
+            captures,
+            packings,
+            frame_size,
+            globals,
+            type_tree,
+            unique_id,
+            debug_info,
+        }
+    }
+}
+
 /// Represents a mini program or module that has been compiled and possibly linked, but has not had
 /// post-link compilation steps applied. Is directly serialized to and from .mao files.
 #[derive(Clone, Serialize, Deserialize)]
@@ -345,10 +395,6 @@ pub struct CompiledProgram {
     pub code: Vec<Instruction>,
     /// All globals used in this program
     pub globals: Vec<GlobalVar>,
-    /// Contains list of offsets of the various modules contained in this program
-    pub source_file_map: Option<SourceFileMap>,
-    /// Map from u64 hashes of file names to the `String`s, `Path`s, and `Content`s they originate from
-    pub file_info_chart: HashMap<u64, FileInfo>,
     /// Tree of the types
     pub type_tree: TypeTree,
     /// A global id unique to the source (usually a func) from which this program was compiled
@@ -363,8 +409,6 @@ impl CompiledProgram {
         path: Vec<String>,
         code: Vec<Instruction>,
         globals: Vec<GlobalVar>,
-        source_file_map: Option<SourceFileMap>,
-        file_info_chart: HashMap<u64, FileInfo>,
         type_tree: TypeTree,
         debug_info: DebugInfo,
     ) -> Self {
@@ -374,8 +418,6 @@ impl CompiledProgram {
             path,
             code,
             globals,
-            source_file_map,
-            file_info_chart,
             type_tree,
             unique_id,
             debug_info,
@@ -430,7 +472,7 @@ pub fn compile_from_file(
     error_system: &mut ErrorSystem,
     release_build: bool,
     builtins: bool,
-) -> Result<(Vec<CompiledProgram>, Vec<GlobalVar>), CompileError> {
+) -> Result<(Vec<CompiledFunc>, Vec<GlobalVar>), CompileError> {
     let library = path
         .parent()
         .map(|par| {
@@ -519,7 +561,7 @@ pub fn compile_from_folder(
     error_system: &mut ErrorSystem,
     release_build: bool,
     builtins: bool,
-) -> Result<(Vec<CompiledProgram>, Vec<GlobalVar>), CompileError> {
+) -> Result<(Vec<CompiledFunc>, Vec<GlobalVar>), CompileError> {
     let constants_default = folder.join("constants.json");
     let constants_path = match constants_path {
         Some(path) => Some(path),
@@ -571,7 +613,7 @@ pub fn compile_from_folder(
         module.propagate_attributes();
     }
 
-    let (progs, globals) = codegen_programs(typechecked_modules, type_tree, folder, release_build)?;
+    let (progs, globals) = codegen_modules(typechecked_modules, type_tree, release_build)?;
     Ok((progs, globals))
 }
 
@@ -965,12 +1007,11 @@ fn check_global_constants(
     }
 }
 
-fn codegen_programs(
+fn codegen_modules(
     typechecked_modules: Vec<TypeCheckedModule>,
     type_tree: TypeTree,
-    folder: &Path,
     release_build: bool,
-) -> Result<(Vec<CompiledProgram>, Vec<GlobalVar>), CompileError> {
+) -> Result<(Vec<CompiledFunc>, Vec<GlobalVar>), CompileError> {
     let mut work_list = vec![];
     let mut globals_so_far = 0;
 
@@ -1009,64 +1050,69 @@ fn codegen_programs(
                 func_labels.clone(),
                 module.string_table.clone(),
                 global_vars.clone(),
-                module.name.clone(),
                 module.path.clone(),
             ));
         }
     }
 
-    let progs = work_list
+    let mut funcs = work_list
         .into_par_iter()
-        .map(
-            |(func, func_labels, string_table, globals, module_name, module_path)| {
-                let func_name = func.name.clone();
-                let debug_info = func.debug_info;
+        .map(|(func, func_labels, string_table, globals, module_path)| {
+            let func_name = func.name.clone();
+            let debug_info = func.debug_info;
 
-                let (code, mut label_gen, frame_size) = codegen::mavm_codegen_func(
-                    func,
-                    &string_table,
-                    &globals,
-                    &func_labels,
-                    release_build,
-                )?;
+            let (code, mut label_gen, frame_size) = codegen::mavm_codegen_func(
+                func,
+                &string_table,
+                &globals,
+                &func_labels,
+                release_build,
+            )?;
 
-                let mut graph = BasicGraph::new(code);
+            let mut graph = BasicGraph::new(code);
 
-                graph.pop_useless_locals();
-                graph.color(frame_size);
-                graph.shrink_frame();
-                graph.shrink_frame();
+            graph.pop_useless_locals();
+            graph.color(frame_size);
+            let frame_size = graph.shrink_frame();
 
-                let code = translate::expand_calls(graph.flatten(), &mut label_gen);
-                let code = translate::untag_jumps(code);
-                let code = translate::replace_phi_nodes(code);
+            let code = graph.flatten();
+            let code = translate::expand_calls(code, &mut label_gen);
+            let code = translate::untag_jumps(code);
+            let code = translate::replace_phi_nodes(code);
+            let (code, captures, packings) = translate::read_capture_data(code);
 
-                let source = Some(SourceFileMap::new(
-                    code.len(),
-                    folder.join(module_name.clone()).display().to_string(),
-                ));
+            let globals: Vec<_> = globals.into_iter().map(|g| g.1).collect();
 
-                let globals: Vec<_> = globals.into_iter().map(|g| g.1).collect();
+            let prog = CompiledFunc::new(
+                func_name,
+                module_path,
+                code,
+                captures,
+                packings,
+                frame_size,
+                globals,
+                type_tree.clone(),
+                debug_info,
+            );
 
-                let prog = CompiledProgram::new(
-                    func_name,
-                    module_path,
-                    code,
-                    globals,
-                    source,
-                    HashMap::new(),
-                    type_tree.clone(),
-                    debug_info,
-                );
+            Ok(prog)
+        })
+        .collect::<Result<Vec<CompiledFunc>, CompileError>>()?;
 
-                Ok(prog)
-            },
-        )
-        .collect::<Result<Vec<CompiledProgram>, CompileError>>()?;
+    let mut capture_map = HashMap::new();
+    let mut frame_sizes = HashMap::new();
+    for func in &funcs {
+        let func_id = func.unique_id;
+        capture_map.insert(func_id, func.captures.clone());
+        frame_sizes.insert(func_id, func.frame_size);
+    }
+    for func in &mut funcs {
+        func.code = translate::pack_closures(&func.code, &capture_map, &frame_sizes);
+    }
 
     let mut globals = BTreeMap::new();
-    for prog in &progs {
-        for global in prog.globals.iter() {
+    for func in &funcs {
+        for global in func.globals.iter() {
             globals.insert(global.offset, global.clone()); // ensure duplicates aren't present
         }
     }
@@ -1079,7 +1125,7 @@ fn codegen_programs(
         DebugInfo::default(),
     ));
 
-    Ok((progs, globals))
+    Ok((funcs, globals))
 }
 
 pub fn comma_list(input: &[String]) -> String {
@@ -1359,52 +1405,6 @@ impl ErrorSystem {
         for error in &self.errors {
             error.print(&self.file_info_chart, self.warnings_are_errors);
         }
-    }
-}
-
-/// Lists the offset of each source file contained by a CompiledProgram in offsets, and the
-/// instruction directly following the last in the CompiledProgram.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct SourceFileMap {
-    offsets: Vec<(usize, String)>,
-    end: usize,
-}
-
-impl SourceFileMap {
-    pub fn new(size: usize, first_filepath: String) -> Self {
-        SourceFileMap {
-            offsets: vec![(0, first_filepath)],
-            end: size,
-        }
-    }
-
-    pub fn new_empty() -> Self {
-        SourceFileMap {
-            offsets: Vec::new(),
-            end: 0,
-        }
-    }
-
-    /// Adds a new source file to self with offset at current end
-    pub fn push(&mut self, size: usize, filepath: String) {
-        self.offsets.push((self.end, filepath));
-        self.end += size;
-    }
-
-    /// Panics if offset is past the end of the SourceFileMap
-    pub fn get(&self, offset: usize) -> String {
-        for i in 0..(self.offsets.len() - 1) {
-            if offset < self.offsets[i + 1].0 {
-                return self.offsets[i].1.clone();
-            }
-        }
-        if offset < self.end {
-            return self.offsets[self.offsets.len() - 1].1.clone();
-        }
-        panic!(
-            "SourceFileMap: bounds check error for offset {} in {}",
-            offset, self.end
-        );
     }
 }
 

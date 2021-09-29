@@ -2,9 +2,12 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-//! Provides routines for substituting instructions
+//! Provides routines for substituting instructions.
 
-use crate::mavm::{AVMOpcode, Instruction, LabelGenerator, Opcode, Value};
+use crate::compile::{ClosureAssignments, FrameSize, SlotNum};
+use crate::mavm::{AVMOpcode, Instruction, LabelGenerator, LabelId, Opcode, Value};
+use crate::stringtable::StringId;
+use std::collections::HashMap;
 
 /// De-virtualizes CjumpTo opcodes into simple Cjumps
 pub fn untag_jumps(code: Vec<Instruction>) -> Vec<Instruction> {
@@ -113,5 +116,86 @@ pub fn expand_calls(code: Vec<Instruction>, label_gen: &mut LabelGenerator) -> V
             _ => out.push(curr.clone()),
         }
     }
+    out
+}
+
+/// Remove and save capture annotations
+pub fn read_capture_data(
+    code: Vec<Instruction>,
+) -> (
+    Vec<Instruction>,
+    ClosureAssignments,
+    HashMap<LabelId, ClosureAssignments>,
+) {
+    let mut out = Vec::with_capacity(code.len());
+    let mut captures = HashMap::new();
+    let mut packings = HashMap::new();
+
+    for curr in code {
+        match curr.opcode {
+            Opcode::ReserveCapture(slot, id) => {
+                // Now we know the slot the optimizer set for using this capture
+                captures.insert(id, slot);
+            }
+            Opcode::Capture(closure, slot, id) => {
+                // Now we know the slot the optimizer set for this closure packing item
+                let packing = packings.entry(closure).or_insert(HashMap::new());
+                packing.insert(id, slot);
+            }
+            _ => {}
+        }
+        out.push(curr);
+    }
+    (out, captures, packings)
+}
+
+pub fn pack_closures(
+    code: &Vec<Instruction>,
+    capture_map: &HashMap<LabelId, ClosureAssignments>,
+    frame_sizes: &HashMap<LabelId, FrameSize>,
+) -> Vec<Instruction> {
+    let mut out = Vec::with_capacity(code.len());
+
+    for curr in code {
+        macro_rules! opcode {
+            ($opcode:ident) => {
+                Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), curr.debug_info)
+            };
+            ($opcode:ident, $immediate:expr) => {
+                Instruction::from_opcode_imm(
+                    Opcode::AVMOpcode(AVMOpcode::$opcode),
+                    $immediate,
+                    curr.debug_info,
+                )
+            };
+            (@$($opcode:tt)+) => {
+                Instruction::from_opcode(Opcode::$($opcode)+, curr.debug_info)
+            };
+        }
+
+        match curr.opcode {
+            Opcode::MakeClosure(closure) => {
+                let size = *frame_sizes.get(&closure).expect("no frame size") as usize;
+                let tuple = Value::new_tuple(vec![Value::none(); size]);
+                out.push(opcode!(Noop, tuple));
+            }
+            Opcode::Capture(closure, slot, id) => {
+                let size = *frame_sizes.get(&closure).expect("no frame size") as usize;
+                let captures = capture_map.get(&closure).expect("no captures");
+                let place = *captures.get(&id).expect("no slot") as usize;
+
+                // get the value we wish to pack and place it into the tuple
+                out.push(opcode!(@GetLocal(slot)));
+                out.push(opcode!(Swap1));
+                out.push(opcode!(@TupleSet(place, size)));
+            }
+            Opcode::ReserveCapture(_, _) => {
+                // The closure receiving the capture doesn't need to do anything,
+                // so we discard this instruction
+            }
+            _ => out.push(curr.clone()),
+        }
+    }
+
     out
 }
