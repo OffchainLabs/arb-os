@@ -14,6 +14,7 @@ use rand::prelude::*;
 use rand::rngs::SmallRng;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
+/// Represents a block of instructions that has no control flow
 pub enum BasicBlock {
     Code(Vec<Instruction>),
     Meta(&'static str),
@@ -34,6 +35,7 @@ impl BasicBlock {
     }
 }
 
+/// Represents control flow between two blocks.
 pub enum BasicEdge {
     Forward,
     Jump,
@@ -68,7 +70,7 @@ impl BasicGraph {
 
         let should_print = code.iter().any(|x| x.debug_info.attributes.codegen_print);
 
-        // Create basic blocks by splitting on jumps and labels
+        // create basic blocks by splitting on jumps and labels
         let mut block_data = vec![];
         for curr in code {
             match curr.opcode {
@@ -119,7 +121,7 @@ impl BasicGraph {
             }
         }
 
-        // Add jump edges
+        // add jump edges
         for node in nodes {
             let last = match &graph[node] {
                 BasicBlock::Code(code) => match code.iter().last().cloned() {
@@ -313,11 +315,25 @@ impl BasicGraph {
 
     /// Efficiently assign frame slots to minimize the frame size.
     pub fn color(&mut self, frame_size: FrameSize) {
+        // Algorithm
+        //   Determine which values would overwrite each other if reassigned the same slot.
+        //   Reassign values using as few slots as possible given this knowledge
+        //
+        // Steps
+        //   - Create a graph of which values are phi'd together.
+        //   - Build a conflict graph whose nodes represent values in the local function frame
+        //     and whose edges represent the inability to give each the same slot.
+        //   - Contract phi nodes so that each side gets the same slot assignment.
+        //   - Color the contracted graph with as few colors as best we can.
+        //   - Color the original graph 1-to-1 using the contracted graph.
+        //   - Modify each instruction to reflect the new slot assignments.
+
         let mut conflicts: StableGraph<SlotNum, (), Undirected> = StableGraph::default();
         let mut phi_graph: UnGraph<SlotNum, ()> = UnGraph::default();
 
         for slot in 0..frame_size {
-            // we do this so that slot & index are the same
+            // we do this so that slot & index are interchangeable.
+            // conflicts is a stable graph to preserve this property when we remove nodes.
             conflicts.add_node(slot);
             phi_graph.add_node(slot);
         }
@@ -330,7 +346,7 @@ impl BasicGraph {
             }
         }
 
-        // Walking the graph backwards is heuristically faster.
+        // Walking the graph backwards is heuristically faster by order O(n).
         let mut work_list: VecDeque<_> = self.graph.node_indices().rev().collect();
         let mut work_set: HashSet<_> = work_list.clone().into_iter().collect();
         let mut node_needs = HashMap::new();
@@ -425,7 +441,11 @@ impl BasicGraph {
             }
         }
 
-        // Coloring a graph is NP-complete
+        // Coloring a graph its chromatic number is NP-complete.
+        // We find the following algorithm approximates this well for the kinds of graphs
+        // SSA tends to produce. How this works is we successively pick the least-used color
+        // we can for each node in the graph. When no color is available, we make a new one.
+        // We repeat this process against a random ording some number of times and take the best.
         let mut rng = SmallRng::seed_from_u64(0);
         let mut best_assignments = HashMap::new();
         let mut ncolors = usize::MAX;
@@ -464,7 +484,8 @@ impl BasicGraph {
             }
         }
 
-        // apply colors to phi'd slots
+        // Apply colors to phi'd slots. Since each came from a strongly connected
+        // component, no two Dfs's will re-assign the same node.
         for node in conflicts.node_indices() {
             let slot = node.index() as u32;
             let color = *best_assignments.get(&slot).unwrap();
@@ -494,6 +515,7 @@ impl BasicGraph {
             }
         }
 
+        // The frame should be much smaller now, so it makes sense to shrink it.
         self.shrink_frame();
 
         if self.should_print {

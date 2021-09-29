@@ -35,11 +35,13 @@ struct Codegen<'a> {
     globals: &'a HashMap<StringId, GlobalVar>,
     /// Whether to elide debug-only constructs like assert().
     release_build: bool,
-
+    /// The open set of scopes
     scopes: Vec<Scope>,
-    next_slot: SlotNum,
+    /// The next slot available for assignment
+    next_assignable_slot: SlotNum,
 }
 
+/// Represents a mini scope and the values it has access to.
 #[derive(Clone, Debug, Default)]
 struct Scope {
     /// A variable's current slot
@@ -49,13 +51,14 @@ struct Scope {
 }
 
 impl Codegen<'_> {
+    /// Get the next available slot.
     fn next_slot(&mut self) -> SlotNum {
-        let next = self.next_slot;
-        self.next_slot += 1;
+        let next = self.next_assignable_slot;
+        self.next_assignable_slot += 1;
         next
     }
 
-    /// Create a new scope, inheriting the locals of the one prior
+    /// Create a new scope, inheriting the locals of the one prior.
     fn open_scope(&mut self) {
         let mut scope = match self.scopes.last() {
             Some(scope) => scope.clone(),
@@ -65,30 +68,33 @@ impl Codegen<'_> {
         self.scopes.push(scope);
     }
 
+    /// Create a new assignment for a local variable.
     fn set_local(&mut self, local: StringId, slot: SlotNum) {
-        let len = self.scopes.len();
-        self.scopes[len - 1].locals.insert(local, slot);
+        let last = self.scopes.last_mut().expect("no scope");
+        last.locals.insert(local, slot);
     }
 
+    /// Shadow a variable, saving the last unshadowed assignment for phi-ing if needed.
     fn shadow(&mut self, local: StringId, slot: SlotNum) {
-        let len = self.scopes.len();
+        let last = self.scopes.last_mut().expect("no scope");
 
         // for the first time shadowing, we save the old value if it exists
-        if let Some(old) = self.scopes[len - 1].locals.get(&local) {
+        if let Some(old) = last.locals.get(&local) {
             let old = *old;
-            if !self.scopes[len - 1].shadows.contains_key(&local) {
-                self.scopes[len - 1].shadows.insert(local, old);
+            if !last.shadows.contains_key(&local) {
+                last.shadows.insert(local, old);
             }
         }
-
-        self.scopes[len - 1].locals.insert(local, slot);
+        last.locals.insert(local, slot);
     }
 
+    /// Get the currently accessible slot assignment for a variable in scope.
     fn get_local(&mut self, local: &StringId) -> Option<SlotNum> {
-        let len = self.scopes.len();
-        self.scopes[len - 1].locals.get(local).cloned()
+        let last = self.scopes.last_mut().expect("no scope");
+        last.locals.get(local).cloned()
     }
 
+    /// Debug print the open scope's current assignments.
     fn _print_locals(&self, title: &str, depth: usize) {
         let len = self.scopes.len();
         let scope = &self.scopes[len - 1];
@@ -128,7 +134,8 @@ impl Codegen<'_> {
 /// and globals lists the globals available to the func.
 ///
 /// Each func gets a unique, hashed label id, after which local labels are assigned. This ensures
-/// two labels are the same iff they point to the same destination.
+/// two labels are the same iff they point to the same destination. func_labels maps local `StringId`s
+/// to these globally consistent labels.
 pub fn mavm_codegen_func(
     mut func: TypeCheckedFunc, // only mutable because of child_nodes()
     string_table: &StringTable,
@@ -200,7 +207,7 @@ pub fn mavm_codegen_func(
         globals,
         release_build,
         scopes: vec![Scope::default()],
-        next_slot: 0,
+        next_assignable_slot: 0,
     };
 
     let mut declare = vec![];
@@ -209,13 +216,18 @@ pub fn mavm_codegen_func(
 
     codegen(func.child_nodes(), &mut cgen, 0, declare)?;
 
-    let space_for_locals = cgen.next_slot;
+    let space_for_locals = cgen.next_assignable_slot;
 
     code[make_frame_offset] = opcode!(@MakeFrame(space_for_locals, prebuilt));
 
     Ok((code, label_gen, space_for_locals))
 }
 
+/// Codegen a scope of typechecked nodes.
+///
+/// stack_items counts the number of items that need be popped for an early return.
+/// declare carries a list of variables to immediately shadow upon opening the scope,
+/// which is useful for function arguments and if-let.
 fn codegen(
     nodes: Vec<TypeCheckedNode>,
     cgen: &mut Codegen,
@@ -431,7 +443,7 @@ fn codegen(
                         // if-let is tricky since the local variable isn't defined in the same scope.
                         // To work around this, we get the next slot without advancing. This means
                         // not actually *calling* next_slot().
-                        let slot = cgen.next_slot;
+                        let slot = cgen.next_assignable_slot;
                         cgen.code.push(opcode!(@SetLocal(slot)));
                         block!(block, vec![*id]);
                         cgen.code.push(opcode!(Jump, Value::Label(end_label)));
@@ -821,7 +833,6 @@ fn codegen(
     }
 
     let debug = cgen.code.last().unwrap().debug_info;
-
     let scope = cgen.scopes.pop().expect("No scope");
 
     for (local, mut slot) in scope.locals {

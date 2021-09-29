@@ -176,7 +176,7 @@ arb_os/arbos-upgrade-base.mexe: $(arbos_source_no_bridge) .make/tools
 	exit 1
 	@touch .make/libs
 
-.make/fmt: src/**.rs Cargo.* .make/install
+.make/fmt: src/*.rs src/*/*.rs Cargo.* .make/install
 	cargo fmt
 	@touch .make/fmt
 

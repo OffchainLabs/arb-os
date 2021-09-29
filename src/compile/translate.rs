@@ -137,6 +137,7 @@ pub fn read_capture_data(code: Vec<Instruction>) -> (Vec<Instruction>, ClosureAs
     (out, captures)
 }
 
+/// Use capture annotations to bridge the gap between packing a closure and calling it.
 pub fn pack_closures(
     code: &Vec<Instruction>,
     capture_map: &HashMap<LabelId, ClosureAssignments>,
