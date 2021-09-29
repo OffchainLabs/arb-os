@@ -4,9 +4,9 @@
 
 //! Provides routines for substituting instructions.
 
-use crate::compile::{ClosureAssignments, FrameSize, SlotNum};
+use crate::compile::{ClosureAssignments, FrameSize};
+use crate::link::TupleTree;
 use crate::mavm::{AVMOpcode, Instruction, LabelGenerator, LabelId, Opcode, Value};
-use crate::stringtable::StringId;
 use std::collections::HashMap;
 
 /// De-virtualizes CjumpTo opcodes into simple Cjumps
@@ -169,7 +169,7 @@ pub fn pack_closures(
         match curr.opcode {
             Opcode::MakeClosure(closure) => {
                 let size = *frame_sizes.get(&closure).expect("no frame size") as usize;
-                let tuple = Value::new_tuple(vec![Value::none(); size]);
+                let tuple = TupleTree::new(size, true).make_empty();
                 out.push(opcode!(Noop, tuple));
             }
             Opcode::Capture(closure, id) => {
@@ -177,9 +177,9 @@ pub fn pack_closures(
                 let captures = capture_map.get(&closure).expect("no captures");
                 let place = *captures.get(&id).expect("no slot") as usize;
 
-                // get the value we wish to pack and place it into the tuple
-                out.push(opcode!(Swap1));
-                out.push(opcode!(@TupleSet(place, size)));
+                // make a tuple tree for a frame, but write to it on the stack
+                let tuple = TupleTree::new(size, true);
+                tuple.write_code(false, place, &mut out, curr.debug_info).unwrap();
             }
             Opcode::ReserveCapture(_, _) => {
                 // The closure receiving the capture doesn't need to do anything,

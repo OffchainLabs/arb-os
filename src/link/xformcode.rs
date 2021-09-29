@@ -366,7 +366,7 @@ impl TupleTree {
     /// Argument is_local defines whether locals or globals are being accessed, generated code is
     /// appended to the code argument and also returned as an owned value, location is used to
     /// assign a code location for the generated instructions.
-    fn write_code(
+    pub fn write_code(
         &self,
         is_local: bool,
         index_in: usize,
