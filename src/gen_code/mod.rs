@@ -257,23 +257,26 @@ fn write_subtypes(
                 code,
                 "type {}{}{} = {};",
                 prefix.unwrap_or(""),
-                if let Type::Nominal(a, _, _) = subtype.clone() {
-                    a.iter().map(|name| name.clone() + "_").collect::<String>()
+                if let Type::Nominal(a, _) = subtype.clone() {
+                    a.path
+                        .iter()
+                        .map(|name| name.clone() + "_")
+                        .collect::<String>()
                 } else {
                     format!("")
                 },
                 name,
                 {
-                    if let Type::Nominal(a, b, _) = subtype.clone() {
+                    if let Type::Nominal(b, _) = subtype.clone() {
                         let (displayed, subtypes) = type_tree
-                            .get(&(a.clone(), b.clone()))
+                            .get(&(b.path.clone(), b.clone()))
                             .or_else(|| {
                                 type_tree.get({
-                                    let new_id = StringId::new(a.clone(), b.id.clone());
-                                    &(a.clone(), new_id)
+                                    let new_id = StringId::new(vec![], b.id.clone());
+                                    &(b.path.clone(), new_id)
                                 })
                             })
-                            .expect(&format!("{:?} {}", a, b))
+                            .expect(&format!("{:?} {}", b.path, b))
                             .0
                             .display_separator("_", prefix, true, type_tree);
                         new_subtypes.extend(subtypes);
@@ -330,11 +333,16 @@ fn get_globals_and_version_from_file(
     for global in globals.globals {
         if global.id != StringId::new(vec!["/meta".to_string()], String::new()) {
             let mut tipe = global.tipe;
-            if let Type::Nominal(file_path, id, _) = tipe {
+            if let Type::Nominal(id, _) = tipe {
                 tipe = type_tree
-                    .get(&(file_path.clone(), id.clone()))
+                    .get(&(id.path.clone(), id.clone()))
                     .cloned()
-                    .expect(&format!("{}: {}", comma_list(&file_path), id))
+                    .or_else(|| {
+                        type_tree
+                            .get(&(id.path.clone(), StringId::new(vec![], id.id.clone())))
+                            .cloned()
+                    })
+                    .expect(&format!("{}: {}", comma_list(&id.path), id))
                     .0;
             }
             tipe.recursive_apply(replace_nominal, &type_tree, &mut state);
@@ -356,11 +364,8 @@ fn get_globals_and_version_from_file(
             .collect::<Vec<_>>();
         for diff in cool_temp {
             let new_type = {
-                let mut new = if let Type::Nominal(file_path, id, _) = diff.0 {
-                    type_tree
-                        .get(&(file_path.clone(), id))
-                        .cloned()
-                        .unwrap_or((Type::Any, "fail2".to_string()))
+                let mut new = if let Type::Nominal(id, _) = diff.0 {
+                    type_tree.get(&(id.path.clone(), id)).cloned().unwrap() //_or((Type::Any, "fail2".to_string()))
                 } else {
                     diff.clone()
                 };
@@ -405,33 +410,38 @@ fn replace_nominal(
                 let to_render = &mut *(*mut_state.1).borrow_mut();
                 to_render.insert((
                     tipe.clone(),
-                    if let Type::Nominal(path, id, _) = tipe {
+                    if let Type::Nominal(id, _) = tipe {
                         state
-                            .get(&(path.clone(), id.clone()))
+                            .get(&(id.path.clone(), id.clone()))
+                            .or_else(|| {
+                                state.get(&(id.path.clone(), StringId::new(vec![], id.id.clone())))
+                            })
                             .map(|(_, name)| name.clone())
-                            .unwrap_or(format!("Bad"))
+                            .unwrap() //_or(format!("Bad"))
                     } else {
-                        format!("Bad")
+                        panic!() //format!("Bad")
                     },
                 ));
                 return false;
             }
-            if let Type::Nominal(path, id, spec) = tipe {
-                mut_state
-                    .0
-                    .push(Type::Nominal(path.clone(), id.clone(), spec.clone()));
+            if let Type::Nominal(id, spec) = tipe {
+                mut_state.0.push(Type::Nominal(id.clone(), spec.clone()));
                 let to_render = &mut *(*mut_state.1).borrow_mut();
                 to_render.insert((
-                    Type::Nominal(path.clone(), id.clone(), spec.clone()),
+                    Type::Nominal(id.clone(), spec.clone()),
                     state
-                        .get(&(path.clone(), id.clone()))
+                        .get(&(id.path.clone(), id.clone()))
+                        .or_else(|| {
+                            state.get(&(id.path.clone(), StringId::new(vec![], id.id.clone())))
+                        })
                         .map(|(_, name)| name.clone())
-                        .unwrap_or(format!("Bad")),
+                        .unwrap(), //_or(format!("Bad")),
                 ));
                 **tipe = state
-                    .get(&(path.clone(), id.clone()))
+                    .get(&(id.path.clone(), id.clone()))
+                    .or_else(|| state.get(&(id.path.clone(), StringId::new(vec![], id.id.clone()))))
                     .cloned()
-                    .unwrap_or((Type::Any, "fail4".to_string()))
+                    .unwrap() //_or((Type::Any, "fail4".to_string()))
                     .0;
             }
             true
