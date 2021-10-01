@@ -4,7 +4,7 @@
 
 use crate::evm::abi::FunctionTable;
 use crate::evm::abi::{ArbAddressTable, ArbFunctionTable, ArbSys};
-use crate::evm::preinstalled_contracts::{ArbosTest, _ArbInfo};
+use crate::evm::preinstalled_contracts::_ArbInfo;
 use crate::run::{load_from_file, load_from_file_and_env, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use ethers_signers::Signer;
@@ -13,6 +13,8 @@ use std::hash::{Hash, Hasher};
 use std::path::Path;
 
 use crate::compile::miniconstants::init_constant_table;
+#[cfg(test)]
+use crate::evm::live_code::ArbosTest;
 pub use abi::{builtin_contract_path, contract_path, AbiForContract};
 pub use benchmarks::make_benchmarks;
 pub use evmtest::run_evm_tests;
@@ -23,7 +25,8 @@ mod benchmarks;
 #[cfg(test)]
 mod bls;
 mod evmtest;
-pub(crate) mod preinstalled_contracts;
+mod live_code;
+pub mod preinstalled_contracts;
 
 #[derive(Clone)]
 pub struct CallInfo<'a> {
@@ -33,18 +36,15 @@ pub struct CallInfo<'a> {
     mutating: bool,
 }
 
-pub fn test_contract_path(contract_name: &str) -> String {
+pub fn test_contract_path2(solidity_name: &str, json_name: &str) -> String {
     format!(
         "contracts/artifacts/arbos/test/{}.sol/{}.json",
-        contract_name, contract_name
+        solidity_name, json_name
     )
 }
 
-pub fn _test_contract_path2(parent_name: &str, contract_name: &str) -> String {
-    format!(
-        "contracts/artifacts/arbos/test/{}.sol/{}.json",
-        parent_name, contract_name
-    )
+pub fn test_contract_path(contract_name: &str) -> String {
+    test_contract_path2(contract_name, contract_name)
 }
 
 pub fn evm_xcontract_call_with_constructors(
@@ -61,6 +61,7 @@ pub fn evm_xcontract_call_with_constructors(
         my_addr.clone(),
         my_addr.clone(),
         Uint256::from_usize(100000),
+        true,
     );
     let _gas_used = if debug {
         machine.debug(None)
@@ -132,7 +133,8 @@ pub fn evm_xcontract_call_with_constructors(
     Ok(true)
 }
 
-pub fn _evm_tx_with_deposit(
+#[cfg(test)]
+pub fn evm_tx_with_deposit(
     log_to: Option<&Path>,
     debug: bool,
     _profile: bool,
@@ -168,7 +170,7 @@ pub fn _evm_tx_with_deposit(
         panic!("failed to deploy PaymentChannel contract");
     }
 
-    let (logs, sends) = pc_contract._call_function_with_deposit(
+    let (logs, sends) = pc_contract.call_function_with_deposit(
         my_addr.clone(),
         "deposit",
         &[],
@@ -179,6 +181,7 @@ pub fn _evm_tx_with_deposit(
     assert_eq!(logs.len(), 1);
     assert_eq!(sends.len(), 0);
 
+    assert_eq!(logs[0].get_return_code(), Uint256::zero());
     assert!(logs[0].succeeded());
 
     let (logs, sends) = pc_contract.call_function(
@@ -196,6 +199,7 @@ pub fn _evm_tx_with_deposit(
     assert_eq!(logs.len(), 1);
     assert_eq!(sends.len(), 0);
 
+    assert_eq!(logs[0].get_return_code(), Uint256::zero());
     assert!(logs[0].succeeded());
 
     if let Some(path) = log_to {
@@ -210,7 +214,8 @@ pub fn _evm_tx_with_deposit(
     Ok(true)
 }
 
-pub fn _evm_block_num_consistency_test(debug: bool) -> Result<(), ethabi::Error> {
+#[cfg(test)]
+pub fn evm_block_num_consistency_test(debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero(true);
 
@@ -279,7 +284,7 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     let arb_address_table = ArbAddressTable::new(&wallet, debug);
     AbiForContract::new_from_file(&builtin_contract_path("ArbSys")).unwrap();
 
-    let version = arbsys._arbos_version(&mut machine)?;
+    let version = arbsys.arbos_version(&mut machine)?;
     assert_eq!(
         version,
         *init_constant_table(Some(Path::new("arb_os/constants.json")))
@@ -289,7 +294,7 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     );
 
     let tx_count = arbsys.get_transaction_count(&mut machine, my_addr.clone())?;
-    assert_eq!(tx_count, Uint256::from_u64(2));
+    assert_eq!(tx_count, Uint256::from_u64(1));
 
     assert!(arbsys.is_top_level_call(&mut machine)?);
 
@@ -357,11 +362,6 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     Ok(())
 }
 
-#[test]
-fn test_pay_eoa_from_contract() {
-    crate::evm::_evm_pay_eoa_from_contract(None, false);
-}
-
 pub fn evm_test_function_table_access(
     log_to: Option<&Path>,
     debug: bool,
@@ -373,8 +373,9 @@ pub fn evm_test_function_table_access(
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
     let arbsys = ArbSys::new(&wallet, debug);
-    let arb_function_table = ArbFunctionTable::new(&wallet, debug);
+    let arb_function_table = ArbFunctionTable::new(my_addr.clone(), debug);
 
+    println!("A");
     let gtc_short_sig = arbsys
         .contract_abi
         .short_signature_for_function("getTransactionCount")
@@ -386,21 +387,24 @@ pub fn evm_test_function_table_access(
         false,
         Uint256::from_u64(10000000),
     )?;
+    println!("B");
     arb_function_table.upload(&mut machine, &func_table)?;
-
+    println!("C");
     assert_eq!(
-        arb_function_table.size(&mut machine, my_addr.clone())?,
+        arb_function_table.size(&mut machine, my_addr.clone(), true)?,
         Uint256::one()
     );
+    println!("D");
 
     let (func_code, is_payable, gas_limit) =
-        arb_function_table.get(&mut machine, my_addr, Uint256::zero())?;
+        arb_function_table.get(&mut machine, my_addr, Uint256::zero(), true)?;
     assert_eq!(
         func_code,
         Uint256::from_bytes(&gtc_short_sig).shift_left(256 - 32)
     );
     assert_eq!(is_payable, false);
     assert_eq!(gas_limit, Uint256::from_u64(10000000));
+    println!("E");
 
     if let Some(path) = log_to {
         machine
@@ -411,15 +415,18 @@ pub fn evm_test_function_table_access(
     }
 
     machine.write_coverage("test_function_table_access".to_string());
+
     Ok(())
 }
 
-pub fn _basic_evm_add_test(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
+#[cfg(test)]
+pub fn basic_evm_add_test(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero(true);
 
     let arbos_test = ArbosTest::new(debug);
 
+    println!("A");
     let code = hex::decode("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0160005500").unwrap();
     let result = arbos_test._install_account_and_call(
         &mut machine,
@@ -430,6 +437,7 @@ pub fn _basic_evm_add_test(log_to: Option<&Path>, debug: bool) -> Result<(), eth
         vec![],
         vec![],
     )?;
+    println!("B");
     let mut right_answer = vec![0u8; 32];
     right_answer.extend(vec![255u8; 31]);
     right_answer.extend(vec![254u8]);
@@ -447,7 +455,8 @@ pub fn _basic_evm_add_test(log_to: Option<&Path>, debug: bool) -> Result<(), eth
     Ok(())
 }
 
-pub fn _underfunded_nested_call_test(
+#[cfg(test)]
+pub fn underfunded_nested_call_test(
     log_to: Option<&Path>,
     debug: bool,
 ) -> Result<(), ethabi::Error> {
@@ -459,7 +468,7 @@ pub fn _underfunded_nested_call_test(
         .deploy(&[], &mut machine, Uint256::zero(), None, debug)
         .is_err()
     {
-        panic!("failed to deploy Fibonacci contract");
+        panic!("failed to deploy Underfunded contract");
     }
 
     let (logs, sends) = contract.call_function(
@@ -498,7 +507,8 @@ pub fn _underfunded_nested_call_test(
     Ok(())
 }
 
-pub fn _evm_test_callback(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
+#[cfg(test)]
+pub fn evm_test_callback(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero(true);
 
@@ -627,6 +637,7 @@ pub fn evm_test_create(
         my_addr.clone(),
         my_addr.clone(),
         Uint256::from_usize(100000),
+        true,
     );
     let _gas_used = if debug {
         machine.debug(None)
@@ -682,6 +693,11 @@ pub fn evm_test_create(
     Ok(true)
 }
 
+#[test]
+fn test_xcontract_call_using_batch() {
+    assert!(evm_xcontract_call_using_batch(None, false, false).is_ok());
+}
+
 pub fn evm_xcontract_call_using_batch(
     log_to: Option<&Path>,
     debug: bool,
@@ -700,6 +716,7 @@ pub fn evm_xcontract_call_using_batch(
         my_addr.clone(),
         my_addr.clone(),
         Uint256::from_usize(100000),
+        false,
     );
     let _gas_used = if debug {
         machine.debug(None)
@@ -774,6 +791,7 @@ pub fn evm_xcontract_call_using_batch(
     assert_eq!(logs.len(), 2);
     assert_eq!(sends.len(), 0);
 
+    assert_eq!(logs[0].get_return_code(), Uint256::zero());
     assert!(logs[0].succeeded());
     assert_eq!(logs[0].get_request_id(), tx_id_1);
     let gas_used_so_far_1 = logs[0].get_gas_used_so_far();
@@ -794,641 +812,6 @@ pub fn evm_xcontract_call_using_batch(
     }
 
     machine.write_coverage("test_crosscontract_call_using_batch".to_string());
-    Ok(true)
-}
-
-pub fn _evm_xcontract_call_using_sequencer_batch(
-    log_to: Option<&Path>,
-    debug: bool,
-    _profile: bool,
-) -> Result<bool, ethabi::Error> {
-    use std::convert::TryFrom;
-    let sequencer_addr = Uint256::from_usize(1337);
-    let mut rt_env = RuntimeEnvironment::_new_options();
-
-    let wallet = rt_env.new_wallet();
-    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
-
-    let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
-    machine.start_at_zero(true);
-
-    machine.runtime_env.insert_eth_deposit_message(
-        my_addr.clone(),
-        my_addr.clone(),
-        Uint256::from_usize(100000),
-    );
-    machine
-        .runtime_env
-        ._advance_time(Uint256::from_u64(50), None, true);
-    let _gas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    }; // handle this eth deposit message
-
-    let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
-    if fib_contract
-        .deploy(
-            &[],
-            &mut machine,
-            Uint256::zero(),
-            Some(Uint256::from_u64(50)),
-            debug,
-        )
-        .is_err()
-    {
-        panic!("failed to deploy Fibonacci contract");
-    }
-
-    let mut pc_contract = AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
-    if pc_contract
-        .deploy(
-            &[ethabi::Token::Address(ethereum_types::H160::from_slice(
-                &fib_contract.address.to_bytes_be()[12..],
-            ))],
-            &mut machine,
-            Uint256::zero(),
-            Some(Uint256::from_u64(50)),
-            debug,
-        )
-        .is_err()
-    {
-        panic!("failed to deploy PaymentChannel contract");
-    }
-
-    machine
-        .runtime_env
-        ._advance_time(Uint256::from_u64(50), None, true);
-
-    let mut batch = machine.runtime_env._new_sequencer_batch(None);
-    let tx_id_1 = pc_contract.add_function_call_to_batch(
-        &mut batch,
-        "deposit",
-        &[],
-        &mut machine,
-        Uint256::from_usize(10000),
-        &wallet,
-    )?;
-    let tx_id_2 = pc_contract.add_function_call_to_batch(
-        &mut batch,
-        "transferFib",
-        vec![
-            ethabi::Token::Address(ethereum_types::H160::from_slice(
-                &my_addr.to_bytes_minimal(),
-            )),
-            ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
-        ]
-        .as_ref(),
-        &mut machine,
-        Uint256::zero(),
-        &wallet,
-    )?;
-
-    machine
-        .runtime_env
-        .insert_batch_message(sequencer_addr, &batch);
-
-    let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
-    let num_sends_before = machine.runtime_env.get_all_sends().len();
-    let _arbgas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    };
-    let logs = machine.runtime_env.get_all_receipt_logs();
-    let sends = machine.runtime_env.get_all_sends();
-    let logs = &logs[num_logs_before..];
-    let sends = &sends[num_sends_before..];
-
-    assert_eq!(logs.len(), 2);
-    assert_eq!(sends.len(), 0);
-
-    assert!(logs[0].succeeded());
-    assert_eq!(logs[0].get_request_id(), tx_id_1);
-    let gas_used_so_far_1 = logs[0].get_gas_used_so_far();
-
-    assert!(logs[1].succeeded());
-    assert_eq!(logs[1].get_request_id(), tx_id_2);
-    assert_eq!(
-        gas_used_so_far_1.add(&logs[1].get_gas_used()),
-        logs[1].get_gas_used_so_far()
-    );
-
-    if let Some(path) = log_to {
-        machine
-            .runtime_env
-            .recorder
-            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
-            .unwrap();
-    }
-
-    machine.write_coverage("_evm_xcontract_call_using_compressed_batch".to_string());
-    Ok(true)
-}
-
-pub fn _evm_xcontract_call_sequencer_slow_path(
-    log_to: Option<&Path>,
-    debug: bool,
-    _profile: bool,
-) -> Result<bool, ethabi::Error> {
-    use std::convert::TryFrom;
-    let sequencer_addr = Uint256::from_usize(1337);
-    let mut rt_env = RuntimeEnvironment::_new_options();
-
-    let wallet = rt_env.new_wallet();
-    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
-
-    let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
-    machine.start_at_zero(true);
-
-    machine.runtime_env.insert_eth_deposit_message(
-        my_addr.clone(),
-        my_addr.clone(),
-        Uint256::from_usize(100000),
-    );
-    machine
-        .runtime_env
-        ._advance_time(Uint256::from_u64(50), None, true);
-    let _gas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    }; // handle this eth deposit message
-
-    let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
-    if fib_contract
-        .deploy(
-            &[],
-            &mut machine,
-            Uint256::zero(),
-            Some(Uint256::from_u64(50)),
-            debug,
-        )
-        .is_err()
-    {
-        panic!("failed to deploy Fibonacci contract");
-    }
-
-    let mut pc_contract = AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
-    if pc_contract
-        .deploy(
-            &[ethabi::Token::Address(ethereum_types::H160::from_slice(
-                &fib_contract.address.to_bytes_be()[12..],
-            ))],
-            &mut machine,
-            Uint256::zero(),
-            Some(Uint256::from_u64(50)),
-            debug,
-        )
-        .is_err()
-    {
-        panic!("failed to deploy PaymentChannel contract");
-    }
-
-    let mut batch = machine.runtime_env.new_batch();
-    let tx_id_1 = pc_contract.add_function_call_to_batch(
-        &mut batch,
-        "deposit",
-        &[],
-        &mut machine,
-        Uint256::from_usize(10000),
-        &wallet,
-    )?;
-    let tx_id_2 = pc_contract.add_function_call_to_batch(
-        &mut batch,
-        "transferFib",
-        vec![
-            ethabi::Token::Address(ethereum_types::H160::from_slice(
-                &my_addr.to_bytes_minimal(),
-            )),
-            ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
-        ]
-        .as_ref(),
-        &mut machine,
-        Uint256::zero(),
-        &wallet,
-    )?;
-
-    machine
-        .runtime_env
-        .insert_batch_message(sequencer_addr, &batch);
-
-    machine
-        .runtime_env
-        ._advance_time(Uint256::from_u64(50), None, true);
-
-    let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
-    let num_sends_before = machine.runtime_env.get_all_sends().len();
-    let _arbgas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    };
-    let logs = machine.runtime_env.get_all_receipt_logs();
-    let sends = machine.runtime_env.get_all_sends();
-    let logs = &logs[num_logs_before..];
-    let sends = &sends[num_sends_before..];
-
-    assert_eq!(logs.len(), 2);
-    assert_eq!(sends.len(), 0);
-
-    assert!(logs[0].succeeded());
-    assert_eq!(logs[0].get_request_id(), tx_id_1);
-    let gas_used_so_far_1 = logs[0].get_gas_used_so_far();
-
-    assert!(logs[1].succeeded());
-    assert_eq!(logs[1].get_request_id(), tx_id_2);
-    assert_eq!(
-        gas_used_so_far_1.add(&logs[1].get_gas_used()),
-        logs[1].get_gas_used_so_far()
-    );
-
-    if let Some(path) = log_to {
-        machine
-            .runtime_env
-            .recorder
-            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
-            .unwrap();
-    }
-
-    machine.write_coverage("_evm_xcontract_call_sequencer_slow_path".to_string());
-    Ok(true)
-}
-
-pub fn _evm_xcontract_call_using_compressed_batch(
-    log_to: Option<&Path>,
-    debug: bool,
-    _profile: bool,
-) -> Result<bool, ethabi::Error> {
-    use std::convert::TryFrom;
-    let mut rt_env = RuntimeEnvironment::default();
-
-    let wallet = rt_env.new_wallet();
-    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
-
-    let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
-    machine.start_at_zero(true);
-
-    machine.runtime_env.insert_eth_deposit_message(
-        my_addr.clone(),
-        my_addr.clone(),
-        Uint256::from_usize(100000),
-    );
-    machine
-        .runtime_env
-        ._advance_time(Uint256::from_u64(50), None, true);
-    let _gas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    }; // handle this eth deposit message
-
-    let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
-    if fib_contract
-        .deploy(&[], &mut machine, Uint256::zero(), None, debug)
-        .is_err()
-    {
-        panic!("failed to deploy Fibonacci contract");
-    }
-
-    let mut pc_contract = AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
-    if pc_contract
-        .deploy(
-            &[ethabi::Token::Address(ethereum_types::H160::from_slice(
-                &fib_contract.address.to_bytes_be()[12..],
-            ))],
-            &mut machine,
-            Uint256::zero(),
-            None,
-            debug,
-        )
-        .is_err()
-    {
-        panic!("failed to deploy PaymentChannel contract");
-    }
-
-    let mut batch = machine.runtime_env.new_batch();
-    let tx_id_1 = pc_contract._add_function_call_to_compressed_batch(
-        &mut batch,
-        "deposit",
-        &[],
-        &mut machine,
-        Uint256::from_usize(10000),
-        &wallet,
-        None,
-    )?;
-    let tx_id_2 = pc_contract._add_function_call_to_compressed_batch(
-        &mut batch,
-        "transferFib",
-        vec![
-            ethabi::Token::Address(ethereum_types::H160::from_slice(
-                &my_addr.to_bytes_minimal(),
-            )),
-            ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
-        ]
-        .as_ref(),
-        &mut machine,
-        Uint256::zero(),
-        &wallet,
-        None,
-    )?;
-
-    machine
-        .runtime_env
-        .insert_batch_message(Uint256::from_usize(1025), &batch);
-
-    let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
-    let num_sends_before = machine.runtime_env.get_all_sends().len();
-    let _arbgas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    };
-    let logs = machine.runtime_env.get_all_receipt_logs();
-    let sends = machine.runtime_env.get_all_sends();
-    let logs = &logs[num_logs_before..];
-    let sends = &sends[num_sends_before..];
-
-    assert_eq!(logs.len(), 2);
-    assert_eq!(sends.len(), 0);
-
-    assert!(logs[0].succeeded());
-    assert_eq!(logs[0].get_request_id(), tx_id_1);
-    let gas_used_so_far_1 = logs[0].get_gas_used_so_far();
-
-    assert!(logs[1].succeeded());
-    assert_eq!(logs[1].get_request_id(), tx_id_2);
-    assert_eq!(
-        gas_used_so_far_1.add(&logs[1].get_gas_used()),
-        logs[1].get_gas_used_so_far()
-    );
-
-    if let Some(path) = log_to {
-        machine
-            .runtime_env
-            .recorder
-            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
-            .unwrap();
-    }
-
-    machine.write_coverage("_evm_xcontract_call_using_compressed_batch".to_string());
-    Ok(true)
-}
-
-pub fn _evm_xcontract_call_sequencer_reordering(
-    log_to: Option<&Path>,
-    debug: bool,
-    _profile: bool,
-) -> Result<bool, ethabi::Error> {
-    use std::convert::TryFrom;
-    let sequencer_addr = Uint256::from_usize(1337);
-    let mut rt_env = RuntimeEnvironment::_new_options();
-
-    let wallet = rt_env.new_wallet();
-    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
-
-    let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
-    machine.start_at_zero(true);
-
-    machine.runtime_env.insert_eth_deposit_message(
-        my_addr.clone(),
-        my_addr.clone(),
-        Uint256::from_usize(100000),
-    );
-    machine
-        .runtime_env
-        ._advance_time(Uint256::from_u64(50), None, true);
-    let _gas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    }; // handle this eth deposit message
-
-    let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
-    if fib_contract
-        .deploy(
-            &[],
-            &mut machine,
-            Uint256::zero(),
-            Some(Uint256::from_u64(50)),
-            debug,
-        )
-        .is_err()
-    {
-        panic!("failed to deploy Fibonacci contract");
-    }
-
-    let mut pc_contract = AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
-    if pc_contract
-        .deploy(
-            &[ethabi::Token::Address(ethereum_types::H160::from_slice(
-                &fib_contract.address.to_bytes_be()[12..],
-            ))],
-            &mut machine,
-            Uint256::zero(),
-            Some(Uint256::from_u64(50)),
-            debug,
-        )
-        .is_err()
-    {
-        panic!("failed to deploy PaymentChannel contract");
-    }
-
-    machine
-        .runtime_env
-        ._advance_time(Uint256::from_u64(50), None, true);
-
-    let mut slow_batch = machine.runtime_env.new_batch();
-    let mut seq_batch = machine
-        .runtime_env
-        ._new_sequencer_batch(Some((Uint256::from_u64(3), Uint256::from_u64(40))));
-
-    let tx_id_1 = pc_contract.add_function_call_to_batch(
-        &mut seq_batch,
-        "deposit",
-        &[],
-        &mut machine,
-        Uint256::from_usize(10000),
-        &wallet,
-    )?;
-    let tx_id_2 = pc_contract.add_function_call_to_batch(
-        &mut slow_batch,
-        "transferFib",
-        vec![
-            ethabi::Token::Address(ethereum_types::H160::from_slice(
-                &my_addr.to_bytes_minimal(),
-            )),
-            ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
-        ]
-        .as_ref(),
-        &mut machine,
-        Uint256::zero(),
-        &wallet,
-    )?;
-
-    machine
-        .runtime_env
-        .insert_batch_message(my_addr, &slow_batch);
-
-    machine
-        .runtime_env
-        ._advance_time(Uint256::one(), None, false);
-
-    machine
-        .runtime_env
-        .insert_batch_message(sequencer_addr, &seq_batch);
-
-    machine
-        .runtime_env
-        ._advance_time(Uint256::from_u64(50), None, true);
-
-    let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
-    let num_sends_before = machine.runtime_env.get_all_sends().len();
-    let _arbgas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    };
-    let logs = machine.runtime_env.get_all_receipt_logs();
-    let sends = machine.runtime_env.get_all_sends();
-    let logs = &logs[num_logs_before..];
-    let sends = &sends[num_sends_before..];
-
-    assert_eq!(logs.len(), 2);
-    assert_eq!(sends.len(), 0);
-
-    assert!(logs[0].succeeded());
-    assert_eq!(logs[0].get_request_id(), tx_id_1);
-
-    assert!(logs[1].succeeded());
-    assert_eq!(logs[1].get_request_id(), tx_id_2);
-
-    if let Some(path) = log_to {
-        machine
-            .runtime_env
-            .recorder
-            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
-            .unwrap();
-    }
-
-    machine.write_coverage("_evm_xcontract_call_sequencer_reordering".to_string());
-    Ok(true)
-}
-
-pub fn _evm_xcontract_call_using_compressed_batch_2(
-    log_to: Option<&Path>,
-    debug: bool,
-    _profile: bool,
-) -> Result<bool, ethabi::Error> {
-    use std::convert::TryFrom;
-    let mut rt_env = RuntimeEnvironment::default();
-
-    let wallet = rt_env.new_wallet();
-    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
-
-    let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
-    machine.start_at_zero(true);
-
-    machine.runtime_env.insert_eth_deposit_message(
-        my_addr.clone(),
-        my_addr.clone(),
-        Uint256::from_usize(100000),
-    );
-    let _gas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    }; // handle this eth deposit message
-
-    let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
-    if fib_contract
-        .deploy(&[], &mut machine, Uint256::zero(), None, debug)
-        .is_err()
-    {
-        panic!("failed to deploy Fibonacci contract");
-    }
-
-    let mut pc_contract = AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
-    if pc_contract
-        .deploy(
-            &[ethabi::Token::Address(ethereum_types::H160::from_slice(
-                &fib_contract.address.to_bytes_be()[12..],
-            ))],
-            &mut machine,
-            Uint256::zero(),
-            None,
-            debug,
-        )
-        .is_err()
-    {
-        panic!("failed to deploy PaymentChannel contract");
-    }
-
-    let mut batch = machine.runtime_env.new_batch();
-    let tx_id_1 = pc_contract._add_function_call_to_compressed_batch(
-        &mut batch,
-        "deposit",
-        &[],
-        &mut machine,
-        Uint256::from_usize(10000),
-        &wallet,
-        None,
-    )?;
-    let tx_id_2 = pc_contract._add_function_call_to_compressed_batch(
-        &mut batch,
-        "transferFib",
-        vec![
-            ethabi::Token::Address(ethereum_types::H160::from_slice(
-                &my_addr.to_bytes_minimal(),
-            )),
-            ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
-        ]
-        .as_ref(),
-        &mut machine,
-        Uint256::zero(),
-        &wallet,
-        None,
-    )?;
-
-    machine
-        .runtime_env
-        .insert_batch_message(Uint256::from_usize(1025), &batch);
-
-    let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
-    let num_sends_before = machine.runtime_env.get_all_sends().len();
-    let _arbgas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    };
-    let logs = machine.runtime_env.get_all_receipt_logs();
-    let sends = machine.runtime_env.get_all_sends();
-    let logs = &logs[num_logs_before..];
-    let sends = &sends[num_sends_before..];
-
-    assert_eq!(logs.len(), 2);
-    assert_eq!(sends.len(), 0);
-
-    assert!(logs[0].succeeded());
-    assert_eq!(logs[0].get_request_id(), tx_id_1);
-    let gas_used_so_far_1 = logs[0].get_gas_used_so_far();
-
-    assert!(logs[1].succeeded());
-    assert_eq!(logs[1].get_request_id(), tx_id_2);
-    assert_eq!(
-        gas_used_so_far_1.add(&logs[1].get_gas_used()),
-        logs[1].get_gas_used_so_far()
-    );
-
-    if let Some(path) = log_to {
-        machine
-            .runtime_env
-            .recorder
-            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
-            .unwrap();
-    }
-
-    machine.write_coverage("_evm_xcontract_call_using_compressed_batch_2".to_string());
     Ok(true)
 }
 
@@ -1510,23 +893,27 @@ pub fn _evm_pay_eoa_from_contract(log_to: Option<&Path>, debug: bool) {
         }
     };
 
+    println!("A");
     let payer = Uint256::from_u64(5386492);
     let recipient = Uint256::from_u64(5771838591);
     machine.runtime_env.insert_eth_deposit_message(
         payer.clone(),
         payer.clone(),
         Uint256::_from_eth(1000),
+        true,
     );
     let _gas_used = if debug {
         machine.debug(None)
     } else {
         machine.run(None)
     }; // handle this eth deposit message
+    println!("B");
 
     let arbinfo = _ArbInfo::_new(debug);
     let balance_before = arbinfo._get_balance(&mut machine, &recipient).unwrap();
     assert!(balance_before.is_zero());
 
+    println!("C");
     let (receipts, _) = add_contract
         .call_function(
             payer,
@@ -1538,6 +925,7 @@ pub fn _evm_pay_eoa_from_contract(log_to: Option<&Path>, debug: bool) {
         )
         .unwrap();
     assert_eq!(receipts.len(), 1);
+    assert_eq!(receipts[0].get_return_code(), Uint256::zero());
     assert!(receipts[0].succeeded());
 
     let balance_after = arbinfo._get_balance(&mut machine, &recipient).unwrap();
@@ -1554,7 +942,8 @@ pub fn _evm_pay_eoa_from_contract(log_to: Option<&Path>, debug: bool) {
     machine.write_coverage("test_pay_eoa_from_contract".to_string());
 }
 
-pub fn _evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
+#[cfg(test)]
+pub fn evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero(true);
 
@@ -1563,6 +952,7 @@ pub fn _evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
         my_addr.clone(),
         my_addr.clone(),
         Uint256::from_usize(10000),
+        true,
     );
     let _gas_used = if debug {
         machine.debug(None)
@@ -1642,6 +1032,7 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
         my_addr.clone(),
         my_addr.clone(),
         Uint256::from_usize(10000),
+        true,
     );
     let _gas_used = if debug {
         machine.debug(None)
@@ -1683,7 +1074,7 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
                 .unwrap();
             assert_eq!(
                 decoded_result[0],
-                ethabi::Token::Uint(ethabi::Uint::try_from(2).unwrap())
+                ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap())
             );
         }
         Err(e) => {
@@ -1799,7 +1190,8 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
     machine.write_coverage("test_direct_deploy_and_call_add".to_string());
 }
 
-pub fn _evm_test_contract_call(log_to: Option<&Path>, debug: bool) {
+#[cfg(test)]
+pub fn evm_test_contract_call(log_to: Option<&Path>, debug: bool) {
     use std::convert::TryFrom;
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero(true);
@@ -1977,11 +1369,12 @@ pub fn evm_payment_to_empty_address(log_to: Option<&Path>, debug: bool) {
         my_addr.clone(),
         my_addr.clone(),
         Uint256::from_u64(20000),
+        true,
     );
     let tx_id = machine.runtime_env.insert_tx_message(
         my_addr,
         Uint256::from_u64(1000000000),
-        Uint256::zero(),
+        None,
         dest_addr,
         Uint256::from_u64(10000),
         &vec![],
@@ -1997,6 +1390,7 @@ pub fn evm_payment_to_empty_address(log_to: Option<&Path>, debug: bool) {
     let receipts = machine.runtime_env.get_all_receipt_logs();
     assert_eq!(receipts.len(), 2);
     assert_eq!(receipts[1].get_request_id(), tx_id);
+    assert_eq!(receipts[1].get_return_code(), Uint256::zero());
     assert!(receipts[1].succeeded());
 
     if let Some(path) = log_to {
@@ -2019,7 +1413,7 @@ pub fn evm_eval_sha256(log_to: Option<&Path>, debug: bool) {
     let tx_id = machine.runtime_env.insert_tx_message(
         my_addr,
         Uint256::from_u64(10000000),
-        Uint256::zero(),
+        None,
         Uint256::from_u64(2), // sha256 precompile
         Uint256::from_u64(0),
         &vec![0xCCu8],
@@ -2058,7 +1452,8 @@ pub fn evm_eval_sha256(log_to: Option<&Path>, debug: bool) {
     machine.write_coverage("test_sha256_precompile".to_string());
 }
 
-pub fn _evm_ecpairing_precompile(_log_to: Option<&Path>, debug: bool) {
+#[cfg(test)]
+pub fn evm_ecpairing_precompile(_log_to: Option<&Path>, debug: bool) {
     for (calldata, result) in &[
         // test vectors from geth: https://github.com/ethereum/go-ethereum/blob/2045a2bba3cd2f93fd913c692be146adabd8940c/core/vm/testdata/precompiles/bn256Pairing.json
         ("1c76476f4def4bb94541d57ebba1193381ffa7aa76ada664dd31c16024c43f593034dd2920f673e204fee2811c678745fc819b55d3e9d294e45c9b03a76aef41209dd15ebff5d46c4bd888e51a93cf99a7329636c63514396b4a452003a35bf704bf11ca01483bfa8b34b43561848d28905960114c8ac04049af4b6315a416782bb8324af6cfc93537a2ad1a445cfd0ca2a71acd7ac41fadbf933c2a51be344d120a2a4cf30c1bf9845f20c6fe39e07ea2cce61f0c9bb048165fe5e4de877550111e129f1cf1097710d41c4ac70fcdfa5ba2023c6ff1cbeac322de49d1b6df7c2032c61a830e3c17286de9462bf242fca2883585b93870a73853face6a6bf411198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c21800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa", true),
@@ -2095,7 +1490,7 @@ fn _evm_ecpairing_precompile_test_one(calldata: &str, result: bool, debug: bool)
     let tx_id = machine.runtime_env.insert_tx_message(
         my_addr,
         Uint256::from_u64(1000000000),
-        Uint256::zero(),
+        None,
         Uint256::from_u64(8), // ecpairing precompile
         Uint256::from_u64(0),
         &calldata,
@@ -2123,7 +1518,8 @@ fn _evm_ecpairing_precompile_test_one(calldata: &str, result: bool, debug: bool)
     //}
 }
 
-pub fn _evm_eval_ripemd160(log_to: Option<&Path>, debug: bool) {
+#[cfg(test)]
+pub fn evm_eval_ripemd160(log_to: Option<&Path>, debug: bool) {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero(true);
 
@@ -2131,7 +1527,7 @@ pub fn _evm_eval_ripemd160(log_to: Option<&Path>, debug: bool) {
     let tx_id = machine.runtime_env.insert_tx_message(
         my_addr,
         Uint256::from_u64(1000000000),
-        Uint256::zero(),
+        None,
         Uint256::from_u64(3), // ripemd160 precompile
         Uint256::from_u64(0),
         &vec![0x61u8],
@@ -2205,7 +1601,7 @@ fn _evm_bad_receipt_revert_test_impl() {
     let txid = machine.runtime_env.insert_tx_message(
         my_addr,
         Uint256::zero(),
-        Uint256::zero(),
+        None,
         add_contract.address,
         Uint256::one(),
         &[],
@@ -2235,7 +1631,7 @@ pub fn _test_constructor_recursion() -> Result<(), ethabi::Error> {
 
     let my_addr = Uint256::from_usize(1025);
 
-    let mut ccontract = AbiForContract::new_from_file(&_test_contract_path2(
+    let mut ccontract = AbiForContract::new_from_file(&test_contract_path2(
         "ReverterFactory",
         "ConstructorCallback2",
     ))?;

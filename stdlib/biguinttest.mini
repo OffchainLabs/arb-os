@@ -21,7 +21,7 @@ use std::random::RandomGenerator;
 use std::random::random_new;
 
 
-impure func main() {
+write func main() {
     asm(2*1000*1000*1000,) { setgas };
 	asm(tests(),) { log };
 }

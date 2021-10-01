@@ -2,17 +2,17 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-//!Provides utilities for dealing with nested tuples and conversion from large flat tuples to
-//! nested tuples
+//! Provides utilities for dealing with nested tuples and conversion from large flat tuples to nested tuples
 
 use crate::compile::{CompileError, DebugInfo};
+use crate::console::Color;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
 use crate::uint256::Uint256;
 
-///The maximum size of an AVM tuple
+/// The maximum size of an AVM tuple
 pub const TUPLE_SIZE: usize = 8;
 
-///Takes a slice of instructions from a single function scope, and changes tuples of size greater
+/// Takes a slice of instructions from a single function scope, and changes tuples of size greater
 /// than TUPLE_SIZE to nested tuples with each subtuple at most TUPLE_SIZE
 pub fn fix_tuple_size(
     code_in: &[Instruction],
@@ -24,25 +24,40 @@ pub fn fix_tuple_size(
 
     for insn in code_in.iter() {
         let debug_info = insn.debug_info;
+
+        macro_rules! opcode {
+            ($opcode:ident) => {
+                Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), debug_info)
+            };
+            ($opcode:ident, $value:expr) => {
+                Instruction::from_opcode_imm(
+                    Opcode::AVMOpcode(AVMOpcode::$opcode),
+                    $value,
+                    debug_info,
+                )
+            };
+        }
+
         match insn.opcode {
-            Opcode::MakeFrame(nargs, ntotal) => {
-                code_out.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                    debug_info,
-                )); // move return address to aux stack
-                locals_tree = TupleTree::new(ntotal, true);
-                if let Some(imm) = &insn.immediate {
-                    code_out.push(Instruction::from_opcode_imm(
-                        Opcode::AVMOpcode(AVMOpcode::Noop),
-                        imm.clone(),
-                        debug_info,
-                    ));
+            Opcode::MakeFrame(nargs, space, prebuilt, return_address) => {
+                if return_address {
+                    code_out.push(opcode!(AuxPush)); // move return address to aux stack
                 }
-                code_out.push(Instruction::from_opcode_imm(
-                    Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                    TupleTree::make_empty(&locals_tree),
-                    debug_info,
-                ));
+                locals_tree = TupleTree::new(space, true);
+                if let Some(imm) = &insn.immediate {
+                    panic!(
+                        "{} somehow has an immediate {}",
+                        insn.opcode,
+                        imm.pretty_print(Color::RED)
+                    );
+                }
+
+                match prebuilt {
+                    false => code_out.push(opcode!(AuxPush, TupleTree::make_empty(&locals_tree))),
+                    true => code_out.push(opcode!(AuxPush)),
+                }
+
+                // need to offset by nargs
                 for lnum in 0..nargs {
                     locals_tree.write_code(true, lnum, &mut code_out, debug_info)?;
                 }
@@ -138,21 +153,12 @@ pub fn fix_tuple_size(
                 }
             }
             Opcode::SetGlobalVar(idx) => {
-                code_out.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Rget),
-                    debug_info,
-                ));
+                code_out.push(opcode!(Rpush));
                 global_tree.write_code(false, idx, &mut code_out, debug_info)?;
-                code_out.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Rset),
-                    debug_info,
-                ));
+                code_out.push(opcode!(Rset));
             }
             Opcode::GetGlobalVar(idx) => {
-                code_out.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Rget),
-                    debug_info,
-                ));
+                code_out.push(opcode!(Rpush));
                 global_tree.read_code(false, idx, &mut code_out, debug_info)?;
             }
             Opcode::Return => {
@@ -164,18 +170,9 @@ pub fn fix_tuple_size(
                     },
                     debug_info,
                 ));
-                code_out.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Pop),
-                    debug_info,
-                ));
-                code_out.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                    debug_info,
-                ));
-                code_out.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Jump),
-                    debug_info,
-                ));
+                code_out.push(opcode!(Pop));
+                code_out.push(opcode!(AuxPop));
+                code_out.push(opcode!(Jump));
             }
             Opcode::UncheckedFixedArrayGet(sz) => {
                 let tup_size_val = Value::Int(Uint256::from_usize(TUPLE_SIZE));
@@ -183,54 +180,26 @@ pub fn fix_tuple_size(
                 while remaining_size > TUPLE_SIZE {
                     //TODO: can probably make this more efficient
                     // stack: idx arr
-                    code_out.push(Instruction::from_opcode_imm(
-                        Opcode::AVMOpcode(AVMOpcode::Dup1),
-                        tup_size_val.clone(),
-                        debug_info,
-                    ));
-                    code_out.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::Mod),
-                        debug_info,
-                    ));
-                    code_out.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::Swap1),
-                        debug_info,
-                    ));
+                    code_out.push(opcode!(Dup1, tup_size_val.clone()));
+                    code_out.push(opcode!(Mod));
+                    code_out.push(opcode!(Swap1));
+
                     // stack: idx slot arr
-                    code_out.push(Instruction::from_opcode_imm(
-                        Opcode::AVMOpcode(AVMOpcode::Swap1),
-                        tup_size_val.clone(),
-                        debug_info,
-                    ));
-                    code_out.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::Div),
-                        debug_info,
-                    ));
+                    code_out.push(opcode!(Swap1, tup_size_val.clone()));
+                    code_out.push(opcode!(Div));
+
                     // stack: subindex slot arr
-                    code_out.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::Swap2),
-                        debug_info,
-                    ));
-                    code_out.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::Swap1),
-                        debug_info,
-                    ));
+                    code_out.push(opcode!(Swap2));
+                    code_out.push(opcode!(Swap1));
+
                     // stack: slot arr subindex
-                    code_out.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::Tget),
-                        debug_info,
-                    ));
-                    code_out.push(Instruction::from_opcode(
-                        Opcode::AVMOpcode(AVMOpcode::Swap1),
-                        debug_info,
-                    ));
+                    code_out.push(opcode!(Tget));
+                    code_out.push(opcode!(Swap1));
+
                     // stack: subindex subarr
                     remaining_size = (remaining_size + (TUPLE_SIZE - 1)) / TUPLE_SIZE;
                 }
-                code_out.push(Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Tget),
-                    debug_info,
-                ));
+                code_out.push(opcode!(Tget));
             }
             _ => {
                 code_out.push(insn.clone());
@@ -241,7 +210,7 @@ pub fn fix_tuple_size(
     Ok(code_out)
 }
 
-///Used for generating the static_val for a `LinkedProgram`.
+/// Used for generating the static_val for a `LinkedProgram`.
 ///
 /// Takes a vector of codepoints, and places them in order into a nested tuple `Value`
 pub fn jump_table_to_value(jump_table: Vec<CodePt>) -> Value {
@@ -253,12 +222,12 @@ pub fn jump_table_to_value(jump_table: Vec<CodePt>) -> Value {
     shape.make_value(jump_table_codepoints)
 }
 
-///Generates a `Value` that is a nested tuple with size total leaf values, all leaf values are null.
+/// Generates a `Value` that is a nested tuple with size total leaf values, all leaf values are null.
 pub fn make_uninitialized_tuple(size: usize) -> Value {
     TupleTree::new(size, false).make_empty()
 }
 
-///Represents tuple structure of mini value.
+/// Represents tuple structure of mini value.
 #[derive(Debug)]
 pub enum TupleTree {
     Single,
@@ -266,7 +235,7 @@ pub enum TupleTree {
 }
 
 impl TupleTree {
-    ///Constructs new `TupleTree` with capacity of size.
+    /// Constructs new `TupleTree` with capacity of size.
     ///
     /// The is_local argument indicates whether the `TupleTree` is intended to be used for locals,
     /// if set to false and size is 1 will return the Single variant, and will return the Tree
@@ -299,7 +268,7 @@ impl TupleTree {
         TupleTree::Tree(size, v)
     }
 
-    ///Creates a `Value` with the same tree structure as self.
+    /// Creates a `Value` with the same tree structure as self.
     pub fn make_empty(&self) -> Value {
         match self {
             TupleTree::Single => Value::new_tuple(Vec::new()),
@@ -313,14 +282,14 @@ impl TupleTree {
         }
     }
 
-    ///Create a nested tuple `Value` with structure determined by self, and leaf nodes determined
+    /// Create a nested tuple `Value` with structure determined by self, and leaf nodes determined
     /// left to right by vals.
     fn make_value(&self, vals: Vec<Value>) -> Value {
         let (val, _) = self.make_value_2(vals);
         val
     }
 
-    ///Internal call used by `make_value`.
+    /// Internal call used by `make_value`.
     ///
     /// The returned `Value` is the value constructed from vals, and the returned `Vec<Values>` are
     /// the unconsumed `Value`s in vals.
@@ -340,7 +309,7 @@ impl TupleTree {
         }
     }
 
-    ///Gets the total number of nodes in the `TupleTree`
+    /// Gets the total number of nodes in the `TupleTree`
     fn tsize(&self) -> usize {
         match self {
             TupleTree::Single => 1,
@@ -348,7 +317,7 @@ impl TupleTree {
         }
     }
 
-    ///Generates code for pushing a copy the index-th element of self to the top of the stack.
+    /// Generates code for pushing a copy the index-th element of self to the top of the stack.
     ///
     /// Argument is_local defines whether locals or globals are being accessed, generated code is
     /// appended to the code argument and also returned as an owned value, location is used to
@@ -405,7 +374,7 @@ impl TupleTree {
         }
     }
 
-    ///Generates code for writing to the index_in-th element of self.
+    /// Generates code for writing to the index_in-th element of self.
     ///
     /// Argument is_local defines whether locals or globals are being accessed, generated code is
     /// appended to the code argument and also returned as an owned value, location is used to
@@ -482,7 +451,7 @@ impl TupleTree {
                 }
             }
             return Err(CompileError::new(
-                String::from("Compile error: TupleTree::write_code"),
+                String::from("Internal error in write_code:"),
                 "out-of-bounds write".to_string(),
                 debug_info.location.into_iter().collect(),
             ));
@@ -496,7 +465,7 @@ impl TupleTree {
     }
 }
 
-///Generates a `TupleTree` of size equal to the length of lis, and fills its leaf nodes with the
+/// Generates a `TupleTree` of size equal to the length of lis, and fills its leaf nodes with the
 /// `Value`s in lis.
 pub fn value_from_field_list(lis: Vec<Value>) -> Value {
     TupleTree::new(lis.len(), false).make_value(lis)

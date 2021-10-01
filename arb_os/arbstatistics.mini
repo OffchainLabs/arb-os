@@ -2,7 +2,6 @@
 // Copyright 2021, Offchain Labs, Inc. All rights reserved.
 //
 
-use accounts::getGlobalAccountStore;
 use accounts::accountStore_getNumAccounts;
 use accounts::accountStore_getNumContracts;
 
@@ -11,6 +10,7 @@ use evmCallStack::evmCallStack_topFrame;
 use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallStack_callHitError;
+use evmCallStack::evmCallStack_getAccountStoreInCurrentContext;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
@@ -24,13 +24,13 @@ use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 
 
-public impure func arbStatistics_txcall() {
+public view write func arbStatistics_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) < 4) {
             evmOp_revert_knownPc(0, 0, 0);
         }
-        let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
+        let funcCode = (bytearray_get256(calldata, 0) >> 224);
         if (funcCode == const::funcCode_ArbStatistics_getStats) {
             arbStatistics_getStats(topFrame, calldata);
         } else {
@@ -43,18 +43,19 @@ public impure func arbStatistics_txcall() {
     }
 }
 
-impure func arbStatistics_getStats(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (txId)
+// function getStats() external view returns(uint, uint, uint, uint, uint, uint);
+view write func arbStatistics_getStats(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(10, 0, 0);
     }
 
     let mem = bytearray_new(0);
     let mem = bytearray_set256(mem, 0, inbox_currentArbBlockNumber());
-    let mem = bytearray_set256(mem, 32, accountStore_getNumAccounts(getGlobalAccountStore()));
+    let mem = bytearray_set256(mem, 32, accountStore_getNumAccounts(evmCallStack_getAccountStoreInCurrentContext()));
     let mem = bytearray_set256(mem, 2*32, arbStats.storage);
     let mem = bytearray_set256(mem, 3*32, arbStats.arbGasUsed);
     let mem = bytearray_set256(mem, 4*32, arbStats.numTxReceipts);
-    let mem = bytearray_set256(mem, 5*32, accountStore_getNumContracts(getGlobalAccountStore()));
+    let mem = bytearray_set256(mem, 5*32, accountStore_getNumContracts(evmCallStack_getAccountStoreInCurrentContext()));
 
     if (evmCallStack_setTopFrameMemory(mem)) {
         evmOp_return(0, bytearray_size(mem));
@@ -67,11 +68,11 @@ type ArbStatistics = struct {
     storage: uint,
     arbGasUsed: uint,
     numTxReceipts: uint,
-}
+};
 
 var arbStats: ArbStatistics;
 
-public impure func arbStatistics_init() {
+public write func arbStatistics_init() {
     arbStats = struct {
         storage: 0,
         arbGasUsed: 0,
@@ -79,19 +80,19 @@ public impure func arbStatistics_init() {
     };
 }
 
-public impure func arbStatistics_addToStorage(delta: int) {
+public view write func arbStatistics_addToStorage(delta: uint) {
     arbStats = arbStats with {
-        storage: uint(int(arbStats.storage) + delta)
+        storage: arbStats.storage + delta
     };
 }
 
-public impure func arbStatistics_addToGasUsed(gas: uint) {
+public view write func arbStatistics_addToGasUsed(gas: uint) {
     arbStats = arbStats with {
         arbGasUsed: arbStats.arbGasUsed + gas
     };
 }
 
-public impure func arbStatistics_addTxReceipt() {
+public view write func arbStatistics_addTxReceipt() {
     arbStats = arbStats with {
         numTxReceipts: arbStats.numTxReceipts + 1
     };

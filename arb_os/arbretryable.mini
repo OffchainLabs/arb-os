@@ -2,6 +2,8 @@
 // Copyright 2021, Offchain Labs, Inc. All rights reserved.
 //
 
+use chainParameters::chainParams_getOrDie;
+
 use evmCallStack::EvmCallFrame;
 use evmCallStack::evmCallStack_topFrame;
 use evmCallStack::evmCallStack_stackDepth;
@@ -37,13 +39,13 @@ use retrybuffer::retryBuffer_getBeneficiary;
 use retrybuffer::retryBuffer_delete;
 
 
-public impure func arbretryable_txcall() {
+public view write func arbretryable_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) < 4) {
             evmOp_revert_knownPc(0, 0, 0);
         }
-        let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
+        let funcCode = (bytearray_get256(calldata, 0) >> 224);
         if (funcCode == const::funcCode_ArbRetryableTx_redeem) {
             arbRetryable_redeem(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbRetryableTx_getLifetime) {
@@ -70,7 +72,8 @@ public impure func arbretryable_txcall() {
     }
 }
 
-impure func arbRetryable_redeem(topFrame: EvmCallFrame, calldata: ByteArray) {  // (txId)
+// function redeem(bytes32 txId) external;
+view write func arbRetryable_redeem(topFrame: EvmCallFrame, calldata: ByteArray) {
     evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(10, 0, 0);
@@ -99,7 +102,8 @@ impure func arbRetryable_redeem(topFrame: EvmCallFrame, calldata: ByteArray) {  
     }
 }
 
-impure func arbRetryable_getTimeout(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (txId) -> uint
+// function getTimeout(bytes32 ticketId) external view returns(uint);
+view write func arbRetryable_getTimeout(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(20, 0, 0);
     }
@@ -117,7 +121,8 @@ impure func arbRetryable_getTimeout(_topFrame: EvmCallFrame, calldata: ByteArray
     }
 }
 
-impure func arbRetryable_getLifetime(_topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> uint
+// function getLifetime() external view returns(uint);
+view write func arbRetryable_getLifetime(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownPc(30, 0, 0);
     }
@@ -130,7 +135,8 @@ impure func arbRetryable_getLifetime(_topFrame: EvmCallFrame, calldata: ByteArra
     }
 }
 
-impure func arbRetryable_getKeepalivePrice(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (txId) -> (uint, uint)
+// function getKeepalivePrice(bytes32 ticketId) external view returns(uint, uint);
+view write func arbRetryable_getKeepalivePrice(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(40, 0, 0);
     }
@@ -152,38 +158,52 @@ impure func arbRetryable_getKeepalivePrice(_topFrame: EvmCallFrame, calldata: By
     }
 }
 
-impure func arbRetryable_keepalive(topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint) payable -> uint
+// function keepalive(bytes32 ticketId) external payable returns(uint);
+view write func arbRetryable_keepalive(topFrame: EvmCallFrame, calldata: ByteArray) {
     evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(50, 0, 0);
     }
-    let caller = evmCallFrame_getCaller(topFrame);
     let callvalue = evmCallFrame_getCallvalue(topFrame);
-    if (callvalue > 0) {
-        if (evmCallStack_transferEthFromCurrent(caller, callvalue) == None<()>) {
+    let txId = bytearray_get256(calldata, 4);
+
+    let rbuf = getRetryBufferInCurrentContext();
+    if let Some(res) = retryBuffer_getTxKeepalivePrice(rbuf, txId) {
+        let (keepalivePrice, _) = res;
+        if (callvalue != keepalivePrice) {
             evmOp_revert_knownPc(51, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownPc(52, 0, 0);
+    }
+    if (callvalue > 0) {
+        if (evmCallStack_transferEthFromCurrent(
+            address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
+            callvalue
+        ) == None<()>) {
+            evmOp_revert_knownPc(53, 0, 0);
         }
     }
 
-    let txId = bytearray_get256(calldata, 4);
-    if let Some(res) = retryBuffer_keepalive(getRetryBufferInCurrentContext(), txId) {
-        let (rbuf, newTimeout) = res;
+    if let Some(res) = retryBuffer_keepalive(rbuf, txId) {
+        let (*rbuf, newTimeout) = res;
         setRetryBufferInCurrentContext(rbuf);
         if (arbRetryable_emitLifetimeExtended(topFrame, txId, newTimeout) == None<()>) {
-            evmOp_revert_knownPc(52, 0, 0);
+            evmOp_revert_knownPc(54, 0, 0);
         }
         let mem = bytearray_set256(bytearray_new(0), 0, newTimeout);
         if (evmCallStack_setTopFrameMemory(mem)) {
             evmOp_return(0, 32);
         } else {
-            evmOp_revert_knownPc(53, 0, 0);
+            evmOp_revert_knownPc(55, 0, 0);
         }
     } else {
-        evmOp_revert_knownPc(54, 0, 0);
+        evmOp_revert_knownPc(56, 0, 0);
     }
 }
 
-impure func arbRetryable_getBeneficiary(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint) -> address
+// function getBeneficiary(bytes32 ticketId) external view returns (address);
+view write func arbRetryable_getBeneficiary(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(60, 0, 0);
     }
@@ -200,7 +220,8 @@ impure func arbRetryable_getBeneficiary(_topFrame: EvmCallFrame, calldata: ByteA
     }
 }
 
-impure func arbRetryable_cancel(topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint)
+// function cancel(bytes32 ticketId) external;
+view write func arbRetryable_cancel(topFrame: EvmCallFrame, calldata: ByteArray) {
     evmOp_revertIfStatic();
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(70, 0, 0);
@@ -226,7 +247,8 @@ impure func arbRetryable_cancel(topFrame: EvmCallFrame, calldata: ByteArray) {  
     }
 }
 
-impure func arbRetryable_getSubmissionPrice(_topFrame: EvmCallFrame, calldata: ByteArray) { // (uint) -> (uint, uint)
+// function getSubmissionPrice(uint calldataSize) external view returns (uint, uint);
+view write func arbRetryable_getSubmissionPrice(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(80, 0, 0);
     }
@@ -245,11 +267,13 @@ impure func arbRetryable_getSubmissionPrice(_topFrame: EvmCallFrame, calldata: B
     }
 }
 
-impure func _arbRetryable_emitTicketCreated(_topFrame: EvmCallFrame, txId: uint) {
+// event TicketCreated(bytes32 indexed ticketId);
+view write func _arbRetryable_emitTicketCreated(_topFrame: EvmCallFrame, txId: uint) {
     evmOp_log2(0, 0, const::eventTopic_ArbRetryableTx_TicketCreated, txId);
 }
 
-impure func arbRetryable_emitLifetimeExtended(topFrame: EvmCallFrame, txId: uint, newTimeout: uint) -> option<()> {
+// event LifetimeExtended(bytes32 indexed ticketId, uint newTimeout);
+view write func arbRetryable_emitLifetimeExtended(topFrame: EvmCallFrame, txId: uint, newTimeout: uint) -> option<()> {
     let savedMem = evmCallFrame_getMemory(topFrame);
     let mem = bytearray_set256(bytearray_new(0), 0, newTimeout);
     if ( ! evmCallStack_setTopFrameMemory(mem)) {
@@ -263,10 +287,12 @@ impure func arbRetryable_emitLifetimeExtended(topFrame: EvmCallFrame, txId: uint
     };
 }
 
-impure func arbRetryable_emitRedeemed(_topFrame: EvmCallFrame, txId: uint) {
+// event Redeemed(bytes32 indexed ticketId);
+view write func arbRetryable_emitRedeemed(_topFrame: EvmCallFrame, txId: uint) {
     evmOp_log2(0, 0, const::eventTopic_ArbRetryableTx_Redeemed, txId);
 }
 
-impure func arbRetryable_emitCanceled(_topFrame: EvmCallFrame, txId: uint) {
+// event Canceled(bytes32 indexed ticketId);
+view write func arbRetryable_emitCanceled(_topFrame: EvmCallFrame, txId: uint) {
     evmOp_log2(0, 0, const::eventTopic_ArbRetryableTx_Canceled, txId);
 }

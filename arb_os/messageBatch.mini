@@ -11,6 +11,9 @@ use std::bytestream::bytestream_get256;
 use std::bytestream::bytestream_skipBytes;
 use std::bytestream::bytestream_bytesReadSoFar;
 use std::bytestream::bytestream_getCalldataUnits;
+use std::bytestream::bytestream_atEof;
+
+use chainParameters::chainParams_getDefaultAggregator;
 
 use inbox::IncomingRequest;
 use inbox::GasEstimationParams;
@@ -21,8 +24,9 @@ use std::rlp::rlp_decodeUint;
 type MessageBatch = struct {
     template: IncomingRequest,
     stream: ByteStream,
+    nested: bool,
     numSoFar: uint,
-}
+};
 
 public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
     return xif ( ((msg.kind == const::L1MessageType_L2) || (msg.kind == const::L1MessageType_L2ForGasEstimation))
@@ -40,9 +44,8 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
             }
             (agg, None<GasEstimationParams>)
         } else {
-            let (ustr, agg) = bytestream_get256(stream)?;
-            let (ustr, limit) = bytestream_get256(ustr)?;
-            stream = ustr;
+            let (*stream, agg) = bytestream_get256(stream)?;
+            let (*stream, limit) = bytestream_get256(stream)?;
             (
                 address(agg),
                 Some(struct {
@@ -53,23 +56,24 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
             )
         };
 
+        let nested = msg.provenance.parentRequestId != 0;
         Some(
             struct {
-                template: msg with {
-                    provenance: struct {
+                template: {
+                    set msg.provenance = struct {
                         l1SeqNum: msg.provenance.l1SeqNum,
                         parentRequestId: msg.requestId,
                         indexInParent: 0,
-                    }
-                } with {
-                    aggregator: Some(struct {
+                    };
+                    set msg.aggregator = Some(struct {
                         aggregator: Some(aggregator),
                         calldataUnits: 0,
-                    })
-                } with {
-                    gasEstimationParams: gasEstimationParams
+                    });
+                    set msg.gasEstimationParams = gasEstimationParams;
+                    msg
                 },
                 stream: stream,
+                nested: nested,
                 numSoFar: 0,
             }
         )
@@ -79,35 +83,42 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
     };
 }
 
-public func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)> {
+public view func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)> {
     // returns next message in the batch (and updated batch), or None if no more messages in batch
     let (stream, l2MsgLength) = rlp_decodeUint(batch.stream)?;
 
     return xif let Some(res) = bytestream_getN(stream, l2MsgLength) {
-        let (bs, extractedL2data) = res;
         let streamBeforeCalldata = stream;
-        stream = bs;
+        let (*stream, extractedL2data) = res;
 
         Some((
-            batch.template with {
-                msgData: extractedL2data
-            } with {
-                requestId: uint(hash(bytes32(batch.template.requestId), bytes32(batch.numSoFar)))
-            } with {
-                provenance: batch.template.provenance with { indexInParent: batch.numSoFar }
-            } with {
-                aggregator: Some(struct {
+            {
+                let request = batch.template;
+                set request.msgData = extractedL2data;
+                set request.requestId = uint(hash(bytes32(batch.template.requestId), bytes32(batch.numSoFar)));
+                set request.provenance.indexInParent = batch.numSoFar;
+                set request.aggregator = Some(struct {
                     aggregator: (batch.template.aggregator?).aggregator,
                     calldataUnits: bytestream_getCalldataUnits(
                         streamBeforeCalldata,
                         bytestream_bytesReadSoFar(stream) - bytestream_bytesReadSoFar(streamBeforeCalldata),
                     ),
-                })
+                });
+                if (
+                    l2MsgLength == 0 // The aggregator is signaling an end of block
+                        && request.sender == chainParams_getDefaultAggregator() // They are the default aggregator
+                        && !batch.nested // This isn't a nested batch
+                        && bytestream_atEof(stream) // This is the end of the batch
+                ) {
+                    set request.kind = const::L1MessageType_endOfBlock;
+                }
+                request
             },
-            batch with {
-                stream: stream
-            } with {
-                numSoFar: batch.numSoFar + 1
+            {
+                let tmpBatch = batch;
+                set tmpBatch.stream = stream;
+                set tmpBatch.numSoFar = tmpBatch.numSoFar + 1;
+                tmpBatch
             }
         ))
     } else {

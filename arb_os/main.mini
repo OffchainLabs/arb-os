@@ -1,15 +1,14 @@
 //
-// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
 //
 
+
+use accounts::AccountStore;
 use accounts::accountStore_init;
-use accounts::getGlobalAccountStore;
-use accounts::setGlobalAccountStore;
-use accounts::accountStore_get;
-use accounts::accountStore_set;
+use accounts::safeGetGlobalAccountStore;
+use accounts::safeSetGlobalAccountStore;
 use accounts::accountStore_createAccountFromEvmCode;
 use accounts::accountStore_upgradeContractFromEvmCode;
-use accounts::account_checkAndIncrSeqNum;
 
 use arbstatistics::arbStatistics_init;
 use arbowner::arbowner_init;
@@ -19,8 +18,8 @@ use blockhash::blockhash_init;
 use chainParameters::chainParams_init;
 use chainParameters::notifyParamsChanged;
 
-use codeSegment::codeSegment_init;
-use codeSegment::translateEvmCodeSegment;
+use std::codeSegment::codeSegment_init;
+use std::codeSegment::translateEvmCodeSegment;
 
 use contractTemplates::getArbInfoCode;
 use contractTemplates::getArbInfoAddress;
@@ -29,32 +28,24 @@ use contractTemplates::getArbInfoStorage;
 use decompression::decompression_init;
 
 use errorHandler::errorHandler_init;
+use errorHandler::errorHandler_setUpgradeProtector;
 
 use evmCallStack::evmCallStack_init;
 
 use evmOps::evmOps_init;
 use evmOps::dispatchForEvmOp;
 
-use evmlogs::EvmLogs;
-
-use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_init;
-use gasAccounting::getNextRequestFromCongestionAuction;
 
 use inbox::inbox_init;
+use inbox::mainRunLoop;
 use inbox::emitGenesisBlockReceipt;
-
-use messages::handleL2Request;
 
 use output::output_init;
 use output::txReceipts_init;
-use output::emitTxReceipt;
-
-use pluggables::pluggables_init;
 
 use precompiles::precompiles_init;
 
-use std::bytearray::ByteArray;
 use std::bytearray::bytearray_unmarshalBytes;
 use std::bytestream::bytestream_new;
 
@@ -63,15 +54,18 @@ use bridge_arbos_versions::remapGlobalsForUpgrade;
 
 // The compiler will always put __fixedLocationGlobal in slot 0 of the AVM Register,
 //     so we can rely on it not moving across upgrades.
-var __fixedLocationGlobal: impure func(uint);    // points to EVM op dispatch function
+var __fixedLocationGlobal: view write func(uint);    // points to EVM op dispatch function
 
-impure func main(oldGlobals: GlobalsBeforeUpgrade) {
+view write func main(oldGlobals: GlobalsBeforeUpgrade) {
     if (unsafecast<any>(oldGlobals) != ()) {
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
 
+        // create an upgrade-only error handler that saves and restores the contents of the register
+        errorHandler_setUpgradeProtector(oldGlobals);
+
         let (newGlobals, _oldArbosVersion) = remapGlobalsForUpgrade(oldGlobals);
 
-        asm(newGlobals,) { rset };
+        asm(newGlobals) { rset };
 
         // now re-do the initializations that set up pointers into the ArbOS code
         errorHandler_init();
@@ -80,7 +74,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         codeSegment_init();
 
         if (initializePreinstalls(true) == None<()>) {
-            panic;   // don't try to run without preinstalls and precompiles
+            error;   // don't try to run without preinstalls and precompiles
         }
 
         notifyParamsChanged();   // call this in case parameters changed during upgrade
@@ -90,7 +84,6 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         chainParams_init();
         arbStatistics_init();
 
-        pluggables_init();
         codeSegment_init();
         output_init();
         decompression_init();
@@ -104,60 +97,18 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         arbowner_init();
         txReceipts_init();
         if (initializePreinstalls(false) == None<()>) {
-            panic;   // don't try to run without preinstalls and precompiles
+            error;   // don't try to run without preinstalls and precompiles
         }
 
         // advance the Arbitrum block number, and emit a block receipt
         emitGenesisBlockReceipt();
     }
 
-    // initialize any customizations here
-
     mainRunLoop();
 }
 
-public impure func mainRunLoop() {
-    loop {
-        let (resultCode, request) = getNextRequestFromCongestionAuction();
-        if (resultCode == const::TxResultCode_success) {
-            if (handleL2Request(request) == None<()>) {
-                // reject for message format error
-                emitTxReceipt(
-                    request.incomingRequest,
-                    const::TxResultCode_formatError,
-                    None<ByteArray>,
-                    None<EvmLogs>,
-                    None<GasUsage>,
-                    request.feeStats,
-                    false,      // don't emit tracing info because the tx was bogus
-                );
-            }
-        } else {
-            // before emitting a failure receipt, try to increment caller's sequence number
-            if ( (resultCode != const::TxResultCode_sequenceNumberTooLow) && (resultCode != const::TxResultCode_sequenceNumberTooHigh) ) {
-                if let Some(seqNum) = request.seqNum {
-                    let gAcctStore = getGlobalAccountStore();
-                    if let Some(acct) = account_checkAndIncrSeqNum(accountStore_get(gAcctStore, request.caller), seqNum) {
-                        setGlobalAccountStore(accountStore_set(gAcctStore, request.caller, acct));
-                    }
-                }
-            }
-
-            emitTxReceipt(
-                request.incomingRequest,
-                resultCode,
-                None<ByteArray>,
-                None<EvmLogs>,
-                None<GasUsage>,
-                request.feeStats,
-                true,
-            );
-        }
-    }
-}
-
-impure func initializePreinstalls(isUpgrade: bool) -> option<()> {
-    let acctStore = getGlobalAccountStore();
+view write func initializePreinstalls(isUpgrade: bool) -> option<()> {
+    let acctStore = safeGetGlobalAccountStore();
 
     let code = bytearray_unmarshalBytes(getArbInfoCode())?;
     let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
@@ -186,7 +137,7 @@ impure func initializePreinstalls(isUpgrade: bool) -> option<()> {
     // set up precompiled contracts
     acctStore = precompiles_init(acctStore, isUpgrade)?;
 
-    setGlobalAccountStore(acctStore);
+    safeSetGlobalAccountStore(acctStore);
 
     return Some(());
 }

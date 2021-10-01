@@ -2,13 +2,13 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-type Stack = option<StackCell>
+type Stack = option<StackCell>;
 
 type StackCell = struct {
     top: [8]any,
     num: uint,
     rest: option<StackCell>
-}
+};
 
 
 public func stack_new() -> Stack {
@@ -16,7 +16,7 @@ public func stack_new() -> Stack {
 }
 
 public func stack_push(stack: Stack, value: any) -> Stack {
-    if let Some(cell) = unsafecast<option<StackCell>>(stack) {
+    if let Some(cell) = unsafecast<option<StackCell> >(stack) {
         if (cell.num < 8) {
             return Some(
                 cell with {

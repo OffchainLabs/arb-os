@@ -8,7 +8,7 @@ use std::priorityq::priorityq_insert;
 use std::priorityq::priorityq_get;
 
 
-impure func main() {
+write func main() {
 	asm(tests(),) { log };
 }
 
