@@ -1,8 +1,6 @@
 /**
  * @type import('hardhat/config').HardhatUserConfig
  */
-require("@typechain/hardhat");
-
 module.exports = {
   solidity: "0.6.11",
   paths: {
@@ -19,9 +17,5 @@ module.exports = {
         count: 10,
       },
     },
-  },
-  typechain: {
-    outDir: "src/types",
-    target: "ethers-v5",
-  },
+  }
 };
