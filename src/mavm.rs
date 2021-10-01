@@ -858,7 +858,7 @@ impl Value {
                                 s = format!("{}{}", s, child);
                             }
                             false => {
-                                s = format!("{}{} {}", s, Color::grey(","), child);
+                                s = format!("{}{}{}", s, Color::grey(", "), child);
                             }
                         }
                     }

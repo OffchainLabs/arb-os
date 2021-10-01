@@ -12,7 +12,11 @@ use petgraph::visit::{Dfs, IntoNodeReferences};
 use petgraph::{Direction, Undirected};
 use rand::prelude::*;
 use rand::rngs::SmallRng;
+use reduce::ValueGraph;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+
+mod effects;
+mod reduce;
 
 /// Represents a block of instructions that has no control flow
 pub enum BasicBlock {
@@ -520,6 +524,16 @@ impl BasicGraph {
 
         if self.should_print {
             self.print();
+        }
+    }
+
+    pub fn graph_reduce(&mut self) {
+        let mut graphs = HashMap::new();
+
+        for node in self.graph.node_indices() {
+            let block = self.graph[node].get_code();
+            let values = ValueGraph::new(block);
+            graphs.insert(node, values);
         }
     }
 }

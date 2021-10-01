@@ -375,7 +375,7 @@ fn codegen(
 
                         // Test the condition
                         cgen.code.push(opcode!(Dup0));
-                        cgen.code.push(opcode!(Tget, Value::from(0)));
+                        cgen.code.push(opcode!(@TupleGet(0, 2)));
                         cgen.code.push(opcode!(Cjump, Value::Label(ok_label)));
 
                         // failure state
@@ -383,9 +383,9 @@ fn codegen(
                         let text = format!("assert on line {} failed with", line);
                         let tuple =
                             Value::new_tuple(vec![Value::from(text.as_ref()), Value::none()]);
-                        cgen.code.push(opcode!(Tget, Value::from(1)));
+                        cgen.code.push(opcode!(@TupleGet(1, 2)));
                         cgen.code.push(opcode!(Noop, tuple));
-                        cgen.code.push(opcode!(Tset, Value::from(1)));
+                        cgen.code.push(opcode!(@TupleSet(1, 2)));
                         cgen.code.push(opcode!(DebugPrint));
                         cgen.code.push(opcode!(Error));
 
@@ -433,12 +433,12 @@ fn codegen(
                         let end_label = cgen.label_gen.next();
                         let else_label = cgen.label_gen.next();
                         cgen.code.push(opcode!(Dup0));
-                        cgen.code.push(opcode!(Tget, Value::from(0)));
+                        cgen.code.push(opcode!(@TupleGet(0, 2)));
                         cgen.code.push(opcode!(IsZero));
                         cgen.code.push(opcode!(Cjump, Value::Label(else_label)));
 
                         // Some(_) case
-                        cgen.code.push(opcode!(Tget, Value::from(1)));
+                        cgen.code.push(opcode!(@TupleGet(1, 2)));
 
                         // if-let is tricky since the local variable isn't defined in the same scope.
                         // To work around this, we get the next slot without advancing. This means
@@ -540,7 +540,7 @@ fn codegen(
                         let container = vec![Value::new_tuple(Vec::new()); 8];
                         cgen.code.push(opcode!(Noop, Value::new_tuple(container)));
                         for i in 0..8 {
-                            cgen.code.push(opcode!(Tset, Value::from(i)));
+                            cgen.code.push(opcode!(@TupleSet(i, 8)));
                         }
 
                         let mut tuple_size: usize = 8;
@@ -551,7 +551,7 @@ fn codegen(
                             let container = vec![Value::new_tuple(Vec::new()); 8];
                             cgen.code.push(opcode!(Noop, Value::new_tuple(container)));
                             for i in 0..8 {
-                                cgen.code.push(opcode!(Tset, Value::from(i)));
+                                cgen.code.push(opcode!(@TupleSet(i, 8)));
                             }
                             tuple_size *= 8;
                         }
@@ -755,18 +755,18 @@ fn codegen(
                         expr!(inner);
                         let option = Value::new_tuple(vec![Value::from(1), Value::none()]);
                         cgen.code.push(opcode!(Noop, option));
-                        cgen.code.push(opcode!(Tset, Value::from(1)));
+                        cgen.code.push(opcode!(@TupleSet(1, 2)));
                     }
                     TypeCheckedExprKind::Try(variant, _) => {
                         expr!(variant);
                         let success = cgen.label_gen.next();
                         cgen.code.push(opcode!(Dup0));
-                        cgen.code.push(opcode!(Tget, Value::from(0)));
+                        cgen.code.push(opcode!(@TupleGet(0, 2)));
                         cgen.code.push(opcode!(Cjump, Value::Label(success)));
                         cgen.code.push(opcode!(@Return));
                         clear_stack!();
                         cgen.code.push(opcode!(@Label(success)));
-                        cgen.code.push(opcode!(Tget, Value::from(1)));
+                        cgen.code.push(opcode!(@TupleGet(1, 2)));
                     }
                     TypeCheckedExprKind::ClosureLoad(id, captures, _) => {
                         // The closure ABI is based around the idea that a closure pointer is essentially

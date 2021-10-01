@@ -14,6 +14,7 @@ write func main() {
     }
 }
 
+#[print]
 func test_1() -> option<string> {
     
     let a = Some("uh oh, not replaced");
@@ -22,7 +23,6 @@ func test_1() -> option<string> {
     
     a
 }
-
 
 func test_2() -> option<string> {
     

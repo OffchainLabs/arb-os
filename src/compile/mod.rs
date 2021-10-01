@@ -1068,6 +1068,7 @@ fn codegen_modules(
             let mut graph = BasicGraph::new(code);
 
             graph.pop_useless_locals();
+            graph.graph_reduce();
             graph.color(frame_size);
             let frame_size = graph.shrink_frame();
 

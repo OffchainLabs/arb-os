@@ -322,16 +322,16 @@ pub fn postlink_compile(
 ) -> Result<LinkedProgram, CompileError> {
     let consider_debug_printing = |code: &Vec<Instruction>, did_print: bool, phase: &str| {
         if debug {
-            println!("========== {} ==========", phase);
+            /*println!("========== {} ==========", phase);
             for (idx, insn) in code.iter().enumerate() {
                 println!(
                     "{}  {}",
                     Color::grey(format!("{:04}", idx)),
                     insn.pretty_print(Color::PINK)
                 );
-            }
+            }*/
         } else if did_print {
-            println!("========== {} ==========", phase);
+            /*println!("========== {} ==========", phase);
             for (idx, insn) in code.iter().enumerate() {
                 if insn.debug_info.attributes.codegen_print {
                     println!(
@@ -340,23 +340,23 @@ pub fn postlink_compile(
                         insn.pretty_print(Color::PINK)
                     );
                 }
-            }
+            }*/
         }
     };
 
     let mut did_print = false;
 
     if debug {
-        println!("========== after initial linking ===========");
+        /*println!("========== after initial linking ===========");
         for (idx, insn) in program.code.iter().enumerate() {
             println!(
                 "{}  {}",
                 Color::grey(format!("{:04}", idx)),
                 insn.pretty_print(Color::PINK)
             );
-        }
+        }*/
     } else {
-        for (idx, insn) in program.code.iter().enumerate() {
+        /*for (idx, insn) in program.code.iter().enumerate() {
             if insn.debug_info.attributes.codegen_print {
                 println!(
                     "{}  {}",
@@ -365,7 +365,7 @@ pub fn postlink_compile(
                 );
                 did_print = true;
             }
-        }
+        }*/
     }
 
     let (code, jump_table) =
