@@ -16,6 +16,7 @@ use std::bytestream::bytestream_new;
 use std::storageMap::storageMap_serialize;
 use std::storageMap::storageMap_deserialize;
 use std::storageMap::storageMap_new;
+use std::storageMap::storageMap_set;
 
 use accounts::pristineAccount;
 use accounts::account_setContractInfo;
@@ -332,11 +333,13 @@ view write func arbosTest_store(topFrame: EvmCallFrame, calldata: ByteArray) {
 
     let key = bytearray_get256(calldata, 4+32);
     let val = bytearray_get256(calldata, 4+32*2);
-    if let Some(resaccount) = account_setStorageCell(account, key, val) {
-        account = resaccount;
+    account = xif let Some(resaccount) = account_setStorageCell(account, key, val) {
+        resaccount
     } else {
-        evmOp_revert_knownPc(82, 0, 0);
-    }
+        let storage = storageMap_new();
+        storage = storageMap_set(storage, key, val);
+        account_setStorage(account, storage)
+    };
     evmCallStack_setAccountInCurrentContext(addr, account);
 
     evmOp_return(0, 0);

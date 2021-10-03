@@ -486,7 +486,7 @@ pub fn arbos_ethcall_test(log_to: Option<&Path>, debug: bool) -> Result<(), etha
     // code translates to: storage[1] = storage[0] + 0x10, return (storage[1])
     let code = hex::decode("6000546010018060015560005260206000f3").unwrap();
 
-    arbos_test._set_code(&mut machine, &contract_address, code)?;
+    arbos_test._set_code(&mut machine, &contract_address, code.clone())?;
     let retdata = arbos_test.call(
         &mut machine,
         caller_address.clone(),
@@ -551,6 +551,27 @@ pub fn arbos_ethcall_test(log_to: Option<&Path>, debug: bool) -> Result<(), etha
     let res_storage = deserialize_storage(res_storage_serial);
     assert_eq!(res_nonce, Uint256::from_u64(0x20));
     assert!(compare_storage(&expected_storage, &res_storage));
+
+    println!("store and then set code:\n");
+    let contract_address = Uint256::from_u64(89629813089426999);
+
+    arbos_test._store(
+        &mut machine,
+        &contract_address,
+        &Uint256::zero(),
+        &Uint256::from_u64(0x800),
+    )?;
+
+    arbos_test._set_code(&mut machine, &contract_address, code.clone())?;
+    let retdata = arbos_test.call(
+        &mut machine,
+        caller_address.clone(),
+        contract_address.clone(),
+        Vec::new(),
+        Uint256::zero(),
+    )?;
+    let intres = Uint256::from_bytes(&retdata[0..32]);
+    assert_eq!(intres, Uint256::from_u64(0x810));
 
     if let Some(path) = log_to {
         machine

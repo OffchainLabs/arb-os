@@ -31,7 +31,8 @@ use std::codeSegment::translateEvmCodeSegment;
 use decompression::AggregatorDecompressionState;
 use evmCallStack::evmCallStack_addStorageCharge;
 use evmCallStack::evmCallStack_isEmpty;
-
+use precompiles::makeTrampoline;
+use precompiles::revertPrecompile;
 
 type AccountStore = struct {
     accounts: map<address, Account>,
@@ -362,9 +363,7 @@ public func account_setBaseTxFeeL1Gas(account: Account, fee: uint) -> Account {
     };
 }
 
-func entrypoint_stub() {}
-
-public func account_setStorage(account: Account, storage: StorageMap) -> Account {
+public view write func account_setStorage(account: Account, storage: StorageMap) -> Account {
     return account with {
         contractInfo: Some(
             xif let Some(contractInfo) = account.contractInfo {
@@ -372,11 +371,13 @@ public func account_setStorage(account: Account, storage: StorageMap) -> Account
                     storage: storage
                 }
             } else {
+                let fakeCode = bytearray_new(0);
+                fakeCode = bytearray_setByte(fakeCode, 0, 0xfe);
                 struct {
                     contractStateVersion: 1,
-                    code: bytearray_new(0),
+                    code: fakeCode,
                     evmJumpTable: newmap<uint, view write func()>,
-                    startCodePoint: entrypoint_stub,
+                    startCodePoint: makeTrampoline(revertPrecompile),
                     storage: storage,
                 }
             }
