@@ -3,6 +3,7 @@
  */
 
 use crate::compile::{FrameSize, SlotNum};
+use crate::console;
 use crate::console::Color;
 use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
 use petgraph::algo::{is_cyclic_directed, kosaraju_scc};
@@ -523,7 +524,7 @@ impl BasicGraph {
         self.shrink_frame();
 
         if self.should_print {
-            self.print();
+            //self.print();
         }
     }
 
@@ -540,7 +541,24 @@ impl BasicGraph {
         if self.should_print {
             for node in self.graph.node_indices() {
                 match graphs.get(&node) {
-                    Some(graph) => graph.print(),
+                    Some(graph) => {
+                        let code = self.graph[node].get_code();
+                        let ssa = code
+                            .into_iter()
+                            .map(|x| x.pretty_print(Color::PINK))
+                            .collect();
+                        let values = graph.print_lines();
+                        let reduced = graph
+                            .codegen()
+                            .into_iter()
+                            .map(|x| x.pretty_print(Color::PINK))
+                            .collect();
+                        console::print_columns(
+                            vec![ssa, values, reduced],
+                            vec!["SSA", "values", "reduced"],
+                        );
+                        println!();
+                    }
                     None => println!("No value graph"),
                 }
             }

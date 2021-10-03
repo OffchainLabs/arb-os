@@ -19,9 +19,9 @@ pub enum Effect {
     ReadLocal(u32),
     WriteLocal(u32),
     PhiLocal(u32, u32),
-    OpenFrame(FrameSize),
-    WriteGlobal,
     ReadGlobal,
+    WriteGlobal,
+    OpenFrame(FrameSize),
     Unsure,
 }
 
@@ -78,7 +78,9 @@ impl Effects for Opcode {
                 effects
             }
             Opcode::AVMOpcode(avm_op) => avm_op.effects(),
-            Opcode::BackwardLabelTarget(..) => unreachable!("The optimizer shouldn't see this"),
+            Opcode::BackwardLabelTarget(..) | Opcode::Pull(..) => {
+                unreachable!("The optimizer shouldn't see this")
+            }
         }
     }
 }

@@ -89,3 +89,53 @@ pub fn human_readable_index(index: usize) -> String {
         _ => format!("{}th", index),
     }
 }
+
+pub fn side_by_side(mut left: Vec<String>, mut right: Vec<String>) -> Vec<String> {
+    if left.len() < right.len() {
+        let blank = vec![String::new(); right.len() - left.len()];
+        left.extend(blank);
+    }
+    if right.len() < left.len() {
+        let blank = vec![String::new(); left.len() - right.len()];
+        right.extend(blank);
+    }
+    let widest = 4 + left
+        .iter()
+        .map(|x| Color::uncolored(x).len())
+        .max()
+        .unwrap();
+
+    let mut merged = vec![];
+
+    for (left, right) in left.into_iter().zip(right.into_iter()) {
+        let spacing = widest - Color::uncolored(&left).len();
+        merged.push(format!("{}{}{}", left, " ".repeat(spacing), right));
+    }
+    merged
+}
+
+pub fn widest_line(lines: &Vec<String>) -> usize {
+    lines
+        .into_iter()
+        .map(|line| Color::uncolored(line).len())
+        .max()
+        .unwrap_or(0)
+}
+
+pub fn print_columns(data: Vec<Vec<String>>, titles: Vec<&str>) {
+    let mut data = data.into_iter().zip(titles.into_iter());
+    let mut merged = vec![String::new()];
+    let mut heading = format!("");
+
+    while let Some((column, title)) = data.next() {
+        let bars = 2 + (widest_line(&column).saturating_sub(title.len())) / 2;
+        let bars = "=".repeat(bars);
+        heading += &format!("{} {} {}", bars, title, bars);
+        merged = side_by_side(merged, column);
+    }
+
+    println!("{}", Color::grey(heading));
+    for line in merged {
+        println!("{}", line);
+    }
+}

@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::compile::SlotNum;
+use crate::compile::{DebugInfo, SlotNum};
 use crate::console::Color;
 use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
 use crate::optimize::effects::{Effect, Effects};
@@ -10,7 +10,9 @@ use petgraph::graph::NodeIndex;
 use petgraph::stable_graph::StableGraph;
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
-use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+use rand::prelude::*;
+use rand::rngs::SmallRng;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
 pub enum ValueNode {
     Opcode(Opcode),     // a
@@ -47,14 +49,15 @@ pub struct ValueGraph {
     graph: StableGraph<ValueNode, ValueEdge>,
     defs: BTreeMap<SlotNum, NodeIndex>,
     phis: BTreeMap<SlotNum, SlotNum>,
+    output: NodeIndex,
+    source: Vec<Instruction>,
 }
 
 impl ValueGraph {
-    pub fn print(&self) {
+    pub fn print_lines(&self) -> Vec<String> {
         let graph = &self.graph;
 
-        let bars = Color::grey("=".repeat(4));
-        println!("{}  {}  {}", bars, Color::grey("Value Graph"), bars);
+        let mut output = vec![];
 
         for node in graph.node_indices() {
             let node_string = format!(
@@ -68,14 +71,14 @@ impl ValueGraph {
                     ValueNode::Meta(name) => name.to_string(),
                 }
             );
-            let spacing = 36_usize.saturating_sub(Color::uncolored(&node_string).len());
-            print!("{} {}", node_string, " ".repeat(spacing));
+            let spacing = 24_usize.saturating_sub(Color::uncolored(&node_string).len());
+            let mut line = format!("{} {}", node_string, " ".repeat(spacing));
             let mut edges: Vec<_> = graph.edges_directed(node, Direction::Outgoing).collect();
             edges.sort_by_key(|edge| edge.weight().input_order());
 
             for edge in edges {
                 let input = edge.target();
-                print!(
+                line += &format!(
                     "  {}",
                     match edge.weight() {
                         ValueEdge::Connect(_) => Color::grey(input.index()),
@@ -83,19 +86,20 @@ impl ValueGraph {
                     }
                 );
             }
-            println!();
+            output.push(line);
         }
 
         if !self.phis.is_empty() {
-            print!("    ");
+            let mut line = format!("    ");
             for (dest, source) in &self.phis {
-                print!(
+                line += &format!(
                     "  {}",
                     Opcode::MoveLocal(*dest, *source).pretty_print(Color::MINT)
                 );
             }
-            println!();
+            output.push(line);
         }
+        output
     }
 
     /// Create a new `ValueGraph` from a set of instructions without control flow
@@ -237,13 +241,97 @@ impl ValueGraph {
 
         prune_graph(&mut graph);
 
-        Some(ValueGraph { graph, defs, phis })
+        Some(ValueGraph {
+            graph,
+            defs,
+            phis,
+            output,
+            source: code.to_vec(),
+        })
     }
 
-    fn codegen(self) -> Vec<Instruction> {
-        
+    pub fn codegen(&self) -> Vec<Instruction> {
+        let mut stack = vec![];
+        let graph = &self.graph;
 
+        let mut debug = DebugInfo::default();
+        debug.attributes.codegen_print = true;
 
-        
+        macro_rules! opcode {
+            ($opcode:ident) => {
+                Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), debug)
+            };
+            ($opcode:ident, $immediate:expr) => {
+                Instruction::from_opcode_imm(
+                    Opcode::AVMOpcode(AVMOpcode::$opcode),
+                    $immediate,
+                    debug,
+                )
+            };
+            (@$($opcode:tt)+) => {
+                Instruction::from_opcode(Opcode::$($opcode)+, debug)
+            };
+        }
+
+        macro_rules! degree {
+            ($node:expr) => {
+                graph.neighbors_directed($node, Direction::Incoming).count()
+            };
+        }
+
+        let mut arg_code = vec![];
+
+        // Pop unused arguments. We can't just ignore them, since they were created elsewhere.
+        for node in graph.node_indices() {
+            if let ValueNode::Arg(num) = &graph[node] {
+                if degree!(node) != 0 {
+                    stack.push(node);
+                } else {
+                    arg_code.push(opcode!(@Pull(stack.len())));
+                    arg_code.push(opcode!(Pop));
+                }
+            }
+        }
+
+        let output = self.output;
+
+        fn descend(
+            node: NodeIndex,
+            graph: &StableGraph<ValueNode, ValueEdge>,
+            produced: &mut HashSet<NodeIndex>,
+            entropy: &mut SmallRng,
+            debug: DebugInfo,
+        ) -> Vec<Instruction> {
+            let mut code = vec![];
+
+            if produced.contains(&node) {
+                // We've already produced a value for this node,
+                // which should be on the stack.
+                return vec![];
+            }
+
+            produced.insert(node);
+            code
+        }
+
+        let mut entropy: SmallRng = SeedableRng::seed_from_u64(2);
+
+        let mut best = self.source.clone();
+        for _ in 0..4 {
+            let mut alt = arg_code.clone();
+            alt.extend(descend(
+                output,
+                &graph,
+                &mut HashSet::new(),
+                &mut entropy,
+                debug,
+            ));
+
+            if alt.len() < best.len() {
+                best = alt;
+            }
+        }
+
+        best
     }
 }
