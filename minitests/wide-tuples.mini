@@ -2,7 +2,6 @@
  * Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
  */
 
-
 write func main() {
     
     if let Some(issue) = test_1() {
@@ -14,7 +13,6 @@ write func main() {
     }
 }
 
-#[print]
 func test_1() -> option<string> {
     
     let a = Some("uh oh, not replaced");

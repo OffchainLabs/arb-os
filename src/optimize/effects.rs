@@ -2,8 +2,10 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
+use crate::compile::FrameSize;
 use crate::mavm::{AVMOpcode, Opcode};
 
+#[derive(Clone, Copy, Debug)]
 pub enum Effect {
     PushStack,
     PopStack,
@@ -14,45 +16,64 @@ pub enum Effect {
     PushAux,
     PopAux,
     ReadAux,
-    WriteLocal,
-    ReadLocal,
+    ReadLocal(u32),
+    WriteLocal(u32),
+    PhiLocal(u32, u32),
+    OpenFrame(FrameSize),
     WriteGlobal,
     ReadGlobal,
     Unsure,
 }
 
-trait Effects {
+pub trait Effects {
     fn effects(&self) -> Vec<Effect>;
 }
 
 impl Effects for Opcode {
     fn effects(&self) -> Vec<Effect> {
         match self {
-            Opcode::MakeFrame(..) => vec![Effect::PushStack],
-            Opcode::GetLocal(..) => vec![Effect::ReadLocal],
-            Opcode::SetLocal(..) => vec![Effect::WriteLocal],
-            Opcode::ReserveCapture(..) => vec![Effect::WriteLocal],
-            Opcode::MoveLocal(..) => vec![Effect::ReadLocal, Effect::WriteLocal],
-            Opcode::ReserveCapture(..) => vec![Effect::WriteLocal],
+            Opcode::MakeFrame(size, ..) => vec![Effect::OpenFrame(*size)],
+            Opcode::GetLocal(slot) => vec![Effect::ReadLocal(*slot), Effect::PushStack],
+            Opcode::SetLocal(slot) => vec![
+                Effect::ReadStack(1),
+                Effect::PopStack,
+                Effect::WriteLocal(*slot),
+            ],
+            Opcode::ReserveCapture(slot, _) => vec![Effect::WriteLocal(*slot)],
+            Opcode::MoveLocal(dest, source) => {
+                vec![Effect::PhiLocal(*dest, *source)]
+            }
             Opcode::Capture(..) => vec![],
             Opcode::MakeClosure(..) => vec![],
-            Opcode::TupleGet(..) => vec![],
-            Opcode::TupleSet(..) => vec![],
+            Opcode::TupleGet(..) => vec![Effect::ReadStack(1), Effect::PopStack, Effect::PushStack],
+            Opcode::TupleSet(..) => vec![
+                Effect::ReadStack(1),
+                Effect::PopStack,
+                Effect::ReadStack(1),
+                Effect::PopStack,
+                Effect::PushStack,
+            ],
             Opcode::GetGlobalVar(..) => vec![],
             Opcode::SetGlobalVar(..) => vec![],
             Opcode::UncheckedFixedArrayGet(..) => vec![],
-            Opcode::Label(Label) => vec![],
+            Opcode::Label(..) => vec![],
             Opcode::JumpTo(..) => vec![],
             Opcode::CjumpTo(..) => vec![],
             Opcode::Return => vec![],
             Opcode::FuncCall(prop) => {
                 let mut effects = vec![];
+                if prop.view {
+                    effects.push(Effect::ReadGlobal);
+                }
                 for _ in 0..prop.nargs {
                     effects.push(Effect::ReadStack(1));
                     effects.push(Effect::PopStack);
                 }
                 for _ in 0..prop.nouts {
                     effects.push(Effect::PushStack);
+                }
+                if prop.write {
+                    effects.push(Effect::WriteGlobal);
                 }
                 effects
             }
@@ -89,7 +110,7 @@ impl Effects for AVMOpcode {
 
             avm!(Rpush, PushGas, PCpush) => vec![Effect::ReadGlobal, Effect::PushStack],
 
-            avm!(DebugPrint, Rset, ErrSet, SetGas, Jump, Cjump) => vec![
+            avm!(DebugPrint, Rset, ErrSet, SetGas, Log, Jump, Cjump) => vec![
                 Effect::ReadStack(1), Effect::PopStack,
                 Effect::WriteGlobal
             ],
@@ -164,7 +185,7 @@ impl Effects for AVMOpcode {
 
             avm!(
                 Zero, Error, StackEmpty, AuxStackEmpty, ErrPush,
-                Breakpoint, Log, Send, Inbox, InboxPeek, Halt,
+                Breakpoint, Send, Inbox, InboxPeek, Halt,
                 OpenInsn, Sideload
             ) => vec![Effect::Unsure],
         };

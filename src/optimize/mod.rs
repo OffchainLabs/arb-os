@@ -306,7 +306,7 @@ impl BasicGraph {
                         *dest = *replace.get(dest).unwrap();
                         *source = *replace.get(source).unwrap();
                     }
-                    Opcode::MakeFrame(ref mut space, _) => {
+                    Opcode::MakeFrame(ref mut space, ..) => {
                         *space = replace.len() as FrameSize;
                     }
                     _ => {}
@@ -532,8 +532,19 @@ impl BasicGraph {
 
         for node in self.graph.node_indices() {
             let block = self.graph[node].get_code();
-            let values = ValueGraph::new(block);
-            graphs.insert(node, values);
+            if let Some(value_graph) = ValueGraph::new(block) {
+                graphs.insert(node, value_graph);
+            }
+        }
+
+        if self.should_print {
+            for node in self.graph.node_indices() {
+                match graphs.get(&node) {
+                    Some(graph) => graph.print(),
+                    None => println!("No value graph"),
+                }
+            }
+            println!();
         }
     }
 }

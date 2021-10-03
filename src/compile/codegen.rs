@@ -179,14 +179,10 @@ pub fn mavm_codegen_func(
         _ => panic!("not a func"),
     };
 
-    if prop.returns {
-        code.push(opcode!(AuxPush));
-    }
-
     let prebuilt = !func.captures.is_empty();
+    let returns = prop.returns;
     let make_frame_offset = code.len();
-    code.push(opcode!(@MakeFrame(0, prebuilt)));
-    code.push(opcode!(AuxPush));
+    code.push(opcode!(@MakeFrame(0, returns, prebuilt)));
 
     let nargs = func.args.len();
     for i in 0..nargs {
@@ -218,7 +214,7 @@ pub fn mavm_codegen_func(
 
     let space_for_locals = cgen.next_assignable_slot;
 
-    code[make_frame_offset] = opcode!(@MakeFrame(space_for_locals, prebuilt));
+    code[make_frame_offset] = opcode!(@MakeFrame(space_for_locals, returns, prebuilt));
 
     Ok((code, label_gen, space_for_locals))
 }

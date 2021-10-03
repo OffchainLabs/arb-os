@@ -3,9 +3,22 @@
 //
 
 write func main() {
-    asm(tests().1) { log };
+    
+    if let Some(issue) = test_1() {
+        asm(issue.1) { log };
+    } else {
+        asm("".1) { log };
+    }
 }
 
-func tests() -> string {
-    ""
+#[print]
+func test_1() -> option<string> {
+    
+    let a = Some("uh oh, not replaced");
+    
+    a = (0, None, 2).1;
+
+    let b = a;
+
+    b
 }

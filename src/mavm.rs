@@ -936,10 +936,10 @@ impl fmt::Display for Value {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub enum Opcode {
-    MakeFrame(FrameSize, bool),        // make a func frame: space, captures
-    GetLocal(SlotNum),                 // get a local variable within a func frame
-    SetLocal(SlotNum),                 // set a local variable within a func frame
-    MoveLocal(SlotNum, SlotNum),       // move into arg1 arg2 within a func frame
+    MakeFrame(FrameSize, bool, bool), // make a func frame: space, returns, prebuilt
+    GetLocal(SlotNum),                // get a local variable within a func frame
+    SetLocal(SlotNum),                // set a local variable within a func frame
+    MoveLocal(SlotNum, SlotNum),      // move into arg1 arg2 within a func frame
     ReserveCapture(SlotNum, StringId), // annotate where a capture should be placed within a func frame
     Capture(LabelId, StringId),        // annotate which value to retrieve for closure packing
     MakeClosure(LabelId),              // create a callable closure frame
@@ -1088,9 +1088,17 @@ impl Opcode {
 
     pub fn pretty_print(&self, label_color: &str) -> String {
         match self {
-            Opcode::MakeFrame(space, prebuilt) => match prebuilt {
-                true => format!("MakeFrame<{}>", space),
-                false => format!("MakeFrame({})", space),
+            Opcode::MakeFrame(space, returns, prebuilt) => match prebuilt {
+                true => format!(
+                    "MakeFrame<{}, {}>",
+                    Color::mint(space),
+                    Color::color_if(*returns, Color::GREY, Color::MINT)
+                ),
+                false => format!(
+                    "MakeFrame {} {}",
+                    Color::mint(space),
+                    Color::color_if(*returns, Color::GREY, Color::MINT)
+                ),
             },
             Opcode::GetLocal(slot) => format!("GetLocal {}", Color::pink(slot)),
             Opcode::SetLocal(slot) => format!("SetLocal {}", Color::pink(slot)),
@@ -1537,8 +1545,8 @@ fn test_consistent_opcode_numbers() {
 impl fmt::Display for Opcode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Opcode::MakeFrame(space, prebuilt) => {
-                write!(f, "MakeFrame({}, {})", space, prebuilt)
+            Opcode::MakeFrame(space, returns, prebuilt) => {
+                write!(f, "MakeFrame({}, {}, {})", space, returns, prebuilt)
             }
             Opcode::Label(label) => label.fmt(f),
             _ => write!(f, "{}", self.to_name()),
