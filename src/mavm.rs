@@ -954,7 +954,7 @@ pub enum Opcode {
     JumpTo(Label),                     // Like a Jump, but with info about where it'll go
     CjumpTo(Label),                    // Like a Cjump, but with info about where it'll go
     Return,                            // return from a func, popping the frame
-    Pull(usize),                       // pull a value usize deep to the top of the stack
+    Pop(usize),                        // pop a value deep within the stack
     AVMOpcode(AVMOpcode),              // a non-virtual, AVM opcode
 }
 
@@ -1136,7 +1136,7 @@ impl Opcode {
             Opcode::CjumpTo(label) => {
                 format!("CjumpTo {}", Value::Label(*label).pretty_print(label_color))
             }
-            Opcode::Pull(depth) => format!("Pull {}", Color::pink(depth)),
+            Opcode::Pop(depth) => format!("Pop {}", Color::pink(depth)),
             Opcode::FuncCall(prop) => format!(
                 "FuncCall {}{}{} {}{}",
                 Color::mint(match prop.view {
@@ -1252,7 +1252,7 @@ impl Opcode {
             Opcode::Label(_) => "Label",
             Opcode::JumpTo(_) => "JumpTo",
             Opcode::CjumpTo(_) => "CjumpTo",
-            Opcode::Pull(_) => "Pull",
+            Opcode::Pop(_) => "PopN",
             Opcode::TupleGet(_, _) => "TupleGet",
             Opcode::TupleSet(_, _) => "TupleSet",
             Opcode::UncheckedFixedArrayGet(_) => "UncheckedFixedArrayGet",

@@ -78,7 +78,7 @@ impl Effects for Opcode {
                 effects
             }
             Opcode::AVMOpcode(avm_op) => avm_op.effects(),
-            Opcode::BackwardLabelTarget(..) | Opcode::Pull(..) => {
+            Opcode::BackwardLabelTarget(..) | Opcode::Pop(..) => {
                 unreachable!("The optimizer shouldn't see this")
             }
         }

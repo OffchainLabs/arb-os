@@ -287,8 +287,7 @@ impl ValueGraph {
                 if degree!(node) != 0 {
                     stack.push(node);
                 } else {
-                    arg_code.push(opcode!(@Pull(stack.len())));
-                    arg_code.push(opcode!(Pop));
+                    arg_code.push(opcode!(@Pop(stack.len())));
                 }
             }
         }
@@ -298,34 +297,56 @@ impl ValueGraph {
         fn descend(
             node: NodeIndex,
             graph: &StableGraph<ValueNode, ValueEdge>,
-            produced: &mut HashSet<NodeIndex>,
+            stack: &mut Vec<NodeIndex>,
             entropy: &mut SmallRng,
             debug: DebugInfo,
         ) -> Vec<Instruction> {
             let mut code = vec![];
 
-            if produced.contains(&node) {
-                // We've already produced a value for this node,
-                // which should be on the stack.
-                return vec![];
+            let mut edges: Vec<_> = graph.edges_directed(node, Direction::Outgoing).collect();
+            edges.sort_by_key(|edge| edge.weight().input_order());
+            //edges.shuffle(entropy);
+
+            for edge in &edges {
+                let input = edge.target();
+                if !stack.contains(&input) {
+                    code.extend(descend(input, graph, stack, entropy, debug));
+                }
             }
 
-            produced.insert(node);
+            for edge in edges {
+                let input = edge.target();
+                //let depth = stack.position(|node| node == input);
+            }
+
+            match &graph[node] {
+                ValueNode::Opcode(opcode) => {
+                    code.push(Instruction::from_opcode(*opcode, debug));
+                    stack.push(node);
+                }
+                ValueNode::Value(value) => {
+                    code.push(Instruction::from_opcode_imm(
+                        Opcode::AVMOpcode(AVMOpcode::Noop),
+                        value.clone(),
+                        debug,
+                    ));
+                    stack.push(node);
+                }
+                _ => {}
+            }
+
             code
         }
 
-        let mut entropy: SmallRng = SeedableRng::seed_from_u64(2);
-
         let mut best = self.source.clone();
+        let mut entropy: SmallRng = SeedableRng::seed_from_u64(0);
+
         for _ in 0..4 {
+            // attempt to codegen a better set of instructions than the best found so far.
+
+            let mut stack = stack.clone();
             let mut alt = arg_code.clone();
-            alt.extend(descend(
-                output,
-                &graph,
-                &mut HashSet::new(),
-                &mut entropy,
-                debug,
-            ));
+            alt.extend(descend(output, &graph, &mut stack, &mut entropy, debug));
 
             if alt.len() < best.len() {
                 best = alt;
