@@ -128,7 +128,7 @@ FuncDecl: Func = {
         let params: Vec<_> = g.into_iter().flatten().collect();
         let generic_ids = check_generic_parameters(params.clone(), &string_table)?;
         args.iter_mut().for_each(|arg| arg.tipe = arg.tipe.make_generic(&generic_ids));
-        if let Some(ref mut tipe) = ret {
+        if let Some(tipe) = &mut ret {
             *tipe = tipe.make_generic(&generic_ids);
         }
 
