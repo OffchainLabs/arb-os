@@ -17,7 +17,7 @@ interface ArbosTest {
 
     function setState(address addr, bytes calldata state) external;
 
-    function store(address addr, uint32 key, uint32 value) external;
+    function store(address addr, uint256 key, uint256 value) external;
 }
 
 
