@@ -17,6 +17,7 @@ use reduce::ValueGraph;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
 mod effects;
+mod peephole;
 mod reduce;
 
 /// Represents a block of instructions that has no control flow
