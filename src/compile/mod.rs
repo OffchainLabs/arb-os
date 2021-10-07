@@ -1073,6 +1073,7 @@ fn codegen_modules(
             let frame_size = graph.shrink_frame();
 
             let code = graph.flatten();
+            let code = translate::expand_pops(code);
             let code = translate::expand_calls(code, &mut label_gen);
             let code = translate::untag_jumps(code);
             let code = translate::replace_phi_nodes(code);

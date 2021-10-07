@@ -35,6 +35,8 @@ pub struct Attributes {
     #[serde(skip)]
     /// Whether generated instructions should be printed to the console.
     pub codegen_print: bool,
+    #[serde(skip)]
+    pub color_group: usize,
 }
 
 impl DebugInfo {

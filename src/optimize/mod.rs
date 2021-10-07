@@ -6,7 +6,7 @@ use crate::compile::{FrameSize, SlotNum};
 use crate::console;
 use crate::console::Color;
 use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
-use petgraph::algo::{is_cyclic_directed, kosaraju_scc};
+use petgraph::algo;
 use petgraph::graph::{NodeIndex, UnGraph};
 use petgraph::stable_graph::StableGraph;
 use petgraph::visit::{Dfs, IntoNodeReferences};
@@ -166,7 +166,7 @@ impl BasicGraph {
             }
         }
 
-        let cyclic = is_cyclic_directed(&graph);
+        let cyclic = algo::is_cyclic_directed(&graph);
         BasicGraph {
             graph,
             cyclic,
@@ -431,7 +431,7 @@ impl BasicGraph {
 
         // Graph-contract all phi nodes. We can do this since mini is a scoped language.
         // What this does is force both sides of a phi to be colored the same way.
-        for component in kosaraju_scc(&phi_graph) {
+        for component in algo::kosaraju_scc(&phi_graph) {
             let mut nodes = component.into_iter();
             let slot = nodes.next().unwrap();
 
@@ -564,6 +564,16 @@ impl BasicGraph {
                 }
             }
             println!();
+        }
+
+        if self.should_print {
+            let nodes: Vec<_> = self.graph.node_indices().collect();
+            for node in nodes {
+                if let Some(values) = graphs.get(&node) {
+                    let reduced = values.codegen();
+                    self.graph[node] = BasicBlock::Code(reduced);
+                }
+            }
         }
     }
 }

@@ -9,7 +9,8 @@ use crate::mavm::{AVMOpcode, Opcode};
 pub enum Effect {
     PushStack,
     PopStack,
-    ReadStack(usize),
+    DupStack(usize),
+    ReadStack,
     SwapStack(usize),
     MoveToStack,
     MoveToAux,
@@ -21,6 +22,7 @@ pub enum Effect {
     PhiLocal(u32, u32),
     ReadGlobal,
     WriteGlobal,
+    WritePC,
     OpenFrame(FrameSize),
     Unsure,
 }
@@ -31,54 +33,45 @@ pub trait Effects {
 
 impl Effects for Opcode {
     fn effects(&self) -> Vec<Effect> {
+        use Effect::*;
+        use Opcode::*;
         match self {
-            Opcode::MakeFrame(size, ..) => vec![Effect::OpenFrame(*size)],
-            Opcode::GetLocal(slot) => vec![Effect::ReadLocal(*slot), Effect::PushStack],
-            Opcode::SetLocal(slot) => vec![
-                Effect::ReadStack(1),
-                Effect::PopStack,
-                Effect::WriteLocal(*slot),
-            ],
-            Opcode::ReserveCapture(slot, _) => vec![Effect::WriteLocal(*slot)],
-            Opcode::MoveLocal(dest, source) => {
-                vec![Effect::PhiLocal(*dest, *source)]
+            MakeFrame(size, ..) => vec![OpenFrame(*size)],
+            GetLocal(slot) => vec![ReadLocal(*slot), PushStack],
+            SetLocal(slot) => vec![ReadStack, PopStack, WriteLocal(*slot)],
+            ReserveCapture(slot, _) => vec![WriteLocal(*slot)],
+            MoveLocal(dest, source) => {
+                vec![PhiLocal(*dest, *source)]
             }
-            Opcode::Capture(..) => vec![],
-            Opcode::MakeClosure(..) => vec![],
-            Opcode::TupleGet(..) => vec![Effect::ReadStack(1), Effect::PopStack, Effect::PushStack],
-            Opcode::TupleSet(..) => vec![
-                Effect::ReadStack(1),
-                Effect::PopStack,
-                Effect::ReadStack(1),
-                Effect::PopStack,
-                Effect::PushStack,
-            ],
-            Opcode::GetGlobalVar(..) => vec![],
-            Opcode::SetGlobalVar(..) => vec![],
-            Opcode::UncheckedFixedArrayGet(..) => vec![],
-            Opcode::Label(..) => vec![],
-            Opcode::JumpTo(..) => vec![],
-            Opcode::CjumpTo(..) => vec![],
-            Opcode::Return => vec![],
-            Opcode::FuncCall(prop) => {
+            Capture(..) => vec![],
+            MakeClosure(..) => vec![],
+            TupleGet(..) => vec![ReadStack, PopStack, PushStack],
+            TupleSet(..) => vec![ReadStack, PopStack, ReadStack, PopStack, PushStack],
+            GetGlobalVar(..) => vec![ReadGlobal, PushStack],
+            SetGlobalVar(..) => vec![ReadStack, PopStack, WriteGlobal],
+            UncheckedFixedArrayGet(..) => vec![Unsure],
+            Label(..) => vec![],
+            JumpTo(..) | Return => vec![WritePC],
+            CjumpTo(..) => vec![ReadStack, PopStack, ReadStack, PopStack, WritePC],
+            FuncCall(prop) => {
                 let mut effects = vec![];
                 if prop.view {
-                    effects.push(Effect::ReadGlobal);
+                    effects.push(ReadGlobal);
                 }
-                for _ in 0..prop.nargs {
-                    effects.push(Effect::ReadStack(1));
-                    effects.push(Effect::PopStack);
+                for _ in 0..(prop.nargs + 1) {
+                    effects.push(ReadStack);
+                    effects.push(PopStack);
                 }
                 for _ in 0..prop.nouts {
-                    effects.push(Effect::PushStack);
+                    effects.push(PushStack);
                 }
                 if prop.write {
-                    effects.push(Effect::WriteGlobal);
+                    effects.push(WriteGlobal);
                 }
                 effects
             }
-            Opcode::AVMOpcode(avm_op) => avm_op.effects(),
-            Opcode::BackwardLabelTarget(..) | Opcode::Pop(..) => {
+            AVMOpcode(avm_op) => avm_op.effects(),
+            BackwardLabelTarget(..) | Pop(..) => {
                 unreachable!("The optimizer shouldn't see this")
             }
         }
@@ -87,6 +80,7 @@ impl Effects for Opcode {
 
 impl Effects for AVMOpcode {
     fn effects(&self) -> Vec<Effect> {
+        use Effect::*;
         macro_rules! avm {
             ($first:ident $(,$opcode:ident)*) => {
                 AVMOpcode::$first $(| AVMOpcode::$opcode)*
@@ -97,29 +91,40 @@ impl Effects for AVMOpcode {
         let effects = match self {
             avm!(Noop) => vec![],
 
-            avm!(Pop)     => vec![Effect::PopStack],
-            avm!(AuxPush) => vec![Effect::MoveToAux],
-            avm!(AuxPop)  => vec![Effect::MoveToStack],
+            avm!(Pop)     => vec![PopStack],
+            avm!(AuxPush) => vec![MoveToAux],
+            avm!(AuxPop)  => vec![MoveToStack],
 
-            avm!(Dup0) => vec![Effect::ReadStack(1), Effect::PushStack],
-            avm!(Dup1) => vec![Effect::ReadStack(2), Effect::PushStack],
-            avm!(Dup2) => vec![Effect::ReadStack(3), Effect::PushStack],
+            avm!(Dup0) => vec![DupStack(1)],
+            avm!(Dup1) => vec![DupStack(2)],
+            avm!(Dup2) => vec![DupStack(3)],
 
-            avm!(Swap1) => vec![Effect::SwapStack(1)],
-            avm!(Swap2) => vec![Effect::SwapStack(2)],
+            avm!(Swap1) => vec![SwapStack(1)],
+            avm!(Swap2) => vec![SwapStack(2)],
 
-            avm!(NewBuffer, Spush, ErrCodePoint) => vec![Effect::PushStack],
+            avm!(NewBuffer, Spush, ErrCodePoint) => vec![PushStack],
 
-            avm!(Rpush, PushGas, PCpush) => vec![Effect::ReadGlobal, Effect::PushStack],
+            avm!(Rpush, PushGas, PCpush) => vec![ReadGlobal, PushStack],
 
-            avm!(DebugPrint, Rset, ErrSet, SetGas, Log, Jump, Cjump) => vec![
-                Effect::ReadStack(1), Effect::PopStack,
-                Effect::WriteGlobal
+            avm!(DebugPrint, Rset, ErrSet, SetGas, Log) => vec![
+                ReadStack, PopStack,
+                WriteGlobal
+            ],
+
+            avm!(Jump) => vec![
+                ReadStack, PopStack,
+                WritePC
+            ],
+
+            avm!(Cjump) => vec![
+                ReadStack, PopStack,
+                ReadStack, PopStack,
+                WritePC
             ],
 
             avm!(IsZero, BitwiseNeg, Hash, Type, Keccakf, Blake2f, Tlen, EcPairing) => vec![
-                Effect::ReadStack(1), Effect::PopStack,
-                Effect::PushStack,
+                ReadStack, PopStack,
+                PushStack,
             ],
 
             avm!(
@@ -129,67 +134,67 @@ impl Effects for AVMOpcode {
                 ShiftLeft, ShiftRight, ShiftArith, PushInsn, Tget,
                 GetBuffer8, GetBuffer64, GetBuffer256
             ) => vec![
-                Effect::ReadStack(1), Effect::PopStack,
-                Effect::ReadStack(1), Effect::PopStack,
-                Effect::PushStack,
+                ReadStack, PopStack,
+                ReadStack, PopStack,
+                PushStack,
             ],
 
             avm!(
                 AddMod, MulMod, Sha256f, Ripemd160f, PushInsnImm,
                 SetBuffer8, SetBuffer64, SetBuffer256, Tset
             ) => vec![
-                Effect::ReadStack(1), Effect::PopStack,
-                Effect::ReadStack(1), Effect::PopStack,
-                Effect::ReadStack(1), Effect::PopStack,
-                Effect::PushStack,
+                ReadStack, PopStack,
+                ReadStack, PopStack,
+                ReadStack, PopStack,
+                PushStack,
             ],
 
             avm!(EcRecover) => vec![
-                Effect::ReadStack(1), Effect::PopStack,
-                Effect::ReadStack(1), Effect::PopStack,
-                Effect::ReadStack(1), Effect::PopStack,
-                Effect::ReadStack(1), Effect::PopStack,
-                Effect::PushStack,
+                ReadStack, PopStack,
+                ReadStack, PopStack,
+                ReadStack, PopStack,
+                ReadStack, PopStack,
+                PushStack,
             ],
 
             avm!(EcMul) => vec![
-                Effect::ReadStack(1), Effect::PopStack,
-                Effect::ReadStack(1), Effect::PopStack,
-                Effect::ReadStack(1), Effect::PopStack,
-                Effect::PushStack,
-                Effect::PushStack,
+                ReadStack, PopStack,
+                ReadStack, PopStack,
+                ReadStack, PopStack,
+                PushStack,
+                PushStack,
             ],
 
             avm!(EcAdd) => vec![
-                Effect::ReadStack(1), Effect::PopStack,
-                Effect::ReadStack(1), Effect::PopStack,
-                Effect::ReadStack(1), Effect::PopStack,
-                Effect::ReadStack(1), Effect::PopStack,
-                Effect::PushStack,
-                Effect::PushStack,
+                ReadStack, PopStack,
+                ReadStack, PopStack,
+                ReadStack, PopStack,
+                ReadStack, PopStack,
+                PushStack,
+                PushStack,
             ],
 
             avm!(Xset) => vec![
-                Effect::ReadStack(1), Effect::PopStack,
-                Effect::ReadStack(1), Effect::PopStack,
-                Effect::ReadAux,
-                Effect::PopAux,
-                Effect::PushAux,
+                ReadStack, PopStack,
+                ReadStack, PopStack,
+                ReadAux,
+                PopAux,
+                PushAux,
             ],
 
             avm!(Xget) => vec![
-                Effect::ReadStack(1), Effect::PopStack,
-                Effect::ReadAux,
-                Effect::PopAux,
-                Effect::PushStack,
-                Effect::PushAux,
+                ReadStack, PopStack,
+                ReadAux,
+                PopAux,
+                PushStack,
+                PushAux,
             ],
 
             avm!(
                 Zero, Error, StackEmpty, AuxStackEmpty, ErrPush,
                 Breakpoint, Send, Inbox, InboxPeek, Halt,
                 OpenInsn, Sideload
-            ) => vec![Effect::Unsure],
+            ) => vec![Unsure],
         };
         effects
     }

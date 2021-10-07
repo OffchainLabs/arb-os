@@ -181,13 +181,17 @@ impl Instruction {
 
     pub fn pretty_print(&self, highlight: &str) -> String {
         let label_color = Color::PINK;
-        match &self.immediate {
+        let text = match &self.immediate {
             Some(value) => format!(
                 "{} {}",
                 self.opcode.pretty_print(label_color),
                 value.pretty_print(highlight)
             ),
             None => format!("{}", self.opcode.pretty_print(label_color)),
+        };
+        match self.debug_info.attributes.color_group {
+            1 => Color::orange(text),
+            _ => text,
         }
     }
 }

@@ -52,6 +52,41 @@ pub fn replace_phi_nodes(code: Vec<Instruction>) -> Vec<Instruction> {
     out
 }
 
+/// Removes higher-order Pop(n) instructions
+pub fn expand_pops(code: Vec<Instruction>) -> Vec<Instruction> {
+    let mut out = Vec::with_capacity(code.len());
+
+    for curr in code {
+        macro_rules! opcode {
+            ($opcode:ident) => {
+                Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), curr.debug_info)
+            };
+        }
+
+        match curr.opcode {
+            Opcode::Pop(depth) => out.extend(match depth {
+                0 => vec![opcode!(Pop)],
+                1 => vec![opcode!(Swap1), opcode!(Pop)],
+                2 => vec![opcode!(Swap2), opcode!(Pop), opcode!(Swap1)],
+                x => {
+                    let mut code = vec![];
+                    for _ in 0..(x - 1) {
+                        code.push(opcode!(AuxPush));
+                    }
+                    code.push(opcode!(Pop));
+                    for _ in 0..(x - 1) {
+                        code.push(opcode!(AuxPop));
+                    }
+                    code
+                }
+            }),
+            _ => out.push(curr),
+        }
+    }
+
+    out
+}
+
 /// De-virtualizes FuncCall opcodes into the AVM function call ABI
 pub fn expand_calls(code: Vec<Instruction>, label_gen: &mut LabelGenerator) -> Vec<Instruction> {
     let mut out = Vec::with_capacity(code.len());

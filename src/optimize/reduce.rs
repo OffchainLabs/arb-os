@@ -3,16 +3,18 @@
  */
 
 use crate::compile::{DebugInfo, SlotNum};
-use crate::console::Color;
-use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
+use crate::console::{print_columns, Color};
+use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::optimize::effects::{Effect, Effects};
 use crate::optimize::peephole;
+use petgraph::algo;
 use petgraph::graph::NodeIndex;
 use petgraph::stable_graph::StableGraph;
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 use rand::prelude::*;
 use rand::rngs::SmallRng;
+use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
 pub enum ValueNode {
@@ -38,18 +40,30 @@ pub enum ValueEdge {
 }
 
 impl ValueEdge {
-    fn input_order(&self) -> usize {
+    fn input_order(&self) -> Reverse<usize> {
         match self {
-            Self::Connect(num) => *num,
-            Self::Meta(_) => usize::MAX,
+            Self::Connect(num) => Reverse(1 + *num),
+            Self::Meta(_) => Reverse(usize::MAX),
         }
     }
+}
+
+fn in_degree(graph: &StableGraph<ValueNode, ValueEdge>, node: NodeIndex) -> usize {
+    graph.edges_directed(node, Direction::Incoming).count()
+}
+
+fn conn_count(graph: &StableGraph<ValueNode, ValueEdge>, node: NodeIndex) -> usize {
+    graph
+        .edges_directed(node, Direction::Incoming)
+        .filter(|edge| matches!(edge.weight(), ValueEdge::Connect(_)))
+        .count()
 }
 
 pub struct ValueGraph {
     graph: StableGraph<ValueNode, ValueEdge>,
     defs: BTreeMap<SlotNum, NodeIndex>,
     phis: BTreeMap<SlotNum, SlotNum>,
+    header: Vec<Instruction>,
     output: NodeIndex,
     source: Vec<Instruction>,
 }
@@ -111,6 +125,18 @@ impl ValueGraph {
         // Assumptions
         //   The instructions *must* be in SSA
 
+        // separate the metadata instructions from the top
+        let mut header = vec![];
+        for curr in code {
+            match &curr.opcode {
+                Opcode::Label(_) | Opcode::MakeFrame(..) => {
+                    header.push(curr.clone());
+                }
+                _ => break,
+            }
+        }
+        let code = &code[header.len()..];
+
         let mut graph = StableGraph::new();
         let mut locals = HashMap::new();
         let mut defs = BTreeMap::new();
@@ -118,6 +144,7 @@ impl ValueGraph {
 
         let mut globals = graph.add_node(ValueNode::Meta("globals"));
         let mut global_readers = BTreeSet::new();
+        let mut pc_writer = None;
 
         let mut stack: VecDeque<NodeIndex> = VecDeque::new();
         let mut nargs = 0;
@@ -160,11 +187,16 @@ impl ValueGraph {
                         touch!(1);
                         stack.pop_back();
                     }
-                    Effect::ReadStack(depth) => {
+                    Effect::ReadStack => {
+                        touch!(1);
+                        let pusher = stack.iter().last().unwrap();
+                        graph.add_edge(node, *pusher, ValueEdge::Connect(input_count));
+                        input_count += 1;
+                    }
+                    Effect::DupStack(depth) => {
                         touch!(depth);
                         let pusher = stack[stack.len() - depth];
-                        graph.add_edge(node, pusher, ValueEdge::Connect(input_count));
-                        input_count += 1;
+                        stack.push_back(pusher);
                     }
                     Effect::SwapStack(depth) => {
                         touch!(depth + 1);
@@ -199,11 +231,18 @@ impl ValueGraph {
                     }
                     Effect::WriteGlobal => {
                         for reader in global_readers {
-                            graph.add_edge(node, reader, ValueEdge::Meta("order"));
+                            if reader != node {
+                                graph.add_edge(node, reader, ValueEdge::Meta("order"));
+                            }
                         }
                         global_readers = BTreeSet::new();
                         globals = graph.add_node(ValueNode::Meta("globals"));
                         graph.add_edge(globals, node, ValueEdge::Meta("write"));
+                    }
+                    Effect::WritePC => {
+                        // this can only happen once since these are basic blocks,
+                        // so we save this node so that it can be the output.
+                        pc_writer = Some(node);
                     }
                     Effect::PhiLocal(dest, source) => {
                         phis.insert(dest, source);
@@ -219,20 +258,28 @@ impl ValueGraph {
             }
         }
 
-        let output = graph.add_node(ValueNode::Meta("output"));
-        let mut nouts = 0;
+        let output = match pc_writer {
+            Some(writer) => writer,
+            None => graph.add_node(ValueNode::Meta("output")),
+        };
+        let mut nouts = graph
+            .edges_directed(output, Direction::Incoming)
+            .filter(|edge| matches!(edge.weight(), ValueEdge::Connect(_)))
+            .count();
         while let Some(item) = stack.pop_back() {
-            graph.add_edge(output, item, ValueEdge::Connect(nouts));
             nouts += 1;
+            graph.add_edge(output, item, ValueEdge::Connect(nouts));
         }
+        graph.add_edge(output, globals, ValueEdge::Meta("globals"));
 
         /// Prunes nodes whose values are never consumed.
-        fn prune_graph(graph: &mut StableGraph<ValueNode, ValueEdge>) {
+        fn prune_graph(graph: &mut StableGraph<ValueNode, ValueEdge>, output: NodeIndex) {
             loop {
                 let node_count = graph.node_count();
                 graph.retain_nodes(|this, node| {
                     !this[node].prunable()
                         || this.neighbors_directed(node, Direction::Incoming).count() > 0
+                        || node == output
                 });
                 if graph.node_count() == node_count {
                     break;
@@ -240,15 +287,28 @@ impl ValueGraph {
             }
         }
 
-        prune_graph(&mut graph);
+        prune_graph(&mut graph, output);
 
-        Some(ValueGraph {
+        let values = ValueGraph {
             graph,
             defs,
             phis,
+            header,
             output,
             source: code.to_vec(),
-        })
+        };
+
+        if algo::is_cyclic_directed(&values.graph) {
+            let ssa = code
+                .into_iter()
+                .map(|x| x.pretty_print(Color::PINK))
+                .collect();
+            let values = values.print_lines();
+            print_columns(vec![ssa, values], vec!["SSA", "values"]);
+            panic!("Value graph is not a DAG!");
+        }
+
+        Some(values)
     }
 
     pub fn codegen(&self) -> Vec<Instruction> {
@@ -274,24 +334,15 @@ impl ValueGraph {
             };
         }
 
-        macro_rules! conn_count {
-            ($node:expr) => {
-                graph
-                    .edges_directed($node, Direction::Incoming)
-                    .filter(|edge| matches!(edge.weight(), ValueEdge::Connect(_)))
-                    .count()
-            };
-        }
-
-        let mut arg_code = vec![];
+        let mut header = self.header.clone();
 
         // Pop unused arguments. We can't just ignore them, since they were created elsewhere.
         for node in graph.node_indices() {
             if let ValueNode::Arg(num) = &graph[node] {
-                if conn_count!(node) != 0 {
+                if conn_count(&graph, node) != 0 {
                     stack.push(node);
                 } else {
-                    arg_code.push(opcode!(@Pop(stack.len())));
+                    header.push(opcode!(@Pop(stack.len())));
                 }
             }
         }
@@ -299,7 +350,7 @@ impl ValueGraph {
         // determine the number of times each node is used by another
         let mut conn_counts = HashMap::new();
         for node in graph.node_indices() {
-            conn_counts.insert(node, conn_count!(node));
+            conn_counts.insert(node, conn_count(&graph, node));
         }
 
         let output = self.output;
@@ -352,9 +403,13 @@ impl ValueGraph {
                 }
             }
 
-            let (transformation, new_stack) = reorder_stack(&stack, needs, kills);
+            // reorder the stack to place the inputs at the top and then consume them
+            let (trans, new_stack) = reorder_stack(&stack, needs, kills);
             *stack = new_stack;
-            code.extend(transformation);
+            code.extend(trans);
+            for _ in edges {
+                stack.pop();
+            }
 
             match &graph[node] {
                 ValueNode::Opcode(opcode) => {
@@ -379,11 +434,11 @@ impl ValueGraph {
         let mut best = self.source.clone();
         let mut entropy: SmallRng = SeedableRng::seed_from_u64(0);
 
-        for _ in 0..4 {
+        for i in 0..16 {
             // attempt to codegen a better set of instructions than the best found so far.
 
             let mut stack = stack.clone();
-            let mut alt = arg_code.clone();
+            let mut alt = header.clone();
             alt.extend(descend(
                 output,
                 &graph,
@@ -393,7 +448,7 @@ impl ValueGraph {
                 &mut HashSet::new(),
             ));
 
-            if alt.len() < best.len() {
+            if alt.len() < best.len() || i == 0 {
                 best = alt;
             }
         }
@@ -453,21 +508,24 @@ fn reorder_stack(
     }
 
     fn print_stack(title: &str, stack: &Vec<(NodeIndex, usize, bool)>) {
-        print!("{}", title);
+        /*print!("{}", title);
         for item in stack {
             match item.2 {
                 true => print!(" {}{}{}", item.0.index(), Color::grey("-"), item.1),
                 false => print!("{}", Color::grey(" ???")),
             }
         }
-        println!();
+        println!();*/
     }
     print_stack("needs", &needs);
     print_stack("start", &stack);
 
+    let mut debug = DebugInfo::default();
+    debug.attributes.color_group = 1;
+
     macro_rules! opcode {
         ($opcode:ident) => {
-            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), DebugInfo::default())
+            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), debug)
         };
     }
 
