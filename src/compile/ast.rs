@@ -170,6 +170,12 @@ impl Type {
         while let Type::Nominal(id, spec) = base_type.clone() {
             base_type = type_tree
                 .get(&(id.path.clone(), id.clone()))
+                .or_else(|| {
+                    type_tree.get({
+                        let new_id = StringId::new(vec![], id.id.clone());
+                        &(id.path.clone(), new_id)
+                    })
+                })
                 .cloned()
                 .ok_or(CompileError::new_type_error(
                     format!("No type at {:?}, {}", id.path, id),
@@ -1111,6 +1117,12 @@ impl Type {
                     },
                     type_tree
                         .get(&(id.path.clone(), id.clone()))
+                        .or_else(|| {
+                            type_tree.get({
+                                let new_id = StringId::new(vec![], id.id.clone());
+                                &(id.path.clone(), new_id)
+                            })
+                        })
                         .map(|(_, name)| name.clone())
                         .unwrap_or(format!("{}", id)),
                     match spec.len() {
@@ -1145,6 +1157,12 @@ impl Type {
                     self.clone(),
                     type_tree
                         .get(&(id.path.clone(), id.clone()))
+                        .or_else(|| {
+                            type_tree.get({
+                                let new_id = StringId::new(vec![], id.id.clone());
+                                &(id.path.clone(), new_id)
+                            })
+                        })
                         .map(|d| d.1.clone())
                         .unwrap_or_else(|| format!("{}", id)),
                 ));
