@@ -854,23 +854,31 @@ impl Value {
                 &Value::Int(buf.avm_hash()),
             ),
             Value::Tuple(v) => {
-                let mut buf = vec![];
-                buf.push(v.len() as u8);
+                // According to the C++ emulator, the AVM hash of a tuple is
+                //   H(3 || H(uint8(tlen) || A(tuple[0]) || ... || A(tuple[tlen-1])) || uint256(recursiveSize))
+                //   where A is an AVM hash & H is keccack
+
+                let total_size = 1 + v.len(); // we assume tuples only contain ints for now
+                let outer_size = v.len() as u8;
+
+                let mut all_bytes = vec![3u8];
+                let mut content_bytes = vec![outer_size];
+
                 for val in v.to_vec() {
                     if let Value::Int(ui) = val.avm_hash() {
-                        buf.extend(ui.to_bytes_be());
+                        let child_hash = Uint256::avm_hash(&ui);
+                        content_bytes.extend(child_hash.to_bytes_be());
                     } else {
                         panic!("Invalid value type from hash");
                     }
                 }
-                // println!("tuple hash {} {:?}", buf.len(), buf);
-                let preimage = Uint256::from_bytes(&keccak256(&buf));
-                let mut buf = vec![];
-                buf.push(3u8);
-                buf.extend(preimage.to_bytes_be());
-                buf.extend(Uint256::from_u64(self.value_size()).to_bytes_be());
-                Value::Int(Uint256::from_bytes(&keccak256(&buf)))
-                // Value::Int(acc)
+
+                let content_hash = keccak256(&content_bytes);
+                all_bytes.extend(content_hash);
+                all_bytes.extend(Uint256::from_usize(total_size).to_bytes_be());
+
+                let hash = Uint256::from_bytes(&keccak256(&all_bytes));
+                Value::Int(hash)
             }
             Value::CodePoint(cp) => Value::avm_hash2(&Value::Int(Uint256::one()), &cp.avm_hash()),
             Value::WasmCodePoint(v, _) => {
