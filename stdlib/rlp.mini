@@ -315,8 +315,8 @@ var wasm_prog : any;
 
 public write func rlp_init() {
     let (ln, buf) = #include "rlp-nohash.wasm";
-    debug(ln);
-    debug(buf);
+    // debug(ln);
+    // debug(buf);
     let compiled = asm(ln, buf,) any { compilewasm };
     wasm_prog = compiled;
 }

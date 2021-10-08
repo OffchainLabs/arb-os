@@ -141,8 +141,10 @@ jobs:
 
       - name: Clone Arbitrum
         run: |
-          git clone --recursive https://github.com/OffchainLabs/arbitrum.git
-          cd arbitrum && git submodule update --init --recursive
+          git clone --recursive https://github.com/mrsmkl/arbitrum.git
+          cd arbitrum
+          git checkout mrsmkl/wasm-onestepproof
+          git submodule update --init --recursive
 
       - name: Copy over this branch's ArbOS
         run: |
@@ -153,9 +155,9 @@ jobs:
 
       - name: Build Arbitrum
         run: |
-          mkdir arbitrum/packages/arb-avm-cpp/debug/
+          mkdir arbitrum/packages/arb-avm-cpp/build/
           cd $_
-          cmake .. -DCMAKE_BUILD_TYPE=Debug
+          cmake .. -DCMAKE_BUILD_TYPE=Release
           make -j
 
       - name: Test Node's C++ Database
