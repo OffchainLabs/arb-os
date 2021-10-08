@@ -1387,7 +1387,7 @@ impl Machine {
                 AVMOpcode::SetBuffer8 => 100,
                 AVMOpcode::SetBuffer64 => 100,
                 AVMOpcode::SetBuffer256 => 100,
-                AVMOpcode::RunWasm => 1000000,
+                AVMOpcode::RunWasm => 1000100,
                 AVMOpcode::CompileWasm => 100,
                 AVMOpcode::MakeWasm => 100,
             })
