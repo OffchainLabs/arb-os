@@ -2,7 +2,6 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::compile::FrameSize;
 use crate::mavm::{AVMOpcode, Opcode};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

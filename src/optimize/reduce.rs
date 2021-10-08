@@ -4,7 +4,7 @@
 
 use crate::compile::{DebugInfo, SlotNum};
 use crate::console::{print_columns, Color};
-use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
+use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
 use crate::optimize::effects::{Effect, Effects};
 use crate::optimize::peephole;
 use crate::run::{Machine, MachineState};
@@ -101,7 +101,6 @@ pub struct ValueGraph {
     phis: BTreeMap<SlotNum, SlotNum>,
     header: Vec<Instruction>,
     output: NodeIndex,
-    source: Vec<Instruction>,
 }
 
 impl ValueGraph {
@@ -122,7 +121,7 @@ impl ValueGraph {
                     ValueNode::Meta(name) => name.to_string(),
                 }
             );
-            let spacing = 24_usize.saturating_sub(Color::uncolored(&node_string).len());
+            let spacing = 22_usize.saturating_sub(Color::uncolored(&node_string).len());
             let mut line = format!("{} {}", node_string, " ".repeat(spacing));
             let mut edges: Vec<_> = graph.edges_directed(node, Direction::Outgoing).collect();
             edges.sort_by_key(|edge| edge.weight().input_order());
@@ -139,17 +138,6 @@ impl ValueGraph {
             }
             output.push(line);
         }
-
-        /*if !self.phis.is_empty() {
-            let mut line = format!("    ");
-            for (dest, source) in &self.phis {
-                line += &format!(
-                    "  {}",
-                    Opcode::MoveLocal(*dest, *source).pretty_print(Color::MINT)
-                );
-            }
-            output.push(line);
-        }*/
         output
     }
 
@@ -159,9 +147,10 @@ impl ValueGraph {
         //
         //
         // Assumptions
-        //   The instructions *must* be in SSA
-
-        let source = code.to_vec();
+        //   The instructions must be in SSA, which ensures blocks have:
+        //     No more than 1 jump, which can only be at the end of a block
+        //     Locals are accessed at a common auxstack height
+        //
 
         // separate the metadata instructions from the top
         let mut header = vec![];
@@ -299,7 +288,7 @@ impl ValueGraph {
             ($($collectable:tt)+) => {
                 graph. $($collectable)+ .collect::<Vec<_>>()
             };
-        };
+        }
         macro_rules! slice {
             ($num:expr, $vec:expr) => {{
                 let slice: [_; $num] = $vec.try_into().expect("wrong number");
@@ -315,11 +304,6 @@ impl ValueGraph {
 
         // shift the output
         let output_edges = col!(edges_directed(output, Direction::Outgoing).map(|e| e.id()));
-        /*for edge in output_edges {
-            if let ValueEdge::Connect(ref mut num) = graph[edge] {
-                *num += stack.len();
-            }
-        }*/
         for (index, item) in stack.into_iter().rev().enumerate() {
             graph.add_edge(output, item, ValueEdge::Connect(index + output_edges.len()));
         }
@@ -424,7 +408,6 @@ impl ValueGraph {
             phis,
             header,
             output,
-            source,
         };
 
         if algo::is_cyclic_directed(&values.graph) {
@@ -440,7 +423,7 @@ impl ValueGraph {
         Some(values)
     }
 
-    pub fn codegen(&self) -> Vec<Instruction> {
+    pub fn codegen(&self, unoptimized: &[Instruction]) -> Vec<Instruction> {
         let mut stack = vec![];
         let graph = &self.graph;
 
@@ -567,7 +550,7 @@ impl ValueGraph {
             code
         }
 
-        let mut best = self.source.clone();
+        let mut best = unoptimized.to_vec();
         let mut entropy: SmallRng = SeedableRng::seed_from_u64(0);
 
         for i in 0..64 {
@@ -584,9 +567,7 @@ impl ValueGraph {
                 &mut HashSet::new(),
             ));
 
-            if alt.len() < best.len()
-            /*|| i == 0*/
-            {
+            if alt.len() < best.len() {
                 best = alt;
             }
         }
@@ -595,24 +576,31 @@ impl ValueGraph {
     }
 }
 
+/// Reorder the stack to place needed values on top.
+/// - needs represent the ordered, potentially duplicated, values we want at the top of the stack
+/// - kills represent needs we don't need to save future copies of.
 fn reorder_stack(
     stack: &Vec<NodeIndex>,
     needs: Vec<NodeIndex>,
     kills: HashSet<NodeIndex>,
     print: bool,
 ) -> (Vec<Instruction>, Vec<NodeIndex>) {
-    let mut stack = stack.clone();
-
+    // Determine which values can be treated as "blanks" verses
+    // those whose order we must track. Blanks get sifted to the bottom.
     let mut used: HashSet<_> = needs.clone().into_iter().collect();
     let mut stack: Vec<_> = stack
         .into_iter()
-        .map(|item| (item, 0, used.contains(&item)))
+        .map(|item| (*item, 0, used.contains(item)))
         .collect();
 
+    // Differentiate needs based on their copy number.
     let mut need_counts: HashMap<_, usize> = HashMap::new();
     let needs: Vec<_> = needs
         .into_iter()
         .map(|need| {
+            // If a value isn't killed, we need to leave a copy of it on the stack.
+            // We can do this by saying we need the 1st copy of an unkilled value.
+            // Since the 0th version won't be marked as "needed", it'll be left under the stack.
             let start = match kills.contains(&need) {
                 true => 0,
                 false => 1,
@@ -623,6 +611,9 @@ fn reorder_stack(
             exact
         })
         .collect();
+
+    // The "highest copy" of a need is its latest copy on the stack.
+    // The "highest need" of a need is the final copy we'll eventually want on the stack.
     let mut highest_copy: HashMap<_, _> = need_counts.iter().map(|(n, _)| (*n, 0)).collect();
     let mut highest_need: HashMap<_, _> = need_counts.iter().map(|(n, c)| (*n, c - 1)).collect();
 
@@ -637,12 +628,19 @@ fn reorder_stack(
 
         match (upper_pos, lower_pos) {
             (Some(Some(_)), Some(Some(_))) => {
+                // two needs whose positions differ
                 let upper_pos = needs.into_iter().position(|n| *n == *upper).unwrap();
                 let lower_pos = needs.into_iter().position(|n| *n == *lower).unwrap();
                 upper_pos < lower_pos
             }
-            (Some(None), Some(Some(_))) => true,
-            _ => (!upper.2 || upper_pos.is_none()) && lower.2,
+            (Some(None), Some(Some(_))) => {
+                // a 0th copy we need to save vs a true need
+                true
+            }
+            _ => {
+                // a blank vs a need
+                (!upper.2 || upper_pos.is_none()) && lower.2
+            }
         }
     }
 
@@ -663,7 +661,6 @@ fn reorder_stack(
 
     let mut debug = DebugInfo::default();
     debug.attributes.color_group = 1;
-
     macro_rules! opcode {
         ($opcode:ident) => {
             Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), debug)
@@ -673,7 +670,10 @@ fn reorder_stack(
     let mut code = vec![];
 
     macro_rules! window {
-        (false) => {
+        ($label:tt) => {
+            // Fix any out-of-order items on the part of the stack we can access
+            // with Dups & Swaps. We call this top part of the stack the "window".
+
             let len = stack.len();
             let mut top = (len >= 1).then(|| stack[len - 1]);
             let mut mid = (len >= 2).then(|| stack[len - 2]);
@@ -701,11 +701,9 @@ fn reorder_stack(
             // For safety we update these to point to the right items even if they aren't used again,
             // so we do this assignment to silence the "unused assignment" warnings
             let _ = (top, bot, mid);
-        };
-        (true) => {
-            window!(false);
 
-            'restart: loop {
+            // Now that we've ordered the window, see if there's any dups needed.
+            $label: loop {
                 for depth in 1..3 {
                     let len = stack.len();
                     let item = (len >= depth).then(|| stack[len - depth]);
@@ -722,7 +720,7 @@ fn reorder_stack(
                             stack.push((item, high_copy + 1, true));
                             highest_copy.insert(item, high_copy + 1);
                             print_stack(&format!("dup{} ", depth - 1), &stack);
-                            continue 'restart;
+                            continue $label;
                         }
                     }
                 }
@@ -731,11 +729,14 @@ fn reorder_stack(
         };
     }
 
-    let mut aux = vec![];
+    let mut aux = vec![]; // values temporarily in the aux stack.
 
     loop {
+        // Slide the window up and down via AuxPush & AuxPop, making corrections until
+        // what we need is at the top of the stack.
+
         while stack.len() > 0 {
-            window!(true);
+            window!('going_down);
             code.push(opcode!(AuxPush));
             aux.push(stack.pop().unwrap());
             print_stack("apush", &stack);
@@ -745,7 +746,7 @@ fn reorder_stack(
             code.push(opcode!(AuxPop));
             stack.push(aux.pop().unwrap());
             print_stack("aupop", &stack);
-            window!(true);
+            window!('going_up);
         }
 
         let top_of_stack: Vec<_> = stack.iter().rev().take(needs.len()).rev().collect();
@@ -758,6 +759,10 @@ fn reorder_stack(
         break;
     }
 
+    // Eliminate any spans of AuxPush's and AuxPop's. These cancel each other out,
+    // and by eliding them we've essentially transformed the window function to
+    // ignore ordered parts of the stack as it intelligently moves the window
+    // directly to where values need to be swapped.
     let code = peephole::filter_pair(
         code,
         Opcode::AVMOpcode(AVMOpcode::AuxPush),
@@ -775,13 +780,9 @@ fn reorder_stack(
 
 #[test]
 fn reorder_test() {
-    /*let stack = [0, 1, 2, 3, 4];
+    let stack = [0, 1, 2, 3, 4];
     let needs = [3, 1, 0, 1, 1, 0, 2];
-    let kills = [1, 3];*/
-
-    let stack = [0, 1, 2];
-    let needs = [1, 2];
-    let kills = [1];
+    let kills = [1, 3];
 
     let stack: Vec<_> = std::array::IntoIter::new(stack)
         .map(NodeIndex::new)

@@ -188,7 +188,7 @@ impl BasicGraph {
     }
 
     /// Prints a basic graph with colors
-    pub fn print(&self) {
+    pub fn _print(&self) {
         let graph = &self.graph;
         let mut block_num = 0;
         let mut insn_num = 0;
@@ -544,13 +544,10 @@ impl BasicGraph {
                 match graphs.get(&node) {
                     Some(graph) => {
                         let code = self.graph[node].get_code();
-                        let ssa = code
-                            .into_iter()
-                            .map(|x| x.pretty_print(Color::PINK))
-                            .collect();
+                        let ssa = code.iter().map(|x| x.pretty_print(Color::PINK)).collect();
                         let values = graph.print_lines();
                         let reduced = graph
-                            .codegen()
+                            .codegen(code)
                             .into_iter()
                             .map(|x| x.pretty_print(Color::PINK))
                             .collect();
@@ -570,7 +567,8 @@ impl BasicGraph {
         let nodes: Vec<_> = self.graph.node_indices().collect();
         for node in nodes {
             if let Some(values) = graphs.get(&node) {
-                let reduced = values.codegen();
+                let code = self.graph[node].get_code();
+                let reduced = values.codegen(code);
                 self.graph[node] = BasicBlock::Code(reduced);
             }
         }
