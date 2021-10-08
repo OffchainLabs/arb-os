@@ -1,5 +1,5 @@
 {
-  "arbos_version": 45,
+  "arbos_version": 46,
   "integer": {
     "AVMSendType_batch": 0,
     "AVM_add": 1,
