@@ -5,7 +5,7 @@
 use crate::compile::FrameSize;
 use crate::mavm::{AVMOpcode, Opcode};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Effect {
     PushStack,
     PopStack,
@@ -23,7 +23,6 @@ pub enum Effect {
     ReadGlobal,
     WriteGlobal,
     WritePC,
-    OpenFrame(FrameSize),
     Unsure,
 }
 
@@ -36,23 +35,24 @@ impl Effects for Opcode {
         use Effect::*;
         use Opcode::*;
         match self {
-            MakeFrame(size, ..) => vec![OpenFrame(*size)],
+            MakeFrame(size, ..) => vec![],
+            Label(..) => vec![],
             GetLocal(slot) => vec![ReadLocal(*slot), PushStack],
             SetLocal(slot) => vec![ReadStack, PopStack, WriteLocal(*slot)],
-            ReserveCapture(slot, _) => vec![WriteLocal(*slot)],
+            ReserveCapture(slot, _) => vec![WriteLocal(*slot), Unsure],
             MoveLocal(dest, source) => {
                 vec![PhiLocal(*dest, *source)]
             }
-            Capture(..) => vec![],
-            MakeClosure(..) => vec![],
+            Capture(..) => vec![Unsure],
+            MakeClosure(..) => vec![Unsure],
             TupleGet(..) => vec![ReadStack, PopStack, PushStack],
             TupleSet(..) => vec![ReadStack, PopStack, ReadStack, PopStack, PushStack],
             GetGlobalVar(..) => vec![ReadGlobal, PushStack],
             SetGlobalVar(..) => vec![ReadStack, PopStack, WriteGlobal],
             UncheckedFixedArrayGet(..) => vec![Unsure],
-            Label(..) => vec![],
-            JumpTo(..) | Return => vec![WritePC],
             CjumpTo(..) => vec![ReadStack, PopStack, ReadStack, PopStack, WritePC],
+            JumpTo(..) => vec![ReadStack, PopStack, WritePC],
+            Return => vec![WritePC],
             FuncCall(prop) => {
                 let mut effects = vec![];
                 if prop.view {

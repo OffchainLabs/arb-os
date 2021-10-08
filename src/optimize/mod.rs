@@ -566,14 +566,14 @@ impl BasicGraph {
             println!();
         }
 
-        if self.should_print {
-            let nodes: Vec<_> = self.graph.node_indices().collect();
-            for node in nodes {
-                if let Some(values) = graphs.get(&node) {
-                    let reduced = values.codegen();
-                    self.graph[node] = BasicBlock::Code(reduced);
-                }
+        //if self.should_print {
+        let nodes: Vec<_> = self.graph.node_indices().collect();
+        for node in nodes {
+            if let Some(values) = graphs.get(&node) {
+                let reduced = values.codegen();
+                self.graph[node] = BasicBlock::Code(reduced);
             }
         }
+        //}
     }
 }
