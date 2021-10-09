@@ -557,7 +557,7 @@ impl ValueGraph {
         let mut best_cost = usize::MAX;
         let mut entropy: SmallRng = SeedableRng::seed_from_u64(0);
 
-        for _ in 0..64 {
+        for _ in 0..128 {
             // attempt to codegen a better set of instructions than the best found so far.
 
             let mut stack = stack.clone();

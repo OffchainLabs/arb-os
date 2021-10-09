@@ -1503,7 +1503,9 @@ impl Func {
         let nouts = ret_type.iter().count();
         let ret_type = ret_type.unwrap_or(Type::Void);
         let returns = ret_type != Type::Every;
-        let prop = FuncProperties::new(view, write, sensitive, closure, public, returns, nargs, nouts);
+        let prop = FuncProperties::new(
+            view, write, sensitive, closure, public, returns, nargs, nouts,
+        );
         Func {
             name,
             id,

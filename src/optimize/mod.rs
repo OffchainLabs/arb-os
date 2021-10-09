@@ -555,11 +555,13 @@ impl BasicGraph {
                         .into_iter()
                         .map(|x| x.pretty_print(Color::PINK))
                         .collect();
-                    console::print_columns(
-                        vec![ssa, values, reduced],
-                        vec!["SSA", "values", "reduced"],
-                    );
-                    println!();
+                    if ssa != reduced {
+                        console::print_columns(
+                            vec![ssa, values, reduced],
+                            vec!["SSA", "values", "reduced"],
+                        );
+                        println!();
+                    }
                 }
             }
         }

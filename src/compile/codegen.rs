@@ -511,7 +511,7 @@ fn codegen(
                             expr!(&mut args[nargs - 1 - i], i);
                         }
                         expr!(fexpr, nargs + 1);
-                        
+
                         if prop.sensitive {
                             // a sensitive func must be in its own basic block
                             // since it does something that violates the func call ABI
