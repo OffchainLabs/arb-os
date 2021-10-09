@@ -386,6 +386,7 @@ impl ValueGraph {
                         Some(value) => graph[node] = ValueNode::Value(value.clone()),
                         _ => continue,
                     }
+                    assert!(machine.stack.contents.is_empty());
 
                     for edge in dep_edges {
                         graph.remove_edge(edge);
@@ -409,7 +410,7 @@ impl ValueGraph {
             }
         }
 
-        //fold_constants(&mut graph);
+        fold_constants(&mut graph);
         prune_graph(&mut graph, output);
 
         let values = ValueGraph {
