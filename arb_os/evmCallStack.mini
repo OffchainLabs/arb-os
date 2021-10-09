@@ -1338,7 +1338,7 @@ public func emptyAvmStack() {
     }
 }
 
-func restoreAvmStack(savedStack: Stack) {
+view write func restoreAvmStack(savedStack: Stack) {
     // restore AVM stack state, from a Stack that was created earlier by saveAvmStack
     while ! stack_isEmpty(savedStack) {
         if let Some(res) = stack_pop(savedStack) {

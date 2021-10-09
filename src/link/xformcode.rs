@@ -14,7 +14,7 @@ pub const TUPLE_SIZE: usize = 8;
 
 /// Takes a slice of instructions from a single function scope, and changes tuples of size greater
 /// than TUPLE_SIZE to nested tuples with each subtuple at most TUPLE_SIZE
-pub fn fix_tuple_size(
+pub fn fold_tuples(
     code: Vec<Instruction>,
     num_globals: usize,
 ) -> Result<Vec<Instruction>, CompileError> {

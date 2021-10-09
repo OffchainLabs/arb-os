@@ -25,7 +25,7 @@ use std::io::Write;
 
 use crate::compile::miniconstants::init_constant_table;
 use std::path::Path;
-pub use xformcode::{TupleTree, TUPLE_SIZE};
+pub use xformcode::{TupleTree, TUPLE_SIZE, fold_tuples};
 
 mod optimize;
 mod striplabels;
@@ -375,7 +375,7 @@ pub fn postlink_compile(
         striplabels::fix_backward_labels(&program.code, program.globals.len() - 1);
     consider_debug_printing(&code, did_print, "after fix_backward_labels");
 
-    let code = xformcode::fix_tuple_size(code, program.globals.len())?;
+    let code = xformcode::fold_tuples(code, program.globals.len())?;
     consider_debug_printing(&code, did_print, "after fix_tuple_size");
 
     let code = optimize::peephole(&code);

@@ -1182,7 +1182,7 @@ impl Opcode {
             Opcode::GetLocal(slot) => format!("GetLocal {}", Color::pink(slot)),
             Opcode::SetLocal(slot) => format!("SetLocal {}", Color::pink(slot)),
             Opcode::MoveLocal(dest, source) => {
-                format!("p({}, {})", Color::pink(dest), Color::pink(source))
+                format!("φ({}, {})", Color::pink(dest), Color::pink(source))
             }
             Opcode::ReserveCapture(slot, id) => {
                 format!("ReserveCapture {} {}", Color::pink(slot), Color::grey(id))

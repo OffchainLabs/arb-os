@@ -8,6 +8,7 @@ use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
 use crate::optimize::effects::{Effect, Effects};
 use crate::optimize::peephole;
 use crate::run::{Machine, MachineState};
+use crate::link::fold_tuples;
 use petgraph::algo;
 use petgraph::graph::{EdgeIndex, NodeIndex};
 use petgraph::stable_graph::StableGraph;
@@ -97,6 +98,22 @@ pub struct ValueGraph {
     phis: BTreeMap<SlotNum, SlotNum>,
     header: Vec<Instruction>,
     output: NodeIndex,
+}
+
+macro_rules! opcode {
+    ($opcode:ident) => {
+        Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), DebugInfo::default())
+    };
+    ($opcode:ident, $immediate:expr) => {
+        Instruction::from_opcode_imm(
+            Opcode::AVMOpcode(AVMOpcode::$opcode),
+            $immediate,
+            DebugInfo::default(),
+        )
+    };
+    (@$($opcode:tt)+) => {
+        Instruction::from_opcode(Opcode::$($opcode)+, DebugInfo::default())
+    };
 }
 
 impl ValueGraph {
@@ -251,7 +268,7 @@ impl ValueGraph {
                     Effect::WriteLocal(slot) => {
                         let local = graph.add_node(ValueNode::Local(slot));
                         if let Some(_) = locals.get(&slot) {
-                            unreachable!("found a second write: code is not in SSA");
+                            unreachable!("Not SSA: found 2nd write or write-after-read");
                         }
                         graph.add_edge(local, node, ValueEdge::Meta("set"));
                         locals.insert(slot, local);
@@ -316,36 +333,18 @@ impl ValueGraph {
         }
 
         fn fold_constants(graph: &mut StableGraph<ValueNode, ValueEdge>) {
-            for node in nodes(&graph) {
-                if let ValueNode::Opcode(Opcode::TupleSet(offset, size)) = &graph[node] {
-                    // Here we attempt to place the value inside the tuple
+            // perform constant folding
 
-                    let (deps, _, dep_edges, _) = node_data(&graph, node);
-                    let [value, tuple] = slice!(2, deps);
+            'next: for node in nodes(&graph) {
 
-                    let value = match &graph[value] {
-                        ValueNode::Value(value) => value,
-                        _ => continue,
-                    };
-                    let mut tuple = match &graph[tuple] {
-                        ValueNode::Value(Value::Tuple(tuple)) => tuple.to_vec(),
-                        _ => continue,
-                    };
-                    if tuple.len() != *size {
-                        continue;
-                    }
-
-                    tuple[*offset] = value.clone();
-                    graph[node] = ValueNode::Value(Value::new_tuple(tuple));
-                    for edge in dep_edges {
-                        graph.remove_edge(edge);
-                    }
-                }
-
-                if let ValueNode::Opcode(Opcode::AVMOpcode(opcode)) = &graph[node] {
+                if let ValueNode::Opcode(opcode) = &graph[node] {
                     // For AVM opcodes that only touch the stack, we can try to emulate them by
                     // building a machine whose only purpose is to execute the opcode and then halt.
 
+                    if let Opcode::FuncCall(..) = opcode {
+                        continue;
+                    }
+                    
                     let mut pushes = 0;
                     let mut stateful = false;
                     for effect in opcode.effects() {
@@ -361,20 +360,22 @@ impl ValueGraph {
                     }
 
                     // we'll build a machine to run the instruction
-                    let insn =
-                        Instruction::from_opcode(Opcode::AVMOpcode(*opcode), DebugInfo::default());
-                    let mut machine = Machine::from(vec![insn]);
-
                     let (deps, _, dep_edges, _) = node_data(&graph, node);
-                    for dep in deps.into_iter() {
+                    let mut code = vec![];
+                    for dep in deps {
                         match &graph[dep] {
-                            ValueNode::Value(Value::Tuple(tup)) if tup.len() > 8 => continue,
-                            ValueNode::Value(value) => machine.stack.push(value.clone()),
-                            _ => continue,
+                            ValueNode::Value(value) => code.push(opcode!(Noop, value.clone())),
+                            _ => continue 'next,
                         }
                     }
+                    code.push(Instruction::from_opcode(*opcode, DebugInfo::default()));
 
-                    let size_before = machine.stack.num_items();
+                    // fold wide tuples as is needed to compute the result
+                    let code = match fold_tuples(code, 0) {
+                        Ok(code) => code,
+                        _ => continue,
+                    };
+                    let mut machine = Machine::from(code);
                     machine.start_at_zero(false);
                     machine.run(None);
                     if let MachineState::Error(_) = &machine.state {
@@ -386,8 +387,7 @@ impl ValueGraph {
                         _ => continue,
                     }
 
-                    let items_consumed = size_before - machine.stack.num_items();
-                    for edge in dep_edges.into_iter().rev().take(items_consumed) {
+                    for edge in dep_edges {
                         graph.remove_edge(edge);
                     }
                 }
@@ -409,7 +409,7 @@ impl ValueGraph {
             }
         }
 
-        fold_constants(&mut graph);
+        //fold_constants(&mut graph);
         prune_graph(&mut graph, output);
 
         let values = ValueGraph {

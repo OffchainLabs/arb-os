@@ -6,6 +6,7 @@
 
 use regex::Regex;
 use std::fmt;
+use unicode_width::UnicodeWidthStr;
 
 pub struct Color;
 
@@ -95,6 +96,10 @@ pub fn human_readable_index(index: usize) -> String {
     }
 }
 
+pub fn console_width<S: std::convert::AsRef<str>>(text: S) -> usize {
+    Color::uncolored(text).width()
+}
+
 pub fn side_by_side(mut left: Vec<String>, mut right: Vec<String>) -> Vec<String> {
     if left.len() < right.len() {
         let blank = vec![String::new(); right.len() - left.len()];
@@ -104,16 +109,12 @@ pub fn side_by_side(mut left: Vec<String>, mut right: Vec<String>) -> Vec<String
         let blank = vec![String::new(); left.len() - right.len()];
         right.extend(blank);
     }
-    let widest = 4 + left
-        .iter()
-        .map(|x| Color::uncolored(x).len())
-        .max()
-        .unwrap();
+    let widest = 4 + left.iter().map(|x| console_width(x)).max().unwrap();
 
     let mut merged = vec![];
 
     for (left, right) in left.into_iter().zip(right.into_iter()) {
-        let spacing = widest - Color::uncolored(&left).len();
+        let spacing = widest - console_width(&left);
         merged.push(format!("{}{}{}", left, " ".repeat(spacing), right));
     }
     merged
@@ -122,7 +123,7 @@ pub fn side_by_side(mut left: Vec<String>, mut right: Vec<String>) -> Vec<String
 pub fn widest_line(lines: &Vec<String>) -> usize {
     lines
         .into_iter()
-        .map(|line| Color::uncolored(line).len())
+        .map(|line| console_width(line))
         .max()
         .unwrap_or(0)
 }
