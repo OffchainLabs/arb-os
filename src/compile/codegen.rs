@@ -511,7 +511,18 @@ fn codegen(
                             expr!(&mut args[nargs - 1 - i], i);
                         }
                         expr!(fexpr, nargs + 1);
-                        cgen.code.push(opcode!(@FuncCall(*prop)));
+                        
+                        if prop.sensitive {
+                            // a sensitive func must be in its own basic block
+                            // since it does something that violates the func call ABI
+                            let prior = cgen.label_gen.next();
+                            let after = cgen.label_gen.next();
+                            cgen.code.push(opcode!(@Label(prior)));
+                            cgen.code.push(opcode!(@FuncCall(*prop)));
+                            cgen.code.push(opcode!(@Label(after)));
+                        } else {
+                            cgen.code.push(opcode!(@FuncCall(*prop)));
+                        }
                     }
                     TypeCheckedExprKind::Tuple(fields, _) => {
                         let nfields = fields.len();

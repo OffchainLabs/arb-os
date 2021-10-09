@@ -4,11 +4,11 @@
 
 use crate::compile::{DebugInfo, SlotNum};
 use crate::console::{print_columns, Color};
+use crate::link::fold_tuples;
 use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
 use crate::optimize::effects::{Effect, Effects};
 use crate::optimize::peephole;
 use crate::run::{Machine, MachineState};
-use crate::link::fold_tuples;
 use petgraph::algo;
 use petgraph::graph::{EdgeIndex, NodeIndex};
 use petgraph::stable_graph::StableGraph;
@@ -18,7 +18,6 @@ use rand::prelude::*;
 use rand::rngs::SmallRng;
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
-use std::convert::TryInto;
 
 pub enum ValueNode {
     Opcode(Opcode),     // a
@@ -97,6 +96,7 @@ pub struct ValueGraph {
     defs: BTreeMap<SlotNum, NodeIndex>,
     phis: BTreeMap<SlotNum, SlotNum>,
     header: Vec<Instruction>,
+    footer: Vec<Instruction>,
     output: NodeIndex,
 }
 
@@ -167,9 +167,11 @@ impl ValueGraph {
         //     Phis happen just before jumping
         //     The order of phis don't matter
 
-        // Separate the metadata instructions from the top. Given our assumptions,
+        // Separate the metadata instructions from the top & bottom. Given our assumptions,
         // these don't impact how values relate to one another.
         let mut header = vec![];
+        let mut footer = vec![];
+        let mut phis = BTreeMap::new();
         for curr in code {
             match &curr.opcode {
                 Opcode::Label(_) | Opcode::MakeFrame(..) => {
@@ -178,16 +180,21 @@ impl ValueGraph {
                 _ => break,
             }
         }
-        let code = &code[header.len()..];
-
-        // Save the phi-metadata for later. Given our assumptions,
-        // these only impact control flow.
-        let mut phis = BTreeMap::new();
-        for curr in code {
-            if let Opcode::MoveLocal(dest, source) = &curr.opcode {
-                phis.insert(*dest, *source);
+        for curr in code.iter().rev() {
+            match &curr.opcode {
+                Opcode::MoveLocal(dest, source) => {
+                    phis.insert(*dest, *source);
+                }
+                Opcode::Return
+                | Opcode::JumpTo(..)
+                | Opcode::CjumpTo(..)
+                | Opcode::AVMOpcode(AVMOpcode::Jump | AVMOpcode::Cjump) => {}
+                _ => break,
             }
+            footer.push(curr.clone());
         }
+        footer.reverse();
+        let code = &code[header.len()..(code.len() - footer.len())];
 
         let mut graph = StableGraph::new();
         let mut locals = BTreeMap::new();
@@ -195,7 +202,6 @@ impl ValueGraph {
 
         let mut globals = graph.add_node(ValueNode::Meta("globals"));
         let mut global_readers = BTreeSet::new();
-        let mut pc_writer = None;
 
         let mut stack: VecDeque<NodeIndex> = VecDeque::new();
         let mut nargs = 0;
@@ -290,9 +296,7 @@ impl ValueGraph {
                         graph.add_edge(globals, node, ValueEdge::Meta("write"));
                     }
                     Effect::WritePC => {
-                        // this can only happen once since these are basic blocks,
-                        // so we save this node so that it can be the output.
-                        pc_writer = Some(node);
+                        unreachable!("Not SSA: jumps should only happen at the end")
                     }
                     Effect::PushAux
                     | Effect::PopAux
@@ -304,30 +308,18 @@ impl ValueGraph {
             }
         }
 
-        macro_rules! col {
-            ($($collectable:tt)+) => {
-                graph. $($collectable)+ .collect::<Vec<_>>()
-            };
-        }
-        macro_rules! slice {
-            ($num:expr, $vec:expr) => {{
-                let slice: [_; $num] = $vec.try_into().expect("wrong number");
-                slice
-            }};
-        }
+        // represents the output of the graph just before exiting
+        let output = graph.add_node(ValueNode::Meta("output"));
 
-        //
-        let output = match pc_writer {
-            Some(writer) => writer,
-            None => graph.add_node(ValueNode::Meta("output")),
-        };
-
-        // shift the output
-        let output_edges = col!(edges_directed(output, Direction::Outgoing).map(|e| e.id()));
+        // items left on the stack need to be passed on
         for (index, item) in stack.into_iter().rev().enumerate() {
-            graph.add_edge(output, item, ValueEdge::Connect(index + output_edges.len()));
+            graph.add_edge(output, item, ValueEdge::Connect(index));
         }
+
+        // edits to global state must be written
         graph.add_edge(output, globals, ValueEdge::Meta("globals"));
+
+        // edits to local variables must be written
         for (_, local) in locals {
             graph.add_edge(output, local, ValueEdge::Meta("locals"));
         }
@@ -336,7 +328,6 @@ impl ValueGraph {
             // perform constant folding
 
             'next: for node in nodes(&graph) {
-
                 if let ValueNode::Opcode(opcode) = &graph[node] {
                     // For AVM opcodes that only touch the stack, we can try to emulate them by
                     // building a machine whose only purpose is to execute the opcode and then halt.
@@ -344,7 +335,7 @@ impl ValueGraph {
                     if let Opcode::FuncCall(..) = opcode {
                         continue;
                     }
-                    
+
                     let mut pushes = 0;
                     let mut stateful = false;
                     for effect in opcode.effects() {
@@ -418,6 +409,7 @@ impl ValueGraph {
             defs,
             phis,
             header,
+            footer,
             output,
         };
 
@@ -586,13 +578,8 @@ impl ValueGraph {
             }
         }
 
-        if let Some(exit) = best.pop() {
-            for (dest, source) in &self.phis {
-                best.push(opcode!(@MoveLocal(*dest, *source)));
-            }
-            best.push(exit);
-        }
-
+        // write the exit code for this block
+        best.extend(self.footer.clone());
         (best, best_cost)
     }
 }

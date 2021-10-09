@@ -25,7 +25,7 @@ use std::io::Write;
 
 use crate::compile::miniconstants::init_constant_table;
 use std::path::Path;
-pub use xformcode::{TupleTree, TUPLE_SIZE, fold_tuples};
+pub use xformcode::{fold_tuples, TupleTree, TUPLE_SIZE};
 
 mod optimize;
 mod striplabels;

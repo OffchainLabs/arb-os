@@ -33,7 +33,6 @@ impl Effects for Opcode {
         use Effect::*;
         use Opcode::*;
         match self {
-            MoveLocal(..) => vec![Unsure],
             MakeFrame(..) | Label(..) | MoveLocal(..) => vec![],
             GetLocal(slot) => vec![ReadLocal(*slot), PushStack],
             SetLocal(slot) => vec![ReadStack, PopStack, WriteLocal(*slot)],
@@ -60,7 +59,7 @@ impl Effects for Opcode {
                 for _ in 0..prop.nouts {
                     effects.push(PushStack);
                 }
-                if prop.write {
+                if prop.write || prop.sensitive {
                     effects.push(WriteGlobal);
                 }
                 effects

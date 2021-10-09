@@ -118,9 +118,11 @@ TypeDecl: TypeDecl = {
 
 FuncDecl: Func = {
     <attribs: ("#[" <Attributes> "]")?> <qualifiers: (<Qualifier>)*> "func" <lno: @L> <i: Ident> <g: Generalization?> "(" <mut args: FuncArgs> ")" <mut ret: Return?> <block: CodeBlock> =>? {
-        let public = qualifiers.contains(&"public");
-        let view = qualifiers.contains(&"view");
-        let write = qualifiers.contains(&"write");
+        let public    = qualifiers.contains(&"public");
+        let view      = qualifiers.contains(&"view");
+        let write     = qualifiers.contains(&"write");
+        let sensitive = qualifiers.contains(&"sensitive");
+        
         let debug = DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default());
         let name = string_table.name_from_id(i).clone();
 
@@ -165,7 +167,9 @@ FuncDecl: Func = {
             stats.push(Statement::new(stat, debug_info));
         }
         
-	Ok(Func::new(name, i, public, view, write, false, args, ret, stats, BTreeSet::new(), generic_ids, debug))
+	Ok(Func::new(
+            name, i, public, view, write, sensitive, false, args, ret, stats, BTreeSet::new(), generic_ids, debug
+        ))
     }
 }
 
@@ -335,7 +339,7 @@ Type: Type = {
         let returns = r != Some(Type::Every);
         let nargs = a.len();
         let nouts = r.iter().count();
-        let prop = FuncProperties::new(view, write, false, false, returns, nargs, nouts);
+        let prop = FuncProperties::new(view, write, false, false, false, returns, nargs, nouts);
         Type::Func(prop, a, Box::new(r.unwrap_or(Type::Void)))
     },
     <q: Qualifier*> "closure" <a: CommaedTypesInParens> <r: Return?> => {
@@ -344,7 +348,7 @@ Type: Type = {
         let returns = r != Some(Type::Every);
         let nargs = a.len();
         let nouts = r.iter().count();
-        let prop = FuncProperties::new(view, write, false, false, returns, nargs, nouts);
+        let prop = FuncProperties::new(view, write, false, false, false, returns, nargs, nouts);
         Type::Func(prop, a, Box::new(r.unwrap_or(Type::Void)))
     },
     <i: Ident> <g: Specialization?> => {
@@ -615,7 +619,9 @@ Expr12: Expr = {
             false => format!("_closure #{}", closures.len() + 1),
         };
         let id = string_table.get(name.clone());
-        let closure = Func::new(name, id, false, view, write, true, fa, t, stats, BTreeSet::new(), vec![], debug);
+        let closure = Func::new(
+            name, id, false, view, write, false, true, fa, t, stats, BTreeSet::new(), vec![], debug
+        );
         
 	closures.insert(id, closure.clone());
         
@@ -699,6 +705,7 @@ Qualifier: &'input str = {
     "view" => <>,
     "write" => <>,
     "public" => <>,
+    "sensitive" => <>,
 };
 
 IdentStr: &'input str = {
