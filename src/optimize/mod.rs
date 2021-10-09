@@ -532,6 +532,7 @@ impl BasicGraph {
     pub fn graph_reduce(&mut self) {
         let mut graphs = HashMap::new();
 
+        // compute each block's value graph where possible
         for node in self.graph.node_indices() {
             let block = self.graph[node].get_code();
             if let Some(value_graph) = ValueGraph::new(block) {
@@ -541,37 +542,41 @@ impl BasicGraph {
 
         if self.should_print {
             for node in self.graph.node_indices() {
-                match graphs.get(&node) {
-                    Some(graph) => {
-                        let code = self.graph[node].get_code();
-                        let ssa = code.iter().map(|x| x.pretty_print(Color::PINK)).collect();
-                        let values = graph.print_lines();
-                        let reduced = graph
-                            .codegen(code)
-                            .into_iter()
-                            .map(|x| x.pretty_print(Color::PINK))
-                            .collect();
-                        console::print_columns(
-                            vec![ssa, values, reduced],
-                            vec!["SSA", "values", "reduced"],
-                        );
-                        println!();
-                    }
-                    None => println!("No value graph"),
+                if let BasicBlock::Meta(_) = &self.graph[node] {
+                    continue;
+                }
+                if let Some(graph) = graphs.get(&node) {
+                    let code = self.graph[node].get_code();
+                    let ssa = code.iter().map(|x| x.pretty_print(Color::PINK)).collect();
+                    let values = graph.print_lines();
+                    let reduced = graph
+                        .codegen()
+                        .0
+                        .into_iter()
+                        .map(|x| x.pretty_print(Color::PINK))
+                        .collect();
+                    console::print_columns(
+                        vec![ssa, values, reduced],
+                        vec!["SSA", "values", "reduced"],
+                    );
+                    println!();
                 }
             }
-            println!();
         }
 
-        //if self.should_print {
+        if !self.cyclic {}
+
+        // see for each block if we can do better using each's value graph
         let nodes: Vec<_> = self.graph.node_indices().collect();
         for node in nodes {
             if let Some(values) = graphs.get(&node) {
                 let code = self.graph[node].get_code();
-                let reduced = values.codegen(code);
-                self.graph[node] = BasicBlock::Code(reduced);
+                let cost = code.iter().map(|x| x.opcode.base_cost()).sum();
+                let (reduced, reduced_cost) = values.codegen();
+                if reduced_cost < cost {
+                    self.graph[node] = BasicBlock::Code(reduced);
+                }
             }
         }
-        //}
     }
 }

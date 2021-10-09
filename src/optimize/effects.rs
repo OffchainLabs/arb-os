@@ -18,7 +18,6 @@ pub enum Effect {
     ReadAux,
     ReadLocal(u32),
     WriteLocal(u32),
-    PhiLocal(u32, u32),
     ReadGlobal,
     WriteGlobal,
     WritePC,
@@ -34,14 +33,11 @@ impl Effects for Opcode {
         use Effect::*;
         use Opcode::*;
         match self {
-            MakeFrame(size, ..) => vec![],
-            Label(..) => vec![],
+            MoveLocal(..) => vec![Unsure],
+            MakeFrame(..) | Label(..) | MoveLocal(..) => vec![],
             GetLocal(slot) => vec![ReadLocal(*slot), PushStack],
             SetLocal(slot) => vec![ReadStack, PopStack, WriteLocal(*slot)],
             ReserveCapture(slot, _) => vec![WriteLocal(*slot), Unsure],
-            MoveLocal(dest, source) => {
-                vec![PhiLocal(*dest, *source)]
-            }
             Capture(..) => vec![Unsure],
             MakeClosure(..) => vec![Unsure],
             TupleGet(..) => vec![ReadStack, PopStack, PushStack],
@@ -101,9 +97,9 @@ impl Effects for AVMOpcode {
             avm!(Swap1) => vec![SwapStack(1)],
             avm!(Swap2) => vec![SwapStack(2)],
 
-            avm!(NewBuffer, Spush, ErrCodePoint) => vec![PushStack],
+            avm!(NewBuffer, Spush) => vec![PushStack],
 
-            avm!(Rpush, PushGas, PCpush) => vec![ReadGlobal, PushStack],
+            avm!(Rpush, PushGas, PCpush, ErrCodePoint) => vec![ReadGlobal, PushStack],
 
             avm!(DebugPrint, Rset, ErrSet, SetGas, Log) => vec![
                 ReadStack, PopStack,

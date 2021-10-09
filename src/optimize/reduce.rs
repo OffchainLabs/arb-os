@@ -54,10 +54,6 @@ fn nodes(graph: &StableGraph<ValueNode, ValueEdge>) -> Vec<NodeIndex> {
     graph.node_indices().collect()
 }
 
-fn in_degree(graph: &StableGraph<ValueNode, ValueEdge>, node: NodeIndex) -> usize {
-    graph.edges_directed(node, Direction::Incoming).count()
-}
-
 fn conn_count(graph: &StableGraph<ValueNode, ValueEdge>, node: NodeIndex) -> usize {
     graph
         .edges_directed(node, Direction::Incoming)
@@ -149,10 +145,13 @@ impl ValueGraph {
         // Assumptions
         //   The instructions must be in SSA, which ensures blocks have:
         //     No more than 1 jump, which can only be at the end of a block
+        //     No more than 1 label, which can only be at the start of a block
         //     Locals are accessed at a common auxstack height
-        //
+        //     Phis happen just before jumping
+        //     The order of phis don't matter
 
-        // separate the metadata instructions from the top
+        // Separate the metadata instructions from the top. Given our assumptions,
+        // these don't impact how values relate to one another.
         let mut header = vec![];
         for curr in code {
             match &curr.opcode {
@@ -164,11 +163,18 @@ impl ValueGraph {
         }
         let code = &code[header.len()..];
 
-        let mut graph = StableGraph::new();
-        let mut locals = HashMap::new();
-        let mut defs = BTreeMap::new();
+        // Save the phi-metadata for later. Given our assumptions,
+        // these only impact control flow.
         let mut phis = BTreeMap::new();
-        let mut phi_nodes = BTreeSet::new();
+        for curr in code {
+            if let Opcode::MoveLocal(dest, source) = &curr.opcode {
+                phis.insert(*dest, *source);
+            }
+        }
+
+        let mut graph = StableGraph::new();
+        let mut locals = BTreeMap::new();
+        let mut defs = BTreeMap::new();
 
         let mut globals = graph.add_node(ValueNode::Meta("globals"));
         let mut global_readers = BTreeSet::new();
@@ -244,11 +250,12 @@ impl ValueGraph {
                     }
                     Effect::WriteLocal(slot) => {
                         let local = graph.add_node(ValueNode::Local(slot));
-                        if let Some(old) = locals.get(&slot) {
-                            graph.add_edge(local, *old, ValueEdge::Meta("order"));
+                        if let Some(_) = locals.get(&slot) {
+                            unreachable!("found a second write: code is not in SSA");
                         }
                         graph.add_edge(local, node, ValueEdge::Meta("set"));
                         locals.insert(slot, local);
+                        defs.insert(slot, local);
                     }
                     Effect::ReadGlobal => {
                         graph.add_edge(node, globals, ValueEdge::Meta("view"));
@@ -269,10 +276,6 @@ impl ValueGraph {
                         // this can only happen once since these are basic blocks,
                         // so we save this node so that it can be the output.
                         pc_writer = Some(node);
-                    }
-                    Effect::PhiLocal(dest, source) => {
-                        phis.insert(dest, source);
-                        phi_nodes.insert(node);
                     }
                     Effect::PushAux
                     | Effect::PopAux
@@ -311,16 +314,13 @@ impl ValueGraph {
         for (_, local) in locals {
             graph.add_edge(output, local, ValueEdge::Meta("locals"));
         }
-        for node in phi_nodes {
-            graph.add_edge(output, node, ValueEdge::Meta("phi"));
-        }
 
         fn fold_constants(graph: &mut StableGraph<ValueNode, ValueEdge>) {
             for node in nodes(&graph) {
                 if let ValueNode::Opcode(Opcode::TupleSet(offset, size)) = &graph[node] {
                     // Here we attempt to place the value inside the tuple
 
-                    let (deps, users, dep_edges, user_edges) = node_data(&graph, node);
+                    let (deps, _, dep_edges, _) = node_data(&graph, node);
                     let [value, tuple] = slice!(2, deps);
 
                     let value = match &graph[value] {
@@ -331,6 +331,9 @@ impl ValueGraph {
                         ValueNode::Value(Value::Tuple(tuple)) => tuple.to_vec(),
                         _ => continue,
                     };
+                    if tuple.len() != *size {
+                        continue;
+                    }
 
                     tuple[*offset] = value.clone();
                     graph[node] = ValueNode::Value(Value::new_tuple(tuple));
@@ -343,10 +346,17 @@ impl ValueGraph {
                     // For AVM opcodes that only touch the stack, we can try to emulate them by
                     // building a machine whose only purpose is to execute the opcode and then halt.
 
-                    let stateful =
-                        |e| !matches!(e, Effect::PushStack | Effect::PopStack | Effect::ReadStack);
-                    if opcode.effects().into_iter().any(stateful) {
-                        // we only want to fold opcodes that solely depend on the stack
+                    let mut pushes = 0;
+                    let mut stateful = false;
+                    for effect in opcode.effects() {
+                        match effect {
+                            Effect::PushStack => pushes += 1,
+                            Effect::PopStack => {}
+                            Effect::ReadStack => {}
+                            _ => stateful = true,
+                        }
+                    }
+                    if pushes != 1 || stateful {
                         continue;
                     }
 
@@ -355,7 +365,7 @@ impl ValueGraph {
                         Instruction::from_opcode(Opcode::AVMOpcode(*opcode), DebugInfo::default());
                     let mut machine = Machine::from(vec![insn]);
 
-                    let (deps, users, dep_edges, user_edges) = node_data(&graph, node);
+                    let (deps, _, dep_edges, _) = node_data(&graph, node);
                     for dep in deps.into_iter() {
                         match &graph[dep] {
                             ValueNode::Value(Value::Tuple(tup)) if tup.len() > 8 => continue,
@@ -377,7 +387,7 @@ impl ValueGraph {
                     }
 
                     let items_consumed = size_before - machine.stack.num_items();
-                    for edge in dep_edges.into_iter().take(items_consumed) {
+                    for edge in dep_edges.into_iter().rev().take(items_consumed) {
                         graph.remove_edge(edge);
                     }
                 }
@@ -423,7 +433,7 @@ impl ValueGraph {
         Some(values)
     }
 
-    pub fn codegen(&self, unoptimized: &[Instruction]) -> Vec<Instruction> {
+    pub fn codegen(&self) -> (Vec<Instruction>, usize) {
         let mut stack = vec![];
         let graph = &self.graph;
 
@@ -450,7 +460,7 @@ impl ValueGraph {
 
         // Pop unused arguments. We can't just ignore them, since they were created elsewhere.
         for node in graph.node_indices().rev() {
-            if let ValueNode::Arg(num) = &graph[node] {
+            if let ValueNode::Arg(_) = &graph[node] {
                 if conn_count(&graph, node) != 0 {
                     stack.push(node);
                 } else {
@@ -550,10 +560,11 @@ impl ValueGraph {
             code
         }
 
-        let mut best = unoptimized.to_vec();
+        let mut best = vec![];
+        let mut best_cost = usize::MAX;
         let mut entropy: SmallRng = SeedableRng::seed_from_u64(0);
 
-        for i in 0..64 {
+        for _ in 0..64 {
             // attempt to codegen a better set of instructions than the best found so far.
 
             let mut stack = stack.clone();
@@ -566,13 +577,22 @@ impl ValueGraph {
                 &mut entropy,
                 &mut HashSet::new(),
             ));
+            let alt_cost = alt.iter().map(|x| x.opcode.base_cost()).sum();
 
-            if alt.len() < best.len() {
+            if alt_cost < best_cost {
+                best_cost = alt_cost;
                 best = alt;
             }
         }
 
-        best
+        if let Some(exit) = best.pop() {
+            for (dest, source) in &self.phis {
+                best.push(opcode!(@MoveLocal(*dest, *source)));
+            }
+            best.push(exit);
+        }
+
+        (best, best_cost)
     }
 }
 
@@ -585,9 +605,14 @@ fn reorder_stack(
     kills: HashSet<NodeIndex>,
     print: bool,
 ) -> (Vec<Instruction>, Vec<NodeIndex>) {
+    // Algorithm
+    //   Annotate the stack & needs with how many copies need to be made & their order
+    //   Move a sliding window around, fixing order & duping values as is needed
+    //   Optimize to compute an efficient transformation of Swap's, Dup's, and Aux code.
+
     // Determine which values can be treated as "blanks" verses
     // those whose order we must track. Blanks get sifted to the bottom.
-    let mut used: HashSet<_> = needs.clone().into_iter().collect();
+    let used: HashSet<_> = needs.clone().into_iter().collect();
     let mut stack: Vec<_> = stack
         .into_iter()
         .map(|item| (*item, 0, used.contains(item)))
@@ -615,7 +640,7 @@ fn reorder_stack(
     // The "highest copy" of a need is its latest copy on the stack.
     // The "highest need" of a need is the final copy we'll eventually want on the stack.
     let mut highest_copy: HashMap<_, _> = need_counts.iter().map(|(n, _)| (*n, 0)).collect();
-    let mut highest_need: HashMap<_, _> = need_counts.iter().map(|(n, c)| (*n, c - 1)).collect();
+    let highest_need: HashMap<_, _> = need_counts.iter().map(|(n, c)| (*n, c - 1)).collect();
 
     /// Determine if two items on the stack need to be swapped
     fn out_of_order(

@@ -1091,6 +1091,80 @@ impl Opcode {
         }
     }
 
+    pub fn base_cost(&self) -> usize {
+        macro_rules! avm {
+            ($first:ident $(,$opcode:ident)*) => {
+                Opcode::AVMOpcode(AVMOpcode::$first $(| AVMOpcode::$opcode)*)
+            };
+        }
+
+        #[rustfmt::skip]
+        let cost = match self {
+            avm!(
+                Pop, Spush, Rpush, PCpush, AuxPush, AuxPop, Noop, ErrPush, ErrSet,
+                Dup0, Dup1, Dup2, Swap1, Swap2, PushGas, SetGas, NewBuffer, DebugPrint,
+                IsZero, BitwiseNeg
+            ) => 1,
+            avm!(
+                LessThan, GreaterThan, SLessThan, SGreaterThan, Equal,
+                Tget, Tlen, BitwiseAnd, BitwiseOr, BitwiseXor,
+                Rset, StackEmpty, AuxStackEmpty
+            ) => 2,
+            avm!(
+                Div, Mod, AddMod, MulMod, Hash, Jump, Cjump,
+                Byte, ShiftLeft, ShiftRight, ShiftArith
+            ) => 4,
+            avm!(Add, Sub, Mul, Type, Xget) => 3,
+            avm!(Zero, Error) => 5,
+            avm!(Sdiv, Smod, SignExtend) => 7,
+            avm!(EthHash2) => 8,
+            avm!(Halt, Sideload, GetBuffer8, GetBuffer64, GetBuffer256) => 10,
+            avm!(Exp, ErrCodePoint, PushInsn, PushInsnImm, OpenInsn) => 25,
+            avm!(Tset, Inbox, InboxPeek) => 40,
+            avm!(Xset) => 41,
+            avm!(Breakpoint, Log, Send, SetBuffer8, SetBuffer64, SetBuffer256) => 100,
+            avm!(Sha256f, Ripemd160f) => 250,
+            avm!(Keccakf, Blake2f) => 600,
+            avm!(EcPairing) => 1_000,
+            avm!(EcAdd) => 3_500,
+            avm!(EcRecover) => 20_000,
+            avm!(EcMul) => 82_000,
+            Self::MakeFrame(..) => 3,
+            Self::GetLocal(..) => 3,
+            Self::SetLocal(..) => 41,
+            Self::Capture(..) => 41,
+            Self::ReserveCapture(..) => 0,
+            Self::MakeClosure(..) => 1,
+            Self::FuncCall(..) => 10,
+            Self::TupleGet(offset, _) =>   2 +  2 * (offset / 8),
+            Self::TupleSet(offset, _) =>  40 + 42 * (offset / 8),
+            Self::GetGlobalVar(offset) =>  3 +  2 * (offset / 8),
+            Self::SetGlobalVar(offset) => 43 + 42 * (offset / 8),
+            Self::Label(..) => 0,
+            Self::BackwardLabelTarget(..) => 0,
+            Self::JumpTo(..) => 4,
+            Self::CjumpTo(..) => 4,
+            Self::Return => 7,
+            Self::UncheckedFixedArrayGet(size) => 2 + 16 * (size / 8),
+            Self::MoveLocal(dest, source) => {
+                if dest == source {
+                    0
+                } else {
+                    43
+                }
+            }
+            Self::Pop(depth) => {
+                match depth {
+                    0 => 1,
+                    1 => 2,
+                    2 => 3,
+                    x => 1 + 2*(x-1),
+                }
+            }
+        };
+        cost
+    }
+
     pub fn pretty_print(&self, label_color: &str) -> String {
         match self {
             Opcode::MakeFrame(space, returns, prebuilt) => match prebuilt {
