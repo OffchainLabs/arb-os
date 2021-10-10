@@ -950,11 +950,15 @@ fn typecheck_programs(
                         ));
                     }
 
-                    if !detected_view && !detected_write && func.properties.nouts == 0 && !func.properties.sensitive {
+                    if !detected_view
+                        && !detected_write
+                        && func.properties.nouts == 0
+                        && !func.properties.sensitive
+                    {
                         typecheck_issues.push(CompileError::new_warning(
                             "Optimizer warning",
                             format!(
-                                "Func {} is {} and {} and will thus be pruned. Should it be marked {}?",
+                                "Func {} is prunable since it's {} and {}. Should it be marked {}?",
                                 Color::color(error_system.warn_color, name),
                                 Color::color(error_system.warn_color, "pure"),
                                 Color::color(error_system.warn_color, "void"),

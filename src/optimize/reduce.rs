@@ -169,7 +169,6 @@ impl ValueGraph {
         // Separate the metadata instructions from the top & bottom.
         let mut header = vec![];
         let mut footer = vec![];
-        //let mut phis = BTreeMap::new();
         for curr in code {
             match &curr.opcode {
                 Opcode::Label(_) | Opcode::MakeFrame(..) => {
@@ -180,12 +179,10 @@ impl ValueGraph {
         }
         for curr in code.iter().rev() {
             match &curr.opcode {
-                Opcode::MoveLocal(dest, source) => {
-                    //phis.insert(*dest, *source);
-                }
                 Opcode::Return
                 | Opcode::JumpTo(..)
                 | Opcode::CjumpTo(..)
+                | Opcode::MoveLocal(..)
                 | Opcode::AVMOpcode(AVMOpcode::Jump | AVMOpcode::Cjump) => {}
                 _ => break,
             }
@@ -196,7 +193,6 @@ impl ValueGraph {
 
         let mut graph = StableGraph::new();
         let mut locals = BTreeMap::new();
-        //let mut local_users: HashMap<SlotNum, BTreeSet<NodeIndex>> = HashMap::new();
 
         let mut globals = graph.add_node(ValueNode::Meta("globals"));
         let mut global_readers = BTreeSet::new();

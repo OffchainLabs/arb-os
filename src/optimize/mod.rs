@@ -532,10 +532,14 @@ impl BasicGraph {
 
     pub fn graph_reduce(&mut self) {
         // Algorithm
-        //   
-        // Re-express basic blocks as value graphs
-        
-        // collect all phi data
+        //   Where possible, create a value graph for each basic block.
+        //   Apply reductions like constant folding to each value graph.
+        //   Apply cross-block reductions like local-variable elision using the graphs.
+        //   Re-construct a, hopefully more performant, vec of instructions.
+
+        // Phi data is needed to ensure locals are never rearanged across phi-boundries.
+        // Since this requires knowledge that's often not local to a specific block, we must
+        // collect this info before constructing the value graphs.
         let mut phis = HashMap::new();
         for node in self.graph.node_indices() {
             for curr in self.graph[node].get_code() {
@@ -546,14 +550,25 @@ impl BasicGraph {
                 }
             }
         }
-        
+
+        // We use environment variables to make debugging easier.
+        // GRAPH_BISECT takes a bitstring & only applies graph_reduce() on blocks whose hashes match it.
+        // GRAPH_ALWAYS_PRINT pretty-prints every block we apply graph_reduce() on. Together these find bugs.
+        let bisect = std::env::var("GRAPH_BISECT")
+            .map(|x| (u64::from_str_radix(&x, 2).unwrap_or(0), x.len()));
+        let always_print = std::env::var_os("GRAPH_ALWAYS_PRINT")
+            .filter(|x| !x.is_empty())
+            .is_some();
+
         let mut graphs = HashMap::new();
 
-        // compute each block's value graph where possible
+        // Compute each block's value graph where possible. In the rare case that a
+        // block contains code for which correctness cannot be easily varified, we
+        // simply don't optimize it.
         for node in self.graph.node_indices() {
             let block = self.graph[node].get_code();
-            
-            if let Ok(target) = std::env::var("GRAPH_SEARCH") {
+
+            if let Ok((bitstring, length)) = bisect {
                 let mut hasher = std::collections::hash_map::DefaultHasher::new();
                 for insn in block {
                     if let Opcode::AVMOpcode(opcode) = insn.opcode {
@@ -561,17 +576,19 @@ impl BasicGraph {
                     }
                 }
                 let hash = hasher.finish();
-                if hash % (1 << target.len()) != u64::from_str_radix(&target, 2).unwrap() {
+                if hash % (1 << length) != bitstring {
+                    // block's hash didn't match the bitstring, so we skip it.
                     continue;
                 }
             }
-            
+
             if let Some(value_graph) = ValueGraph::new(block, &phis) {
                 graphs.insert(node, value_graph);
             }
         }
 
-        if self.should_print || std::env::var_os("GRAPH_ALWAYS_PRINT").filter(|x| !x.is_empty()).is_some() {
+        // Pretty print SSA, the value graph, and graph-codegened results.
+        if self.should_print || always_print {
             for node in self.graph.node_indices() {
                 if let BasicBlock::Meta(_) = &self.graph[node] {
                     continue;
@@ -599,7 +616,7 @@ impl BasicGraph {
 
         if !self.cyclic {}
 
-        // see for each block if we can do better using each's value graph
+        // See for each block if we can do better by codegenning against each's value graph
         let nodes: Vec<_> = self.graph.node_indices().collect();
         for node in nodes {
             if let Some(values) = graphs.get(&node) {
