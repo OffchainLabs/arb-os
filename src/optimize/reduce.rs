@@ -308,12 +308,12 @@ impl ValueGraph {
         }
 
         // order locals based on phis
-        for (dest, source) in phis {
-            let dest = match locals.get(dest) {
+        for (source, dest) in phis {
+            let source = match locals.get(source) {
                 Some(node) => *node,
                 _ => continue,
             };
-            let source = match locals.get(source) {
+            let dest = match locals.get(dest) {
                 Some(node) => *node,
                 _ => continue,
             };

@@ -540,7 +540,9 @@ impl BasicGraph {
         for node in self.graph.node_indices() {
             for curr in self.graph[node].get_code() {
                 if let Opcode::MoveLocal(dest, source) = curr.opcode {
-                    phis.insert(dest, source);
+                    // A dest can be phi'd by many sources, but a source can only
+                    // phi a single dest. Hence, this map has to be source-to-dest.
+                    phis.insert(source, dest);
                 }
             }
         }
