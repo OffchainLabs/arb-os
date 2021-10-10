@@ -531,6 +531,20 @@ impl BasicGraph {
     }
 
     pub fn graph_reduce(&mut self) {
+        // Algorithm
+        //   
+        // Re-express basic blocks as value graphs
+        
+        // collect all phi data
+        let mut phis = HashMap::new();
+        for node in self.graph.node_indices() {
+            for curr in self.graph[node].get_code() {
+                if let Opcode::MoveLocal(dest, source) = curr.opcode {
+                    phis.insert(dest, source);
+                }
+            }
+        }
+        
         let mut graphs = HashMap::new();
 
         // compute each block's value graph where possible
@@ -550,7 +564,7 @@ impl BasicGraph {
                 }
             }
             
-            if let Some(value_graph) = ValueGraph::new(block) {
+            if let Some(value_graph) = ValueGraph::new(block, &phis) {
                 graphs.insert(node, value_graph);
             }
         }

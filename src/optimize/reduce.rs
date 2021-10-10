@@ -94,7 +94,6 @@ fn node_data(
 pub struct ValueGraph {
     graph: StableGraph<ValueNode, ValueEdge>,
     defs: BTreeMap<SlotNum, NodeIndex>,
-    phis: BTreeMap<SlotNum, SlotNum>,
     header: Vec<Instruction>,
     footer: Vec<Instruction>,
     output: NodeIndex,
@@ -155,7 +154,7 @@ impl ValueGraph {
     }
 
     /// Create a new `ValueGraph` from a set of instructions without control flow
-    pub fn new(code: &[Instruction]) -> Option<Self> {
+    pub fn new(code: &[Instruction], phis: &HashMap<SlotNum, SlotNum>) -> Option<Self> {
         // Algorithm
         //
         //
@@ -167,11 +166,10 @@ impl ValueGraph {
         //     Phis happen just before jumping
         //     The order of phis don't matter
 
-        // Separate the metadata instructions from the top & bottom. Given our assumptions,
-        // these don't impact how values relate to one another.
+        // Separate the metadata instructions from the top & bottom.
         let mut header = vec![];
         let mut footer = vec![];
-        let mut phis = BTreeMap::new();
+        //let mut phis = BTreeMap::new();
         for curr in code {
             match &curr.opcode {
                 Opcode::Label(_) | Opcode::MakeFrame(..) => {
@@ -183,7 +181,7 @@ impl ValueGraph {
         for curr in code.iter().rev() {
             match &curr.opcode {
                 Opcode::MoveLocal(dest, source) => {
-                    phis.insert(*dest, *source);
+                    //phis.insert(*dest, *source);
                 }
                 Opcode::Return
                 | Opcode::JumpTo(..)
@@ -271,8 +269,6 @@ impl ValueGraph {
                             }
                         };
                         graph.add_edge(node, local, ValueEdge::Meta("read"));
-                        //let readers = local_readers.entry(slot).or_insert(BTreeSet::new());
-                        //readers.insert(node);
                     }
                     Effect::WriteLocal(slot) => {
                         let local = graph.add_node(ValueNode::Local(slot));
@@ -312,7 +308,7 @@ impl ValueGraph {
         }
 
         // order locals based on phis
-        for (dest, source) in &phis {
+        for (dest, source) in phis {
             let dest = match locals.get(dest) {
                 Some(node) => *node,
                 _ => continue,
@@ -322,18 +318,15 @@ impl ValueGraph {
                 _ => continue,
             };
 
-
-
-            let mut accessors: Vec<_> = graph.neighbors_undirected(dest).collect();
-            for access in accessors {
-                graph.add_edge(source, access, ValueEdge::Meta("phi"));
+            let source_accessors: Vec<_> = graph.neighbors_undirected(source).collect();
+            let dest_accessors: Vec<_> = graph.neighbors_undirected(dest).collect();
+            for source_access in source_accessors {
+                for &dest_access in &dest_accessors {
+                    graph.add_edge(source_access, dest_access, ValueEdge::Meta("phi"));
+                }
             }
 
             graph.add_edge(source, dest, ValueEdge::Meta("phi"));
-            
-            /*for &reader in local_readers.get(dest).into_iter().flatten() {
-                graph.add_edge(source_node, reader, ValueEdge::Meta("phi"));
-            }*/
         }
 
         // represents the output of the graph just before exiting
@@ -435,7 +428,6 @@ impl ValueGraph {
         let values = ValueGraph {
             graph,
             defs,
-            phis,
             header,
             footer,
             output,
