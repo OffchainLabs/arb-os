@@ -535,12 +535,25 @@ impl BasicGraph {
         // compute each block's value graph where possible
         for node in self.graph.node_indices() {
             let block = self.graph[node].get_code();
+            
+            if let Ok(target) = std::env::var("GRAPH_SEARCH") {
+                let mut hash = 0_u64;
+                for insn in block {
+                    if let Opcode::AVMOpcode(opcode) = insn.opcode {
+                        hash = hash.wrapping_mul(31).wrapping_add(u64::from(opcode.to_number()));
+                    }
+                }
+                if hash % (1 << target.len()) != u64::from_str_radix(&target, 2).unwrap() {
+                    continue;
+                }
+            }
+            
             if let Some(value_graph) = ValueGraph::new(block) {
                 graphs.insert(node, value_graph);
             }
         }
 
-        if self.should_print {
+        if self.should_print || std::env::var_os("GRAPH_ALWAYS_PRINT").filter(|x| !x.is_empty()).is_some() {
             for node in self.graph.node_indices() {
                 if let BasicBlock::Meta(_) = &self.graph[node] {
                     continue;

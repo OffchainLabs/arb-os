@@ -1321,7 +1321,7 @@ func ethTransferOrGrant(
     }
 }
 
-func saveAvmStack() -> Stack {
+sensitive func saveAvmStack() -> Stack {
     // pop all items from the AVM stack, push them into a Stack
     let ret = stack_new();
     while ! asm() bool { stackempty } {
@@ -1331,14 +1331,14 @@ func saveAvmStack() -> Stack {
     ret
 }
 
-public func emptyAvmStack() {
+public sensitive func emptyAvmStack() {
     // discard everything on the AVM stack
     while ! asm() bool { stackempty }  {
-        let _ = asm() any { };  // pop a value from AVM stack and discard it
+        asm() { pop }; // pop a value from AVM stack and discard it
     }
 }
 
-view write func restoreAvmStack(savedStack: Stack) {
+sensitive func restoreAvmStack(savedStack: Stack) {
     // restore AVM stack state, from a Stack that was created earlier by saveAvmStack
     while ! stack_isEmpty(savedStack) {
         if let Some(res) = stack_pop(savedStack) {

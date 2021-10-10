@@ -198,11 +198,12 @@ impl ValueGraph {
 
         let mut graph = StableGraph::new();
         let mut locals = BTreeMap::new();
-        let mut defs = BTreeMap::new();
+        let mut local_readers: HashMap<SlotNum, BTreeSet<NodeIndex>> = HashMap::new();
 
         let mut globals = graph.add_node(ValueNode::Meta("globals"));
         let mut global_readers = BTreeSet::new();
 
+        let mut defs = BTreeMap::new();
         let mut stack: VecDeque<NodeIndex> = VecDeque::new();
         let mut nargs = 0;
 
@@ -270,6 +271,8 @@ impl ValueGraph {
                             }
                         };
                         graph.add_edge(node, local, ValueEdge::Meta("read"));
+                        let readers = local_readers.entry(slot).or_insert(BTreeSet::new());
+                        readers.insert(node);
                     }
                     Effect::WriteLocal(slot) => {
                         let local = graph.add_node(ValueNode::Local(slot));
@@ -305,6 +308,24 @@ impl ValueGraph {
                     | Effect::MoveToAux
                     | Effect::Unsure => return None,
                 }
+            }
+        }
+
+        // order locals based on phis
+        for (dest, source) in &phis {
+            let dest_node = match locals.get(dest) {
+                Some(node) => *node,
+                _ => continue,
+            };
+            let source_node = match locals.get(source) {
+                Some(node) => *node,
+                _ => continue,
+            };
+
+            graph.add_edge(source_node, dest_node, ValueEdge::Meta("phi"));
+            
+            for &reader in local_readers.get(dest).into_iter().flatten() {
+                graph.add_edge(source_node, reader, ValueEdge::Meta("phi"));
             }
         }
 
@@ -452,10 +473,10 @@ impl ValueGraph {
         let mut header = self.header.clone();
 
         // Pop unused arguments. We can't just ignore them, since they were created elsewhere.
-        for node in graph.node_indices().rev() {
+        for node in graph.node_indices() {
             if let ValueNode::Arg(_) = &graph[node] {
                 if conn_count(&graph, node) != 0 {
-                    stack.push(node);
+                    stack.insert(0, node);
                 } else {
                     header.push(opcode!(@Pop(stack.len())));
                 }
