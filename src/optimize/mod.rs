@@ -15,6 +15,7 @@ use rand::prelude::*;
 use rand::rngs::SmallRng;
 use reduce::ValueGraph;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+use std::hash::Hasher;
 
 mod effects;
 mod peephole;
@@ -537,12 +538,13 @@ impl BasicGraph {
             let block = self.graph[node].get_code();
             
             if let Ok(target) = std::env::var("GRAPH_SEARCH") {
-                let mut hash = 0_u64;
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
                 for insn in block {
                     if let Opcode::AVMOpcode(opcode) = insn.opcode {
-                        hash = hash.wrapping_mul(31).wrapping_add(u64::from(opcode.to_number()));
+                        hasher.write_u8(opcode.to_number());
                     }
                 }
+                let hash = hasher.finish();
                 if hash % (1 << target.len()) != u64::from_str_radix(&target, 2).unwrap() {
                     continue;
                 }
