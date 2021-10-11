@@ -2,9 +2,7 @@
 // Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
 //
 
-use crate::compile::{
-    comma_list, AbstractSyntaxTree, StructField, Type, TypeCheckedNode, TypeTree,
-};
+use crate::compile::{AbstractSyntaxTree, StructField, Type, TypeCheckedNode, TypeTree};
 use crate::console::Color;
 use crate::link::LinkedProgram;
 use crate::stringtable::StringId;
@@ -116,6 +114,7 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
             output_only.insert(field);
         };
     }
+    output_only.remove(&StructField::new(String::from("_jump_table"), Type::Any));
 
     intersection.remove(&StructField::new(String::from("_jump_table"), Type::Any));
 
@@ -126,10 +125,16 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
     let mut intersection: Vec<_> = intersection.into_iter().collect();
     intersection.sort_by(|left, right| left.name.cmp(&right.name));
     for field in output_only.iter() {
+        if field.name == String::from("_jump_table") {
+            panic!()
+        }
         writeln!(code, "use {}::set_{}_onUpgrade;", impl_file, field.name)
             .map_err(|_| GenCodeError::new("Failed to write use statement".to_string()))?;
     }
     for field in &intersection {
+        if field.name == String::from("_jump_table") {
+            panic!()
+        }
         if map.data.contains(&field.name) {
             writeln!(code, "use {}::set_{}_onUpgrade;", impl_file, field.name)
                 .map_err(|_| GenCodeError::new("Failed to write use statement".to_string()))?;
@@ -238,21 +243,21 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
 
 fn write_subtypes(
     code: &mut File,
-    mut subtypes: HashSet<(Type, String)>,
+    mut subtypes: HashMap<StringId, Type>,
     prefix: Option<&str>,
     type_tree: &TypeTree,
 ) -> Result<(), GenCodeError> {
     let mut total_subtypes = subtypes.clone();
     while !subtypes.is_empty() {
-        let mut new_subtypes = HashSet::new();
+        let mut new_subtypes = HashMap::new();
         let mut vec_subtypes = subtypes.iter().collect::<Vec<_>>();
-        vec_subtypes.sort_by(|(lower, _), (higher, _)| {
+        vec_subtypes.sort_by(|(_, lower), (_, higher)| {
             lower
                 .display_separator("_", None, true, type_tree)
                 .0
                 .cmp(&higher.display_separator("_", None, true, type_tree).0)
         });
-        for (subtype, name) in vec_subtypes {
+        for (id, subtype) in vec_subtypes {
             writeln!(
                 code,
                 "type {}{}{} = {};",
@@ -265,19 +270,12 @@ fn write_subtypes(
                 } else {
                     format!("")
                 },
-                name,
+                &id.id,
                 {
                     if let Type::Nominal(b, _) = subtype.clone() {
                         let (displayed, subtypes) = type_tree
-                            .get(&(b.path.clone(), b.clone()))
-                            .or_else(|| {
-                                type_tree.get({
-                                    let new_id = StringId::new(vec![], b.id.clone());
-                                    &(b.path.clone(), new_id)
-                                })
-                            })
-                            .expect(&format!("{:?} {}", b.path, b))
-                            .0
+                            .get(&b)
+                            .expect(&format!("{}", b))
                             .display_separator("_", prefix, true, type_tree);
                         new_subtypes.extend(subtypes);
                         displayed
@@ -291,7 +289,16 @@ fn write_subtypes(
             )
             .unwrap();
         }
-        subtypes = new_subtypes.difference(&total_subtypes).cloned().collect();
+        subtypes = HashMap::new() /*new_subtypes.difference(&total_subtypes).cloned().collect()*/;
+        for (id, tipe) in &new_subtypes {
+            if let Some(val) = total_subtypes.get(id) {
+                if !(tipe == val) {
+                    subtypes.insert(id.clone(), tipe.clone());
+                }
+            } else {
+                subtypes.insert(id.clone(), tipe.clone());
+            }
+        }
         total_subtypes.extend(new_subtypes);
     }
     Ok(())
@@ -300,7 +307,7 @@ fn write_subtypes(
 fn get_globals_and_version_from_file(
     path: &Path,
     fix: bool,
-) -> Result<(Vec<StructField>, HashSet<(Type, String)>, TypeTree, u64), GenCodeError> {
+) -> Result<(Vec<StructField>, HashMap<StringId, Type>, TypeTree, u64), GenCodeError> {
     let mut file = File::open(&path).map_err(|_| {
         GenCodeError::new(format!(
             "Could not create file \"{}\"",
@@ -324,8 +331,8 @@ fn get_globals_and_version_from_file(
 
     let type_tree = globals.type_tree.into_type_tree(fix);
 
-    let mut state: (Vec<_>, Rc<RefCell<HashSet<(Type, String)>>>) =
-        (vec![], Rc::new(RefCell::new(HashSet::new())));
+    let mut state: (Vec<_>, Rc<RefCell<HashMap<StringId, Type>>>) =
+        (vec![], Rc::new(RefCell::new(HashMap::new())));
 
     let mut fields = vec![];
 
@@ -334,16 +341,7 @@ fn get_globals_and_version_from_file(
         if global.id != StringId::new(vec!["/meta".to_string()], String::new()) {
             let mut tipe = global.tipe;
             if let Type::Nominal(id, _) = tipe {
-                tipe = type_tree
-                    .get(&(id.path.clone(), id.clone()))
-                    .cloned()
-                    .or_else(|| {
-                        type_tree
-                            .get(&(id.path.clone(), StringId::new(vec![], id.id.clone())))
-                            .cloned()
-                    })
-                    .expect(&format!("{}: {}", comma_list(&id.path), id))
-                    .0;
+                tipe = type_tree.get(&id).cloned().expect(&format!("{}", id));
             }
             tipe.recursive_apply(replace_nominal, &type_tree, &mut state);
 
@@ -355,25 +353,29 @@ fn get_globals_and_version_from_file(
             break;
         }
         old_state = state.clone();
-        let mut new_types = HashSet::new();
-        let cool_temp = state
-            .1
-            .borrow()
-            .difference(&*old_state.1.borrow())
-            .cloned()
-            .collect::<Vec<_>>();
-        for diff in cool_temp {
+        let mut new_types = HashMap::new();
+        let mut cool_temp = HashMap::new();
+
+        for (id, tipe) in state.1.borrow().iter() {
+            if let Some(value) = old_state.1.borrow().get(id) {
+                if value != tipe {
+                    cool_temp.insert(id.clone(), tipe.clone());
+                }
+            } else {
+                cool_temp.insert(id.clone(), tipe.clone());
+            }
+        }
+        for (id, diff) in cool_temp {
             let new_type = {
-                let mut new = if let Type::Nominal(id, _) = diff.0 {
-                    type_tree.get(&(id.path.clone(), id)).cloned().unwrap() //_or((Type::Any, "fail2".to_string()))
+                let mut new = if let Type::Nominal(id, _) = diff {
+                    type_tree.get(&id).cloned().unwrap() //_or(Type::Any)
                 } else {
                     diff.clone()
                 };
-                new.0
-                    .recursive_apply(replace_nominal, &type_tree, &mut state);
+                new.recursive_apply(replace_nominal, &type_tree, &mut state);
                 new
             };
-            new_types.insert(new_type);
+            new_types.insert(id, new_type);
         }
         (&mut *(*state.1).borrow_mut()).extend(new_types);
     }
@@ -402,47 +404,27 @@ fn let_string(name: &String, expr: &String) -> String {
 fn replace_nominal(
     node: &mut TypeCheckedNode,
     state: &TypeTree,
-    mut_state: &mut (Vec<Type>, Rc<RefCell<HashSet<(Type, String)>>>),
+    mut_state: &mut (Vec<Type>, Rc<RefCell<HashMap<StringId, Type>>>),
 ) -> bool {
     match node {
         TypeCheckedNode::Type(tipe) => {
             if mut_state.0.iter().any(|thing| thing == *tipe) {
                 let to_render = &mut *(*mut_state.1).borrow_mut();
-                to_render.insert((
-                    tipe.clone(),
+                to_render.insert(
                     if let Type::Nominal(id, _) = tipe {
-                        state
-                            .get(&(id.path.clone(), id.clone()))
-                            .or_else(|| {
-                                state.get(&(id.path.clone(), StringId::new(vec![], id.id.clone())))
-                            })
-                            .map(|(_, name)| name.clone())
-                            .unwrap() //_or(format!("Bad"))
+                        id.clone()
                     } else {
                         panic!() //format!("Bad")
                     },
-                ));
+                    tipe.clone(),
+                );
                 return false;
             }
             if let Type::Nominal(id, spec) = tipe {
                 mut_state.0.push(Type::Nominal(id.clone(), spec.clone()));
                 let to_render = &mut *(*mut_state.1).borrow_mut();
-                to_render.insert((
-                    Type::Nominal(id.clone(), spec.clone()),
-                    state
-                        .get(&(id.path.clone(), id.clone()))
-                        .or_else(|| {
-                            state.get(&(id.path.clone(), StringId::new(vec![], id.id.clone())))
-                        })
-                        .map(|(_, name)| name.clone())
-                        .unwrap(), //_or(format!("Bad")),
-                ));
-                **tipe = state
-                    .get(&(id.path.clone(), id.clone()))
-                    .or_else(|| state.get(&(id.path.clone(), StringId::new(vec![], id.id.clone()))))
-                    .cloned()
-                    .unwrap() //_or((Type::Any, "fail4".to_string()))
-                    .0;
+                to_render.insert(id.clone(), Type::Nominal(id.clone(), spec.clone()));
+                **tipe = state.get(&id).cloned().unwrap_or(Type::Any);
             }
             true
         }

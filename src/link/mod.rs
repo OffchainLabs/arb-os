@@ -4,6 +4,7 @@
 
 //! Provides types and utilities for linking together compiled mini programs
 
+use crate::compile::miniconstants::init_constant_table;
 use crate::compile::{
     comma_list, CompileError, CompiledProgram, DebugInfo, ErrorSystem, FileInfo, GlobalVar,
     SourceFileMap, Type, TypeTree,
@@ -22,25 +23,24 @@ use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io;
 use std::io::Write;
-
-use crate::compile::miniconstants::init_constant_table;
 use std::path::Path;
+
 pub use xformcode::{TupleTree, TUPLE_SIZE};
 
 mod optimize;
 mod striplabels;
 mod xformcode;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct SerializableTypeTree {
-    inner: BTreeMap<String, (Type, String)>,
+    inner: BTreeMap<String, Type>,
 }
 
 impl SerializableTypeTree {
     pub fn from_type_tree(tree: TypeTree) -> Self {
         let mut inner = BTreeMap::new();
-        for ((path, id), tipe) in tree.into_iter() {
-            inner.insert(format!("{}, {}", comma_list(&path), id.id), tipe);
+        for (id, tipe) in tree.into_iter() {
+            inner.insert(format!("{}, {}", comma_list(&id.path), id.id), tipe);
         }
         Self { inner }
     }
@@ -49,8 +49,8 @@ impl SerializableTypeTree {
         for (path, tipe) in self.inner.into_iter() {
             let mut x: Vec<_> = path.split(", ").map(|val| val.to_string()).collect();
             let id = x.pop().expect("empty list");
-            let sid = StringId::new(if fix { x.clone() } else { vec![] }, id.clone());
-            type_tree.insert((x, sid), tipe);
+            let sid = StringId::new(if fix { x.clone() } else { x.clone() }, id.clone());
+            type_tree.insert(sid, tipe);
         }
         type_tree
     }

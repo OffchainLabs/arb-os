@@ -808,13 +808,7 @@ fn resolve_imports(
 fn create_type_tree(program_tree: &HashMap<Vec<String>, Module>) -> TypeTree {
     program_tree
         .iter()
-        .map(|(path, program)| {
-            program
-                .named_types
-                .iter()
-                .map(|(id, tipe)| ((path.clone(), id.clone()), (tipe.clone(), id.id.clone())))
-                .collect::<Vec<_>>()
-        })
+        .map(|(_, program)| program.named_types.clone())
         .flatten()
         .collect()
 }
@@ -846,7 +840,6 @@ fn typecheck_programs(
                     &imports,
                     func_table,
                     type_tree,
-                    &path,
                 )?;
 
                 checked_funcs.iter_mut().for_each(|(id, func)| {

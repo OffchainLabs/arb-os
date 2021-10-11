@@ -18,7 +18,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 
 /// This is a map of the types at a given location, with the Vec<String> representing the module path
 /// and the usize representing the `StringId` of the type at that location.
-pub type TypeTree = HashMap<(Vec<String>, StringId), (Type, String)>;
+pub type TypeTree = HashMap<StringId, Type>;
 
 /// Debugging info serialized into mini executables, currently only contains a location.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -167,21 +167,14 @@ impl Type {
     pub fn rep(&self, type_tree: &TypeTree) -> Result<Self, CompileError> {
         let mut base_type = self.clone();
 
-        while let Type::Nominal(id, spec) = base_type.clone() {
+        while let Type::Nominal(id, spec) = &base_type {
             base_type = type_tree
-                .get(&(id.path.clone(), id.clone()))
-                .or_else(|| {
-                    type_tree.get({
-                        let new_id = StringId::new(vec![], id.id.clone());
-                        &(id.path.clone(), new_id)
-                    })
-                })
+                .get(&id)
                 .cloned()
                 .ok_or(CompileError::new_type_error(
                     format!("No type at {:?}, {}", id.path, id),
                     vec![],
                 ))?
-                .0
                 .make_specific(&spec)?;
         }
         Ok(base_type)
@@ -1020,7 +1013,7 @@ impl Type {
         prefix: Option<&str>,
         include_pathname: bool,
         type_tree: &TypeTree,
-    ) -> (String, HashSet<(Type, String)>) {
+    ) -> (String, HashMap<StringId, Type>) {
         self.display_indented(0, separator, prefix, include_pathname, type_tree)
     }
 
@@ -1031,8 +1024,8 @@ impl Type {
         prefix: Option<&str>,
         include_pathname: bool,
         type_tree: &TypeTree,
-    ) -> (String, HashSet<(Type, String)>) {
-        let mut type_set = HashSet::new();
+    ) -> (String, HashMap<StringId, Type>) {
+        let mut type_set = HashMap::new();
         match self {
             Type::Void => ("void".to_string(), type_set),
             Type::Uint => ("uint".to_string(), type_set),
@@ -1115,16 +1108,7 @@ impl Type {
                     } else {
                         format!("")
                     },
-                    type_tree
-                        .get(&(id.path.clone(), id.clone()))
-                        .or_else(|| {
-                            type_tree.get({
-                                let new_id = StringId::new(vec![], id.id.clone());
-                                &(id.path.clone(), new_id)
-                            })
-                        })
-                        .map(|(_, name)| name.clone())
-                        .unwrap_or(format!("{}", id)),
+                    &id.id,
                     match spec.len() {
                         0 => format!(""),
                         _ => {
@@ -1153,19 +1137,7 @@ impl Type {
                         }
                     }
                 );
-                type_set.insert((
-                    self.clone(),
-                    type_tree
-                        .get(&(id.path.clone(), id.clone()))
-                        .or_else(|| {
-                            type_tree.get({
-                                let new_id = StringId::new(vec![], id.id.clone());
-                                &(id.path.clone(), new_id)
-                            })
-                        })
-                        .map(|d| d.1.clone())
-                        .unwrap_or_else(|| format!("{}", id)),
-                ));
+                type_set.insert(id.clone(), self.clone());
                 (out, type_set)
             }
             Type::Func(prop, args, ret) => {
@@ -1236,7 +1208,7 @@ impl Type {
             }
             Type::Union(types) => {
                 let mut s = String::from("union<");
-                let mut subtypes = HashSet::new();
+                let mut subtypes = HashMap::new();
                 for tipe in types {
                     let (name, new_subtypes) = tipe.display_indented(
                         indent_level + 1,
@@ -1462,7 +1434,7 @@ pub enum TypeMismatch {
 }
 
 impl TypeMismatch {
-    fn print(&self, type_tree: &TypeTree) -> String {
+    pub(crate) fn print(&self, type_tree: &TypeTree) -> String {
         match self {
             TypeMismatch::Type(left, right) => format!(
                 "expected {} got {}",

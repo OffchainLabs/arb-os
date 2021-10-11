@@ -1268,7 +1268,6 @@ pub fn typecheck_top_level_decls(
     imports: &Vec<Import>,
     func_table: HashMap<StringId, Type>,
     type_tree: &TypeTree,
-    path: &Vec<String>,
 ) -> Result<(BTreeMap<StringId, TypeCheckedFunc>, Vec<GlobalVar>), CompileError> {
     if let Some(var) = global_vars
         .iter()
@@ -1294,10 +1293,7 @@ pub fn typecheck_top_level_decls(
     for func in &funcs {
         let mut type_tree = type_tree.clone();
         for (index, generic) in func.generics.iter().enumerate() {
-            type_tree.insert(
-                (path.clone(), generic.clone()),
-                (Type::Generic(index), generic.id.clone()),
-            );
+            type_tree.insert(generic.clone(), Type::Generic(index));
         }
         checked_funcs.insert(
             func.id.clone(),
@@ -2364,9 +2360,10 @@ fn typecheck_expr(
                                 ) {
                                     return Err(CompileError::new_type_error(
                                         format!(
-                                            "func arg has wrong type:\nencountered {}\ninstead of  {}",
+                                            "func arg has wrong type:\nencountered {}\ninstead of  {} {}",
                                             Color::red(&tc_args[i].get_type().print(type_tree)),
                                             Color::red(resolved_arg_type.print(type_tree)),
+                                            &tc_args[i].get_type().first_mismatch(&resolved_arg_type, type_tree, HashSet::new()).unwrap().print(type_tree),
                                         ),
                                         tc_args[i].debug_info.locs(),
                                     ));
