@@ -1134,13 +1134,13 @@ impl Machine {
                             .sub(&Uint256::from_u64(gas_this_instruction))
                             .unwrap();
                         let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
-                        return final_gas - orig_gas
+                        return final_gas - orig_gas;
                     }
                 }
                 Err(e) => {
                     self.state = MachineState::Error(e);
                     let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
-                    return final_gas - orig_gas
+                    return final_gas - orig_gas;
                 }
             }
         }
