@@ -104,6 +104,12 @@ impl From<Instruction<AVMOpcode>> for Instruction {
     }
 }
 
+impl From<Opcode> for Instruction {
+    fn from(opcode: Opcode) -> Self {
+        Self::from_opcode(opcode, DebugInfo::default())
+    }
+}
+
 impl<T> Instruction<T> {
     pub fn new(opcode: T, immediate: Option<Value>, debug_info: DebugInfo) -> Self {
         Instruction {

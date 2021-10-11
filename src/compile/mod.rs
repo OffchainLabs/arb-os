@@ -36,7 +36,7 @@ mod ast;
 mod codegen;
 pub mod miniconstants;
 mod source;
-mod translate;
+pub mod translate;
 mod typecheck;
 lalrpop_mod!(mini);
 

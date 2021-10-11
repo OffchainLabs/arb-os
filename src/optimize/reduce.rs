@@ -153,11 +153,23 @@ impl ValueGraph {
         output
     }
 
+    pub fn new(code: &[Instruction], phis: &HashMap<SlotNum, SlotNum>) -> Option<Self> {
+        Self::with_stack(
+            code,
+            phis,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+        )
+    }
+
     /// Create a new `ValueGraph` from a set of instructions without control flow
-    pub fn new(
+    pub fn with_stack(
         mut code: &[Instruction],
         phis: &HashMap<SlotNum, SlotNum>,
-        passed_values: &Vec<SlotNum>,
+        to_stack: &BTreeSet<SlotNum>,
+        to_pop: &BTreeSet<SlotNum>,
+        stacked: &BTreeSet<SlotNum>,
     ) -> Option<Self> {
         // Algorithm
         //
@@ -360,7 +372,7 @@ impl ValueGraph {
                     // For AVM opcodes that only touch the stack, we can try to emulate them by
                     // building a machine whose only purpose is to execute the opcode and then halt.
 
-                    if let Opcode::FuncCall(..) = opcode {
+                    if let Opcode::FuncCall(..) | Opcode::AVMOpcode(AVMOpcode::Hash) = opcode {
                         continue;
                     }
 
@@ -456,21 +468,28 @@ impl ValueGraph {
         let mut known = BTreeMap::new();
         let graph = &self.graph;
 
-        let locals = self.graph.node_indices().filter_map(|node| {
-            match &graph[node] {
+        let locals = self
+            .graph
+            .node_indices()
+            .filter_map(|node| match &graph[node] {
                 ValueNode::Local(slot) => Some((*slot, node)),
                 _ => None,
-            }
-        });
-        
+            });
+
         for (slot, local) in locals {
             let (deps, _, dep_edges, _) = node_data(&graph, local);
             for (dep, edge) in deps.into_iter().zip(dep_edges.into_iter()) {
                 if let ValueEdge::Meta("write") = &graph[edge] {
                     // We have our SetLocal. Now see if we know the value it read.
                     let read = node_data(&graph, dep).0[0];
-                    if let ValueNode::Value(value) = &graph[read] {
-                        known.insert(slot, value.clone());  
+                    match &graph[read] {
+                        ValueNode::Value(Value::Label(_)) => {
+                            // we can't do labels since this could induce a backwards jump
+                        }
+                        ValueNode::Value(value) => {
+                            known.insert(slot, value.clone());
+                        }
+                        _ => {}
                     }
                     break;
                 }
@@ -846,9 +865,13 @@ fn reorder_stack(
 
 #[test]
 fn reorder_test() {
-    let stack = [0, 1, 2, 3, 4];
+    /*let stack = [0, 1, 2, 3, 4];
     let needs = [3, 1, 0, 1, 1, 0, 2];
-    let kills = [1, 3];
+    let kills = [1, 3];*/
+
+    let stack = [13];
+    let needs = [13];
+    let kills = [13];
 
     let stack: Vec<_> = std::array::IntoIter::new(stack)
         .map(NodeIndex::new)

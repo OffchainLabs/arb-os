@@ -2,7 +2,8 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::mavm::{AVMOpcode, Opcode};
+use crate::mavm::{AVMOpcode, Opcode, Instruction};
+use crate::compile::translate;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Effect {
@@ -64,9 +65,14 @@ impl Effects for Opcode {
                 }
                 effects
             }
+            Pop(depth) => {
+                let code = vec![Instruction::from(self.clone())];
+                let code = translate::expand_pops(code);
+                code.into_iter().map(|curr| curr.opcode.effects()).flatten().collect()
+            }
             AVMOpcode(avm_op) => avm_op.effects(),
-            BackwardLabelTarget(..) | Pop(..) => {
-                unreachable!("The optimizer shouldn't see this")
+            BackwardLabelTarget(..) => {
+                unreachable!("The optimizer shouldn't see this {:?}", self)
             }
         }
     }

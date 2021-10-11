@@ -547,12 +547,14 @@ impl BasicGraph {
         // Since this requires knowledge that's often not local to a specific block, we must
         // collect this info before constructing the value graphs.
         let mut phis = HashMap::new();
+        let mut phid = HashSet::new();
         for node in self.graph.node_indices() {
             for curr in self.graph[node].get_code() {
                 if let Opcode::MoveLocal(dest, source) = curr.opcode {
                     // A dest can be phi'd by many sources, but a source can only
                     // phi a single dest. Hence, this map has to be source-to-dest.
                     phis.insert(source, dest);
+                    phid.insert(dest);
                 }
             }
         }
@@ -574,6 +576,13 @@ impl BasicGraph {
                         if let Opcode::AVMOpcode(opcode) = insn.opcode {
                             hasher.write_u8(opcode.to_number());
                         }
+                        let mut immediate_hash = [0u8; 32];
+                        if let Some(value) = &insn.immediate {
+                            if let Value::Int(x) = value.avm_hash() {
+                                immediate_hash.copy_from_slice(&x.to_bytes_be());
+                            }
+                        }
+                        hasher.write(&immediate_hash);
                     }
                     let hash = hasher.finish();
                     if hash % (1 << length) != bitstring {
@@ -594,7 +603,7 @@ impl BasicGraph {
 
             maybe_skip!(&block);
 
-            if let Some(value_graph) = ValueGraph::new(block, &phis, &vec![]) {
+            if let Some(value_graph) = ValueGraph::new(block, &phis) {
                 graphs.insert(node, value_graph);
             }
         }
@@ -641,8 +650,15 @@ impl BasicGraph {
                 known_locals.extend(values.known_locals());
             }
         }
+        // Give up on phi'd & phi'ing values. A future extension of this algo could handle them,
+        // but it's not as trivial as it may seem.
+        known_locals = known_locals
+            .into_iter()
+            .filter(|(slot, _)| !phid.contains(slot) && !phis.contains_key(slot))
+            .collect();
+
         for &node in &nodes {
-            let mut block = self.graph[node].get_code().to_vec();
+            let mut block = self.graph[node].get_code_mut();
             for index in 0..block.len() {
                 match block[index].opcode {
                     Opcode::GetLocal(slot) => {
@@ -662,15 +678,17 @@ impl BasicGraph {
                 }
             }
 
-            maybe_skip!(&block);
-            
-            if let Some(value_graph) = ValueGraph::new(&block, &phis, &vec![]) {
+            if !graphs.contains_key(&node) {
+                continue;
+            }
+
+            if let Some(value_graph) = ValueGraph::new(&block, &phis) {
                 graphs.insert(node, value_graph);
             }
         }
 
         show_all!();
-        
+
         // See for each block if we can do better by codegenning against each's value graph
 
         for &node in &nodes {
@@ -683,7 +701,7 @@ impl BasicGraph {
                 }
             }
         }
-        
+
         if self.cyclic {
             // While there's a reasonable path toward making the following work for
             // loops, these are rare and so we'll restrict our analysis to DAG's.
@@ -758,18 +776,63 @@ impl BasicGraph {
                 }
             }
         }
-        
-            //let mut stack_states = HashMap::new();
-        //let entry_state = ValueGraph::new(block, &phis, stack);
-        //stack_states.insert(self.entry, entry_state);
 
-        let mut dfs = Dfs::new(&self.graph, self.entry);
-        while let Some(node) = dfs.next(&self.graph) {
-            
-            
-            /*let block = graph[node].get_code();
-            state = ValueGraph::new(block, &phis, stack);
-            stack_states.insert(node, state);*/
+        let mut who_stacks = HashMap::new();
+        for (slot, def) in defs {
+            who_stacks
+                .entry(def)
+                .or_insert(BTreeSet::new())
+                .insert(slot);
         }
+
+        /// Stack the locals we can
+        fn stack_locals(
+            node: NodeIndex,
+            blocks: &StableGraph<BasicBlock, BasicEdge>,
+            phis: &HashMap<SlotNum, SlotNum>,
+            graphs: &mut HashMap<NodeIndex, ValueGraph>,
+            who_stacks: &HashMap<NodeIndex, BTreeSet<SlotNum>>,
+            who_pops: &HashMap<NodeIndex, BTreeSet<SlotNum>>,
+            stacked: &BTreeSet<SlotNum>,
+        ) {
+            let block = blocks[node].get_code();
+            let mut stacked = stacked.clone();
+
+            let to_stack = match who_stacks.get(&node) {
+                Some(slots) => slots.clone(),
+                None => BTreeSet::new(),
+            };
+            let to_pop = match who_pops.get(&node) {
+                Some(slots) => slots.clone(),
+                None => BTreeSet::new(),
+            };
+
+            match ValueGraph::with_stack(block, phis, &to_stack, &to_pop, &stacked) {
+                Some(values) => drop(graphs.insert(node, values)),
+                None => {
+                    // No value graph exists, but we can restart this analysis since, by construction,
+                    // a local is only stack'd when it's descendents have value graphs.
+                    stacked = BTreeSet::new();
+                }
+            };
+
+            stacked.extend(to_stack);
+            for slot in to_pop {
+                stacked.remove(&slot);
+            }
+            for child in blocks.neighbors_directed(node, Direction::Outgoing) {
+                stack_locals(child, blocks, phis, graphs, who_stacks, who_pops, &stacked);
+            }
+        }
+
+        stack_locals(
+            self.entry,
+            &self.graph,
+            &phis,
+            &mut graphs,
+            &who_stacks,
+            &pops,
+            &BTreeSet::new(),
+        );
     }
 }
