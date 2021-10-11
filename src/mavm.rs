@@ -827,6 +827,7 @@ impl Value {
         }
     }
 
+    #[allow(dead_code)]
     pub fn value_size(&self) -> u64 {
         match self {
             Value::HashOnly(_, sz) => *sz, // this has to be changed for table
