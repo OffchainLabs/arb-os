@@ -3,7 +3,6 @@
 //
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
-use bridge_arbos_versions::before__accounts_Account;
 
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsForall;
