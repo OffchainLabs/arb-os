@@ -67,7 +67,8 @@ impl Codegen<'_> {
             Some(scope) => scope.clone(),
             None => Scope::default(),
         };
-        scope.shadows = HashMap::new();
+        scope.shadows.clear();
+        scope.owned.clear();
         self.scopes.push(scope);
     }
 
@@ -217,6 +218,7 @@ pub fn mavm_codegen_func(
     declare.extend(func.captures.clone().into_iter().map(|x| x));
 
     codegen(func.child_nodes(), &mut cgen, 0, declare)?;
+    cgen.code.push(opcode!(@Label(cgen.label_gen.next())));
 
     let space_for_locals = cgen.next_assignable_slot;
 

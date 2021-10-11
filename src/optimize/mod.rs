@@ -588,7 +588,7 @@ impl BasicGraph {
                 }
             }
 
-            if let Some(value_graph) = ValueGraph::new(block, &phis) {
+            if let Some(value_graph) = ValueGraph::new(block, &phis, &vec![]) {
                 graphs.insert(node, value_graph);
             }
         }
@@ -697,6 +697,8 @@ impl BasicGraph {
 
                 let mut dfs = Dfs::new(&self.graph, dropper);
                 while let Some(node) = dfs.next(&self.graph) {
+                    // This exit happens after the annotated drop, so
+                    // we don't actually want to issue a pop.
                     poppers.remove(&node);
                 }
 
@@ -706,7 +708,14 @@ impl BasicGraph {
             }
         }
 
+        /*let mut stack_states = HashMap::new();
+        stack_states.insert(self.entry, vec![]);*/
+
         let mut dfs = Dfs::new(&self.graph, self.entry);
-        while let Some(node) = dfs.next(&self.graph) {}
+        while let Some(node) = dfs.next(&self.graph) {
+            /*let block = graph[node].get_code();
+            state = ValueGraph::new(block, &phis, stack);
+            stack_states.insert(node, state);*/
+        }
     }
 }

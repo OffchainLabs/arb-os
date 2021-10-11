@@ -153,7 +153,11 @@ impl ValueGraph {
     }
 
     /// Create a new `ValueGraph` from a set of instructions without control flow
-    pub fn new(code: &[Instruction], phis: &HashMap<SlotNum, SlotNum>) -> Option<Self> {
+    pub fn new(
+        mut code: &[Instruction],
+        phis: &HashMap<SlotNum, SlotNum>,
+        passed_values: &Vec<SlotNum>,
+    ) -> Option<Self> {
         // Algorithm
         //
         //
@@ -165,9 +169,8 @@ impl ValueGraph {
         //     Phis happen just before jumping
         //     The order of phis don't matter
 
-        // Separate the metadata instructions from the top & bottom.
+        // Separate the metadata instructions from the top.
         let mut header = vec![];
-        let mut footer = vec![];
         for curr in code {
             match &curr.opcode {
                 Opcode::Label(_) | Opcode::MakeFrame(..) => {
@@ -176,20 +179,28 @@ impl ValueGraph {
                 _ => break,
             }
         }
-        for curr in code.iter().rev() {
-            match &curr.opcode {
+        code = &code[header.len()..];
+
+        // Save Phis and Drops for the footer. Since they have no `Effects`,
+        // they can stay in the slice.
+        let mut footer = vec![];
+        for curr in code {
+            if let Opcode::MoveLocal(..) | Opcode::DropLocal(..) = &curr.opcode {
+                footer.push(curr.clone());
+            }
+        }
+        if let Some(last) = code.last() {
+            match &last.opcode {
                 Opcode::Return
                 | Opcode::JumpTo(..)
                 | Opcode::CjumpTo(..)
-                | Opcode::MoveLocal(..)
-                | Opcode::DropLocal(..)
-                | Opcode::AVMOpcode(AVMOpcode::Jump | AVMOpcode::Cjump) => {}
-                _ => break,
+                | Opcode::AVMOpcode(AVMOpcode::Jump | AVMOpcode::Cjump) => {
+                    footer.push(last.clone());
+                    code = &code[..(code.len() - 1)];
+                }
+                _ => {}
             }
-            footer.push(curr.clone());
         }
-        footer.reverse();
-        let code = &code[header.len()..(code.len() - footer.len())];
 
         let mut graph = StableGraph::new();
         let mut locals = BTreeMap::new();
