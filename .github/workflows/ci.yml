@@ -147,6 +147,7 @@ jobs:
           cd wasmer
           git checkout ec36089cbf4a65b768501ba38f3d63baad6badf3
           export ENABLE_LLVM=0
+          export RUSTFLAGS=
           make build-wasmer
           make build-capi
           make package-capi
