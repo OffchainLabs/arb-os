@@ -185,9 +185,9 @@ jobs:
       - name: Test Node's Core
         run: |
           cd arbitrum/packages/arb-node-core/
-          gotestsum --format testname | tee issues | grep FAIL
+          gotestsum --format testname
 
       - name: Test Node's RPC
         run: |
           cd arbitrum/packages/arb-rpc-node/
-          gotestsum --format testname | tee issues | grep FAIL
+          gotestsum --format testname
