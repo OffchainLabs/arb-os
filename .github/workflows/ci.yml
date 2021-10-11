@@ -126,9 +126,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          apt-get update && apt-get -y install sudo
+          # apt-get update && apt-get -y install sudo
+          # sudo apt install -y software-properties-common curl git
           sudo add-apt-repository -y ppa:longsleep/golang-backports
-          sudo apt install -y software-properties-common curl git
           sudo apt-get install -y \
             autoconf automake cmake libboost-dev libboost-filesystem-dev libgmp-dev \
             librocksdb-dev libssl-dev libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev \
@@ -150,10 +150,10 @@ jobs:
           make build-wasmer
           make build-capi
           make package-capi
-          mkdir -p /usr/local/lib
-          mkdir -p /usr/local/include/wasmer
-          cp package/lib/* /usr/local/lib
-          cp package/include/* /usr/local/include/wasmer
+          sudo mkdir -p /usr/local/lib
+          sudo mkdir -p /usr/local/include/wasmer
+          sudo cp package/lib/* /usr/local/lib
+          sudo cp package/include/* /usr/local/include/wasmer
 
       - name: Clone Arbitrum
         run: |
@@ -174,6 +174,7 @@ jobs:
           mkdir arbitrum/packages/arb-avm-cpp/build/
           cd $_
           cmake .. -DCMAKE_BUILD_TYPE=Release
+          sudo ldconfig
           make -j
 
       - name: Test Node's C++ Database
