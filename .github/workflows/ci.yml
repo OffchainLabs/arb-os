@@ -126,8 +126,10 @@ jobs:
 
       - name: Install dependencies
         run: |
+          apt-get update && apt-get -y install sudo
           sudo add-apt-repository -y ppa:longsleep/golang-backports
-          sudo apt-get update && sudo apt-get install -y \
+          sudo apt install -y software-properties-common curl git
+          sudo apt-get install -y \
             autoconf automake cmake libboost-dev libboost-filesystem-dev libgmp-dev \
             librocksdb-dev libssl-dev libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev \
             liblz4-dev libzstd-dev libtool golang-go clang-format cmake
@@ -138,6 +140,20 @@ jobs:
           #   cd rocksdb && make shared_lib && sudo make install
           #
           curl -sSL "https://github.com/gotestyourself/gotestsum/releases/download/v1.7.0/gotestsum_1.7.0_linux_amd64.tar.gz" | sudo tar -xz -C /usr/local/bin gotestsum
+          # build wasmer
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          source $HOME/.cargo/env
+          git clone https://github.com/wasmerio/wasmer
+          cd wasmer
+          git checkout ec36089cbf4a65b768501ba38f3d63baad6badf3
+          export ENABLE_LLVM=0
+          make build-wasmer
+          make build-capi
+          make package-capi
+          mkdir -p /usr/local/lib
+          mkdir -p /usr/local/include/wasmer
+          cp package/lib/* /usr/local/lib
+          cp package/include/* /usr/local/include/wasmer
 
       - name: Clone Arbitrum
         run: |
