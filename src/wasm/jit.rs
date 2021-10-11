@@ -421,7 +421,8 @@ impl JitWasm {
         self.cell.replace_with(|_buf| buf);
         self.len_cell.replace_with(|_len| len as i32);
         self.immed_cell.replace_with(|_buf| v);
-        self.gas_cell.replace_with(|_gas| 1000000000);
+        // self.gas_cell.replace_with(|_gas| 1000000000);
+        self.gas_cell.replace_with(|_gas| 1000000);
 
         let _res = match self.instance.get_typed_func::<(), (i32)>("test") {
             Ok(f) => get_answer(f) as i64,

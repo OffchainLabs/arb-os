@@ -1064,16 +1064,13 @@ impl Machine {
     /// Runs self until the program counter reaches stop_pc, an error state is encountered or the
     /// machine reaches a stopped state for any other reason.  Returns the total gas used by self.
     pub fn run(&mut self, stop_pc: Option<CodePt>) -> u64 {
-        let mut gas_used = 0;
         let orig_gas = self.total_gas_usage.clone().to_u64().unwrap();
         while self.state.is_running() {
             if let Some(spc) = stop_pc {
                 if let MachineState::Running(pc) = self.state {
                     if pc == spc {
                         let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
-                        // gas_used
                         return final_gas - orig_gas;
-                        // return gas_used;
                     }
                 }
             }
@@ -1086,7 +1083,6 @@ impl Machine {
                 }
             }
             let gas_this_instruction = if let Some(gas) = self.next_op_gas() {
-                gas_used += gas;
                 gas
             } else {
                 println!("Warning: next opcode does not have a gas cost");
@@ -1133,28 +1129,23 @@ impl Machine {
             match self.run_one(false) {
                 Ok(still_runnable) => {
                     if !still_runnable {
-                        /*
-                        let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
-                        return final_gas - orig_gas
-                        */
                         self.total_gas_usage = self
                             .total_gas_usage
                             .sub(&Uint256::from_u64(gas_this_instruction))
                             .unwrap();
-                        return gas_used - gas_this_instruction;
+                        let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
+                        return final_gas - orig_gas
                     }
                 }
                 Err(e) => {
                     self.state = MachineState::Error(e);
-                    println!("gas used 1 {}", gas_used);
-                    return gas_used;
+                    let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
+                    return final_gas - orig_gas
                 }
             }
         }
-        // let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
-        println!("gas used 2 {}", gas_used);
-        gas_used
-        // final_gas - orig_gas
+        let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
+        final_gas - orig_gas
     }
 
     /// Generates a `ProfilerData` from a run of self with args from address 0.
@@ -2353,10 +2344,10 @@ impl Machine {
                         println!("Going to run JIT");
                         let (nbuf, _, len, gas_left, _, _) =
                             self.wasm_instances[idx].run_immed(buf, arg, v);
-                        println!("JIT success");
+                        println!("JIT success {}", gas_left);
 
                         let gas256 = Uint256::from_u64(gas_left);
-                        // self.total_gas_usage = self.total_gas_usage.sub(&gas256).unwrap();
+                        self.total_gas_usage = self.total_gas_usage.sub(&gas256).unwrap();
                         self.arb_gas_remaining = self.arb_gas_remaining.add(&gas256);
 
                         let values =

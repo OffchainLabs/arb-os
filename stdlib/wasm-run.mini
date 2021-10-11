@@ -15,8 +15,7 @@ use std::bytearray::bytearray_copy;
 use std::bytearray::bytearray_buffer;
 
 func main() {
-    let buf = #include "/home/sami/arb-os/wasm-tests/test-buffer.wasm";
-    let ln = 138;
+	let (ln, buf) = #include "wasm-tests/test-usegas.wasm";
 	debug(123456564);
     let compiled = asm(ln, buf,) any { compilewasm };
 	debug(123);
