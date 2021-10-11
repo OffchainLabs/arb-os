@@ -36,6 +36,7 @@ impl ValueNode {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum ValueEdge {
     Connect(usize),
     Meta(&'static str),
@@ -166,7 +167,7 @@ impl ValueGraph {
         //     No more than 1 jump, which can only be at the end of a block
         //     No more than 1 label, which can only be at the start of a block
         //     Locals are accessed at a common auxstack height
-        //     Phis happen just before jumping
+        //     Phis & Drops may be moved to the end
         //     The order of phis don't matter
 
         // Separate the metadata instructions from the top.
@@ -181,7 +182,7 @@ impl ValueGraph {
         }
         code = &code[header.len()..];
 
-        // Save Phis and Drops for the footer. Since they have no `Effects`,
+        // Save Phis and Drops for the footer. Since they have no Opcode `Effects`,
         // they can stay in the slice.
         let mut footer = vec![];
         for curr in code {
@@ -281,7 +282,7 @@ impl ValueGraph {
                         if let Some(_) = locals.get(&slot) {
                             unreachable!("Not SSA: found 2nd write or write-after-read");
                         }
-                        graph.add_edge(local, node, ValueEdge::Meta("set"));
+                        graph.add_edge(local, node, ValueEdge::Meta("write"));
                         locals.insert(slot, local);
                     }
                     Effect::ReadGlobal => {
@@ -350,6 +351,7 @@ impl ValueGraph {
             graph.add_edge(output, local, ValueEdge::Meta("locals"));
         }
 
+        /// Statically analyze the graph for values we can compute at compile time.
         fn fold_constants(graph: &mut StableGraph<ValueNode, ValueEdge>) {
             // perform constant folding
 
@@ -448,6 +450,33 @@ impl ValueGraph {
         }
 
         Some(values)
+    }
+
+    pub fn known_locals(&self) -> BTreeMap<SlotNum, Value> {
+        let mut known = BTreeMap::new();
+        let graph = &self.graph;
+
+        let locals = self.graph.node_indices().filter_map(|node| {
+            match &graph[node] {
+                ValueNode::Local(slot) => Some((*slot, node)),
+                _ => None,
+            }
+        });
+        
+        for (slot, local) in locals {
+            let (deps, _, dep_edges, _) = node_data(&graph, local);
+            for (dep, edge) in deps.into_iter().zip(dep_edges.into_iter()) {
+                if let ValueEdge::Meta("write") = &graph[edge] {
+                    // We have our SetLocal. Now see if we know the value it read.
+                    let read = node_data(&graph, dep).0[0];
+                    if let ValueNode::Value(value) = &graph[read] {
+                        known.insert(slot, value.clone());  
+                    }
+                    break;
+                }
+            }
+        }
+        known
     }
 
     pub fn codegen(&self) -> (Vec<Instruction>, usize) {

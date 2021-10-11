@@ -566,6 +566,24 @@ impl BasicGraph {
             .filter(|x| !x.is_empty())
             .is_some();
 
+        macro_rules! maybe_skip {
+            ($block:expr) => {
+                if let Ok((bitstring, length)) = bisect {
+                    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                    for insn in $block.iter() {
+                        if let Opcode::AVMOpcode(opcode) = insn.opcode {
+                            hasher.write_u8(opcode.to_number());
+                        }
+                    }
+                    let hash = hasher.finish();
+                    if hash % (1 << length) != bitstring {
+                        // Block's hash didn't match the bitstring, so we skip it.
+                        continue;
+                    }
+                }
+            };
+        }
+
         let mut graphs = HashMap::new();
 
         // Compute each block's value graph where possible. In the rare case that a
@@ -574,55 +592,88 @@ impl BasicGraph {
         for node in self.graph.node_indices() {
             let block = self.graph[node].get_code();
 
-            if let Ok((bitstring, length)) = bisect {
-                let mut hasher = std::collections::hash_map::DefaultHasher::new();
-                for insn in block {
-                    if let Opcode::AVMOpcode(opcode) = insn.opcode {
-                        hasher.write_u8(opcode.to_number());
-                    }
-                }
-                let hash = hasher.finish();
-                if hash % (1 << length) != bitstring {
-                    // Block's hash didn't match the bitstring, so we skip it.
-                    continue;
-                }
-            }
+            maybe_skip!(&block);
 
             if let Some(value_graph) = ValueGraph::new(block, &phis, &vec![]) {
                 graphs.insert(node, value_graph);
             }
         }
 
-        // Pretty print SSA, the value graph, and graph-codegened results.
-        if self.should_print || always_print {
-            for node in self.graph.node_indices() {
-                if let BasicBlock::Meta(_) = &self.graph[node] {
-                    continue;
-                }
-                if let Some(graph) = graphs.get(&node) {
-                    let code = self.graph[node].get_code();
-                    let ssa = code.iter().map(|x| x.pretty_print(Color::PINK)).collect();
-                    let values = graph.print_lines();
-                    let reduced = graph
-                        .codegen()
-                        .0
-                        .into_iter()
-                        .map(|x| x.pretty_print(Color::PINK))
-                        .collect();
-                    if ssa != reduced {
-                        console::print_columns(
-                            vec![ssa, values, reduced],
-                            vec!["SSA", "values", "reduced"],
-                        );
-                        println!();
+        macro_rules! show_all {
+            () => {
+                // Pretty print SSA, the value graph, and graph-codegened results.
+                if self.should_print || always_print {
+                    for node in self.graph.node_indices() {
+                        if let BasicBlock::Meta(_) = &self.graph[node] {
+                            continue;
+                        }
+                        if let Some(graph) = graphs.get(&node) {
+                            let code = self.graph[node].get_code();
+                            let ssa = code.iter().map(|x| x.pretty_print(Color::PINK)).collect();
+                            let values = graph.print_lines();
+                            let reduced = graph
+                                .codegen()
+                                .0
+                                .into_iter()
+                                .map(|x| x.pretty_print(Color::PINK))
+                                .collect();
+                            if ssa != reduced {
+                                console::print_columns(
+                                    vec![ssa, values, reduced],
+                                    vec!["SSA", "values", "reduced"],
+                                );
+                                println!();
+                            }
+                        }
                     }
                 }
+            };
+        }
+
+        show_all!();
+
+        let nodes: Vec<_> = self.graph.node_indices().collect();
+
+        // See if there's any simple local substitutions we can make
+        let mut known_locals = BTreeMap::new();
+        for node in &nodes {
+            if let Some(values) = graphs.get(node) {
+                known_locals.extend(values.known_locals());
+            }
+        }
+        for &node in &nodes {
+            let mut block = self.graph[node].get_code().to_vec();
+            for index in 0..block.len() {
+                match block[index].opcode {
+                    Opcode::GetLocal(slot) => {
+                        if let Some(value) = known_locals.get(&slot) {
+                            let mut insn = block.get_mut(index).unwrap();
+                            insn.opcode = Opcode::AVMOpcode(AVMOpcode::Noop);
+                            insn.immediate = Some(value.clone());
+                        }
+                    }
+                    Opcode::SetLocal(slot) => {
+                        if let Some(_) = known_locals.get(&slot) {
+                            let mut insn = block.get_mut(index).unwrap();
+                            insn.opcode = Opcode::AVMOpcode(AVMOpcode::Pop);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            maybe_skip!(&block);
+            
+            if let Some(value_graph) = ValueGraph::new(&block, &phis, &vec![]) {
+                graphs.insert(node, value_graph);
             }
         }
 
+        show_all!();
+        
         // See for each block if we can do better by codegenning against each's value graph
-        let nodes: Vec<_> = self.graph.node_indices().collect();
-        for node in nodes {
+
+        for &node in &nodes {
             if let Some(values) = graphs.get(&node) {
                 let code = self.graph[node].get_code();
                 let cost = code.iter().map(|x| x.opcode.base_cost()).sum();
@@ -632,7 +683,7 @@ impl BasicGraph {
                 }
             }
         }
-
+        
         if self.cyclic {
             // While there's a reasonable path toward making the following work for
             // loops, these are rare and so we'll restrict our analysis to DAG's.
@@ -693,7 +744,6 @@ impl BasicGraph {
             }
             if defs.contains_key(&slot) {
                 let dropper = *dels.get(&slot).expect("no dropper");
-                pops.entry(dropper).or_insert(BTreeSet::new()).insert(slot);
 
                 let mut dfs = Dfs::new(&self.graph, dropper);
                 while let Some(node) = dfs.next(&self.graph) {
@@ -702,17 +752,21 @@ impl BasicGraph {
                     poppers.remove(&node);
                 }
 
+                pops.entry(dropper).or_insert(BTreeSet::new()).insert(slot);
                 for popper in poppers {
                     pops.entry(popper).or_insert(BTreeSet::new()).insert(slot);
                 }
             }
         }
-
-        /*let mut stack_states = HashMap::new();
-        stack_states.insert(self.entry, vec![]);*/
+        
+            //let mut stack_states = HashMap::new();
+        //let entry_state = ValueGraph::new(block, &phis, stack);
+        //stack_states.insert(self.entry, entry_state);
 
         let mut dfs = Dfs::new(&self.graph, self.entry);
         while let Some(node) = dfs.next(&self.graph) {
+            
+            
             /*let block = graph[node].get_code();
             state = ValueGraph::new(block, &phis, stack);
             stack_states.insert(node, state);*/
