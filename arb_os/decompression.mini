@@ -226,10 +226,6 @@ public view write func decompressAndVerifyEcdsaSignedTx(
         tx.s,
     );
 
-    debug("returning");
-
-    debug(encodedMessage);
-    debug(tx.data);
     set originalRequest.sender = signer;
     set originalRequest.msgData = bytearray_copy(
         encodedMessage,
@@ -238,13 +234,11 @@ public view write func decompressAndVerifyEcdsaSignedTx(
         1,
         bytearray_size(encodedMessage)
     );
-    debug(encodedMessage);
     if (calldataUnitsDelta != int(0)) {
         if let Some(aggInfo) = originalRequest.aggregator {
             set originalRequest.aggregator = Some(aggInfo with { calldataUnits: uint(int(aggInfo.calldataUnits) + calldataUnitsDelta) });
         }
     }
-    debug(12345);
     if (originalRequest.kind == const::L1MessageType_L2ForGasEstimation) {
         if (tx.gasPrice == 0) {
             // gas estimation tx requested zero gas, so ignore gas funding and pay whatever price is necessary to run
@@ -265,7 +259,6 @@ public view write func decompressAndVerifyEcdsaSignedTx(
         }
     }
 
-    debug(12345);
     return Some(
         {
             set txRequest.caller = signer;
