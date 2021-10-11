@@ -57,8 +57,7 @@ impl Codegen<'_> {
     fn next_slot(&mut self) -> SlotNum {
         let next = self.next_assignable_slot;
         self.next_assignable_slot += 1;
-        let last = self.scopes.last_mut().expect("no scope");
-        last.owned.push(next);
+        self.current_scope().owned.push(next);
         next
     }
 
@@ -72,30 +71,33 @@ impl Codegen<'_> {
         self.scopes.push(scope);
     }
 
-    /// Create a new assignment for a local variable.
-    fn set_local(&mut self, local: StringId, slot: SlotNum) {
-        let last = self.scopes.last_mut().expect("no scope");
-        last.locals.insert(local, slot);
+    /// Get the scope codegen is currently operating on.
+    fn current_scope(&mut self) -> &mut Scope {
+        self.scopes.last_mut().expect("no scope")
     }
 
-    /// Shadow a variable, saving the last unshadowed assignment for phi-ing if needed.
-    fn shadow(&mut self, local: StringId, slot: SlotNum) {
-        let last = self.scopes.last_mut().expect("no scope");
-
-        // for the first time shadowing, we save the old value if it exists
-        if let Some(old) = last.locals.get(&local) {
-            let old = *old;
-            if !last.shadows.contains_key(&local) {
-                last.shadows.insert(local, old);
-            }
-        }
-        last.locals.insert(local, slot);
+    /// Create a new assignment for a local variable.
+    fn set_local(&mut self, local: StringId, slot: SlotNum) {
+        self.current_scope().locals.insert(local, slot);
     }
 
     /// Get the currently accessible slot assignment for a variable in scope.
     fn get_local(&mut self, local: &StringId) -> Option<SlotNum> {
-        let last = self.scopes.last_mut().expect("no scope");
-        last.locals.get(local).cloned()
+        self.current_scope().locals.get(local).cloned()
+    }
+
+    /// Shadow a variable, saving the last unshadowed assignment for phi-ing if needed.
+    fn shadow(&mut self, local: StringId, slot: SlotNum) {
+        let scope = self.current_scope();
+
+        // for the first time shadowing, we save the old value if it exists
+        if let Some(old) = scope.locals.get(&local) {
+            let old = *old;
+            if !scope.shadows.contains_key(&local) {
+                scope.shadows.insert(local, old);
+            }
+        }
+        scope.locals.insert(local, slot);
     }
 
     /// Debug print the open scope's current assignments.
