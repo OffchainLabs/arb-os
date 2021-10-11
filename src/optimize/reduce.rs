@@ -182,6 +182,7 @@ impl ValueGraph {
                 | Opcode::JumpTo(..)
                 | Opcode::CjumpTo(..)
                 | Opcode::MoveLocal(..)
+                | Opcode::DropLocal(..)
                 | Opcode::AVMOpcode(AVMOpcode::Jump | AVMOpcode::Cjump) => {}
                 _ => break,
             }

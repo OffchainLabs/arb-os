@@ -662,8 +662,6 @@ impl BasicGraph {
             }
         }
 
-        return;
-
         // Stacking a local means moving it from the aux stack to the data stack.
         // Using the stack'd value means passing it from value graph to value graph as an arg.
         // This is only safe, however, if we can determine where exactly to pop the value.
