@@ -48,6 +48,8 @@ struct Scope {
     locals: BTreeMap<StringId, SlotNum>,
     /// A variable's slot just before its first shadow
     shadows: HashMap<StringId, SlotNum>,
+    /// All variables this scope creates
+    owned: Vec<SlotNum>,
 }
 
 impl Codegen<'_> {
@@ -55,6 +57,8 @@ impl Codegen<'_> {
     fn next_slot(&mut self) -> SlotNum {
         let next = self.next_assignable_slot;
         self.next_assignable_slot += 1;
+        let last = self.scopes.last_mut().expect("no scope");
+        last.owned.push(next);
         next
     }
 
@@ -857,6 +861,12 @@ fn codegen(
                 ));
             }
         }
+    }
+
+    for slot in scope.owned {
+        // Annotate which slots are provably never used from this point on
+        cgen.code
+            .push(Instruction::from_opcode(Opcode::DropLocal(slot), debug));
     }
 
     Ok(())

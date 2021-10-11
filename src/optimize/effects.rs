@@ -33,7 +33,7 @@ impl Effects for Opcode {
         use Effect::*;
         use Opcode::*;
         match self {
-            MakeFrame(..) | Label(..) | MoveLocal(..) => vec![],
+            MakeFrame(..) | Label(..) | MoveLocal(..) | DropLocal(..) => vec![],
             GetLocal(slot) => vec![ReadLocal(*slot), PushStack],
             SetLocal(slot) => vec![ReadStack, PopStack, WriteLocal(*slot)],
             ReserveCapture(slot, _) => vec![WriteLocal(*slot), Unsure],

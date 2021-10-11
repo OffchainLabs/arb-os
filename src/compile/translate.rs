@@ -46,6 +46,7 @@ pub fn replace_phi_nodes(code: Vec<Instruction>) -> Vec<Instruction> {
                     out.extend(vec![get_local, set_local]);
                 }
             }
+            Opcode::DropLocal(_) => {}
             _ => out.push(curr),
         }
     }

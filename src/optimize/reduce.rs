@@ -93,7 +93,6 @@ fn node_data(
 
 pub struct ValueGraph {
     graph: StableGraph<ValueNode, ValueEdge>,
-    defs: BTreeMap<SlotNum, NodeIndex>,
     header: Vec<Instruction>,
     footer: Vec<Instruction>,
     output: NodeIndex,
@@ -197,7 +196,6 @@ impl ValueGraph {
         let mut globals = graph.add_node(ValueNode::Meta("globals"));
         let mut global_readers = BTreeSet::new();
 
-        let mut defs = BTreeMap::new();
         let mut stack: VecDeque<NodeIndex> = VecDeque::new();
         let mut nargs = 0;
 
@@ -273,7 +271,6 @@ impl ValueGraph {
                         }
                         graph.add_edge(local, node, ValueEdge::Meta("set"));
                         locals.insert(slot, local);
-                        defs.insert(slot, local);
                     }
                     Effect::ReadGlobal => {
                         graph.add_edge(node, globals, ValueEdge::Meta("view"));
@@ -303,7 +300,7 @@ impl ValueGraph {
             }
         }
 
-        // order locals based on phis
+        // Order locals based on phis. We need to ensure
         for (source, dest) in phis {
             let source = match locals.get(source) {
                 Some(node) => *node,
@@ -423,7 +420,6 @@ impl ValueGraph {
 
         let values = ValueGraph {
             graph,
-            defs,
             header,
             footer,
             output,

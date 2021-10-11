@@ -52,6 +52,10 @@ pub enum BasicEdge {
 pub struct BasicGraph {
     /// Basic blocks and the edges that connect them
     graph: StableGraph<BasicBlock, BasicEdge>,
+    /// The output node of the graph
+    entry: NodeIndex,
+    /// The output node of the graph
+    output: NodeIndex,
     /// Whether this graph contains a cycle
     cyclic: bool,
     /// Whether this graph contains code that's been marked for printing
@@ -73,7 +77,7 @@ impl BasicGraph {
         //   We assume all label-less jumps are not reentrant
 
         let mut graph: StableGraph<BasicBlock, BasicEdge> = StableGraph::new();
-        let _entry = graph.add_node(BasicBlock::Meta("Entry"));
+        let entry = graph.add_node(BasicBlock::Meta("Entry"));
 
         let should_print = code.iter().any(|x| x.debug_info.attributes.codegen_print);
 
@@ -170,6 +174,8 @@ impl BasicGraph {
         let cyclic = algo::is_cyclic_directed(&graph);
         BasicGraph {
             graph,
+            entry,
+            output,
             cyclic,
             should_print,
         }
@@ -577,7 +583,7 @@ impl BasicGraph {
                 }
                 let hash = hasher.finish();
                 if hash % (1 << length) != bitstring {
-                    // block's hash didn't match the bitstring, so we skip it.
+                    // Block's hash didn't match the bitstring, so we skip it.
                     continue;
                 }
             }
@@ -614,8 +620,6 @@ impl BasicGraph {
             }
         }
 
-        if !self.cyclic {}
-
         // See for each block if we can do better by codegenning against each's value graph
         let nodes: Vec<_> = self.graph.node_indices().collect();
         for node in nodes {
@@ -628,5 +632,81 @@ impl BasicGraph {
                 }
             }
         }
+
+        if self.cyclic {
+            // While there's a reasonable path toward making the following work for
+            // loops, these are rare and so we'll restrict our analysis to DAG's.
+            return;
+        }
+
+        let mut defs = HashMap::new(); // the assigner for each assignment
+        let mut uses = HashMap::new(); // the users for each assignment
+        let mut dels = HashMap::new(); // the dropper for each assignment
+        for node in self.graph.node_indices() {
+            for curr in self.graph[node].get_code() {
+                match curr.opcode {
+                    Opcode::SetLocal(slot) => {
+                        // Since the graph is SSA, a slot can only be assigned once.
+                        defs.insert(slot, node);
+                    }
+                    Opcode::GetLocal(slot) => {
+                        let set = uses.entry(slot).or_insert(HashSet::new());
+                        set.insert(node);
+                    }
+                    Opcode::DropLocal(slot) => {
+                        // Since mini is a scoped language, only one drop is ever needed.
+                        dels.insert(slot, node);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // Stacking a local means moving it from the aux stack to the data stack.
+        // Using the stack'd value means passing it from value graph to value graph as an arg.
+        // This is only safe, however, if we can determine where exactly to pop the value.
+        // There are two kinds of places we must pop a given def
+        //   Whenever we exit the basic graph.
+        //     We can find this by dfs'ing from the def to all exits
+        //   Whenever a value goes out of scope
+        //     We place DropLocal annotations during codegen for this purpose
+
+        // Find which locals we can move from the aux stack to the data stack.
+        let mut pops = HashMap::new();
+        let exits: HashSet<_> = self.graph.neighbors_undirected(self.output).collect();
+
+        for (slot, node) in defs.clone() {
+            let mut poppers = BTreeSet::new();
+            let mut dfs = Dfs::new(&self.graph, node);
+            while let Some(alive) = dfs.next(&self.graph) {
+                if exits.contains(&alive) {
+                    // This block is an exit, so we need to make sure we pop this value
+                    // to clean up the stack.
+                    poppers.insert(alive);
+                }
+                if let None = graphs.get(&alive) {
+                    // We can't place this local on the stack since we don't understand
+                    // how the values in a down-stream block relate to one another.
+                    defs.remove(&slot);
+                    break;
+                }
+            }
+            if defs.contains_key(&slot) {
+                let dropper = *dels.get(&slot).expect("no dropper");
+                pops.entry(dropper).or_insert(BTreeSet::new()).insert(slot);
+
+                let mut dfs = Dfs::new(&self.graph, dropper);
+                while let Some(node) = dfs.next(&self.graph) {
+                    poppers.remove(&node);
+                }
+
+                for popper in poppers {
+                    pops.entry(popper).or_insert(BTreeSet::new()).insert(slot);
+                }
+            }
+        }
+
+        let mut dfs = Dfs::new(&self.graph, self.entry);
+        while let Some(node) = dfs.next(&self.graph) {}
     }
 }

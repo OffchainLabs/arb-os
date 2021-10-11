@@ -944,6 +944,7 @@ pub enum Opcode {
     GetLocal(SlotNum),                // get a local variable within a func frame
     SetLocal(SlotNum),                // set a local variable within a func frame
     MoveLocal(SlotNum, SlotNum),      // move into arg1 arg2 within a func frame
+    DropLocal(SlotNum),               // annotate a point after which the local is never used again
     ReserveCapture(SlotNum, StringId), // annotate where a capture should be placed within a func frame
     Capture(LabelId, StringId),        // annotate which value to retrieve for closure packing
     MakeClosure(LabelId),              // create a callable closure frame
@@ -1132,6 +1133,7 @@ impl Opcode {
             Self::MakeFrame(..) => 3,
             Self::GetLocal(..) => 3,
             Self::SetLocal(..) => 41,
+            Self::DropLocal(..) => 0,
             Self::Capture(..) => 41,
             Self::ReserveCapture(..) => 0,
             Self::MakeClosure(..) => 1,
@@ -1181,6 +1183,7 @@ impl Opcode {
             },
             Opcode::GetLocal(slot) => format!("GetLocal {}", Color::pink(slot)),
             Opcode::SetLocal(slot) => format!("SetLocal {}", Color::pink(slot)),
+            Opcode::DropLocal(slot) => format!("δ({})", Color::pink(slot)),
             Opcode::MoveLocal(dest, source) => {
                 format!("φ({}, {})", Color::pink(dest), Color::pink(source))
             }
@@ -1326,6 +1329,7 @@ impl Opcode {
             Opcode::GetLocal(_) => "GetLocal",
             Opcode::SetLocal(_) => "SetLocal",
             Opcode::MoveLocal(_, _) => "MoveLocal",
+            Opcode::DropLocal(_) => "DropLocal",
             Opcode::ReserveCapture(_, _) => "ReserveCapture",
             Opcode::Capture(_, _) => "Capture",
             Opcode::MakeClosure(_) => "MakeClosure",
