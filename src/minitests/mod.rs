@@ -356,6 +356,11 @@ fn test_evm_add_code() {
 }
 
 #[test]
+fn arbos_ethcall_test() {
+    crate::evm::arbos_ethcall_test(None, false).unwrap();
+}
+
+#[test]
 pub fn test_tx_with_deposit() {
     match crate::evm::evm_tx_with_deposit(None, false, false) {
         Ok(result) => assert_eq!(result, true),

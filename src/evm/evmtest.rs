@@ -237,7 +237,7 @@ fn do_call(
     }
 }
 
-fn serialize_storage(st: HashMap<Uint256, Uint256>) -> Vec<u8> {
+pub fn serialize_storage(st: HashMap<Uint256, Uint256>) -> Vec<u8> {
     let mut ret: Vec<u8> = vec![];
     for (k, v) in st {
         ret.extend(k.to_bytes_be());
@@ -246,7 +246,7 @@ fn serialize_storage(st: HashMap<Uint256, Uint256>) -> Vec<u8> {
     ret
 }
 
-fn deserialize_storage(buf: Vec<u8>) -> HashMap<Uint256, Uint256> {
+pub fn deserialize_storage(buf: Vec<u8>) -> HashMap<Uint256, Uint256> {
     let mut ret = HashMap::new();
     let mut offset = 0;
     while offset < buf.len() {
@@ -258,7 +258,7 @@ fn deserialize_storage(buf: Vec<u8>) -> HashMap<Uint256, Uint256> {
     ret
 }
 
-fn compare_storage(
+pub fn compare_storage(
     expected: &HashMap<Uint256, Uint256>,
     actual: &HashMap<Uint256, Uint256>,
 ) -> bool {
