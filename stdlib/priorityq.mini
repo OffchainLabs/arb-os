@@ -18,42 +18,42 @@ type PriorityQ = struct {
 };
 
 public func priorityq_new() -> PriorityQ {
-    return struct {
+    struct {
         size: 0,
         capacity: 8,
         contents: newarray<PqItem>(8),
-    };
+    }
 }
 
 public func priorityq_isEmpty(pq: PriorityQ) -> bool {
-    return pq.size == 0;
+    pq.size == 0
 }
 
 public func priorityq_size(pq: PriorityQ) -> uint {
-    return pq.size;
+    pq.size
 }
 
 public func priorityq_get(pq: PriorityQ) -> option<(any, PriorityQ)> {
-    return xif (priorityq_isEmpty(pq)) {
+    if priorityq_isEmpty(pq) {
         None<(any, PriorityQ)>
     } else {
         let ret = pq.contents[0].item;
         let newpq = pq with { size: pq.size-1 }
                        with { contents: pq.contents with { [0] = pq.contents[pq.size-1] } };
         Some((ret, pq_pushDown(newpq, 0)))
-    };
+    }
 }
 
 func pq_pushDown(pq: PriorityQ, index: uint) -> PriorityQ {
-    return xloop {
+    loop {
         let firstKidIdx = 2*index+1;
-        if (firstKidIdx >= pq.size) {
+        if firstKidIdx >= pq.size {
             return pq;
-        } elseif (firstKidIdx+1 == pq.size) {
+        } else if firstKidIdx+1 == pq.size {
             // only one kid is in play
             let this = pq.contents[index];
             let kid = pq.contents[firstKidIdx];
-            if (kid.priority > this.priority) {
+            if kid.priority > this.priority {
                 return pq with { contents: pq.contents with { [index] = kid }
                                                        with { [firstKidIdx] = this } };
             } else {
@@ -64,8 +64,8 @@ func pq_pushDown(pq: PriorityQ, index: uint) -> PriorityQ {
             let firstKid = pq.contents[firstKidIdx];
             let secondKidIdx = firstKidIdx+1;
             let secondKid = pq.contents[secondKidIdx];
-            if (firstKid.priority > secondKid.priority) {
-                if (firstKid.priority > this.priority) {
+            if firstKid.priority > secondKid.priority {
+                if firstKid.priority > this.priority {
                     pq = pq with { contents: pq.contents with { [index] = firstKid }
                                                          with { [firstKidIdx] = this } };
                     index = firstKidIdx;
@@ -73,7 +73,7 @@ func pq_pushDown(pq: PriorityQ, index: uint) -> PriorityQ {
                     return pq;
                 }
             } else {
-               if (secondKid.priority > this.priority) {
+               if secondKid.priority > this.priority {
                     pq = pq with { contents: pq.contents with { [index] = secondKid }
                                                          with { [secondKidIdx] = this } };
                     index = secondKidIdx;
@@ -82,46 +82,46 @@ func pq_pushDown(pq: PriorityQ, index: uint) -> PriorityQ {
                 }
             }
         }
-    };
+    }
 }
 
 func pq_pushUp(pq: PriorityQ, index: uint) -> PriorityQ {
     let this = pq.contents[index];
-    return xloop {
-        if (index == 0) {
+    loop {
+        if index == 0 {
             return pq;
         }
         let parentIdx = (index-1)/2;
         let parent = pq.contents[parentIdx];
-        if (parent.priority >= this.priority) {
+        if parent.priority >= this.priority {
             return pq;
         } else {
             pq = pq with { contents: pq.contents with { [index] = parent }
                                                  with { [parentIdx] = this } };
             index = parentIdx;
         }
-    };
+    }
 }
 
 public func priorityq_insert(pq: PriorityQ, item: any, priority: uint) -> PriorityQ {
-    if (pq.size == pq.capacity) {
+    if pq.size == pq.capacity {
         let newCapacity = 8*pq.capacity;
         pq = pq with { capacity: newCapacity }
-                with { contents: unsafecast<[]PqItem>(array_resize(unsafecast<array>(pq.contents), newCapacity, null)) };
+                with { contents: unsafecast<[]PqItem>(array_resize(unsafecast<array>(pq.contents), newCapacity, ())) };
     }
     let index = pq.size;
     let newpq = pq with { size: index+1 }
-                   with { contents: pq.contents with { [index] = struct { priority: priority, item: item, } } };
-    return pq_pushUp(newpq, index);
+                   with { contents: pq.contents with { [index] = struct { priority: priority, item: item } } };
+    pq_pushUp(newpq, index)
 }
 
 public func priorityq_printAsArray(pq: PriorityQ) -> uint {
     let ret = pq.size;
     let cont = pq.contents;
     let i = 0;
-    while (i < ret) {
+    while i < ret {
         debug(cont[i]);
         i = i+1;
     }
-    return ret;
+    ret
 }

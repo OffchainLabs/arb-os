@@ -24,19 +24,19 @@ fn compile_run_cycle(input: String) -> Machine {
 
 #[test]
 fn test_basic() {
-    let machine = compile_run_cycle("test-programs/basic.mini".to_string());
+    let machine = compile_run_cycle("minitests/basic.mini".to_string());
     assert_eq!(machine.stack_top(), None);
 }
 
 #[test]
-fn test_xif_else() {
-    let machine = compile_run_cycle("test-programs/xif-else.mini".to_string());
+fn test_if_else() {
+    let machine = compile_run_cycle("minitests/if-else.mini".to_string());
     assert_eq!(machine.stack_top(), Some(&Value::Int(Uint256::zero())));
 }
 
 #[test]
 fn test_codeblocks() {
-    let machine = compile_run_cycle("test-programs/codeblocks.mini".to_string());
+    let machine = compile_run_cycle("minitests/codeblocks.mini".to_string());
     assert_eq!(
         machine.stack_top(),
         Some(&Value::Tuple(Arc::new(vec![
