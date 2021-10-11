@@ -964,8 +964,8 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Int(i) => i.fmt(f),
-            Value::Buffer(buf) => {
-                write!(f, "Buffer({})", buf.hex_encode())
+            Value::Buffer(_) => {
+                write!(f, "Buffer({})", self.avm_hash())
             }
             Value::HashOnly(i, _) => write!(f, "HashOnly({})", i),
             Value::CodePoint(pc) => write!(f, "CodePoint({})", pc),
@@ -1452,8 +1452,8 @@ impl AVMOpcode {
             0xa4 => Some(AVMOpcode::SetBuffer8),
             0xa5 => Some(AVMOpcode::SetBuffer64),
             0xa6 => Some(AVMOpcode::SetBuffer256),
-            0xa7 => Some(AVMOpcode::RunWasm),
-            0xa8 => Some(AVMOpcode::CompileWasm),
+            0xa7 => Some(AVMOpcode::CompileWasm),
+            0xa8 => Some(AVMOpcode::RunWasm),
             0xa9 => Some(AVMOpcode::MakeWasm),
             0xff => Some(AVMOpcode::Noop),
             _ => None,
@@ -1545,8 +1545,8 @@ impl AVMOpcode {
             AVMOpcode::SetBuffer8 => 0xa4,
             AVMOpcode::SetBuffer64 => 0xa5,
             AVMOpcode::SetBuffer256 => 0xa6,
-            AVMOpcode::RunWasm => 0xa7,
-            AVMOpcode::CompileWasm => 0xa8,
+            AVMOpcode::CompileWasm => 0xa7,
+            AVMOpcode::RunWasm => 0xa8,
             AVMOpcode::MakeWasm => 0xa9,
         }
     }

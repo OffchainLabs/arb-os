@@ -1683,7 +1683,6 @@ pub fn _try_upgrade(
 ) -> Result<Option<Uint256>, ethabi::Error> {
     arbowner._start_code_upload(machine)?;
 
-    println!("Started upload");
     let mut accum = vec![];
     for buf in uploader.instructions {
         accum.extend(buf);
