@@ -3,8 +3,8 @@
  */
 
 use crate::compile::{DebugInfo, SlotNum};
-use crate::console;
 use crate::console::Color;
+use crate::console;
 use crate::link::fold_tuples;
 use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
 use crate::optimize::effects::{Effect, Effects};
@@ -325,8 +325,9 @@ impl ValueGraph {
                         assert!(!stacked.contains(&slot), "Not SSA: found write-after-write");
 
                         if tostack.contains(&slot) {
-                            graph[local] = ValueNode::StackLocal(slot);
                             graph.add_edge(local, node, ValueEdge::Connect(0));
+                            graph[local] = ValueNode::StackLocal(slot);
+                            graph[node] = ValueNode::Opcode(Opcode::AVMOpcode(AVMOpcode::Noop));
                             stacked.insert(slot);
                         } else {
                             graph.add_edge(local, node, ValueEdge::Meta("write"));
@@ -658,10 +659,7 @@ impl ValueGraph {
                     let mut fake = ValueGraph::default();
                     fake.graph = (*graph).clone();
                     let lines = fake.print_lines();
-                    let sofar = code
-                        .into_iter()
-                        .map(|x| x.pretty_print(Color::PINK))
-                        .collect();
+                    let sofar = code.into_iter().map(|x| x.pretty_print(Color::PINK)).collect();
                     console::print_columns(vec![lines, sofar], vec!["Values", "Crash"]);
                     println!("Could not reorder stack: {}", Color::red(msg));
                     panic!();
@@ -761,7 +759,7 @@ fn reorder_stack(
     if !needs_check.is_superset(&kills) {
         return Err("kills ⊄ needs");
     }
-
+    
     // Determine which values can be treated as "blanks" verses
     // those whose order we must track. Blanks get sifted to the bottom.
     let used: HashSet<_> = needs.clone().into_iter().collect();
