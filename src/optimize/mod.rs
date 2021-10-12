@@ -794,6 +794,7 @@ impl BasicGraph {
             who_stacks: &HashMap<NodeIndex, BTreeSet<SlotNum>>,
             who_pops: &HashMap<NodeIndex, BTreeSet<SlotNum>>,
             stacked: &BTreeSet<SlotNum>,
+            done: &mut HashSet<NodeIndex>,
         ) {
             let block = blocks[node].get_code();
             let mut stacked = stacked.clone();
@@ -811,7 +812,7 @@ impl BasicGraph {
                 Some(values) => drop(graphs.insert(node, values)),
                 None => {
                     // No value graph exists, but we can restart this analysis since, by construction,
-                    // a local is only stack'd when it's descendents have value graphs.
+                    // a local is only stack'd when its descendents have value graphs.
                     stacked = BTreeSet::new();
                 }
             };
@@ -821,8 +822,13 @@ impl BasicGraph {
                 stacked.remove(&slot);
             }
             for child in blocks.neighbors_directed(node, Direction::Outgoing) {
-                stack_locals(child, blocks, phis, graphs, who_stacks, who_pops, &stacked);
+                if !done.contains(&child) {
+                    stack_locals(
+                        child, blocks, phis, graphs, who_stacks, who_pops, &stacked, done,
+                    );
+                }
             }
+            done.insert(node);
         }
 
         stack_locals(
@@ -833,6 +839,7 @@ impl BasicGraph {
             &who_stacks,
             &pops,
             &BTreeSet::new(),
+            &mut HashSet::new(),
         );
     }
 }

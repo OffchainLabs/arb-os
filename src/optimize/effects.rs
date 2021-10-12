@@ -2,8 +2,8 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::mavm::{AVMOpcode, Opcode, Instruction};
 use crate::compile::translate;
+use crate::mavm::{AVMOpcode, Instruction, Opcode};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Effect {
@@ -68,7 +68,11 @@ impl Effects for Opcode {
             Pop(depth) => {
                 let code = vec![Instruction::from(self.clone())];
                 let code = translate::expand_pops(code);
-                code.into_iter().map(|curr| curr.opcode.effects()).flatten().collect()
+                code.into_iter()
+                    .map(|curr| curr.opcode.effects())
+                    .flatten()
+                    .filter(|effect| !matches!(effect, MoveToAux | MoveToStack))
+                    .collect()
             }
             AVMOpcode(avm_op) => avm_op.effects(),
             BackwardLabelTarget(..) => {

@@ -865,36 +865,40 @@ fn reorder_stack(
 
 #[test]
 fn reorder_test() {
-    /*let stack = [0, 1, 2, 3, 4];
-    let needs = [3, 1, 0, 1, 1, 0, 2];
-    let kills = [1, 3];*/
+    let mut rng = thread_rng();
 
-    let stack = [13];
-    let needs = [13];
-    let kills = [13];
+    for _ in 0..128 {
+        let mut stack: [usize; 32] = rng.gen();
+        let stack: HashSet<_> = IntoIterator::into_iter(stack).collect();
+        let stack: Vec<NodeIndex> = stack.into_iter().map(NodeIndex::new).collect();
 
-    let stack: Vec<_> = std::array::IntoIter::new(stack)
-        .map(NodeIndex::new)
-        .collect();
-    let needs: Vec<_> = std::array::IntoIter::new(needs)
-        .map(NodeIndex::new)
-        .collect();
-    let kills: HashSet<_> = std::array::IntoIter::new(kills)
-        .map(NodeIndex::new)
-        .collect();
+        let mut needs = vec![];
+        for item in &stack {
+            for _ in 0..(rand::random::<usize>() % 3) {
+                needs.push(*item);
+            }
+        }
 
-    let (code, mut new_stack) = reorder_stack(&stack, needs.clone(), kills, true);
-    println!("{:?}", stack);
-    println!("{:?}", new_stack);
-    for curr in code {
-        println!("{}", curr.pretty_print(Color::PINK));
+        let mut kills = HashSet::new();
+        for item in &needs {
+            if rand::random::<usize>() % 4 == 0 {
+                kills.insert(*item);
+            }
+        }
+
+        let (code, mut new_stack) = reorder_stack(&stack, needs.clone(), kills, true);
+        println!("{:?}", stack);
+        println!("{:?}", new_stack);
+        for curr in code {
+            println!("{}", curr.pretty_print(Color::PINK));
+        }
+
+        new_stack = new_stack
+            .into_iter()
+            .rev()
+            .take(needs.len())
+            .rev()
+            .collect();
+        assert_eq!(new_stack, needs);
     }
-
-    new_stack = new_stack
-        .into_iter()
-        .rev()
-        .take(needs.len())
-        .rev()
-        .collect();
-    assert_eq!(new_stack, needs);
 }
