@@ -3,7 +3,8 @@
  */
 
 use crate::compile::{DebugInfo, SlotNum};
-use crate::console::{print_columns, Color};
+use crate::console;
+use crate::console::Color;
 use crate::link::fold_tuples;
 use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
 use crate::optimize::effects::{Effect, Effects};
@@ -19,12 +20,14 @@ use rand::rngs::SmallRng;
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
+#[derive(Clone)]
 pub enum ValueNode {
-    Opcode(Opcode),     // a
-    Value(Value),       // a simple value
-    Arg(usize),         //
-    Local(SlotNum),     //
+    Opcode(Opcode), // a
+    Value(Value),   // a simple value
+    Arg(usize),     //
+    Local(SlotNum), //
     StackedLocal(SlotNum),
+    StackLocal(SlotNum),
     Drop(usize),
     Meta(&'static str), //
 }
@@ -94,6 +97,7 @@ fn node_data(
     (deps, users, dep_edges, user_edges)
 }
 
+#[derive(Default)]
 pub struct ValueGraph {
     graph: StableGraph<ValueNode, ValueEdge>,
     header: Vec<Instruction>,
@@ -132,6 +136,7 @@ impl ValueGraph {
                     ValueNode::Value(value) => value.pretty_print(Color::PINK),
                     ValueNode::Arg(num) => format!("Arg {}", Color::mint(num)),
                     ValueNode::Local(slot) => format!("Local {}", Color::mint(slot)),
+                    ValueNode::StackLocal(slot) => format!("Stack {}", Color::mint(slot)),
                     ValueNode::StackedLocal(slot) => format!("Stack'd {}", Color::mint(slot)),
                     ValueNode::Drop(count) => format!("Drop {}", Color::mint(count)),
                     ValueNode::Meta(name) => name.to_string(),
@@ -160,6 +165,7 @@ impl ValueGraph {
     pub fn new(code: &[Instruction], phis: &HashMap<SlotNum, SlotNum>) -> Option<Self> {
         Self::with_stack(
             code,
+            BTreeSet::new(),
             &BTreeSet::new(),
             &BTreeSet::new(),
             phis,
@@ -167,10 +173,15 @@ impl ValueGraph {
     }
 
     /// Create a new `ValueGraph` from a set of instructions without control flow
+    /// - stacked is the set of stack'd locals added before this block
+    /// - unstack is the set of stack'd locals that this block must pop
+    /// - tostack is the set of locals that this block will stack
+    /// - phis denotes which locals phi which others
     pub fn with_stack(
         mut code: &[Instruction],
-        stacked: &BTreeSet<SlotNum>,
+        mut stacked: BTreeSet<SlotNum>,
         unstack: &BTreeSet<SlotNum>,
+        tostack: &BTreeSet<SlotNum>,
         phis: &HashMap<SlotNum, SlotNum>,
     ) -> Option<Self> {
         // Algorithm
@@ -226,13 +237,9 @@ impl ValueGraph {
         let mut stack: VecDeque<NodeIndex> = VecDeque::new();
         let mut nargs = 0;
 
-        for slot in stacked {
-            let local = graph.add_node(ValueNode::StackedLocal(*slot));
-            locals.insert(*slot, local);
-        }
-        for slot in unstack {
-            let local = graph.add_node(ValueNode::StackedLocal(*slot));
-            locals.insert(*slot, local);
+        for &slot in &stacked {
+            let local = graph.add_node(ValueNode::StackedLocal(slot));
+            locals.insert(slot, local);
         }
 
         macro_rules! touch {
@@ -259,12 +266,6 @@ impl ValueGraph {
                 // complicate things as you can see in the #compiler-optimization-passes branch.
                 return None;
             }
-
-            /*let node = match curr.opcode {
-                Opcode::SetLocal(slot) if stacked.contains(slot) => {
-                    
-                }
-            };*/
 
             let node = graph.add_node(ValueNode::Opcode(curr.opcode));
             let effects = curr.opcode.effects();
@@ -304,7 +305,7 @@ impl ValueGraph {
                                 local
                             }
                         };
-                        
+
                         if stacked.contains(&slot) {
                             graph.add_edge(node, local, ValueEdge::Connect(0));
                         } else {
@@ -320,9 +321,13 @@ impl ValueGraph {
                                 local
                             }
                         };
-                        
-                        if stacked.contains(&slot) {
+
+                        assert!(!stacked.contains(&slot), "Not SSA: found write-after-write");
+
+                        if tostack.contains(&slot) {
+                            graph[local] = ValueNode::StackLocal(slot);
                             graph.add_edge(local, node, ValueEdge::Connect(0));
+                            stacked.insert(slot);
                         } else {
                             graph.add_edge(local, node, ValueEdge::Meta("write"));
                         }
@@ -382,6 +387,7 @@ impl ValueGraph {
         for (index, slot) in unstack.iter().enumerate() {
             let local = locals.get(slot).unwrap();
             graph.add_edge(drop_locals, *local, ValueEdge::Connect(index));
+            stacked.remove(slot);
         }
 
         // represents the output of the graph just before exiting
@@ -391,7 +397,7 @@ impl ValueGraph {
         graph.add_edge(output, drop_locals, ValueEdge::Meta("drops"));
 
         // locals still stack'd need to be placed at the top of the stack
-        for slot in stacked {
+        for slot in &stacked {
             let local = locals.get(slot).unwrap();
             stack.push_back(*local);
         }
@@ -503,7 +509,7 @@ impl ValueGraph {
                 .map(|x| x.pretty_print(Color::PINK))
                 .collect();
             let values = values.print_lines();
-            print_columns(vec![ssa, values], vec!["SSA", "values"]);
+            console::print_columns(vec![ssa, values], vec!["SSA", "values"]);
             panic!("Value graph is not a DAG!");
         }
 
@@ -568,6 +574,12 @@ impl ValueGraph {
         }
 
         let mut header = self.header.clone();
+
+        for node in graph.node_indices().rev() {
+            if let ValueNode::StackedLocal(_) = &graph[node] {
+                stack.push(node);
+            }
+        }
 
         // Pop unused arguments. We can't just ignore them, since they were created elsewhere.
         for node in graph.node_indices() {
@@ -637,9 +649,25 @@ impl ValueGraph {
             }
 
             // reorder the stack to place the inputs at the top and then consume them
-            let (trans, new_stack) = reorder_stack(&stack, needs, kills, false);
-            *stack = new_stack;
-            code.extend(trans);
+            match reorder_stack(&stack, needs, kills, false) {
+                Ok((trans, new_stack)) => {
+                    *stack = new_stack;
+                    code.extend(trans);
+                }
+                Err(msg) => {
+                    let mut fake = ValueGraph::default();
+                    fake.graph = (*graph).clone();
+                    let lines = fake.print_lines();
+                    let sofar = code
+                        .into_iter()
+                        .map(|x| x.pretty_print(Color::PINK))
+                        .collect();
+                    console::print_columns(vec![lines, sofar], vec!["Values", "Crash"]);
+                    println!("Could not reorder stack: {}", Color::red(msg));
+                    panic!();
+                }
+            }
+
             for _ in edges {
                 stack.pop();
             }
@@ -662,6 +690,9 @@ impl ValueGraph {
                         value.clone(),
                         DebugInfo::default(),
                     ));
+                    stack.push(node);
+                }
+                ValueNode::StackLocal(_) => {
                     stack.push(node);
                 }
                 ValueNode::Drop(count) => {
@@ -715,11 +746,21 @@ fn reorder_stack(
     needs: Vec<NodeIndex>,
     kills: HashSet<NodeIndex>,
     print: bool,
-) -> (Vec<Instruction>, Vec<NodeIndex>) {
+) -> Result<(Vec<Instruction>, Vec<NodeIndex>), &'static str> {
     // Algorithm
     //   Annotate the stack & needs with how many copies need to be made & their order
     //   Move a sliding window around, fixing order & duping values as is needed
     //   Optimize to compute an efficient transformation of Swap's, Dup's, and Aux code.
+
+    // Ensure needs are present on the stack & all kills are needed
+    let stack_check: HashSet<_> = stack.clone().into_iter().collect();
+    let needs_check: HashSet<_> = needs.clone().into_iter().collect();
+    if !stack_check.is_superset(&needs_check) {
+        return Err("needs ⊄ stack");
+    }
+    if !needs_check.is_superset(&kills) {
+        return Err("kills ⊄ needs");
+    }
 
     // Determine which values can be treated as "blanks" verses
     // those whose order we must track. Blanks get sifted to the bottom.
@@ -911,11 +952,11 @@ fn reorder_stack(
     );
 
     let stack = stack.into_iter().map(|item| item.0).collect();
-    (code, stack)
+    Ok((code, stack))
 }
 
 #[test]
-fn reorder_test() {
+fn reorder_test() -> Result<(), &'static str> {
     let mut rng = thread_rng();
 
     for _ in 0..128 {
@@ -929,7 +970,6 @@ fn reorder_test() {
                 needs.push(*item);
             }
         }
-
         let mut kills = HashSet::new();
         for item in &needs {
             if rand::random::<usize>() % 4 == 0 {
@@ -937,7 +977,7 @@ fn reorder_test() {
             }
         }
 
-        let (code, mut new_stack) = reorder_stack(&stack, needs.clone(), kills, true);
+        let (code, mut new_stack) = reorder_stack(&stack, needs.clone(), kills, true)?;
         println!("{:?}", stack);
         println!("{:?}", new_stack);
         for curr in code {

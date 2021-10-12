@@ -799,15 +799,16 @@ impl BasicGraph {
             let block = blocks[node].get_code();
             let mut stacked = stacked.clone();
 
-            if let Some(slots) = who_stacks.get(&node) {
-                stacked.extend(slots);
-            }
+            let tostack = match who_stacks.get(&node) {
+                Some(slots) => slots.clone(),
+                None => BTreeSet::new(),
+            };
             let unstack = match who_pops.get(&node) {
                 Some(slots) => slots.clone(),
                 None => BTreeSet::new(),
             };
 
-            match ValueGraph::with_stack(block, &stacked, &unstack, phis) {
+            match ValueGraph::with_stack(block, stacked.clone(), &unstack, &tostack, phis) {
                 Some(values) => {
                     graphs.insert(node, values);
                 }
@@ -818,10 +819,11 @@ impl BasicGraph {
                 }
             };
 
+            stacked.extend(tostack);
             for slot in unstack {
                 stacked.remove(&slot);
             }
-            
+
             for child in blocks.neighbors_directed(node, Direction::Outgoing) {
                 if !done.contains(&child) {
                     stack_locals(
@@ -846,7 +848,7 @@ impl BasicGraph {
         for (node, values) in &graphs {
             self.graph[*node] = BasicBlock::Code(values.codegen().0);
         }
-        
+
         show_all!();
     }
 }

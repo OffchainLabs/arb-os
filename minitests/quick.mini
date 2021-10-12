@@ -12,19 +12,22 @@ use core::kvs::builtin_kvsForall;
 use core::kvs::builtin_kvsSize;
 
 write func main() {
-    asm(tests().1) { log };
+    if let Some(issue) = test_1() {
+        asm(issue.1) { log };
+    } else {
+        asm("".1) { log };
+    }
 }
 
-func tests() -> (uint, buffer) {    
-    if unsafecast<uint>(
-        builtin_kvsForall(builtin_kvsSet(builtin_kvsSet(builtin_kvsNew(), 0, 56), 1, 99), sumForKvsIterator, 0)
-    ) != 155 {
-	return "map forall did not compute correctly";
+#[print]
+func test_1() -> option<string> {
+
+    let a = 32;
+
+    if a == 32 {
+        return None;
     }
     
-    ""
-}
-
-func sumForKvsIterator(_key: any, value: any, state: any) -> any {
-    unsafecast<uint>(value) + unsafecast<uint>(state)
+    
+    None
 }
