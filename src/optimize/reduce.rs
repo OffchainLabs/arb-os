@@ -8,7 +8,7 @@ use crate::console::Color;
 use crate::link::fold_tuples;
 use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
 use crate::optimize::effects::{Effect, Effects};
-use crate::optimize::peephole;
+use crate::optimize::reorder::reorder_stack;
 use crate::run::{Machine, MachineState};
 use petgraph::algo;
 use petgraph::graph::{EdgeIndex, NodeIndex};
@@ -20,34 +20,46 @@ use rand::rngs::SmallRng;
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
+/// Represents a value or value state in a `ValueGraph`
 #[derive(Clone)]
 pub enum ValueNode {
-    Opcode(Opcode), // a
-    Value(Value),   // a simple value
-    Arg(usize),     //
-    Local(SlotNum), //
-    StackedLocal(SlotNum),
-    StackLocal(SlotNum),
-    Drop(usize),
-    Meta(&'static str), //
+    Opcode(Opcode),        // An opcode that, when applied to its inputs, produces a value
+    Value(Value),          // A compile-time known AVM value
+    Arg(usize),            // A value created elsewhere that this valuegraph references
+    Local(SlotNum),        // A local variable on the Aux stack
+    StackedLocal(SlotNum), // A local variable that's been moved to the data stack
+    StackLocal(SlotNum),   // Operation for placing a local on the data stack
+    Drop(usize),           // Mechanism for popping a group of values
+    Meta(&'static str),    // A node that's just used to enforce some kind of ordering
 }
 
 impl ValueNode {
+    /// A node is prunable if, upon discovery that the output is unused, it can be removed.
     fn prunable(&self) -> bool {
+        // Value         T => an AVM value that's never read is useless
+        // Opcode        T => stateful opcodes will always be read by some Meta or Local node
+        // Arg           F => we must _pop_, rather than _prune_, unused args since we don't create them
+        // Local         F => you can't elide a local sets/gets variable without global knowledge
+        // Stack'd Local F => a future block might use this so we must _pop_ rather than _prune_
+        // Stack Local   F => a future block might use this so we must _pop_ rather than _prune_
+        // Drop          F => this is used to pop things that aren't prunable
+
         match self {
-            Self::Opcode(_) | Self::Value(_) => true,
+            Self::Value(_) | Self::Opcode(_) => true,
             _ => false,
         }
     }
 }
 
+/// Represents the relationship between two `ValueNode`s in a `ValueGraph`.
 #[derive(Clone, Copy)]
 pub enum ValueEdge {
-    Connect(usize),
-    Meta(&'static str),
+    Connect(usize),     // an edge that causes a node to consume the output of another
+    Meta(&'static str), // an edge that induces an ordering
 }
 
 impl ValueEdge {
+    /// Determines the consumption order of a `ValueNode` during codegen
     fn input_order(&self) -> Reverse<usize> {
         match self {
             Self::Connect(num) => Reverse(1 + *num),
@@ -56,10 +68,12 @@ impl ValueEdge {
     }
 }
 
+/// Retrieves the `NodeIndex`s of a graph without borrowing
 fn nodes(graph: &StableGraph<ValueNode, ValueEdge>) -> Vec<NodeIndex> {
     graph.node_indices().collect()
 }
 
+/// Retrieves the number of times other nodes consume this `ValueNode`
 fn conn_count(graph: &StableGraph<ValueNode, ValueEdge>, node: NodeIndex) -> usize {
     graph
         .edges_directed(node, Direction::Incoming)
@@ -67,6 +81,7 @@ fn conn_count(graph: &StableGraph<ValueNode, ValueEdge>, node: NodeIndex) -> usi
         .count()
 }
 
+/// Retrieves the inputs and outputs of a `ValueNode` and the associated `ValueEdge`s
 fn node_data(
     graph: &StableGraph<ValueNode, ValueEdge>,
     node: NodeIndex,
@@ -97,6 +112,8 @@ fn node_data(
     (deps, users, dep_edges, user_edges)
 }
 
+/// Represents how values in a `BasicBlock` relate to one another
+/// The header & footer save metadata not directly encoded in the value relationships themselves
 #[derive(Default)]
 pub struct ValueGraph {
     graph: StableGraph<ValueNode, ValueEdge>,
@@ -107,7 +124,7 @@ pub struct ValueGraph {
 
 macro_rules! opcode {
     ($opcode:ident) => {
-        Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), DebugInfo::default())
+        Instruction::from(Opcode::AVMOpcode(AVMOpcode::$opcode))
     };
     ($opcode:ident, $immediate:expr) => {
         Instruction::from_opcode_imm(
@@ -117,7 +134,7 @@ macro_rules! opcode {
         )
     };
     (@$($opcode:tt)+) => {
-        Instruction::from_opcode(Opcode::$($opcode)+, DebugInfo::default())
+        Instruction::from_opcode(Opcode::$($opcode)+)
     };
 }
 
@@ -162,6 +179,8 @@ impl ValueGraph {
         output
     }
 
+    /// Create a value graph, if possible, for set of instructions without any prior
+    /// knowledge of what's on the stack.
     pub fn new(code: &[Instruction], phis: &HashMap<SlotNum, SlotNum>) -> Option<Self> {
         Self::with_stack(
             code,
@@ -178,26 +197,34 @@ impl ValueGraph {
     /// - tostack is the set of locals that this block will stack
     /// - phis denotes which locals phi which others
     pub fn with_stack(
-        mut code: &[Instruction],
+        mut block: &[Instruction],
         mut stacked: BTreeSet<SlotNum>,
         unstack: &BTreeSet<SlotNum>,
         tostack: &BTreeSet<SlotNum>,
         phis: &HashMap<SlotNum, SlotNum>,
     ) -> Option<Self> {
         // Algorithm
-        //
+        //   Strip away metadata so that the code solely reflects the block's actions
+        //   Simulate the block's execution to determine the connectivity of values
+        //   Where possible pre-compute instructions whose inputs are statically known
+        //   Enforce phi and other orderings
+        //   Track output values for the exit
+        //   Prune provably useless values from the graph
         //
         // Assumptions
-        //   The instructions must be in SSA, which ensures blocks have:
-        //     No more than 1 jump, which can only be at the end of a block
-        //     No more than 1 label, which can only be at the start of a block
-        //     Locals are accessed at a common auxstack height
-        //     Phis & Drops may be moved to the end
-        //     The order of phis don't matter
+        //   The block must be in SSA, which ensures certain properties:
+        //     - There's no more than 1 jump, which can only be at the end of a block
+        //     - There's no more than 1 label, which can only be at the start of a block
+        //     - Phis & Drops may be moved to the end
+        //     - The order of phis don't matter
+        //   Locals are accessed at a common auxstack height
+        //     - There can't be Aux -pushes & -pops that misalign xgets and xsets
+        //   Pure funcs can be arbitrarily reordered
+        //     - Those that aren't view and write must be marked sensitive
 
         // Separate the metadata instructions from the top.
         let mut header = vec![];
-        for curr in code {
+        for curr in block {
             match &curr.opcode {
                 Opcode::Label(_) | Opcode::MakeFrame(..) => {
                     header.push(curr.clone());
@@ -205,24 +232,24 @@ impl ValueGraph {
                 _ => break,
             }
         }
-        code = &code[header.len()..];
+        block = &block[header.len()..];
 
         // Save Phis and Drops for the footer. Since they have no Opcode `Effects`,
         // they can stay in the slice.
         let mut footer = vec![];
-        for curr in code {
+        for curr in block {
             if let Opcode::MoveLocal(..) | Opcode::DropLocal(..) = &curr.opcode {
                 footer.push(curr.clone());
             }
         }
-        if let Some(last) = code.last() {
+        if let Some(last) = block.last() {
             match &last.opcode {
                 Opcode::Return
                 | Opcode::JumpTo(..)
                 | Opcode::CjumpTo(..)
                 | Opcode::AVMOpcode(AVMOpcode::Jump | AVMOpcode::Cjump) => {
                     footer.push(last.clone());
-                    code = &code[..(code.len() - 1)];
+                    block = &block[..(block.len() - 1)];
                 }
                 _ => {}
             }
@@ -238,10 +265,14 @@ impl ValueGraph {
         let mut nargs = 0;
 
         for &slot in &stacked {
+            // These are values already on the stack, so we can make nodes for them.
+            // We do this now for simplicity instead of being lazy as in for normal locals.
             let local = graph.add_node(ValueNode::StackedLocal(slot));
             locals.insert(slot, local);
         }
 
+        /// Ensures the stack has enough args.
+        /// For example, stack(2) ensures at least 2 args are on the stack, and if not prepends them.
         macro_rules! touch {
             ($count:expr) => {
                 let count: usize = $count;
@@ -255,7 +286,12 @@ impl ValueGraph {
             };
         }
 
-        for curr in code {
+        for curr in block {
+            // Since we track the stack, each instruction informs our relationships between values.
+            // For simplicity, we split up an instruction into its immediate & opcode, adding nodes for each.
+            // Each opcode has a set of effects, which when stepped through may reveal additional info,
+            // including things like the need to create Local nodes, track globals, etc.
+
             if let Some(value) = &curr.immediate {
                 let node = graph.add_node(ValueNode::Value(value.clone()));
                 stack.push_back(node);
@@ -361,7 +397,9 @@ impl ValueGraph {
             }
         }
 
-        // Order locals based on phis. We need to ensure
+        // Enforce phi-orderings. The Local nodes so far only gauruntee that SetLocal()
+        // happens before GetLocal() during codegen. We need to further ensure that for
+        // each φ(dest, source) each SetLocal(source) happens before all GetLocal(dest)
         for (source, dest) in phis {
             let source = match locals.get(source) {
                 Some(node) => *node,
@@ -376,11 +414,11 @@ impl ValueGraph {
             let dest_accessors: Vec<_> = graph.neighbors_undirected(dest).collect();
             for source_access in source_accessors {
                 for &dest_access in &dest_accessors {
-                    graph.add_edge(source_access, dest_access, ValueEdge::Meta("phi"));
+                    graph.add_edge(source_access, dest_access, ValueEdge::Meta("φ"));
                 }
             }
 
-            graph.add_edge(source, dest, ValueEdge::Meta("phi"));
+            graph.add_edge(source, dest, ValueEdge::Meta("φ"));
         }
 
         // represents stack'd locals that need to be dropped
@@ -397,7 +435,7 @@ impl ValueGraph {
         // drop the locals we'll never use again right at the end
         graph.add_edge(output, drop_locals, ValueEdge::Meta("drops"));
 
-        // locals still stack'd need to be placed at the top of the stack
+        // locals still stack'd need to be placed at the top of the data stack
         for slot in &stacked {
             let local = locals.get(slot).unwrap();
             stack.push_back(*local);
@@ -408,17 +446,15 @@ impl ValueGraph {
             graph.add_edge(output, item, ValueEdge::Connect(index));
         }
 
-        // edits to global state must be written
-        graph.add_edge(output, globals, ValueEdge::Meta("globals"));
-
-        // edits to local variables must be written
+        // state updates are part of the output
         for (_, local) in locals {
             graph.add_edge(output, local, ValueEdge::Meta("locals"));
         }
+        graph.add_edge(output, globals, ValueEdge::Meta("globals"));
 
         /// Statically analyze the graph for values we can compute at compile time.
         fn fold_constants(graph: &mut StableGraph<ValueNode, ValueEdge>) {
-            // perform constant folding
+            // For all nodes that aren't stateful, try to pre-compute their values
 
             'next: for node in nodes(&graph) {
                 if let ValueNode::Opcode(opcode) = &graph[node] {
@@ -426,6 +462,8 @@ impl ValueGraph {
                     // building a machine whose only purpose is to execute the opcode and then halt.
 
                     if let Opcode::FuncCall(..) | Opcode::AVMOpcode(AVMOpcode::Hash) = opcode {
+                        // Hash is unsafe since the emulator isn't to spec.
+                        // Func calls require more complex infrusture to safely pre-compute.
                         continue;
                     }
 
@@ -505,7 +543,13 @@ impl ValueGraph {
         };
 
         if algo::is_cyclic_directed(&values.graph) {
-            let ssa = code
+            // By construction, a value graph is a DAG.
+            // Each edge represents a dependency: compute this to compute that.
+            // For there to be a cycle, computing a value would require computing
+            // another that in turn requires computing the first. This is impossible
+            // for a basic block since it doesn't have control flow.
+
+            let ssa = block
                 .into_iter()
                 .map(|x| x.pretty_print(Color::PINK))
                 .collect();
@@ -551,6 +595,7 @@ impl ValueGraph {
         known
     }
 
+    /// Flatten a `ValueGraph` into an efficient block of equivalent instructions
     pub fn codegen(&self) -> (Vec<Instruction>, usize) {
         let mut stack = vec![];
         let graph = &self.graph;
@@ -574,13 +619,15 @@ impl ValueGraph {
             };
         }
 
-        let mut header = self.header.clone();
-
+        // Stack'd locals are always on top of the data stack when entering a basic block.
+        // This is something codegen must guarantee later too.
         for node in graph.node_indices().rev() {
             if let ValueNode::StackedLocal(_) = &graph[node] {
                 stack.push(node);
             }
         }
+
+        let mut header = self.header.clone();
 
         // Pop unused arguments. We can't just ignore them, since they were created elsewhere.
         for node in graph.node_indices() {
@@ -593,24 +640,22 @@ impl ValueGraph {
             }
         }
 
-        // determine the number of times each node is used by another
+        // Determine the number of times each node is used by another.
         let mut conn_counts = HashMap::new();
         for node in graph.node_indices() {
             conn_counts.insert(node, conn_count(&graph, node));
         }
 
-        let output = self.output;
-
+        /// Walk the `ValueGraph`, building the instructions in a bottom-up manner.
         fn descend(
             node: NodeIndex,
             graph: &StableGraph<ValueNode, ValueEdge>,
             stack: &mut Vec<NodeIndex>,
             conn_counts: &mut HashMap<NodeIndex, usize>,
             entropy: &mut SmallRng,
+            code: &mut Vec<Instruction>,
             done: &mut HashSet<NodeIndex>,
-        ) -> Vec<Instruction> {
-            let mut code = vec![];
-
+        ) {
             let mut deps: Vec<_> = graph.edges_directed(node, Direction::Outgoing).collect();
             deps.shuffle(entropy);
 
@@ -618,7 +663,7 @@ impl ValueGraph {
             for edge in &deps {
                 let input = edge.target();
                 if !done.contains(&input) {
-                    code.extend(descend(input, graph, stack, conn_counts, entropy, done));
+                    descend(input, graph, stack, conn_counts, entropy, code, done);
                 }
             }
 
@@ -675,7 +720,7 @@ impl ValueGraph {
 
             match &graph[node] {
                 ValueNode::Opcode(opcode) => {
-                    code.push(Instruction::from_opcode(*opcode, DebugInfo::default()));
+                    code.push(Instruction::from(*opcode));
                     let pushes = opcode
                         .effects()
                         .into_iter()
@@ -705,26 +750,26 @@ impl ValueGraph {
             }
 
             done.insert(node);
-            code
         }
 
         let mut best = vec![];
         let mut best_cost = usize::MAX;
         let mut entropy: SmallRng = SeedableRng::seed_from_u64(0);
 
-        for _ in 0..128 {
+        for _ in 0..32 {
             // attempt to codegen a better set of instructions than the best found so far.
 
             let mut stack = stack.clone();
             let mut alt = header.clone();
-            alt.extend(descend(
-                output,
+            descend(
+                self.output,
                 &graph,
                 &mut stack,
                 &mut conn_counts.clone(),
                 &mut entropy,
+                &mut alt,
                 &mut HashSet::new(),
-            ));
+            );
             let alt_cost = alt.iter().map(|x| x.opcode.base_cost()).sum();
 
             if alt_cost < best_cost {
@@ -737,259 +782,4 @@ impl ValueGraph {
         best.extend(self.footer.clone());
         (best, best_cost)
     }
-}
-
-/// Reorder the stack to place needed values on top.
-/// - needs represent the ordered, potentially duplicated, values we want at the top of the stack
-/// - kills represent needs we don't need to save future copies of.
-fn reorder_stack(
-    stack: &Vec<NodeIndex>,
-    needs: Vec<NodeIndex>,
-    kills: HashSet<NodeIndex>,
-    print: bool,
-) -> Result<(Vec<Instruction>, Vec<NodeIndex>), &'static str> {
-    // Algorithm
-    //   Annotate the stack & needs with how many copies need to be made & their order
-    //   Move a sliding window around, fixing order & duping values as is needed
-    //   Optimize to compute an efficient transformation of Swap's, Dup's, and Aux code.
-
-    // Ensure needs are present on the stack & all kills are needed
-    let stack_check: HashSet<_> = stack.clone().into_iter().collect();
-    let needs_check: HashSet<_> = needs.clone().into_iter().collect();
-    if !stack_check.is_superset(&needs_check) {
-        return Err("needs ⊄ stack");
-    }
-    if !needs_check.is_superset(&kills) {
-        return Err("kills ⊄ needs");
-    }
-
-    // Determine which values can be treated as "blanks" verses
-    // those whose order we must track. Blanks get sifted to the bottom.
-    let used: HashSet<_> = needs.clone().into_iter().collect();
-    let mut stack: Vec<_> = stack
-        .into_iter()
-        .map(|item| (*item, 0, used.contains(item)))
-        .collect();
-
-    // Differentiate needs based on their copy number.
-    let mut need_counts: HashMap<_, usize> = HashMap::new();
-    let needs: Vec<_> = needs
-        .into_iter()
-        .map(|need| {
-            // If a value isn't killed, we need to leave a copy of it on the stack.
-            // We can do this by saying we need the 1st copy of an unkilled value.
-            // Since the 0th version won't be marked as "needed", it'll be left under the stack.
-            let start = match kills.contains(&need) {
-                true => 0,
-                false => 1,
-            };
-            let count = need_counts.entry(need).or_insert(start);
-            let exact = (need, *count, true);
-            *count += 1;
-            exact
-        })
-        .collect();
-
-    // The "highest copy" of a need is its latest copy on the stack.
-    // The "highest need" of a need is the final copy we'll eventually want on the stack.
-    let mut highest_copy: HashMap<_, _> = need_counts.iter().map(|(n, _)| (*n, 0)).collect();
-    let highest_need: HashMap<_, _> = need_counts.iter().map(|(n, c)| (*n, c - 1)).collect();
-
-    /// Determine if two items on the stack need to be swapped
-    fn out_of_order(
-        upper: &(NodeIndex, usize, bool),
-        lower: &(NodeIndex, usize, bool),
-        needs: &Vec<(NodeIndex, usize, bool)>,
-    ) -> bool {
-        let upper_pos = (upper.2).then(|| needs.into_iter().position(|n| *n == *upper));
-        let lower_pos = (lower.2).then(|| needs.into_iter().position(|n| *n == *lower));
-
-        match (upper_pos, lower_pos) {
-            (Some(Some(upper_pos)), Some(Some(lower_pos))) => {
-                // two needs whose positions differ
-                upper_pos < lower_pos
-            }
-            (Some(None), Some(Some(_))) => {
-                // a 0th copy we need to save vs a true need
-                true
-            }
-            _ => {
-                // a blank vs a need
-                (!upper.2 || upper_pos.is_none()) && lower.2
-            }
-        }
-    }
-
-    let print_stack = |title: &str, stack: &Vec<(NodeIndex, usize, bool)>| {
-        if print {
-            print!("{}", title);
-            for item in stack {
-                match item.2 {
-                    true => print!(" {}{}{}", item.0.index(), Color::grey("-"), item.1),
-                    false => print!("{}", Color::grey(" ???")),
-                }
-            }
-            println!();
-        }
-    };
-    print_stack("needs", &needs);
-    print_stack("start", &stack);
-
-    let mut debug = DebugInfo::default();
-    debug.attributes.color_group = 1;
-    macro_rules! opcode {
-        ($opcode:ident) => {
-            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), debug)
-        };
-    }
-
-    let mut code = vec![];
-
-    macro_rules! window {
-        ($label:tt) => {
-            // Fix any out-of-order items on the part of the stack we can access
-            // with Dups & Swaps. We call this top part of the stack the "window".
-
-            let len = stack.len();
-            let mut top = (len >= 1).then(|| stack[len - 1]);
-            let mut mid = (len >= 2).then(|| stack[len - 2]);
-            let mut bot = (len >= 3).then(|| stack[len - 3]);
-
-            if let (Some(top_val), Some(bot_val)) = &(top, bot) {
-                if out_of_order(top_val, bot_val, &needs) {
-                    code.push(opcode!(Swap2));
-                    stack.swap(len - 1, len - 3);
-                    top = Some(*bot_val);
-                    bot = Some(*top_val);
-                    print_stack("swap2", &stack);
-                }
-            }
-            if let (Some(top_val), Some(mid_val)) = &(top, mid) {
-                if out_of_order(top_val, mid_val, &needs) {
-                    code.push(opcode!(Swap1));
-                    stack.swap(len - 1, len - 2);
-                    top = Some(*mid_val);
-                    mid = Some(*top_val);
-                    print_stack("swap1", &stack);
-                }
-            }
-
-            // For safety we update these to point to the right items even if they aren't used again,
-            // so we do this assignment to silence the "unused assignment" warnings
-            let _ = (top, bot, mid);
-
-            // Now that we've ordered the window, see if there's any dups needed.
-            $label: loop {
-                for depth in 1..3 {
-                    let len = stack.len();
-                    let item = (len >= depth).then(|| stack[len - depth]);
-                    if let Some((item, _, true)) = item {
-                        let high_copy = *highest_copy.get(&item).unwrap();
-                        let high_need = *highest_need.get(&item).unwrap();
-                        if high_copy < high_need {
-                            code.push(match depth {
-                                1 => opcode!(Dup0),
-                                2 => opcode!(Dup1),
-                                3 => opcode!(Dup2),
-                                _ => unreachable!(),
-                            });
-                            stack.push((item, high_copy + 1, true));
-                            highest_copy.insert(item, high_copy + 1);
-                            print_stack(&format!("dup{} ", depth - 1), &stack);
-                            continue $label;
-                        }
-                    }
-                }
-                break;
-            }
-        };
-    }
-
-    let mut aux = vec![]; // values temporarily in the aux stack.
-
-    loop {
-        // Slide the window up and down via AuxPush & AuxPop, making corrections until
-        // what we need is at the top of the stack.
-
-        while stack.len() > 0 {
-            window!('going_down);
-            code.push(opcode!(AuxPush));
-            aux.push(stack.pop().unwrap());
-            print_stack("apush", &stack);
-        }
-
-        while aux.len() > 0 {
-            code.push(opcode!(AuxPop));
-            stack.push(aux.pop().unwrap());
-            print_stack("aupop", &stack);
-            window!('going_up);
-        }
-
-        let top_of_stack: Vec<_> = stack.iter().rev().take(needs.len()).rev().collect();
-        let what_we_need: Vec<_> = needs.iter().collect();
-        if top_of_stack != what_we_need {
-            continue;
-        }
-
-        print_stack("final", &stack);
-        break;
-    }
-
-    // Eliminate any spans of AuxPush's and AuxPop's. These cancel each other out,
-    // and by eliding them we've essentially transformed the window function to
-    // ignore ordered parts of the stack as it intelligently moves the window
-    // directly to where values need to be swapped.
-    let code = peephole::filter_pair(
-        code,
-        Opcode::AVMOpcode(AVMOpcode::AuxPush),
-        Opcode::AVMOpcode(AVMOpcode::AuxPop),
-    );
-    let code = peephole::filter_pair(
-        code,
-        Opcode::AVMOpcode(AVMOpcode::AuxPop),
-        Opcode::AVMOpcode(AVMOpcode::AuxPush),
-    );
-
-    let stack = stack.into_iter().map(|item| item.0).collect();
-    Ok((code, stack))
-}
-
-#[test]
-fn reorder_test() -> Result<(), &'static str> {
-    let mut rng = thread_rng();
-
-    for _ in 0..128 {
-        let mut stack: [usize; 32] = rng.gen();
-        let stack: HashSet<_> = IntoIterator::into_iter(stack).collect();
-        let stack: Vec<NodeIndex> = stack.into_iter().map(NodeIndex::new).collect();
-
-        let mut needs = vec![];
-        for item in &stack {
-            for _ in 0..(rand::random::<usize>() % 3) {
-                needs.push(*item);
-            }
-        }
-        let mut kills = HashSet::new();
-        for item in &needs {
-            if rand::random::<usize>() % 4 == 0 {
-                kills.insert(*item);
-            }
-        }
-
-        let (code, mut new_stack) = reorder_stack(&stack, needs.clone(), kills, true)?;
-        println!("{:?}", stack);
-        println!("{:?}", new_stack);
-        for curr in code {
-            println!("{}", curr.pretty_print(Color::PINK));
-        }
-
-        new_stack = new_stack
-            .into_iter()
-            .rev()
-            .take(needs.len())
-            .rev()
-            .collect();
-        assert_eq!(new_stack, needs);
-    }
-    Ok(())
 }

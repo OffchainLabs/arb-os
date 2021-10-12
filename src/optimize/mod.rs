@@ -20,6 +20,7 @@ use std::hash::Hasher;
 mod effects;
 mod peephole;
 mod reduce;
+mod reorder;
 
 /// Represents a block of instructions that has no control flow
 pub enum BasicBlock {
@@ -837,7 +838,7 @@ impl BasicGraph {
             done.insert(node);
         }
 
-        stack_locals(
+        /*stack_locals(
             self.entry,
             &self.graph,
             &phis,
@@ -850,7 +851,7 @@ impl BasicGraph {
 
         for (node, values) in &graphs {
             self.graph[*node] = BasicBlock::Code(values.codegen().0);
-        }
+        }*/
 
         show_all!();
     }
