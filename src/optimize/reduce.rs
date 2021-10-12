@@ -24,6 +24,8 @@ pub enum ValueNode {
     Value(Value),       // a simple value
     Arg(usize),         //
     Local(SlotNum),     //
+    StackedLocal(SlotNum),
+    Drop(usize),
     Meta(&'static str), //
 }
 
@@ -130,6 +132,8 @@ impl ValueGraph {
                     ValueNode::Value(value) => value.pretty_print(Color::PINK),
                     ValueNode::Arg(num) => format!("Arg {}", Color::mint(num)),
                     ValueNode::Local(slot) => format!("Local {}", Color::mint(slot)),
+                    ValueNode::StackedLocal(slot) => format!("Stack'd {}", Color::mint(slot)),
+                    ValueNode::Drop(count) => format!("Drop {}", Color::mint(count)),
                     ValueNode::Meta(name) => name.to_string(),
                 }
             );
@@ -156,20 +160,18 @@ impl ValueGraph {
     pub fn new(code: &[Instruction], phis: &HashMap<SlotNum, SlotNum>) -> Option<Self> {
         Self::with_stack(
             code,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
             phis,
-            &BTreeSet::new(),
-            &BTreeSet::new(),
-            &BTreeSet::new(),
         )
     }
 
     /// Create a new `ValueGraph` from a set of instructions without control flow
     pub fn with_stack(
         mut code: &[Instruction],
-        phis: &HashMap<SlotNum, SlotNum>,
-        to_stack: &BTreeSet<SlotNum>,
-        to_pop: &BTreeSet<SlotNum>,
         stacked: &BTreeSet<SlotNum>,
+        unstack: &BTreeSet<SlotNum>,
+        phis: &HashMap<SlotNum, SlotNum>,
     ) -> Option<Self> {
         // Algorithm
         //
@@ -224,6 +226,15 @@ impl ValueGraph {
         let mut stack: VecDeque<NodeIndex> = VecDeque::new();
         let mut nargs = 0;
 
+        for slot in stacked {
+            let local = graph.add_node(ValueNode::StackedLocal(*slot));
+            locals.insert(*slot, local);
+        }
+        for slot in unstack {
+            let local = graph.add_node(ValueNode::StackedLocal(*slot));
+            locals.insert(*slot, local);
+        }
+
         macro_rules! touch {
             ($count:expr) => {
                 let count: usize = $count;
@@ -248,6 +259,12 @@ impl ValueGraph {
                 // complicate things as you can see in the #compiler-optimization-passes branch.
                 return None;
             }
+
+            /*let node = match curr.opcode {
+                Opcode::SetLocal(slot) if stacked.contains(slot) => {
+                    
+                }
+            };*/
 
             let node = graph.add_node(ValueNode::Opcode(curr.opcode));
             let effects = curr.opcode.effects();
@@ -287,15 +304,28 @@ impl ValueGraph {
                                 local
                             }
                         };
-                        graph.add_edge(node, local, ValueEdge::Meta("read"));
+                        
+                        if stacked.contains(&slot) {
+                            graph.add_edge(node, local, ValueEdge::Connect(0));
+                        } else {
+                            graph.add_edge(node, local, ValueEdge::Meta("read"));
+                        }
                     }
                     Effect::WriteLocal(slot) => {
-                        let local = graph.add_node(ValueNode::Local(slot));
-                        if let Some(_) = locals.get(&slot) {
-                            unreachable!("Not SSA: found 2nd write or write-after-read");
+                        let local = match locals.get(&slot) {
+                            Some(local) => *local,
+                            None => {
+                                let local = graph.add_node(ValueNode::Local(slot));
+                                locals.insert(slot, local);
+                                local
+                            }
+                        };
+                        
+                        if stacked.contains(&slot) {
+                            graph.add_edge(local, node, ValueEdge::Connect(0));
+                        } else {
+                            graph.add_edge(local, node, ValueEdge::Meta("write"));
                         }
-                        graph.add_edge(local, node, ValueEdge::Meta("write"));
-                        locals.insert(slot, local);
                     }
                     Effect::ReadGlobal => {
                         graph.add_edge(node, globals, ValueEdge::Meta("view"));
@@ -347,8 +377,24 @@ impl ValueGraph {
             graph.add_edge(source, dest, ValueEdge::Meta("phi"));
         }
 
+        // represents stack'd locals that need to be dropped
+        let drop_locals = graph.add_node(ValueNode::Drop(unstack.len()));
+        for (index, slot) in unstack.iter().enumerate() {
+            let local = locals.get(slot).unwrap();
+            graph.add_edge(drop_locals, *local, ValueEdge::Connect(index));
+        }
+
         // represents the output of the graph just before exiting
         let output = graph.add_node(ValueNode::Meta("output"));
+
+        // drop the locals we'll never use again right at the end
+        graph.add_edge(output, drop_locals, ValueEdge::Meta("drops"));
+
+        // locals still stack'd need to be placed at the top of the stack
+        for slot in stacked {
+            let local = locals.get(slot).unwrap();
+            stack.push_back(*local);
+        }
 
         // items left on the stack need to be passed on
         for (index, item) in stack.into_iter().rev().enumerate() {
@@ -617,6 +663,11 @@ impl ValueGraph {
                         DebugInfo::default(),
                     ));
                     stack.push(node);
+                }
+                ValueNode::Drop(count) => {
+                    for _ in 0..*count {
+                        code.push(Instruction::from(Opcode::AVMOpcode(AVMOpcode::Pop)));
+                    }
                 }
                 _ => {}
             }
