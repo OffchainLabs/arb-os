@@ -3,8 +3,8 @@
  */
 
 use crate::compile::{DebugInfo, SlotNum};
-use crate::console::Color;
 use crate::console;
+use crate::console::Color;
 use crate::link::fold_tuples;
 use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
 use crate::optimize::effects::{Effect, Effects};
@@ -325,7 +325,7 @@ impl ValueGraph {
                         assert!(!stacked.contains(&slot), "Not SSA: found write-after-write");
 
                         if tostack.contains(&slot) {
-                            graph.add_edge(local, node, ValueEdge::Connect(0));
+                            graph.add_edge(local, node, ValueEdge::Meta("stacking"));
                             graph[local] = ValueNode::StackLocal(slot);
                             graph[node] = ValueNode::Opcode(Opcode::AVMOpcode(AVMOpcode::Noop));
                             stacked.insert(slot);
@@ -659,7 +659,10 @@ impl ValueGraph {
                     let mut fake = ValueGraph::default();
                     fake.graph = (*graph).clone();
                     let lines = fake.print_lines();
-                    let sofar = code.into_iter().map(|x| x.pretty_print(Color::PINK)).collect();
+                    let sofar = code
+                        .into_iter()
+                        .map(|x| x.pretty_print(Color::PINK))
+                        .collect();
                     console::print_columns(vec![lines, sofar], vec!["Values", "Crash"]);
                     println!("Could not reorder stack: {}", Color::red(msg));
                     panic!();
@@ -759,7 +762,7 @@ fn reorder_stack(
     if !needs_check.is_superset(&kills) {
         return Err("kills ⊄ needs");
     }
-    
+
     // Determine which values can be treated as "blanks" verses
     // those whose order we must track. Blanks get sifted to the bottom.
     let used: HashSet<_> = needs.clone().into_iter().collect();
@@ -802,10 +805,8 @@ fn reorder_stack(
         let lower_pos = (lower.2).then(|| needs.into_iter().position(|n| *n == *lower));
 
         match (upper_pos, lower_pos) {
-            (Some(Some(_)), Some(Some(_))) => {
+            (Some(Some(upper_pos)), Some(Some(lower_pos))) => {
                 // two needs whose positions differ
-                let upper_pos = needs.into_iter().position(|n| *n == *upper).unwrap();
-                let lower_pos = needs.into_iter().position(|n| *n == *lower).unwrap();
                 upper_pos < lower_pos
             }
             (Some(None), Some(Some(_))) => {
@@ -990,4 +991,5 @@ fn reorder_test() -> Result<(), &'static str> {
             .collect();
         assert_eq!(new_stack, needs);
     }
+    Ok(())
 }

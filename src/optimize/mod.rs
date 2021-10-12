@@ -808,6 +808,9 @@ impl BasicGraph {
                 None => BTreeSet::new(),
             };
 
+            let check_stack: BTreeSet<_> = stacked.union(&tostack).cloned().collect();
+            assert!(unstack.is_subset(&check_stack), "unstack ⊄ stack ∪ tostack");
+
             match ValueGraph::with_stack(block, stacked.clone(), &unstack, &tostack, phis) {
                 Some(values) => {
                     graphs.insert(node, values);
