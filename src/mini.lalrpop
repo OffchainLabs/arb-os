@@ -605,7 +605,9 @@ Expr12: Expr = {
     <qualifiers: (<Qualifier>)*> <lno: @L> <u: ClosureUsage> "(" <fa:FuncArgs> ")" <t: (Return)?> <block:CodeBlock> => {
         let view = qualifiers.contains(&"view");
         let write = qualifiers.contains(&"write");
-        let debug = DebugInfo::here(file_info, lno, filename);
+        let print = qualifiers.contains(&"__codegen_print");
+        let mut debug = DebugInfo::here(file_info, lno, filename);
+        debug.attributes.codegen_print = print;
 
         let mut stats = block.body;
         if let Some(expr) = block.ret_expr {
@@ -706,6 +708,7 @@ Qualifier: &'input str = {
     "write" => <>,
     "public" => <>,
     "sensitive" => <>,
+    "__codegen_print" => <>
 };
 
 IdentStr: &'input str = {

@@ -74,6 +74,7 @@ pub fn expand_pops(code: Vec<Instruction>) -> Vec<Instruction> {
                     for _ in 0..(x - 1) {
                         code.push(opcode!(AuxPush));
                     }
+                    code.push(opcode!(Swap1));
                     code.push(opcode!(Pop));
                     for _ in 0..(x - 1) {
                         code.push(opcode!(AuxPop));

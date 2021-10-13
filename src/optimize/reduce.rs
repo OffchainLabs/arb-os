@@ -57,6 +57,7 @@ impl ValueNode {
 pub enum ValueEdge {
     Connect(usize),     // an edge that causes a node to consume the output of another
     Meta(&'static str), // an edge that induces an ordering
+    Order,              // an edge that induces an ordering without implying necessity
 }
 
 impl ValueEdge {
@@ -64,7 +65,7 @@ impl ValueEdge {
     fn input_order(&self) -> Reverse<usize> {
         match self {
             Self::Connect(num) => Reverse(1 + *num),
-            Self::Meta(_) => Reverse(usize::MAX),
+            Self::Order | Self::Meta(_) => Reverse(usize::MAX),
         }
     }
 }
@@ -84,6 +85,14 @@ fn conn_count(graph: &StableGraph<ValueNode, ValueEdge>, node: NodeIndex) -> usi
     graph
         .edges_directed(node, Direction::Incoming)
         .filter(|edge| matches!(edge.weight(), ValueEdge::Connect(_)))
+        .count()
+}
+
+/// Retrieves the number of times other nodes statefully depend on this `ValueNode`
+fn meta_count(graph: &StableGraph<ValueNode, ValueEdge>, node: NodeIndex) -> usize {
+    graph
+        .edges_directed(node, Direction::Incoming)
+        .filter(|edge| matches!(edge.weight(), ValueEdge::Meta(_)))
         .count()
 }
 
@@ -162,7 +171,7 @@ impl ValueGraph {
                     ValueNode::StackLocal(slot) => format!("Stack {}", Color::mint(slot)),
                     ValueNode::StackedLocal(slot) => format!("Stack'd {}", Color::mint(slot)),
                     ValueNode::Drop(count) => format!("Drop {}", Color::mint(count)),
-                    ValueNode::Alias => Color::lavender("Alias"),
+                    ValueNode::Alias => Color::blue("Alias"),
                     ValueNode::Meta(name) => name.to_string(),
                 }
             );
@@ -178,6 +187,7 @@ impl ValueGraph {
                     match edge.weight() {
                         ValueEdge::Connect(_) => Color::grey(input.index()),
                         ValueEdge::Meta(_) => Color::mint(input.index()),
+                        ValueEdge::Order => Color::blue(input.index()),
                     }
                 );
             }
@@ -432,7 +442,7 @@ impl ValueGraph {
 
             for node in neighbors(&graph, local) {
                 // the drop must occur after all uses of the local
-                graph.add_edge(drop_locals, node, ValueEdge::Meta("drop"));
+                graph.add_edge(drop_locals, node, ValueEdge::Order);
             }
 
             graph.add_edge(drop_locals, local, ValueEdge::Connect(index));
@@ -445,6 +455,7 @@ impl ValueGraph {
         // drop the locals we'll never use again right at the end
         graph.add_edge(output, drop_locals, ValueEdge::Meta("drops"));
 
+        /// Give up and print the value graph
         macro_rules! bail {
             ($text:expr) => {
                 println!("{}", Color::red("Bailing on graph"));
@@ -573,9 +584,8 @@ impl ValueGraph {
             loop {
                 let node_count = graph.node_count();
                 graph.retain_nodes(|this, node| {
-                    !this[node].prunable()
-                        || this.neighbors_directed(node, Direction::Incoming).count() > 0
-                        || node == output
+                    let need_count = conn_count(&this, node) + meta_count(&this, node);
+                    !this[node].prunable() || need_count > 0 || node == output
                 });
                 if graph.node_count() == node_count {
                     break;

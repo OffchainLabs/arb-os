@@ -68,6 +68,11 @@ impl Color {
         Color::color(Color::MINT, text)
     }
 
+    /// Colors text lime.
+    pub fn lime<S: fmt::Display>(text: S) -> String {
+        Color::color(Color::LIME, text)
+    }
+
     /// Colors text orange.
     pub fn orange<S: fmt::Display>(text: S) -> String {
         Color::color(Color::ORANGE, text)
