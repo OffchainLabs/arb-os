@@ -25,94 +25,93 @@ const TwoTo64 = 0x10000000000000000;
 const LargeOffset = 0xf000000000000000;
 
 write func main() {
-	asm(tests(),) { log };
+    asm(tests()) { log };
 }
 
 func tests() -> uint {
 
-	let buf = newbuffer();
-	let buf2 = setbuffer8(buf, 10000, 12);
+    let buf = newbuffer();
+    let buf2 = setbuffer8(buf, 10000, 12);
 
-	if (getbuffer8(buf, 10000) != 0) {
-		return 987;
-	}	
-
-	// check that this wont error
-	let _ = setbuffer8(buf2, 10000, 1234);
-
-	let ba = bytearray_new(33);
-	if (bytearray_size(ba) != 0) {
-		return 1;
-	}
-
-	ba = bytearray_new(117);
-	ba = bytearray_setByte(ba, 33, 42);
-    if (bytearray_getByte(ba, 33) != 42) {
-	    return 2;
+    if getbuffer8(buf, 10000) != 0 {
+	return 987;
     }
 
-	ba = bytearray_new(117);
-	ba = bytearray_setByte(ba, 33000, 42);
-    if (bytearray_getByte(ba, 33000) != 42) {
-	    return 2001;
+    // check that this wont error
+    let _ = setbuffer8(buf2, 10000, 1234);
+    let ba = bytearray_new(33);
+    if bytearray_size(ba) != 0 {
+	return 1;
     }
 
-	ba = bytearray_new(117);
-	ba = bytearray_setByte(ba, 33, 42);
+    ba = bytearray_new(117);
+    ba = bytearray_setByte(ba, 33, 42);
+    if bytearray_getByte(ba, 33) != 42 {
+	return 2;
+    }
+
+    ba = bytearray_new(117);
+    ba = bytearray_setByte(ba, 33000, 42);
+    if bytearray_getByte(ba, 33000) != 42 {
+	return 2001;
+    }
+
+    ba = bytearray_new(117);
+    ba = bytearray_setByte(ba, 33, 42);
     ba = bytearray_setByte(ba, 37, 99);
-    if (bytearray_getByte(ba, 33) != 42) {
-		return 3;
-	}
+    if bytearray_getByte(ba, 33) != 42 {
+	return 3;
+    }
 
-	ba = bytearray_new(117);
-	ba = bytearray_setByte(ba, 37, 42+99*256);
-	ba = bytearray_setByte(ba, 36, 999999999999999999);
-    if (bytearray_getByte(ba, 37) != 42) {
-		return 4;
-	}
+    ba = bytearray_new(117);
+    ba = bytearray_setByte(ba, 37, 42+99*256);
+    ba = bytearray_setByte(ba, 36, 999999999999999999);
+    if bytearray_getByte(ba, 37) != 42 {
+	return 4;
+    }
 
-	ba = bytearray_new(117);
-	ba = bytearray_set256(ba, 64, 7373);
-	if (bytearray_get256(ba, 64) != 7373) {
-		return bytearray_get256(ba, 64);
-	}
+    ba = bytearray_new(117);
+    ba = bytearray_set256(ba, 64, 7373);
+    if bytearray_get256(ba, 64) != 7373 {
+	return bytearray_get256(ba, 64);
+    }
 
-	ba = bytearray_new(117);
-	ba = bytearray_set256(ba, 64, 7373);
-	let res = bytearray_get256(ba, 63);
-	if (res != 7373/256) {
-	    return 60000+res;
-	}
+    ba = bytearray_new(117);
+    ba = bytearray_set256(ba, 64, 7373);
+    let res = bytearray_get256(ba, 63);
+    if res != 7373/256 {
+	return 60000+res;
+    }
 
-	ba = bytearray_new(117);
-	ba = bytearray_set256(ba, 13, ~0);
-	ba = bytearray_set256(ba, 13+32, 0);
-	ba = bytearray_set256(ba, 13+64, ~0);
-	if ( (bytearray_get256(ba, 13) != ~0)
-		|| (bytearray_get256(ba, 13+32) != 0)
-		|| (bytearray_get256(ba, 13+64) != ~0) ) {
-		return 7;
-	}
-
-	let marshalledStruct = unsafecast<MarshalledBytes>((
-		67,
+    ba = bytearray_new(117);
+    ba = bytearray_set256(ba, 13, ~0);
+    ba = bytearray_set256(ba, 13+32, 0);
+    ba = bytearray_set256(ba, 13+64, ~0);
+    if  (bytearray_get256(ba, 13   ) != ~0) ||
+        (bytearray_get256(ba, 13+32) !=  0) ||
+        (bytearray_get256(ba, 13+64) != ~0) {
+	return 7;
+    }
+    
+    let marshalledStruct = unsafecast<MarshalledBytes>((
+	67,
+	(
+	    0x4041420000000000000000000000000000000000000000000000000000000000,
+	    (
+		0x202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f,
 		(
-			0x4041420000000000000000000000000000000000000000000000000000000000,
-			(
-				0x202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f,
-				(
-					0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f,
-					null,
-				),
-			),
+		    0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f,
+		    (),
 		),
-	));
+	    ),
+	),
+    ));
 
-	if let Some(ba2) = bytearray_unmarshalBytes(marshalledStruct) {
+    if let Some(ba2) = bytearray_unmarshalBytes(marshalledStruct) {
         let i = 0;
-        while (i < 67) {
+        while i < 67 {
             let b = bytearray_getByte(ba2, i);
-            if (b != i) {
+            if b != i {
                 return 100+i;
             }
             i = i+1;
@@ -121,45 +120,45 @@ func tests() -> uint {
         return 8;
     }
 
-	ba = setupFromUnmarshal();
-	let res = bytearray_get64(ba, 3);
-	if (res != 0x030405060708090a) {
-		return 9;
+    ba = setupFromUnmarshal();
+    let res = bytearray_get64(ba, 3);
+    if res != 0x030405060708090a {
+	return 9;
     }
 
-	ba = setupFromUnmarshal();
-	if (bytearray_get64(ba, 29) != 0x1d1e1f2021222324) {
-		return 10;
-	}
+    ba = setupFromUnmarshal();
+    if bytearray_get64(ba, 29) != 0x1d1e1f2021222324 {
+	return 10;
+    }
 
-	ba = setupFromUnmarshal();
-	let before = bytearray_get256(ba, 32);
-	let _ = bytearray_get64(ba, 29); // ^ 0x24232221201f1e1d;
-	if (bytearray_get256(ba, 32) != before) {
-		return 11;
-	}
+    ba = setupFromUnmarshal();
+    let before = bytearray_get256(ba, 32);
+    let _ = bytearray_get64(ba, 29); // ^ 0x24232221201f1e1d;
+    if bytearray_get256(ba, 32) != before {
+	return 11;
+    }
 
-	// test for big-endian byte order
-	ba = bytearray_new(32);
-	ba = bytearray_setByte(ba, 31, 1);
-	if (bytearray_get256(ba, 0) != 1) {
-	    return 12;
-	}
+    // test for big-endian byte order
+    ba = bytearray_new(32);
+    ba = bytearray_setByte(ba, 31, 1);
+    if bytearray_get256(ba, 0) != 1 {
+	return 12;
+    }
 
-    if (bytes32(0x4fc384a19926e9ff7ec8f2376a0d146dc273031df1db4d133236d209700e4780)
+    if bytes32(0x4fc384a19926e9ff7ec8f2376a0d146dc273031df1db4d133236d209700e4780)
         != marshalledBytes_hash(bytearray_marshalFull(setupFromUnmarshal()))
-    ) {
+    {
         return 13;
     }
 
-    if (bytes32(0x6203cb97ced4e35e64eeaddf64d03b68bcb81b5ee3cb0205f7edb755a8a4198)
-            != marshalledBytes_hash(bytearray_marshalFull(bytearray_setByte(bytearray_new(0), 0, 13)))
-    ) {
+    if bytes32(0x6203cb97ced4e35e64eeaddf64d03b68bcb81b5ee3cb0205f7edb755a8a4198)
+        != marshalledBytes_hash(bytearray_marshalFull(bytearray_setByte(bytearray_new(0), 0, 13)))
+    {
         return 14;
     }
 
-    if (bytes32(0x2286697a7baf78c99024b26bd236a05975a57714bf44a9b7400fe583b31fa274)
-            != marshalledBytes_hash(bytearray_marshalFull(bytearray_set256(bytearray_new(0), 0, 0x6203cb97ced4e35e64eeaddf64d03b68bcb81b5ee3cb0205f7edb755a8a4198)))
+    if bytes32(0x2286697a7baf78c99024b26bd236a05975a57714bf44a9b7400fe583b31fa274)
+        != marshalledBytes_hash(bytearray_marshalFull(bytearray_set256(bytearray_new(0), 0, 0x6203cb97ced4e35e64eeaddf64d03b68bcb81b5ee3cb0205f7edb755a8a4198))
     ) {
         return 15;
     }
@@ -169,166 +168,166 @@ func tests() -> uint {
     let ba3 = bytearray_copy(ba, 0, bytearray_new(0), 0, 41);
     let mb2 = bytearray_marshalFull(ba2);
     let mb3 = bytearray_marshalFull(ba3);
-    if (mb2 != mb3) {
-        asm(mb2, ) { debugprint };
-        asm(mb3, ) { debugprint };
+    if mb2 != mb3 {
+        asm(mb2) { debugprint };
+        asm(mb3) { debugprint };
         return 16;
     }
 
-	let ba = bytearray_new(0);
-	let ba = bytearray_set256(ba, 0, 0x0101010101010101010101010101010101010101010101010101010101010101);
-	let ba = bytearray_set256(ba, 32, 0x2222222222222222222222222222222222222222222222222222222222222222);
-	let ba2 = bytearray_extract(ba, 0, 36);
-	let mb1 = bytearray_getByte(ba2, 36);
-	if (mb1 != 0x0) {
-		return 17;
-	} 
-	let mw1 = bytearray_get256(ba2, 32);
-	if (mw1 != 0x2222222200000000000000000000000000000000000000000000000000000000) {
-		debug(mw1);
-		return 18;
-	} 
+    let ba = bytearray_new(0);
+    let ba = bytearray_set256(ba, 0, 0x0101010101010101010101010101010101010101010101010101010101010101);
+    let ba = bytearray_set256(ba, 32, 0x2222222222222222222222222222222222222222222222222222222222222222);
+    let ba2 = bytearray_extract(ba, 0, 36);
+    let mb1 = bytearray_getByte(ba2, 36);
+    if mb1 != 0x0 {
+	return 17;
+    } 
+    let mw1 = bytearray_get256(ba2, 32);
+    if mw1 != 0x2222222200000000000000000000000000000000000000000000000000000000 {
+	debug(mw1);
+	return 18;
+    } 
 
     let ba = bytearray_new(0);
     let i = 0;
-    while (i < 5000) {
+    while i < 5000 {
         ba = bytearray_set256(ba, i*32, i);
         i = i+1;
     }
     i = 0;
     let sum = 0;
-    while (i < 5000) {
+    while i < 5000 {
         sum = sum + bytearray_get256(ba, i*32);
         i = i+1;
     }
 
-    if (sum != (2500*4999)) {
+    if sum != (2500*4999) {
         return 19;
     }
 
     // test handling of large bytearrays with large offsets
     ba = bytearray_new(0);
-    if (bytearray_get256(ba, const::TwoTo64 - 32) != 0) {
+    if bytearray_get256(ba, const::TwoTo64 - 32) != 0 {
         return 20;
     }
-    if (bytearray_get256(ba, const::TwoTo64) != 0) {
+    if bytearray_get256(ba, const::TwoTo64) != 0 {
         return 21;
     }
 
     ba = bytearray_set256(ba, const::LargeOffset, 42);
-    if (bytearray_size(ba) != (const::LargeOffset + 32)) {
+    if bytearray_size(ba) != (const::LargeOffset + 32) {
         return 22;
     }
-    if (bytearray_get256(ba, const::LargeOffset) != 42) {
+    if bytearray_get256(ba, const::LargeOffset) != 42 {
         return 23;
     }
     let ba2 = bytearray_extract(ba, const::LargeOffset, 32);
-    if (bytearray_size(ba2) != 32) {
+    if bytearray_size(ba2) != 32 {
         return 24;
     }
-    if (bytearray_get256(ba2, 0) != 42) {
+    if bytearray_get256(ba2, 0) != 42 {
         return 25;
     }
-    if (bytearray_get256(ba2, const::LargeOffset) != 0) {
+    if bytearray_get256(ba2, const::LargeOffset) != 0 {
         return 26;
     }
     ba2 = bytearray_set256(ba2, const::LargeOffset, 99);  // this one runs for a very long time
-    if (bytearray_get256(ba2, const::LargeOffset) != 99) {
+    if bytearray_get256(ba2, const::LargeOffset) != 99 {
         return 27;
     }
     ba = bytearray_set256(bytearray_new(0), const::TwoTo64-1, ~0);
-    if (bytearray_size(ba) != 0) {
+    if bytearray_size(ba) != 0 {
         return 28;
     }
-    if (bytearray_get256(ba, const::TwoTo64-1) != 0) {
+    if bytearray_get256(ba, const::TwoTo64-1) != 0 {
         return 29;
     }
     let ba3 = bytearray_copy(ba2, 0, ba2, const::LargeOffset, const::LargeOffset);
-    if (bytearray_size(ba3) != bytearray_size(ba2)) {
+    if bytearray_size(ba3) != bytearray_size(ba2) {
         return 30;
     }
 
     let ba = setupFromUnmarshal();
     ba = bytearray_extract(ba, 0, 1);
     ba = bytearray_setByte(ba, 256, 42);
-    if (bytearray_get256(ba, 32) != 0) {
+    if bytearray_get256(ba, 32) != 0 {
         return 40;
     }
 
     let ba = setupFromUnmarshal();
     ba = bytearray_extract(ba, 0, 1);
     ba = bytearray_set64(ba, 256, 42);
-    if (bytearray_get256(ba, 32) != 0) {
+    if bytearray_get256(ba, 32) != 0 {
         return 41;
     }
 
     let ba = setupFromUnmarshal();
     ba = bytearray_extract(ba, 0, 1);
     ba = bytearray_set256(ba, 256, 42);
-    if (bytearray_get256(ba, 32) != 0) {
+    if bytearray_get256(ba, 32) != 0 {
         return 42;
     }
 
     let ba = setupFromUnmarshal();
     ba = bytearray_extract(ba, 0, 1);
     ba = bytearray_copy(bytearray_set256(bytearray_new(0), 0, 99), 0, ba, 256, 32);
-    if (bytearray_get256(ba, 32) != 0) {
+    if bytearray_get256(ba, 32) != 0 {
         return 43;
     }
 
     let ba = setupFromUnmarshal();
     ba = bytearray_extract(ba, 0, 1);
     let ba2 = bytearray_copy(ba, 0, bytearray_set256(bytearray_new(0), 256, 42), 0, 100);
-    if (bytearray_get256(ba2, 32) != 0) {
+    if bytearray_get256(ba2, 32) != 0 {
         return 50;
     }
 
     let ba = bytearray_set256(bytearray_new(0), 0, 0x202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f);
     ba = bytearray_extract(ba, 1, 2);
     let res = bytearray_get64(ba, 0);
-    if (res != 0x2122000000000000) {
+    if res != 0x2122000000000000 {
         return 60;
     }
 
     res = bytearray_get256(ba, 0);
-    if (res != 0x2122000000000000000000000000000000000000000000000000000000000000) {
+    if res != 0x2122000000000000000000000000000000000000000000000000000000000000 {
         return 61;
     }
 
-    return testCalldataUnitCounting();
+    testCalldataUnitCounting()
 }
 
 func setupFromUnmarshal() -> ByteArray {
-	let marshalledStruct = unsafecast<MarshalledBytes>((
-		67,
+    let marshalledStruct = unsafecast<MarshalledBytes>((
+	67,
+	(
+	    0x4041420000000000000000000000000000000000000000000000000000000000,
+	    (
+		0x202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f,
 		(
-			0x4041420000000000000000000000000000000000000000000000000000000000,
-			(
-				0x202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f,
-				(
-				    0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f,
-					null,
-				),
-			),
+		    0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f,
+		    (),
 		),
-	));
-	return xif let Some(ba) = bytearray_unmarshalBytes(marshalledStruct) {
-	    ba
-	} else {
-	    error
-	};
+	    ),
+	),
+    ));
+    if let Some(ba) = bytearray_unmarshalBytes(marshalledStruct) {
+	ba
+    } else {
+	error
+    }
 }
 
 func testCalldataUnitCounting() -> uint {
     let buf = newbuffer();
-    if (buffer_getCalldataUnits(buf, 0, 37) != 4*37) {
+    if buffer_getCalldataUnits(buf, 0, 37) != 4*37 {
         return 10001;
     }
 
     buf = setbuffer256(buf, 3, ~0);
-    if (buffer_getCalldataUnits(buf, 0, 37) != (16*32 + 4*5)) {
+    if buffer_getCalldataUnits(buf, 0, 37) != (16*32 + 4*5) {
         return 10002;
     }
 
-    return 0;
+    0
 }

@@ -12,6 +12,7 @@ use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_setByte;
 use std::bytestream::bytestream_new;
 use std::bls::BLSKey;
+use std::codeSegment::getDummyAcceptContractCode;
 use std::keccak::keccak256;
 use std::storageMap::StorageMap;
 use std::storageMap::storageMap_new;
@@ -31,7 +32,6 @@ use std::codeSegment::translateEvmCodeSegment;
 use decompression::AggregatorDecompressionState;
 use evmCallStack::evmCallStack_addStorageCharge;
 use evmCallStack::evmCallStack_isEmpty;
-
 
 type AccountStore = struct {
     accounts: map<address, Account>,
@@ -71,7 +71,9 @@ type Account = struct {
 };
 
 type AccountContractInfo = struct {
-    code: ByteArray,                         // deployed EVM code for the contract
+    contractStateVersion: uint,                  // this changes when the rules of contract interpretation change,
+                                                 //       for example due to Ethereum hardfork
+    code: ByteArray,                             // deployed EVM code for the contract
     evmJumpTable: map<uint, view write func()>,  // maps each valid EVM jump destination to the corresponding AVM codepoint
     startCodePoint: view write func(),           // entry point for the translated AVM code
     storage: StorageMap,
@@ -102,10 +104,10 @@ public view write func accountStore_init() {
 }
 
 public func escrowStore_new() -> EscrowStore {
-    return struct {
+    struct {
         nextKey: 1,     // key 0 is pre-reserved for escrowing the current tx's gas funds
         escrowedValues: storageMap_new(),
-    };
+    }
 }
 
 public view write func accounts_notifyParamsChanged() {    // called if the chain parameters have changed
@@ -116,16 +118,16 @@ public view write func accounts_notifyParamsChanged() {    // called if the chai
 // if we're in a user tx, this will error, which will revert the tx
 //      that should never happen, but we check to be safe
 public view func safeGetGlobalAccountStore() -> AccountStore {
-    if ( ! evmCallStack_isEmpty()) {
+    if ! evmCallStack_isEmpty() {
         asm(668) { debugprint };
         error;
     }
-    return globalAccountStore;
+    globalAccountStore
 }
 
 // see comment on safeGet... above
 public view write func safeSetGlobalAccountStore(acctStore: AccountStore) {
-    if ( ! evmCallStack_isEmpty()) {
+    if ! evmCallStack_isEmpty() {
         asm(669) { debugprint };
         error;
     }
@@ -133,7 +135,7 @@ public view write func safeSetGlobalAccountStore(acctStore: AccountStore) {
 }
 
 public view func getGlobalAccountStore() -> AccountStore {
-    return globalAccountStore;
+    globalAccountStore
 }
 
 public write func setGlobalAccountStore(acctStore: AccountStore) {
@@ -141,25 +143,25 @@ public write func setGlobalAccountStore(acctStore: AccountStore) {
 }
 
 public func accountStore_get(acctStore: AccountStore, addr: address) -> Account {
-    return xif let Some(acct) = acctStore.accounts[addr] {
+    if let Some(acct) = acctStore.accounts[addr] {
         acct
     } else {
         // There is no recorded account at this address, so make a pristine account.
         pristineAccount(addr)
-    };
+    }
 }
 
 // create and initialize a new account at a given address
 public func pristineAccount(addr: address) -> Account {
-    return struct {
+    struct {
         addr: addr,
-        blsKey: None<BLSKey>,
+        blsKey: None,
         nextSeqNum: 0,
         ethBalance: 0,
-        contractInfo: None<AccountContractInfo>,
-        aggregatorInfo: None<AggregatorInfo>,
-        aggregatorToPay: None<address>
-    };
+        contractInfo: None,
+        aggregatorInfo: None,
+        aggregatorToPay: None,
+    }
 }
 
 public func accountStore_set(
@@ -168,48 +170,48 @@ public func accountStore_set(
     acct: Account
 ) -> AccountStore {
     set acctStore.accounts[addr] = acct;
-    return acctStore;
+    acctStore
 }
 
 public func accountStore_getRetryBuffer(acctStore: AccountStore) -> RetryBuffer {
-    return acctStore.retryBuffer;
+    acctStore.retryBuffer
 }
 
 public func accountStore_setRetryBuffer(acctStore: AccountStore, rbuf: RetryBuffer) -> AccountStore {
-    return acctStore with { retryBuffer: rbuf };
+    acctStore with { retryBuffer: rbuf }
 }
 
 public func accountStore_getNumAccounts(acctStore: AccountStore) -> uint {
-    return builtin_kvsSize(unsafecast<Kvs>(acctStore.accounts));
+    builtin_kvsSize(unsafecast<Kvs>(acctStore.accounts))
 }
 
 public func accountStore_getNumContracts(acctStore: AccountStore) -> uint {
-    return acctStore.numContracts;
+    acctStore.numContracts
 }
 
 public func accountStore_changeNumContracts(acctStore: AccountStore, delta: int) -> AccountStore {
-    return acctStore with { numContracts: uint(int(acctStore.numContracts) + delta) };
+    acctStore with { numContracts: uint(int(acctStore.numContracts) + delta) }
 }
 
 public func accountStore_destroyAccount(acctStore: AccountStore, addrToDestroy: address) -> AccountStore {
     if let Some(contractInfo) = accountStore_get(acctStore, addrToDestroy).contractInfo {
         acctStore = accountStore_dropCodeRef(
             acctStore,
-            keccak256(contractInfo.code, 0, bytearray_size(contractInfo.code))
+            hashForCodeRef(contractInfo.code, contractInfo.contractStateVersion),
         );
-        if (acctStore.numContracts > 0) {  // avoid underflow, if the count is somehow incorrect
+        if acctStore.numContracts > 0 {  // avoid underflow, if the count is somehow incorrect
             set acctStore.numContracts = acctStore.numContracts-1;
         }
     }
-    return accountStore_set(acctStore, addrToDestroy, pristineAccount(addrToDestroy));
+    accountStore_set(acctStore, addrToDestroy, pristineAccount(addrToDestroy))
 }
 
 public func account_isEmpty(acct: Account) -> bool {
-    return (acct.nextSeqNum == 0) && (acct.ethBalance == 0) && (acct.contractInfo == None<AccountContractInfo>);
+    (acct.nextSeqNum == 0) && (acct.ethBalance == 0) && (acct.contractInfo == None<AccountContractInfo>)
 }
 
 public func account_hasContract(acct: Account) -> bool {
-    return acct.contractInfo != None<AccountContractInfo>;
+    acct.contractInfo != None<AccountContractInfo>
 }
 
 public func account_checkAndIncrSeqNum(
@@ -219,85 +221,85 @@ public func account_checkAndIncrSeqNum(
     // if seqNumRecvd has the expected value, increment seqNum in account and return updated account.
     // else return None
     let nextSeq = account.nextSeqNum;
-    return xif (nextSeq == seqNumRecvd) {
+    if nextSeq == seqNumRecvd {
         Some(account with { nextSeqNum: nextSeq+1 })
     } else {
-        None<Account>
-    };
+        None
+    }
 }
 
 public func account_getAddress(account: Account) -> address {
-    return account.addr;
+    account.addr
 }
 
 public func account_getBlsKey(account: Account) -> option<BLSKey> {
-    return account.blsKey;
+    account.blsKey
 }
 
 public func account_setBlsKey(account: Account, maybeKey: option<BLSKey>) -> Account {
-    return account with { blsKey: maybeKey };
+    account with { blsKey: maybeKey }
 }
 
 public func account_getAggregatorToPayAsOption(account: Account) -> option<address> {
-    return account.aggregatorToPay;
+    account.aggregatorToPay
 }
 
 public view func account_getAggregatorToPay(account: Account) -> address {
-    return xif let Some(atp) = account.aggregatorToPay {
+    if let Some(atp) = account.aggregatorToPay {
         atp
     } else {
         chainParams_getDefaultAggregator()
-    };
+    }
 }
 
 public func account_setAggregatorToPay(account: Account, atp: option<address>) -> Account {
-    return account with { aggregatorToPay: atp };
+    account with { aggregatorToPay: atp }
 }
 
 public func account_getStartCodePoint(account: Account) -> option<view write func()> {
-    return Some((account.contractInfo?).startCodePoint);
+    Some((account.contractInfo?).startCodePoint)
 }
 
 public func account_getBalance(account: Account) -> uint {
-    return account.ethBalance;
+    account.ethBalance
 }
 
 public func account_getEvmJumpTable(account: Account) -> option<map<uint, view write func()> > {
-    return Some((account.contractInfo?).evmJumpTable);
+    Some((account.contractInfo?).evmJumpTable)
 }
 
 public func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account) {
     let ret = account.nextSeqNum;
     set account.nextSeqNum = ret+1;
-    return (ret, account);
+    (ret, account)
 }
 
 public func account_incrSeqNum(account: Account) -> Account {
-    return account with {
+    account with {
         nextSeqNum: account.nextSeqNum + 1
-    };
+    }
 }
 
 public func account_getNextSeqNum(account: Account) -> uint {
-    return account.nextSeqNum;
+    account.nextSeqNum
 }
 
 public func account_setNextSeqNum(account: Account, newSeqNum: uint) -> Account {
     set account.nextSeqNum = newSeqNum;
-    return account;
+    account
 }
 
 public func account_getAggregatorDecompressionState(account: Account) -> option<AggregatorDecompressionState> {
-    return (account.aggregatorInfo?).decompressionState;
+    (account.aggregatorInfo?).decompressionState
 }
 
 public view func account_setAggregatorDecompressionState(
     account: Account,
     maybeState: option<AggregatorDecompressionState>,
 ) -> Account {
-    return account with {
+    account with {
         aggregatorInfo: Some(
-            xif let Some(aggInfo) = account.aggregatorInfo {
+            if let Some(aggInfo) = account.aggregatorInfo {
                 aggInfo with {
                     decompressionState: maybeState
                 }
@@ -309,55 +311,78 @@ public view func account_setAggregatorDecompressionState(
                 }
             }
         )
-    };
+    }
 }
 
 public func _accountStore_feeCollectorForAggregator(acctStore: AccountStore, agg: address) -> address {
-    return account_getFeeCollector(accountStore_get(acctStore, agg));
+    account_getFeeCollector(accountStore_get(acctStore, agg))
 }
 
 public func account_getFeeCollector(account: Account) -> address {
-    return xif let Some(aggInfo) = account.aggregatorInfo {
+    if let Some(aggInfo) = account.aggregatorInfo {
         aggInfo.feeCollector
     } else {
         account.addr   // if fee collector isn't explicitly set, fees go to the account's own address
-    };
+    }
 }
 
 public view func account_setFeeCollector(account: Account, newCollector: address) -> Account {
-    return account with {
+    account with {
         aggregatorInfo: Some(
-            xif let Some(aggInfo) = account.aggregatorInfo {
+            if let Some(aggInfo) = account.aggregatorInfo {
                 aggInfo with {
                     feeCollector: newCollector
                 }
             } else {
                 struct {
-                    decompressionState: None<AggregatorDecompressionState>,
+                    decompressionState: None,
                     feeCollector: newCollector,
                     baseTxFeeL1Gas: chainParams_getOrDie(const::Atom_Param_DefaultBaseTxFeeL1Gas),
                 }
             }
         )
-    };
+    }
 }
 
 public func account_setBaseTxFeeL1Gas(account: Account, fee: uint) -> Account {
-    return account with {
+    account with {
         aggregatorInfo: Some(
-            xif let Some(aggInfo) = account.aggregatorInfo {
+            if let Some(aggInfo) = account.aggregatorInfo {
                 aggInfo with {
                     baseTxFeeL1Gas: fee
                 }
             } else {
                 struct {
-                    decompressionState: None<AggregatorDecompressionState>,
+                    decompressionState: None,
                     feeCollector: account.addr,
                     baseTxFeeL1Gas: fee,
                 }
             }
         )
-    };
+    }
+}
+
+public view func account_setStorage(account: Account, storage: StorageMap) -> Account {
+    account with {
+        contractInfo: Some(
+            if let Some(contractInfo) = account.contractInfo {
+                contractInfo with {
+                    storage: storage
+                }
+            } else {
+                let fakeCode = bytearray_new(0);
+                fakeCode = bytearray_setByte(fakeCode, 0, 0xfe);
+                struct {
+                    contractStateVersion: const::ContractStateVersion_current,
+                    code: fakeCode,
+                    evmJumpTable: newmap<uint, view write func()>,
+                    startCodePoint: unsafecast<view write func()>
+                                    (getDummyAcceptContractCode()), // cast due to compiler error
+                    storage: storage,
+                }
+            }
+        )
+    }
 }
 
 public view write func accountStore_createAccountFromEvmCode(
@@ -371,20 +396,21 @@ public view write func accountStore_createAccountFromEvmCode(
     // Create a new account for a compiled EVM contract.
     // Returns Some(updatedAccountStore), or None if something went wrong.
     let oldAcct = accountStore_get(store, newAddr);
-    return xif ( ! account_hasContract(oldAcct)) {
-        evmCallStack_addStorageCharge( (bytearray_size(code) + 31) / 32 );
+    if ! account_hasContract(oldAcct) {
+        evmCallStack_addStorageCharge( (bytearray_size(code) + 31) / 32, None);
         set oldAcct.nextSeqNum = 1;
         set oldAcct.contractInfo = Some(struct {
-           code: code,
-           evmJumpTable: evmJumpTable,
-           startCodePoint: initCodePt,
-           storage: storageMap,
+            contractStateVersion: const::ContractStateVersion_current,
+            code: code,
+            evmJumpTable: evmJumpTable,
+            startCodePoint: initCodePt,
+            storage: storageMap,
         });
         Some(accountStore_set(store, newAddr, oldAcct))
     } else {
         // There was already an account at that address, so return failure.
-        None<AccountStore>
-    };
+        None
+    }
 }
 
 
@@ -398,10 +424,11 @@ public func accountStore_upgradeContractFromEvmCode(
     let oldAcct = accountStore_get(store, addr);
     let contractAdded = false;
     set oldAcct.contractInfo = Some(struct {
+        contractStateVersion: const::ContractStateVersion_current,
         code: code,
         evmJumpTable: evmJumpTable,
         startCodePoint: initCodePt,
-        storage: xif let Some(cinfo) = oldAcct.contractInfo {
+        storage: if let Some(cinfo) = oldAcct.contractInfo {
            cinfo.storage
         } else {
            contractAdded = true;
@@ -409,11 +436,11 @@ public func accountStore_upgradeContractFromEvmCode(
         },
     });
     store = accountStore_set(store, addr, oldAcct);
-    return xif (contractAdded) {
+    if contractAdded {
         accountStore_changeNumContracts(store, int(1))
     } else {
         store
-    };
+    }
 }
 
 public func accountStore_createBuiltinContract(
@@ -429,23 +456,24 @@ public func accountStore_createBuiltinContract(
     // if Arbitrum style, must give it nonzero size because callers check if size is zero to see if contract exists
     // otherwise it's an Ethereum precompile which is specified to have null bytearray as its code
     let fakeCode = bytearray_new(0);
-    if (isArbitrumStyle) {
+    if isArbitrumStyle {
         // fake code is a single EVM INVALID instruction
         fakeCode = bytearray_setByte(fakeCode, 0, 0xfe);
     }
 
-    return xif (account_isEmpty(oldAcct) || !isUpgrade) {
+    if account_isEmpty(oldAcct) || !isUpgrade {
         set oldAcct.contractInfo = Some(struct {
+            contractStateVersion: const::ContractStateVersion_current,
             code: fakeCode,
             evmJumpTable: newmap<uint, view write func()>,
             startCodePoint: entryPoint,
-            storage: xif (isUpgrade && (oldAcct.contractInfo != None<AccountContractInfo>)) {
+            storage: if isUpgrade && (oldAcct.contractInfo != None<AccountContractInfo>) {
                (oldAcct.contractInfo?).storage
             } else {
                storageMap_new()
             },
         });
-        if ( ! isUpgrade) {
+        if ! isUpgrade {
             set oldAcct.nextSeqNum = 1;
         }
         Some(
@@ -457,7 +485,7 @@ public func accountStore_createBuiltinContract(
                 numContracts: acctStore.numContracts + 1
             }
         )
-    } elseif (isUpgrade) {
+    } else if isUpgrade {
         Some(accountStore_upgradeContractFromEvmCode(
             acctStore,
             addr,
@@ -467,26 +495,26 @@ public func accountStore_createBuiltinContract(
         ))
     } else {
         // There was already an account at that address, so return failure.
-        None<AccountStore>
-    };
+        None
+    }
 }
 
 public func account_getEthBalance(account: Account) -> uint {
-    return account.ethBalance;
+    account.ethBalance
 }
 
 public func account_addToEthBalance(account: Account, addition: uint) -> Account {
-    return account with { ethBalance: account.ethBalance + addition };
+    account with { ethBalance: account.ethBalance + addition }
 }
 
 public func account_deductFromEthBalance(account: Account, deduction: uint) -> option<Account> {
-    return xif (account.ethBalance >= deduction) {
+    if account.ethBalance >= deduction {
         Some(
             account with { ethBalance: account.ethBalance-deduction }
         )
     } else {
-        None<Account>
-    };
+        None
+    }
 }
 
 public func accountStore_transferEthBalance(
@@ -502,7 +530,7 @@ public func accountStore_transferEthBalance(
     acctStore = accountStore_set(acctStore, from, account_deductFromEthBalance(fromAcct, amount)?);
 
     let toAcct = accountStore_get(acctStore, to);
-    return Some(accountStore_set(acctStore, to, account_addToEthBalance(toAcct, amount)));
+    Some(accountStore_set(acctStore, to, account_addToEthBalance(toAcct, amount)))
 }
 
 // An escrow box contains ETH that are being held for some particular purpose.
@@ -513,7 +541,7 @@ public func accountStore_transferEthBalance(
 // Return None if payer has insufficient funds
 public func accountStore_newEscrow(acctStore: AccountStore, payer: address, amount: uint) -> option<(AccountStore, uint)> {
     let key = acctStore.escrowStore.nextKey;
-    let updatedEscrowedValues = xif (amount == 0) {
+    let updatedEscrowedValues = if amount == 0 {
         // in this case we're allocating a new escrow box, which holds zero funds
         // this is not a waste of space in escrowedValues because a zero value doesn't consume space in a StorageMap
         acctStore.escrowStore.escrowedValues
@@ -525,7 +553,7 @@ public func accountStore_newEscrow(acctStore: AccountStore, payer: address, amou
         );
         storageMap_set(acctStore.escrowStore.escrowedValues, key, amount)
     };
-    return Some((
+    Some((
         acctStore with {
             escrowStore: struct {
                 nextKey: key + 1,
@@ -533,30 +561,30 @@ public func accountStore_newEscrow(acctStore: AccountStore, payer: address, amou
             }
         },
         key
-    ));
+    ))
 }
 
-public func _accountStore_getEscrowBalance(acctStore: AccountStore, key: uint) -> uint {
-    return storageMap_get(acctStore.escrowStore.escrowedValues, key);
+public func accountStore_getEscrowBalance(acctStore: AccountStore, key: uint) -> uint {
+    storageMap_get(acctStore.escrowStore.escrowedValues, key)
 }
 
 public func accountStore_sumOfAllEscrowBalances(acctStore: AccountStore) -> uint {
-    return unsafecast<uint>(
+    unsafecast<uint>(
         storageMap_forall(
             acctStore.escrowStore.escrowedValues,
-            _closure(_k: uint, v: uint, state: any) -> any {
-                return unsafecast<uint>(state) + v;
+            closure(_k: uint, v: uint, state: any) -> any {
+                unsafecast<uint>(state) + v
             },
             0,
         )
-    );
+    )
 }
 
 // Transfer funds into an existing escrow box
 public func _accountStore_addToEscrow(acctStore: AccountStore, key: uint, payer: address, amount: uint) -> option<AccountStore> {
     let acct = accountStore_get(acctStore, payer);
-    return xif (acct.ethBalance < amount) {
-        None<AccountStore>
+    if acct.ethBalance < amount {
+        None
     } else {
         let oldValue = storageMap_get(acctStore.escrowStore.escrowedValues, key);
         Some(
@@ -566,30 +594,30 @@ public func _accountStore_addToEscrow(acctStore: AccountStore, key: uint, payer:
                 }
             }
         )
-    };
+    }
 }
 
 // Transfer funds into an existing escrow box. Transfer min(maxAmount, payer's balance)
 public func accountStore_addToEscrowUpToMax(acctStore: AccountStore, key: uint, payer: address, maxAmount: uint) -> (AccountStore, uint) {
     let acct = accountStore_get(acctStore, payer);
     let balance = account_getEthBalance(acct);
-    let amount = xif (balance < maxAmount) { balance } else { maxAmount };
+    let amount = if balance < maxAmount { balance } else { maxAmount };
     let oldValue = storageMap_get(acctStore.escrowStore.escrowedValues, key);
-    return (
+    (
         accountStore_set(acctStore, payer, acct with { ethBalance: acct.ethBalance-amount }) with {
             escrowStore: acctStore.escrowStore with {
                 escrowedValues: storageMap_set(acctStore.escrowStore.escrowedValues, key, oldValue+amount)
             }
         },
         amount,
-    );
+    )
 }
 
 // Transfer funds out of an escrow box into an account, or return None if box has insufficient funds.
 public func accountStore_payFromEscrow(acctStore: AccountStore, key: uint, recipient: address, amount: uint) -> option<AccountStore> {
     let oldEscrow = storageMap_get(acctStore.escrowStore.escrowedValues, key);
-    return xif (oldEscrow < amount) {
-        None<AccountStore>
+    if oldEscrow < amount {
+        None
     } else {
         let oldAcct = accountStore_get(acctStore, recipient);
         Some(
@@ -603,14 +631,14 @@ public func accountStore_payFromEscrow(acctStore: AccountStore, key: uint, recip
                 }
             }
         )
-    };
+    }
 }
 
 // Transfer all of the funds in an escrow box into an account
 public func accountStore_payFullyFromEscrow(acctStore: AccountStore, key: uint, recipient: address) -> AccountStore {
     let amount = storageMap_get(acctStore.escrowStore.escrowedValues, key);
     let acct = accountStore_get(acctStore, recipient);
-    return accountStore_set(
+    accountStore_set(
         acctStore,
         recipient,
         acct with { ethBalance: acct.ethBalance + amount }
@@ -618,19 +646,19 @@ public func accountStore_payFullyFromEscrow(acctStore: AccountStore, key: uint, 
         escrowStore: acctStore.escrowStore with {
             escrowedValues: storageMap_set(acctStore.escrowStore.escrowedValues, key, 0)
         }
-    };
+    }
 }
 
 public func account_getAllStorage(account: Account) -> option<StorageMap> {
     // Get the full contents of a contract's storage.
     // Return None if account doesn't have contract storage.
-    return Some((account.contractInfo?).storage);
+    Some((account.contractInfo?).storage)
 }
 
 public func account_getStorageCell(account: Account, cell: uint) -> option<uint> {
     // Get contents of one cell in a contract's storage.
     // Return None if account doesn't have contract storage.
-    return Some(storageMap_get((account.contractInfo?).storage, cell));
+    Some(storageMap_get((account.contractInfo?).storage, cell))
 }
 
 public func account_setStorageCell(
@@ -641,15 +669,15 @@ public func account_setStorageCell(
     // Set the value of one cell in a contract's storage.
     // Return None if account doesn't have contract storage.
     let contractInfo = account.contractInfo?;
-    return Some(account with {
+    Some(account with {
         contractInfo: Some(contractInfo with {
             storage: storageMap_set(contractInfo.storage, cell, value)
         })
-    });
+    })
 }
 
 public func account_getStorageSize(account: Account) -> option<uint> {
-    return Some(storageMap_size((account.contractInfo?).storage));
+    Some(storageMap_size((account.contractInfo?).storage))
 }
 
 public func account_setContractInfo(
@@ -660,31 +688,40 @@ public func account_setContractInfo(
     storage: StorageMap,
     forceNonce: bool
 ) -> Account {
-    if (forceNonce && (acct.nextSeqNum == 0)) {
+    if forceNonce && (acct.nextSeqNum == 0) {
         // new contract accounts are supposed to start with sequence number = 1; make it so
         set acct.nextSeqNum = 1;
     }
 
-    return acct with { contractInfo: Some(
+    acct with { contractInfo: Some(
         struct {
+            contractStateVersion: const::ContractStateVersion_current,
             code: code,
             evmJumpTable: evmJumpTable,
             startCodePoint: startCodePoint,
             storage: storage
         }
-    )};
+    )}
 }
 
 public func account_getCodeSize(acct: Account) -> uint {
-    return xif let Some(contractInfo) = acct.contractInfo {
+    if let Some(contractInfo) = acct.contractInfo {
         bytearray_size(contractInfo.code)
     } else {
         0  // Account has no code, so its codesize is deemed to be zero.
-    };
+    }
 }
 
 public func account_getCode(acct: Account) -> option<ByteArray> {
-    return Some((acct.contractInfo?).code);
+    Some((acct.contractInfo?).code)
+}
+
+public func account_usesOriginalStorageGasAlloc(acct: Account) -> bool {
+    if let Some(contractInfo) = acct.contractInfo {
+        contractInfo.contractStateVersion == const::ContractStateVersion_original
+    } else {
+        false
+    }
 }
 
 type asfa_wrappedState = struct {
@@ -706,13 +743,20 @@ public func accountStore_forall(acctStore: AccountStore, closure_: func(Account,
         unsafecast<func(any, any, any) -> any>(asfaClosure),
         wrappedState,
     ));
-    return wrappedState.innerState;
+    wrappedState.innerState
 }
 
 func asfaClosure(_: any, acct: Account, wrappedState: asfa_wrappedState) -> asfa_wrappedState {
-    return wrappedState with {
+    wrappedState with {
         innerState: wrappedState.innerClosure(acct, wrappedState.innerState)
-    };
+    }
+}
+
+func hashForCodeRef(code: ByteArray, contractStateVersion: uint) -> bytes32 {
+    // This hash, meant as the key in the coderef table, is a collision-free function of this function's args.
+    // For the original contractStateVersion (= 0) this is just the keccak256 of the code, so it is
+    //       backward-compatible with the original hashing scheme.
+    bytes32(uint(keccak256(code, 0, bytearray_size(code))) + contractStateVersion)  // overflow OK
 }
 
 // If a CodeRef exists for code, increment its reference count.
@@ -720,6 +764,7 @@ func asfaClosure(_: any, acct: Account, wrappedState: asfa_wrappedState) -> asfa
 // Return the attributes of the resulting CodeRef
 public view write func accountStore_createOrAddCodeRef(
     acctStore: AccountStore,
+    contractStateVersion: uint,
     code: ByteArray
 ) -> option<(
     AccountStore,
@@ -727,8 +772,8 @@ public view write func accountStore_createOrAddCodeRef(
     map<uint, view write func()>,
     bool,
 )> {
-    let codeHash = keccak256(code, 0, bytearray_size(code));
-    return xif let Some(codeRef) = acctStore.codeRefTable[codeHash] {
+    let codeHash = hashForCodeRef(code, contractStateVersion);  // overflow OK
+    if let Some(codeRef) = acctStore.codeRefTable[codeHash] {
         Some((
             accountStore_addCodeRef(acctStore, codeHash)?,
             codeRef.startCodePoint,
@@ -738,12 +783,12 @@ public view write func accountStore_createOrAddCodeRef(
     } else {
         let (startCodePoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(code), false);
         Some((
-            accountStore_createCodeRef(acctStore, code, evmJumpTable, startCodePoint),
+            accountStore_createCodeRef(acctStore, contractStateVersion, code, evmJumpTable, startCodePoint),
             unsafecast<view write func()>(startCodePoint),
             unsafecast<map<uint, view write func()> >(evmJumpTable),
             true,
         ))
-    };
+    }
 }
 
 // increment the reference count of a CodeRef
@@ -752,30 +797,31 @@ public func accountStore_addCodeRef(acctStore: AccountStore, codeHash: bytes32) 
 
     let codeRef = acctStore.codeRefTable[codeHash]?;
     set acctStore.codeRefTable[codeHash] = codeRef with { refCount: codeRef.refCount + 1 };
-    return Some(acctStore);
+    Some(acctStore)
 }
 
 public func accountStore_createCodeRef(
     acctStore: AccountStore,
+    contractStateVersion: uint,
     code: ByteArray,
     evmJumpTable: map<uint, view write func()>,
     startCodePoint: view write func(),
 ) -> AccountStore {
-    let codeHash = keccak256(code, 0, bytearray_size(code));
+    let codeHash = hashForCodeRef(code, contractStateVersion);  // overflow OK
     set acctStore.codeRefTable[codeHash] = struct {
         refCount: 1,
         code: code,
         evmJumpTable: evmJumpTable,
         startCodePoint: startCodePoint,
     };
-    return acctStore;
+    acctStore
 }
 
 // Decrement the reference count of a CodeRef, and remove it if ref count is now zero.
 // If the CodeRef doesn't exist, do nothing.
 public func accountStore_dropCodeRef(acctStore: AccountStore, codeHash: bytes32) -> AccountStore {
     if let Some(codeRef) = acctStore.codeRefTable[codeHash] {
-        if (codeRef.refCount == 1) {
+        if codeRef.refCount == 1 {
             set acctStore.codeRefTable = unsafecast<map<bytes32, CodeRef> >(
                 builtin_kvsDelete(unsafecast<Kvs>(acctStore.codeRefTable), uint(codeHash))
             );
@@ -783,5 +829,5 @@ public func accountStore_dropCodeRef(acctStore: AccountStore, codeHash: bytes32)
             set acctStore.codeRefTable[codeHash] = codeRef with { refCount: codeRef.refCount - 1 };
         }
     }
-    return acctStore;
+    acctStore
 }

@@ -9,46 +9,48 @@ use std::queue::queue_get;
 
 write func main() {
     if let Some(res) = tests() {
-	    asm(res,) { log };
-	} else {
-	    asm(1000,) { log };
-	}
+	asm(res) { log };
+    } else {
+	asm(1000) { log };
+    }
 }
 
 func tests() -> option<uint> {
-	let q = queue_new();
-	if ( ! queue_isEmpty(q)) {
-		return Some(1);
-	}
+    
+    let q = queue_new();
+    
+    if !queue_isEmpty(q) {
+	return Some(1);
+    }
 
-	q = queue_new();
-	q = queue_put(q, 42);
-	if (queue_isEmpty(q)) {
-		return Some(2);
-	} 
+    q = queue_new();
+    q = queue_put(q, 42);
+    if queue_isEmpty(q) {
+	return Some(2);
+    }
 
-	q = queue_new();
-	q = queue_put(q, 42);
-	q = queue_put(q, 97);
-	let pair = queue_get(q)?;
-	if (pair.1 != 42) {
-		return Some(3);
-	}
+    q = queue_new();
+    q = queue_put(q, 42);
+    q = queue_put(q, 97);
+    let pair = queue_get(q)?;
+    if pair.1 != any(42) {
+	return Some(3);
+    }
 
-	q = queue_new();
-	let i = 0;
-	while (i < 25) {
-		q = queue_put(q, i);
-		i = i+1;
-	}
-	i = 0;
-	while (i < 21) {
-		q = (queue_get(q)?).0;
-		i = i+1;
-	}
-	if ((queue_get(q)?).1 != 21) {
-		return Some(4);
-	}
+    q = queue_new();
+    let i = 0;
+    while i < 25 {
+	q = queue_put(q, i);
+	i = i+1;
+    }
+    i = 0;
+    while i < 21 {
+	q = (queue_get(q)?).0;
+	i = i+1;
+    }
+    if (queue_get(q)?).1 != any(21) {
+	return Some(4);
+    }
 
-	return Some(0);
+    Some(0)
 }

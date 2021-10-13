@@ -6,7 +6,6 @@
 
 use crate::compile::CompileError;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
-use crate::uint256::Uint256;
 use std::collections::{HashMap, HashSet};
 
 /// Replaces labels with code points in code_in, and in copies of jump_table. A
@@ -25,7 +24,7 @@ pub fn strip_labels(
     for insn in &code_in {
         match insn.get_label() {
             Some(label) => {
-                let old_value = label_map.insert(*label, CodePt::new_internal(after_count));
+                let old_value = label_map.insert(label, CodePt::new_internal(after_count));
                 if let Some(CodePt::Internal(x)) = old_value {
                     return Err(CompileError::new(
                         String::from("Compile error: Internal error"),
@@ -82,7 +81,7 @@ pub fn strip_labels(
 ///
 /// Returns the modified set of instructions and a vector of labels in order of appearance in the
 /// code.
-pub fn fix_nonforward_labels(
+pub fn fix_backward_labels(
     code_in: &[Instruction],
     jump_table_index_in_globals: usize,
 ) -> (Vec<Instruction>, Vec<Label>) {
@@ -90,6 +89,9 @@ pub fn fix_nonforward_labels(
     let mut jump_table_index = HashMap::new();
     let mut imm_labels_seen = HashSet::new();
     let mut code_out = Vec::new();
+
+    // Note, this func assumes nested labels never exist.
+    // Should this change, we'll need to write some tuple ops to surgically replace them.
 
     for insn in code_in {
         let insn_in = insn.clone();
@@ -111,7 +113,7 @@ pub fn fix_nonforward_labels(
                             insn_in.debug_info,
                         ));
                         code_out.push(Instruction::from_opcode(
-                            Opcode::PushExternal(idx),
+                            Opcode::BackwardLabelTarget(idx),
                             insn_in.debug_info,
                         ));
                         code_out.push(Instruction::from_opcode(insn_in.opcode, insn_in.debug_info));
@@ -143,7 +145,7 @@ pub fn fix_nonforward_labels(
     let mut code_xformed = Vec::new();
     for insn in code_out.iter() {
         match insn.opcode {
-            Opcode::PushExternal(idx) => {
+            Opcode::BackwardLabelTarget(index) => {
                 if let Some(val) = &insn.immediate {
                     code_xformed.push(Instruction::from_opcode_imm(
                         Opcode::AVMOpcode(AVMOpcode::Noop),
@@ -151,9 +153,8 @@ pub fn fix_nonforward_labels(
                         insn.debug_info,
                     ));
                 }
-                code_xformed.push(Instruction::from_opcode_imm(
-                    Opcode::TupleGet(jump_table.len()),
-                    Value::Int(Uint256::from_usize(idx)),
+                code_xformed.push(Instruction::from_opcode(
+                    Opcode::TupleGet(index, jump_table.len()),
                     insn.debug_info,
                 ));
             }

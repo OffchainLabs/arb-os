@@ -23,13 +23,13 @@ public view write func evmTracer_clear() {
 }
 
 public func evmTracer_new() -> EvmTracer {
-    return struct {
+    struct {
         recordStack: stack_new(),
-    };
+    }
 }
 
 public view func evmTracer_emit() {
-    let val = unsafecast<any>(());
+    let val = any(());
     let theStack = outbox_getEvmTracer().recordStack;
     loop {
         if let Some(res) = stack_pop(theStack) {
@@ -39,7 +39,7 @@ public view func evmTracer_emit() {
             debug((20000, val));
             return;
         }
-    }
+    };
 }
 
 public view write func evmTracer_emitAndClear() {

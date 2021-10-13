@@ -27,11 +27,11 @@ use std::bytearray::bytearray_set256;
 public view write func arbStatistics_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
-        if (bytearray_size(calldata) < 4) {
+        if bytearray_size(calldata) < 4 {
             evmOp_revert_knownPc(0, 0, 0);
         }
         let funcCode = (bytearray_get256(calldata, 0) >> 224);
-        if (funcCode == const::funcCode_ArbStatistics_getStats) {
+        if funcCode == const::funcCode_ArbStatistics_getStats {
             arbStatistics_getStats(topFrame, calldata);
         } else {
             // unrecognized function code
@@ -45,7 +45,7 @@ public view write func arbStatistics_txcall() {
 
 // function getStats() external view returns(uint, uint, uint, uint, uint, uint);
 view write func arbStatistics_getStats(_topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 4) {
+    if bytearray_size(calldata) != 4 {
         evmOp_revert_knownPc(10, 0, 0);
     }
 
@@ -57,7 +57,7 @@ view write func arbStatistics_getStats(_topFrame: EvmCallFrame, calldata: ByteAr
     let mem = bytearray_set256(mem, 4*32, arbStats.numTxReceipts);
     let mem = bytearray_set256(mem, 5*32, accountStore_getNumContracts(evmCallStack_getAccountStoreInCurrentContext()));
 
-    if (evmCallStack_setTopFrameMemory(mem)) {
+    if evmCallStack_setTopFrameMemory(mem) {
         evmOp_return(0, bytearray_size(mem));
     } else {
         evmOp_revert_knownPc(12, 0, 0);
@@ -80,9 +80,9 @@ public write func arbStatistics_init() {
     };
 }
 
-public view write func arbStatistics_addToStorage(delta: int) {
+public view write func arbStatistics_addToStorage(delta: uint) {
     arbStats = arbStats with {
-        storage: uint(int(arbStats.storage) + delta)
+        storage: arbStats.storage + delta
     };
 }
 
