@@ -71,8 +71,11 @@ impl Effects for Opcode {
                 for _ in 0..prop.nouts {
                     effects.push(PushStack);
                 }
-                if prop.write || prop.sensitive {
+                if prop.write {
                     effects.push(WriteGlobal);
+                }
+                if prop.sensitive {
+                    effects.push(Unsure);
                 }
                 effects
             }

@@ -30,6 +30,7 @@ pub enum ValueNode {
     StackedLocal(SlotNum), // A local variable that's been moved to the data stack
     StackLocal(SlotNum),   // Operation for placing a local on the data stack
     Drop(usize),           // Mechanism for popping a group of values
+    Alias,                 //
     Meta(&'static str),    // A node that's just used to enforce some kind of ordering
 }
 
@@ -161,6 +162,7 @@ impl ValueGraph {
                     ValueNode::StackLocal(slot) => format!("Stack {}", Color::mint(slot)),
                     ValueNode::StackedLocal(slot) => format!("Stack'd {}", Color::mint(slot)),
                     ValueNode::Drop(count) => format!("Drop {}", Color::mint(count)),
+                    ValueNode::Alias => Color::lavender("Alias"),
                     ValueNode::Meta(name) => name.to_string(),
                 }
             );
@@ -370,9 +372,9 @@ impl ValueGraph {
                         assert!(!stacked.contains(&slot), "Not SSA: found write-after-write");
 
                         if tostack.contains(&slot) {
-                            graph.add_edge(local, node, ValueEdge::Meta("stacking"));
+                            graph.add_edge(local, node, ValueEdge::Connect(0));
+                            graph[node] = ValueNode::Alias;
                             graph[local] = ValueNode::StackLocal(slot);
-                            graph[node] = ValueNode::Opcode(Opcode::AVMOpcode(AVMOpcode::Noop));
                             stacked.insert(slot);
                         } else {
                             graph.add_edge(local, node, ValueEdge::Meta("write"));
@@ -663,7 +665,7 @@ impl ValueGraph {
 
         // Stack'd locals are always on top of the data stack when entering a basic block.
         // This is something codegen must guarantee later too.
-        for node in graph.node_indices().rev() {
+        for node in graph.node_indices() {
             if let ValueNode::StackedLocal(_) = &graph[node] {
                 stack.push(node);
             }
@@ -781,6 +783,9 @@ impl ValueGraph {
                     stack.push(node);
                 }
                 ValueNode::StackLocal(_) => {
+                    stack.push(node);
+                }
+                ValueNode::Alias => {
                     stack.push(node);
                 }
                 ValueNode::Drop(count) => {

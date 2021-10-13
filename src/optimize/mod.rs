@@ -567,11 +567,16 @@ impl BasicGraph {
         // We use environment variables to make debugging easier.
         // GR_BISECT takes a bitstring & only applies graph_reduce() on blocks whose hashes match it.
         // GR_PRINT pretty-prints every block we apply graph_reduce() on. Together these find bugs.
-        let bisect =
-            std::env::var("GR_BISECT").map(|x| (u64::from_str_radix(&x, 2).unwrap_or(0), x.len()));
+        let (bitstring, length) = std::env::var("GR_BISECT")
+            .map(|x| (u64::from_str_radix(&x, 2).unwrap_or(0), x.len()))
+            .unwrap_or_default();
+        let var_bisect = std::env::var("GR_VAR_BISECT")
+            .map(|x| (u64::from_str_radix(&x, 2).unwrap_or(0), x.len()));
         let always_print = std::env::var_os("GR_PRINT")
             .filter(|x| !x.is_empty())
             .is_some();
+        let mut global_hash = 0;
+        let mut bisect_nodes = HashSet::new();
 
         // Compute each block's value graph where possible. In the rare case that a
         // block contains code for which correctness cannot be easily varified, we
@@ -579,7 +584,7 @@ impl BasicGraph {
         for node in self.graph.node_indices() {
             let block = self.graph[node].get_code();
 
-            if let Ok((bitstring, length)) = bisect {
+            if length > 0 || var_bisect.is_ok() {
                 let mut hasher = std::collections::hash_map::DefaultHasher::new();
                 for insn in block.iter() {
                     if let Opcode::AVMOpcode(opcode) = insn.opcode {
@@ -594,6 +599,7 @@ impl BasicGraph {
                     hasher.write(&immediate_hash);
                 }
                 let hash = hasher.finish();
+                global_hash ^= hash;
                 if hash % (1 << length) != bitstring {
                     // Block's hash didn't match the bitstring, so we skip it.
                     continue;
@@ -613,6 +619,9 @@ impl BasicGraph {
                         if let BasicBlock::Meta(_) = &self.graph[node] {
                             continue;
                         }
+                        if var_bisect.is_ok() && !bisect_nodes.contains(&node) {
+                            continue;
+                        }
                         if let Some(graph) = graphs.get(&node) {
                             let code = self.graph[node].get_code();
                             let ssa = code.iter().map(|x| x.pretty_print(Color::PINK)).collect();
@@ -623,7 +632,7 @@ impl BasicGraph {
                                 .into_iter()
                                 .map(|x| x.pretty_print(Color::PINK))
                                 .collect();
-                            if ssa != reduced {
+                            if ssa != reduced || var_bisect.is_ok() {
                                 console::print_columns(
                                     vec![ssa, values, reduced],
                                     vec!["SSA", "values", "reduced"],
@@ -712,16 +721,38 @@ impl BasicGraph {
             for curr in self.graph[node].get_code() {
                 match curr.opcode {
                     Opcode::SetLocal(slot) => {
+                        // In the case of variable bisection, skip adding defs against the hash.
+
+                        if let Ok((bitstring, length)) = var_bisect {
+                            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                            hasher.write_u64(global_hash);
+                            hasher.write_u32(slot);
+                            let hash = hasher.finish();
+                            if hash % (1 << length) != bitstring {
+                                // Variable's hash didn't match the bitstring, so we skip it.
+                                continue;
+                            }
+                            bisect_nodes.insert(node);
+                        }
+
                         // Since the graph is SSA, a slot can only be assigned once.
                         defs.insert(slot, node);
                     }
                     Opcode::GetLocal(slot) => {
                         let set = uses.entry(slot).or_insert(HashSet::new());
                         set.insert(node);
+
+                        if defs.contains_key(&slot) {
+                            bisect_nodes.insert(node);
+                        }
                     }
                     Opcode::DropLocal(slot) => {
                         // Since mini is a scoped language, only one drop is ever needed.
                         dels.insert(slot, node);
+
+                        if defs.contains_key(&slot) {
+                            bisect_nodes.insert(node);
+                        }
                     }
                     _ => {}
                 }
@@ -733,6 +764,8 @@ impl BasicGraph {
             .into_iter()
             .filter(|(slot, _)| !phid.contains(slot) && !phis.contains_key(slot))
             .collect();
+
+        //defs = defs.into_iter().take(2).collect();
 
         // Stacking a local means moving it from the aux stack to the data stack.
         // Using the stack'd value means passing it from value graph to value graph as an arg.
@@ -749,6 +782,7 @@ impl BasicGraph {
 
         for (slot, node) in defs.clone() {
             let mut poppers = BTreeSet::new();
+            let mut new_bisect_nodes = HashSet::new();
             let mut dfs = Dfs::new(&self.graph, node);
             while let Some(alive) = dfs.next(&self.graph) {
                 if exits.contains(&alive) {
@@ -756,6 +790,9 @@ impl BasicGraph {
                     // to clean up the stack.
                     poppers.insert(alive);
                 }
+
+                new_bisect_nodes.insert(alive);
+
                 if let None = graphs.get(&alive) {
                     // We can't place this local on the stack since we don't understand
                     // how the values in a down-stream block relate to one another.
@@ -771,12 +808,21 @@ impl BasicGraph {
                     // This exit happens after the annotated drop, so
                     // we don't actually want to issue a pop.
                     poppers.remove(&node);
+                    new_bisect_nodes.remove(&node);
                 }
 
                 pops.entry(dropper).or_insert(BTreeSet::new()).insert(slot);
                 for popper in poppers {
                     pops.entry(popper).or_insert(BTreeSet::new()).insert(slot);
+
+                    let mut dfs = Dfs::new(&self.graph, popper);
+                    while let Some(node) = dfs.next(&self.graph) {
+                        // don't include nodes after the exit
+                        new_bisect_nodes.remove(&node);
+                    }
+                    new_bisect_nodes.insert(popper);
                 }
+                bisect_nodes.extend(new_bisect_nodes);
             }
         }
 
