@@ -65,10 +65,10 @@ func tests() -> uint {
 }
 
 // stuff below here is for testing the compiler
-func nullFunc() {
+sensitive func nullFunc() {
     return;
 }
 
-func callNullFunc() {
+sensitive func callNullFunc() {
     callNullFunc();
 }

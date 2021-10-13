@@ -47,7 +47,6 @@ type StorageMapCell = struct {
     value: uint,
 };
 
-
 public func storageMap_new() -> StorageMap {
     struct {
         tree: unsafecast<StorageMapNode>(0),

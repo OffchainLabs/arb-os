@@ -29,6 +29,17 @@ pub trait Effects {
     fn effects(&self) -> Vec<Effect>;
 }
 
+impl Effects for Instruction {
+    fn effects(&self) -> Vec<Effect> {
+        let mut effects = match self.immediate {
+            Some(_) => vec![Effect::PushStack],
+            None => vec![],
+        };
+        effects.extend(self.opcode.effects());
+        effects
+    }
+}
+
 impl Effects for Opcode {
     fn effects(&self) -> Vec<Effect> {
         use Effect::*;

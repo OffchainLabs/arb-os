@@ -73,6 +73,11 @@ fn nodes(graph: &StableGraph<ValueNode, ValueEdge>) -> Vec<NodeIndex> {
     graph.node_indices().collect()
 }
 
+/// Retrieves the `NodeIndex`s of a graph without borrowing
+fn neighbors(graph: &StableGraph<ValueNode, ValueEdge>, node: NodeIndex) -> Vec<NodeIndex> {
+    graph.neighbors_undirected(node).collect()
+}
+
 /// Retrieves the number of times other nodes consume this `ValueNode`
 fn conn_count(graph: &StableGraph<ValueNode, ValueEdge>, node: NodeIndex) -> usize {
     graph
@@ -286,6 +291,7 @@ impl ValueGraph {
             };
         }
 
+        use Effect::*;
         for curr in block {
             // Since we track the stack, each instruction informs our relationships between values.
             // For simplicity, we split up an instruction into its immediate & opcode, adding nodes for each.
@@ -303,36 +309,35 @@ impl ValueGraph {
                 return None;
             }
 
-            let node = graph.add_node(ValueNode::Opcode(curr.opcode));
-            let effects = curr.opcode.effects();
+            let mut node = graph.add_node(ValueNode::Opcode(curr.opcode));
             let mut input_count = 0;
 
-            for effect in effects {
+            for effect in curr.opcode.effects() {
                 match effect {
-                    Effect::PushStack => {
+                    PushStack => {
                         stack.push_back(node);
                     }
-                    Effect::PopStack => {
+                    PopStack => {
                         touch!(1);
                         stack.pop_back();
                     }
-                    Effect::ReadStack => {
+                    ReadStack => {
                         touch!(1);
                         let pusher = stack.iter().last().unwrap();
                         graph.add_edge(node, *pusher, ValueEdge::Connect(input_count));
                         input_count += 1;
                     }
-                    Effect::DupStack(depth) => {
+                    DupStack(depth) => {
                         touch!(depth);
                         let pusher = stack[stack.len() - depth];
                         stack.push_back(pusher);
                     }
-                    Effect::SwapStack(depth) => {
+                    SwapStack(depth) => {
                         touch!(depth + 1);
                         let swapped = stack.swap_remove_back(stack.len() - depth - 1).unwrap();
                         stack.push_back(swapped);
                     }
-                    Effect::ReadLocal(slot) => {
+                    ReadLocal(slot) => {
                         let local = match locals.get(&slot) {
                             Some(local) => *local,
                             None => {
@@ -343,12 +348,16 @@ impl ValueGraph {
                         };
 
                         if stacked.contains(&slot) {
-                            graph.add_edge(node, local, ValueEdge::Connect(0));
+                            // The local has been stack'd, so rather than creating a meta edge,
+                            // which just ensures ordering, we instead cause future Push effects
+                            // to place a copy of the local _itself_ on the stack.
+                            graph.remove_node(node);
+                            node = local;
                         } else {
                             graph.add_edge(node, local, ValueEdge::Meta("read"));
                         }
                     }
-                    Effect::WriteLocal(slot) => {
+                    WriteLocal(slot) => {
                         let local = match locals.get(&slot) {
                             Some(local) => *local,
                             None => {
@@ -369,11 +378,11 @@ impl ValueGraph {
                             graph.add_edge(local, node, ValueEdge::Meta("write"));
                         }
                     }
-                    Effect::ReadGlobal => {
+                    ReadGlobal => {
                         graph.add_edge(node, globals, ValueEdge::Meta("view"));
                         global_readers.insert(node);
                     }
-                    Effect::WriteGlobal => {
+                    WriteGlobal => {
                         for reader in global_readers {
                             if reader != node {
                                 graph.add_edge(node, reader, ValueEdge::Meta("order"));
@@ -384,15 +393,10 @@ impl ValueGraph {
                         globals = graph.add_node(ValueNode::Meta("globals"));
                         graph.add_edge(globals, node, ValueEdge::Meta("write"));
                     }
-                    Effect::WritePC => {
+                    WritePC => {
                         unreachable!("Not SSA: jumps should only happen at the end")
                     }
-                    Effect::PushAux
-                    | Effect::PopAux
-                    | Effect::ReadAux
-                    | Effect::MoveToStack
-                    | Effect::MoveToAux
-                    | Effect::Unsure => return None,
+                    PushAux | PopAux | ReadAux | MoveToStack | MoveToAux | Unsure => return None,
                 }
             }
         }
@@ -410,10 +414,8 @@ impl ValueGraph {
                 _ => continue,
             };
 
-            let source_accessors: Vec<_> = graph.neighbors_undirected(source).collect();
-            let dest_accessors: Vec<_> = graph.neighbors_undirected(dest).collect();
-            for source_access in source_accessors {
-                for &dest_access in &dest_accessors {
+            for source_access in neighbors(&graph, source) {
+                for dest_access in neighbors(&graph, dest) {
                     graph.add_edge(source_access, dest_access, ValueEdge::Meta("φ"));
                 }
             }
@@ -424,8 +426,14 @@ impl ValueGraph {
         // represents stack'd locals that need to be dropped
         let drop_locals = graph.add_node(ValueNode::Drop(unstack.len()));
         for (index, slot) in unstack.iter().enumerate() {
-            let local = locals.get(slot).unwrap();
-            graph.add_edge(drop_locals, *local, ValueEdge::Connect(index));
+            let local = *locals.get(slot).unwrap();
+
+            for node in neighbors(&graph, local) {
+                // the drop must occur after all uses of the local
+                graph.add_edge(drop_locals, node, ValueEdge::Meta("drop"));
+            }
+
+            graph.add_edge(drop_locals, local, ValueEdge::Connect(index));
             stacked.remove(slot);
         }
 
@@ -435,10 +443,51 @@ impl ValueGraph {
         // drop the locals we'll never use again right at the end
         graph.add_edge(output, drop_locals, ValueEdge::Meta("drops"));
 
+        macro_rules! bail {
+            ($text:expr) => {
+                println!("{}", Color::red("Bailing on graph"));
+                let ssa = block
+                    .into_iter()
+                    .map(|x| x.pretty_print(Color::RED))
+                    .collect();
+                let mut incomplete = ValueGraph::default();
+                incomplete.graph = graph.clone();
+                let lines = incomplete.print_lines();
+                console::print_columns(vec![ssa, lines], vec!["SSA", "values"]);
+                panic!("{}", $text);
+            };
+        }
+
+        let mut footer_inputs = vec![];
+        if let Some(last) = footer.last() {
+            let reads = last.effects().iter().filter(|e| **e == ReadStack).count();
+            let makes = last.effects().iter().filter(|e| **e == PushStack).count();
+            touch!(reads - makes);
+            for _ in 0..(reads - makes) {
+                let input = match stack.pop_back() {
+                    Some(input) => input,
+                    None => {
+                        let msg =
+                            format!("{} needs value not on stack", last.pretty_print(Color::RED));
+                        bail!(msg);
+                    }
+                };
+                footer_inputs.push(input);
+            }
+            footer_inputs.reverse();
+        }
+
+        // see if we need to phi any stack'd locals
+        let phid = locals.iter().filter_map(|x| phis.get(x.0)).cloned();
+
         // locals still stack'd need to be placed at the top of the data stack
         for slot in &stacked {
             let local = locals.get(slot).unwrap();
             stack.push_back(*local);
+        }
+
+        for input in footer_inputs {
+            stack.push_back(input);
         }
 
         // items left on the stack need to be passed on
@@ -471,9 +520,9 @@ impl ValueGraph {
                     let mut stateful = false;
                     for effect in opcode.effects() {
                         match effect {
-                            Effect::PushStack => pushes += 1,
-                            Effect::PopStack => {}
-                            Effect::ReadStack => {}
+                            PushStack => pushes += 1,
+                            PopStack => {}
+                            ReadStack => {}
                             _ => stateful = true,
                         }
                     }
@@ -535,28 +584,21 @@ impl ValueGraph {
         fold_constants(&mut graph);
         prune_graph(&mut graph, output);
 
+        if algo::is_cyclic_directed(&graph) {
+            // By construction, a value graph is a DAG.
+            // Each edge represents a dependency: compute this to compute that.
+            // For there to be a cycle, computing a value would require computing
+            // another that in turn requires computing the first. This is impossible
+            // for a basic block since it doesn't have control flow.
+            bail!("Value graph is not a DAG!");
+        }
+
         let values = ValueGraph {
             graph,
             header,
             footer,
             output,
         };
-
-        if algo::is_cyclic_directed(&values.graph) {
-            // By construction, a value graph is a DAG.
-            // Each edge represents a dependency: compute this to compute that.
-            // For there to be a cycle, computing a value would require computing
-            // another that in turn requires computing the first. This is impossible
-            // for a basic block since it doesn't have control flow.
-
-            let ssa = block
-                .into_iter()
-                .map(|x| x.pretty_print(Color::PINK))
-                .collect();
-            let values = values.print_lines();
-            console::print_columns(vec![ssa, values], vec!["SSA", "values"]);
-            panic!("Value graph is not a DAG!");
-        }
 
         Some(values)
     }
@@ -724,7 +766,7 @@ impl ValueGraph {
                     let pushes = opcode
                         .effects()
                         .into_iter()
-                        .filter(|effect| *effect == Effect::PushStack)
+                        .filter(|e| *e == Effect::PushStack)
                         .count();
                     for _ in 0..pushes {
                         stack.push(node);

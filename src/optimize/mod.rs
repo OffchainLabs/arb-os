@@ -728,6 +728,12 @@ impl BasicGraph {
             }
         }
 
+        // TODO: handle phis
+        defs = defs
+            .into_iter()
+            .filter(|(slot, _)| !phid.contains(slot) && !phis.contains_key(slot))
+            .collect();
+
         // Stacking a local means moving it from the aux stack to the data stack.
         // Using the stack'd value means passing it from value graph to value graph as an arg.
         // This is only safe, however, if we can determine where exactly to pop the value.
@@ -810,7 +816,7 @@ impl BasicGraph {
 
             match ValueGraph::with_stack(block, stacked.clone(), &unstack, &tostack, phis) {
                 Some(values) => {
-                    //graphs.insert(node, values);
+                    graphs.insert(node, values);
                 }
                 None => {
                     // No value graph exists, but we can restart this analysis since, by construction,
@@ -849,10 +855,10 @@ impl BasicGraph {
             &mut HashSet::new(),
         );
 
+        show_all!();
+
         for (node, values) in &graphs {
             self.graph[*node] = BasicBlock::Code(values.codegen(optimization_level).0);
         }
-
-        show_all!();
     }
 }
