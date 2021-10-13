@@ -52,6 +52,8 @@ pub struct CompileStruct {
     pub warnings_are_errors: bool,
     #[clap(short, long)]
     pub output: Option<String>,
+    #[clap(short = 'O', long, default_value="32")]
+    pub optimization_level: usize,
     #[clap(short, long)]
     pub format: Option<String>,
     #[clap(short, long)]
@@ -146,6 +148,7 @@ impl CompileStruct {
                 constants_path,
                 self.must_use_global_consts,
                 &mut error_system,
+                self.optimization_level,
                 self.release_build,
                 !self.no_builtins,
             ) {
@@ -466,6 +469,7 @@ pub fn compile_from_file(
     constants_path: Option<&Path>,
     must_use_global_consts: bool,
     error_system: &mut ErrorSystem,
+    optimization_level: usize,
     release_build: bool,
     builtins: bool,
 ) -> Result<(Vec<CompiledFunc>, Vec<GlobalVar>), CompileError> {
@@ -497,6 +501,7 @@ pub fn compile_from_file(
             constants_path,
             must_use_global_consts,
             error_system,
+            optimization_level,
             release_build,
             builtins,
         )
@@ -515,6 +520,7 @@ pub fn compile_from_file(
             constants_path,
             must_use_global_consts,
             error_system,
+            optimization_level,
             release_build,
             builtins,
         )
@@ -555,6 +561,7 @@ pub fn compile_from_folder(
     constants_path: Option<&Path>,
     must_use_global_consts: bool,
     error_system: &mut ErrorSystem,
+    optimization_level: usize,
     release_build: bool,
     builtins: bool,
 ) -> Result<(Vec<CompiledFunc>, Vec<GlobalVar>), CompileError> {
@@ -609,7 +616,7 @@ pub fn compile_from_folder(
         module.propagate_attributes();
     }
 
-    let (progs, globals) = codegen_modules(typechecked_modules, type_tree, release_build)?;
+    let (progs, globals) = codegen_modules(typechecked_modules, type_tree, optimization_level, release_build)?;
     Ok((progs, globals))
 }
 
@@ -1024,6 +1031,7 @@ fn check_global_constants(
 fn codegen_modules(
     typechecked_modules: Vec<TypeCheckedModule>,
     type_tree: TypeTree,
+    optimization_level: usize,
     release_build: bool,
 ) -> Result<(Vec<CompiledFunc>, Vec<GlobalVar>), CompileError> {
     let mut work_list = vec![];
@@ -1086,8 +1094,8 @@ fn codegen_modules(
             let mut graph = BasicGraph::new(code);
 
             graph.pop_useless_locals();
-            graph.graph_reduce();
-            graph.color(frame_size);
+            graph.graph_reduce(optimization_level);
+            graph.color(frame_size, optimization_level);
             let frame_size = graph.shrink_frame();
 
             let code = graph.flatten();

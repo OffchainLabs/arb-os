@@ -328,7 +328,7 @@ impl BasicGraph {
     }
 
     /// Efficiently assign frame slots to minimize the frame size.
-    pub fn color(&mut self, frame_size: FrameSize) {
+    pub fn color(&mut self, frame_size: FrameSize, optimization_level: usize) {
         // Algorithm
         //   Determine which values would overwrite each other if reassigned the same slot.
         //   Reassign values using as few slots as possible given this knowledge
@@ -464,7 +464,7 @@ impl BasicGraph {
         let mut best_assignments = HashMap::new();
         let mut ncolors = usize::MAX;
 
-        for _ in 0..24 {
+        for _ in 0..(24 + 2 * optimization_level) {
             let mut colors: BTreeMap<u32, usize> = BTreeMap::new(); // colors to usage counts
             let mut assignments: HashMap<SlotNum, u32> = HashMap::new(); // slots to colors
 
@@ -537,7 +537,7 @@ impl BasicGraph {
         }
     }
 
-    pub fn graph_reduce(&mut self) {
+    pub fn graph_reduce(&mut self, optimization_level: usize) {
         // Algorithm
         //   Where possible, create a value graph for each basic block.
         //   Apply reductions like constant folding to each value graph.
@@ -560,41 +560,18 @@ impl BasicGraph {
             }
         }
 
+        // The proposed value graph for each basic block.
+        // These are replaced as better ones are created.
+        let mut graphs = HashMap::new();
+
         // We use environment variables to make debugging easier.
-        // GRAPH_BISECT takes a bitstring & only applies graph_reduce() on blocks whose hashes match it.
-        // GRAPH_ALWAYS_PRINT pretty-prints every block we apply graph_reduce() on. Together these find bugs.
-        let bisect = std::env::var("GRAPH_BISECT")
-            .map(|x| (u64::from_str_radix(&x, 2).unwrap_or(0), x.len()));
-        let always_print = std::env::var_os("GRAPH_ALWAYS_PRINT")
+        // GR_BISECT takes a bitstring & only applies graph_reduce() on blocks whose hashes match it.
+        // GR_PRINT pretty-prints every block we apply graph_reduce() on. Together these find bugs.
+        let bisect =
+            std::env::var("GR_BISECT").map(|x| (u64::from_str_radix(&x, 2).unwrap_or(0), x.len()));
+        let always_print = std::env::var_os("GR_PRINT")
             .filter(|x| !x.is_empty())
             .is_some();
-
-        macro_rules! maybe_skip {
-            ($block:expr) => {
-                if let Ok((bitstring, length)) = bisect {
-                    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-                    for insn in $block.iter() {
-                        if let Opcode::AVMOpcode(opcode) = insn.opcode {
-                            hasher.write_u8(opcode.to_number());
-                        }
-                        let mut immediate_hash = [0u8; 32];
-                        if let Some(value) = &insn.immediate {
-                            if let Value::Int(x) = value.avm_hash() {
-                                immediate_hash.copy_from_slice(&x.to_bytes_be());
-                            }
-                        }
-                        hasher.write(&immediate_hash);
-                    }
-                    let hash = hasher.finish();
-                    if hash % (1 << length) != bitstring {
-                        // Block's hash didn't match the bitstring, so we skip it.
-                        continue;
-                    }
-                }
-            };
-        }
-
-        let mut graphs = HashMap::new();
 
         // Compute each block's value graph where possible. In the rare case that a
         // block contains code for which correctness cannot be easily varified, we
@@ -602,7 +579,26 @@ impl BasicGraph {
         for node in self.graph.node_indices() {
             let block = self.graph[node].get_code();
 
-            maybe_skip!(&block);
+            if let Ok((bitstring, length)) = bisect {
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                for insn in block.iter() {
+                    if let Opcode::AVMOpcode(opcode) = insn.opcode {
+                        hasher.write_u8(opcode.to_number());
+                    }
+                    let mut immediate_hash = [0u8; 32];
+                    if let Some(value) = &insn.immediate {
+                        if let Value::Int(x) = value.avm_hash() {
+                            immediate_hash.copy_from_slice(&x.to_bytes_be());
+                        }
+                    }
+                    hasher.write(&immediate_hash);
+                }
+                let hash = hasher.finish();
+                if hash % (1 << length) != bitstring {
+                    // Block's hash didn't match the bitstring, so we skip it.
+                    continue;
+                }
+            }
 
             if let Some(value_graph) = ValueGraph::new(block, &phis) {
                 graphs.insert(node, value_graph);
@@ -622,7 +618,7 @@ impl BasicGraph {
                             let ssa = code.iter().map(|x| x.pretty_print(Color::PINK)).collect();
                             let values = graph.print_lines();
                             let reduced = graph
-                                .codegen()
+                                .codegen(optimization_level)
                                 .0
                                 .into_iter()
                                 .map(|x| x.pretty_print(Color::PINK))
@@ -690,22 +686,22 @@ impl BasicGraph {
 
         show_all!();
 
-        // See for each block if we can do better by codegenning against each's value graph
+        if self.cyclic {
+            // While there's a reasonable path toward making the rest work for
+            // loops, these are rare and so we'll restrict our analysis to DAG's.
+            // The next best thing is to use these graphs to improve blocks independently.
 
-        for &node in &nodes {
-            if let Some(values) = graphs.get(&node) {
-                let code = self.graph[node].get_code();
-                let cost = code.iter().map(|x| x.opcode.base_cost()).sum();
-                let (reduced, reduced_cost) = values.codegen();
-                if reduced_cost < cost {
-                    self.graph[node] = BasicBlock::Code(reduced);
+            // Update blocks where value graphs produce more performant code
+            for &node in &nodes {
+                if let Some(values) = graphs.get(&node) {
+                    let code = self.graph[node].get_code();
+                    let cost = code.iter().map(|x| x.opcode.base_cost()).sum();
+                    let (reduced, reduced_cost) = values.codegen(optimization_level);
+                    if reduced_cost < cost {
+                        self.graph[node] = BasicBlock::Code(reduced);
+                    }
                 }
             }
-        }
-
-        if self.cyclic {
-            // While there's a reasonable path toward making the following work for
-            // loops, these are rare and so we'll restrict our analysis to DAG's.
             return;
         }
 
@@ -814,11 +810,15 @@ impl BasicGraph {
 
             match ValueGraph::with_stack(block, stacked.clone(), &unstack, &tostack, phis) {
                 Some(values) => {
-                    graphs.insert(node, values);
+                    //graphs.insert(node, values);
                 }
                 None => {
                     // No value graph exists, but we can restart this analysis since, by construction,
                     // a local is only stack'd when its descendents have value graphs.
+                    assert!(
+                        !graphs.contains_key(&node),
+                        "assumption about construction is wrong"
+                    );
                     stacked = BTreeSet::new();
                 }
             };
@@ -838,7 +838,7 @@ impl BasicGraph {
             done.insert(node);
         }
 
-        /*stack_locals(
+        stack_locals(
             self.entry,
             &self.graph,
             &phis,
@@ -850,8 +850,8 @@ impl BasicGraph {
         );
 
         for (node, values) in &graphs {
-            self.graph[*node] = BasicBlock::Code(values.codegen().0);
-        }*/
+            self.graph[*node] = BasicBlock::Code(values.codegen(optimization_level).0);
+        }
 
         show_all!();
     }

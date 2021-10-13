@@ -596,7 +596,7 @@ impl ValueGraph {
     }
 
     /// Flatten a `ValueGraph` into an efficient block of equivalent instructions
-    pub fn codegen(&self) -> (Vec<Instruction>, usize) {
+    pub fn codegen(&self, optimization_level: usize) -> (Vec<Instruction>, usize) {
         let mut stack = vec![];
         let graph = &self.graph;
 
@@ -756,7 +756,7 @@ impl ValueGraph {
         let mut best_cost = usize::MAX;
         let mut entropy: SmallRng = SeedableRng::seed_from_u64(0);
 
-        for _ in 0..32 {
+        for _ in 0..(1 + optimization_level) {
             // attempt to codegen a better set of instructions than the best found so far.
 
             let mut stack = stack.clone();

@@ -232,7 +232,7 @@ fn reorder_test() -> Result<(), &'static str> {
     let mut rng = thread_rng();
 
     for _ in 0..128 {
-        let mut stack: [usize; 32] = rng.gen();
+        let stack: [usize; 32] = rng.gen();
         let stack: HashSet<_> = IntoIterator::into_iter(stack).collect();
         let stack: Vec<NodeIndex> = stack.into_iter().map(NodeIndex::new).collect();
 
