@@ -16,7 +16,7 @@ use std::addressSet::addressPairSet_lookup;
 
 
 write func main() {
-	asm(tests(),) { log };
+    asm(tests()) { log };
 }
 
 func tests() -> uint {
@@ -25,110 +25,111 @@ func tests() -> uint {
     let empty = setOfAddresses_emptySet();
     let all = setOfAddresses_all();
 
-    if(setOfAddresses_contains(empty, addr1)) {
+    if setOfAddresses_contains(empty, addr1) {
         return 1;
     }
 
-    if( ! setOfAddresses_isEmpty(empty)) {
+    if !setOfAddresses_isEmpty(empty) {
         return 2;
     }
 
-    if(setOfAddresses_isEmpty(all)) {
+    if setOfAddresses_isEmpty(all) {
         return 3;
     }
 
-    if( ! setOfAddresses_contains(all, addr1)) {
+    if !setOfAddresses_contains(all, addr1) {
         return 4;
     }
 
-    if(setOfAddresses_isAll(empty)) {
+    if setOfAddresses_isAll(empty) {
         return 5;
     }
 
-    if ( ! setOfAddresses_isAll(all)) {
+    if !setOfAddresses_isAll(all) {
         return 6;
     }
 
     let set1 = setOfAddresses_add(empty, addr1);
     set1 = setOfAddresses_add(set1, addr2);
-    if (setOfAddresses_contains(set1, addr3)) {
+    if setOfAddresses_contains(set1, addr3) {
         return 7;
     }
-    if (! setOfAddresses_contains(set1, addr1)) {
+    if ! setOfAddresses_contains(set1, addr1) {
         return 8;
     }
-    if (! setOfAddresses_contains(set1, addr2)) {
+    if ! setOfAddresses_contains(set1, addr2) {
         return 9;
     }
 
     set1 = setOfAddresses_remove(set1, addr3);  // remove address that isn't in the set
-    if (setOfAddresses_contains(set1, addr3)) {
+    if setOfAddresses_contains(set1, addr3) {
         return 10;
     }
-    if (! setOfAddresses_contains(set1, addr1)) {
+    if !setOfAddresses_contains(set1, addr1) {
         return 11;
     }
-    if (! setOfAddresses_contains(set1, addr2)) {
+    if !setOfAddresses_contains(set1, addr2) {
         return 12;
     }
 
     set1 = setOfAddresses_remove(set1, addr1);
-    if (setOfAddresses_contains(set1, addr3)) {
+
+    if setOfAddresses_contains(set1, addr3) {
         return 13;
     }
-    if (setOfAddresses_contains(set1, addr1)) {
+    if setOfAddresses_contains(set1, addr1) {
         return 14;
     }
-    if (! setOfAddresses_contains(set1, addr2)) {
+    if ! setOfAddresses_contains(set1, addr2) {
         return 15;
     }
 
     let aps = addressPairSet_new();
-    if (addressPairSet_lookup(aps, addr4, addr5)) {
+    if addressPairSet_lookup(aps, addr4, addr5) {
         return 100;
     }
 
     aps = addressPairSet_set(aps, Some(addr1), None<address>, true);
     aps = addressPairSet_set(aps, None<address>, Some(addr2), true);
     aps = addressPairSet_set(aps, Some(addr3), Some(addr4), true);
-    if( ! addressPairSet_lookup(aps, addr1, addr5)) {
+    if !addressPairSet_lookup(aps, addr1, addr5) {
         return 101;
     }
-    if( ! addressPairSet_lookup(aps, addr5, addr2)) {
+    if !addressPairSet_lookup(aps, addr5, addr2) {
         return 102;
     }
-    if( ! addressPairSet_lookup(aps, addr3, addr4)) {
+    if !addressPairSet_lookup(aps, addr3, addr4) {
         return 103;
     }
-    if(addressPairSet_lookup(aps, addr4, addr3)) {
+    if addressPairSet_lookup(aps, addr4, addr3) {
         return 104;
     }
-    if(addressPairSet_lookup(aps, addr2, addr5)) {
+    if addressPairSet_lookup(aps, addr2, addr5) {
         return 105;
     }
-    if(addressPairSet_lookup(aps, addr5, addr1)) {
+    if addressPairSet_lookup(aps, addr5, addr1) {
         return 106;
     }
 
     aps = addressPairSet_set(aps, Some(addr1), None<address>, false);
-    if(addressPairSet_lookup(aps, addr1, addr5)) {
+    if addressPairSet_lookup(aps, addr1, addr5) {
         return 111;
     }
-    if( ! addressPairSet_lookup(aps, addr5, addr2)) {
+    if !addressPairSet_lookup(aps, addr5, addr2) {
         return 112;
     }
-    if( ! addressPairSet_lookup(aps, addr3, addr4)) {
+    if !addressPairSet_lookup(aps, addr3, addr4) {
         return 113;
     }
-    if(addressPairSet_lookup(aps, addr4, addr3)) {
+    if addressPairSet_lookup(aps, addr4, addr3) {
         return 114;
     }
-    if(addressPairSet_lookup(aps, addr2, addr5)) {
+    if addressPairSet_lookup(aps, addr2, addr5) {
         return 115;
     }
-    if(addressPairSet_lookup(aps, addr5, addr1)) {
+    if addressPairSet_lookup(aps, addr5, addr1) {
         return 116;
     }
-
-    return 0;
+    
+    0
 }

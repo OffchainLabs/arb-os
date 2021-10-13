@@ -4,7 +4,7 @@
 
 //! Provides utilities for dealing with nested tuples and conversion from large flat tuples to nested tuples
 
-use crate::compile::{CompileError, DebugInfo};
+use crate::compile::{CompileError, DebugInfo, GlobalVar, TypeTree};
 use crate::console::Color;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
 use crate::uint256::Uint256;
@@ -15,14 +15,14 @@ pub const TUPLE_SIZE: usize = 8;
 /// Takes a slice of instructions from a single function scope, and changes tuples of size greater
 /// than TUPLE_SIZE to nested tuples with each subtuple at most TUPLE_SIZE
 pub fn fix_tuple_size(
-    code_in: &[Instruction],
+    code: Vec<Instruction>,
     num_globals: usize,
 ) -> Result<Vec<Instruction>, CompileError> {
     let mut code_out = Vec::new();
     let mut locals_tree = TupleTree::new(1, true);
     let global_tree = TupleTree::new(num_globals, false);
 
-    for insn in code_in.iter() {
+    for insn in code {
         let debug_info = insn.debug_info;
 
         macro_rules! opcode {
@@ -39,118 +39,25 @@ pub fn fix_tuple_size(
         }
 
         match insn.opcode {
-            Opcode::MakeFrame(nargs, space, prebuilt, return_address) => {
-                if return_address {
-                    code_out.push(opcode!(AuxPush)); // move return address to aux stack
-                }
-                locals_tree = TupleTree::new(space, true);
-                if let Some(imm) = &insn.immediate {
-                    panic!(
-                        "{} somehow has an immediate {}",
-                        insn.opcode,
-                        imm.pretty_print(Color::RED)
-                    );
-                }
-
-                match prebuilt {
-                    false => code_out.push(opcode!(AuxPush, TupleTree::make_empty(&locals_tree))),
-                    true => code_out.push(opcode!(AuxPush)),
-                }
-
-                // need to offset by nargs
-                for lnum in 0..nargs {
-                    locals_tree.write_code(true, lnum, &mut code_out, debug_info)?;
+            Opcode::MakeFrame(space, prebuilt) => {
+                locals_tree = TupleTree::new(space as usize, true);
+                if !prebuilt {
+                    code_out.push(opcode!(Noop, TupleTree::make_empty(&locals_tree)));
                 }
             }
-            Opcode::TupleGet(size) => {
+            Opcode::TupleGet(offset, size) => {
                 let ttree = TupleTree::new(size, false);
-                if let Some(index) = &insn.immediate {
-                    match index.to_usize() {
-                        Some(iu) => {
-                            ttree.read_code(false, iu, &mut code_out, debug_info)?;
-                        }
-                        None => {
-                            return Err(CompileError::new(
-                                String::from("Compile error: fix_tuple_size"),
-                                "index too large".to_string(),
-                                debug_info.location.into_iter().collect(),
-                            ))
-                        }
-                    }
-                } else {
-                    return Err(CompileError::new(
-                        String::from("Compile error: fix_tuple_size"),
-                        "TupleGet without immediate arg".to_string(),
-                        debug_info.location.into_iter().collect(),
-                    ));
-                }
+                ttree.read_code(false, offset, &mut code_out, debug_info)?;
             }
-            Opcode::TupleSet(size) => {
+            Opcode::TupleSet(offset, size) => {
                 let ttree = TupleTree::new(size, false);
-                if let Some(index) = &insn.immediate {
-                    match index.to_usize() {
-                        Some(iu) => {
-                            ttree.write_code(false, iu, &mut code_out, debug_info)?;
-                        }
-                        None => {
-                            return Err(CompileError::new(
-                                String::from("Compile error: fix_tuple_size"),
-                                "TupleSet index too large".to_string(),
-                                debug_info.location.into_iter().collect(),
-                            ))
-                        }
-                    }
-                } else {
-                    return Err(CompileError::new(
-                        String::from("Compile error: fix_tuple_size"),
-                        "TupleSet without immediate arg".to_string(),
-                        debug_info.location.into_iter().collect(),
-                    ));
-                }
+                ttree.write_code(false, offset, &mut code_out, debug_info)?;
             }
-            Opcode::SetLocal => {
-                if let Some(index) = &insn.immediate {
-                    match index.to_usize() {
-                        Some(iu) => {
-                            locals_tree.write_code(true, iu, &mut code_out, debug_info)?;
-                        }
-                        None => {
-                            return Err(CompileError::new(
-                                String::from("Compile error: fix_tuple_size"),
-                                "index too large".to_string(),
-                                debug_info.location.into_iter().collect(),
-                            ))
-                        }
-                    }
-                } else {
-                    return Err(CompileError::new(
-                        String::from("Compile error: fix_tuple_size"),
-                        "SetLocal without immediate arg".to_string(),
-                        debug_info.location.into_iter().collect(),
-                    ));
-                }
+            Opcode::SetLocal(offset) => {
+                locals_tree.write_code(true, offset as usize, &mut code_out, debug_info)?;
             }
-            Opcode::GetLocal => {
-                if let Some(index) = &insn.immediate {
-                    match index.to_usize() {
-                        Some(iu) => {
-                            locals_tree.read_code(true, iu, &mut code_out, debug_info)?;
-                        }
-                        None => {
-                            return Err(CompileError::new(
-                                String::from("Compile error: fix_tuple_size"),
-                                "index too large".to_string(),
-                                debug_info.location.into_iter().collect(),
-                            ))
-                        }
-                    }
-                } else {
-                    return Err(CompileError::new(
-                        String::from("Compile error: fix_tuple_size"),
-                        "GetLocal without immediate arg".to_string(),
-                        debug_info.location.into_iter().collect(),
-                    ));
-                }
+            Opcode::GetLocal(offset) => {
+                locals_tree.read_code(true, offset as usize, &mut code_out, debug_info)?;
             }
             Opcode::SetGlobalVar(idx) => {
                 code_out.push(opcode!(Rpush));
@@ -207,6 +114,20 @@ pub fn fix_tuple_size(
         }
     }
 
+    for curr in code_out.iter_mut() {
+        // replace any wide immediate values
+
+        if let Some(ref mut value) = curr.immediate {
+            value.replace2(&mut |value| match value {
+                Value::Tuple(tup) if tup.len() >= 8 => {
+                    let folded = TupleTree::fold_into_tuple(tup.to_vec());
+                    *value = folded;
+                }
+                _ => {}
+            });
+        }
+    }
+
     Ok(code_out)
 }
 
@@ -225,6 +146,67 @@ pub fn jump_table_to_value(jump_table: Vec<CodePt>) -> Value {
 /// Generates a `Value` that is a nested tuple with size total leaf values, all leaf values are null.
 pub fn make_uninitialized_tuple(size: usize) -> Value {
     TupleTree::new(size, false).make_empty()
+}
+
+/// Creates a globals tuple with the globals' access offsets in the slots.
+pub fn make_numbered_tuple(size: usize) -> Value {
+    //TupleTree::new(size, false).make_value((0..size).into_iter().map(Value::from).collect())
+    let mut sequence: Vec<_> = (0..(size - 1)).into_iter().map(Value::from).collect();
+    sequence.push(Value::none());
+    TupleTree::fold_into_tuple(sequence)
+}
+
+/// Creates a globals tuple with the globals' names in the slots.
+pub fn make_named_tuple(globals: &Vec<GlobalVar>) -> Value {
+    TupleTree::fold_into_tuple(
+        globals
+            .iter()
+            .map(|g| Value::from(g.name.as_ref()))
+            .collect(),
+    )
+}
+
+/// Creates a globals tuple with default values. The jump table is inserted at the end.
+pub fn make_globals_tuple(
+    globals: &Vec<GlobalVar>,
+    jump_table: &Value,
+    type_tree: &TypeTree,
+) -> Value {
+    let mut values: Vec<_> = globals
+        .iter()
+        .map(|g| g.tipe.default_value(type_tree))
+        .collect();
+    values[globals.len() - 1] = jump_table.clone();
+    TupleTree::fold_into_tuple(values)
+}
+
+/// Creates a globals tuple with (global-name, default-value) pairs
+pub fn make_globals_tuple_debug(globals: &Vec<GlobalVar>, type_tree: &TypeTree) -> Value {
+    let values = globals
+        .iter()
+        .map(|g| {
+            Value::new_tuple(vec![
+                Value::from(g.name.as_ref()),
+                g.tipe.default_value(type_tree),
+            ])
+        })
+        .collect();
+    TupleTree::fold_into_tuple(values)
+}
+
+/// Replaces all instances of CodePt::Null with the error codepoint.
+pub fn set_error_codepoints(mut code: Vec<Instruction>) -> Vec<Instruction> {
+    let error_codepoint = Value::CodePoint(CodePt::Internal(code.len() - 1));
+
+    for curr in &mut code {
+        let mut when = |codept: &Value| matches!(codept, Value::CodePoint(CodePt::Null));
+        let mut with = |_codept: Value| error_codepoint.clone();
+
+        if let Some(ref mut value) = curr.immediate {
+            *value = value.clone().replace(&mut with, &mut when);
+        }
+    }
+    code
 }
 
 /// Represents tuple structure of mini value.
@@ -287,6 +269,11 @@ impl TupleTree {
     fn make_value(&self, vals: Vec<Value>) -> Value {
         let (val, _) = self.make_value_2(vals);
         val
+    }
+
+    /// Takes a list of values and folds them up into a nested, 8-ary tuple.
+    pub fn fold_into_tuple(values: Vec<Value>) -> Value {
+        TupleTree::new(values.len(), false).make_value(values)
     }
 
     /// Internal call used by `make_value`.
@@ -379,7 +366,7 @@ impl TupleTree {
     /// Argument is_local defines whether locals or globals are being accessed, generated code is
     /// appended to the code argument and also returned as an owned value, location is used to
     /// assign a code location for the generated instructions.
-    fn write_code(
+    pub fn write_code(
         &self,
         is_local: bool,
         index_in: usize,
@@ -451,8 +438,12 @@ impl TupleTree {
                 }
             }
             return Err(CompileError::new(
-                String::from("Internal error in write_code:"),
-                "out-of-bounds write".to_string(),
+                String::from("Internal error in write_code"),
+                format!(
+                    "out-of-bounds write {} into {}",
+                    Color::red(index_in),
+                    Color::red(v.len())
+                ),
                 debug_info.location.into_iter().collect(),
             ));
         } else {
@@ -463,10 +454,4 @@ impl TupleTree {
             Ok(())
         }
     }
-}
-
-/// Generates a `TupleTree` of size equal to the length of lis, and fills its leaf nodes with the
-/// `Value`s in lis.
-pub fn value_from_field_list(lis: Vec<Value>) -> Value {
-    TupleTree::new(lis.len(), false).make_value(lis)
 }

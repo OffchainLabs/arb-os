@@ -5,19 +5,18 @@
 //! Converts non-type checked ast nodes to type checked versions, and other related utilities.
 
 use super::ast::{
-    Attributes, BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func, GlobalVarDecl,
-    MatchPattern, MatchPatternKind, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp,
-    Type, TypeTree, UnaryOp,
+    AssignRef, Attributes, BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func,
+    GlobalVar, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp, Type, TypeTree,
+    UnaryOp,
 };
 use crate::compile::ast::{FieldInitializer, FuncProperties};
-use crate::compile::{CompileError, ErrorSystem, InliningHeuristic};
-use crate::console::Color;
+use crate::compile::{CompileError, ErrorSystem};
+use crate::console::{human_readable_index, Color};
 use crate::link::Import;
-use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
-use crate::pos::{Column, Location};
+use crate::mavm::{Instruction, Value};
+use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
-use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 type TypeTable = HashMap<usize, Type>;
@@ -54,7 +53,6 @@ pub trait AbstractSyntaxTree {
 pub enum TypeCheckedNode<'a> {
     Statement(&'a mut TypeCheckedStatement),
     Expression(&'a mut TypeCheckedExpr),
-    StructField(&'a mut TypeCheckedFieldInitializer),
     Type(&'a mut Type),
 }
 
@@ -63,9 +61,6 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
         match self {
             TypeCheckedNode::Statement(stat) => stat.child_nodes(),
             TypeCheckedNode::Expression(exp) => exp.child_nodes(),
-            TypeCheckedNode::StructField(field) => {
-                vec![TypeCheckedNode::Expression(&mut field.value)]
-            }
             TypeCheckedNode::Type(tipe) => tipe.child_nodes(),
         }
     }
@@ -73,7 +68,6 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
         match self {
             TypeCheckedNode::Statement(stat) => stat.is_view(type_tree),
             TypeCheckedNode::Expression(exp) => exp.is_view(type_tree),
-            TypeCheckedNode::StructField(field) => field.is_view(type_tree),
             TypeCheckedNode::Type(_) => false,
         }
     }
@@ -81,7 +75,6 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
         match self {
             TypeCheckedNode::Statement(stat) => stat.is_write(type_tree),
             TypeCheckedNode::Expression(exp) => exp.is_write(type_tree),
-            TypeCheckedNode::StructField(field) => field.is_write(type_tree),
             TypeCheckedNode::Type(_) => false,
         }
     }
@@ -97,25 +90,19 @@ impl<'a> TypeCheckedNode<'a> {
                         stat.debug_info.attributes.codegen_print || attributes.codegen_print;
                     let child_attributes = stat.debug_info.attributes.clone();
                     TypeCheckedNode::propagate_attributes(stat.child_nodes(), &child_attributes);
-                    if let TypeCheckedStatementKind::Asm(ref mut vec, _) = stat.kind {
-                        for insn in vec {
-                            insn.debug_info.attributes.codegen_print =
-                                stat.debug_info.attributes.codegen_print
-                                    || attributes.codegen_print;
-                        }
-                    }
                 }
                 TypeCheckedNode::Expression(expr) => {
                     expr.debug_info.attributes.codegen_print =
                         expr.debug_info.attributes.codegen_print || attributes.codegen_print;
                     let child_attributes = expr.debug_info.attributes.clone();
                     TypeCheckedNode::propagate_attributes(expr.child_nodes(), &child_attributes);
-                }
-                TypeCheckedNode::StructField(field) => {
-                    field.value.debug_info.attributes.codegen_print =
-                        field.value.debug_info.attributes.codegen_print || attributes.codegen_print;
-                    let child_attributes = field.value.debug_info.attributes.clone();
-                    TypeCheckedNode::propagate_attributes(field.child_nodes(), &child_attributes);
+                    if let TypeCheckedExprKind::Asm(_, ref mut vec, _) = expr.kind {
+                        for insn in vec {
+                            insn.debug_info.attributes.codegen_print =
+                                expr.debug_info.attributes.codegen_print
+                                    || attributes.codegen_print;
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -144,232 +131,6 @@ impl AbstractSyntaxTree for TypeCheckedFunc {
     }
 }
 
-/// Used by inlining to replace early returns with break statements
-fn strip_returns(to_strip: &mut TypeCheckedNode, _state: &(), _mut_state: &mut ()) -> bool {
-    if let TypeCheckedNode::Statement(stat) = to_strip {
-        if let TypeCheckedStatementKind::Return(exp) = &mut stat.kind {
-            stat.kind = TypeCheckedStatementKind::Break(Some(exp.clone()), "_inline".to_string());
-        } else if let TypeCheckedStatementKind::ReturnVoid() = &mut stat.kind {
-            stat.kind = TypeCheckedStatementKind::Break(None, "_inline".to_string());
-        }
-    } else if let TypeCheckedNode::Expression(expr) = to_strip {
-        if let TypeCheckedExprKind::Try(inner, tipe) = &expr.kind {
-            expr.kind = TypeCheckedExprKind::CodeBlock(TypeCheckedCodeBlock::new(
-                vec![],
-                Some(Box::new(TypeCheckedExpr {
-                    kind: TypeCheckedExprKind::If(
-                        Box::new(TypeCheckedExpr {
-                            kind: TypeCheckedExprKind::Asm(
-                                Type::Bool,
-                                vec![
-                                    Instruction::from_opcode(
-                                        Opcode::AVMOpcode(AVMOpcode::Dup0),
-                                        inner.debug_info,
-                                    ),
-                                    Instruction::from_opcode_imm(
-                                        Opcode::AVMOpcode(AVMOpcode::Tget),
-                                        Value::Int(Uint256::zero()),
-                                        inner.debug_info,
-                                    ),
-                                ],
-                                vec![(**inner).clone()],
-                            ),
-                            debug_info: inner.debug_info,
-                        }),
-                        TypeCheckedCodeBlock::new(
-                            vec![],
-                            Some(Box::new(TypeCheckedExpr {
-                                kind: TypeCheckedExprKind::Asm(
-                                    tipe.clone(),
-                                    vec![Instruction::from_opcode_imm(
-                                        Opcode::AVMOpcode(AVMOpcode::Tget),
-                                        Value::Int(Uint256::one()),
-                                        inner.debug_info,
-                                    )],
-                                    vec![],
-                                ),
-                                debug_info: inner.debug_info,
-                            })),
-                            None,
-                        ),
-                        Some(TypeCheckedCodeBlock::new(
-                            vec![TypeCheckedStatement {
-                                kind: TypeCheckedStatementKind::Break(
-                                    Some(TypeCheckedExpr {
-                                        kind: TypeCheckedExprKind::Asm(
-                                            Type::Option(Box::new(tipe.clone())),
-                                            vec![],
-                                            vec![],
-                                        ),
-                                        debug_info: inner.debug_info,
-                                    }),
-                                    "_inline".to_string(),
-                                ),
-                                debug_info: inner.debug_info,
-                            }],
-                            Some(Box::new(TypeCheckedExpr {
-                                kind: TypeCheckedExprKind::Error,
-                                debug_info: inner.debug_info,
-                            })),
-                            None,
-                        )),
-                        tipe.clone(),
-                    ),
-                    debug_info: inner.debug_info,
-                })),
-                None,
-            ))
-        }
-    }
-    true
-}
-
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-#[repr(u32)]
-pub enum InliningMode {
-    Always,
-    Auto,
-    Never,
-}
-
-impl Default for InliningMode {
-    fn default() -> Self {
-        Self::Auto
-    }
-}
-
-impl InliningMode {
-    pub fn and(&self, other: &InliningMode) -> InliningMode {
-        *if *self == InliningMode::Auto {
-            other
-        } else {
-            self
-        }
-    }
-}
-
-/// Used to inline an AST node
-fn inline(
-    to_do: &mut TypeCheckedNode,
-    state: &(&Vec<TypeCheckedFunc>, &StringTable, &InliningHeuristic),
-    _mut_state: &mut (InliningMode, Vec<usize>),
-) -> bool {
-    if let TypeCheckedNode::Statement(stat) = to_do {
-        _mut_state.0 = stat.debug_info.attributes.inline;
-    }
-    if let TypeCheckedNode::Expression(exp) = to_do {
-        if let TypeCheckedExpr {
-            kind: TypeCheckedExprKind::FunctionCall(name, args, _, _),
-            debug_info: _,
-        } = exp
-        {
-            let (code, block_exp) = if let TypeCheckedExpr {
-                kind: TypeCheckedExprKind::FuncRef(id, _),
-                debug_info: _,
-            } = **name
-            {
-                let found_func = state.0.iter().find(|func| func.id == id);
-                if let Some(func) = found_func {
-                    if match state.2 {
-                        InliningHeuristic::All => {
-                            _mut_state.0.and(&func.debug_info.attributes.inline)
-                                == InliningMode::Never
-                        }
-                        InliningHeuristic::None => {
-                            _mut_state.0.and(&func.debug_info.attributes.inline)
-                                != InliningMode::Always
-                        }
-                    } {
-                        return false;
-                    }
-                    if _mut_state.1.iter().any(|id| *id == func.id) {
-                        return false;
-                    } else {
-                        _mut_state.1.push(func.id);
-                    }
-                    let mut code: Vec<_> = if func.args.len() == 0 {
-                        vec![]
-                    } else {
-                        vec![TypeCheckedStatement {
-                            kind: TypeCheckedStatementKind::Let(
-                                TypeCheckedMatchPattern::new_tuple(
-                                    func.args
-                                        .iter()
-                                        .map(|arg| {
-                                            TypeCheckedMatchPattern::new_bind(
-                                                arg.name,
-                                                arg.debug_info,
-                                                arg.tipe.clone(),
-                                            )
-                                        })
-                                        .collect(),
-                                    func.debug_info,
-                                    Type::Tuple(
-                                        func.args.iter().map(|arg| arg.tipe.clone()).collect(),
-                                    ),
-                                ),
-                                TypeCheckedExpr {
-                                    kind: TypeCheckedExprKind::Tuple(
-                                        args.iter()
-                                            .cloned()
-                                            .map(|mut expr| {
-                                                expr.recursive_apply(strip_returns, &(), &mut ());
-                                                expr
-                                            })
-                                            .collect(),
-                                        Type::Tuple(
-                                            func.args.iter().map(|arg| arg.tipe.clone()).collect(),
-                                        ),
-                                    ),
-                                    debug_info: DebugInfo::default(),
-                                },
-                            ),
-                            debug_info: DebugInfo::default(),
-                        }]
-                    };
-                    code.append(&mut func.code.clone());
-                    let last = code.pop();
-                    let block_exp = match last {
-                        Some(TypeCheckedStatement {
-                            kind: TypeCheckedStatementKind::Return(mut exp),
-                            debug_info: _,
-                        }) => Some(Box::new({
-                            exp.recursive_apply(strip_returns, &(), &mut ());
-                            exp
-                        })),
-                        _ => {
-                            if let Some(statement) = last {
-                                code.push(statement);
-                            }
-                            None
-                        }
-                    };
-                    (Some(code), block_exp)
-                } else {
-                    (None, None)
-                }
-            } else {
-                (None, None)
-            };
-            if let Some(mut code) = code {
-                for statement in code.iter_mut().rev() {
-                    statement.recursive_apply(strip_returns, &(), &mut ())
-                }
-                exp.kind = TypeCheckedExprKind::CodeBlock(TypeCheckedCodeBlock::new(
-                    code,
-                    block_exp,
-                    Some("_inline".to_string()),
-                ));
-            }
-            true
-        } else {
-            true
-        }
-    } else {
-        true
-    }
-}
-
 /// Discovers which import statements have been used
 fn flowcheck_imports(mut nodes: Vec<TypeCheckedNode>, imports: &mut BTreeMap<usize, Import>) {
     for node in &mut nodes {
@@ -377,8 +138,7 @@ fn flowcheck_imports(mut nodes: Vec<TypeCheckedNode>, imports: &mut BTreeMap<usi
             let nominals = match &expr.kind {
                 TypeCheckedExprKind::Cast(_, tipe)
                 | TypeCheckedExprKind::Const(_, tipe)
-                | TypeCheckedExprKind::ClosureLoad(.., tipe)
-                | TypeCheckedExprKind::NewArray(_, _, tipe) => tipe.find_nominals(),
+                | TypeCheckedExprKind::ClosureLoad(.., tipe) => tipe.find_nominals(),
                 _ => vec![],
             };
             for nominal in &nominals {
@@ -446,11 +206,11 @@ fn flowcheck_reachability<T: AbstractSyntaxTree>(node: &mut T) -> Vec<CompileErr
     }
 
     warnings.push(CompileError::new_warning(
-        String::from("Compile warning"),
+        "Compile warning",
         if locations.len() == 2 {
-            String::from("found unreachable statement")
+            "found unreachable statement"
         } else {
-            String::from("found unreachable statements")
+            "found unreachable statements"
         },
         locations,
     ));
@@ -504,97 +264,51 @@ fn flowcheck_liveliness(
     for node in &mut node_iter {
         let repeat = match node {
             TypeCheckedNode::Statement(stat) => match &mut stat.kind {
-                TypeCheckedStatementKind::AssignLocal(id, expr) => {
+                TypeCheckedStatementKind::SetLocals(assigned, expr) => {
                     process!(vec![TypeCheckedNode::Expression(expr)], problems, false);
 
-                    if let Some(loc) = alive.get(id) {
-                        problems.push((*loc, id.clone()));
-                    }
+                    for local in assigned {
+                        let id = local.id;
+                        let loc = local.debug_info.locs()[0];
 
-                    if let None = born.get(id) {
-                        reborn.insert(id.clone(), stat.debug_info.location.unwrap());
-                    }
-
-                    if !alive.contains_key(id) && !born.contains(id) && !killed.contains(id) {
-                        rescue.insert(id.clone());
-                    }
-
-                    // we don't assert that the variable is born since it might not be from this scope
-                    alive.insert(id.clone(), stat.debug_info.location.unwrap());
-                    continue;
-                }
-
-                TypeCheckedStatementKind::Let(pat, expr) => {
-                    process!(vec![TypeCheckedNode::Expression(expr)], problems, false);
-
-                    let ids: Vec<(StringId, bool, Location)> = pat
-                        .collect_identifiers()
-                        .iter()
-                        .map(|(id, assigns, debug_info)| {
-                            (id.clone(), *assigns, {
-                                // since assign-type patterns prefix the variable with a star,
-                                // we have to shift over by one to line up the arrow.
-                                let mut loc = debug_info.location.unwrap().clone();
-                                loc.column = Column::from(
-                                    loc.column.to_usize()
-                                        + match assigns {
-                                            true => 1,
-                                            false => 0,
-                                        },
-                                );
-                                loc
-                            })
-                        })
-                        .collect();
-
-                    for (id, assigns, loc) in ids.iter() {
-                        if *assigns {
-                            if let Some(loc) = alive.get(id) {
-                                problems.push((*loc, id.clone()));
-                            }
-                            if let None = born.get(id) {
-                                reborn.insert(id.clone(), stat.debug_info.location.unwrap());
-                            }
-                            if !alive.contains_key(id) && !born.contains(id) && !killed.contains(id)
-                            {
-                                rescue.insert(id.clone());
-                            }
-                            alive.insert(*id, *loc);
-                        } else {
-                            if let Some(_) = born.get(id) {
-                                if let Some(loc) = alive.get(id) {
-                                    problems.push((*loc, id.clone()))
+                        if local.shadow {
+                            if let Some(_) = born.get(&id) {
+                                if let Some(loc) = alive.get(&id) {
+                                    problems.push((*loc, id))
                                 }
                             }
-
-                            if !alive.contains_key(id) && !born.contains(id) && !killed.contains(id)
+                            if !alive.contains_key(&id)
+                                && !born.contains(&id)
+                                && !killed.contains(&id)
                             {
-                                rescue.insert(id.clone());
+                                rescue.insert(id);
                             }
-                            born.insert(*id);
-                            alive.insert(*id, *loc);
+                            born.insert(id);
+                            alive.insert(id, loc);
+                        } else {
+                            if let Some(loc) = alive.get(&id) {
+                                problems.push((*loc, id));
+                            }
+                            if let None = born.get(&id) {
+                                reborn.insert(id, stat.debug_info.location.unwrap());
+                            }
+                            if !alive.contains_key(&id)
+                                && !born.contains(&id)
+                                && !killed.contains(&id)
+                            {
+                                rescue.insert(id);
+                            }
+                            alive.insert(id, loc);
                         }
                     }
                     continue;
                 }
                 TypeCheckedStatementKind::While(..) => true,
-                TypeCheckedStatementKind::Break(optional_expr, _) => {
-                    process!(
-                        optional_expr
-                            .iter_mut()
-                            .map(|x| TypeCheckedNode::Expression(x))
-                            .collect(),
-                        problems,
-                        false,
-                    );
-                    continue;
-                }
                 _ => false,
             },
 
             TypeCheckedNode::Expression(expr) => match &mut expr.kind {
-                TypeCheckedExprKind::DotRef(_, id, ..)
-                | TypeCheckedExprKind::LocalVariableRef(id, ..) => {
+                TypeCheckedExprKind::LocalVariableRef(id, ..) => {
                     killed.insert(id.clone());
                     alive.remove(id);
                     reborn.remove(id);
@@ -626,8 +340,8 @@ fn flowcheck_liveliness(
                     process!((if_killed, if_reborn));
                     continue;
                 }
-                TypeCheckedExprKind::Loop(_body) => true,
-                TypeCheckedExprKind::ClosureLoad(_, _, _, captures, _) => {
+                TypeCheckedExprKind::Loop(_body, _) => true,
+                TypeCheckedExprKind::ClosureLoad(_, captures, _) => {
                     // In the future we'll walk into the closure in case a captured value is overwritten,
                     // but because child_nodes() requires a *mutable* reference we can't do that cheaply.
                     // Hence, we'll just claim that every captured value is used.
@@ -637,14 +351,6 @@ fn flowcheck_liveliness(
                 }
                 _ => false,
             },
-            TypeCheckedNode::StructField(field) => {
-                process!(
-                    vec![TypeCheckedNode::Expression(&mut field.value)],
-                    problems,
-                    false
-                );
-                continue;
-            }
             _ => false,
         };
 
@@ -662,8 +368,7 @@ fn flowcheck_liveliness(
                 },
                 TypeCheckedNode::Expression(expr) => match &mut expr.kind {
                     TypeCheckedExprKind::Loop(..) => true,
-                    TypeCheckedExprKind::DotRef(_, id, ..)
-                    | TypeCheckedExprKind::LocalVariableRef(id, ..) => {
+                    TypeCheckedExprKind::LocalVariableRef(id, ..) => {
                         // a variable born in this scope shouldn't get a second chance when unrolling
                         if !born.contains(id) {
                             alive.remove(id);
@@ -706,19 +411,6 @@ fn flowcheck_liveliness(
 }
 
 impl TypeCheckedFunc {
-    pub fn inline(
-        &mut self,
-        funcs: &Vec<TypeCheckedFunc>,
-        string_table: &StringTable,
-        heuristic: &InliningHeuristic,
-    ) {
-        self.recursive_apply(
-            inline,
-            &(funcs, string_table, heuristic),
-            &mut (InliningMode::Auto, vec![]),
-        );
-    }
-
     pub fn flowcheck(
         &mut self,
         imports: &mut BTreeMap<usize, Import>,
@@ -781,10 +473,8 @@ impl TypeCheckedFunc {
                 flowcheck_warnings.push(CompileError::new_warning(
                     String::from("Compile warning"),
                     format!(
-                        "value {}{}{} is assigned but never used",
-                        error_system.warn_color,
-                        string_table.name_from_id(id.clone()),
-                        CompileError::RESET,
+                        "value {} is assigned but never used",
+                        Color::color(error_system.warn_color, string_table.name_from_id(id)),
                     ),
                     vec![loc],
                 ));
@@ -792,25 +482,6 @@ impl TypeCheckedFunc {
         }
 
         flowcheck_warnings
-    }
-
-    pub fn determine_funcs_used(mut nodes: Vec<TypeCheckedNode>) -> HashSet<StringId> {
-        let mut calls = HashSet::new();
-
-        for node in &mut nodes {
-            match node {
-                TypeCheckedNode::Expression(expr) => match &expr.kind {
-                    TypeCheckedExprKind::FuncRef(id, _)
-                    | TypeCheckedExprKind::ClosureLoad(id, ..) => calls.insert(*id),
-                    _ => false,
-                },
-                _ => false,
-            };
-
-            calls.extend(Func::determine_funcs_used(node.child_nodes()));
-        }
-
-        return calls;
     }
 }
 
@@ -826,13 +497,10 @@ pub struct TypeCheckedStatement {
 pub enum TypeCheckedStatementKind {
     ReturnVoid(),
     Return(TypeCheckedExpr),
-    Break(Option<TypeCheckedExpr>, String),
     Expression(TypeCheckedExpr),
-    Let(TypeCheckedMatchPattern, TypeCheckedExpr),
-    AssignLocal(StringId, TypeCheckedExpr),
-    AssignGlobal(usize, TypeCheckedExpr),
-    While(TypeCheckedExpr, Vec<TypeCheckedStatement>),
-    Asm(Vec<Instruction>, Vec<TypeCheckedExpr>),
+    SetLocals(Vec<AssignRef>, TypeCheckedExpr),
+    AssignGlobal(StringId, TypeCheckedExpr),
+    While(TypeCheckedExpr, TypeCheckedCodeBlock),
     DebugPrint(TypeCheckedExpr),
     Assert(TypeCheckedExpr),
 }
@@ -843,47 +511,24 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
             TypeCheckedStatementKind::ReturnVoid() => vec![],
             TypeCheckedStatementKind::Return(exp)
             | TypeCheckedStatementKind::Expression(exp)
-            | TypeCheckedStatementKind::Let(_, exp)
-            | TypeCheckedStatementKind::AssignLocal(_, exp)
+            | TypeCheckedStatementKind::SetLocals(_, exp)
             | TypeCheckedStatementKind::AssignGlobal(_, exp)
             | TypeCheckedStatementKind::Assert(exp)
             | TypeCheckedStatementKind::DebugPrint(exp) => vec![TypeCheckedNode::Expression(exp)],
-            TypeCheckedStatementKind::While(exp, stats) => vec![TypeCheckedNode::Expression(exp)]
+            TypeCheckedStatementKind::While(exp, block) => vec![TypeCheckedNode::Expression(exp)]
                 .into_iter()
-                .chain(
-                    stats
-                        .iter_mut()
-                        .map(|stat| TypeCheckedNode::Statement(stat)),
-                )
+                .chain(block.child_nodes())
                 .collect(),
-            TypeCheckedStatementKind::Asm(_, exps) => exps
-                .iter_mut()
-                .map(|exp| TypeCheckedNode::Expression(exp))
-                .collect(),
-            TypeCheckedStatementKind::Break(oexp, _) => {
-                oexp.iter_mut().flat_map(|exp| exp.child_nodes()).collect()
-            }
         }
     }
     fn is_view(&mut self, type_tree: &TypeTree) -> bool {
-        match &mut self.kind {
-            TypeCheckedStatementKind::Asm(insns, args) => {
-                insns.iter().any(|insn| insn.is_view(type_tree))
-                    || args.iter_mut().any(|expr| expr.is_view(type_tree))
-            }
-            _ => self
-                .child_nodes()
-                .iter_mut()
-                .any(|node| node.is_view(type_tree)),
-        }
+        self.child_nodes()
+            .iter_mut()
+            .any(|node| node.is_view(type_tree))
     }
     fn is_write(&mut self, type_tree: &TypeTree) -> bool {
         match &mut self.kind {
             TypeCheckedStatementKind::AssignGlobal(_, _) => true,
-            TypeCheckedStatementKind::Asm(insns, args) => {
-                insns.iter().any(|insn| insn.is_write(type_tree))
-                    || args.iter_mut().any(|expr| expr.is_write(type_tree))
-            }
             _ => self
                 .child_nodes()
                 .iter_mut()
@@ -891,8 +536,6 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
         }
     }
 }
-
-pub type TypeCheckedMatchPattern = MatchPattern<Type>;
 
 /// A mini expression with associated `DebugInfo` that has been type checked.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -918,11 +561,10 @@ pub enum TypeCheckedExprKind {
     ShortcutOr(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>),
     ShortcutAnd(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>),
     LocalVariableRef(StringId, Type),
-    GlobalVariableRef(usize, Type),
+    GlobalVariableRef(StringId, Type),
     Variant(Box<TypeCheckedExpr>),
     FuncRef(StringId, Type),
-    TupleRef(Box<TypeCheckedExpr>, Uint256, Type),
-    DotRef(Box<TypeCheckedExpr>, StringId, usize, Type),
+    TupleRef(Box<TypeCheckedExpr>, usize, usize, Type),
     Const(Value, Type),
     FunctionCall(
         Box<TypeCheckedExpr>,
@@ -931,21 +573,10 @@ pub enum TypeCheckedExprKind {
         FuncProperties,
     ),
     CodeBlock(TypeCheckedCodeBlock),
-    StructInitializer(Vec<TypeCheckedFieldInitializer>, Type),
-    ArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
     FixedArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, usize, Type),
-    MapRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
-    ClosureLoad(StringId, usize, usize, BTreeSet<StringId>, Type),
+    ClosureLoad(StringId, BTreeSet<StringId>, Type),
     Tuple(Vec<TypeCheckedExpr>, Type),
-    NewArray(Box<TypeCheckedExpr>, Type, Type),
-    NewFixedArray(usize, Option<Box<TypeCheckedExpr>>, Type),
-    NewMap(Type),
-    ArrayMod(
-        Box<TypeCheckedExpr>,
-        Box<TypeCheckedExpr>,
-        Box<TypeCheckedExpr>,
-        Type,
-    ),
+    NewFixedArray(usize, Box<TypeCheckedExpr>, Type),
     FixedArrayMod(
         Box<TypeCheckedExpr>,
         Box<TypeCheckedExpr>,
@@ -953,13 +584,13 @@ pub enum TypeCheckedExprKind {
         usize,
         Type,
     ),
-    MapMod(
+    StructMod(
         Box<TypeCheckedExpr>,
-        Box<TypeCheckedExpr>,
+        usize,
+        usize,
         Box<TypeCheckedExpr>,
         Type,
     ),
-    StructMod(Box<TypeCheckedExpr>, usize, Box<TypeCheckedExpr>, Type),
     Cast(Box<TypeCheckedExpr>, Type),
     Asm(Type, Vec<Instruction>, Vec<TypeCheckedExpr>),
     Error,
@@ -979,7 +610,7 @@ pub enum TypeCheckedExprKind {
         Option<TypeCheckedCodeBlock>,
         Type,
     ),
-    Loop(Vec<TypeCheckedStatement>),
+    Loop(TypeCheckedCodeBlock, Type),
 }
 
 impl AbstractSyntaxTree for TypeCheckedExpr {
@@ -992,15 +623,13 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             | TypeCheckedExprKind::Const(..)
             | TypeCheckedExprKind::NewBuffer
             | TypeCheckedExprKind::Quote(..)
-            | TypeCheckedExprKind::NewMap(..)
             | TypeCheckedExprKind::GetGas
             | TypeCheckedExprKind::Error => vec![],
             TypeCheckedExprKind::UnaryOp(_, exp, _)
             | TypeCheckedExprKind::Variant(exp)
             | TypeCheckedExprKind::SetGas(exp)
-            | TypeCheckedExprKind::TupleRef(exp, _, _)
-            | TypeCheckedExprKind::DotRef(exp, _, _, _)
-            | TypeCheckedExprKind::NewArray(exp, _, _)
+            | TypeCheckedExprKind::TupleRef(exp, ..)
+            | TypeCheckedExprKind::NewFixedArray(_, exp, _)
             | TypeCheckedExprKind::Cast(exp, _)
             | TypeCheckedExprKind::Try(exp, _) => vec![TypeCheckedNode::Expression(exp)],
             TypeCheckedExprKind::Trinary(_, a, b, c, _) => vec![
@@ -1011,10 +640,8 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             TypeCheckedExprKind::Binary(_, lexp, rexp, _)
             | TypeCheckedExprKind::ShortcutOr(lexp, rexp)
             | TypeCheckedExprKind::ShortcutAnd(lexp, rexp)
-            | TypeCheckedExprKind::ArrayRef(lexp, rexp, _)
             | TypeCheckedExprKind::FixedArrayRef(lexp, rexp, _, _)
-            | TypeCheckedExprKind::MapRef(lexp, rexp, _)
-            | TypeCheckedExprKind::StructMod(lexp, _, rexp, _) => vec![
+            | TypeCheckedExprKind::StructMod(lexp, _, _, rexp, _) => vec![
                 TypeCheckedNode::Expression(lexp),
                 TypeCheckedNode::Expression(rexp),
             ],
@@ -1028,22 +655,14 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                     )
                     .collect()
             }
-            TypeCheckedExprKind::CodeBlock(block) => block.child_nodes(),
-            TypeCheckedExprKind::StructInitializer(fields, _) => fields
-                .iter_mut()
-                .map(|field| TypeCheckedNode::StructField(field))
-                .collect(),
+            TypeCheckedExprKind::Loop(block, _) | TypeCheckedExprKind::CodeBlock(block) => {
+                block.child_nodes()
+            }
             TypeCheckedExprKind::Tuple(exps, _) | TypeCheckedExprKind::Asm(_, _, exps) => exps
                 .iter_mut()
                 .map(|exp| TypeCheckedNode::Expression(exp))
                 .collect(),
-            TypeCheckedExprKind::NewFixedArray(_, oexp, _) => oexp
-                .into_iter()
-                .map(|exp| TypeCheckedNode::Expression(exp))
-                .collect(),
-            TypeCheckedExprKind::ArrayMod(exp1, exp2, exp3, _)
-            | TypeCheckedExprKind::FixedArrayMod(exp1, exp2, exp3, _, _)
-            | TypeCheckedExprKind::MapMod(exp1, exp2, exp3, _) => vec![
+            TypeCheckedExprKind::FixedArrayMod(exp1, exp2, exp3, _, _) => vec![
                 TypeCheckedNode::Expression(exp1),
                 TypeCheckedNode::Expression(exp2),
                 TypeCheckedNode::Expression(exp3),
@@ -1061,24 +680,11 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                     )
                     .collect()
             }
-            TypeCheckedExprKind::Loop(stats) => stats
-                .iter_mut()
-                .map(|stat| TypeCheckedNode::Statement(stat))
-                .collect(),
         }
     }
     fn is_view(&mut self, type_tree: &TypeTree) -> bool {
         match &mut self.kind {
-            TypeCheckedExprKind::FunctionCall(func, args, _, _) => {
-                let func_type = func
-                    .get_type()
-                    .get_representation(type_tree)
-                    .expect("Type tree inconsistency");
-
-                let prop = match func_type {
-                    Type::Func(prop, ..) => prop,
-                    _ => panic!("Internal error: func call has non function type {:?}", func),
-                };
+            TypeCheckedExprKind::FunctionCall(func, args, _, prop) => {
                 prop.view
                     || func.is_view(type_tree)
                     || args.iter_mut().any(|expr| expr.is_view(type_tree))
@@ -1096,16 +702,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
     }
     fn is_write(&mut self, type_tree: &TypeTree) -> bool {
         match &mut self.kind {
-            TypeCheckedExprKind::FunctionCall(func, args, _, _) => {
-                let func_type = func
-                    .get_type()
-                    .get_representation(type_tree)
-                    .expect("Type tree inconsistency");
-
-                let prop = match func_type {
-                    Type::Func(prop, ..) => prop,
-                    _ => panic!("Internal error: func call has non function type {:?}", func),
-                };
+            TypeCheckedExprKind::FunctionCall(func, args, _, prop) => {
                 prop.write
                     || func.is_write(type_tree)
                     || args.iter_mut().any(|expr| expr.is_write(type_tree))
@@ -1129,39 +726,37 @@ impl TypeCheckedExpr {
         Self { kind, debug_info }
     }
 
-    /// Creates a type-aware builtin function call based on its sub expressions
-    pub fn builtin(
+    /// Make a reference to to a builtin func with the types altered for safety.
+    pub fn builtin_ref(
         name: &str,
-        args: Vec<&TypeCheckedExpr>,
+        args: Vec<&Type>,
         ret: &Type,
+        func_table: &HashMap<usize, Type>,
         string_table: &StringTable,
         debug_info: DebugInfo,
-    ) -> Self {
-        let mut arg_types = vec![];
+    ) -> Result<Self, CompileError> {
+        let args = args.into_iter().cloned().collect();
+        let ret = ret.clone();
 
-        for arg in args.iter() {
-            arg_types.push(arg.get_type());
-        }
+        let error_msg = Err(CompileError::new(
+            "Internal Error",
+            format!("Builtin {} does not exist", name),
+            debug_info.locs(),
+        ));
 
-        let call_type = Type::Func(FuncProperties::pure(), arg_types, Box::new(ret.clone()));
+        let builtin_id = match string_table.get_if_exists(name) {
+            Some(id) => id,
+            _ => return error_msg,
+        };
 
-        TypeCheckedExpr::new(
-            TypeCheckedExprKind::FunctionCall(
-                Box::new(TypeCheckedExpr::new(
-                    TypeCheckedExprKind::FuncRef(
-                        string_table
-                            .get_if_exists(name)
-                            .expect(&format!("builtin {} does not exist", Color::red(name))),
-                        call_type.clone(),
-                    ),
-                    debug_info,
-                )),
-                args.into_iter().cloned().collect(),
-                call_type,
-                FuncProperties::pure(),
-            ),
+        let builtin_type = match func_table.get(&builtin_id) {
+            Some(Type::Func(prop, ..)) => Type::Func(prop.clone(), args, Box::new(ret)),
+            _ => return error_msg,
+        };
+        Ok(TypeCheckedExpr::new(
+            TypeCheckedExprKind::FuncRef(builtin_id, builtin_type),
             debug_info,
-        )
+        ))
     }
 
     /// Extracts the type returned from the expression.
@@ -1183,29 +778,21 @@ impl TypeCheckedExpr {
             TypeCheckedExprKind::FuncRef(.., t) => t.clone(),
             TypeCheckedExprKind::TupleRef(.., t) => t.clone(),
             TypeCheckedExprKind::Variant(t) => Type::Option(Box::new(t.get_type())),
-            TypeCheckedExprKind::DotRef(.., t) => t.clone(),
             TypeCheckedExprKind::Const(.., t) => t.clone(),
             TypeCheckedExprKind::FunctionCall(.., t, _) => t.clone(),
             TypeCheckedExprKind::CodeBlock(block) => block.get_type(),
-            TypeCheckedExprKind::StructInitializer(.., t) => t.clone(),
-            TypeCheckedExprKind::ArrayRef(.., t) => t.clone(),
             TypeCheckedExprKind::FixedArrayRef(.., t) => t.clone(),
-            TypeCheckedExprKind::MapRef(.., t) => t.clone(),
             TypeCheckedExprKind::ClosureLoad(.., t) => t.clone(),
             TypeCheckedExprKind::Tuple(.., t) => t.clone(),
-            TypeCheckedExprKind::NewArray(.., t) => t.clone(),
             TypeCheckedExprKind::NewFixedArray(.., t) => t.clone(),
-            TypeCheckedExprKind::NewMap(t) => t.clone(),
-            TypeCheckedExprKind::ArrayMod(.., t) => t.clone(),
             TypeCheckedExprKind::FixedArrayMod(.., t) => t.clone(),
-            TypeCheckedExprKind::MapMod(.., t) => t.clone(),
             TypeCheckedExprKind::StructMod(.., t) => t.clone(),
             TypeCheckedExprKind::Cast(.., t) => t.clone(),
             TypeCheckedExprKind::Asm(t, ..) => t.clone(),
             TypeCheckedExprKind::Try(.., t) => t.clone(),
             TypeCheckedExprKind::If(.., t) => t.clone(),
             TypeCheckedExprKind::IfLet(.., t) => t.clone(),
-            TypeCheckedExprKind::Loop(..) => Type::Every,
+            TypeCheckedExprKind::Loop(.., t) => t.clone(),
         }
     }
 }
@@ -1228,14 +815,12 @@ impl AbstractSyntaxTree for TypeCheckedFieldInitializer {
 /// if they are not defined in string_table, they are inserted.
 fn builtin_func_decls() -> Vec<Import> {
     vec![
-        Import::new_builtin("assert", "builtin_assert"),
         Import::new_builtin("array", "builtin_arrayNew"),
         Import::new_builtin("array", "builtin_arrayGet"),
         Import::new_builtin("array", "builtin_arraySet"),
         Import::new_builtin("kvs", "builtin_kvsNew"),
         Import::new_builtin("kvs", "builtin_kvsGet"),
         Import::new_builtin("kvs", "builtin_kvsSet"),
-        Import::new_builtin("assert", "builtin_assert"),
     ]
 }
 
@@ -1248,9 +833,8 @@ pub fn sort_top_level_decls(
 ) -> (
     Vec<Import>,
     Vec<Func>,
-    BTreeMap<StringId, Func>,
     HashMap<usize, Type>,
-    Vec<GlobalVarDecl>,
+    Vec<GlobalVar>,
     HashMap<usize, Type>,
 ) {
     let (decls, closures) = parsed;
@@ -1273,7 +857,7 @@ pub fn sort_top_level_decls(
     let mut funcs = vec![];
     let mut named_types = HashMap::new();
     let mut func_table = HashMap::new();
-    let mut global_vars = vec![];
+    let mut globals = vec![];
 
     for decl in decls {
         match decl {
@@ -1288,7 +872,7 @@ pub fn sort_top_level_decls(
                 named_types.insert(td.name, td.tipe);
             }
             TopLevelDecl::VarDecl(vd) => {
-                global_vars.push(vd);
+                globals.push(vd);
             }
             TopLevelDecl::ConstDecl => {}
         }
@@ -1298,31 +882,24 @@ pub fn sort_top_level_decls(
         func_table.insert(*id, closure.tipe.clone());
     }
 
-    (
-        imports,
-        funcs,
-        closures,
-        named_types,
-        global_vars,
-        func_table,
-    )
+    (imports, funcs, named_types, globals, func_table)
 }
 
 /// Performs typechecking various top level declarations, `FuncDecl`s,
 /// named `Type`s, and global variables.
 pub fn typecheck_top_level_decls(
     funcs: Vec<Func>,
-    closures: BTreeMap<StringId, Func>,
     named_types: &HashMap<usize, Type>,
-    mut global_vars: Vec<GlobalVarDecl>,
+    mut global_vars: Vec<GlobalVar>,
     imports: &Vec<Import>,
     string_table: StringTable,
     func_table: HashMap<usize, Type>,
     type_tree: &TypeTree,
+    path: &Vec<String>,
 ) -> Result<
     (
         BTreeMap<StringId, TypeCheckedFunc>,
-        Vec<GlobalVarDecl>,
+        Vec<GlobalVar>,
         StringTable,
     ),
     CompileError,
@@ -1335,16 +912,10 @@ pub fn typecheck_top_level_decls(
     }
     let global_vars_map = global_vars
         .iter()
-        .enumerate()
-        .map(|(idx, var)| (var.name_id, (var.tipe.clone(), idx)))
+        .map(|var| (var.id, var.tipe.clone()))
         .collect::<HashMap<_, _>>();
 
     let type_table: HashMap<_, _> = named_types.clone().into_iter().collect();
-
-    let mut resolved_global_vars_map = HashMap::new();
-    for (name, (tipe, slot_num)) in global_vars_map {
-        resolved_global_vars_map.insert(name, (tipe, slot_num));
-    }
 
     let mut undefinable_ids = HashMap::new(); // ids no one is allowed to define
     for import in imports {
@@ -1353,24 +924,29 @@ pub fn typecheck_top_level_decls(
             import.location,
         );
     }
-    for (id, _) in &func_table {
-        if let Some(closure) = closures.get(id) {
-            undefinable_ids.insert(*id, closure.debug_info.location);
-        }
-    }
 
     let mut checked_funcs = BTreeMap::new();
     let mut checked_closures = BTreeMap::new();
 
     for func in &funcs {
+        let mut type_tree = type_tree.clone();
+        for (index, generic) in func.generics.iter().enumerate() {
+            type_tree.insert(
+                (path.clone(), *generic),
+                (
+                    Type::Generic(index),
+                    string_table.name_from_id(*generic).clone(),
+                ),
+            );
+        }
         checked_funcs.insert(
             func.id,
             typecheck_function(
                 &func,
                 &type_table,
-                &resolved_global_vars_map,
+                &global_vars_map,
                 &func_table,
-                type_tree,
+                &type_tree,
                 &string_table,
                 &mut checked_closures,
                 &mut undefinable_ids,
@@ -1395,70 +971,45 @@ pub fn typecheck_top_level_decls(
 pub fn typecheck_function(
     func: &Func,
     type_table: &TypeTable,
-    global_vars: &HashMap<StringId, (Type, usize)>,
+    global_vars: &HashMap<StringId, Type>,
     func_table: &TypeTable,
     type_tree: &TypeTree,
     string_table: &StringTable,
     closures: &mut BTreeMap<StringId, TypeCheckedFunc>,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
 ) -> Result<TypeCheckedFunc, CompileError> {
+    let mut func = func.clone();
+
+    func.ret_type = func.ret_type.commit_generic_slots();
+    func.args
+        .iter_mut()
+        .for_each(|arg| arg.tipe = arg.tipe.commit_generic_slots());
+
     let mut hm = HashMap::new();
 
-    if func.ret_type != Type::Void {
-        if func.code.len() == 0 {
-            return Err(CompileError::new_type_error(
-                format!(
-                    "Func {} never returns",
-                    Color::red(string_table.name_from_id(func.id))
-                ),
-                func.debug_info.location.into_iter().collect(),
-            ));
-        }
-        if let Some(stat) = func.code.last() {
-            match &stat.kind {
-                StatementKind::Return(_) => {}
-                _ => {
-                    return Err(CompileError::new_type_error(
-                        format!(
-                            "Func {}'s last statement is not a return",
-                            Color::red(string_table.name_from_id(func.id)),
-                        ),
-                        func.debug_info
-                            .location
-                            .into_iter()
-                            .chain(stat.debug_info.location.into_iter())
-                            .collect(),
-                    ))
-                }
-            }
-        }
+    if let Some(location_option) = undefinable_ids.get(&func.id) {
+        return Err(CompileError::new_type_error(
+            format!(
+                "Func {} has the same name as another top-level symbol",
+                Color::red(string_table.name_from_id(func.id)),
+            ),
+            location_option
+                .iter()
+                .chain(func.debug_info.location.iter())
+                .cloned()
+                .collect(),
+        ));
     }
-
-    if !func.properties.closure {
-        // closure names are checked earlier
-
-        if let Some(location_option) = undefinable_ids.get(&func.id) {
-            return Err(CompileError::new_type_error(
-                format!(
-                    "Func {} has the same name as another top-level symbol",
-                    Color::red(string_table.name_from_id(func.id)),
-                ),
-                location_option
-                    .iter()
-                    .chain(func.debug_info.location.iter())
-                    .cloned()
-                    .collect(),
-            ));
-        }
-        undefinable_ids.insert(func.id, func.debug_info.location);
-    }
+    undefinable_ids.insert(func.id, func.debug_info.location);
 
     for arg in func.args.iter() {
-        arg.tipe.get_representation(type_tree).map_err(|_| {
+        arg.tipe.rep(type_tree).map_err(|_| {
             CompileError::new_type_error(
                 format!(
-                    "Unknown type for function argument {}",
-                    Color::red(string_table.name_from_id(arg.name))
+                    "Func {}'s argument {} has the unknown type {}",
+                    Color::red(string_table.name_from_id(func.id)),
+                    Color::red(string_table.name_from_id(arg.name)),
+                    Color::red(arg.tipe.print(type_tree)),
                 ),
                 arg.debug_info.location.into_iter().collect(),
             )
@@ -1482,9 +1033,9 @@ pub fn typecheck_function(
 
     let mut inner_type_table = type_table.clone();
     inner_type_table.extend(hm);
-    let tc_stats = typecheck_statement_sequence(
+    let mut tc_stats = typecheck_statement_sequence(
         &func.code,
-        &func.ret_type,
+        &func,
         &inner_type_table,
         global_vars,
         func_table,
@@ -1494,18 +1045,56 @@ pub fn typecheck_function(
         closures,
         &mut vec![],
     )?;
+
+    if func.ret_type == Type::Void {
+        if tc_stats.last().cloned().map(|s| s.kind) != Some(TypeCheckedStatementKind::ReturnVoid())
+        {
+            tc_stats.push(TypeCheckedStatement {
+                kind: TypeCheckedStatementKind::ReturnVoid(),
+                debug_info: func.debug_info,
+            });
+        }
+    } else {
+        if func.code.len() == 0 {
+            return Err(CompileError::new_type_error(
+                format!(
+                    "Func {} never returns",
+                    Color::red(string_table.name_from_id(func.id))
+                ),
+                func.debug_info.locs(),
+            ));
+        }
+        if let Some(stat) = func.code.last() {
+            match &stat.kind {
+                StatementKind::Return(_) => {}
+                _ => {
+                    return Err(CompileError::new_type_error(
+                        format!(
+                            "Func {}'s last statement does not a return a value",
+                            Color::red(string_table.name_from_id(func.id)),
+                        ),
+                        func.debug_info
+                            .location
+                            .into_iter()
+                            .chain(stat.debug_info.location.into_iter())
+                            .collect(),
+                    ))
+                }
+            }
+        }
+    }
+
     Ok(TypeCheckedFunc {
         name: func.name.clone(),
         id: func.id,
-        args: func.args.clone(),
-        ret_type: func.ret_type.clone(),
+        args: func.args,
+        ret_type: func.ret_type,
         code: tc_stats,
         tipe: func.tipe.clone(),
         public: func.public,
         captures: BTreeSet::new(),
-        frame_size: 0,
+        generics: func.generics.clone(),
         unique_id: func.unique_id,
-        func_labels: func.func_labels.clone(),
         properties: func.properties,
         debug_info: DebugInfo::from(func.debug_info),
     })
@@ -1524,9 +1113,9 @@ pub fn typecheck_function(
 /// to the statement sequence.
 fn typecheck_statement_sequence(
     statements: &[Statement],
-    return_type: &Type,
+    func: &Func,
     type_table: &TypeTable,
-    global_vars: &HashMap<StringId, (Type, usize)>,
+    global_vars: &HashMap<StringId, Type>,
     func_table: &TypeTable,
     type_tree: &TypeTree,
     string_table: &StringTable,
@@ -1536,7 +1125,7 @@ fn typecheck_statement_sequence(
 ) -> Result<Vec<TypeCheckedStatement>, CompileError> {
     typecheck_statement_sequence_with_bindings(
         &statements,
-        return_type,
+        &func,
         type_table,
         global_vars,
         func_table,
@@ -1553,9 +1142,9 @@ fn typecheck_statement_sequence(
 /// added to type_table.
 fn typecheck_statement_sequence_with_bindings<'a>(
     statements: &'a [Statement],
-    return_type: &Type,
+    func: &Func,
     type_table: &'a TypeTable,
-    global_vars: &'a HashMap<StringId, (Type, usize)>,
+    global_vars: &'a HashMap<StringId, Type>,
     func_table: &TypeTable,
     bindings: &[(StringId, Type)],
     type_tree: &TypeTree,
@@ -1572,7 +1161,7 @@ fn typecheck_statement_sequence_with_bindings<'a>(
     for stat in statements {
         let (tcs, bindings) = typecheck_statement(
             stat,
-            return_type,
+            &func,
             &inner_type_table,
             global_vars,
             func_table,
@@ -1598,9 +1187,9 @@ fn typecheck_statement_sequence_with_bindings<'a>(
 /// The argument loc provide the correct location to `CompileError` if the function fails.
 fn typecheck_statement<'a>(
     statement: &'a Statement,
-    return_type: &Type,
+    func: &Func,
     type_table: &'a TypeTable,
-    global_vars: &'a HashMap<StringId, (Type, usize)>,
+    global_vars: &'a HashMap<StringId, Type>,
     func_table: &TypeTable,
     type_tree: &TypeTree,
     string_table: &StringTable,
@@ -1610,254 +1199,208 @@ fn typecheck_statement<'a>(
 ) -> Result<(TypeCheckedStatement, Vec<(StringId, Type)>), CompileError> {
     let kind = &statement.kind;
     let debug_info = statement.debug_info;
+
+    macro_rules! error {
+        ($text:expr $(,$args:expr)* $(,)?) => {
+            return Err(CompileError::new("Typecheck error", format!($text, $(Color::red($args),)*), debug_info.locs()));
+        };
+    }
+
     let (stat, binds) = match kind {
         StatementKind::ReturnVoid() => {
-            if Type::Void.assignable(return_type, type_tree, HashSet::new()) {
+            if Type::Void.assignable(&func.ret_type, type_tree, HashSet::new()) {
                 Ok((TypeCheckedStatementKind::ReturnVoid(), vec![]))
             } else {
-                Err(CompileError::new_type_error(
-                    format!(
-                        "Tried to return without type in function that returns {}",
-                        return_type.display()
-                    ),
-                    debug_info.location.into_iter().collect(),
-                ))
+                error!(
+                    "Tried to return without type in function that returns {}",
+                    &func.ret_type.print(type_tree)
+                );
             }
         }
         StatementKind::Return(expr) => {
-            let tc_expr = typecheck_expr(
+            let expr = typecheck_expr(
                 expr,
                 type_table,
                 global_vars,
                 func_table,
-                return_type,
+                func,
                 type_tree,
                 string_table,
                 undefinable_ids,
                 closures,
                 scopes,
             )?;
-            if return_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
-                Ok((TypeCheckedStatementKind::Return(tc_expr), vec![]))
+
+            let tipe = expr.get_type().rep(type_tree)?;
+            let ret_type = func.ret_type.rep(type_tree)?;
+
+            if ret_type.assignable(&tipe, type_tree, HashSet::new()) {
+                Ok((TypeCheckedStatementKind::Return(expr), vec![]))
             } else {
-                Err(CompileError::new_type_error(
-                    format!(
-                        "return statement has wrong type, {}",
-                        return_type
-                            .mismatch_string(&tc_expr.get_type(), type_tree)
-                            .unwrap_or("failed to resolve type name".to_string())
-                    ),
-                    debug_info.location.into_iter().collect(),
-                ))
+                error!(
+                    "return statement has wrong type:\nencountered {}\ninstead of  {}",
+                    tipe.print(type_tree),
+                    ret_type.print(type_tree),
+                );
             }
         }
-        StatementKind::Break(exp, scope) => Ok((
-            {
-                let te = exp
-                    .clone()
-                    .map(|expr| {
-                        typecheck_expr(
-                            &expr,
-                            type_table,
-                            global_vars,
-                            func_table,
-                            return_type,
-                            type_tree,
-                            string_table,
-                            undefinable_ids,
-                            closures,
-                            scopes,
-                        )
-                    })
-                    .transpose()?;
-                let key = scope.clone().unwrap_or("_".to_string());
-                let (_name, tipe) = scopes
-                    .iter_mut()
-                    .rev()
-                    .find(|(s, _)| key == *s)
-                    .ok_or_else(|| {
-                        CompileError::new_type_error(
-                            "No valid scope to break from".to_string(),
-                            debug_info.location.into_iter().collect(),
-                        )
-                    })?;
-                if let Some(t) = tipe {
-                    if *t
-                        != te
-                            .clone()
-                            .map(|te| te.get_type())
-                            .unwrap_or(Type::Tuple(vec![]))
-                    {
-                        return Err(CompileError::new_type_error(
-                            format!(
-                                "mismatched types in break statement {}",
-                                te.map(|te| te.get_type())
-                                    .unwrap_or(Type::Tuple(vec![]))
-                                    .mismatch_string(
-                                        &tipe.clone().unwrap_or(Type::Tuple(vec![])),
-                                        type_tree
-                                    )
-                                    .expect("Did not find type mismatch")
-                            ),
-                            debug_info.location.into_iter().collect(),
-                        ));
-                    } else {
-                        *t = te
-                            .clone()
-                            .map(|te| te.get_type())
-                            .unwrap_or(Type::Tuple(vec![]));
-                    }
-                }
-                TypeCheckedStatementKind::Break(
-                    exp.clone()
-                        .map(|expr| {
-                            typecheck_expr(
-                                &expr,
-                                type_table,
-                                global_vars,
-                                func_table,
-                                return_type,
-                                type_tree,
-                                string_table,
-                                undefinable_ids,
-                                closures,
-                                scopes,
-                            )
-                        })
-                        .transpose()?,
-                    scope.clone().unwrap_or("_".to_string()),
-                )
-            },
-            vec![],
-        )),
-        StatementKind::Expression(expr) => Ok((
-            TypeCheckedStatementKind::Expression(typecheck_expr(
+        StatementKind::Break(_expr, _scope) => {
+            error!("Break is not yet supported");
+        }
+        StatementKind::Expression(expr) => {
+            let expr = typecheck_expr(
                 expr,
                 type_table,
                 global_vars,
                 func_table,
-                return_type,
-                type_tree,
-                string_table,
-                undefinable_ids,
-                closures,
-                scopes,
-            )?),
-            vec![],
-        )),
-        StatementKind::Let(pat, expr) => {
-            let tc_expr = typecheck_expr(
-                expr,
-                type_table,
-                global_vars,
-                func_table,
-                return_type,
+                func,
                 type_tree,
                 string_table,
                 undefinable_ids,
                 closures,
                 scopes,
             )?;
-            let tce_type = tc_expr.get_type();
-            if tce_type == Type::Void {
-                return Err(CompileError::new_type_error(
-                    format!("Assignment of void value to local variable"),
-                    debug_info.location.into_iter().collect(),
-                ));
+            let tipe = expr.get_type();
+            if !matches!(tipe, Type::Void | Type::Every) {
+                error!("Statement discards {} value", tipe.print(type_tree));
             }
-            let (stat, bindings) = match &pat.kind {
-                MatchPatternKind::Bind(name) => (
-                    TypeCheckedStatementKind::Let(
-                        TypeCheckedMatchPattern::new_bind(*name, pat.debug_info, tce_type.clone()),
-                        tc_expr,
-                    ),
-                    vec![(*name, tce_type)],
-                ),
-                MatchPatternKind::Assign(_) => unimplemented!(),
-                MatchPatternKind::Tuple(pats) => {
-                    let (tc_pats, bindings) =
-                        typecheck_patvec(tce_type.clone(), pats.to_vec(), debug_info.location)?;
-                    (
-                        TypeCheckedStatementKind::Let(
-                            TypeCheckedMatchPattern::new_tuple(tc_pats, pat.debug_info, tce_type),
-                            tc_expr,
-                        ),
-                        bindings,
-                    )
-                }
+            Ok((TypeCheckedStatementKind::Expression(expr), vec![]))
+        }
+        StatementKind::Let(assigned, expr) => {
+            let expr = typecheck_expr(
+                expr,
+                type_table,
+                global_vars,
+                func_table,
+                func,
+                type_tree,
+                string_table,
+                undefinable_ids,
+                closures,
+                scopes,
+            )?;
+
+            let types = match expr.get_type() {
+                Type::Tuple(vec) if assigned.len() > 1 => vec.clone(),
+                x => vec![x.clone()],
             };
 
-            for (id, _, _) in pat.collect_identifiers() {
+            if types.len() != assigned.len() {
+                error!(
+                    "Left side needs {} items but right has {}",
+                    assigned.len(),
+                    types.len()
+                );
+            }
+
+            let mut bindings = vec![];
+
+            for (assigned, tipe) in assigned.iter().zip(types.into_iter()) {
+                let id = assigned.id;
+                let name = Color::red(string_table.name_from_id(id));
+
                 if let Some(location_option) = undefinable_ids.get(&id) {
-                    return Err(CompileError::new_type_error(
+                    Err(CompileError::new_type_error(
                         String::from("Variable has the same name as a top-level symbol"),
                         location_option
                             .iter()
                             .chain(statement.debug_info.location.iter())
                             .cloned()
                             .collect(),
-                    ));
+                    ))?
+                }
+
+                if let Some(_) = global_vars.get(&id) {
+                    Err(CompileError::new_type_error(
+                        match assigned.shadow {
+                            true => format!("Tried to shadow global variable {}", name),
+                            false => format!("Tried to let-assign global variable {}", name),
+                        },
+                        assigned.debug_info.locs(),
+                    ))?
+                }
+
+                if tipe == Type::Void {
+                    Err(CompileError::new_type_error(
+                        format!("Tried to assign something void to {}", name),
+                        assigned.debug_info.locs(),
+                    ))?
+                }
+
+                if assigned.shadow {
+                    bindings.push((id, tipe));
+                } else {
+                    match type_table.get(&id) {
+                        Some(var_type) => {
+                            if !var_type.assignable(&tipe, type_tree, HashSet::new()) {
+                                Err(CompileError::new_type_error(
+                                    format!(
+                                        "Cannot make assignment for {}\n {}",
+                                        name,
+                                        var_type
+                                            .mismatch_string(&tipe, type_tree)
+                                            .unwrap_or("Did not find mismatch".to_string())
+                                    ),
+                                    assigned.debug_info.locs(),
+                                ))?
+                            }
+                        }
+                        None => Err(CompileError::new_type_error(
+                            format!("assignment to undeclared variable {}", name),
+                            assigned.debug_info.locs(),
+                        ))?,
+                    }
                 }
             }
 
+            let stat = TypeCheckedStatementKind::SetLocals(assigned.clone(), expr);
+
             Ok((stat, bindings))
         }
-        StatementKind::Assign(name, expr) => {
-            let tc_expr = typecheck_expr(
+        StatementKind::Assign(id, expr) => {
+            let expr = typecheck_expr(
                 expr,
                 type_table,
                 global_vars,
                 func_table,
-                return_type,
+                func,
                 type_tree,
                 string_table,
                 undefinable_ids,
                 closures,
                 scopes,
             )?;
-            match type_table.get(name) {
-                Some(var_type) => {
-                    if var_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
-                        Ok((
-                            TypeCheckedStatementKind::AssignLocal(*name, tc_expr),
-                            vec![],
-                        ))
-                    } else {
-                        Err(CompileError::new_type_error(
-                            format!(
-                                "mismatched types in assignment statement {}",
-                                var_type
-                                    .mismatch_string(&tc_expr.get_type(), type_tree)
-                                    .expect("Did not find mismatch")
-                            ),
-                            debug_info.location.into_iter().collect(),
-                        ))
-                    }
+
+            let tipe = expr.get_type().rep(type_tree)?;
+
+            if let Some(var_type) = type_table.get(id) {
+                if var_type.assignable(&tipe, type_tree, HashSet::new()) {
+                    let assigned = vec![AssignRef::new(*id, false, debug_info)];
+                    Ok((TypeCheckedStatementKind::SetLocals(assigned, expr), vec![]))
+                } else {
+                    error!(
+                        "mismatched types in assignment statement {}",
+                        var_type
+                            .mismatch_string(&tipe, type_tree)
+                            .unwrap_or("Did not find mismatch".to_string())
+                    );
                 }
-                None => match global_vars.get(&*name) {
-                    Some((var_type, idx)) => {
-                        if var_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
-                            Ok((
-                                TypeCheckedStatementKind::AssignGlobal(*idx, tc_expr),
-                                vec![],
-                            ))
-                        } else {
-                            Err(CompileError::new_type_error(
-                                format!(
-                                    "mismatched types in assignment statement {}",
-                                    var_type
-                                        .mismatch_string(&tc_expr.get_type(), type_tree)
-                                        .unwrap_or("Did not find type mismatch".parse().unwrap())
-                                ),
-                                debug_info.location.into_iter().collect(),
-                            ))
-                        }
-                    }
-                    None => Err(CompileError::new_type_error(
-                        "assignment to non-existent variable".to_string(),
-                        debug_info.location.into_iter().collect(),
-                    )),
-                },
+            } else if let Some(var_type) = global_vars.get(id) {
+                if var_type.assignable(&tipe, type_tree, HashSet::new()) {
+                    Ok((TypeCheckedStatementKind::AssignGlobal(*id, expr), vec![]))
+                } else {
+                    error!(
+                        "mismatched types in assignment statement {}",
+                        var_type
+                            .mismatch_string(&tipe, type_tree)
+                            .unwrap_or("Did not find mismatch".to_string())
+                    );
+                }
+            } else {
+                error!(
+                    "assignment to undeclared variable {}",
+                    string_table.name_from_id(*id)
+                );
             }
         }
         StatementKind::While(cond, body) => {
@@ -1866,7 +1409,7 @@ fn typecheck_statement<'a>(
                 type_table,
                 global_vars,
                 func_table,
-                return_type,
+                func,
                 type_tree,
                 string_table,
                 undefinable_ids,
@@ -1875,12 +1418,12 @@ fn typecheck_statement<'a>(
             )?;
             match tc_cond.get_type() {
                 Type::Bool => {
-                    let tc_body = typecheck_statement_sequence(
+                    let tc_body = typecheck_codeblock(
                         body,
-                        return_type,
                         type_table,
                         global_vars,
                         func_table,
+                        func,
                         type_tree,
                         string_table,
                         undefinable_ids,
@@ -1889,35 +1432,11 @@ fn typecheck_statement<'a>(
                     )?;
                     Ok((TypeCheckedStatementKind::While(tc_cond, tc_body), vec![]))
                 }
-                _ => Err(CompileError::new_type_error(
-                    format!(
-                        "while condition must be bool, found {}",
-                        tc_cond.get_type().display()
-                    ),
-                    debug_info.location.into_iter().collect(),
-                )),
+                _ => error!(
+                    "while condition must be bool, found {}",
+                    tc_cond.get_type().print(type_tree)
+                ),
             }
-        }
-        StatementKind::Asm(insns, args) => {
-            let mut tc_args = Vec::new();
-            for arg in args {
-                tc_args.push(typecheck_expr(
-                    arg,
-                    type_table,
-                    global_vars,
-                    func_table,
-                    return_type,
-                    type_tree,
-                    string_table,
-                    undefinable_ids,
-                    closures,
-                    scopes,
-                )?);
-            }
-            Ok((
-                TypeCheckedStatementKind::Asm(insns.to_vec(), tc_args),
-                vec![],
-            ))
         }
         StatementKind::DebugPrint(e) => {
             let tce = typecheck_expr(
@@ -1925,7 +1444,7 @@ fn typecheck_statement<'a>(
                 type_table,
                 global_vars,
                 func_table,
-                return_type,
+                func,
                 type_tree,
                 string_table,
                 undefinable_ids,
@@ -1940,7 +1459,7 @@ fn typecheck_statement<'a>(
                 type_table,
                 global_vars,
                 func_table,
-                return_type,
+                func,
                 type_tree,
                 string_table,
                 undefinable_ids,
@@ -1951,13 +1470,10 @@ fn typecheck_statement<'a>(
                 Type::Tuple(vec) if vec.len() == 2 && vec[0] == Type::Bool => {
                     Ok((TypeCheckedStatementKind::Assert(tce), vec![]))
                 }
-                _ => Err(CompileError::new_type_error(
-                    format!(
-                        "assert condition must be of type (bool, any), found {}",
-                        tce.get_type().display()
-                    ),
-                    debug_info.location.into_iter().collect(),
-                )),
+                _ => error!(
+                    "assert condition must be of type (bool, any), found {}",
+                    tce.get_type().print(type_tree)
+                ),
             }
         }
     }?;
@@ -1970,73 +1486,6 @@ fn typecheck_statement<'a>(
     ))
 }
 
-/// Type checks a `Vec<MatchPattern>`, representing a tuple match pattern against `Type` rhs_type.
-///
-/// This is used in let bindings, and may have other uses in the future.
-///
-/// If successful this function returns a tuple containing a `TypeCheckedMatchPattern`, and a
-/// `Vec<(StringId, Type)>` representing the bindings produced from this match pattern.  Otherwise
-/// the function returns a `CompileError`
-fn typecheck_patvec(
-    rhs_type: Type,
-    patterns: Vec<MatchPattern>,
-    location: Option<Location>,
-) -> Result<(Vec<TypeCheckedMatchPattern>, Vec<(StringId, Type)>), CompileError> {
-    if let Type::Tuple(tvec) = rhs_type {
-        if tvec.len() == patterns.len() {
-            let mut tc_pats = Vec::new();
-            let mut bindings = Vec::new();
-            for (i, rhs_type) in tvec.iter().enumerate() {
-                if *rhs_type == Type::Void {
-                    return Err(CompileError::new_type_error(
-                        "attempted to assign void in tuple binding".to_string(),
-                        location.into_iter().collect(),
-                    ));
-                }
-                let pat = &patterns[i];
-                match &pat.kind {
-                    MatchPatternKind::Bind(name) => {
-                        tc_pats.push(TypeCheckedMatchPattern::new_bind(
-                            *name,
-                            pat.debug_info,
-                            rhs_type.clone(),
-                        ));
-                        bindings.push((*name, rhs_type.clone()));
-                    }
-                    MatchPatternKind::Assign(name) => {
-                        tc_pats.push(TypeCheckedMatchPattern::new_assign(
-                            *name,
-                            pat.debug_info,
-                            rhs_type.clone(),
-                        ));
-                    }
-                    MatchPatternKind::Tuple(_) => {
-                        //TODO: implement this properly
-                        return Err(CompileError::new_type_error(
-                            "nested pattern not yet supported in let".to_string(),
-                            location.into_iter().collect(),
-                        ));
-                    }
-                }
-            }
-            Ok((tc_pats, bindings))
-        } else {
-            Err(CompileError::new_type_error(
-                "tuple-match let must receive tuple of equal size".to_string(),
-                location.into_iter().collect(),
-            ))
-        }
-    } else {
-        Err(CompileError::new_type_error(
-            format!(
-                "tuple-match let must receive tuple value, found \"{}\"",
-                rhs_type.display()
-            ),
-            location.into_iter().collect(),
-        ))
-    }
-}
-
 /// Performs type checking on the expression expr.  Returns `TypeCheckedExpr` if successful, and
 /// `CompileError` otherwise.
 ///
@@ -2047,9 +1496,9 @@ fn typecheck_patvec(
 fn typecheck_expr(
     expr: &Expr,
     type_table: &TypeTable,
-    global_vars: &HashMap<StringId, (Type, usize)>,
+    global_vars: &HashMap<StringId, Type>,
     func_table: &TypeTable,
-    return_type: &Type,
+    func: &Func,
     type_tree: &TypeTree,
     string_table: &StringTable,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
@@ -2058,6 +1507,13 @@ fn typecheck_expr(
 ) -> Result<TypeCheckedExpr, CompileError> {
     let debug_info = expr.debug_info;
     let loc = debug_info.location;
+
+    macro_rules! error {
+        ($text:expr $(,$args:expr)* $(,)?) => {
+            return Err(CompileError::new("Typecheck error", format!($text, $(Color::red($args),)*), debug_info.locs()));
+        };
+    }
+
     Ok(TypeCheckedExpr {
         kind: match &expr.kind {
             ExprKind::NewBuffer => Ok(TypeCheckedExprKind::NewBuffer),
@@ -2069,7 +1525,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2084,7 +1540,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2096,7 +1552,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2111,7 +1567,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2123,7 +1579,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2135,7 +1591,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2150,7 +1606,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2162,7 +1618,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2170,14 +1626,11 @@ fn typecheck_expr(
                     scopes,
                 )?;
                 if (tc_sub1.get_type(), tc_sub2.get_type()) != (Type::Bool, Type::Bool) {
-                    return Err(CompileError::new_type_error(
-                        format!(
-                            "operands to logical or must be boolean, got \"{}\" and \"{}\"",
-                            tc_sub1.get_type().display(),
-                            tc_sub2.get_type().display(),
-                        ),
-                        loc.into_iter().collect(),
-                    ));
+                    error!(
+                        "operands to logical or must be boolean, got {} and {}",
+                        tc_sub1.get_type().print(type_tree),
+                        tc_sub2.get_type().print(type_tree),
+                    );
                 }
                 Ok(TypeCheckedExprKind::ShortcutOr(
                     Box::new(tc_sub1),
@@ -2190,7 +1643,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2202,7 +1655,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2210,14 +1663,11 @@ fn typecheck_expr(
                     scopes,
                 )?;
                 if (tc_sub1.get_type(), tc_sub2.get_type()) != (Type::Bool, Type::Bool) {
-                    return Err(CompileError::new_type_error(
-                        format!(
-                            "operands to logical and must be boolean, got \"{}\" and \"{}\"",
-                            tc_sub1.get_type().display(),
-                            tc_sub2.get_type().display()
-                        ),
-                        loc.into_iter().collect(),
-                    ));
+                    error!(
+                        "operands to logical and must be boolean, got {} and {}",
+                        tc_sub1.get_type().print(type_tree),
+                        tc_sub2.get_type().print(type_tree)
+                    );
                 }
                 Ok(TypeCheckedExprKind::ShortcutAnd(
                     Box::new(tc_sub1),
@@ -2230,7 +1680,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2238,109 +1688,206 @@ fn typecheck_expr(
                     scopes,
                 )?)))
             }
-            ExprKind::VariableRef(id) => match func_table.get(id) {
-                Some(t) => Ok(TypeCheckedExprKind::FuncRef(*id, (*t).clone())),
-                None => match type_table.get(id) {
-                    Some(t) => Ok(TypeCheckedExprKind::LocalVariableRef(*id, (*t).clone())),
-                    None => match global_vars.get(id) {
-                        Some((t, idx)) => {
-                            Ok(TypeCheckedExprKind::GlobalVariableRef(*idx, t.clone()))
-                        }
-                        None => Err(CompileError::new_type_error(
+            ExprKind::VariableRef(id, spec) => {
+                if let Some(tipe) = func_table.get(id) {
+                    let template_type = tipe.rep(type_tree)?;
+                    let num_generic_params = tipe.count_generic_slots();
+
+                    if spec.len() != num_generic_params {
+                        return Err(CompileError::new(
+                            "Generics error",
                             format!(
-                                "reference to unrecognized identifier {}",
-                                Color::red(string_table.name_from_id(*id))
+                                "Func {} has {} generic args but was passed {}",
+                                Color::red(string_table.name_from_id(*id)),
+                                Color::red(num_generic_params),
+                                Color::red(spec.len()),
                             ),
-                            loc.into_iter().collect(),
-                        )),
-                    },
-                },
-            },
-            ExprKind::TupleRef(tref, idx) => {
-                let tc_sub = typecheck_expr(
-                    &*tref,
-                    type_table,
-                    global_vars,
-                    func_table,
-                    return_type,
-                    type_tree,
-                    string_table,
-                    undefinable_ids,
-                    closures,
-                    scopes,
-                )?;
-                let uidx = idx.to_usize().unwrap();
-                if let Type::Tuple(tv) = tc_sub.get_type() {
-                    if uidx < tv.len() {
-                        Ok(TypeCheckedExprKind::TupleRef(
-                            Box::new(tc_sub),
-                            idx.clone(),
-                            tv[uidx].clone(),
-                        ))
-                    } else {
-                        Err(CompileError::new_type_error(
-                            "tuple field access to non-existent field".to_string(),
-                            loc.into_iter().collect(),
-                        ))
+                            debug_info.locs(),
+                        ));
                     }
+
+                    let tipe = template_type.make_specific(spec)?;
+                    Ok(TypeCheckedExprKind::FuncRef(*id, tipe))
+                } else if let Some(tipe) = type_table.get(id) {
+                    if !spec.is_empty() {
+                        return Err(CompileError::new(
+                            "Generics error",
+                            format!(
+                                "Variable {} doesn't need specialization",
+                                Color::red(string_table.name_from_id(*id)),
+                            ),
+                            debug_info.locs(),
+                        ));
+                    }
+
+                    let tipe = tipe.rep(type_tree)?;
+                    Ok(TypeCheckedExprKind::LocalVariableRef(*id, tipe))
+                } else if let Some(tipe) = global_vars.get(id) {
+                    let tipe = tipe.rep(type_tree)?;
+
+                    if !spec.is_empty() {
+                        return Err(CompileError::new(
+                            "Generics error",
+                            format!(
+                                "Global variable {} doesn't need specialization",
+                                Color::red(string_table.name_from_id(*id)),
+                            ),
+                            debug_info.locs(),
+                        ));
+                    }
+
+                    Ok(TypeCheckedExprKind::GlobalVariableRef(*id, tipe))
                 } else {
-                    Err(CompileError::new_type_error(
-                        format!(
-                            "tuple field access to non-tuple value of type \"{}\"",
-                            tc_sub.get_type().display()
-                        ),
-                        loc.into_iter().collect(),
-                    ))
+                    error!(
+                        "reference to unrecognized identifier {}",
+                        string_table.name_from_id(*id)
+                    );
                 }
             }
-            ExprKind::DotRef(sref, name) => {
-                let tc_sub = typecheck_expr(
-                    &*sref,
+            ExprKind::TupleRef(tuple_expr, offset_value) => {
+                let tuple_expr = typecheck_expr(
+                    &*tuple_expr,
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
                     closures,
                     scopes,
                 )?;
-                if let Type::Struct(v) = tc_sub.get_type().get_representation(type_tree)? {
-                    for sf in v.iter() {
-                        if *name == sf.name {
-                            let slot_num = tc_sub
-                                .get_type()
-                                .get_representation(type_tree)?
-                                .get_struct_slot_by_name(name.clone())
-                                .ok_or(CompileError::new_type_error(
-                                    "Could not find name of struct field".to_string(),
-                                    loc.into_iter().collect(),
-                                ))?;
-                            return Ok(TypeCheckedExpr {
-                                kind: TypeCheckedExprKind::DotRef(
-                                    Box::new(tc_sub),
-                                    slot_num,
-                                    v.len(),
-                                    sf.tipe.clone(),
-                                ),
-                                debug_info,
-                            });
-                        }
-                    }
-                    Err(CompileError::new_type_error(
-                        "reference to non-existent struct field".to_string(),
-                        loc.into_iter().collect(),
-                    ))
-                } else {
-                    Err(CompileError::new_type_error(
-                        format!(
-                            "struct field access to non-struct value of type \"{}\"",
-                            tc_sub.get_type().display()
-                        ),
-                        loc.into_iter().collect(),
-                    ))
+                let offset = offset_value.to_usize().unwrap();
+
+                let tipe = match tuple_expr.get_type().rep(type_tree)? {
+                    Type::Tuple(tup) => tup,
+                    wrong => error!("{} isn't a tuple", wrong.print(type_tree)),
+                };
+
+                if offset >= tipe.len() {
+                    error!("tuple is not wide enough")
                 }
+
+                Ok(TypeCheckedExprKind::TupleRef(
+                    Box::new(tuple_expr),
+                    offset,
+                    tipe.len(),
+                    tipe[offset].clone(),
+                ))
+            }
+            ExprKind::DotRef(expr, name) => {
+                let expr = typecheck_expr(
+                    &*expr,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    func,
+                    type_tree,
+                    string_table,
+                    undefinable_ids,
+                    closures,
+                    scopes,
+                )?;
+                let tipe = expr.get_type().rep(type_tree)?;
+
+                let fields = match &tipe {
+                    Type::Struct(fields) => fields,
+                    _ => {
+                        error!(
+                            "can't lookup .{} for non-struct {}",
+                            name,
+                            tipe.print(type_tree)
+                        )
+                    }
+                };
+
+                let slot = fields.into_iter().position(|field| &field.name == name);
+
+                let slot = match slot {
+                    Some(slot) => slot,
+                    None => {
+                        error!("There's no field .{} in {}", name, tipe.print(type_tree))
+                    }
+                };
+
+                Ok(TypeCheckedExprKind::TupleRef(
+                    Box::new(expr),
+                    slot,
+                    fields.len(),
+                    fields[slot].tipe.clone(),
+                ))
+            }
+            ExprKind::StructMod(struc, name, item) => {
+                let struc = typecheck_expr(
+                    struc,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    func,
+                    type_tree,
+                    string_table,
+                    undefinable_ids,
+                    closures,
+                    scopes,
+                )?;
+                let item = typecheck_expr(
+                    item,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    func,
+                    type_tree,
+                    string_table,
+                    undefinable_ids,
+                    closures,
+                    scopes,
+                )?;
+
+                let struc_type = struc.get_type().rep(type_tree)?;
+                let item_type = item.get_type().rep(type_tree)?;
+
+                let fields = match &struc_type {
+                    Type::Struct(fields) => fields,
+                    _ => {
+                        error!(
+                            "can't edit .{} for non-struct {}",
+                            name,
+                            struc_type.print(type_tree)
+                        )
+                    }
+                };
+
+                let slot = fields.into_iter().position(|field| &field.name == name);
+
+                let slot = match slot {
+                    Some(slot) => slot,
+                    None => {
+                        error!(
+                            "There's no field .{} in {}",
+                            name,
+                            struc_type.print(type_tree)
+                        )
+                    }
+                };
+
+                let field_type = &fields[slot].tipe;
+
+                if !item_type.assignable(&field_type, type_tree, HashSet::new()) {
+                    error!(
+                        "incorrect value type in struct modifier, {}",
+                        field_type
+                            .mismatch_string(&item_type, type_tree)
+                            .unwrap_or("Did not find type mismatch".to_string())
+                    );
+                }
+
+                Ok(TypeCheckedExprKind::StructMod(
+                    Box::new(struc),
+                    slot,
+                    fields.len(),
+                    Box::new(item),
+                    struc_type,
+                ))
             }
             ExprKind::Constant(constant) => Ok(match constant {
                 Constant::Uint(n) => TypeCheckedExprKind::Const(Value::Int(n.clone()), Type::Uint),
@@ -2349,100 +1896,68 @@ fn typecheck_expr(
                     TypeCheckedExprKind::Const(Value::Int(Uint256::from_bool(*b)), Type::Bool)
                 }
                 Constant::Option(o) => TypeCheckedExprKind::Const(o.value(), o.type_of()),
-                Constant::Null => TypeCheckedExprKind::Const(Value::none(), Type::Any),
             }),
-            ExprKind::FunctionCall(fexpr, args) => {
-                let tc_fexpr = typecheck_expr(
-                    fexpr,
+            ExprKind::FunctionCall(expr, args) => {
+                let expr = typecheck_expr(
+                    expr,
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
                     closures,
                     scopes,
                 )?;
-                match tc_fexpr.get_type().get_representation(type_tree)? {
-                    Type::Func(prop, arg_types, ret_type) => {
-                        if args.len() == arg_types.len() {
-                            let mut tc_args = Vec::new();
-                            for i in 0..args.len() {
-                                let tc_arg = typecheck_expr(
-                                    &args[i],
-                                    type_table,
-                                    global_vars,
-                                    func_table,
-                                    return_type,
-                                    type_tree,
-                                    string_table,
-                                    undefinable_ids,
-                                    closures,
-                                    scopes,
-                                )?;
-                                tc_args.push(tc_arg);
-                                let resolved_arg_type = arg_types[i].clone();
-                                if !resolved_arg_type.assignable(
-                                    &tc_args[i].get_type().get_representation(type_tree)?,
-                                    type_tree,
-                                    HashSet::new(),
-                                ) {
-                                    return Err(CompileError::new_type_error(
-                                        format!(
-                                            "wrong argument type in function call, {}",
-                                            resolved_arg_type
-                                                .mismatch_string(&tc_args[i].get_type(), type_tree)
-                                                .unwrap_or("Compiler could not identify a specific mismatch".to_string())
-                                        ),
-                                        loc.into_iter().collect(),
-                                    ));
-                                }
-                            }
-                            Ok(TypeCheckedExprKind::FunctionCall(
-                                Box::new(tc_fexpr),
-                                tc_args,
-                                *ret_type,
-                                prop,
-                            ))
-                        } else {
-                            Err(CompileError::new_type_error(
-                                "wrong number of args passed to function".to_string(),
-                                loc.into_iter().collect(),
-                            ))
-                        }
-                    }
-                    _ => Err(CompileError::new_type_error(
-                        format!(
-                            "function call to non-function value of type \"{}\"",
-                            tc_fexpr.get_type().get_representation(type_tree)?.display()
-                        ),
-                        loc.into_iter().collect(),
-                    )),
-                }
+
+                let args = args
+                    .iter()
+                    .map(|arg| {
+                        typecheck_expr(
+                            arg,
+                            type_table,
+                            global_vars,
+                            func_table,
+                            func,
+                            type_tree,
+                            string_table,
+                            undefinable_ids,
+                            closures,
+                            scopes,
+                        )
+                    })
+                    .collect::<Result<_, _>>()?;
+
+                Ok(build_function_call(expr, args, string_table, type_tree)?)
             }
             ExprKind::CodeBlock(block) => Ok(TypeCheckedExprKind::CodeBlock(typecheck_codeblock(
                 block,
                 &type_table,
                 global_vars,
                 func_table,
-                return_type,
+                func,
                 type_tree,
                 string_table,
                 undefinable_ids,
                 closures,
                 scopes,
             )?)),
-            ExprKind::Closure(func) => {
-                let id = func.id;
-                let tipe = func.tipe.clone();
+            ExprKind::Closure(closure_func) => {
+                let mut closure_func = closure_func.clone();
+
+                // a closures inherits its parent's generics
+                closure_func.generics = func.generics.clone();
+
+                let id = closure_func.id;
+                let tipe = closure_func.tipe.clone();
 
                 // The closure must capture only variables that are in scope above it.
                 // The type table as of this moment includes exactly these variables.
                 let capture_table = type_table;
 
                 let mut closure = typecheck_function(
-                    func,
+                    &closure_func,
                     &capture_table,
                     global_vars,
                     func_table,
@@ -2461,16 +1976,10 @@ fn typecheck_expr(
                     for node in &mut nodes {
                         match node {
                             TypeCheckedNode::Statement(stat) => match &mut stat.kind {
-                                TypeCheckedStatementKind::AssignLocal(id, ref mut expr) => {
+                                TypeCheckedStatementKind::SetLocals(assigned, ref mut expr) => {
                                     let right = vec![TypeCheckedNode::Expression(expr)];
                                     captures.extend(find_captures(right, local.clone()));
-                                    local.insert(*id);
-                                    continue;
-                                }
-                                TypeCheckedStatementKind::Let(pat, ref mut expr) => {
-                                    let right = vec![TypeCheckedNode::Expression(expr)];
-                                    captures.extend(find_captures(right, local.clone()));
-                                    local.extend(pat.collect_identifiers().iter().map(|x| x.0));
+                                    local.extend(assigned.iter().map(|x| x.id));
                                     continue;
                                 }
                                 _ => {}
@@ -2486,7 +1995,6 @@ fn typecheck_expr(
                                 }
                                 _ => {}
                             },
-                            TypeCheckedNode::StructField(_) => {}
                             TypeCheckedNode::Type(_) => continue,
                         }
 
@@ -2496,202 +2004,82 @@ fn typecheck_expr(
                     captures
                 }
 
-                fn all_idents(
-                    mut nodes: Vec<TypeCheckedNode>, // nodes of the same scope
-                ) -> HashSet<StringId> {
-                    let mut idents = HashSet::new();
-
-                    for node in &mut nodes {
-                        match node {
-                            TypeCheckedNode::Statement(stat) => match &mut stat.kind {
-                                TypeCheckedStatementKind::Let(pat, ..) => {
-                                    let ids: Vec<_> =
-                                        pat.collect_identifiers().iter().map(|x| x.0).collect();
-                                    idents.extend(ids);
-                                }
-                                _ => {}
-                            },
-                            TypeCheckedNode::Expression(expr) => match &mut expr.kind {
-                                TypeCheckedExprKind::IfLet(id, ..) => {
-                                    idents.insert(*id);
-                                }
-                                TypeCheckedExprKind::LocalVariableRef(id, ..) => {
-                                    idents.insert(*id);
-                                }
-                                _ => {}
-                            },
-                            TypeCheckedNode::StructField(_) => {}
-                            TypeCheckedNode::Type(_) => continue,
-                        }
-                        idents.extend(all_idents(node.child_nodes()));
-                    }
-                    idents
-                }
-
                 let args: HashSet<StringId> = closure.args.iter().map(|arg| arg.name).collect();
-                let arg_count = args.len();
                 let captures = find_captures(closure.child_nodes(), args);
 
-                // We don't yet have an AST-walker that efficiently assigns slot numbers.
-                // The plan is to soon do this: instead of determining slot assignments for
-                // locals, args, and captures at codegen, we'll analyze the AST to efficiently pick
-                // a position for each identifier. Then, ClosureLoad(), MakeFrame(), and non-closure
-                // functions in general will both cost less gas and pay down technical debt.
-                //
-                // So, for the very short term, we'll just take the maximum use possible.
-                let frame_size = arg_count + all_idents(closure.child_nodes()).len() + 1;
-
-                closure.frame_size = frame_size;
                 closure.captures = captures.clone();
                 closures.insert(id, closure);
 
                 // We only get one opportunity to load in the captured values,
                 // so we do that at declaration.
-                Ok(TypeCheckedExprKind::ClosureLoad(
-                    id, arg_count, frame_size, captures, tipe,
+                Ok(TypeCheckedExprKind::ClosureLoad(id, captures, tipe))
+            }
+            ExprKind::NewArray(size_expr, tipe) => {
+                let size_expr = typecheck_expr(
+                    &size_expr,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    func,
+                    type_tree,
+                    string_table,
+                    undefinable_ids,
+                    closures,
+                    scopes,
+                )?;
+
+                let fill = TypeCheckedExpr::new(
+                    TypeCheckedExprKind::Const(tipe.default_value(type_tree), tipe.clone()),
+                    debug_info,
+                );
+
+                // In order to best simulate a call to the builtin, we alter the signature
+                //   In array.mini   func builtin_arrayNew(uint, any) -> Array
+                //   Best effort     func builtin_arrayNew(uint, v) -> []v
+
+                let builtin_ref = TypeCheckedExpr::builtin_ref(
+                    "builtin_arrayNew",
+                    vec![&Type::Uint, tipe],
+                    &Type::Array(Box::new(tipe.clone())),
+                    func_table,
+                    string_table,
+                    debug_info,
+                )?;
+
+                Ok(build_function_call(
+                    builtin_ref,
+                    vec![size_expr, fill],
+                    string_table,
+                    type_tree,
+                )?)
+            }
+            ExprKind::NewFixedArray(size, expr) => {
+                let expr = typecheck_expr(
+                    expr,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    func,
+                    type_tree,
+                    string_table,
+                    undefinable_ids,
+                    closures,
+                    scopes,
+                )?;
+                let tipe = expr.get_type();
+                Ok(TypeCheckedExprKind::NewFixedArray(
+                    *size,
+                    Box::new(expr.clone()),
+                    Type::FixedArray(Box::new(tipe), *size),
                 ))
             }
-            ExprKind::ArrayOrMapRef(array, index) => {
-                let tc_arr = typecheck_expr(
-                    &*array,
-                    type_table,
-                    global_vars,
-                    func_table,
-                    return_type,
-                    type_tree,
-                    string_table,
-                    undefinable_ids,
-                    closures,
-                    scopes,
-                )?;
-                let tc_idx = typecheck_expr(
-                    &*index,
-                    type_table,
-                    global_vars,
-                    func_table,
-                    return_type,
-                    type_tree,
-                    string_table,
-                    undefinable_ids,
-                    closures,
-                    scopes,
-                )?;
-                match tc_arr.get_type().get_representation(type_tree)? {
-                    Type::Array(t) => {
-                        if tc_idx.get_type() == Type::Uint {
-                            Ok(TypeCheckedExprKind::ArrayRef(
-                                Box::new(tc_arr),
-                                Box::new(tc_idx),
-                                *t,
-                            ))
-                        } else {
-                            Err(CompileError::new_type_error(
-                                format!(
-                                    "array index must be Uint, found \"{}\"",
-                                    tc_idx.get_type().display()
-                                ),
-                                loc.into_iter().collect(),
-                            ))
-                        }
-                    }
-                    Type::FixedArray(t, sz) => {
-                        if tc_idx.get_type() == Type::Uint {
-                            Ok(TypeCheckedExprKind::FixedArrayRef(
-                                Box::new(tc_arr),
-                                Box::new(tc_idx),
-                                sz,
-                                *t,
-                            ))
-                        } else {
-                            Err(CompileError::new_type_error(
-                                format!(
-                                    "fixedarray index must be uint, found \"{}\"",
-                                    tc_idx.get_type().display()
-                                ),
-                                loc.into_iter().collect(),
-                            ))
-                        }
-                    }
-                    Type::Map(kt, vt) => {
-                        if tc_idx.get_type() == *kt {
-                            Ok(TypeCheckedExprKind::MapRef(
-                                Box::new(tc_arr),
-                                Box::new(tc_idx),
-                                Type::Option(Box::new(*vt)),
-                            ))
-                        } else {
-                            Err(CompileError::new_type_error(
-                                format!(
-                                    "invalid key value in map lookup, {}",
-                                    kt.mismatch_string(&tc_idx.get_type(), type_tree)
-                                        .expect("Did not find type mismatch")
-                                ),
-                                loc.into_iter().collect(),
-                            ))
-                        }
-                    }
-                    _ => Err(CompileError::new_type_error(
-                        format!(
-                            "fixedarray lookup in non-array type \"{}\"",
-                            tc_arr.get_type().get_representation(type_tree)?.display()
-                        ),
-                        loc.into_iter().collect(),
-                    )),
-                }
-            }
-            ExprKind::NewArray(size_expr, tipe) => Ok(TypeCheckedExprKind::NewArray(
-                Box::new(typecheck_expr(
-                    size_expr,
-                    type_table,
-                    global_vars,
-                    func_table,
-                    return_type,
-                    type_tree,
-                    string_table,
-                    undefinable_ids,
-                    closures,
-                    scopes,
-                )?),
-                tipe.get_representation(type_tree)?,
-                Type::Array(Box::new(tipe.clone())),
-            )),
-            ExprKind::NewFixedArray(size, maybe_expr) => match maybe_expr {
-                Some(expr) => {
-                    let tc_expr = typecheck_expr(
-                        expr,
-                        type_table,
-                        global_vars,
-                        func_table,
-                        return_type,
-                        type_tree,
-                        string_table,
-                        undefinable_ids,
-                        closures,
-                        scopes,
-                    )?;
-                    Ok(TypeCheckedExprKind::NewFixedArray(
-                        *size,
-                        Some(Box::new(tc_expr.clone())),
-                        Type::FixedArray(Box::new(tc_expr.get_type()), *size),
-                    ))
-                }
-                None => Ok(TypeCheckedExprKind::NewFixedArray(
-                    *size,
-                    None,
-                    Type::FixedArray(Box::new(Type::Any), *size),
-                )),
-            },
-            ExprKind::NewMap(key_type, value_type) => Ok(TypeCheckedExprKind::NewMap(Type::Map(
-                Box::new(key_type.clone()),
-                Box::new(value_type.clone()),
-            ))),
             ExprKind::NewUnion(types, expr) => {
                 let tc_expr = typecheck_expr(
                     expr,
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -2708,42 +2096,12 @@ fn typecheck_expr(
                         Type::Union(types.clone()),
                     ))
                 } else {
-                    Err(CompileError::new_type_error(
-                        format!(
-                            "Type {} is not a member of type union: {}",
-                            tc_type.display(),
-                            Type::Union(types.clone()).display()
-                        ),
-                        loc.into_iter().collect(),
-                    ))
+                    error!(
+                        "Type {} is not a member of type union: {}",
+                        tc_type.print(type_tree),
+                        Type::Union(types.clone()).print(type_tree)
+                    );
                 }
-            }
-            ExprKind::StructInitializer(fieldvec) => {
-                let mut tc_fields = Vec::new();
-                let mut tc_fieldtypes = Vec::new();
-                for field in fieldvec {
-                    let tc_expr = typecheck_expr(
-                        &field.value,
-                        type_table,
-                        global_vars,
-                        func_table,
-                        return_type,
-                        type_tree,
-                        string_table,
-                        undefinable_ids,
-                        closures,
-                        scopes,
-                    )?;
-                    tc_fields.push(TypeCheckedFieldInitializer::new(
-                        field.name.clone(),
-                        tc_expr.clone(),
-                    ));
-                    tc_fieldtypes.push(StructField::new(field.name.clone(), tc_expr.get_type()));
-                }
-                Ok(TypeCheckedExprKind::StructInitializer(
-                    tc_fields,
-                    Type::Struct(tc_fieldtypes),
-                ))
             }
             ExprKind::Tuple(fields) => {
                 let mut tc_fields = Vec::new();
@@ -2754,7 +2112,7 @@ fn typecheck_expr(
                         type_table,
                         global_vars,
                         func_table,
-                        return_type,
+                        func,
                         type_tree,
                         string_table,
                         undefinable_ids,
@@ -2766,275 +2124,316 @@ fn typecheck_expr(
                 }
                 Ok(TypeCheckedExprKind::Tuple(tc_fields, Type::Tuple(types)))
             }
-            ExprKind::ArrayOrMapMod(arr, index, val) => {
-                let tc_arr = typecheck_expr(
-                    arr,
+            ExprKind::StructInitializer(fieldvec) => {
+                let mut fields = vec![];
+                let mut types = vec![];
+                for field in fieldvec {
+                    let expr = typecheck_expr(
+                        &field.value,
+                        type_table,
+                        global_vars,
+                        func_table,
+                        func,
+                        type_tree,
+                        string_table,
+                        undefinable_ids,
+                        closures,
+                        scopes,
+                    )?;
+                    types.push(StructField::new(field.name.clone(), expr.get_type()));
+                    fields.push(expr);
+                }
+                Ok(TypeCheckedExprKind::Tuple(fields, Type::Struct(types)))
+            }
+            ExprKind::NewMap(key_type, value_type) => {
+                // In order to best simulate a call to the builtin, we alter the signature
+                //   In kvs.mini   func builtin_kvsNew() -> Kvs
+                //   Best effort   func builtin_kvsNew() -> map<k,v>
+
+                let builtin_ref = TypeCheckedExpr::builtin_ref(
+                    "builtin_kvsNew",
+                    vec![],
+                    &Type::Map(Box::new(key_type.clone()), Box::new(value_type.clone())),
+                    func_table,
+                    string_table,
+                    debug_info,
+                )?;
+
+                Ok(build_function_call(
+                    builtin_ref,
+                    vec![],
+                    string_table,
+                    type_tree,
+                )?)
+            }
+            ExprKind::ArrayOrMapRef(unchecked_store, unchecked_key) => {
+                let store = typecheck_expr(
+                    &*unchecked_store,
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
                     closures,
                     scopes,
                 )?;
-                let tc_index = typecheck_expr(
-                    index,
+                let key = typecheck_expr(
+                    &*unchecked_key,
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
                     closures,
                     scopes,
                 )?;
-                let tc_val = typecheck_expr(
-                    val,
-                    type_table,
-                    global_vars,
-                    func_table,
-                    return_type,
-                    type_tree,
-                    string_table,
-                    undefinable_ids,
-                    closures,
-                    scopes,
-                )?;
-                match tc_arr.get_type().get_representation(type_tree)? {
-                    Type::Array(t) => {
-                        if t.assignable(&tc_val.get_type(), type_tree, HashSet::new()) {
-                            if tc_index.get_type() != Type::Uint {
-                                Err(CompileError::new_type_error(
-                                    format!(
-                                        "array modifier requires uint index, found \"{}\"",
-                                        tc_index.get_type().display()
-                                    ),
-                                    loc.into_iter().collect(),
-                                ))
-                            } else {
-                                Ok(TypeCheckedExprKind::ArrayMod(
-                                    Box::new(tc_arr),
-                                    Box::new(tc_index),
-                                    Box::new(tc_val),
-                                    Type::Array(t),
-                                ))
-                            }
-                        } else {
-                            Err(CompileError::new_type_error(
-                                format!(
-                                    "mismatched types in array modifier, {}",
-                                    t.mismatch_string(&tc_val.get_type(), type_tree)
-                                        .expect("Did not find type mismatch")
-                                ),
-                                loc.into_iter().collect(),
-                            ))
+
+                let store_type = store.get_type().rep(type_tree)?;
+                let key_type = key.get_type().rep(type_tree)?;
+
+                match store_type.clone() {
+                    Type::FixedArray(inner_type, size) => {
+                        if key_type != Type::Uint {
+                            error!(
+                                "{} index must be uint, found {}",
+                                "[]",
+                                key_type.print(type_tree)
+                            );
                         }
+
+                        Ok(TypeCheckedExprKind::FixedArrayRef(
+                            Box::new(store),
+                            Box::new(key),
+                            size,
+                            *inner_type,
+                        ))
                     }
-                    Type::FixedArray(t, sz) => {
-                        if tc_index.get_type() != Type::Uint {
-                            Err(CompileError::new_type_error(
-                                format!(
-                                    "array modifier requires uint index, found \"{}\"",
-                                    tc_index.get_type().display()
-                                ),
-                                loc.into_iter().collect(),
-                            ))
-                        } else {
-                            Ok(TypeCheckedExprKind::FixedArrayMod(
-                                Box::new(tc_arr),
-                                Box::new(tc_index),
-                                Box::new(tc_val),
-                                sz,
-                                Type::FixedArray(t, sz),
-                            ))
+                    Type::Array(inner_type) => {
+                        // In order to best simulate a call to the builtin, we alter the signature
+                        //   In array.mini   func builtin_arrayGet(Array, uint) -> any
+                        //   Best effort     func builtin_arrayGet([]v, uint) -> v
+
+                        let builtin_ref = TypeCheckedExpr::builtin_ref(
+                            "builtin_arrayGet",
+                            vec![&store_type, &Type::Uint],
+                            &*inner_type,
+                            func_table,
+                            string_table,
+                            debug_info,
+                        )?;
+
+                        Ok(build_function_call(
+                            builtin_ref,
+                            vec![store, key],
+                            string_table,
+                            type_tree,
+                        )?)
+                    }
+                    Type::Map(store_key_type, store_value_type) => {
+                        if !store_key_type.assignable(&key_type, type_tree, HashSet::new()) {
+                            error!(
+                                "tried to {} lookup {} in map with {} keys",
+                                "[]",
+                                key_type.print(type_tree),
+                                store_key_type.print(type_tree),
+                            );
                         }
+
+                        // In order to best simulate a call to the builtin, we alter the signature
+                        //   In array.mini   func builtin_kvsGet(Kvs, k') -> option<any>
+                        //   Best effort     func builtin_kvsGet(map<k,v>, k) -> option<v>
+
+                        let builtin_ref = TypeCheckedExpr::builtin_ref(
+                            "builtin_kvsGet",
+                            vec![&store_type, &*store_key_type],
+                            &Type::Option(store_value_type),
+                            func_table,
+                            string_table,
+                            debug_info,
+                        )?;
+
+                        Ok(build_function_call(
+                            builtin_ref,
+                            vec![store, key],
+                            string_table,
+                            type_tree,
+                        )?)
                     }
-                    Type::Map(kt, vt) => {
-                        if tc_index.get_type() == *kt {
-                            if vt.assignable(&tc_val.get_type(), type_tree, HashSet::new()) {
-                                Ok(TypeCheckedExprKind::MapMod(
-                                    Box::new(tc_arr),
-                                    Box::new(tc_index),
-                                    Box::new(tc_val),
-                                    Type::Map(kt, vt),
-                                ))
-                            } else {
-                                Err(CompileError::new_type_error(
-                                    format!(
-                                        "invalid value type for map modifier, {}",
-                                        vt.mismatch_string(&tc_val.get_type(), type_tree)
-                                            .expect("Did not find type mismatch")
-                                    ),
-                                    loc.into_iter().collect(),
-                                ))
-                            }
-                        } else {
-                            Err(CompileError::new_type_error(
-                                format!(
-                                    "invalid key type for map modifier, {}",
-                                    kt.mismatch_string(&tc_index.get_type(), type_tree)
-                                        .expect("Did not find type mismatch")
-                                ),
-                                loc.into_iter().collect(),
-                            ))
-                        }
-                    }
-                    other => Err(CompileError::new_type_error(
-                        format!(
-                            "[] modifier must operate on array or block, found \"{}\"",
-                            other.display()
-                        ),
-                        loc.into_iter().collect(),
-                    )),
+                    _ => error!(
+                        "{} lookup in non-array & non-map type {}",
+                        "[]",
+                        store_type.print(type_tree)
+                    ),
                 }
             }
-            ExprKind::StructMod(struc, name, val) => {
-                let tc_struc = typecheck_expr(
-                    struc,
+            ExprKind::ArrayOrMapMod(unchecked_store, unchecked_key, unchecked_item) => {
+                let store = typecheck_expr(
+                    unchecked_store,
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
                     closures,
                     scopes,
                 )?;
-                let tc_val = typecheck_expr(
-                    val,
+                let key = typecheck_expr(
+                    unchecked_key,
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
                     closures,
                     scopes,
                 )?;
-                let tcs_type = tc_struc.get_type().get_representation(type_tree)?;
-                if let Type::Struct(fields) = &tcs_type {
-                    match tcs_type.get_struct_slot_by_name(name.clone()) {
-                        Some(index) => {
-                            if fields[index].tipe.assignable(
-                                &tc_val.get_type(),
-                                type_tree,
-                                HashSet::new(),
-                            ) {
-                                Ok(TypeCheckedExprKind::StructMod(
-                                    Box::new(tc_struc),
-                                    index,
-                                    Box::new(tc_val),
-                                    tcs_type,
-                                ))
-                            } else {
-                                Err(CompileError::new_type_error(
-                                    format!(
-                                        "incorrect value type in struct modifier, {}",
-                                        fields[index]
-                                            .tipe
-                                            .mismatch_string(&tc_val.get_type(), type_tree)
-                                            .expect("Did not find type mismatch")
-                                    ),
-                                    loc.into_iter().collect(),
-                                ))
-                            }
+                let item = typecheck_expr(
+                    unchecked_item,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    func,
+                    type_tree,
+                    string_table,
+                    undefinable_ids,
+                    closures,
+                    scopes,
+                )?;
+
+                let store_type = store.get_type().rep(type_tree)?;
+                let key_type = key.get_type().rep(type_tree)?;
+                let item_type = item.get_type().rep(type_tree)?;
+
+                match store_type.clone() {
+                    Type::FixedArray(inner_type, size) => {
+                        if key_type != Type::Uint {
+                            error!(
+                                "array modifier requires {} index, found {}",
+                                "uint",
+                                key_type.print(type_tree)
+                            );
                         }
-                        None => Err(CompileError::new_type_error(
-                            "struct modifier must use valid field name".to_string(),
-                            loc.into_iter().collect(),
-                        )),
+                        if !inner_type.assignable(&item_type, type_tree, HashSet::new()) {
+                            error!(
+                                "fixed array doesn't have this type, {}",
+                                inner_type
+                                    .mismatch_string(&item_type, type_tree)
+                                    .unwrap_or("Did not find type mismatch".to_string()),
+                            );
+                        }
+                        Ok(TypeCheckedExprKind::FixedArrayMod(
+                            Box::new(store),
+                            Box::new(key),
+                            Box::new(item),
+                            size,
+                            Type::FixedArray(inner_type, size),
+                        ))
                     }
-                } else {
-                    Err(CompileError::new_type_error(
-                        format!(
-                            "struct modifier must operate on a struct, found \"{}\"",
-                            tcs_type.display()
-                        ),
-                        loc.into_iter().collect(),
-                    ))
-                }
-            }
-            ExprKind::WeakCast(expr, t) => {
-                let tc_expr = typecheck_expr(
-                    expr,
-                    type_table,
-                    global_vars,
-                    func_table,
-                    return_type,
-                    type_tree,
-                    string_table,
-                    undefinable_ids,
-                    closures,
-                    scopes,
-                )?;
-                if t.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
-                    Ok(TypeCheckedExprKind::Cast(Box::new(tc_expr), t.clone()))
-                } else {
-                    Err(CompileError::new_type_error(
-                        format!(
-                            "Cannot weak cast from type {} to type {}",
-                            tc_expr.get_type().display(),
-                            t.display()
-                        ),
-                        debug_info.location.into_iter().collect(),
-                    ))
+                    Type::Array(inner_type) => {
+                        if !inner_type.assignable(&item_type, type_tree, HashSet::new()) {
+                            error!(
+                                "mismatched types in array modifier, {}",
+                                inner_type
+                                    .mismatch_string(&item_type, type_tree)
+                                    .unwrap_or("Did not find type mismatch".to_string())
+                            );
+                        }
+
+                        // In order to best simulate a call to the builtin, we alter the signature
+                        //   In array.mini   func builtin_arraySet(Array, uint, any) -> Array
+                        //   Best effort     func builtin_arraySet([]v, uint, v) -> []v
+
+                        let builtin_ref = TypeCheckedExpr::builtin_ref(
+                            "builtin_arraySet",
+                            vec![&store_type, &Type::Uint, &*inner_type],
+                            &store_type,
+                            func_table,
+                            string_table,
+                            debug_info,
+                        )?;
+
+                        Ok(build_function_call(
+                            builtin_ref,
+                            vec![store, key, item],
+                            string_table,
+                            type_tree,
+                        )?)
+                    }
+                    Type::Map(store_key_type, store_value_type) => {
+                        if !store_key_type.assignable(&key_type, type_tree, HashSet::new()) {
+                            error!(
+                                "tried to {} lookup {} in map with {} keys",
+                                "[]",
+                                key_type.print(type_tree),
+                                store_key_type.print(type_tree),
+                            );
+                        }
+
+                        if !store_value_type.assignable(&item_type, type_tree, HashSet::new()) {
+                            error!(
+                                "tried to {} set {} in map with {} values",
+                                "[]",
+                                item_type.print(type_tree),
+                                store_value_type.print(type_tree),
+                            );
+                        }
+
+                        // In order to best simulate a call to the builtin, we alter the signature
+                        //   In kvs.mini   func builtin_kvsSet(Kvs, any, any) -> Kvs
+                        //   Best effort   func builtin_kvsSet(Map<k,v>, k', v') -> Map<k,v>
+
+                        let builtin_ref = TypeCheckedExpr::builtin_ref(
+                            "builtin_kvsSet",
+                            vec![&store_type, &*store_key_type, &*store_value_type],
+                            &store_type,
+                            func_table,
+                            string_table,
+                            debug_info,
+                        )?;
+
+                        Ok(build_function_call(
+                            builtin_ref,
+                            vec![store, key, item],
+                            string_table,
+                            type_tree,
+                        )?)
+                    }
+                    other => error!(
+                        "{} mod must operate on array or block, found {}",
+                        "[]",
+                        other.print(type_tree)
+                    ),
                 }
             }
             ExprKind::Cast(expr, t) => {
-                let tc_expr = typecheck_expr(
+                let expr = typecheck_expr(
                     expr,
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
                     closures,
                     scopes,
                 )?;
-                if t.castable(&tc_expr.get_type(), type_tree, HashSet::new()) {
-                    Ok(TypeCheckedExprKind::Cast(Box::new(tc_expr), t.clone()))
+                if t.castable(&expr.get_type(), type_tree, HashSet::new()) {
+                    Ok(TypeCheckedExprKind::Cast(Box::new(expr), t.clone()))
                 } else {
-                    Err(CompileError::new_type_error(
-                        format!(
-                            "Cannot cast from type {} to type {}",
-                            tc_expr.get_type().display(),
-                            t.display()
-                        ),
-                        debug_info.location.into_iter().collect(),
-                    ))
-                }
-            }
-            ExprKind::CovariantCast(expr, t) => {
-                let tc_expr = typecheck_expr(
-                    expr,
-                    type_table,
-                    global_vars,
-                    func_table,
-                    return_type,
-                    type_tree,
-                    string_table,
-                    undefinable_ids,
-                    closures,
-                    scopes,
-                )?;
-                if t.covariant_castable(&tc_expr.get_type(), type_tree, HashSet::new()) {
-                    Ok(TypeCheckedExprKind::Cast(Box::new(tc_expr), t.clone()))
-                } else {
-                    Err(CompileError::new_type_error(
-                        format!(
-                            "Cannot covariant cast from type {} to type {}",
-                            tc_expr.get_type().display(),
-                            t.display()
-                        ),
-                        debug_info.location.into_iter().collect(),
-                    ))
+                    error!(
+                        "Cannot cast from type {} to type {}",
+                        expr.get_type().print(type_tree),
+                        t.print(type_tree)
+                    );
                 }
             }
             ExprKind::UnsafeCast(expr, t) => Ok(TypeCheckedExprKind::Cast(
@@ -3043,7 +2442,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -3052,42 +2451,41 @@ fn typecheck_expr(
                 )?),
                 t.clone(),
             )),
-            ExprKind::Asm(ret_type, insns, args) => {
-                if *ret_type == Type::Void {
-                    return Err(CompileError::new_type_error(
-                        "asm expression cannot return void".to_string(),
-                        loc.into_iter().collect(),
-                    ));
-                }
-                let mut tc_args = Vec::new();
-                for arg in args {
-                    tc_args.push(typecheck_expr(
-                        arg,
+            ExprKind::Asm(ret_type, insns, unchecked_args) => {
+                let mut args = vec![];
+                for (index, unchecked) in unchecked_args.into_iter().enumerate() {
+                    let arg = typecheck_expr(
+                        unchecked,
                         type_table,
                         global_vars,
                         func_table,
-                        return_type,
+                        func,
                         type_tree,
                         string_table,
                         undefinable_ids,
                         closures,
                         scopes,
-                    )?);
+                    )?;
+                    if arg.get_type().rep(type_tree)? == Type::Void {
+                        error!("Asm's {} arg is void", human_readable_index(index + 1));
+                    }
+                    args.push(arg);
                 }
                 Ok(TypeCheckedExprKind::Asm(
                     ret_type.clone(),
                     insns.to_vec(),
-                    tc_args,
+                    args,
                 ))
             }
             ExprKind::Try(inner) => {
-                match return_type {
+                match &func.ret_type {
                     Type::Option(_) | Type::Any => {}
                     ret => {
-                        return Err(CompileError::new_type_error(
-                            format!("Can only use \"?\" operator in functions that can return option, found \"{}\"", ret.display()),
-                            loc.into_iter().collect()
-                        ))
+                        error!(
+                            "Can only use {} operator in functions that can return option, found {}",
+                            "?",
+                            ret.print(type_tree),
+                        );
                     }
                 }
                 let res = typecheck_expr(
@@ -3095,22 +2493,19 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
                     closures,
                     scopes,
                 )?;
-                match res.get_type().get_representation(type_tree)? {
+                match res.get_type().rep(type_tree)? {
                     Type::Option(t) => Ok(TypeCheckedExprKind::Try(Box::new(res), *t)),
-                    other => Err(CompileError::new_type_error(
-                        format!(
-                            "Try expression requires option type, found \"{}\"",
-                            other.display()
-                        ),
-                        loc.into_iter().collect(),
-                    )),
+                    other => error!(
+                        "Try expression requires option type, found {}",
+                        other.print(type_tree)
+                    ),
                 }
             }
             ExprKind::GetGas => Ok(TypeCheckedExprKind::GetGas),
@@ -3120,7 +2515,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -3128,13 +2523,10 @@ fn typecheck_expr(
                     scopes,
                 )?;
                 if expr.get_type() != Type::Uint {
-                    Err(CompileError::new_type_error(
-                        format!(
-                            "SetGas(_) requires a uint, found a {}",
-                            expr.get_type().display()
-                        ),
-                        debug_info.location.into_iter().collect(),
-                    ))
+                    error!(
+                        "SetGas(_) requires a uint, found a {}",
+                        expr.get_type().print(type_tree)
+                    );
                 } else {
                     Ok(TypeCheckedExprKind::SetGas(Box::new(expr)))
                 }
@@ -3145,7 +2537,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -3157,7 +2549,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -3172,7 +2564,7 @@ fn typecheck_expr(
                             type_table,
                             global_vars,
                             func_table,
-                            return_type,
+                            func,
                             type_tree,
                             string_table,
                             undefinable_ids,
@@ -3182,13 +2574,10 @@ fn typecheck_expr(
                     })
                     .transpose()?;
                 if cond_expr.get_type() != Type::Bool {
-                    Err(CompileError::new_type_error(
-                        format!(
-                            "Condition of if expression must be bool: found \"{}\"",
-                            cond_expr.get_type().display()
-                        ),
-                        debug_info.location.into_iter().collect(),
-                    ))
+                    error!(
+                        "Condition of if expression must be bool: found {}",
+                        cond_expr.get_type().print(type_tree)
+                    );
                 } else {
                     let block_type = block.get_type();
                     let else_type = else_block
@@ -3200,14 +2589,11 @@ fn typecheck_expr(
                     } else if else_type.assignable(&block_type, type_tree, HashSet::new()) {
                         else_type
                     } else {
-                        return Err(CompileError::new_type_error(
-                            format!(
-                                "Mismatch of if and else types found: \"{}\" and \"{}\"",
-                                block_type.display(),
-                                else_type.display()
-                            ),
-                            debug_info.location.into_iter().collect(),
-                        ));
+                        error!(
+                            "Mismatch of if and else types found: {} and {}",
+                            block_type.print(type_tree),
+                            else_type.print(type_tree)
+                        );
                     };
                     Ok(TypeCheckedExprKind::If(
                         Box::new(cond_expr),
@@ -3223,7 +2609,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -3233,10 +2619,7 @@ fn typecheck_expr(
                 let tct = match tcr.get_type() {
                     Type::Option(t) => *t,
                     unexpected => {
-                        return Err(CompileError::new_type_error(
-                            format!("Expected option type got: \"{}\"", unexpected.display()),
-                            debug_info.location.into_iter().collect(),
-                        ))
+                        error!("Expected option type got: {}", unexpected.print(type_tree));
                     }
                 };
                 let mut inner_type_table = type_table.clone();
@@ -3246,7 +2629,7 @@ fn typecheck_expr(
                     &inner_type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -3261,7 +2644,7 @@ fn typecheck_expr(
                             type_table,
                             global_vars,
                             func_table,
-                            return_type,
+                            func,
                             type_tree,
                             string_table,
                             undefinable_ids,
@@ -3280,14 +2663,11 @@ fn typecheck_expr(
                 } else if else_type.assignable(&block_type, type_tree, HashSet::new()) {
                     else_type
                 } else {
-                    return Err(CompileError::new_type_error(
-                        format!(
-                            "Mismatch of if and else types found: \"{}\" and \"{}\"",
-                            block_type.display(),
-                            else_type.display()
-                        ),
-                        debug_info.location.into_iter().collect(),
-                    ));
+                    error!(
+                        "Mismatch of if and else types found: {} and {}",
+                        block_type.print(type_tree),
+                        else_type.print(type_tree)
+                    );
                 };
                 Ok(TypeCheckedExprKind::IfLet(
                     *l,
@@ -3297,52 +2677,49 @@ fn typecheck_expr(
                     if_let_type,
                 ))
             }
-            ExprKind::Loop(stats) => Ok(TypeCheckedExprKind::Loop(typecheck_statement_sequence(
-                stats,
-                return_type,
-                type_table,
-                global_vars,
-                func_table,
-                type_tree,
-                string_table,
-                undefinable_ids,
-                closures,
-                scopes,
-            )?)),
-            ExprKind::UnionCast(expr, tipe) => {
-                let tc_expr = typecheck_expr(
-                    expr,
+            ExprKind::Loop(block, tipe) => {
+                let expr = typecheck_codeblock(
+                    block,
                     type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
                     closures,
                     scopes,
                 )?;
-                if let Type::Union(types) = tc_expr.get_type().get_representation(type_tree)? {
+                Ok(TypeCheckedExprKind::Loop(expr, tipe.clone()))
+            }
+            ExprKind::UnionCast(expr, tipe) => {
+                let tc_expr = typecheck_expr(
+                    expr,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    func,
+                    type_tree,
+                    string_table,
+                    undefinable_ids,
+                    closures,
+                    scopes,
+                )?;
+                if let Type::Union(types) = tc_expr.get_type().rep(type_tree)? {
                     if types.iter().any(|t| t == tipe) {
                         Ok(TypeCheckedExprKind::Cast(Box::new(tc_expr), tipe.clone()))
                     } else {
-                        Err(CompileError::new_type_error(
-                            format!(
-                                "Type {} is not a member of {}",
-                                tipe.display(),
-                                tc_expr.get_type().display()
-                            ),
-                            debug_info.location.into_iter().collect(),
-                        ))
+                        error!(
+                            "Type {} is not a member of {}",
+                            tipe.print(type_tree),
+                            tc_expr.get_type().print(type_tree)
+                        );
                     }
                 } else {
-                    Err(CompileError::new_type_error(
-                        format!(
-                            "Tried to unioncast from non-union type \"{}\"",
-                            tc_expr.get_type().display()
-                        ),
-                        debug_info.location.into_iter().collect(),
-                    ))
+                    error!(
+                        "Tried to unioncast from non-union type {}",
+                        tc_expr.get_type().print(type_tree)
+                    );
                 }
             }
         }?,
@@ -3359,7 +2736,7 @@ fn typecheck_unary_op(
     loc: Option<Location>,
     type_tree: &TypeTree,
 ) -> Result<TypeCheckedExprKind, CompileError> {
-    let tc_type = sub_expr.get_type().get_representation(type_tree)?;
+    let tc_type = sub_expr.get_type().rep(type_tree)?;
     match op {
         UnaryOp::Minus => match tc_type {
             Type::Int => {
@@ -3378,8 +2755,8 @@ fn typecheck_unary_op(
             }
             other => Err(CompileError::new_type_error(
                 format!(
-                    "invalid operand type \"{}\" for unary minus",
-                    other.display()
+                    "invalid operand type {} for unary minus",
+                    Color::red(other.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3393,8 +2770,8 @@ fn typecheck_unary_op(
                     )),
                     other => Err(CompileError::new_type_error(
                         format!(
-                            "invalid operand type \"{}\" for bitwise negation",
-                            other.display()
+                            "invalid operand type {} for bitwise negation",
+                            Color::red(other.print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     )),
@@ -3408,8 +2785,8 @@ fn typecheck_unary_op(
                     )),
                     other => Err(CompileError::new_type_error(
                         format!(
-                            "invalid operand type \"{}\" for bitwise negation",
-                            other.display()
+                            "invalid operand type {} for bitwise negation",
+                            Color::red(other.print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     )),
@@ -3434,8 +2811,8 @@ fn typecheck_unary_op(
             }
             other => Err(CompileError::new_type_error(
                 format!(
-                    "invalid operand type \"{}\" for logical negation",
-                    other.display()
+                    "invalid operand type {} for logical negation",
+                    Color::red(other.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3469,7 +2846,10 @@ fn typecheck_unary_op(
                 Type::Uint,
             )),
             other => Err(CompileError::new_type_error(
-                format!("invalid operand type \"{}\" for len", other.display()),
+                format!(
+                    "invalid operand type {} for len",
+                    Color::red(other.print(type_tree))
+                ),
                 loc.into_iter().collect(),
             )),
         },
@@ -3486,7 +2866,10 @@ fn typecheck_unary_op(
                         ))
                     }
                     other => Err(CompileError::new_type_error(
-                        format!("invalid operand type \"{}\" for uint()", other.display()),
+                        format!(
+                            "invalid operand type {} for uint()",
+                            Color::red(other.print(type_tree))
+                        ),
                         loc.into_iter().collect(),
                     )),
                 }
@@ -3501,7 +2884,10 @@ fn typecheck_unary_op(
                         TypeCheckedExprKind::UnaryOp(UnaryOp::ToInt, Box::new(sub_expr), Type::Int),
                     ),
                     other => Err(CompileError::new_type_error(
-                        format!("invalid operand type \"{}\" for int()", other.display()),
+                        format!(
+                            "invalid operand type {} for int()",
+                            Color::red(other.print(type_tree))
+                        ),
                         loc.into_iter().collect(),
                     )),
                 }
@@ -3520,7 +2906,10 @@ fn typecheck_unary_op(
                         ))
                     }
                     other => Err(CompileError::new_type_error(
-                        format!("invalid operand type \"{}\" for bytes32()", other.display()),
+                        format!(
+                            "invalid operand type {} for bytes32()",
+                            Color::red(other.print(type_tree))
+                        ),
                         loc.into_iter().collect(),
                     )),
                 }
@@ -3551,8 +2940,8 @@ fn typecheck_unary_op(
                     }
                     other => Err(CompileError::new_type_error(
                         format!(
-                            "invalid operand type \"{}\" for address cast",
-                            other.display()
+                            "invalid operand type {} for address cast",
+                            Color::red(other.print(type_tree))
                         ),
                         loc.into_iter().collect(),
                     )),
@@ -3580,7 +2969,7 @@ fn typecheck_binary_op(
             match op {
                 BinaryOp::GetBuffer256 | BinaryOp::GetBuffer64 | BinaryOp::GetBuffer8 => {}
                 _ => {
-                    return typecheck_binary_op_const(op, val1, t1, val2, t2, loc);
+                    return typecheck_binary_op_const(op, val1, t1, val2, t2, type_tree, loc);
                 }
             }
         } else {
@@ -3615,8 +3004,8 @@ fn typecheck_binary_op(
             }
         }
     }
-    let subtype1 = tcs1.get_type().get_representation(type_tree)?;
-    let subtype2 = tcs2.get_type().get_representation(type_tree)?;
+    let subtype1 = tcs1.get_type().rep(type_tree)?;
+    let subtype2 = tcs2.get_type().rep(type_tree)?;
     match op {
         BinaryOp::Plus | BinaryOp::Minus | BinaryOp::Times => match (subtype1, subtype2) {
             (Type::Uint, Type::Uint) => Ok(TypeCheckedExprKind::Binary(
@@ -3633,9 +3022,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to binary op: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to binary op: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree)),
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3655,9 +3044,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to divide: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to divide: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree)),
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3671,9 +3060,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to getbuffer8: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to getbuffer8: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3687,9 +3076,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to getbuffer64: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to getbuffer64: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3703,9 +3092,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to getbuffer256: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to getbuffer256: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3725,9 +3114,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to mod: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to mod: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3747,9 +3136,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to <: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to <: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3769,9 +3158,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to >: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to >: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3791,9 +3180,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to <=: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to <=: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3813,18 +3202,18 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to >=: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to >=: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
         },
         BinaryOp::Equal | BinaryOp::NotEqual => {
-            if subtype1 != Type::Void
-                && subtype2 != Type::Void
-                && ((subtype1 == Type::Any) || (subtype2 == Type::Any) || (subtype1 == subtype2))
-            {
+            let mutual = subtype1.assignable(&subtype2, type_tree, HashSet::new())
+                && subtype2.assignable(&subtype1, type_tree, HashSet::new());
+
+            if mutual {
                 Ok(TypeCheckedExprKind::Binary(
                     op,
                     Box::new(tcs1),
@@ -3834,9 +3223,9 @@ fn typecheck_binary_op(
             } else {
                 Err(CompileError::new_type_error(
                     format!(
-                        "invalid argument types to equality comparison: \"{}\" and \"{}\"",
-                        subtype1.display(),
-                        subtype2.display()
+                        "invalid argument types to equality comparison: {} and {}",
+                        Color::red(subtype1.print(type_tree)),
+                        Color::red(subtype2.print(type_tree))
                     ),
                     loc.into_iter().collect(),
                 ))
@@ -3867,25 +3256,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to binary bitwise operator: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
-                ),
-                loc.into_iter().collect(),
-            )),
-        },
-        BinaryOp::_LogicalAnd | BinaryOp::LogicalOr => match (subtype1, subtype2) {
-            (Type::Bool, Type::Bool) => Ok(TypeCheckedExprKind::Binary(
-                op,
-                Box::new(tcs1),
-                Box::new(tcs2),
-                Type::Bool,
-            )),
-            (subtype1, subtype2) => Err(CompileError::new_type_error(
-                format!(
-                    "invalid argument types to binary logical operator: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to binary bitwise operator: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3899,9 +3272,9 @@ fn typecheck_binary_op(
             )),
             (subtype1, subtype2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to binary hash operator: \"{}\" and \"{}\"",
-                    subtype1.display(),
-                    subtype2.display()
+                    "invalid argument types to binary hash operator: {} and {}",
+                    Color::red(subtype1.print(type_tree)),
+                    Color::red(subtype2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -3925,9 +3298,9 @@ fn typecheck_trinary_op(
     type_tree: &TypeTree,
     loc: Option<Location>,
 ) -> Result<TypeCheckedExprKind, CompileError> {
-    let subtype1 = tcs1.get_type().get_representation(type_tree)?;
-    let subtype2 = tcs2.get_type().get_representation(type_tree)?;
-    let subtype3 = tcs3.get_type().get_representation(type_tree)?;
+    let subtype1 = tcs1.get_type().rep(type_tree)?;
+    let subtype2 = tcs2.get_type().rep(type_tree)?;
+    let subtype3 = tcs3.get_type().rep(type_tree)?;
     match op {
         TrinaryOp::SetBuffer8 | TrinaryOp::SetBuffer64 | TrinaryOp::SetBuffer256 => {
             match (subtype1, subtype2, subtype3) {
@@ -3940,10 +3313,10 @@ fn typecheck_trinary_op(
                 )),
                 (t1, t2, t3) => Err(CompileError::new_type_error(
                     format!(
-                        "invalid argument types to 3-ary op: \"{}\", \"{}\" and \"{}\"",
-                        t1.display(),
-                        t2.display(),
-                        t3.display()
+                        "invalid argument types to 3-ary op: {}, {} and {}",
+                        Color::red(t1.print(type_tree)),
+                        Color::red(t2.print(type_tree)),
+                        Color::red(t3.print(type_tree))
                     ),
                     loc.into_iter().collect(),
                 )),
@@ -3966,6 +3339,7 @@ fn typecheck_binary_op_const(
     t1: Type,
     val2: Uint256,
     t2: Type,
+    type_tree: &TypeTree,
     loc: Option<Location>,
 ) -> Result<TypeCheckedExprKind, CompileError> {
     match op {
@@ -3992,9 +3366,9 @@ fn typecheck_binary_op_const(
             )),
             _ => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to binary op: \"{}\" and \"{}\"",
-                    t1.display(),
-                    t2.display()
+                    "invalid argument types to binary op: {} and {}",
+                    Color::red(t1.print(type_tree)),
+                    Color::red(t2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -4016,9 +3390,9 @@ fn typecheck_binary_op_const(
             },
             _ => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to divide: \"{}\" and \"{}\"",
-                    t1.display(),
-                    t2.display()
+                    "invalid argument types to divide: {} and {}",
+                    Color::red(t1.print(type_tree)),
+                    Color::red(t2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -4040,9 +3414,9 @@ fn typecheck_binary_op_const(
             },
             _ => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to mod: \"{}\" and \"{}\"",
-                    t1.display(),
-                    t2.display()
+                    "invalid argument types to mod: {} and {}",
+                    Color::red(t1.print(type_tree)),
+                    Color::red(t2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -4058,9 +3432,9 @@ fn typecheck_binary_op_const(
             )),
             (t1, t2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to <: \"{}\" and \"{}\"",
-                    t1.display(),
-                    t2.display()
+                    "invalid argument types to <: {} and {}",
+                    Color::red(t1.print(type_tree)),
+                    Color::red(t2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -4076,9 +3450,9 @@ fn typecheck_binary_op_const(
             )),
             (t1, t2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to >: \"{}\" and \"{}\"",
-                    t1.display(),
-                    t2.display()
+                    "invalid argument types to >: {} and {}",
+                    Color::red(t1.print(type_tree)),
+                    Color::red(t2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -4094,9 +3468,9 @@ fn typecheck_binary_op_const(
             )),
             (t1, t2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to <=: \"{}\" and \"{}\"",
-                    t1.display(),
-                    t2.display()
+                    "invalid argument types to <=: {} and {}",
+                    Color::red(t1.print(type_tree)),
+                    Color::red(t2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -4112,9 +3486,9 @@ fn typecheck_binary_op_const(
             )),
             (t1, t2) => Err(CompileError::new_type_error(
                 format!(
-                    "invalid argument types to >=: \"{}\" and \"{}\"",
-                    t1.display(),
-                    t2.display()
+                    "invalid argument types to >=: {} and {}",
+                    Color::red(t1.print(type_tree)),
+                    Color::red(t2.print(type_tree))
                 ),
                 loc.into_iter().collect(),
             )),
@@ -4142,9 +3516,9 @@ fn typecheck_binary_op_const(
                             } else {
                                 return Err(CompileError::new_type_error(
                                     format!(
-                                        "invalid argument types to binary op: \"{}\" and \"{}\"",
-                                        t1.display(),
-                                        t2.display()
+                                        "invalid argument types to binary op: {} and {}",
+                                        Color::red(t1.print(type_tree)),
+                                        Color::red(t2.print(type_tree))
                                     ),
                                     loc.into_iter().collect(),
                                 ));
@@ -4159,43 +3533,9 @@ fn typecheck_binary_op_const(
             } else {
                 Err(CompileError::new_type_error(
                     format!(
-                        "invalid argument types to binary op: \"{}\" and \"{}\"",
-                        t1.display(),
-                        t2.display()
-                    ),
-                    loc.into_iter().collect(),
-                ))
-            }
-        }
-        BinaryOp::_LogicalAnd => {
-            if (t1 == Type::Bool) && (t2 == Type::Bool) {
-                Ok(TypeCheckedExprKind::Const(
-                    Value::Int(Uint256::from_bool(!val1.is_zero() && !val2.is_zero())),
-                    Type::Bool,
-                ))
-            } else {
-                Err(CompileError::new_type_error(
-                    format!(
-                        "invalid argument types to logical and: \"{}\" and \"{}\"",
-                        t1.display(),
-                        t2.display()
-                    ),
-                    loc.into_iter().collect(),
-                ))
-            }
-        }
-        BinaryOp::LogicalOr => {
-            if (t1 == Type::Bool) && (t2 == Type::Bool) {
-                Ok(TypeCheckedExprKind::Const(
-                    Value::Int(Uint256::from_bool(!val1.is_zero() || !val2.is_zero())),
-                    Type::Bool,
-                ))
-            } else {
-                Err(CompileError::new_type_error(
-                    format!(
-                        "invalid argument types to logical or: \"{}\" and \"{}\"",
-                        t1.display(),
-                        t2.display()
+                        "invalid argument types to binary op: {} and {}",
+                        Color::red(t1.print(type_tree)),
+                        Color::red(t2.print(type_tree))
                     ),
                     loc.into_iter().collect(),
                 ))
@@ -4225,8 +3565,8 @@ fn typecheck_binary_op_const(
                             return Err(CompileError::new_type_error(
                                 format!(
                                     "Attempt to shift a {} by a {}, must shift an integer type by a uint",
-                                    t2.display(),
-                                    t1.display()
+                                    Color::red(t2.print(type_tree)),
+                                    Color::red(t1.print(type_tree))
                                 ),
                                 loc.into_iter().collect(),
                             ))
@@ -4238,8 +3578,8 @@ fn typecheck_binary_op_const(
                 Err(CompileError::new_type_error(
                     format!(
                         "Attempt to shift a {} by a {}, must shift an integer type by a uint",
-                        t2.display(),
-                        t1.display()
+                        Color::red(t2.print(type_tree)),
+                        Color::red(t1.print(type_tree))
                     ),
                     loc.into_iter().collect(),
                 ))
@@ -4267,17 +3607,6 @@ pub struct TypeCheckedCodeBlock {
 }
 
 impl TypeCheckedCodeBlock {
-    fn new(
-        body: Vec<TypeCheckedStatement>,
-        ret_expr: Option<Box<TypeCheckedExpr>>,
-        scope: Option<String>,
-    ) -> Self {
-        Self {
-            body,
-            ret_expr,
-            scope,
-        }
-    }
     pub fn get_type(&self) -> Type {
         self.ret_expr
             .clone()
@@ -4323,9 +3652,9 @@ impl AbstractSyntaxTree for TypeCheckedCodeBlock {
 fn typecheck_codeblock(
     block: &CodeBlock,
     type_table: &TypeTable,
-    global_vars: &HashMap<StringId, (Type, usize)>,
+    global_vars: &HashMap<StringId, Type>,
     func_table: &TypeTable,
-    return_type: &Type,
+    func: &Func,
     type_tree: &TypeTree,
     string_table: &StringTable,
     undefinable_ids: &mut HashMap<StringId, Option<Location>>,
@@ -4345,7 +3674,7 @@ fn typecheck_codeblock(
         );
         let (statement, bindings) = typecheck_statement(
             &statement,
-            return_type,
+            func,
             &inner_type_table,
             global_vars,
             func_table,
@@ -4378,7 +3707,7 @@ fn typecheck_codeblock(
                     &inner_type_table,
                     global_vars,
                     func_table,
-                    return_type,
+                    func,
                     type_tree,
                     string_table,
                     undefinable_ids,
@@ -4390,4 +3719,69 @@ fn typecheck_codeblock(
             .map(Box::new),
         scope: None,
     })
+}
+
+fn build_function_call(
+    func_expr: TypeCheckedExpr,
+    args: Vec<TypeCheckedExpr>,
+    string_table: &StringTable,
+    type_tree: &TypeTree,
+) -> Result<TypeCheckedExprKind, CompileError> {
+    let func_name = match &func_expr.kind {
+        TypeCheckedExprKind::FuncRef(id, _) => {
+            format!(" {}", string_table.name_from_id(*id))
+        }
+        _ => String::new(),
+    };
+
+    let func_expr_type = func_expr.get_type().rep(type_tree)?;
+
+    let (prop, arg_types, ret_type) = match func_expr_type {
+        Type::Func(prop, arg_types, ret_type) => (prop, arg_types, ret_type),
+        wrong => {
+            return Err(CompileError::new(
+                "Typecheck Error",
+                format!(
+                    "tried to call non-func {}",
+                    Color::red(wrong.print(type_tree))
+                ),
+                func_expr.debug_info.locs(),
+            ));
+        }
+    };
+
+    if args.len() != arg_types.len() {
+        return Err(CompileError::new(
+            "Typecheck Error",
+            format!(
+                "wrong number of args passed to func{}",
+                Color::red(func_name)
+            ),
+            func_expr.debug_info.locs(),
+        ));
+    }
+
+    for (index, (arg, tipe)) in args.iter().zip(arg_types).enumerate() {
+        let arg_type = arg.get_type();
+
+        if !tipe.assignable(&arg_type, type_tree, HashSet::new()) {
+            return Err(CompileError::new_type_error(
+                format!(
+                    "func{}'s {} arg has wrong type:\nencountered {}\ninstead of  {}",
+                    Color::red(func_name),
+                    Color::red(human_readable_index(index + 1)),
+                    Color::red(arg_type.print(type_tree)),
+                    Color::red(tipe.print(type_tree)),
+                ),
+                arg.debug_info.locs(),
+            ));
+        }
+    }
+
+    Ok(TypeCheckedExprKind::FunctionCall(
+        Box::new(func_expr),
+        args,
+        *ret_type,
+        prop,
+    ))
 }

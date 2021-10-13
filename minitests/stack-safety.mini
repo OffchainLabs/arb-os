@@ -1,0 +1,45 @@
+/*
+ * Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
+ */
+
+
+write func main() {
+    asm(tests().1) { log };
+}
+
+func tests() -> string {
+    
+    asm("on stack") { noop };
+    
+    let _ = smash_stack();
+    smash_stack2();
+    smash_stack3();
+    smash_stack4();
+    
+    let top = asm() string { noop };
+    
+    if (top != "on stack") {
+        return "broke the stack";
+    }
+    
+    return "";
+}
+
+func load(_: uint, __: uint) {}
+
+func smash_stack() -> uint {
+    asm({ return 4; 4 }, {4}) { noop };
+    return 8;
+}
+
+func smash_stack2() {
+    asm({ return; 4 }, {4}) { noop };
+}
+
+func smash_stack3() {
+    load({ return; 8 }, { 8 });
+}
+
+func smash_stack4() {
+    load({ 8 }, { return; 8 });
+}

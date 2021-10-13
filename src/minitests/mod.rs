@@ -77,18 +77,19 @@ fn test_for_numeric_error_code(path: &Path) {
 }
 
 #[test]
+fn test_address_set() {
+    test_for_numeric_error_code(Path::new("stdlib/addressSetTest.mexe"));
+}
+
+#[test]
 fn test_arraytest() {
     test_for_error_string(Path::new("builtin/arraytest.mexe"));
+    test_for_error_string(Path::new("stdlib2/arraytest.mexe"));
 }
 
 #[test]
 fn test_kvstest() {
     test_for_error_string(Path::new("builtin/kvstest.mexe"));
-}
-
-#[test]
-fn test_address_set() {
-    test_for_numeric_error_code(Path::new("stdlib/addressSetTest.mexe"));
 }
 
 #[test]
@@ -102,13 +103,9 @@ fn test_queuetest() {
 }
 
 #[test]
-fn test_globaltest() {
-    test_for_numeric_error_code(Path::new("builtin/globaltest.mexe"));
-}
-
-#[test]
 fn test_pqtest() {
     test_for_numeric_error_code(Path::new("stdlib/priorityqtest.mexe"));
+    test_for_error_string(Path::new("stdlib2/priorityqtest.mexe"));
 }
 
 #[test]
@@ -127,7 +124,7 @@ fn test_keccak() {
 }
 
 #[test]
-fn test_bls() {
+fn test_bls_basic() {
     test_for_error_string(Path::new("stdlib/blstest.mexe"));
 }
 
@@ -257,6 +254,11 @@ fn test_rlp_list3(
 }
 
 #[test]
+fn test_arithmetic() {
+    test_for_error_string(Path::new("minitests/arithmetic.mexe"));
+}
+
+#[test]
 fn test_codeload() {
     test_for_numeric_error_code(Path::new("minitests/codeloadtest.mexe"));
 }
@@ -265,6 +267,37 @@ fn test_codeload() {
 fn test_closures() {
     test_for_error_string(Path::new("minitests/simple-closure.mexe"));
     test_for_error_string(Path::new("minitests/closure.mexe"));
+}
+
+#[test]
+fn test_generics() {
+    test_for_error_string(Path::new("minitests/generics/basic.mexe"));
+    test_for_error_string(Path::new("minitests/generics/simple.mexe"));
+    test_for_error_string(Path::new("minitests/generics/nested.mexe"));
+    test_for_error_string(Path::new("minitests/generics/func.mexe"));
+    test_for_error_string(Path::new("minitests/generics/closure.mexe"));
+    test_for_error_string(Path::new("minitests/generics/colorful.mexe"));
+    test_for_error_string(Path::new("minitests/generics/queue.mexe"));
+}
+
+#[test]
+fn test_globals() {
+    test_for_numeric_error_code(Path::new("minitests/globaltest.mexe"));
+}
+
+#[test]
+fn test_stack_safety() {
+    test_for_error_string(Path::new("minitests/stack-safety.mexe"));
+}
+
+#[test]
+fn test_quick() {
+    test_for_error_string(Path::new("minitests/quick.mexe"));
+}
+
+#[test]
+fn test_wide_tuples() {
+    test_for_error_string(Path::new("minitests/wide-tuples.mexe"));
 }
 
 #[test]

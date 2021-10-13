@@ -1,0 +1,94 @@
+
+use std2::array::array_new;
+use std2::array::array_get;
+use std2::array::array_set;
+
+write func main() {
+    asm(tests().1) { log };
+}
+
+func tests() -> string {
+    let a = test_1();
+    let b = test_2();
+    if (a != "") {
+        return a;
+    }
+    return b;
+}
+
+func test_1() -> string {
+    
+    let a = array_new::<uint>(17, 8);
+    if (array_get::<uint>(a, 6) != 8) {
+	return "new small array isn't initialized";
+    }
+    
+    let a = array_new::<bool>(71, true);
+    if (array_get::<bool>(a, 6) != true) {
+	return "new large array isn't initialized";
+    }
+    
+    let a = array_new::<uint>(64, 8);
+    a = array_set::<uint>(a, 17, 3);
+    if (array_get::<uint>(a, 17) != 3) {
+	return "array assignment doesn't work";
+    }
+    
+    let a = array_new::<uint>(111, 8);
+    a = array_set::<uint>(a, 42, 3);
+    a = array_set::<uint>(a, 99, 4);
+    a = array_set::<uint>(a, 42, 5);
+    if (array_get::<uint>(a, 42) != 5) {
+	return "array overwrites don't work";
+    }
+    
+    let a = array_new::<uint>(111, 8);
+    a = array_set::<uint>(a, 42, 3);
+    a = array_set::<uint>(a, 99, 4);
+    a = array_set::<uint>(a, 42, 5);
+    if (array_get::<uint>(a, 99) != 4) {
+	return "array overwrites corrupt other entries";
+    }
+    
+    return "";
+}
+
+func test_2() -> string {
+
+    let spider = "//\(oo)/\\";
+    
+    let _ = array_new::<string>(17, spider);
+    
+    /*if (a[6] != spider || a[7] != a[8]) {
+	return "new small array isn't initialized";
+    }
+
+    let a = array_new::<bool>(71, true);
+    if (a[6] != true) {
+	return "new large array isn't initialized";
+    }
+
+    let a = array_new::<uint>(64, 8);
+    a = array_set::<uint>(a, 17, 3);
+    if (a[17] != 3) {
+	return "array assignment doesn't work";
+    }
+    
+    let a = array_new::<uint>(111, 8);
+    a = array_set::<uint>(a, 42, 3);
+    a = array_set::<uint>(a, 99, 4);
+    a = array_set::<uint>(a, 42, 5);
+    if (a[42] != 5) {
+	return "array overwrites don't work";
+    }
+    
+    let a = array_new::<uint>(111, 8);
+    a = array_set::<uint>(a, 42, 3);
+    a = array_set::<uint>(a, 99, 4);
+    a = array_set::<uint>(a, 42, 5);
+    if (a[99] != 4) {
+	return "array overwrites corrupt other entries";
+    }*/
+    
+    return "";
+}
