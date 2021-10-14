@@ -12,55 +12,51 @@ A Mini program is written as a set of source code files.  You can write separate
 
 ## Top level declarations
 
-A Mini source code file consists of a series of top-level declarations.  Import declarations declare types and functions that live in other files and are being imported so that the code in the current file can use them. Non-import declarations are everything else. 
+A Mini source code file consists of a series of top-level declarations.  
+Import declarations make functions and types from other files usable in the file they are contained in.
+Constant declarations add a constant.
+Import and constant declarations together form head declarations.
+Body declarations are any other declaration.
 
-The import declarations must come first. It is an error to put an import declaration after a non-import declaration.
+The head declarations must come before all other declarations. It is an error to put a head declaration after a body declaration.
 
-Within each group (import or non-import) the order of declarations does not matter.
+Within each group the order of declarations does not matter.
 
-### Import declarations
+### Head Declarations
 
-`import` type *name*;
+`use` *path* `::` *name*;
 
 > This declares an imported type, which is assumed to be defined in another source code file.  The code in the local file can refer to the type as *name*, but it cannot know anything about the internals of the type.  The only operations that can be done on imported types are operations that are valid for any type.
 
-`import [impure] func` *name* ( *argname1: type1, argname2: type2, ...* ) *returntype*;
+`const`
 
-> This declares an imported function, which is assumed to be defined in another source code file. The code in the local file can call this function as if it were in the local file. (The linker will generate an error if this function is called in the local file but is not provided by another file that is being linked.) The syntax follows function declaration syntax (as defined below), except that an import ends with a semicolon where a local function declaration would instead have the function's code.
->
-> The optional `impure` modifier specifies that the function is impure, as defined below.
->
-> The compiler does not check whether the type signature declared here matches the type signature of the actual implementation of the function elsewhere.  If the type signatures are different, this might lead to a runtime error.
->
-> [Potential change: we could add the word unsafe to this somehow. Then we could say that every construction that can lead to an undetected type error has the word `unsafe` in its name.]
->
-> [Potential improvement: allow interfaces to be specified in separate files, and allow a code file to say that it implements or uses a particular interface. This would make it easier to maintain consistency, and easier for the compiler to check consistency..]
+> Write me
 
-### Non-import declarations
+### Body declarations
 
 `type` *name* = *type*
 
 > This declares a type alias, allowing name to be used as a synonym for the specified type.  (Note that in the current syntax there is not a semicolon at the end.)
 
-var *name* : *type* ;
+`var` *name* : *type* ;
 
 > This declares a global variable. If type is an atomic type, the variable will be initialized to the zero value for that type. Otherwise the variable will be uninitialized. Reading an uninitialized variable before initializing it will cause undefined behavior.
 
-`[public] [impure] func` *name* ( *argname1: type1, argname2: type2, ...* ) [-> *returntype] codeblock*
+`#[` *Attributes* `]`? [ `view` | `write` | `public` ]* `func` *name* ( *argname1: type1, argname2: type2, ...* ) [-> *returntype] codeblock*
 
-`[public] [impure] func` *name* ( *argname1: type1, argname2: type2, ...* ) `noreturn` codeblock*
+`#[` *Attributes* `]`? [ `view` | `write` | `public` ]* `func` *name* ( *argname1: type1, argname2: type2, ...* ) `noreturn` codeblock*
 
 > This declares a function and provides its code.
 >
-> The `public` modifier is optional.  It indicates that the function can be called by code outside this source code file. Non-public functions cannot be called directly by outside code.  (However, pointers to non-public functions can be passed to outside code, and this would allow the pointed-to function to be called by outside code.)
+> The `public` modifier indicates that the function can be called by code outside this source code file. Non-public functions cannot be called directly by outside code.  (However, pointers to non-public functions can be passed to outside code, and this would allow the pointed-to function to be called by outside code.)
 >
-> The `impure` modifier is optional. It indicates that the function is impure, meaning that it might access global variables or call other impure functions.
+> The `view` modifier indicates that the function is impure, meaning that it might read global variables or call other read functions.
+>
+> The `write` modifier indicates that the function is impure, meaning that it might write to global variables or call other write functions.
 >
 > The arguments are treated as local variables within the function, so code in the function can read them or assign to them.
 >
 > If there is a `returntype`, the function will return a single value of the specified type. (We'll see below that the type can be a tuple, allowing multiple values to be packaged together into a single return value.)
->
-> If there is a `returntype`, the compiler must be able to infer that execution cannot reach the end of *codeblock* (so that the function terminates via a `return` statement, or the function runs forever). If the compiler is unable to verify this, it will generate an error.
 >
 > If `returntype` is `every`, then the function cannot return, because no return value can exist. The compiler will verify that the function cannot return. If the compiler is unable to verify this, it will generate an error.
 >
@@ -68,7 +64,7 @@ var *name* : *type* ;
 
 ## Types
 
-Mini is a type-checked language.  The compiler should catch any inconsistent use of types. We believe there are only two ways that type errors can go undetected by the compiler: (1) `import func` statements that use a different type signature from the actual implementation of the function, and (2) incorrect uses of the `unsafecast` operator.
+Mini is a type-checked language.  The compiler should catch any inconsistent use of types. We believe there are only one way that type errors can go undetected by the compiler, incorrect uses of the `unsafecast` operator.
 
 Mini has the following types:
 
@@ -91,6 +87,18 @@ Mini has the following types:
 `address`
 
 > a 20-byte Ethereum address (an atomic type with zero value of 0)
+ 
+`buffer`
+
+> Write me
+
+`void`
+
+> Write me
+
+`string`
+
+> Write me
 
 ( *type1*, *type2*, ... )
 
@@ -124,6 +132,10 @@ Mini has the following types:
 
 > a reference to a function
 
+`closure`
+
+> Write me
+
 `any`
 
 > a value of unknown type
@@ -146,7 +158,7 @@ Two array types are equal if their field types are equal.
 
 Two struct types are equal if have the same number of fields, and each field has the same name and equal type, field-by-field.
 
-Two func types are equal if they are both impure or both not-impure, and they have the same number of argument types, and each argument type is equal, argument-by-argument, and the return types are equal (or neither has a return type).
+Two func types are equal if they use the same qualifiers, and they have the same number of argument types, and each argument type is equal, argument-by-argument, and the return types are equal (or neither has a return type).
 
 Two map types are equal if their key types are equal and their value types are equal.
 
@@ -155,8 +167,6 @@ Two option types are equal if their inner types are equal
 `any` equals itself.
 
 `every` equals itself.
-
-Each imported type equals itself.
 
 Unless specified as equal by the rules above, a pair of types is unequal.
 
@@ -222,6 +232,8 @@ A value of type `V` is `covariantcast`able to storage of type `S` if:
 
 ## Values
 
+> Fix me this isn't clear if its talking about mini values or AVM values, it starts by talking about mini and then in the implementation note it starts looking like AVM to me 
+
 All values in Mini are immutable. There is no way to modify a value. You can only create new values that are equal to existing ones with modifications.  (That's what the `with` operator does.)
 
 Because values are immutable, there is no notion of a reference to a value.  As far as the semantics of Mini are concerned, there are only values, and any assignment or passing of values is done by copying (although the compiler might optimize by copying a pointer rather than copying the object).
@@ -232,13 +244,13 @@ Because values are immutable, there is no notion of a reference to a value.  As 
 
 Two values are equal if they have the same type and the same contents.  Equality checking for compound types works as expected, with a "deep comparison" of the fields.  Two function references are equal if they refer to the same function.  
 
-Values of type `anytype` do not have any representation that is understood by the compiler. Two `anytype` values will be equal if they have the same representation in the underlying AVM architecture.  So it could be the case that if values of two different types are constructed, and both are assigned to variables of type `anytype`, the resulting values could test as equal.  (Details of data representations are not described here.) Caution is advised before comparing `anytype` values.
+Values of type `any` do not have any representation that is understood by the compiler. Two `any` values will be equal if they have the same representation in the underlying AVM architecture.  So it could be the case that if values of two different types are constructed, and both are assigned to variables of type `anytype`, the resulting values could test as equal.  (Details of data representations are not described here.) Caution is advised before comparing `anytype` values.
 
 [Potential improvement: prohibit equality comparison of anytypes.]
 
 ## Codeblocks
 
-`{` *statement* * `}`
+`{` [*statement*]* `}`
 
 > A codeblock is a sequence of zero or more statements, enclosed in curly braces.  Codeblocks form the bodies of functions, `if` statements, and loops.  Local variables may be declared and used within a codeblock. A local variable that is declared within a codeblock can be used only within that same codeblock (or other codeblocks nested inside of it).
 
@@ -258,13 +270,9 @@ Values of type `anytype` do not have any representation that is understood by th
 
 `if` ( *condition* ) *codeblock*
 
-`if` ( *condition* ) *codeblock* `else` *codeblock*
+`if` ( *condition* ) *codeblock* [`else` [*codeblock* | *if statement* | *if let statement*]]?
 
-`if` ( *condition* ) *codeblock* `elseif` ( *condition* ) *codeblock*
-
-`if` ( *condition* ) *codeblock* `elseif` ( *condition* ) *codeblock* `else` *codeblock*
-
-> If statements, with the expected behavior.  You can string together as many elseifs as you want.
+> If statements, with the expected behavior.  You can string together as many else ifs as you want.
 
 `let` *name* = *expression* ;
 
@@ -288,7 +296,7 @@ Values of type `anytype` do not have any representation that is understood by th
 >
 > [Potential improvement: This could become a more general pattern-matching assignment mechanism.  Currently it pattern-matches only for a one-level tuple.]
 
-`if let` Some(*nameLeft*) = *nameRight* *codeblock* [else *elseblock*]
+`if let` Some(*nameLeft*) = *nameRight* *codeblock* [`else` [*codeblock* | *if statement* | *if let statement*]]?
 
 > if *nameRight* is the Some variant of an option type, a new local variable *nameLeft* is created with the inner value of *nameRight* inside *codeblock*, and *codeblock* is run.  If *nameRight* is the None variant and *elseblock* is present, then *elseblock* is run instead.  *nameRight* must always be an option type.
 
@@ -312,17 +320,17 @@ Values of type `anytype` do not have any representation that is understood by th
 
 > In a function that returns *option\<type\>*, this returns *None\<type\>*.
 
-`asm` (*expression1*, *expression2*, ... )  { *instructions* } ;
+`debug`
 
-> Escape to assembly code.  The arguments (*expression1*, *expression2*, etc.), if any, are pushed onto the AVM stack (with *expression1* at the top of the stack). Then the *instructions*, which are a sequence of AVM assembly instructions, are executed.  The assembly instructions are assumed to consume the arguments and leave nothing on the stack.  (There is another form of `asm`, which is an expression and returns a value on the stack.)
+> Write me
+ 
+`assert`
 
-`panic` ;
+> Write me
+ 
+`set`
 
-> Generate an error condition.  The precise effect of this depends on the underlying AVM architecture.
-
-;
-
-> A null statement which does nothing.
+> Write me
 
 ## Expressions
 
@@ -496,9 +504,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 `true`
 
-`null`
-
-> Literal values. `false` and `true` are of type bool, and `null` is the empty tuple ( ).
+> Literal values. `false` and `true` are of type bool.
 
 *number*
 
@@ -512,5 +518,10 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 > Escape to assembly code.  The arguments (*expression1*, *expression2*, etc.), if any, are pushed onto the AVM stack (with *expression1* at the top of the stack). Then the *instructions*, which are a sequence of AVM assembly instructions, are executed.  The assembly instructions are assumed to consume the arguments and leave on the stack a single value of type *type*, which becomes the result of this expression. (There is another form of `asm`, which produces no result value and is a statement.)
 
+### Path syntax
+
+*ident* (`::` *ident*)*
+
+> This represents a virtual path with the leftmost identifier being the widest scope.
 
 
