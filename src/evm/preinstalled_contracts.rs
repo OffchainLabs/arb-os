@@ -1652,14 +1652,10 @@ fn test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
 
     machine.runtime_env.force_zero_gas_price = false;
 
-    println!("Upgrade worked");
     let wallet2 = machine.runtime_env.new_wallet();
-    println!("New wallet");
     let arbsys = ArbSys::new(&wallet2, false);
-    println!("New arbsys");
 
     let arbos_version = arbsys.arbos_version(&mut machine)?;
-    println!("arbsys version");
     assert_eq!(
         arbos_version,
         *init_constant_table(Some(Path::new("arb_os/constants.json")))
@@ -1751,7 +1747,6 @@ pub fn _evm_run_with_gas_charging(
         machine.run(None)
     }; // handle these ETH deposit messages
 
-    println!("First deploy ...");
     let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
     if let Err(receipt) = fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) {
         if receipt.unwrap().get_return_code() == Uint256::from_u64(3) {
@@ -1762,7 +1757,6 @@ pub fn _evm_run_with_gas_charging(
         }
     }
 
-    println!("Second deploy ...");
     let mut pc_contract = AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
     if let Err(receipt) = pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
@@ -1788,7 +1782,6 @@ pub fn _evm_run_with_gas_charging(
         .runtime_env
         ._advance_time(Uint256::one(), None, false);
 
-    println!("Function call ...");
     let (logs, sends) = pc_contract.call_function(
         my_addr.clone(),
         "deposit",

@@ -223,7 +223,7 @@ fn run_test(
         }
         (Some(Value::Buffer(buf)), None) => (buf.clone(), Some(0)),
         (Some(Value::Int(err)), _) => {
-            println!("{:?}", err);
+            // println!("{:?}", err);
             if err
                 == Uint256::from_string_hex(
                     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
@@ -341,7 +341,6 @@ fn main() -> Result<(), CompileError> {
             }
             let buffer = std::fs::read_to_string(&filenames[0]).unwrap();
             let json = json::parse(&buffer).unwrap();
-            // println!("laoded {}", json::stringify(json))
             // get commands
             let mut module_buffer = Vec::<u8>::new();
             let mut cur_file = "".to_string();
@@ -358,11 +357,9 @@ fn main() -> Result<(), CompileError> {
                     init = true;
                     cur_file = cmd["filename"].as_str().unwrap().to_string();
                 } else if cmd["type"] == "assert_return" {
-                    println!("{:?}", cmd);
                     if cmd["action"]["type"] == "invoke" {
                         let entry = cmd["action"]["field"].as_str().unwrap();
                         let args = parse_list(&cmd["action"]["args"]);
-                        // println!("{:?}", args);
                         let (mem, result) = run_test(
                             &module_buffer,
                             &cur_memory,
@@ -379,21 +376,24 @@ fn main() -> Result<(), CompileError> {
                                     "At file {} with {}({:?}): Expected {}, Got {:?}",
                                     cur_file, entry, args, expected[0], result
                                 );
-                                run_test(
-                                    &module_buffer,
-                                    &cur_memory,
-                                    &args,
-                                    &entry.to_string(),
-                                    init,
-                                    true,
-                                );
+                                if fname.debug {
+                                    run_test(
+                                        &module_buffer,
+                                        &cur_memory,
+                                        &args,
+                                        &entry.to_string(),
+                                        init,
+                                        true,
+                                    );
+                                } else {
+                                    panic!("Test suite failed")
+                                }
                             }
                         }
                         cur_memory = mem;
                         init = false;
                     }
                 } else if cmd["type"] == "assert_trap" {
-                    println!("{:?}", cmd);
                     if cmd["action"]["type"] == "invoke" {
                         let entry = cmd["action"]["field"].as_str().unwrap();
                         let args = parse_list(&cmd["action"]["args"]);
@@ -411,17 +411,19 @@ fn main() -> Result<(), CompileError> {
                                 "At file {} with {}({:?}): Expected trap, Got {:?}",
                                 cur_file, entry, args, result
                             );
-                            run_test(
-                                &module_buffer,
-                                &cur_memory,
-                                &args,
-                                &entry.to_string(),
-                                init,
-                                true,
-                            );
+                            if fname.debug {
+                                run_test(
+                                    &module_buffer,
+                                    &cur_memory,
+                                    &args,
+                                    &entry.to_string(),
+                                    init,
+                                    true,
+                                );
+                            } else {
+                                panic!("Test suite failed")
+                            }
                         }
-                        // cur_memory = mem;
-                        // init = false;
                     }
                 }
             }

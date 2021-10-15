@@ -951,13 +951,13 @@ impl Machine {
                     println!("Aux-stack contents: {}", self.aux_stack);
                 }
                 if show_reg {
-                    // println!("Register contents: {}", self.register);
+                    println!("Register contents: {}", self.register);
                 }
                 if !self.stack.is_empty() {
                     println!("Stack size: {}", self.stack.num_items());
                 }
                 if !self.stack.is_empty() {
-                    // println!("Stack top: {}", self.stack.top().unwrap());
+                    println!("Stack top: {}", self.stack.top().unwrap());
                 }
                 println!("Gas used: {}", self.total_gas_usage);
                 if let Some(code) = self.next_opcode() {
@@ -2369,10 +2369,8 @@ impl Machine {
                         let code_vec = crate::wasm::clear_labels(code_vec);
                         let mut labels = vec![];
                         let mut code_pt = self.code.create_segment();
-                        println!("Got opcodes {}", init.len());
                         for i in (0..init.len()).rev() {
                             let op = code_vec[i].clone();
-                            // println!("Hmm {} {:?}", i, op);
                             code_pt = self
                                 .code
                                 .push_insn(
@@ -2382,11 +2380,9 @@ impl Machine {
                                 )
                                 .unwrap();
                             if crate::wasm::has_label(&init[i]) {
-                                // println!("Found label at {} {:?}", i, code_pt);
                                 labels.push(Value::CodePoint(code_pt))
                             }
                         }
-                        // println!("Labels are here {:?}", labels);
                         let mut labels_rev = vec![];
                         for a in labels.iter().rev() {
                             labels_rev.push(a.clone())
@@ -2400,15 +2396,6 @@ impl Machine {
                             self.wasm_instances.len() - 1,
                         ));
                         self.incr_pc();
-                        println!("Prepared");
-
-                        // Testing: push table, then jump to code point
-                        /*
-                        {
-                            self.stack.push(tab);
-                            self.state = MachineState::Running(code_pt);
-                        }
-                        */
                         Ok(true)
                     }
                     AVMOpcode::MakeWasm => {

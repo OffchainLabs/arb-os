@@ -117,6 +117,52 @@ jobs:
           fail_ci_if_error: true
           verbose: false
 
+  wasm:
+    name: Run Wasm test suite
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        os: [ubuntu-20.04]
+        rust: [stable]
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y \
+            libasound2-dev libudev-dev build-essential pkg-config libssl-dev
+
+      - name: Install rust ${{ matrix.rust }}
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+          components: ${{ matrix.rust == 'nightly' && 'llvm-tools-preview' || '' }}
+
+      - name: Cache rust build products
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ matrix.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.os }}-cargo-${{ matrix.rust }}-
+
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --all
+
+      - name: Run test suite
+        run: sh ./scripts/run-tests.sh
+
   node:
     name: Node integration test
     runs-on: ubuntu-latest
