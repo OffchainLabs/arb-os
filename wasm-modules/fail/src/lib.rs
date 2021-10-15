@@ -91,7 +91,7 @@ pub fn test() -> u32 {
         }
         6 => {
             let mut output : Vec<u8> = vec![0;32];
-            tuplebytes(output.as_mut_ptr(), 0);
+            tuplebytes(output.as_mut_ptr(), 3);
             wvec(output.as_mut_ptr(), 0, output.len() as i32);
         }
         7 => {
@@ -105,6 +105,9 @@ pub fn test() -> u32 {
         9 => {
             tuple2buffer(out.as_mut_ptr(), 2, 0, 32);
             wvec(out.as_mut_ptr(), 0, 32);
+        }
+        10 => {
+            tuplebytes(out.as_mut_ptr(), 4);
         }
         _ => {
             panic!("foo");

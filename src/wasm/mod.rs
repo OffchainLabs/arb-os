@@ -319,6 +319,19 @@ fn generate_store(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize,
     res.push(simple_op(AVMOpcode::Pop));
 }
 
+
+fn safe_tuple_get(res: &mut Vec<Instruction>) {
+    // idx, tuple
+    res.push(simple_op(AVMOpcode::Dup1)); // tuple, idx, tuple
+    res.push(simple_op(AVMOpcode::Tlen)); // len, idx, tuple
+    res.push(simple_op(AVMOpcode::Dup1)); // idx, len, idx, tuple
+    res.push(simple_op(AVMOpcode::Swap1)); // len, idx, idx, tuple
+    res.push(simple_op(AVMOpcode::GreaterThan)); // bool, idx, tuple
+    res.push(simple_op(AVMOpcode::IsZero)); // bool, idx, tuple
+    cjump(res, 1);
+    res.push(simple_op(AVMOpcode::Tget))
+}
+
 // do a bound check for memory address at top of stack
 fn bound_check(res: &mut Vec<Instruction>) {
     // address
@@ -2375,10 +2388,11 @@ fn process_wasm_inner(
             init.push(immed_op(AVMOpcode::Tget, int_from_usize(5))); // tuple, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(1)); // idx, tuple
-            init.push(simple_op(AVMOpcode::Tget)); // tuple2
+            safe_tuple_get(init);
+            // init.push(simple_op(AVMOpcode::Tget)); // tuple2
             init.push(get_frame());
             init.push(get64_from_buffer(2)); // idx2, tuple2
-            init.push(simple_op(AVMOpcode::Tget)); // buffer
+            safe_tuple_get(init);
 
             // Check that it's actually buffer
             init.push(simple_op(AVMOpcode::Dup0)); // int, int, buffer
@@ -2427,7 +2441,8 @@ fn process_wasm_inner(
             init.push(immed_op(AVMOpcode::Tget, int_from_usize(5))); // tuple, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(1)); // idx, tuple, buffer
-            init.push(simple_op(AVMOpcode::Tget)); // int, buffer
+            safe_tuple_get(init);
+            // init.push(simple_op(AVMOpcode::Tget)); // int, buffer
 
             // Check that it's actually integer
             init.push(simple_op(AVMOpcode::Dup0)); // int, int, buffer
@@ -2461,10 +2476,10 @@ fn process_wasm_inner(
             init.push(immed_op(AVMOpcode::Tget, int_from_usize(5))); // tuple, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(1)); // idx, tuple, buffer
-            init.push(simple_op(AVMOpcode::Tget)); // tuple2, buffer
+            safe_tuple_get(init); // tuple2, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(2)); // idx2, tuple2, buffer
-            init.push(simple_op(AVMOpcode::Tget)); // int, buffer
+            safe_tuple_get(init); // int, buffer
 
             // Check that it's actually integer
             init.push(simple_op(AVMOpcode::Dup0)); // int, int, buffer
@@ -2589,6 +2604,7 @@ fn process_wasm_inner(
     }
     // Error handling
     init.push(mk_label(1));
+    init.push(immed_op(AVMOpcode::DebugPrint, int_from_usize(9999)));
     init.push(push_value(Value::Int(
         Uint256::from_string_hex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
             .unwrap(),
@@ -2617,6 +2633,7 @@ pub fn load(buffer: &[u8], param: &[u8]) -> Vec<Instruction> {
             int_from_usize(234),
             int_from_usize(234),
         ]),
+        int_from_usize(12345678),
     ]);
     /*
     let v = Value::new_tuple(vec![

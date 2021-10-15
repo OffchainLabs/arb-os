@@ -36,7 +36,11 @@ impl fmt::Debug for JitWasm {
 
 fn get_tuple(v: Option<Value>, idx: usize) -> Option<Value> {
     if let Some(Value::Tuple(vs)) = v {
-        Some(vs[idx].clone())
+        if idx < vs.len() {
+            Some(vs[idx].clone())
+        } else {
+            None
+        }
     } else {
         None
     }
@@ -127,6 +131,7 @@ impl JitWasm {
                 int_from_usize(234),
                 int_from_usize(234),
             ]),
+            int_from_usize(12345678),
         ]);
 
         let immed_cell = Rc::new(RefCell::new(immed));
