@@ -203,9 +203,7 @@ impl JitWasm {
             let v = &*immed6.borrow();
             let tmp = get_tuple_bytes(Some(v.clone()), offset as usize);
             match (tmp, &*memory_cell5.borrow()) {
-                (Some(tmp), Some(memory)) => {
-                    error_to_wasm(memory.write(ptr as usize, &tmp))
-                }
+                (Some(tmp), Some(memory)) => error_to_wasm(memory.write(ptr as usize, &tmp)),
                 _ => Err(Trap::new("tuplebytes")),
             }
         });
@@ -214,9 +212,7 @@ impl JitWasm {
             let v = &*immed7.borrow();
             let tmp = get_tuple2_bytes(Some(v.clone()), offset as usize, offset2 as usize);
             match (tmp, &*memory_cell6.borrow()) {
-                (Some(tmp), Some(memory)) => {
-                    error_to_wasm(memory.write(ptr as usize, &tmp))
-                }
+                (Some(tmp), Some(memory)) => error_to_wasm(memory.write(ptr as usize, &tmp)),
                 _ => Err(Trap::new("tuple2bytes")),
             }
         });
@@ -225,12 +221,14 @@ impl JitWasm {
             &store,
             move |ptr: i32, offset: i32, offset2: i32, len: i32| {
                 let v = &*immed8.borrow();
-                let tmp =
-                    get_tuple2_buffer(Some(v.clone()), offset as usize, offset2 as usize, len as usize);
+                let tmp = get_tuple2_buffer(
+                    Some(v.clone()),
+                    offset as usize,
+                    offset2 as usize,
+                    len as usize,
+                );
                 match (tmp, &*memory_cell7.borrow()) {
-                    (Some(tmp), Some(memory)) => {
-                        error_to_wasm(memory.write(ptr as usize, &tmp))
-                    }
+                    (Some(tmp), Some(memory)) => error_to_wasm(memory.write(ptr as usize, &tmp)),
                     _ => Err(Trap::new("tuple2buffer")),
                 }
             },

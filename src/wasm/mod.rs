@@ -2432,8 +2432,8 @@ fn process_wasm_inner(
             // Check that it's actually integer
             init.push(simple_op(AVMOpcode::Dup0)); // int, int, buffer
             init.push(simple_op(AVMOpcode::Type)); // int, int, buffer
-            // init.push(simple_op(AVMOpcode::Dup0)); // int, int, buffer
-            // init.push(simple_op(AVMOpcode::DebugPrint));
+                                                   // init.push(simple_op(AVMOpcode::Dup0)); // int, int, buffer
+                                                   // init.push(simple_op(AVMOpcode::DebugPrint));
             init.push(immed_op(AVMOpcode::Equal, int_from_usize(0))); // bool, int, buffer
             init.push(simple_op(AVMOpcode::IsZero)); // bool, int, buffer
             cjump(init, 1);
