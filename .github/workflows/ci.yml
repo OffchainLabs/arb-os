@@ -161,7 +161,7 @@ jobs:
           args: --all
 
       - name: Run test suite
-        run: sh ./wasm-suite/run-tests.sh
+        run: bash ./wasm-suite/run-tests.sh
 
   node:
     name: Node integration test
