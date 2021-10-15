@@ -102,6 +102,10 @@ pub fn test() -> u32 {
         8 => {
             tuplebytes(out.as_mut_ptr(), 1);
         }
+        9 => {
+            tuple2buffer(out.as_mut_ptr(), 2, 0, 32);
+            wvec(out.as_mut_ptr(), 0, 32);
+        }
         _ => {
             panic!("foo");
         }

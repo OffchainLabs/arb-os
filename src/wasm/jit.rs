@@ -122,7 +122,11 @@ impl JitWasm {
         let immed = Value::new_tuple(vec![
             int_from_usize(123),
             Value::new_buffer(vec![1u8; 32]),
-            Value::new_tuple(vec![int_from_usize(234), int_from_usize(234)]),
+            Value::new_tuple(vec![
+                Value::new_buffer(vec![2u8; 32]),
+                int_from_usize(234),
+                int_from_usize(234),
+            ]),
         ]);
 
         let immed_cell = Rc::new(RefCell::new(immed));

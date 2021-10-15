@@ -2346,6 +2346,7 @@ fn process_wasm_inner(
             init.push(mk_label(end_label));
         }
         if f.field().contains("tuple2buffer") {
+            // init.push(immed_op(AVMOpcode::DebugPrint, int_from_usize(443))); // bool, int, buffer
             // inside frame: ptr, idx1, idx2, len; counter
             let start_label = label;
             let end_label = label + 1;
@@ -2362,8 +2363,8 @@ fn process_wasm_inner(
             // check if loop ends
             init.push(get_frame());
             init.push(get64_from_buffer(4));
-            init.push(get_frame());
             init.push(immed_op(AVMOpcode::Add, int_from_usize(1)));
+            init.push(get_frame());
             init.push(get64_from_buffer(3));
             init.push(simple_op(AVMOpcode::LessThan));
             cjump(init, end_label);
@@ -2378,6 +2379,14 @@ fn process_wasm_inner(
             init.push(get_frame());
             init.push(get64_from_buffer(2)); // idx2, tuple2
             init.push(simple_op(AVMOpcode::Tget)); // buffer
+
+            // Check that it's actually buffer
+            init.push(simple_op(AVMOpcode::Dup0)); // int, int, buffer
+            init.push(simple_op(AVMOpcode::Type)); // int, int, buffer
+            init.push(immed_op(AVMOpcode::Equal, int_from_usize(4))); // bool, int, buffer
+            init.push(simple_op(AVMOpcode::IsZero)); // bool, int, buffer
+            cjump(init, 1);
+
             init.push(get_frame());
             init.push(get64_from_buffer(4)); // offset, buffer
             init.push(simple_op(AVMOpcode::GetBuffer8)); // byte
@@ -2418,13 +2427,20 @@ fn process_wasm_inner(
             init.push(immed_op(AVMOpcode::Tget, int_from_usize(5))); // tuple, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(1)); // idx, tuple, buffer
-                                             // init.push(simple_op(AVMOpcode::DebugPrint));
             init.push(simple_op(AVMOpcode::Tget)); // int, buffer
+
             // Check that it's actually integer
-            init.push(immed_op(AVMOpcode::Add, int_from_usize(0))); // int, buffer
+            init.push(simple_op(AVMOpcode::Dup0)); // int, int, buffer
+            init.push(simple_op(AVMOpcode::Type)); // int, int, buffer
+            // init.push(simple_op(AVMOpcode::Dup0)); // int, int, buffer
+            // init.push(simple_op(AVMOpcode::DebugPrint));
+            init.push(immed_op(AVMOpcode::Equal, int_from_usize(0))); // bool, int, buffer
+            init.push(simple_op(AVMOpcode::IsZero)); // bool, int, buffer
+            cjump(init, 1);
             init.push(get_frame());
             init.push(get64_from_buffer(0)); // address, int, buffer
-                                             // implement bounds checking here
+
+            // implement bounds checking here
             init.push(simple_op(AVMOpcode::Dup0)); // address, address, int, buffer
             init.push(immed_op(
                 AVMOpcode::Add,
@@ -2449,8 +2465,14 @@ fn process_wasm_inner(
             init.push(get_frame());
             init.push(get64_from_buffer(2)); // idx2, tuple2, buffer
             init.push(simple_op(AVMOpcode::Tget)); // int, buffer
+
             // Check that it's actually integer
-            init.push(immed_op(AVMOpcode::Add, int_from_usize(0))); // int, buffer
+            init.push(simple_op(AVMOpcode::Dup0)); // int, int, buffer
+            init.push(simple_op(AVMOpcode::Type)); // int, int, buffer
+            init.push(immed_op(AVMOpcode::Equal, int_from_usize(0))); // bool, int, buffer
+            init.push(simple_op(AVMOpcode::IsZero)); // bool, int, buffer
+            cjump(init, 1);
+
             init.push(get_frame());
             init.push(get64_from_buffer(0)); // address, int, buffer
                                              // implement bounds checking here
@@ -2588,6 +2610,16 @@ pub fn load(buffer: &[u8], param: &[u8]) -> Vec<Instruction> {
     a.push(push_value(Value::new_buffer(param.to_vec())));
     a.push(push_value(tab));
     let v = Value::new_tuple(vec![
+        int_from_usize(123),
+        Value::new_buffer(vec![1u8; 32]),
+        Value::new_tuple(vec![
+            Value::new_buffer(vec![2u8; 32]),
+            int_from_usize(234),
+            int_from_usize(234),
+        ]),
+    ]);
+    /*
+    let v = Value::new_tuple(vec![
         int_from_u32(123),
         int_from_u32(1234),
         int_from_u32(1253),
@@ -2600,6 +2632,7 @@ pub fn load(buffer: &[u8], param: &[u8]) -> Vec<Instruction> {
         ]),
         Value::new_tuple(vec![int_from_u32(10), Value::new_buffer(vec![])]),
     ]);
+    */
     a.push(push_value(v));
     for i in 4..res.len() {
         a.push(res[i].clone());
