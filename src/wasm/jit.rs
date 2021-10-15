@@ -7,10 +7,6 @@ fn int_from_usize(a: usize) -> Value {
     Value::Int(Uint256::from_usize(a))
 }
 
-fn int_from_u32(a: u32) -> Value {
-    Value::Int(Uint256::from_u64(a as u64))
-}
-
 pub fn get_answer(answer: wasmtime::TypedFunc<(), (i32)>) -> i32 {
     match answer.call(()) {
         Ok(result) => result as i32,
@@ -38,44 +34,53 @@ impl fmt::Debug for JitWasm {
     }
 }
 
-fn get_tuple(v: Value, idx: usize) -> Value {
-    if let Value::Tuple(vs) = v {
-        vs[idx].clone()
+fn get_tuple(v: Option<Value>, idx: usize) -> Option<Value> {
+    if let Some(Value::Tuple(vs)) = v {
+        Some(vs[idx].clone())
     } else {
-        int_from_u32(0)
+        None
     }
 }
 
-fn value_bytes(v: Value) -> Vec<u8> {
-    if let Value::Int(i) = v {
-        i.to_bytes_be()
+fn value_bytes(v: Option<Value>) -> Option<Vec<u8>> {
+    if let Some(Value::Int(i)) = v {
+        Some(i.to_bytes_be())
     } else {
-        vec![0; 32]
+        None
     }
 }
 
-fn buffer_bytes(v: Value, len: usize) -> Vec<u8> {
-    if let Value::Buffer(buf) = v {
+fn buffer_bytes(v: Option<Value>, len: usize) -> Option<Vec<u8>> {
+    if let Some(Value::Buffer(buf)) = v {
         let mut tmp = vec![];
         for i in 0..len {
             tmp.push(buf.read_byte(i as u128));
         }
-        tmp
+        Some(tmp)
+    } else if len == 0 {
+        Some(vec![])
     } else {
-        vec![]
+        None
     }
 }
 
-fn get_tuple_bytes(v: Value, idx: usize) -> Vec<u8> {
+fn get_tuple_bytes(v: Option<Value>, idx: usize) -> Option<Vec<u8>> {
     value_bytes(get_tuple(v, idx))
 }
 
-fn get_tuple2_bytes(v: Value, idx: usize, idx2: usize) -> Vec<u8> {
+fn get_tuple2_bytes(v: Option<Value>, idx: usize, idx2: usize) -> Option<Vec<u8>> {
     get_tuple_bytes(get_tuple(v, idx), idx2)
 }
 
-fn get_tuple2_buffer(v: Value, idx: usize, idx2: usize, len: usize) -> Vec<u8> {
+fn get_tuple2_buffer(v: Option<Value>, idx: usize, idx2: usize, len: usize) -> Option<Vec<u8>> {
     buffer_bytes(get_tuple(get_tuple(v, idx), idx2), len)
+}
+
+fn error_to_wasm<E>(res: Result<(), E>) -> Result<(), wasmtime::Trap> {
+    match res {
+        Err(_) => Err(wasmtime::Trap::new("bad pointer")),
+        _ => Ok(()),
+    }
 }
 
 impl JitWasm {
@@ -114,7 +119,13 @@ impl JitWasm {
         let gas_cell = Rc::new(RefCell::new(4));
         let gas1 = gas_cell.clone();
 
-        let immed_cell = Rc::new(RefCell::new(int_from_usize(0)));
+        let immed = Value::new_tuple(vec![
+            int_from_usize(123),
+            Value::new_buffer(vec![1u8; 32]),
+            Value::new_tuple(vec![int_from_usize(234), int_from_usize(234)]),
+        ]);
+
+        let immed_cell = Rc::new(RefCell::new(immed));
         let immed1 = immed_cell.clone();
         let immed2 = immed_cell.clone();
         let immed3 = immed_cell.clone();
@@ -186,27 +197,23 @@ impl JitWasm {
 
         let tuplebytes_func = Func::wrap(&store, move |ptr: i32, offset: i32| {
             let v = &*immed6.borrow();
-            let tmp = get_tuple_bytes(v.clone(), offset as usize);
-            match &*memory_cell5.borrow() {
-                Some(memory) => {
-                    memory
-                        .write(ptr as usize, &tmp)
-                        .expect("cannot write memory");
+            let tmp = get_tuple_bytes(Some(v.clone()), offset as usize);
+            match (tmp, &*memory_cell5.borrow()) {
+                (Some(tmp), Some(memory)) => {
+                    error_to_wasm(memory.write(ptr as usize, &tmp))
                 }
-                _ => panic!("Wasm error: no memory"),
+                _ => Err(Trap::new("tuplebytes")),
             }
         });
 
         let tuple2bytes_func = Func::wrap(&store, move |ptr: i32, offset: i32, offset2: i32| {
             let v = &*immed7.borrow();
-            let tmp = get_tuple2_bytes(v.clone(), offset as usize, offset2 as usize);
-            match &*memory_cell6.borrow() {
-                Some(memory) => {
-                    memory
-                        .write(ptr as usize, &tmp)
-                        .expect("cannot write memory");
+            let tmp = get_tuple2_bytes(Some(v.clone()), offset as usize, offset2 as usize);
+            match (tmp, &*memory_cell6.borrow()) {
+                (Some(tmp), Some(memory)) => {
+                    error_to_wasm(memory.write(ptr as usize, &tmp))
                 }
-                _ => panic!("Wasm error: no memory"),
+                _ => Err(Trap::new("tuple2bytes")),
             }
         });
 
@@ -215,14 +222,12 @@ impl JitWasm {
             move |ptr: i32, offset: i32, offset2: i32, len: i32| {
                 let v = &*immed8.borrow();
                 let tmp =
-                    get_tuple2_buffer(v.clone(), offset as usize, offset2 as usize, len as usize);
-                match &*memory_cell7.borrow() {
-                    Some(memory) => {
-                        memory
-                            .write(ptr as usize, &tmp)
-                            .expect("cannot write memory");
+                    get_tuple2_buffer(Some(v.clone()), offset as usize, offset2 as usize, len as usize);
+                match (tmp, &*memory_cell7.borrow()) {
+                    (Some(tmp), Some(memory)) => {
+                        error_to_wasm(memory.write(ptr as usize, &tmp))
                     }
-                    _ => panic!("Wasm error: no memory"),
+                    _ => Err(Trap::new("tuple2buffer")),
                 }
             },
         );

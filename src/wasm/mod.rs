@@ -2226,6 +2226,7 @@ fn process_wasm_inner(
             // check if loop ends
             init.push(get_frame());
             init.push(get64_from_buffer(3));
+            init.push(immed_op(AVMOpcode::Add, int_from_usize(1)));
             init.push(get_frame());
             init.push(get64_from_buffer(2));
             init.push(simple_op(AVMOpcode::LessThan));
@@ -2292,6 +2293,7 @@ fn process_wasm_inner(
             // check if loop ends
             init.push(get_frame());
             init.push(get64_from_buffer(3));
+            init.push(immed_op(AVMOpcode::Add, int_from_usize(1)));
             init.push(get_frame());
             init.push(get64_from_buffer(2));
             init.push(simple_op(AVMOpcode::LessThan));
@@ -2361,6 +2363,7 @@ fn process_wasm_inner(
             init.push(get_frame());
             init.push(get64_from_buffer(4));
             init.push(get_frame());
+            init.push(immed_op(AVMOpcode::Add, int_from_usize(1)));
             init.push(get64_from_buffer(3));
             init.push(simple_op(AVMOpcode::LessThan));
             cjump(init, end_label);
@@ -2417,6 +2420,8 @@ fn process_wasm_inner(
             init.push(get64_from_buffer(1)); // idx, tuple, buffer
                                              // init.push(simple_op(AVMOpcode::DebugPrint));
             init.push(simple_op(AVMOpcode::Tget)); // int, buffer
+            // Check that it's actually integer
+            init.push(immed_op(AVMOpcode::Add, int_from_usize(0))); // int, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(0)); // address, int, buffer
                                              // implement bounds checking here
@@ -2444,6 +2449,8 @@ fn process_wasm_inner(
             init.push(get_frame());
             init.push(get64_from_buffer(2)); // idx2, tuple2, buffer
             init.push(simple_op(AVMOpcode::Tget)); // int, buffer
+            // Check that it's actually integer
+            init.push(immed_op(AVMOpcode::Add, int_from_usize(0))); // int, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(0)); // address, int, buffer
                                              // implement bounds checking here
