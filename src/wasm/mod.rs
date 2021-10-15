@@ -319,7 +319,6 @@ fn generate_store(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize,
     res.push(simple_op(AVMOpcode::Pop));
 }
 
-
 fn safe_tuple_get(res: &mut Vec<Instruction>) {
     // idx, tuple
     res.push(simple_op(AVMOpcode::Dup1)); // tuple, idx, tuple
