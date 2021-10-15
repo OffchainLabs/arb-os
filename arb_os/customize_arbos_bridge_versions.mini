@@ -7,6 +7,10 @@ use bridge_arbos_versions::GlobalsBeforeUpgrade;
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsForall;
 
+use accounts::AccountStore;
+
+use evmCallStack::EvmCallFrame;
+
 public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> map<uint, uint> {
     return oldGlobals.globalChainParameters;
 }
@@ -17,3 +21,6 @@ public func set_wasm_prog_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> any {
     return compiled;
 }
 
+public func set_globalCallStack_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
+    return None;
+}

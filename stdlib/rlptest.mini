@@ -50,15 +50,15 @@ write view func main(kind: uint, value: any) {
 
         // decode and verify no difference
         if let Some(res) = rlp_decodeUint(bytestream_new(ba)) {
-            if (res.1 == ui) {
-                asm(bytearray_marshalFull(ba),) { log };
+            if res.1 == ui {
+                asm(bytearray_marshalFull(ba)) { log };
             } else {
-                asm(0,) { log };
+                asm(0) { log };
             }
         } else {
-            asm(1,) { log };
+            asm(1) { log };
         }
-    } elseif (kind == 1) {
+    } else if kind == 1 {
         let mb = unsafecast<MarshalledBytes>(value);
         if let Some(in) = bytearray_unmarshalBytes(mb) {
             let encoded = rlp_encodeBytes(
@@ -72,18 +72,18 @@ write view func main(kind: uint, value: any) {
             // decode and verify no difference
             if let Some(res) = rlp_decodeBytes(bytestream_new(encoded)) {
                 let marshDec = bytearray_marshalFull(res.1);
-                if (marshDec == mb) {
-                    asm(bytearray_marshalFull(encoded),) { log };
+                if marshDec == mb {
+                    asm(bytearray_marshalFull(encoded)) { log };
                 } else {
-                    asm( (20, bytearray_marshalFull(encoded)), ) { log };
+                    asm( (20, bytearray_marshalFull(encoded)) ) { log };
                 }
             } else {
-                asm(3,) { log };
+                asm(3) { log };
             }
         } else {
             error;
         }
-    } elseif (kind == 2) {
+    } else if kind == 2 {
         let vals = unsafecast<(uint, MarshalledBytes, uint)>(value);
         if let Some(data) = bytearray_unmarshalBytes(vals.1) {
             let encodedPieces = unsafecast<[]ByteArray>(newarray<any>(3));  // workaround issue #120
@@ -95,9 +95,9 @@ write view func main(kind: uint, value: any) {
                 [2] = rlp_encodeUint(vals.2, bytearray_new(0), 0).0
             };
             if let Some(res) = rlp_encodeList(encodedPieces, 0, 3, bytearray_new(0), 0) {
-                asm(bytearray_marshalFull(res.0),) { log };
+                asm(bytearray_marshalFull(res.0)) { log };
             } else {
-                asm(4,) { log };
+                asm(4) { log };
             }
         } else {
             error;
@@ -163,7 +163,7 @@ view func testRlpHasher() {
             error;
         }
     } else {
-        asm(13,) { debugprint };
+        asm(13) { debugprint };
         error;
     }
 
@@ -191,9 +191,9 @@ view func testRlpHasher() {
 func randomByteArray() -> ByteArray {
     let ret = bytearray_new(0);
     let i = 0;
-    while (i < 5) {
+    while i < 5 {
         ret = bytearray_set256(ret, 32*i, uint(hash(i+1017)));
         i = i+1;
     }
-    return ret;
+    ret
 }

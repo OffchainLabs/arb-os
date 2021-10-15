@@ -1608,12 +1608,7 @@ pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), et
 }
 
 #[test]
-fn test_upgrade_arbos_to_different_version() {
-    test_upgrade_arbos_over_itself_impl().unwrap();
-}
-
-#[cfg(test)]
-fn test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
+fn test_upgrade_arbos_to_different_version() -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos_before.mexe"));
     machine.start_at_zero(true);
     machine.runtime_env.force_zero_gas_price = true;
@@ -1635,7 +1630,7 @@ fn test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys_orig_binding.arbos_version(&mut machine)?,
-        Uint256::from_u64(45),
+        Uint256::from_u64(46),
     );
 
     arbowner._add_chain_owner(&mut machine, my_addr.clone(), true, false)?;

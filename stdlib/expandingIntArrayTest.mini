@@ -12,7 +12,7 @@ use std::bytearray::opClosure;
 
 
 write func main() {
-    asm(tests(),) { log };
+    asm(tests()) { log };
 }
 
 func tests() -> uint {
@@ -20,71 +20,71 @@ func tests() -> uint {
     let a = expandingIntArray_new();
 
     let index = 0;
-    while (index < 24) {
+    while index < 24 {
         a = expandingIntArray_set(a, index, index);
         index = index + 1;
     }
 
     let index = 0;
-    while (index < 23) {
+    while index < 23 {
         let pair = expandingIntArray_getConsecutive(a, index);
-        if (pair.0 != index || pair.1 != index + 1) {
+        if pair.0 != index || pair.1 != index + 1 {
             return 1;
         }
         index = index + 1;
     }
     let index = 25;
-    while (index < 1024) {
+    while index < 1024 {
         let pair = expandingIntArray_getConsecutive(a, index);
-        if (pair.0 != 0 || pair.1 != 0) {
+        if pair.0 != 0 || pair.1 != 0 {
             return 1;
         }
         index = index + 1;
     }
 
-    if (expandingIntArray_size(a) != 64) {
+    if expandingIntArray_size(a) != 64 {
         return 2;
     }
 
     a = expandingIntArray_set(a, 64, 64);
-    if (expandingIntArray_get(a, 64) != 64) {
+    if expandingIntArray_get(a, 64) != 64 {
         return 2;
     }
     a = expandingIntArray_set(a, 728, 728);
-    if (expandingIntArray_size(a) != 4096) {
+    if expandingIntArray_size(a) != 4096 {
         return 2;
     }
 
     let index = 0;
-    while (index < 4096) {
+    while index < 4096 {
         let before = expandingIntArray_get(a, index);
         a = expandingIntArray_op(a, index, unsafecast<opClosure>(struct { f: addFunc, val: index, })).0;
         let after = expandingIntArray_get(a, index);
-        if (before != after - index) {
+        if before != after - index {
             return after;
         }
 
         a = expandingIntArray_opConsecutive(
             a,
             index,
-            unsafecast<opClosure>(struct { f: addFunc, val: index, }),
-            unsafecast<opClosure>(struct { f: addFunc, val: index, })
+            unsafecast<opClosure>(struct { f: addFunc, val: index }),
+            unsafecast<opClosure>(struct { f: addFunc, val: index })
         ).0;
 
-        if (expandingIntArray_get(a, index) != after + index) {
+        if expandingIntArray_get(a, index) != after + index {
             return after;
         }
 
         index = index + 1;
     }
-    if (expandingIntArray_size(a) != 4096 * 8) {
+    if expandingIntArray_size(a) != 4096 * 8 {
         return expandingIntArray_size(a);
     }
 
-    return 0;
+    0
 }
 
 func addFunc(argument: any, value: uint) -> (uint, any) {
-	let res = value + unsafecast<uint>(argument);
-	return (res, res,);
+    let res = value + unsafecast<uint>(argument);
+    (res, res)
 }

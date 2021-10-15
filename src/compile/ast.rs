@@ -4,19 +4,17 @@
 
 //! Contains types and utilities for constructing the mini AST
 
-use crate::compile::typecheck::{AbstractSyntaxTree, InliningMode, TypeCheckedNode};
-use crate::compile::{path_display, CompileError, Lines};
-use crate::console::Color;
-use crate::link::{value_from_field_list, Import, TUPLE_SIZE};
-use crate::mavm::{Instruction, Label, LabelId, Value};
+use crate::compile::typecheck::{AbstractSyntaxTree, TypeCheckedNode};
+use crate::compile::{CompileError, Lines};
+use crate::console::{human_readable_index, Color};
+use crate::link::{Import, TupleTree};
+use crate::mavm::{CodePt, Instruction, LabelId, Value};
 use crate::pos::{BytePos, Location};
-use crate::stringtable::StringId;
+use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
+use derivative::Derivative;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap, HashSet};
-use std::fmt;
-use std::fmt::Formatter;
-use std::sync::Arc;
 
 /// This is a map of the types at a given location, with the Vec<String> representing the module path
 /// and the usize representing the `StringId` of the type at that location.
@@ -34,7 +32,6 @@ pub struct DebugInfo {
 pub struct Attributes {
     /// Is true if the current node is a breakpoint, false otherwise.
     pub breakpoint: bool,
-    pub inline: InliningMode,
     #[serde(skip)]
     /// Whether generated instructions should be printed to the console.
     pub codegen_print: bool,
@@ -76,7 +73,7 @@ impl From<Option<Location>> for DebugInfo {
 pub enum TopLevelDecl {
     TypeDecl(TypeDecl),
     FuncDecl(Func),
-    VarDecl(GlobalVarDecl),
+    VarDecl(GlobalVar),
     UseDecl(Import),
     ConstDecl,
 }
@@ -106,13 +103,15 @@ pub enum Type {
     Array(Box<Type>),
     FixedArray(Box<Type>, usize),
     Struct(Vec<StructField>),
-    Nominal(Vec<String>, StringId),
     Func(FuncProperties, Vec<Type>, Box<Type>),
     Map(Box<Type>, Box<Type>),
     Any,
     Every,
     Option(Box<Type>),
     Union(Vec<Type>),
+    Nominal(Vec<String>, StringId, #[serde(default)] Vec<Type>),
+    GenericSlot(usize),
+    Generic(usize),
 }
 
 impl AbstractSyntaxTree for Type {
@@ -127,7 +126,9 @@ impl AbstractSyntaxTree for Type {
             | Type::Buffer
             | Type::Any
             | Type::Every
-            | Type::Nominal(_, _) => vec![],
+            | Type::GenericSlot(..)
+            | Type::Generic(..)
+            | Type::Nominal(_, _, _) => vec![],
             Type::Tuple(types) | Type::Union(types) => {
                 types.iter_mut().map(|t| TypeCheckedNode::Type(t)).collect()
             }
@@ -162,9 +163,10 @@ impl Type {
     /// Gets the representation of a `Nominal` type, based on the types in `type_tree`, returns self
     /// if the type is not `Nominal`, or a `CompileError` if the type of `self` cannot be resolved in
     /// `type_tree`.
-    pub fn get_representation(&self, type_tree: &TypeTree) -> Result<Self, CompileError> {
+    pub fn rep(&self, type_tree: &TypeTree) -> Result<Self, CompileError> {
         let mut base_type = self.clone();
-        while let Type::Nominal(path, id) = base_type.clone() {
+
+        while let Type::Nominal(path, id, spec) = base_type.clone() {
             base_type = type_tree
                 .get(&(path.clone(), id))
                 .cloned()
@@ -172,7 +174,8 @@ impl Type {
                     format!("No type at {:?}, {}", path, id),
                     vec![],
                 ))?
-                .0;
+                .0
+                .make_specific(&spec)?;
         }
         Ok(base_type)
     }
@@ -180,7 +183,7 @@ impl Type {
     /// Finds all nominal sub-types present under a type
     pub fn find_nominals(&self) -> Vec<usize> {
         match self {
-            Type::Nominal(_, id) => {
+            Type::Nominal(_, id, _) => {
                 vec![*id]
             }
             Type::Array(tipe) | Type::FixedArray(tipe, ..) | Type::Option(tipe) => {
@@ -217,116 +220,145 @@ impl Type {
         }
     }
 
-    /// If self is a Struct, and name is the StringID of a field of self, then returns Some(n), where
-    /// n is the index of the field of self whose ID matches name.  Otherwise returns None.
-    pub fn get_struct_slot_by_name(&self, name: String) -> Option<usize> {
-        match self {
-            Type::Struct(fields) => {
-                for (i, field) in fields.iter().enumerate() {
-                    if field.name == name {
-                        return Some(i);
-                    }
-                }
-                None
+    /// Find all types matching some critereon
+    /// |take| decides whether to take a value, returning true when to do so
+    pub fn find<Take>(&self, take: &Take) -> Vec<Type>
+    where
+        Take: Fn(&Self) -> bool,
+    {
+        let mut found = vec![];
+        macro_rules! find {
+            ($tipe:expr) => {
+                found.extend($tipe.find(take));
+            };
+        }
+        match &self {
+            Self::Tuple(contents) | Self::Union(contents) | Self::Nominal(_, _, contents) => {
+                contents.iter().for_each(|val| find!(val));
             }
-            _ => None,
+            Self::Option(inner) | Self::Array(inner) | Self::FixedArray(inner, _) => {
+                find!(inner);
+            }
+            Self::Map(key, value) => {
+                find!(key);
+                find!(value);
+            }
+            Self::Func(_, args, ret) => {
+                args.iter().for_each(|val| find!(val));
+                find!(ret);
+            }
+            Self::Struct(fields) => {
+                fields.iter().for_each(|field| find!(field.tipe));
+            }
+            _ => {}
+        }
+        if take(self) {
+            found.push(self.clone());
+        }
+        found
+    }
+
+    /// Surgically replace types potentially nested within others.
+    /// |via| makes the type substitution.
+    pub fn replace<Via>(&mut self, via: &mut Via)
+    where
+        Via: FnMut(&mut Self),
+    {
+        match self {
+            Self::Tuple(ref mut contents)
+            | Self::Union(ref mut contents)
+            | Self::Nominal(_, _, ref mut contents) => {
+                contents.iter_mut().for_each(|val| val.replace(via));
+            }
+            Self::Option(ref mut inner)
+            | Self::Array(ref mut inner)
+            | Self::FixedArray(ref mut inner, _) => inner.replace(via),
+            Self::Map(ref mut key, ref mut value) => {
+                key.replace(via);
+                value.replace(via);
+            }
+            Self::Func(_, ref mut args, ref mut ret) => {
+                args.iter_mut().for_each(|val| val.replace(via));
+                ret.replace(via);
+            }
+            Self::Struct(ref mut fields) => {
+                fields.iter_mut().for_each(|field| field.tipe.replace(via));
+            }
+            _ => {}
+        }
+        via(self);
+    }
+
+    /// Count the number of generic slots under this type. Since slots must be filled in at call sites,
+    /// this tells you how many parameters must be passed in.
+    pub fn count_generic_slots(&self) -> usize {
+        let params = self.find(&|tipe| matches!(tipe, Type::GenericSlot(_)));
+
+        let mut seen = HashSet::new();
+
+        for param in params {
+            match param {
+                Type::GenericSlot(slot) => drop(seen.insert(slot)),
+                x => panic!("find() matched something wrong {:?}", x),
+            }
+        }
+        return seen.len();
+    }
+
+    /// Makes a specific version of this type, where the nominals listed are specialized.
+    pub fn make_specific(&self, specialization: &Vec<Type>) -> Result<Self, CompileError> {
+        let mut tipe = self.clone();
+        let mut failure = None;
+        tipe.replace(&mut |tipe| {
+            if let Type::GenericSlot(slot) = tipe {
+                match specialization.get(*slot) {
+                    Some(specific) => *tipe = specific.clone(),
+                    None => failure = Some(*slot),
+                }
+            }
+        });
+        match failure {
+            Some(slot) => Err(CompileError::new(
+                "Generics error",
+                format!(
+                    "Specialization {} is missing its {} type.",
+                    Color::red("<1st, 2nd, ...>"),
+                    Color::red(human_readable_index(slot + 1))
+                ),
+                vec![],
+            )),
+            None => Ok(tipe),
         }
     }
 
-    pub fn covariant_castable(
-        &self,
-        rhs: &Self,
-        type_tree: &TypeTree,
-        mut seen: HashSet<(Type, Type)>,
-    ) -> bool {
-        if *rhs == Type::Every {
-            return true;
-        }
-        match self {
-            Type::Any => *rhs != Type::Void,
-            Type::Uint | Type::Int | Type::Bool | Type::Bytes32 | Type::EthAddress => match &rhs {
-                Type::Uint | Type::Int | Type::Bool | Type::Bytes32 | Type::EthAddress => true,
-                _ => false,
-            },
-            Type::Buffer | Type::Void | Type::Every => rhs == self,
-            Type::Tuple(tvec) => {
-                if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
-                    type_vectors_covariant_castable(tvec, &tvec2, type_tree, seen)
-                } else {
-                    false
+    /// Makes a generic version of this type, where the nominals listed are generalized.
+    pub fn make_generic(&self, generalization: &Vec<StringId>) -> Self {
+        let slots = generalization
+            .into_iter()
+            .enumerate()
+            .map(|(index, id)| (*id, index))
+            .collect::<HashMap<_, _>>();
+
+        let mut tipe = self.clone();
+        tipe.replace(&mut |tipe| {
+            if let Type::Nominal(_, id, _) = tipe {
+                if let Some(slot) = slots.get(&id) {
+                    *tipe = Type::GenericSlot(*slot);
                 }
             }
-            Type::Array(t) => {
-                if let Ok(Type::Array(t2)) = rhs.get_representation(type_tree) {
-                    t.covariant_castable(&t2, type_tree, seen)
-                } else {
-                    false
-                }
+        });
+        tipe
+    }
+
+    /// Converts all slots to immutable generics. This ensures they are never changed again at call sites.
+    pub fn commit_generic_slots(&self) -> Self {
+        let mut tipe = self.clone();
+        tipe.replace(&mut |tipe| {
+            if let Type::GenericSlot(slot) = tipe {
+                *tipe = Type::Generic(*slot);
             }
-            Type::FixedArray(t, s) => {
-                if let Ok(Type::FixedArray(t2, s2)) = rhs.get_representation(type_tree) {
-                    (*s == s2) && t.covariant_castable(&t2, type_tree, seen)
-                } else {
-                    false
-                }
-            }
-            Type::Struct(fields) => {
-                if let Ok(Type::Struct(fields2)) = rhs.get_representation(type_tree) {
-                    field_vectors_covariant_castable(fields, &fields2, type_tree, seen)
-                } else {
-                    false
-                }
-            }
-            Type::Nominal(_, _) => {
-                if let (Ok(left), Ok(right)) = (
-                    self.get_representation(type_tree),
-                    rhs.get_representation(type_tree),
-                ) {
-                    if seen.insert((left.clone(), right.clone())) {
-                        left.covariant_castable(&right, type_tree, seen)
-                    } else {
-                        true
-                    }
-                } else {
-                    false
-                }
-            }
-            Type::Func(_, args, ret) => {
-                if let Type::Func(_, args2, ret2) = rhs {
-                    //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
-                    type_vectors_covariant_castable(args2, args, type_tree, seen.clone())
-                        && (ret.covariant_castable(ret2, type_tree, seen))
-                } else {
-                    false
-                }
-            }
-            Type::Map(key1, val1) => {
-                if let Type::Map(key2, val2) = rhs {
-                    if let Ok(val2) = val2.get_representation(type_tree) {
-                        key1.covariant_castable(key2, type_tree, seen.clone())
-                            && (val1.covariant_castable(&val2, type_tree, seen))
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                }
-            }
-            Type::Option(_) => {
-                if let Ok(Type::Option(_)) = rhs.get_representation(type_tree) {
-                    true
-                } else {
-                    false
-                }
-            }
-            Type::Union(inner) => {
-                if let Ok(Type::Union(inner2)) = rhs.get_representation(type_tree) {
-                    type_vectors_covariant_castable(&*inner2, inner, type_tree, seen.clone())
-                } else {
-                    false
-                }
-            }
-        }
+        });
+        tipe
     }
 
     pub fn castable(
@@ -354,38 +386,35 @@ impl Type {
             },
             Type::Buffer | Type::Void | Type::Every => rhs == self,
             Type::Tuple(tvec) => {
-                if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
+                if let Ok(Type::Tuple(tvec2)) = rhs.rep(type_tree) {
                     type_vectors_castable(tvec, &tvec2, type_tree, seen)
                 } else {
                     false
                 }
             }
             Type::Array(t) => {
-                if let Ok(Type::Array(t2)) = rhs.get_representation(type_tree) {
+                if let Ok(Type::Array(t2)) = rhs.rep(type_tree) {
                     t.castable(&t2, type_tree, seen)
                 } else {
                     false
                 }
             }
             Type::FixedArray(t, s) => {
-                if let Ok(Type::FixedArray(t2, s2)) = rhs.get_representation(type_tree) {
+                if let Ok(Type::FixedArray(t2, s2)) = rhs.rep(type_tree) {
                     (*s == s2) && t.castable(&t2, type_tree, seen)
                 } else {
                     false
                 }
             }
             Type::Struct(fields) => {
-                if let Ok(Type::Struct(fields2)) = rhs.get_representation(type_tree) {
+                if let Ok(Type::Struct(fields2)) = rhs.rep(type_tree) {
                     field_vectors_castable(fields, &fields2, type_tree, seen)
                 } else {
                     false
                 }
             }
-            Type::Nominal(_, _) => {
-                if let (Ok(left), Ok(right)) = (
-                    self.get_representation(type_tree),
-                    rhs.get_representation(type_tree),
-                ) {
+            Type::Nominal(_, _, _) => {
+                if let (Ok(left), Ok(right)) = (self.rep(type_tree), rhs.rep(type_tree)) {
                     if seen.insert((left.clone(), right.clone())) {
                         left.castable(&right, type_tree, seen)
                     } else {
@@ -411,7 +440,7 @@ impl Type {
             }
             Type::Map(key1, val1) => {
                 if let Type::Map(key2, val2) = rhs {
-                    if let Ok(val2) = val2.get_representation(type_tree) {
+                    if let Ok(val2) = val2.rep(type_tree) {
                         key1.castable(key2, type_tree, seen.clone())
                             && (val1.castable(&val2, type_tree, seen))
                     } else {
@@ -422,19 +451,21 @@ impl Type {
                 }
             }
             Type::Option(inner) => {
-                if let Ok(Type::Option(inner2)) = rhs.get_representation(type_tree) {
+                if let Ok(Type::Option(inner2)) = rhs.rep(type_tree) {
                     inner.castable(&inner2, type_tree, seen)
                 } else {
                     false
                 }
             }
             Type::Union(inner) => {
-                if let Ok(Type::Union(inner2)) = rhs.get_representation(type_tree) {
+                if let Ok(Type::Union(inner2)) = rhs.rep(type_tree) {
                     type_vectors_castable(&*inner2, inner, type_tree, seen.clone())
                 } else {
                     false
                 }
             }
+            Type::GenericSlot(..) => panic!("tried to cast a generic"),
+            Type::Generic(..) => panic!("tried to cast a generic"),
         }
     }
 
@@ -457,42 +488,42 @@ impl Type {
             | Type::Bytes32
             | Type::EthAddress
             | Type::Buffer
-            | Type::Every => (self == rhs),
+            | Type::Every => match rhs.rep(type_tree) {
+                Ok(right) => right == *self,
+                Err(_) => false,
+            },
             Type::Tuple(tvec) => {
-                if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
+                if let Ok(Type::Tuple(tvec2)) = rhs.rep(type_tree) {
                     type_vectors_assignable(tvec, &tvec2, type_tree, seen)
                 } else {
                     false
                 }
             }
             Type::Array(t) => {
-                if let Ok(Type::Array(t2)) = rhs.get_representation(type_tree) {
+                if let Ok(Type::Array(t2)) = rhs.rep(type_tree) {
                     t.assignable(&t2, type_tree, seen)
                 } else {
                     false
                 }
             }
             Type::FixedArray(t, s) => {
-                if let Ok(Type::FixedArray(t2, s2)) = rhs.get_representation(type_tree) {
+                if let Ok(Type::FixedArray(t2, s2)) = rhs.rep(type_tree) {
                     (*s == s2) && t.assignable(&t2, type_tree, seen)
                 } else {
                     false
                 }
             }
             Type::Struct(fields) => {
-                if let Ok(Type::Struct(fields2)) = rhs.get_representation(type_tree) {
+                if let Ok(Type::Struct(fields2)) = rhs.rep(type_tree) {
                     field_vectors_assignable(fields, &fields2, type_tree, seen)
                 } else {
                     false
                 }
             }
-            Type::Nominal(_, _) => {
-                if let (Ok(left), Ok(right)) = (
-                    self.get_representation(type_tree),
-                    rhs.get_representation(type_tree),
-                ) {
+            Type::Nominal(_, _, _) => {
+                if let (Ok(left), Ok(right)) = (self.rep(type_tree), rhs.rep(type_tree)) {
                     if seen.insert((left.clone(), right.clone())) {
-                        left.assignable(&right, type_tree, seen)
+                        left.assignable(&right, type_tree, seen.clone())
                     } else {
                         true
                     }
@@ -501,23 +532,23 @@ impl Type {
                 }
             }
             Type::Func(prop, args, ret) => {
-                if let Type::Func(prop2, args2, ret2) = rhs {
+                if let Ok(Type::Func(prop2, args2, ret2)) = rhs.rep(type_tree) {
                     //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
                     let (view1, write1) = prop.purity();
                     let (view2, write2) = prop2.purity();
 
                     (view1 || !view2)
                         && (write1 || !write2)
-                        && arg_vectors_assignable(args2, args, type_tree, seen.clone())
-                        && (ret.assignable(ret2, type_tree, seen))
+                        && arg_vectors_assignable(&args2, args, type_tree, seen.clone())
+                        && (ret.assignable(&ret2, type_tree, seen))
                 } else {
                     false
                 }
             }
             Type::Map(key1, val1) => {
-                if let Type::Map(key2, val2) = rhs {
-                    if let Ok(val2) = val2.get_representation(type_tree) {
-                        key1.assignable(key2, type_tree, seen.clone())
+                if let Ok(Type::Map(key2, val2)) = rhs.rep(type_tree) {
+                    if let Ok(val2) = val2.rep(type_tree) {
+                        key1.assignable(&key2, type_tree, seen.clone())
                             && (val1.assignable(&val2, type_tree, seen))
                     } else {
                         false
@@ -527,15 +558,29 @@ impl Type {
                 }
             }
             Type::Option(inner) => {
-                if let Ok(Type::Option(inner2)) = rhs.get_representation(type_tree) {
+                if let Ok(Type::Option(inner2)) = rhs.rep(type_tree) {
                     inner.assignable(&inner2, type_tree, seen)
                 } else {
                     false
                 }
             }
             Type::Union(types) => {
-                if let Ok(Type::Union(types2)) = rhs.get_representation(type_tree) {
+                if let Ok(Type::Union(types2)) = rhs.rep(type_tree) {
                     type_vectors_assignable(types, &types2, type_tree, seen)
+                } else {
+                    false
+                }
+            }
+            Type::GenericSlot(slot) => {
+                if let Ok(Type::GenericSlot(slot2)) = rhs.rep(type_tree) {
+                    *slot == slot2
+                } else {
+                    false
+                }
+            }
+            Type::Generic(slot) => {
+                if let Ok(Type::Generic(slot2)) = rhs.rep(type_tree) {
+                    *slot == slot2
                 } else {
                     false
                 }
@@ -574,8 +619,16 @@ impl Type {
                     Some(TypeMismatch::Type(self.clone(), rhs.clone()))
                 }
             }
+            Type::GenericSlot(slot) => match rhs.rep(type_tree) {
+                Ok(Type::GenericSlot(slot2)) if *slot == slot2 => None,
+                _ => Some(TypeMismatch::Type(self.clone(), rhs.clone())),
+            },
+            Type::Generic(slot) => match rhs.rep(type_tree) {
+                Ok(Type::Generic(slot2)) if *slot == slot2 => None,
+                _ => Some(TypeMismatch::Type(self.clone(), rhs.clone())),
+            },
             Type::Tuple(tvec) => {
-                if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
+                if let Ok(Type::Tuple(tvec2)) = rhs.rep(type_tree) {
                     for (index, (left, right)) in tvec.iter().zip(tvec2.iter()).enumerate() {
                         if let Some(inner) = left.first_mismatch(right, type_tree, seen.clone()) {
                             return Some(TypeMismatch::Tuple(index, Box::new(inner)));
@@ -590,7 +643,7 @@ impl Type {
                 }
             }
             Type::Array(t) => {
-                if let Ok(Type::Array(t2)) = rhs.get_representation(type_tree) {
+                if let Ok(Type::Array(t2)) = rhs.rep(type_tree) {
                     t.first_mismatch(&t2, type_tree, seen)
                         .map(|mismatch| TypeMismatch::ArrayMismatch(Box::new(mismatch)))
                 } else {
@@ -598,7 +651,7 @@ impl Type {
                 }
             }
             Type::FixedArray(t, s) => {
-                if let Ok(Type::FixedArray(t2, s2)) = rhs.get_representation(type_tree) {
+                if let Ok(Type::FixedArray(t2, s2)) = rhs.rep(type_tree) {
                     if let Some(inner) = t.first_mismatch(&t2, type_tree, seen) {
                         Some(TypeMismatch::ArrayMismatch(Box::new(inner)))
                     } else if *s != s2 {
@@ -611,31 +664,24 @@ impl Type {
                 }
             }
             Type::Struct(fields) => {
-                if let Ok(Type::Struct(fields2)) = rhs.get_representation(type_tree) {
+                if let Ok(Type::Struct(fields2)) = rhs.rep(type_tree) {
                     field_vectors_mismatch(fields, &fields2, type_tree, seen)
                 } else {
                     Some(TypeMismatch::Type(self.clone(), rhs.clone()))
                 }
             }
-            Type::Nominal(_, _) => {
-                match (
-                    self.get_representation(type_tree),
-                    rhs.get_representation(type_tree),
-                ) {
-                    (Ok(left), Ok(right)) => {
-                        if seen.insert((self.clone(), rhs.clone())) {
-                            left.first_mismatch(&right, type_tree, seen)
-                        } else {
-                            None
-                        }
-                    }
-                    (Ok(_), Err(_)) => Some(TypeMismatch::UnresolvedRight(self.clone())),
-                    (Err(_), Ok(_)) => Some(TypeMismatch::UnresolvedLeft(rhs.clone())),
-                    (Err(_), Err(_)) => {
-                        Some(TypeMismatch::UnresolvedBoth(self.clone(), rhs.clone()))
+            Type::Nominal(_, _, _) => match (self.rep(type_tree), rhs.rep(type_tree)) {
+                (Ok(left), Ok(right)) => {
+                    if seen.insert((self.clone(), rhs.clone())) {
+                        left.first_mismatch(&right, type_tree, seen)
+                    } else {
+                        None
                     }
                 }
-            }
+                (Ok(_), Err(_)) => Some(TypeMismatch::UnresolvedRight(self.clone())),
+                (Err(_), Ok(_)) => Some(TypeMismatch::UnresolvedLeft(rhs.clone())),
+                (Err(_), Err(_)) => Some(TypeMismatch::UnresolvedBoth(self.clone(), rhs.clone())),
+            },
             Type::Func(prop, args, ret) => {
                 if let Type::Func(prop2, args2, ret2) = rhs {
                     let (view1, write1) = prop.purity();
@@ -665,7 +711,7 @@ impl Type {
             }
             Type::Map(key1, val1) => {
                 if let Type::Map(key2, val2) = rhs {
-                    if let Ok(val2) = val2.get_representation(type_tree) {
+                    if let Ok(val2) = val2.rep(type_tree) {
                         key1.first_mismatch(key2, type_tree, seen.clone())
                             .map(|mismatch| (true, mismatch))
                             .or_else(|| {
@@ -684,7 +730,7 @@ impl Type {
                 }
             }
             Type::Option(inner) => {
-                if let Ok(Type::Option(inner2)) = rhs.get_representation(type_tree) {
+                if let Ok(Type::Option(inner2)) = rhs.rep(type_tree) {
                     inner
                         .first_mismatch(&inner2, type_tree, seen)
                         .map(|mismatch| TypeMismatch::Option(Box::new(mismatch)))
@@ -693,7 +739,7 @@ impl Type {
                 }
             }
             Type::Union(types) => {
-                if let Ok(Type::Union(types2)) = rhs.get_representation(type_tree) {
+                if let Ok(Type::Union(types2)) = rhs.rep(type_tree) {
                     for (index, (left, right)) in types.iter().zip(types2.iter()).enumerate() {
                         if let Some(inner) = left.first_mismatch(right, type_tree, seen.clone()) {
                             return Some(TypeMismatch::Union(index, Box::new(inner)));
@@ -711,10 +757,7 @@ impl Type {
     }
 
     pub fn mismatch_string(&self, rhs: &Type, type_tree: &TypeTree) -> Option<String> {
-        let (left, right) = (
-            &self.get_representation(type_tree).ok()?,
-            &rhs.get_representation(type_tree).ok()?,
-        );
+        let (left, right) = (&self.rep(type_tree).ok()?, &rhs.rep(type_tree).ok()?);
         self.first_mismatch(rhs, type_tree, HashSet::new())
             .map(|mismatch| {
                 format!(
@@ -749,67 +792,80 @@ impl Type {
                             },
                         }
                     },
-                    mismatch
+                    mismatch.print(type_tree)
                 )
             })
     }
 
-    /// Returns a tuple containing `Type`s default value and a `bool` representing whether use of
-    /// that default is type-safe.
-    // TODO: have this resolve nominal types
-    pub fn default_value(&self) -> (Value, bool) {
+    /// Returns the default value for the type
+    pub fn default_value(&self, type_tree: &TypeTree) -> Value {
         match self {
-            Type::Void => (Value::none(), false),
-            Type::Buffer => (Value::new_buffer(vec![]), true),
+            Type::Any => Value::none(),
+            Type::Buffer => Value::new_buffer(vec![]),
             Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress | Type::Bool => {
-                (Value::Int(Uint256::zero()), true)
+                Value::from(0)
             }
-            Type::Tuple(tvec) => {
-                let mut default_tup = Vec::new();
-                let mut is_safe = true;
-                for t in tvec {
-                    let (def, safe) = t.default_value();
-                    default_tup.push(def);
-                    is_safe = is_safe && safe;
-                }
-                (Value::new_tuple(default_tup), is_safe)
+            Type::Union(types) => {
+                // the first's default has to be right by definition
+                types[0].default_value(type_tree)
             }
-            Type::Array(t) => {
-                let (def, safe) = t.default_value();
-                (
-                    Value::new_tuple(vec![
-                        Value::Int(Uint256::one()),
-                        Value::Int(Uint256::one()),
-                        Value::new_tuple(vec![def]),
-                    ]),
-                    safe,
-                )
-            }
-            Type::FixedArray(t, sz) => {
-                let (default_val, safe) = t.default_value();
-                let mut val = Value::new_tuple(vec![default_val; 8]);
-                let mut chunk_size = 1;
-                while chunk_size * TUPLE_SIZE < *sz {
-                    val = Value::new_tuple(vec![val; 8]);
-                    chunk_size *= 8;
-                }
-                (val, safe)
+            Type::Tuple(types) => {
+                Value::new_tuple(types.iter().map(|v| v.default_value(type_tree)).collect())
             }
             Type::Struct(fields) => {
-                let mut vals = Vec::new();
-                let mut is_safe = true;
-                for field in fields {
-                    let (val, safe) = field.tipe.default_value();
-                    vals.push(val);
-                    is_safe = is_safe && safe;
-                }
-                (value_from_field_list(vals), is_safe)
+                let field_values = fields
+                    .iter()
+                    .map(|f| f.tipe.default_value(type_tree))
+                    .collect();
+                TupleTree::fold_into_tuple(field_values)
             }
-            Type::Map(_, _) | Type::Func(_, _, _) | Type::Nominal(_, _) => (Value::none(), false),
-            Type::Any => (Value::none(), true),
-            Type::Every => (Value::none(), false),
-            Type::Option(_) => (Value::new_tuple(vec![Value::Int(Uint256::zero())]), true),
-            Type::Union(_) => (Value::none(), false),
+            Type::Func(..) => {
+                // the error codepoint
+                Value::CodePoint(CodePt::Null)
+            }
+            Type::Option(_) => Value::new_tuple(vec![Value::Int(Uint256::zero())]),
+            Type::Map(_, _) => Value::new_tuple(vec![
+                Value::from(0), // kvs.mini builtin_kvsNew() unsafe casts on 0
+                Value::from(0), // set size to 0
+            ]),
+            Type::Array(t) => {
+                let fixed = Type::FixedArray(t.clone(), 1).default_value(type_tree);
+                Value::new_tuple(vec![
+                    Value::from(1), // size
+                    Value::from(1), // topstep
+                    fixed,          // array.mini builtin_arrayNew() unsafe casts this
+                ])
+            }
+            Type::FixedArray(t, size) => {
+                // emulate array.mini builtin_arrayNew()
+                fn emulated_builtin(size: usize, mut base: Value) -> Value {
+                    let mut chunk = 1;
+                    while (8 * chunk < size) {
+                        chunk = 8 * chunk;
+                        base = Value::new_tuple(vec![base; 8]);
+                    }
+                    Value::new_tuple(vec![
+                        Value::from(size),  // size
+                        Value::from(chunk), // topstep
+                        Value::new_tuple(vec![base; 8]),
+                    ])
+                }
+                emulated_builtin(*size, t.default_value(type_tree))
+            }
+            Type::Nominal(..) => {
+                let tipe = self.rep(type_tree).unwrap_or(Type::Any);
+                tipe.default_value(type_tree)
+            }
+            Type::Generic(_) | Type::GenericSlot(_) => {
+                // This can happen with builtins, but we plan on refactoring all builtins out.
+                // In the future we'll make this panic since you should always know the specified value
+                // for whatever generic type you're getting the default for.
+                Value::none()
+            }
+            x => panic!(
+                "Tried to get the default value for type {}",
+                x.print(type_tree)
+            ),
         }
     }
 
@@ -849,6 +905,8 @@ impl Type {
             Type::Bytes32 => ("bytes32".to_string(), type_set),
             Type::EthAddress => ("address".to_string(), type_set),
             Type::Buffer => ("buffer".to_string(), type_set),
+            Type::GenericSlot(id) => (format!("generic' {}", id), type_set),
+            Type::Generic(id) => (format!("generic {}", id), type_set),
             Type::Tuple(subtypes) => {
                 let mut out = "(".to_string();
                 for s in subtypes {
@@ -909,9 +967,9 @@ impl Type {
                 out.push('}');
                 (out, type_set)
             }
-            Type::Nominal(path, id) => {
+            Type::Nominal(path, id, spec) => {
                 let out = format!(
-                    "{}{}{}",
+                    "{}{}{}{}",
                     prefix.unwrap_or(""),
                     if include_pathname {
                         path.iter()
@@ -923,10 +981,34 @@ impl Type {
                     type_tree
                         .get(&(path.clone(), *id))
                         .map(|(_, name)| name.clone())
-                        .unwrap_or(format!(
-                            "Failed to resolve type name: {}",
-                            path_display(path)
-                        ))
+                        .unwrap_or(format!("???")),
+                    match spec.len() {
+                        0 => format!(""),
+                        _ => {
+                            let mut out = format!("<");
+                            for s in spec {
+                                let (displayed, subtypes) = s.display_indented(
+                                    indent_level,
+                                    separator,
+                                    prefix,
+                                    include_pathname,
+                                    type_tree,
+                                );
+                                out.push_str(&(displayed + ", "));
+                                type_set.extend(subtypes);
+                            }
+                            out.push_str("> ");
+                            // TODO: Make this work for recursive generics
+                            /*out.push_str(&format!(
+                                "> := {}",
+                                match self.rep(type_tree) {
+                                    Ok(tipe) => tipe.print(type_tree),
+                                    Err(_) => format!("???"),
+                                }
+                            ));*/
+                            out
+                        }
+                    }
                 );
                 type_set.insert((
                     self.clone(),
@@ -1025,17 +1107,26 @@ impl Type {
     }
 }
 
-pub fn type_vectors_covariant_castable(
-    tvec1: &[Type],
-    tvec2: &[Type],
-    type_tree: &TypeTree,
-    seen: HashSet<(Type, Type)>,
-) -> bool {
-    tvec1.len() == tvec2.len()
-        && tvec1
-            .iter()
-            .zip(tvec2)
-            .all(|(t1, t2)| t1.covariant_castable(t2, type_tree, seen.clone()))
+/// Checks generic parameter names for those that may be duplicates or unused.
+pub fn check_generic_parameters(
+    params: Vec<(StringId, DebugInfo)>,
+    string_table: &StringTable,
+) -> Result<Vec<StringId>, CompileError> {
+    let mut seen = HashSet::new();
+    for (id, debug) in params.iter() {
+        if !seen.insert(id) {
+            return Err(CompileError::new(
+                "Parser error",
+                format!(
+                    "Duplicate generic parameter {}",
+                    Color::red(string_table.name_from_id(*id))
+                ),
+                debug.locs(),
+            ));
+        }
+    }
+
+    Ok(params.into_iter().map(|(name, _)| name).collect())
 }
 
 pub fn type_vectors_castable(
@@ -1064,19 +1155,6 @@ pub fn type_vectors_assignable(
             .iter()
             .zip(tvec2)
             .all(|(t1, t2)| t1.assignable(t2, type_tree, seen.clone()))
-}
-
-fn field_vectors_covariant_castable(
-    tvec1: &[StructField],
-    tvec2: &[StructField],
-    type_tree: &TypeTree,
-    seen: HashSet<(Type, Type)>,
-) -> bool {
-    tvec1.len() == tvec2.len()
-        && tvec1.iter().zip(tvec2).all(|(t1, t2)| {
-            t1.tipe
-                .covariant_castable(&t2.tipe, type_tree, seen.clone())
-        })
 }
 
 fn field_vectors_castable(
@@ -1160,9 +1238,13 @@ impl PartialEq for Type {
             (Type::Func(p1, a1, r1), Type::Func(p2, a2, r2)) => {
                 (p1 == p2) && type_vectors_equal(&a1, &a2) && (*r1 == *r2)
             }
-            (Type::Nominal(p1, id1), Type::Nominal(p2, id2)) => (p1, id1) == (p2, id2),
+            (Type::Nominal(p1, id1, s1), Type::Nominal(p2, id2, s2)) => {
+                (p1, id1, s1) == (p2, id2, s2)
+            }
             (Type::Option(x), Type::Option(y)) => *x == *y,
             (Type::Union(x), Type::Union(y)) => type_vectors_equal(x, y),
+            (Type::GenericSlot(x), Type::GenericSlot(y)) => *x == *y,
+            (Type::Generic(x), Type::Generic(y)) => *x == *y,
             (_, _) => false,
         }
     }
@@ -1205,73 +1287,118 @@ pub enum TypeMismatch {
     Write,
 }
 
-impl fmt::Display for TypeMismatch {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                TypeMismatch::Type(left, right) =>
-                    format!("expected {} got {}", left.display(), right.display()),
-                TypeMismatch::FieldType(name, problem) =>
-                    format!("in field \"{}\": {}", name, problem),
-                TypeMismatch::FieldName(left, right) =>
-                    format!("expected field name \"{}\", got \"{}\"", left, right),
-                TypeMismatch::UnresolvedRight(tipe) =>
-                    format!("could not resolve right-hand type \"{}\"", tipe.display()),
-                TypeMismatch::UnresolvedLeft(tipe) =>
-                    format!("could not resolve left-hand type \"{}\"", tipe.display()),
-                TypeMismatch::UnresolvedBoth(left, right) => format!(
-                    "could not resolve both right hand type \"{}\" and left hand type\"{}\"",
-                    left.display(),
-                    right.display()
-                ),
-                TypeMismatch::Length(left, right) => format!(
-                    "structs of different lengths: expected length {} got length {}",
-                    left, right
-                ),
-                TypeMismatch::ArrayLength(left, right) => format!(
-                    "arrays of different lengths: expected length {} got length {}",
-                    left, right
-                ),
-                TypeMismatch::ArrayMismatch(mismatch) =>
-                    format!("inner array type mismatch {}", mismatch),
-                TypeMismatch::Tuple(index, mismatch) =>
-                    format!("in tuple field {}: {}", index + 1, mismatch),
-                TypeMismatch::TupleLength(left, right) => format!(
-                    "tuples of different lengths: expected length {} got length {}",
-                    left, right
-                ),
-                TypeMismatch::FuncArg(index, mismatch) =>
-                    format!("in function argument {}: {}", index + 1, mismatch),
-                TypeMismatch::FuncArgLength(left, right) => format!(
-                    "left func has {} args but right func has {} args",
-                    left, right
-                ),
-                TypeMismatch::FuncReturn(mismatch) =>
-                    format!("in function return type: {}", mismatch),
-                TypeMismatch::Map { is_key, inner } => format!(
-                    "in map {}: {}",
-                    if *is_key { "key" } else { "value" },
-                    inner
-                ),
-                TypeMismatch::Option(mismatch) => format!("in inner option type: {}", mismatch),
-                TypeMismatch::Union(index, mismatch) =>
-                    format!("In type {} of union: {}", index + 1, mismatch),
-                TypeMismatch::UnionLength(left, right) => format!(
-                    "left func has {} args but right func has {} args",
-                    left, right
-                ),
-                TypeMismatch::View => format!(
-                    "assigning {} function to non-view function",
-                    Color::red("view")
-                ),
-                TypeMismatch::Write => format!(
-                    "assigning {} function to non-view function",
-                    Color::red("write")
-                ),
+impl TypeMismatch {
+    fn print(&self, type_tree: &TypeTree) -> String {
+        match self {
+            TypeMismatch::Type(left, right) => format!(
+                "expected {} got {}",
+                Color::red(left.print(type_tree)),
+                Color::red(right.print(type_tree))
+            ),
+            TypeMismatch::FieldType(name, problem) => format!(
+                "in field {}: {}",
+                Color::red(name),
+                Color::red(problem.print(type_tree))
+            ),
+            TypeMismatch::FieldName(left, right) => format!(
+                "expected field name {}, got {}",
+                Color::red(left),
+                Color::red(right)
+            ),
+            TypeMismatch::UnresolvedRight(tipe) => format!(
+                "could not resolve right-hand type {}",
+                Color::red(tipe.print(type_tree))
+            ),
+            TypeMismatch::UnresolvedLeft(tipe) => format!(
+                "could not resolve left-hand type {}",
+                Color::red(tipe.print(type_tree))
+            ),
+            TypeMismatch::UnresolvedBoth(left, right) => format!(
+                "could not resolve both right hand type {} and left hand type {}",
+                Color::red(left.print(type_tree)),
+                Color::red(right.print(type_tree))
+            ),
+            TypeMismatch::Length(left, right) => format!(
+                "structs of different lengths: expected length {} got length {}",
+                Color::red(left),
+                Color::red(right)
+            ),
+            TypeMismatch::ArrayLength(left, right) => format!(
+                "arrays of different lengths: expected length {} got length {}",
+                Color::red(left),
+                Color::red(right)
+            ),
+            TypeMismatch::ArrayMismatch(mismatch) => {
+                format!("inner array type mismatch {}", mismatch.print(type_tree))
             }
-        )
+            TypeMismatch::Tuple(index, mismatch) => format!(
+                "in tuple field {}: {}",
+                Color::red(index),
+                mismatch.print(type_tree)
+            ),
+            TypeMismatch::TupleLength(left, right) => format!(
+                "tuples of different lengths: expected length {} got length {}",
+                Color::red(left),
+                Color::red(right)
+            ),
+            TypeMismatch::FuncArg(index, mismatch) => format!(
+                "in function argument {}: {}",
+                Color::red(index + 1),
+                mismatch.print(type_tree)
+            ),
+            TypeMismatch::FuncArgLength(left, right) => format!(
+                "left func has {} args but right func has {} args",
+                Color::red(left),
+                Color::red(right)
+            ),
+            TypeMismatch::FuncReturn(mismatch) => {
+                format!("in function return type: {}", mismatch.print(type_tree))
+            }
+            TypeMismatch::Map { is_key, inner } => format!(
+                "in map {}: {}",
+                if *is_key { "key" } else { "value" },
+                inner.print(type_tree)
+            ),
+            TypeMismatch::Option(mismatch) => {
+                format!("in inner option type: {}", mismatch.print(type_tree))
+            }
+            TypeMismatch::Union(index, mismatch) => format!(
+                "In type {} of union: {}",
+                Color::red(index + 1),
+                mismatch.print(type_tree)
+            ),
+            TypeMismatch::UnionLength(left, right) => format!(
+                "left union has {} args but right union has {} args",
+                Color::red(left),
+                Color::red(right)
+            ),
+            TypeMismatch::View => format!(
+                "assigning {} function to non-view function",
+                Color::red("view")
+            ),
+            TypeMismatch::Write => format!(
+                "assigning {} function to non-view function",
+                Color::red("write")
+            ),
+        }
+    }
+}
+
+/// Field of a struct, contains field name and underlying type.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssignRef {
+    pub id: StringId,
+    pub shadow: bool,
+    pub debug_info: DebugInfo,
+}
+
+impl AssignRef {
+    pub fn new(id: StringId, shadow: bool, debug_info: DebugInfo) -> Self {
+        Self {
+            id,
+            shadow,
+            debug_info,
+        }
     }
 }
 
@@ -1306,29 +1433,26 @@ pub fn new_func_arg(name: StringId, tipe: Type, debug_info: DebugInfo) -> FuncAr
 
 /// Represents a declaration of a global mini variable.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GlobalVarDecl {
-    pub name_id: StringId,
+pub struct GlobalVar {
+    #[serde(alias = "name_id")]
+    pub id: StringId,
     pub name: String,
     pub tipe: Type,
-    pub location: Option<Location>,
+    pub offset: Option<usize>,
+    #[serde(default)]
+    pub debug_info: DebugInfo,
 }
 
-impl GlobalVarDecl {
-    pub fn new(name_id: StringId, name: String, tipe: Type, location: Option<Location>) -> Self {
-        GlobalVarDecl {
-            name_id,
+impl GlobalVar {
+    pub fn new(id: StringId, name: String, tipe: Type, debug_info: DebugInfo) -> Self {
+        Self {
+            id,
             name,
             tipe,
-            location,
+            offset: None,
+            debug_info,
         }
     }
-}
-
-/// Represents whether the FuncDecl that contains it is public or private.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub enum FuncDeclKind {
-    Public,
-    Private,
 }
 
 /// Represents a top level function declaration.  The view, write, args, and ret_type fields are
@@ -1343,12 +1467,10 @@ pub struct Func<T = Statement> {
     pub tipe: Type,
     pub public: bool,
     pub captures: BTreeSet<StringId>,
-    /// The minimum tuple-tree size needed to generate this func
-    pub frame_size: usize,
+    /// The names of this func's generic types. The order specifies which goes where.
+    pub generics: Vec<StringId>,
     /// A global id unique to this function used for building jump labels
     pub unique_id: Option<LabelId>,
-    /// Associates `StringId`s in this func's context with the global label scheme
-    pub func_labels: Arc<HashMap<StringId, Label>>,
     /// Additional properties like viewness that this func has
     pub properties: FuncProperties,
     pub debug_info: DebugInfo,
@@ -1366,7 +1488,7 @@ impl Func {
         ret_type: Option<Type>,
         code: Vec<Statement>,
         captures: BTreeSet<StringId>,
-        frame_size: usize,
+        generics: Vec<StringId>,
         debug_info: DebugInfo,
     ) -> Self {
         let mut arg_types = Vec::new();
@@ -1374,8 +1496,11 @@ impl Func {
         for arg in args.iter() {
             arg_types.push(arg.tipe.clone());
         }
-        let prop = FuncProperties::new(view, write, closure);
+        let nargs = args.len();
+        let nouts = ret_type.iter().count();
         let ret_type = ret_type.unwrap_or(Type::Void);
+        let returns = ret_type != Type::Every;
+        let prop = FuncProperties::new(view, write, closure, public, returns, nargs, nouts);
         Func {
             name,
             id,
@@ -1385,35 +1510,61 @@ impl Func {
             tipe: Type::Func(prop, arg_types, Box::new(ret_type)),
             public,
             captures,
-            frame_size,
+            generics,
             unique_id: None,
-            func_labels: Arc::new(HashMap::new()),
             properties: prop,
             debug_info,
         }
     }
 }
 
-/// Keeps track of compiler enforced properties, currently only tracks purity, may be extended to
-/// keep track of potential to throw or other properties.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Hash)]
+/// The properties of a function or closure.
+#[derive(Debug, Clone, Copy, Eq, Serialize, Deserialize, Derivative)]
+#[derivative(Hash)]
 pub struct FuncProperties {
     pub view: bool,
     pub write: bool,
     pub closure: bool,
+    #[serde(default)]
+    #[derivative(Hash = "ignore")]
+    pub public: bool,
+    #[serde(default)]
+    #[derivative(Hash = "ignore")]
+    pub returns: bool,
+    #[serde(default)]
+    #[derivative(Hash = "ignore")]
+    pub nargs: usize,
+    #[serde(default)]
+    #[derivative(Hash = "ignore")]
+    pub nouts: usize,
+}
+
+/// We only want equality when comparing types, for which only purity makes sense
+impl PartialEq for FuncProperties {
+    fn eq(&self, other: &Self) -> bool {
+        self.purity() == other.purity()
+    }
 }
 
 impl FuncProperties {
-    pub fn new(view: bool, write: bool, closure: bool) -> Self {
+    pub fn new(
+        view: bool,
+        write: bool,
+        closure: bool,
+        public: bool,
+        returns: bool,
+        nargs: usize,
+        nouts: usize,
+    ) -> Self {
         FuncProperties {
             view,
             write,
             closure,
+            public,
+            returns,
+            nargs,
+            nouts,
         }
-    }
-
-    pub fn pure() -> Self {
-        Self::new(false, false, false)
     }
 
     pub fn purity(&self) -> (bool, bool) {
@@ -1428,6 +1579,12 @@ pub struct Statement {
     pub debug_info: DebugInfo,
 }
 
+impl Statement {
+    pub fn new(kind: StatementKind, debug_info: DebugInfo) -> Self {
+        Self { kind, debug_info }
+    }
+}
+
 /// A raw statement containing no debug information that has not yet been type checked.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StatementKind {
@@ -1435,61 +1592,11 @@ pub enum StatementKind {
     Return(Expr),
     Break(Option<Expr>, Option<String>),
     Expression(Expr),
-    Let(MatchPattern, Expr),
     Assign(StringId, Expr),
-    While(Expr, Vec<Statement>),
-    Asm(Vec<Instruction>, Vec<Expr>),
+    Let(Vec<AssignRef>, Expr),
+    While(Expr, CodeBlock),
     DebugPrint(Expr),
     Assert(Expr),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MatchPattern<T = ()> {
-    pub(crate) kind: MatchPatternKind<MatchPattern<T>>,
-    pub(crate) debug_info: DebugInfo,
-    pub(crate) cached: T,
-}
-
-/// Either a single identifier or a tuple of identifiers, used in mini let bindings.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum MatchPatternKind<T> {
-    Bind(StringId),
-    Assign(StringId),
-    Tuple(Vec<T>),
-}
-
-impl<T> MatchPattern<T> {
-    pub fn new_bind(id: StringId, debug_info: DebugInfo, cached: T) -> Self {
-        Self {
-            kind: MatchPatternKind::Bind(id),
-            debug_info,
-            cached,
-        }
-    }
-    pub fn new_assign(id: StringId, debug_info: DebugInfo, cached: T) -> Self {
-        Self {
-            kind: MatchPatternKind::Assign(id),
-            debug_info,
-            cached,
-        }
-    }
-    pub fn new_tuple(id: Vec<MatchPattern<T>>, debug_info: DebugInfo, cached: T) -> Self {
-        Self {
-            kind: MatchPatternKind::Tuple(id),
-            debug_info,
-            cached,
-        }
-    }
-    pub fn collect_identifiers(&self) -> Vec<(StringId, bool, DebugInfo)> {
-        match &self.kind {
-            MatchPatternKind::Bind(id) => vec![(*id, false, self.debug_info)],
-            MatchPatternKind::Assign(id) => vec![(*id, true, self.debug_info)],
-            MatchPatternKind::Tuple(pats) => pats
-                .iter()
-                .flat_map(|pat| pat.collect_identifiers())
-                .collect(),
-        }
-    }
 }
 
 /// An identifier or array index for left-hand-side substructure assignments
@@ -1514,7 +1621,6 @@ pub enum Constant {
     Int(Uint256),
     Bool(bool),
     Option(OptionConst),
-    Null,
 }
 
 impl OptionConst {
@@ -1545,7 +1651,6 @@ impl Constant {
             Constant::Int(_) => Type::Int,
             Constant::Bool(_) => Type::Bool,
             Constant::Option(inner) => inner.type_of(),
-            Constant::Null => Type::Void,
         }
     }
 
@@ -1556,7 +1661,6 @@ impl Constant {
             Constant::Int(i) => Value::Int(i.clone()),
             Constant::Bool(b) => Value::Int(Uint256::from_bool(*b)),
             Constant::Option(c) => c.value(),
-            Constant::Null => Value::none(),
         }
     }
 }
@@ -1576,7 +1680,7 @@ pub enum ExprKind {
     Trinary(TrinaryOp, Box<Expr>, Box<Expr>, Box<Expr>),
     ShortcutOr(Box<Expr>, Box<Expr>),
     ShortcutAnd(Box<Expr>, Box<Expr>),
-    VariableRef(StringId),
+    VariableRef(StringId, Vec<Type>),
     TupleRef(Box<Expr>, Uint256),
     DotRef(Box<Expr>, String),
     Constant(Constant),
@@ -1587,14 +1691,12 @@ pub enum ExprKind {
     StructInitializer(Vec<FieldInitializer>),
     Tuple(Vec<Expr>),
     NewArray(Box<Expr>, Type),
-    NewFixedArray(usize, Option<Box<Expr>>),
+    NewFixedArray(usize, Box<Expr>),
     NewMap(Type, Type),
     NewUnion(Vec<Type>, Box<Expr>),
     ArrayOrMapMod(Box<Expr>, Box<Expr>, Box<Expr>),
     StructMod(Box<Expr>, String, Box<Expr>),
-    WeakCast(Box<Expr>, Type),
     Cast(Box<Expr>, Type),
-    CovariantCast(Box<Expr>, Type),
     UnsafeCast(Box<Expr>, Type),
     Asm(Type, Vec<Instruction>, Vec<Expr>),
     Error,
@@ -1603,7 +1705,7 @@ pub enum ExprKind {
     Try(Box<Expr>),
     If(Box<Expr>, CodeBlock, Option<CodeBlock>),
     IfLet(StringId, Box<Expr>, CodeBlock, Option<CodeBlock>),
-    Loop(Vec<Statement>),
+    Loop(CodeBlock, Type),
     UnionCast(Box<Expr>, Type),
     NewBuffer,
     Quote(Vec<u8>),
@@ -1612,27 +1714,43 @@ pub enum ExprKind {
 
 impl Expr {
     /// Returns an expression that applies unary operator op to e.
-    pub fn new_unary(op: UnaryOp, e: Expr, loc: Option<Location>) -> Self {
-        Self {
-            kind: ExprKind::UnaryOp(op, Box::new(e)),
-            debug_info: DebugInfo::from(loc),
-        }
+    pub fn new_unary(op: UnaryOp, e: Expr, lines: &Lines, lno: usize, file: u64) -> Self {
+        Self::lno(ExprKind::UnaryOp(op, Box::new(e)), lines, lno, file)
     }
 
     /// Returns an expression that applies binary operator op to e1 and e2.
-    pub fn new_binary(op: BinaryOp, e1: Expr, e2: Expr, loc: Option<Location>) -> Self {
-        Self {
-            kind: ExprKind::Binary(op, Box::new(e1), Box::new(e2)),
-            debug_info: DebugInfo::from(loc),
-        }
+    pub fn new_binary(
+        op: BinaryOp,
+        e1: Expr,
+        e2: Expr,
+        lines: &Lines,
+        lno: usize,
+        file: u64,
+    ) -> Self {
+        Self::lno(
+            ExprKind::Binary(op, Box::new(e1), Box::new(e2)),
+            lines,
+            lno,
+            file,
+        )
     }
 
     /// Returns an expression that applies trinary operator op to e1, e2, and e3.
-    pub fn new_trinary(op: TrinaryOp, e1: Expr, e2: Expr, e3: Expr, loc: Option<Location>) -> Self {
-        Self {
-            kind: ExprKind::Trinary(op, Box::new(e1), Box::new(e2), Box::new(e3)),
-            debug_info: DebugInfo::from(loc),
-        }
+    pub fn new_trinary(
+        op: TrinaryOp,
+        e1: Expr,
+        e2: Expr,
+        e3: Expr,
+        lines: &Lines,
+        lno: usize,
+        file: u64,
+    ) -> Self {
+        Self::lno(
+            ExprKind::Trinary(op, Box::new(e1), Box::new(e2), Box::new(e3)),
+            lines,
+            lno,
+            file,
+        )
     }
 
     /// Creates an expression whose DebugInfo is populated in-place at the parsing site
@@ -1684,8 +1802,6 @@ pub enum BinaryOp {
     BitwiseXor,
     ShiftLeft,
     ShiftRight,
-    _LogicalAnd,
-    LogicalOr,
     Hash,
     GetBuffer8,
     GetBuffer64,

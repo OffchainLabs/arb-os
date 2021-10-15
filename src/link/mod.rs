@@ -5,23 +5,27 @@
 //! Provides types and utilities for linking together compiled mini programs
 
 use crate::compile::{
-    comma_list, CompileError, CompiledProgram, DebugInfo, ErrorSystem, FileInfo, GlobalVarDecl,
-    SourceFileMap, Type, TypeTree,
+    comma_list, CompileError, CompiledFunc, CompiledProgram, DebugInfo, ErrorSystem, FileInfo,
+    GlobalVar, Type, TypeTree,
 };
 use crate::console::Color;
 use crate::mavm::{AVMOpcode, Instruction, LabelId, Opcode, Value};
 use crate::pos::{try_display_location, Location};
 use crate::stringtable::StringId;
+use petgraph::dot::{Config, Dot};
+use petgraph::graph::DiGraph;
+use petgraph::visit::DfsPostOrder;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::{DefaultHasher, HashMap};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
+use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io;
-use xformcode::make_uninitialized_tuple;
+use std::io::Write;
 
 use crate::compile::miniconstants::init_constant_table;
 use std::path::Path;
-pub use xformcode::{value_from_field_list, TupleTree, TUPLE_SIZE};
+pub use xformcode::{TupleTree, TUPLE_SIZE};
 
 mod optimize;
 mod striplabels;
@@ -69,7 +73,7 @@ pub struct LinkedProgram {
     pub arbos_version: u64,
     pub code: Vec<Instruction<AVMOpcode>>,
     pub static_val: Value,
-    pub globals: Vec<GlobalVarDecl>,
+    pub globals: Vec<GlobalVar>,
     // #[serde(default)]
     pub file_info_chart: BTreeMap<u64, FileInfo>,
     pub type_tree: SerializableTypeTree,
@@ -181,13 +185,143 @@ impl Import {
     }
 }
 
+pub type FuncGraph = DiGraph<CompiledFunc, usize>;
+
+/// Creates a graph of the `CompiledProgram`s and then combines them into a single
+/// `CompiledProgram` in such a way as to reduce the number of backward jumps.
+pub fn link(
+    funcs: Vec<CompiledFunc>,
+    globals: Vec<GlobalVar>,
+    error_system: &mut ErrorSystem,
+    test_mode: bool,
+) -> CompiledProgram {
+    let type_tree = funcs[0].type_tree.clone();
+
+    let mut graph = FuncGraph::new();
+    let mut id_to_node = HashMap::new();
+
+    for func in funcs {
+        let func_id = func.unique_id;
+        let node = graph.add_node(func);
+        id_to_node.insert(func_id, node);
+    }
+
+    for node in graph.node_indices() {
+        let prog = &graph[node];
+
+        let uniques = prog.code.iter().flat_map(|insn| insn.get_uniques());
+
+        let mut usages = BTreeMap::new();
+        for unique in uniques {
+            *usages.entry(unique).or_insert(0) += 1;
+        }
+
+        for (unique, count) in usages {
+            let dest = *id_to_node.get(&unique).unwrap();
+            if node != dest {
+                graph.add_edge(node, dest, count);
+            }
+        }
+    }
+
+    let mut debug_info = DebugInfo::default();
+    debug_info.attributes.codegen_print = globals
+        .iter()
+        .any(|x| x.debug_info.attributes.codegen_print);
+
+    // Initialize globals or allow jump table retrieval
+    let mut linked_code = if test_mode {
+        vec![
+            Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::Noop),
+                Value::none(),
+                debug_info,
+            ),
+            Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::Rset),
+                Value::none(), // gets hardcoded later
+                debug_info,
+            ),
+        ]
+    } else {
+        vec![
+            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Rpush), debug_info),
+            Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::Noop),
+                Value::none(),
+                debug_info,
+            ),
+            Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::Rset),
+                Value::none(), // gets hardcoded later
+                debug_info,
+            ),
+        ]
+    };
+
+    let main = graph
+        .node_indices()
+        .find(|node| graph[*node].name == "main")
+        .expect("no main func");
+    let mut dfs = DfsPostOrder::new(&graph, main);
+    let mut traversal = vec![];
+    while let Some(node) = dfs.next(&graph) {
+        traversal.push(node);
+    }
+    traversal.reverse();
+
+    let mut unvisited: HashSet<_> = graph.node_indices().collect();
+    for node in traversal {
+        unvisited.remove(&node);
+        let prog = &graph[node];
+        linked_code.append(&mut prog.code.clone());
+    }
+
+    for node in graph.node_indices() {
+        let name = &graph[node].name;
+        let path = &graph[node].path;
+        let debug_info = &graph[node].debug_info;
+
+        if ["core", "std", "std2", "/meta"].contains(&path[0].as_str()) {
+            continue;
+        }
+
+        if unvisited.contains(&node) && !name.starts_with('_') {
+            error_system.warnings.push(CompileError::new_warning(
+                String::from("Compile warning"),
+                format!(
+                    "func {} is unreachable",
+                    Color::color(error_system.warn_color, name)
+                ),
+                debug_info.locs(),
+            ));
+        }
+    }
+
+    let graph = graph.map(|_, prog| prog.name.clone(), |_, e| e);
+
+    let mut file = File::create("callgraph.dot").expect("failed to open file");
+    let dot = Dot::with_config(&graph, &[Config::EdgeNoLabel]);
+    writeln!(&mut file, "{:?}", dot).expect("failed to write .dot file");
+
+    // check for unvisited
+
+    CompiledProgram::new(
+        String::from("entry_point"),
+        vec![String::from("/meta"), String::from("link")],
+        linked_code,
+        globals,
+        type_tree,
+        DebugInfo::default(),
+    )
+}
+
 /// Converts a linked `CompiledProgram` into a `LinkedProgram` by fixing non-forward jumps,
 /// converting wide tuples to nested tuples, performing code optimizations, converting the jump
 /// table to a static value, and combining the file info chart with the associated argument.
 pub fn postlink_compile(
     program: CompiledProgram,
-    mut file_info_chart: BTreeMap<u64, FileInfo>,
-    _error_system: &mut ErrorSystem,
+    file_info_chart: BTreeMap<u64, FileInfo>,
     test_mode: bool,
     debug: bool,
 ) -> Result<LinkedProgram, CompileError> {
@@ -238,21 +372,29 @@ pub fn postlink_compile(
             }
         }
     }
-    let (code_2, jump_table) =
-        striplabels::fix_nonforward_labels(&program.code, program.globals.len() - 1);
-    consider_debug_printing(&code_2, did_print, "after fix_backward_labels");
 
-    let code_3 = xformcode::fix_tuple_size(&code_2, program.globals.len())?;
-    consider_debug_printing(&code_3, did_print, "after fix_tuple_size");
+    let (code, jump_table) =
+        striplabels::fix_backward_labels(&program.code, program.globals.len() - 1);
+    consider_debug_printing(&code, did_print, "after fix_backward_labels");
 
-    let code_4 = optimize::peephole(&code_3);
-    consider_debug_printing(&code_4, did_print, "after peephole optimization");
+    let code = xformcode::fix_tuple_size(code, program.globals.len())?;
+    consider_debug_printing(&code, did_print, "after fix_tuple_size");
 
-    let (mut code_5, jump_table_final) = striplabels::strip_labels(code_4, &jump_table)?;
+    let code = optimize::peephole(&code);
+    consider_debug_printing(&code, did_print, "after peephole optimization");
+
+    let (mut code, jump_table_final) = striplabels::strip_labels(code, &jump_table)?;
+    let jump_table_len = jump_table_final.len();
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
 
-    hardcode_jump_table_into_register(&mut code_5, &jump_table_value, test_mode);
-    let code_final: Vec<_> = code_5
+    // hardcode globals & set error codepoints
+    let globals =
+        xformcode::make_globals_tuple(&program.globals, &jump_table_value, &program.type_tree);
+    let write_offset = if test_mode { 1 } else { 2 };
+    code[write_offset].immediate = Some(globals.clone());
+    code = xformcode::set_error_codepoints(code);
+
+    let code_final: Vec<_> = code
         .into_iter()
         .map(|insn| {
             if let Opcode::AVMOpcode(inner) = insn.opcode {
@@ -260,7 +402,10 @@ pub fn postlink_compile(
             } else {
                 Err(CompileError::new(
                     String::from("Postlink error"),
-                    format!("In final output encountered virtual opcode {}", insn.opcode),
+                    format!(
+                        "In final output encountered virtual opcode {}",
+                        Color::red(insn.opcode.pretty_print(Color::RED))
+                    ),
                     insn.debug_info.location.into_iter().collect(),
                 ))
             }
@@ -271,12 +416,39 @@ pub fn postlink_compile(
         println!("============ after strip_labels =============");
         println!("static: {}", jump_table_value);
         for (idx, insn) in code_final.iter().enumerate() {
-            println!("{:04}  {}", idx, insn);
+            println!("{:04}  {}", idx, insn.pretty_print(Color::PINK));
         }
         println!("============ after full compile/link =============");
     }
 
-    file_info_chart.extend(program.file_info_chart.clone());
+    if debug {
+        let globals_shape = xformcode::make_uninitialized_tuple(program.globals.len());
+        let globals_index = xformcode::make_numbered_tuple(program.globals.len());
+        let globals_names = xformcode::make_named_tuple(&program.globals);
+
+        println!("\nGlobal Vars {}\n", program.globals.len());
+        println!("shape {}\n", globals_shape.pretty_print(Color::PINK));
+        println!("names {}\n", globals_names.pretty_print(Color::MINT));
+        println!("index {}\n\n", globals_index.pretty_print(Color::MINT));
+        println!("Globals Tuple\n{}\n", globals.pretty_print(Color::GREY));
+
+        println!(
+            "Globals Tuple Debug\n{}\n",
+            xformcode::make_globals_tuple_debug(&program.globals, &program.type_tree)
+                .replace_last_none(&jump_table_value)
+                .pretty_print(Color::GREY)
+        );
+
+        let jump_shape = xformcode::make_uninitialized_tuple(jump_table_len);
+        println!(
+            "Jump Table {}\n{}\n",
+            jump_table_len,
+            jump_shape.pretty_print(Color::PINK)
+        );
+
+        let size = code_final.iter().count() as f64;
+        println!("Total Instructions {}", size);
+    }
 
     Ok(LinkedProgram {
         arbos_version: init_constant_table(Some(Path::new("arb_os/constants.json")))
@@ -291,110 +463,4 @@ pub fn postlink_compile(
         file_info_chart,
         type_tree: SerializableTypeTree::from_type_tree(program.type_tree),
     })
-}
-
-fn hardcode_jump_table_into_register(
-    code: &mut Vec<Instruction>,
-    jump_table: &Value,
-    test_mode: bool,
-) {
-    let offset = if test_mode { 1 } else { 2 };
-    let old_imm = code[offset].clone().immediate.unwrap();
-    code[offset] = Instruction::from_opcode_imm(
-        code[offset].opcode,
-        old_imm.replace_last_none(jump_table),
-        code[offset].debug_info,
-    );
-}
-
-/// Combines the `CompiledProgram`s in progs_in into a single `CompiledProgram` with offsets adjusted
-/// to avoid collisions and auto-linked programs added.
-pub fn link(progs_in: &[CompiledProgram], test_mode: bool) -> CompiledProgram {
-    let progs = progs_in.to_vec();
-    let type_tree = progs[0].type_tree.clone();
-    let mut insns_so_far: usize = 3; // leave 2 insns of space at beginning for initialization
-    let mut int_offsets = Vec::new();
-    let mut merged_source_file_map = SourceFileMap::new_empty();
-    let mut merged_file_info_chart = HashMap::new();
-    let mut global_num_limit = vec![];
-
-    for prog in &progs {
-        merged_source_file_map.push(
-            prog.code.len(),
-            match &prog.source_file_map {
-                Some(sfm) => sfm.get(0),
-                None => "".to_string(),
-            },
-        );
-        int_offsets.push(insns_so_far);
-        insns_so_far += prog.code.len();
-    }
-
-    let mut relocated_progs = Vec::new();
-    let mut func_offset: usize = 0;
-    for (i, prog) in progs.into_iter().enumerate() {
-        merged_file_info_chart.extend(prog.file_info_chart.clone());
-
-        let source_file_map = prog.source_file_map.clone();
-        let (relocated_prog, new_func_offset) = prog.relocate(
-            int_offsets[i],
-            func_offset,
-            global_num_limit,
-            source_file_map,
-        );
-
-        global_num_limit = relocated_prog.globals.clone();
-        relocated_progs.push(relocated_prog);
-        func_offset = new_func_offset + 1;
-    }
-
-    global_num_limit.push(GlobalVarDecl::new(
-        usize::MAX,
-        "_jump_table".to_string(),
-        Type::Any,
-        None,
-    ));
-
-    // Initialize globals or allow jump table retrieval
-    let mut linked_code = if test_mode {
-        vec![
-            Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Noop),
-                Value::none(),
-                DebugInfo::default(),
-            ),
-            Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Noop),
-                make_uninitialized_tuple(global_num_limit.len()),
-                DebugInfo::default(),
-            ),
-            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Rset), DebugInfo::default()),
-        ]
-    } else {
-        vec![
-            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Rpush), DebugInfo::default()),
-            Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Noop),
-                Value::none(),
-                DebugInfo::default(),
-            ),
-            Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Rset),
-                make_uninitialized_tuple(global_num_limit.len()),
-                DebugInfo::default(),
-            ),
-        ]
-    };
-
-    for mut rel_prog in relocated_progs {
-        linked_code.append(&mut rel_prog.code);
-    }
-
-    CompiledProgram::new(
-        linked_code,
-        global_num_limit,
-        Some(merged_source_file_map),
-        merged_file_info_chart,
-        type_tree,
-    )
 }

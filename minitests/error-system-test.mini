@@ -36,16 +36,16 @@ func main(arg: option<RandomGenerator>) -> (option<RandomGenerator>, option<opti
     
     let (_, __) = (shadow, hop);
     
-    return (Some(random_new(bytes32(0))), Some(Some(Some(queue_new()))));
+    (Some(random_new(bytes32(0))), Some(Some(Some(queue_new()))))
 }
 
 var unused_global: uint;
 var used_global: uint;
 
-#[bad_attribute, inline]
+#[bad_attribute, print]
 public func hop() {
     used_global = crazy(4, 8, true, 4);
-    asm(used_global,) { log };
+    asm(used_global) { log };
 }
 
 write view func crazy(n: uint, unused_arg: uint, unused_arg2: bool, _intentional: uint) -> uint {
@@ -62,10 +62,10 @@ write view func crazy(n: uint, unused_arg: uint, unused_arg2: bool, _intentional
     x = w + 8;
     x = w;
     
-    if (true) { v = x; } else { v = x; } // shouldn't warn
-    if (true) { v = u; } else { let v = u; }
+    if true { v = x; } else { v = x; } // shouldn't warn
+    if true { v = u; } else { let v = u; }
     
-    if (true) {
+    if true {
       z = 4;         // should not warn
       let z = 8;
       z = 4;
@@ -73,8 +73,8 @@ write view func crazy(n: uint, unused_arg: uint, unused_arg2: bool, _intentional
       z = 8;
     }
     
-    let (x, y) = (8, xif (8 == 8) { y = 4; y + 4 } else { let y = 4; y + 4 });
-    let (x, y) = (4, xif (4 == 4) { y = 4; y     } else { let y = 4; y     });
+    let (x, y) = (8, if 8 == 8 { y = 4; y + 4 } else { let y = 4; y + 4 });
+    let (x, y) = (4, if 4 == 4 { y = 4; y     } else { let y = 4; y     });
     
     let ret = z;
     let cond = 4;
@@ -84,7 +84,7 @@ write view func crazy(n: uint, unused_arg: uint, unused_arg2: bool, _intentional
         return ret * y;
         
         let loopy = 4;
-        let unreachable_variable = xloop {
+        let unreachable_variable = loop<uint> {
           return loopy;
           loopy = loopy - 8;
           loopy = 4;            // should not warn
@@ -116,22 +116,22 @@ write view func crazy(n: uint, unused_arg: uint, unused_arg2: bool, _intentional
     let some_option = Some(struct { x: x + 1, y: y });
     
     let unreachable_variable = 4;
-    return unreachable_variable;
+    unreachable_variable
 }
 
 write func shadow(shadow_arg: uint, bad_arg: uint, good_arg: uint) {    // everything with an 8 should warn
   
-     if (true) {
-       if (true) {
+     if true {
+       if true {
          let shadow_arg = 4;
          shadow_arg = shadow_arg + 8;
        } else {
          bad_arg = bad_arg;
          while (true) {
-           if (true) {
+           if true {
              good_arg = good_arg + 4;
            } else {
-             if (true) {
+             if true {
                bad_arg = 1;
              }
            }
@@ -143,12 +143,12 @@ write func shadow(shadow_arg: uint, bad_arg: uint, good_arg: uint) {    // every
      let yy = 4;
      let zz = 4;
      
-     if (true) {
+     if true {
        zz = 8 * zz;
      }
      
-     if (true) {
-        if (true) {
+     if true {
+        if true {
           yy = yy * 8;
           yy = 8;          // (**) One of these should warn
         } else {
@@ -166,7 +166,7 @@ write func shadow(shadow_arg: uint, bad_arg: uint, good_arg: uint) {    // every
      
      let last = true;
      while (last) {
-       if (true) {
+       if true {
          
        } else {
          last = false;
@@ -174,7 +174,7 @@ write func shadow(shadow_arg: uint, bad_arg: uint, good_arg: uint) {    // every
      }
      
      let declared = 4;
-     if (true) {
+     if true {
        let declared = 4 * declared;
        declared = 8 * declared;
      }
@@ -186,8 +186,8 @@ write func shadow(shadow_arg: uint, bad_arg: uint, good_arg: uint) {    // every
      
      #[bad_attribute]
      let final = 4;
-     { xif (final == 4) { let _ = final; } elseif (true) { final = 8; } };
-     { xif (final == 4) { final = 8; } elseif (true) { let final = 8 * final; } };
+     { if final == 4 { let _ = final; } else if (true) { final = 8; } };
+     { if final == 4 { final = 8; } else if (true) { let final = 8 * final; } };
 }
 
 view write func unused_function() {}

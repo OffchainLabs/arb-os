@@ -9,66 +9,66 @@ use std::priorityq::priorityq_get;
 
 
 write func main() {
-	asm(tests(),) { log };
+    asm(tests()) { log };
 }
 
 func tests() -> uint {
-	let q = priorityq_new();
-	if ( ! priorityq_isEmpty(q)) {
-		return 1;
-	}
+    let q = priorityq_new();
+    if !priorityq_isEmpty(q) {
+	return 1;
+    }
 
-	q = priorityq_new();
-	q = priorityq_insert(q, 97, 3);
-	if (priorityq_isEmpty(q)) {
-		return 2;
-	}	
+    q = priorityq_new();
+    q = priorityq_insert(q, 97, 3);
+    if priorityq_isEmpty(q) {
+	return 2;
+    }	
 
-	q = priorityq_new();
-	let pq = priorityq_insert(q, 97, 3);
-	if (pq == q) {
-		return 3;
-	}
+    q = priorityq_new();
+    let pq = priorityq_insert(q, 97, 3);
+    if pq == q {
+	return 3;
+    }
 
-	q = priorityq_new();
-	q = priorityq_insert(q, 97, 3);
-	q = priorityq_insert(q, 98, 2);
-	q = priorityq_insert(q, 96, 4);
-	if let Some(res) = priorityq_get(q) {
-	    let (ret, _pq) = res;
-	    if (ret != unsafecast<any>(96)) {
-		    return 4;
-	    }
-	} else {
-	    return 104;
+    q = priorityq_new();
+    q = priorityq_insert(q, 97, 3);
+    q = priorityq_insert(q, 98, 2);
+    q = priorityq_insert(q, 96, 4);
+    if let Some(res) = priorityq_get(q) {
+	let (ret, _pq) = res;
+	if ret != unsafecast<any>(96) {
+	    return 4;
 	}
+    } else {
+	return 104;
+    }
 
-	q = priorityq_new();
-	let i = 0;
-	while (i < 58) {
-		q = priorityq_insert(q, i+30, i+100);
-		i = i+1;
+    q = priorityq_new();
+    let i = 0;
+    while i < 58 {
+	q = priorityq_insert(q, i+30, i+100);
+	i = i+1;
+    }
+    q = priorityq_insert(q, 97, 293);
+    q = priorityq_insert(q, 98, 292);
+    q = priorityq_insert(q, 96, 294);
+    if let Some(res) = priorityq_get(q) {
+	let (ret, _pq,) = res;
+	if ret != unsafecast<any>(96) {
+	    return 5;
 	}
-	q = priorityq_insert(q, 97, 293);
-	q = priorityq_insert(q, 98, 292);
-	q = priorityq_insert(q, 96, 294);
-	if let Some(res) = priorityq_get(q) {
-	    let (ret, _pq,) = res;
-	    if (ret != unsafecast<any>(96)) {
-		    return 5;
-	    }
-	} else {
-	    return 105;
-	}
-		
-	return 0;
+    } else {
+	return 105;
+    }
+    
+    0
 }
 
 // stuff below here is for testing the compiler
 func nullFunc() {
-	return;
+    return;
 }
 
 func callNullFunc() {
-	callNullFunc();
+    callNullFunc();
 }

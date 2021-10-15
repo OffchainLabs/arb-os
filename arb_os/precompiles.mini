@@ -203,7 +203,7 @@ public view write func makeTrampoline(txcallFunc: view write func()) -> view wri
 public view write func precompile_0x01() {  // ecrecover
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
-        if (bytearray_size(calldata) != 4*32) {
+        if bytearray_size(calldata) != 4*32 {
             evmOp_revert_knownPc(0, 0, 0);
         }
         let h = bytearray_get256(calldata, 0);
@@ -215,7 +215,7 @@ public view write func precompile_0x01() {  // ecrecover
         let success = evmCallStack_setTopFrameMemory(
             bytearray_set256(bytearray_new(0), 0, uint(addr))
         );
-        if (success) {
+        if success {
             evmOp_return(0, 32);
         }
     }
@@ -230,7 +230,7 @@ public view write func precompile_0x02() {  // sha256
         let success = evmCallStack_setTopFrameMemory(
             bytearray_set256(bytearray_new(0), 0, uint(result))
         );
-        if (success) {
+        if success {
             evmOp_return(0, 32);
         }
     }
@@ -245,7 +245,7 @@ public view write func precompile_0x03() {  // ripemd160
         let success = evmCallStack_setTopFrameMemory(
             bytearray_set256(bytearray_new(0), 0, uint(result))
         );
-        if (success) {
+        if success {
             evmOp_return(0, 32);
         }
     }
@@ -257,7 +257,7 @@ public view write func precompile_0x04() {  // identity function
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         let success = evmCallStack_setTopFrameMemory(calldata);
-        if (success) {
+        if success {
             evmOp_return(0, bytearray_size(calldata));
         }
     }
@@ -284,9 +284,9 @@ public view write func precompile_0x05() {  // modexp
         ) {
             let mem = biguint_toBytes(result);
             let memSize = bytearray_size(mem);
-            if (memSize > modLen) {
+            if memSize > modLen {
                 mem = bytearray_extract(mem, memSize-modLen, modLen);
-            } elseif (memSize < modLen) {
+            } else if memSize < modLen {
                 mem = bytearray_copy(   // pad result with leading zeroes up to size of modLen
                     mem,
                     0,
@@ -295,14 +295,14 @@ public view write func precompile_0x05() {  // modexp
                     memSize
                 );
             }
-            if (evmCallStack_setTopFrameMemory(mem)) {
+            if evmCallStack_setTopFrameMemory(mem) {
                 evmOp_return(0, modLen);
             } else {
                 evmOp_revert_knownPc(0, 0, 0);
             }
         } else {
             // modulus was zero, so we return zero
-            if (evmCallStack_setTopFrameMemory(bytearray_new(0))) {
+            if evmCallStack_setTopFrameMemory(bytearray_new(0)) {
                 evmOp_return(0, modLen);
             } else {
                 evmOp_revert_knownPc(1, 0, 0);
@@ -335,7 +335,7 @@ public view write func precompile_0x06() {  // ecadd
                 z1,
             )
         );
-        if (success) {
+        if success {
             evmOp_return(0, 64);
         }
     }
@@ -364,7 +364,7 @@ public view write func precompile_0x07() {  // ecmul
                 z1,
             )
         );
-        if (success) {
+        if success {
             evmOp_return(0, 64);
         }
     }
@@ -376,10 +376,10 @@ public view write func precompile_0x08() { // ecpairing
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         let numPts = bytearray_size(calldata) / (6*32);
-        if ((numPts >= 0) && (numPts <= 30)) {
+        if (numPts >= 0) && (numPts <= 30) {
             let acc = unsafecast<any>(());
             let offset = 0;
-            while (numPts > 0) {
+            while numPts > 0 {
                 acc = (
                     (
                         bytearray_get256(calldata, offset),
@@ -403,7 +403,7 @@ public view write func precompile_0x08() { // ecpairing
                     uint(result)
                 )
             );
-            if (success) {
+            if success {
                 evmOp_return(0, 32);
             }
         }
@@ -415,24 +415,24 @@ public view write func precompile_0x08() { // ecpairing
 public view write func precompile_0x09() { // Blake2
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
-        if (bytearray_size(calldata) != 213) {
+        if bytearray_size(calldata) != 213 {
             evmOp_revert_knownPc(0, 0, 0);
         }
 
         let numRounds = (bytearray_get256(calldata, 0) >> (256-32));
-        if (numRounds > 0xffff) {
+        if numRounds > 0xffff {
             evmOp_revert_knownPc(1, 0, 0);
         }
 
         let (_, inputBuf) = bytearray_toSizeAndBuffer(calldata);
 
-        if (getbuffer8(inputBuf, 212) > 1) {   // last byte of input must be 0 or 1
+        if getbuffer8(inputBuf, 212) > 1 {   // last byte of input must be 0 or 1
             evmOp_revert_knownPc(2, 0, 0);
         }
 
         let outputBuf = asm(inputBuf) buffer { blake2f };
         let mem = bytearray_fromSizeAndBuffer(64, outputBuf);
-        if (evmCallStack_setTopFrameMemory(mem)) {
+        if evmCallStack_setTopFrameMemory(mem) {
             evmOp_return(0, 64);
         } else {
             evmOp_revert_knownPc(3, 0, 0);
