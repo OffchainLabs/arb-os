@@ -154,12 +154,6 @@ jobs:
           restore-keys: |
             ${{ matrix.os }}-cargo-${{ matrix.rust }}-
 
-      - name: Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --all
-
       - name: Run test suite
         run: bash ./wasm-suite/run-tests.sh
 
