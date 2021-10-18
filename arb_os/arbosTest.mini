@@ -18,6 +18,7 @@ use std::storageMap::storageMap_deserialize;
 use std::storageMap::storageMap_new;
 use std::storageMap::storageMap_set;
 
+use accounts::Account;
 use accounts::pristineAccount;
 use accounts::account_setContractInfo;
 use accounts::account_setStorageCell;
@@ -29,6 +30,9 @@ use accounts::account_setNextSeqNum;
 use accounts::account_getBalance;
 use accounts::account_addToEthBalance;
 use accounts::account_deductFromEthBalance;
+use accounts::accountStore_forall;
+use accounts::accountStore_get;
+use accounts::account_getSerializedEVMState;
 
 use chainParameters::chainParams_getOrDie;
 
@@ -49,6 +53,7 @@ use evmCallStack::evmCallFrame_getCaller;
 use evmCallStack::evmCallFrame_getAccount;
 use evmCallStack::evmCallStack_getAccountInCurrentContext;
 use evmCallStack::evmCallStack_setAccountInCurrentContext;
+use evmCallStack::evmCallStack_getAccountStoreInCurrentContext;
 
 
 public view write func arbosTest_txcall() {
@@ -76,6 +81,10 @@ public view write func arbosTest_txcall() {
             arbosTest_setState(topFrame, calldata);
         } else if funcCode == const::funcCode_ArbosTest_store {
             arbosTest_store(topFrame, calldata);
+        } else if funcCode == const::funcCode_ArbosTest_getAllAccountAddresses {
+            arbosTest_getAllAccountAddresses(topFrame, calldata);
+        } else if funcCode == const::funcCode_ArbosTest_getSerializedEVMState {
+            arbosTest_getSerializedEVMState(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 2, 0, 0);
@@ -343,4 +352,61 @@ view write func arbosTest_store(topFrame: EvmCallFrame, calldata: ByteArray) {
     evmCallStack_setAccountInCurrentContext(addr, account);
 
     evmOp_return(0, 0);
+}
+
+view write func arbosTest_getAllAccountAddresses(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if bytearray_size(calldata) != 4 {
+        evmOp_revert_knownPc(90, 0, 0);
+    }
+
+    let ret = unsafecast<ByteArray>(accountStore_forall(
+        evmCallStack_getAccountStoreInCurrentContext(),
+        closure(acct: Account, rawState: any) -> any {
+            let state = unsafecast<ByteArray>(rawState);
+            return bytearray_set256(state, bytearray_size(state), uint(acct.addr));
+        },
+        bytearray_new(0),
+    ));
+    ret = bytearray_copy(
+        ret,
+        0,
+        bytearray_set256(
+            bytearray_set256(bytearray_new(0), 0, 32),
+            32,
+            bytearray_size(ret),
+        ),
+        64,
+        bytearray_size(ret)
+    );
+    if evmCallStack_setTopFrameMemory(ret) {
+        evmOp_return(0, bytearray_size(ret));
+    } else {
+        evmOp_revert_knownPc(91, 0, 0);
+    }
+}
+
+view write func arbosTest_getSerializedEVMState(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if bytearray_size(calldata) != 36 {
+        evmOp_revert_knownPc(90, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let ret = account_getSerializedEVMState(
+        accountStore_get(evmCallStack_getAccountStoreInCurrentContext(), addr)
+    );
+    ret = bytearray_copy(
+        ret,
+        0,
+        bytearray_set256(
+            bytearray_set256(bytearray_new(0), 0, 32),
+            32,
+            bytearray_size(ret),
+        ),
+        64,
+        bytearray_size(ret)
+    );
+    if evmCallStack_setTopFrameMemory(ret) {
+        evmOp_return(0, bytearray_size(ret));
+    } else {
+        evmOp_revert_knownPc(91, 0, 0);
+    }
 }

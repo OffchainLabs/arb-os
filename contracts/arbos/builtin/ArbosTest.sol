@@ -18,6 +18,10 @@ interface ArbosTest {
     function setState(address addr, bytes calldata state) external;
 
     function store(address addr, uint256 key, uint256 value) external;
+
+    function getAllAccountAddresses() external view returns (bytes memory);
+
+    function getSerializedEVMState(address addr) external view returns (bytes memory);
 }
 
 

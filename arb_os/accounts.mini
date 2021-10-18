@@ -10,16 +10,24 @@ use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_copy;
+
 use std::bytestream::bytestream_new;
+
 use std::bls::BLSKey;
+
 use std::codeSegment::getDummyAcceptContractCode;
+
 use std::keccak::keccak256;
+
 use std::storageMap::StorageMap;
 use std::storageMap::storageMap_new;
 use std::storageMap::storageMap_size;
 use std::storageMap::storageMap_get;
 use std::storageMap::storageMap_set;
 use std::storageMap::storageMap_forall;
+use std::storageMap::storageMap_serialize;
 
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsSize;
@@ -32,6 +40,7 @@ use std::codeSegment::translateEvmCodeSegment;
 use decompression::AggregatorDecompressionState;
 use evmCallStack::evmCallStack_addStorageCharge;
 use evmCallStack::evmCallStack_isEmpty;
+
 
 type AccountStore = struct {
     accounts: map<address, Account>,
@@ -714,6 +723,62 @@ public func account_getCodeSize(acct: Account) -> uint {
 
 public func account_getCode(acct: Account) -> option<ByteArray> {
     Some((acct.contractInfo?).code)
+}
+
+public func account_getSerializedEVMState(acct: Account) -> ByteArray {
+    let ret = bytearray_new(0);
+    ret = bytearray_set256(ret, 0, uint(acct.addr));
+    ret = bytearray_set256(ret, 32, acct.nextSeqNum);
+    ret = bytearray_set256(ret, 64, acct.ethBalance);
+
+    if let Some(contractInfo) = acct.contractInfo {
+        ret = bytearray_setByte(ret, bytearray_size(ret), 1);
+        ret = getSerializedContractInfo(ret, contractInfo);
+    } else {
+        ret = bytearray_setByte(ret, bytearray_size(ret), 0);
+    }
+
+    if let Some(aggregatorInfo) = acct.aggregatorInfo {
+        ret = bytearray_setByte(ret, bytearray_size(ret), 1);
+        ret = getSerializedAggregatorInfo(ret, aggregatorInfo);
+    } else {
+        ret = bytearray_setByte(ret, bytearray_size(ret), 0);
+    }
+
+    if let Some(aggToPay) = acct.aggregatorToPay {
+        ret = bytearray_setByte(ret, bytearray_size(ret), 1);
+        ret = bytearray_set256(ret, bytearray_size(ret), uint(aggToPay));
+    } else {
+        ret = bytearray_setByte(ret, bytearray_size(ret), 0);
+    }
+
+    return ret;
+}
+
+func getSerializedContractInfo(ba: ByteArray, contractInfo: AccountContractInfo) -> ByteArray {
+    ba = bytearray_set256(ba, bytearray_size(ba), bytearray_size(contractInfo.code));
+    ba = bytearray_copy(
+        contractInfo.code,
+        0,
+        ba,
+        bytearray_size(ba),
+        bytearray_size(contractInfo.code),
+    );
+    let sto = storageMap_serialize(contractInfo.storage);
+    ba = bytearray_set256(ba, bytearray_size(ba), storageMap_size(contractInfo.storage));
+    return bytearray_copy(
+        sto,
+        0,
+        ba,
+        bytearray_size(ba),
+        bytearray_size(sto),
+    );
+}
+
+func getSerializedAggregatorInfo(ba: ByteArray, aggregatorInfo: AggregatorInfo) -> ByteArray {
+    ba = bytearray_set256(ba, bytearray_size(ba), uint(aggregatorInfo.feeCollector));
+    ba = bytearray_set256(ba, bytearray_size(ba), aggregatorInfo.baseTxFeeL1Gas);
+    return ba;
 }
 
 public func account_usesOriginalStorageGasAlloc(acct: Account) -> bool {
