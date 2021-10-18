@@ -2189,7 +2189,10 @@ fn process_wasm_inner(
             // Get params
             init.push(get_frame());
             init.push(get64_from_buffer(1));
-            init.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xff))));
+            init.push(immed_op(
+                AVMOpcode::BitwiseAnd,
+                Value::Int(Uint256::from_usize(0xff)),
+            ));
             init.push(get_frame());
             init.push(get64_from_buffer(0));
             init.push(simple_op(AVMOpcode::SetBuffer8));

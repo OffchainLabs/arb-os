@@ -1765,7 +1765,10 @@ pub fn _test_constructor_recursion() -> Result<(), ethabi::Error> {
         "ReverterFactory",
         "ConstructorCallback2",
     ))?;
-    if ccontract.deploy(&[], &mut machine, Uint256::zero(), None, false).is_err() {
+    if ccontract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .is_err()
+    {
         panic!("failed to deploy ConstructorCallback contract");
     }
 
