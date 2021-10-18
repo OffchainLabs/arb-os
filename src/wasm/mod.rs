@@ -322,6 +322,12 @@ fn generate_store(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize,
 fn safe_tuple_get(res: &mut Vec<Instruction>) {
     // idx, tuple
     res.push(simple_op(AVMOpcode::Dup1)); // tuple, idx, tuple
+    res.push(simple_op(AVMOpcode::Type)); // type, idx, tuple
+    res.push(immed_op(AVMOpcode::Equal, int_from_usize(3))); // bool, idx, tuple
+    res.push(simple_op(AVMOpcode::IsZero)); // bool, idx, tuple
+    cjump(res, 1);
+
+    res.push(simple_op(AVMOpcode::Dup1)); // tuple, idx, tuple
     res.push(simple_op(AVMOpcode::Tlen)); // len, idx, tuple
     res.push(simple_op(AVMOpcode::Dup1)); // idx, len, idx, tuple
     res.push(simple_op(AVMOpcode::Swap1)); // len, idx, idx, tuple

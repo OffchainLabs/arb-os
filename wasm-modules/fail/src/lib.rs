@@ -44,7 +44,7 @@ pub fn test() -> u32 {
 
     match mode {
         1 => {
-            // writes zro to uint
+            // writes zero to uint
             uintimmed_int(out_bad);
         }
         2 => {
