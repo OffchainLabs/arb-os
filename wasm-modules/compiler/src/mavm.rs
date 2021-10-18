@@ -804,7 +804,6 @@ pub enum AVMOpcode {
     SetBuffer256,
     CompileWasm,
     RunWasm,
-    MakeWasm,
     Label = 0xff,
 }
 
@@ -916,7 +915,6 @@ impl Opcode {
             "setbuffer8" => Opcode::AVMOpcode(AVMOpcode::SetBuffer8),
             "setbuffer64" => Opcode::AVMOpcode(AVMOpcode::SetBuffer64),
             "setbuffer256" => Opcode::AVMOpcode(AVMOpcode::SetBuffer256),
-            "makewasm" => Opcode::AVMOpcode(AVMOpcode::MakeWasm),
             "runwasm" => Opcode::AVMOpcode(AVMOpcode::RunWasm),
             "compilewasm" => Opcode::AVMOpcode(AVMOpcode::CompileWasm),
             "halt" => Opcode::AVMOpcode(AVMOpcode::Halt),
@@ -1031,7 +1029,6 @@ impl AVMOpcode {
             AVMOpcode::SetBuffer256 => "setbuffer256",
             AVMOpcode::RunWasm => "runwasm",
             AVMOpcode::CompileWasm => "compilewasm",
-            AVMOpcode::MakeWasm => "makewasm",
             _ => "",
         }
     }
@@ -1123,7 +1120,6 @@ impl AVMOpcode {
             0xa6 => Some(AVMOpcode::SetBuffer256),
             0xa7 => Some(AVMOpcode::RunWasm),
             0xa8 => Some(AVMOpcode::CompileWasm),
-            0xa9 => Some(AVMOpcode::MakeWasm),
             _ => None,
         }
     }
@@ -1215,7 +1211,6 @@ impl AVMOpcode {
             AVMOpcode::SetBuffer256 => 0xa6,
             AVMOpcode::RunWasm => 0xa7,
             AVMOpcode::CompileWasm => 0xa8,
-            AVMOpcode::MakeWasm => 0xa9,
             _ => 0x00,
         }
     }

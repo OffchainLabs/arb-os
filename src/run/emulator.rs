@@ -761,6 +761,7 @@ pub struct Machine {
     trace_writer: Option<BufWriter<File>>,
     wasm_instances: Vec<JitWasm>,
     counter: usize,
+    pub debug_mode: bool,
     coverage: Option<HashSet<usize>>,
 }
 
@@ -782,6 +783,7 @@ impl Machine {
             wasm_instances: Vec::new(),
             counter: 0,
             coverage: None,
+            debug_mode: false,
         }
     }
 
@@ -1380,7 +1382,6 @@ impl Machine {
                 AVMOpcode::SetBuffer256 => 100,
                 AVMOpcode::RunWasm => 1000100,
                 AVMOpcode::CompileWasm => 100,
-                AVMOpcode::MakeWasm => 100,
             })
         } else {
             None
@@ -1447,21 +1448,12 @@ impl Machine {
                 if let Some(val) = &insn.immediate {
                     self.stack.push(val.clone());
                 }
-                {
+                if self.debug_mode {
                     self.counter = self.counter + 1;
-                    // println!("{}, stack sz {}", str, stack_len);
-                    // println!("{}", str);
-                    /*
-                    if self.counter % 1000000 == 0 {
-                        if let Value::Tuple(t) = self.register.clone() {
-                            println!("Instruction {} gas {}", self.counter, t[4]);
-                        }
-                    }*/
+                    if let Some(str) = &insn.debug_str {
+                        println!("{}", str);
+                    }
                 }
-                /*
-                if let Some(str) = &insn.debug_str {
-                    println!("{}", str);
-                }*/
                 let gas_remaining_before = if let Some(gas) = self.next_op_gas() {
                     let gas256 = Uint256::from_u64(gas);
                     let gas_remaining_before = self.arb_gas_remaining.clone();
@@ -1476,15 +1468,6 @@ impl Machine {
                 } else {
                     self.arb_gas_remaining.clone()
                 };
-                /*
-                if let Some(_str) = &insn.debug_str {
-                    self.counter = self.counter + 1;
-                    // println!("{}, stack sz {}", str, stack_len);
-                    // println!("{}", str);
-                    if self.counter % 1000000 == 0 {
-                        println!("Wasm instruction {}", self.counter);
-                    }
-                };*/
                 match insn.opcode {
                     AVMOpcode::Noop => {
                         self.incr_pc();
@@ -2103,7 +2086,6 @@ impl Machine {
                         let opcode = self.stack.pop_usize(&self.state)?;
                         let imm = self.stack.pop(&self.state)?;
                         let cp = self.stack.pop_codepoint(&self.state)?;
-                        // println!("ins {} immed {} codept {}", opcode, imm, cp);
                         let new_cp = self.code.push_insn(opcode, Some(imm), cp);
                         if let Some(cp) = new_cp {
                             self.stack.push_codepoint(cp);
@@ -2220,7 +2202,6 @@ impl Machine {
                         }
                     }
                     AVMOpcode::NewBuffer => {
-                        // self.stack.push(Value::new_buffer(vec![0; 256]));
                         self.stack.push(Value::new_buffer(vec![]));
                         self.incr_pc();
                         Ok(true)
@@ -2246,7 +2227,6 @@ impl Machine {
                         for i in 0..8 {
                             res[i] = buf.read_byte((offset + i) as u128);
                         }
-                        // println!("getting buffer offset {} value {:?}", offset, res);
                         self.stack.push_uint(Uint256::from_bytes(&res));
                         self.incr_pc();
                         Ok(true)
@@ -2292,16 +2272,9 @@ impl Machine {
                         let buf = self.stack.pop_buffer(&self.state)?;
                         let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
-                        // println!("setting buffer offset {} value {} bytes {:?}", offset, val, bytes);
                         for i in 0..8 {
                             nbuf = nbuf.set_byte((offset + i) as u128, bytes[i + 24]);
                         }
-                        /*
-                        let mut res = [0u8; 8];
-                        for i in 0..8 {
-                            res[i] = nbuf.read_byte(offset+i);
-                        }*/
-                        // println!("getting buffer offset {} value {:?}", offset, res);
                         self.stack.push(Value::copy_buffer(nbuf));
                         self.incr_pc();
                         Ok(true)
@@ -2331,10 +2304,8 @@ impl Machine {
                         let arg = self.stack.pop_usize(&self.state)?;
                         let buf = self.stack.pop_buffer(&self.state)?;
                         let (_, idx) = self.stack.pop_wasm_codepoint(&self.state)?;
-                        println!("Going to run JIT");
                         let (nbuf, _, len, gas_left, _, _) =
                             self.wasm_instances[idx].run_immed(buf, arg, v);
-                        println!("JIT success {}", gas_left);
 
                         let gas256 = Uint256::from_u64(gas_left);
                         self.total_gas_usage = self.total_gas_usage.sub(&gas256).unwrap();
@@ -2386,27 +2357,6 @@ impl Machine {
                             self.wasm_instances.len() - 1,
                         ));
                         self.incr_pc();
-                        Ok(true)
-                    }
-                    AVMOpcode::MakeWasm => {
-                        let offset = self.stack.pop_usize(&self.state)?;
-                        let buf = self.stack.pop_buffer(&self.state)?;
-                        let tab = self.stack.pop(&self.state)?;
-                        let code_pt = self.stack.pop(&self.state)?;
-                        let mut vec = vec![];
-                        for i in 0..offset {
-                            vec.push(buf.read_byte(i as u128));
-                        }
-                        let val = Value::new_tuple(vec![code_pt, tab.clone()]);
-                        let instance = JitWasm::new(&vec);
-                        self.wasm_instances.push(instance);
-                        self.stack.push(Value::WasmCodePoint(
-                            Box::new(val),
-                            self.wasm_instances.len() - 1,
-                        ));
-                        self.incr_pc();
-                        println!("Made wasm codepoint");
-
                         Ok(true)
                     }
                 }

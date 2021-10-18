@@ -29,19 +29,6 @@ fn test_hash_test() {
 
     let mut buf: Vec<u8> = Vec::new();
     buf.resize(8 * 1024, 0);
-    assert_eq!(hash_buffer(&buf), zero_hash(32));
-
-    // Test single value buffers
-    for i in 0..1024 {
-        let mut buf: Vec<u8> = Vec::new();
-        buf.resize(32 * 1024, 0);
-        buf[i * 32] = 123;
-        let b = Buffer::empty0();
-        let b = b.set_byte(i * 32, 123);
-        if i >= 512 {
-            assert_eq!(hash_buffer(&buf), hash_full_buffer(&buf));
-        }
-        assert_eq!(hash_buffer(&buf), b.hash().hash);
-    }
+    assert_eq!(hash_buffer(&buf, true), hash_buffer2(buf.to_vec()));
 }
 */

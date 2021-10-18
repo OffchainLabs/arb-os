@@ -1649,7 +1649,6 @@ fn test_upgrade_arbos_to_different_version() -> Result<(), ethabi::Error> {
 
     let wallet2 = machine.runtime_env.new_wallet();
     let arbsys = ArbSys::new(&wallet2, false);
-
     let arbos_version = arbsys.arbos_version(&mut machine)?;
     assert_eq!(
         arbos_version,
@@ -1742,6 +1741,7 @@ pub fn _evm_run_with_gas_charging(
         machine.run(None)
     }; // handle these ETH deposit messages
 
+    println!("First deploy ...");
     let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
     if let Err(receipt) = fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) {
         if receipt.unwrap().get_return_code() == Uint256::from_u64(3) {
@@ -1752,6 +1752,7 @@ pub fn _evm_run_with_gas_charging(
         }
     }
 
+    println!("Second deploy ...");
     let mut pc_contract = AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
     if let Err(receipt) = pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
@@ -1797,6 +1798,7 @@ pub fn _evm_run_with_gas_charging(
         }
     }
 
+    println!("Function call ...");
     let (logs, sends) = pc_contract.call_function(
         my_addr,
         "transferFib",
