@@ -25,10 +25,6 @@ fn test_hash_test() {
     for i in 0..8 * 1024 {
         buf[i] = rng.gen();
     }
-    assert_eq!(hash_buffer(&buf), hash_buffer2(buf.to_vec()));
-
-    let mut buf: Vec<u8> = Vec::new();
-    buf.resize(8 * 1024, 0);
     assert_eq!(hash_buffer(&buf, true), hash_buffer2(buf.to_vec()));
 }
 */

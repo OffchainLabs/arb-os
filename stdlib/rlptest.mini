@@ -42,7 +42,7 @@ type SignedTx = struct {
 
 write view func main(kind: uint, value: any) {
     rlp_init();
-    if (kind == 0) {
+    if kind == 0 {
         let ui = unsafecast<uint>(value);
         let ba = bytearray_new(0);
         let (uba, _) = rlp_encodeUint(ui, ba, 0);
@@ -144,13 +144,11 @@ view func testRlpHasher() {
 
     if let Some(res) = rlp_decodeMessageInfo(bytestream_new(oldBuf2)) {
         let (_, tx) = res;
-        debug(tx);
     }
 
     if let Some(res) = rlp_decodeMessageInfo(bytestream_new(oldBuf2)) {
         let (_, tx) = res;
-        debug(tx);
-        if (keccak256(oldBuf2, 0, bytearray_size(oldBuf2)) != rlp_encodeAndHashMessageInfoForSignature(tx, Some(tx.v))) {
+        if keccak256(oldBuf2, 0, bytearray_size(oldBuf2)) != rlp_encodeAndHashMessageInfoForSignature(tx, Some(tx.v)) {
             asm(12,) { debugprint };
             error;
         }
@@ -174,7 +172,7 @@ view func testRlpHasher() {
         Some(v)
     );
 
-    if (keccak256(oldBuf, 0, bytearray_size(oldBuf)) != newWay) {
+    if keccak256(oldBuf, 0, bytearray_size(oldBuf)) != newWay {
         asm(14,) { debugprint };
         error;
     }

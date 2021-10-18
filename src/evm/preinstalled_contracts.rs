@@ -1778,6 +1778,7 @@ pub fn _evm_run_with_gas_charging(
         .runtime_env
         ._advance_time(Uint256::one(), None, false);
 
+    println!("Function call ...");
     let (logs, sends) = pc_contract.call_function(
         my_addr.clone(),
         "deposit",
@@ -1798,7 +1799,6 @@ pub fn _evm_run_with_gas_charging(
         }
     }
 
-    println!("Function call ...");
     let (logs, sends) = pc_contract.call_function(
         my_addr,
         "transferFib",
