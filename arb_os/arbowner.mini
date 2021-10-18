@@ -246,7 +246,6 @@ view write func arbowner_getUploadedCodeHash(_topFrame: EvmCallFrame, calldata: 
 
 // function finishCodeUploadAsArbosUpgrade(bytes32 newCodeHash, bytes32 oldCodeHash) external;
 view write func arbowner_finishCodeUploadAsArbosUpgrade(_topFrame: EvmCallFrame, calldata: ByteArray) {
-    debug("finishing");
     evmOp_revertIfStatic();
     if bytearray_size(calldata) != 68 {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 40, 0, 0);

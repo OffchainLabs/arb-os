@@ -737,7 +737,7 @@ QuoteString: Vec<u8> = {
         let mut file = File::open(fname).unwrap();
         let mut buffer = Vec::<u8>::new();
         file.read_to_end(&mut buffer).unwrap();
-		buffer
+        buffer
     },
     <lno: @L> <q: r#"h"(0x)?[a-fA-F0-9]*""#> => {
         let re = Regex::new(r#"h"(0x)?([a-fA-F0-9]*)""#).unwrap();

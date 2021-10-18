@@ -316,6 +316,32 @@ fn generate_store(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize,
     res.push(simple_op(AVMOpcode::Pop));
 }
 
+fn safe_tuple_get(res: &mut Vec<Instruction>) {
+    // idx, tuple
+    res.push(simple_op(AVMOpcode::Dup1)); // tuple, idx, tuple
+    res.push(simple_op(AVMOpcode::Tlen)); // len, idx, tuple
+    res.push(simple_op(AVMOpcode::Dup1)); // idx, len, idx, tuple
+    res.push(simple_op(AVMOpcode::Swap1)); // len, idx, idx, tuple
+    res.push(simple_op(AVMOpcode::GreaterThan)); // bool, idx, tuple
+    res.push(simple_op(AVMOpcode::IsZero)); // bool, idx, tuple
+    cjump(res, 1);
+    res.push(simple_op(AVMOpcode::Tget))
+}
+
+// do a bound check for memory address at top of stack
+fn bound_check(res: &mut Vec<Instruction>) {
+    // address
+    get_memory(res);
+    res.push(get64_from_buffer(0));
+    res.push(immed_op(
+        AVMOpcode::Mul,
+        Value::Int(Uint256::from_usize(1 << 16)),
+    ));
+    res.push(simple_op(AVMOpcode::GreaterThan));
+    res.push(simple_op(AVMOpcode::IsZero));
+    cjump(res, 1);
+}
+
 fn generate_load(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize, num: usize) {
     res.push(simple_op(AVMOpcode::Dup0));
     res.push(immed_op(
@@ -2220,6 +2246,7 @@ fn process_wasm_inner(
             // check if loop ends
             init.push(get_frame());
             init.push(get64_from_buffer(3));
+            init.push(immed_op(AVMOpcode::Add, int_from_usize(1)));
             init.push(get_frame());
             init.push(get64_from_buffer(2));
             init.push(simple_op(AVMOpcode::LessThan));
@@ -2286,6 +2313,7 @@ fn process_wasm_inner(
             // check if loop ends
             init.push(get_frame());
             init.push(get64_from_buffer(3));
+            init.push(immed_op(AVMOpcode::Add, int_from_usize(1)));
             init.push(get_frame());
             init.push(get64_from_buffer(2));
             init.push(simple_op(AVMOpcode::LessThan));
@@ -2338,6 +2366,7 @@ fn process_wasm_inner(
             init.push(mk_label(end_label));
         }
         if f.field().contains("tuple2buffer") {
+            // init.push(immed_op(AVMOpcode::DebugPrint, int_from_usize(443))); // bool, int, buffer
             // inside frame: ptr, idx1, idx2, len; counter
             let start_label = label;
             let end_label = label + 1;
@@ -2354,6 +2383,7 @@ fn process_wasm_inner(
             // check if loop ends
             init.push(get_frame());
             init.push(get64_from_buffer(4));
+            init.push(immed_op(AVMOpcode::Add, int_from_usize(1)));
             init.push(get_frame());
             init.push(get64_from_buffer(3));
             init.push(simple_op(AVMOpcode::LessThan));
@@ -2365,10 +2395,19 @@ fn process_wasm_inner(
             init.push(immed_op(AVMOpcode::Tget, int_from_usize(5))); // tuple, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(1)); // idx, tuple
-            init.push(simple_op(AVMOpcode::Tget)); // tuple2
+            safe_tuple_get(init);
+            // init.push(simple_op(AVMOpcode::Tget)); // tuple2
             init.push(get_frame());
             init.push(get64_from_buffer(2)); // idx2, tuple2
-            init.push(simple_op(AVMOpcode::Tget)); // buffer
+            safe_tuple_get(init);
+
+            // Check that it's actually buffer
+            init.push(simple_op(AVMOpcode::Dup0)); // int, int, buffer
+            init.push(simple_op(AVMOpcode::Type)); // int, int, buffer
+            init.push(immed_op(AVMOpcode::Equal, int_from_usize(4))); // bool, int, buffer
+            init.push(simple_op(AVMOpcode::IsZero)); // bool, int, buffer
+            cjump(init, 1);
+
             init.push(get_frame());
             init.push(get64_from_buffer(4)); // offset, buffer
             init.push(simple_op(AVMOpcode::GetBuffer8)); // byte
@@ -2409,10 +2448,27 @@ fn process_wasm_inner(
             init.push(immed_op(AVMOpcode::Tget, int_from_usize(5))); // tuple, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(1)); // idx, tuple, buffer
-                                             // init.push(simple_op(AVMOpcode::DebugPrint));
-            init.push(simple_op(AVMOpcode::Tget)); // int, buffer
+            safe_tuple_get(init);
+            // init.push(simple_op(AVMOpcode::Tget)); // int, buffer
+
+            // Check that it's actually integer
+            init.push(simple_op(AVMOpcode::Dup0)); // int, int, buffer
+            init.push(simple_op(AVMOpcode::Type)); // int, int, buffer
+                                                   // init.push(simple_op(AVMOpcode::Dup0)); // int, int, buffer
+                                                   // init.push(simple_op(AVMOpcode::DebugPrint));
+            init.push(immed_op(AVMOpcode::Equal, int_from_usize(0))); // bool, int, buffer
+            init.push(simple_op(AVMOpcode::IsZero)); // bool, int, buffer
+            cjump(init, 1);
             init.push(get_frame());
             init.push(get64_from_buffer(0)); // address, int, buffer
+
+            // implement bounds checking here
+            init.push(simple_op(AVMOpcode::Dup0)); // address, address, int, buffer
+            init.push(immed_op(
+                AVMOpcode::Add,
+                Value::Int(Uint256::from_usize(31)),
+            )); // address, address, int, buffer
+            bound_check(init); // address, int, buffer
             init.push(immed_op(
                 AVMOpcode::Add,
                 Value::Int(Uint256::from_usize(memory_offset)),
@@ -2427,12 +2483,27 @@ fn process_wasm_inner(
             init.push(immed_op(AVMOpcode::Tget, int_from_usize(5))); // tuple, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(1)); // idx, tuple, buffer
-            init.push(simple_op(AVMOpcode::Tget)); // tuple2, buffer
+            safe_tuple_get(init); // tuple2, buffer
             init.push(get_frame());
             init.push(get64_from_buffer(2)); // idx2, tuple2, buffer
-            init.push(simple_op(AVMOpcode::Tget)); // int, buffer
+            safe_tuple_get(init); // int, buffer
+
+            // Check that it's actually integer
+            init.push(simple_op(AVMOpcode::Dup0)); // int, int, buffer
+            init.push(simple_op(AVMOpcode::Type)); // int, int, buffer
+            init.push(immed_op(AVMOpcode::Equal, int_from_usize(0))); // bool, int, buffer
+            init.push(simple_op(AVMOpcode::IsZero)); // bool, int, buffer
+            cjump(init, 1);
+
             init.push(get_frame());
             init.push(get64_from_buffer(0)); // address, int, buffer
+                                             // implement bounds checking here
+            init.push(simple_op(AVMOpcode::Dup0)); // address, address, int, buffer
+            init.push(immed_op(
+                AVMOpcode::Add,
+                Value::Int(Uint256::from_usize(31)),
+            )); // address, address, int, buffer
+            bound_check(init); // address, int, buffer
             init.push(immed_op(
                 AVMOpcode::Add,
                 Value::Int(Uint256::from_usize(memory_offset)),

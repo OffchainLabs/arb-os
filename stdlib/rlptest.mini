@@ -117,11 +117,6 @@ view func testRlpHasher() {
     let v = uint(hash(value));
     let r = 0;
     let s = 0;
-    debug(value);
-    debug(v);
-    debug(gasLimit);
-
-    debug(data);
 
     let oldBuf = rlp_encodeMessageInfo(
         seqNum,
@@ -146,9 +141,6 @@ view func testRlpHasher() {
         r,
         s
     );
-
-    debug(oldBuf);
-    debug(oldBuf2);
 
     if let Some(res) = rlp_decodeMessageInfo(bytestream_new(oldBuf2)) {
         let (_, tx) = res;
