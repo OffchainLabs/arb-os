@@ -6,14 +6,14 @@ Mini is a programming language and compiler designed for writing code for the Ar
 
 ## Structure of a program
 
-A Mini program is written as a set of source code files.  You can write separate source code files, and compile and link them together to make an executable AVM program.
+A Mini program is written as a set of source code files.  You can write separate source code files, and they will automatically be compiled and linked them together to make an executable AVM program.
 
 ## Top level declarations
 
 A Mini source code file consists of a series of top-level declarations.  
-Import declarations make functions and types from other files usable in the file they are contained in.
+Use declarations make functions and types from other files usable in the file they are contained in.
 Constant declarations add a constant.
-Import and constant declarations together form head declarations.
+Use and constant declarations together form head declarations.
 Body declarations are any other declaration.
 
 The head declarations must come before all other declarations. It is an error to put a head declaration after a body declaration.
@@ -32,17 +32,19 @@ Within each group the order of declarations does not matter.
 
 ### Body declarations
 
-`type` *name* = *type*
+`type` *name* (`<` *ident1*, *ident2*, ... `>`)? = *type* `;`
 
-> This declares a type alias, allowing name to be used as a synonym for the specified type.  (Note that in the current syntax there is not a semicolon at the end.)
+> This declares a type alias, allowing name to be used as a synonym for the specified type. 
+> If `<` *ident1*, *ident2*, ... `>` is included, the type will be generic with *ident1*, *ident2*, etc as type variables.
+> In generic types the type variables will be available in the definition of *type*, and will be replaced by concrete types in specializations.
 
-`var` *name* : *type* ;
+`var` *name* `:` *type* `;`
 
-> This declares a global variable. If type is an atomic type, the variable will be initialized to the zero value for that type. Otherwise the variable will be uninitialized. Reading an uninitialized variable before initializing it will cause undefined behavior.
+> This declares a global variable. The variable will be initially assigned the default value for the type.
 
 `#[` *Attributes* `]`? [ `view` | `write` | `public` ]* `func` *name* ( *argname1: type1, argname2: type2, ...* ) [-> *returntype*] *codeblock*
 
-`#[` *Attributes* `]`? [ `view` | `write` | `public` ]* `func` *name* ( *argname1: type1, argname2: type2, ...* ) `noreturn` codeblock*
+`#[` *Attributes* `]`? [ `view` | `write` | `public` ]* `func` *name* ( *argname1: type1, argname2: type2, ...* ) `noreturn` *codeblock*
 
 > This declares a function and provides its code.
 >
@@ -62,7 +64,7 @@ Within each group the order of declarations does not matter.
 
 ## Types
 
-Mini is a type-checked language.  The compiler should catch any inconsistent use of types. We believe there are only one way that type errors can go undetected by the compiler, incorrect uses of the `unsafecast` operator.
+Mini is a type-checked language.  The compiler should catch any inconsistent use of types. We believe there are only two ways that type errors can go undetected by the compiler, incorrect uses of the `unsafecast` or `unioncast` operators
 
 Mini has the following types:
 
@@ -96,7 +98,7 @@ Mini has the following types:
 
 `string`
 
-> Represents a string of text. Finish me.
+> Represents a string of text. Internally, this is represented by `(uint, buffer)`, with the `uint` representing the length of the string, and the `buffer` representing the raw data.
 
 ( *type1*, *type2*, ... )
 
@@ -118,13 +120,13 @@ Mini has the following types:
 
 > an untagged union type that can hold values from any of *type1*, *type2*, etc. There must be explicit casts to convert to and from its component types. This is done via `newunion` and `unioncast`.
 
-`struct` { *name1: type1 , name2 : type2 , ...* }
+`struct` `{` *name1* `:` *type1* `,` *name2* `:` *type2* `,` ... `}`
 
 > a struct with one or more named, typed fields (a compound type)
 
 `option`< *type* >
 
-> either the contained type or "None<*type*>", must be unwrapped to compare with inner type
+> Either Some(value) or None<*type*>, the specific variant being used can be determined by `if let` and `?`.
 
 [ `view` | `write` | `public` ]* `func` ( *type1, type2, ...*) (-> *returntype*)?
 
@@ -133,6 +135,15 @@ Mini has the following types:
 [ `view` | `write` ] `closure` `(` *type*, *type*, ... `)` (`->` *returntype*`)?
 
 > a closure type, acts like a function except that it can capture data from its contained scope.
+
+*ident*
+
+> A named type
+
+*ident* `<` *type1* `,` *type2* `,` ... `>`
+
+> A specialization of a generic type. *ident* must be the name of some generic type, 
+> and *type1*, *type2*, etc, replace each type variable of *ident* in order of their definition.
 
 `any`
 
@@ -156,11 +167,17 @@ Two array types are equal if their field types are equal.
 
 Two struct types are equal if have the same number of fields, and each field has the same name and equal type, field-by-field.
 
-Two func types are equal if they use the same qualifiers, and they have the same number of argument types, and each argument type is equal, argument-by-argument, and the return types are equal (or neither has a return type).
+Two func types are equal if they use the same qualifiers, they have the same number of argument types, and each argument type is equal, argument-by-argument, and the return types are equal (or neither has a return type).
+
+Two closure types are equal if they use the same qualifiers, they have the same number of argument types, and each argument type is equal, argument-by-argument, and the return types are equal (or neither has a return type).
 
 Two map types are equal if their key types are equal and their value types are equal.
 
 Two option types are equal if their inner types are equal
+
+Two union types are equal if they have the same number of variants and their variants are equal, variant by variant.
+
+Two specialized generic or nominal types are equal if their representations are equal.
 
 `any` equals itself.
 
@@ -203,56 +220,13 @@ A value of type `V` is castable to storage of type `S` if:
 * `V` and `S` are map types, and the key type of `V` is castable to the key type of `S`, and the value type of `V` is castable to the value type of `S`.
 * `V` and `S` are optional types, and the inner type of `V` is castable to the inner type of `S`
 
-## Covariant Cast
-
-A value of type `V` can be `covariantcast` to storage of type `S` if 
-there is a constructable type `T` such that `T`
-is castable to both `V` and `S`.
-
-A constructable type is a type for which it is possible to create a value.
-Non-constructable types include `void`, `every` and `(uint, every)`.
-
-In practical terms this means:
-
-A value of type `V` is `covariantcast`able to storage of type `S` if:
-
-* `V` is any, or
-* `S` is `any`,
-* `V` equals `S`,
-* both `V` and `S` are one of `bool`, `address`, `bytes32`, `uint`, or `int`
-* `V` and `S` are tuple types with the same number of fields, and each field of `V` is covariant castable to the corresponding field of `S`,
-* `V` and `S` are fixed-size arrays of the same size, and the field type of `V` is covariant castable to the field type of `S`,
-* `V` and `S` are arrays, and the field type of `V` is covariant castable to the field type of `S`,
-* `V` and `S` are structs, with the same number of fields, and each field of `V` is covariant castable to the corresponding field of `S`,
-* `V` and `S` are function types, with the same number of arguments, and each argument type of `V` is covariant castable to the corresponding argument type of `S`, and either (a) both `S` and `V` return void, or (b) the return type of `S` is covariant castable to the return type of `V`.
-* `V` and `S` are map types, and the key type of `V` is covariant castable to the key type of `S`, and the value types of `V` and `S` are covariant castable.
-* `V` and `S` are optional types
-
-## Values
-
-> Fix me this isn't clear if its talking about mini values or AVM values, it starts by talking about mini and then in the implementation note it starts looking like AVM to me 
-
-All values in Mini are immutable. There is no way to modify a value. You can only create new values that are equal to existing ones with modifications.  (That's what the `with` operator does.)
-
-Because values are immutable, there is no notion of a reference to a value.  As far as the semantics of Mini are concerned, there are only values, and any assignment or passing of values is done by copying (although the compiler might optimize by copying a pointer rather than copying the object).
-
-[Implementation note: Because of immutability, the compiler can choose whether to implement "copying" of an object by creating a fresh copy of its contents or by just creating a new pointer reference to the object. The difference only affects the efficiency of the generated code.  Currently, the underlying AVM emulator copies a value if its type is atomic, and copies a reference to it otherwise.  Because of immutability, it is impossible to create a cyclic data structure. This means that the underlying implementation doesn't need to use garbage collection but can always use reference-counting to achieve perfect cleanup of unreachable copy-by-reference objects.]
-
-### Comparing values for equality
-
-Two values are equal if they have the same type and the same contents.  Equality checking for compound types works as expected, with a "deep comparison" of the fields.  Two function references are equal if they refer to the same function.  
-
-Values of type `any` do not have any representation that is understood by the compiler. Two `any` values will be equal if they have the same representation in the underlying AVM architecture.  So it could be the case that if values of two different types are constructed, and both are assigned to variables of type `anytype`, the resulting values could test as equal.  (Details of data representations are not described here.) Caution is advised before comparing `anytype` values.
-
-[Potential improvement: prohibit equality comparison of anytypes.]
-
 ## Codeblocks
 
 `{` [*statement*]* `}`
 
 > This is a statement codeblock, it is a sequence of zero or more statements, enclosed in curly braces.  Statement codeblocks form the bodies of functions, `if` and `loop` statements.  Local variables may be declared and used within a codeblock. A local variable that is declared within a codeblock can be used only within that same codeblock (or other codeblocks nested inside of it). 
 
-`{` [statement]* *expression* `}`
+`{` [*statement*]* *expression* `}`
 
 > This is an expression codeblock, the statements are executed in order, with the same behavior as statement codeblocks, and then *expression* is evaluated, with access to locals defined in *statement*s. 
 > The type of the codeblock is the same as the type of *expression*.
@@ -265,7 +239,7 @@ Values of type `any` do not have any representation that is understood by the co
 
 `loop` *codeblock*
 
-> An "infinite loop" which executes codeblock repeatedly. The only way to exit the loop is via a `return` statement (or a panic).
+> An "infinite loop" which executes codeblock repeatedly. The only way to exit the loop is via a `return` statement (or an error).
 
 `while` ( *condition* ) *codeblock*
 
@@ -273,7 +247,7 @@ Values of type `any` do not have any representation that is understood by the co
 
 `if` ( *condition* ) *codeblock* ([`else` [*codeblock* | *if statement* | *if let statement*]])?
 
-> If statements, with the expected behavior.  You can string together as many else ifs as you want.
+> If statements, with the expected behavior. If *condition* is true then the main *codeblock* is executed, otherwise, the `else` statement is executed if present. You can string together as many else ifs as you want.
 
 `let` *name* = *expression* ;
 
@@ -291,17 +265,13 @@ Values of type `any` do not have any representation that is understood by the co
 
 > Creates or assigns to multiple variables based on unpacking a tuple. If the *nameorbinding* is an identifier it creates a new variable, if *nameorbinding* is **identifier* it assigns to an existing variable with that name.  *expression* must be a tuple type, with the number of fields in the tuple equal to the number of names on the left-hand side.  The compiler creates a new local variable for each name on the left-hand side, and infers the type of each new variable based on the type of the corresponding field of the right-hand side tuple.
 >
-> [Potential improvement: Allow left-hand side names to be replaced by `_`, allowing unneeded components to be discarded without creating a variable.]
->
-> [Potential improvement: Allow assignment directly into existing variables, or a mix of new and existing variables, rather than requiring creation of new variables.  I would have done this already but couldn't figure out a clean syntax for it--suggestions are welcome.]
->
 > [Potential improvement: This could become a more general pattern-matching assignment mechanism.  Currently it pattern-matches only for a one-level tuple.]
 
-`if let` Some(*nameLeft*) = *nameRight* *codeblock* [`else` [*codeblock* | *if statement* | *if let statement*]]?
+`if let` `Some(`*nameLeft*`)` `=` *nameRight* *codeblock* [`else` [*codeblock* | *if statement* | *if let statement*]]?
 
 > It is required that *nameLeft* is an identifier, and *nameRight* is an expression of some option type. 
-> If *nameRight* returns the Some variant of an option type, a new local variable *nameLeft* is created with the inner value of *nameRight* inside *codeblock*, 
-> and *codeblock* is run.  If *nameRight* is the None variant and *elseblock* is present, then *elseblock* is run instead.  
+> If *nameRight* returns the Some variant of an option type, within *codeblock* a new local variable *nameLeft* is created with the inner value of *nameRight*, 
+> and *codeblock* is run.  If *nameRight* is the None variant and *elseblock* is present, then, if present, the `else` statement is run instead.  
 > *nameRight* must always be an option type.
 
 *expression*
@@ -342,13 +312,13 @@ Values of type `any` do not have any representation that is understood by the co
 
 ## Expressions
 
-There are many types of expressions, which we'll catalog here.   Operator precedence works roughly as expected.  Generally the operators listed earlier here have higher precedence.
+There are many types of expressions, which we'll catalog here.   Operator precedence works roughly as expected.
 
 Mini never automatically converts types to make an operation succeed.  Programmers will need to do explicit conversions. The compiler will report an error if a conversion would be necessary.
 
 \- *expression*
 
-> Unary minus. Defined only for type `int`, and produces an `int`. This will panic if the result is not expressible in the `int` datatype (that is, if the value of expression is `MaxNegInt`).
+> Unary minus. Defined only for type `int`, and produces an `int`. This will error if the result is not expressible in the `int` datatype (that is, if the value of expression is `MaxNegInt`).
 
 ! *expression*
 
@@ -360,7 +330,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 *expression* ?
 
-> The containing function must return either option or any, and *expression* must be an option. If expression is the Some variant, then it evaluates as the inner value, otherwise, this will cause the function to return None.
+> The containing function must return either option or any, and *expression* must be an option type. If expression is the Some variant, then it evaluates as the inner value, otherwise, this will cause the function to return `None`.
 
 *expression* + *expression*
 
@@ -374,7 +344,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 *expression* % *expression*
 
-> Multiplication, integer division, and modulo. Both operands must have the same numeric type, and the result is of that same type. Multiplication does 256-bit arithmetic and does not check for overflow or underflow.  Division and modulo panic if the second operand is zero.
+> Multiplication, integer division, and modulo. Both operands must have the same numeric type, and the result is of that same type. Multiplication does 256-bit arithmetic and does not check for overflow or underflow.  Division and modulo error if the second operand is zero.
 
 *expression* < *expression*
 
@@ -390,7 +360,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 *expression* != *expression*
 
-> Equality comparison, under the rules for equality comparison of values as described above. The result has type `bool`.
+> Equality comparison, checking that value have the same AVM representation. The result has type `bool`.
 
 *expression* & *expression*
 
@@ -470,7 +440,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 `unioncast<` *type* `>(` *expression* `)`
 
-> Converts from a type of `union<`*type1*, *type2*,...`>` to *type*, where *type* must be a member of *type1*, *type2*,.... This is an unsafe operation, as which type the union contains is not checked. 
+> Converts from a type of `union<`*type1*, *type2*,...`>` to *type*, where *type* must be a member of *type1*, *type2*,... . This is an unsafe operation, as which type the union contains is not checked. 
 
 `unsafecast` < *type* > ( *expression*  )
 
@@ -478,23 +448,27 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 `Some` (*expression*)
 
-> Creates an optional with inner value equal to the result of *expression*
+> Creates an optional value with inner value equal to the result of *expression*
 
-`None`<*type*>
+`None`
 
-> Creates an optional value of type option<*type*> with no inner value 
+> Creates an optional value of type `option<every>` with no inner value.
+ 
+`None` `<` *type* `>`
+
+> Creates an optional value of type `option<` *type* `>` with no inner value.
 
 `newunion<` *type1*, *type2*, ... `>(` *expression* `)`
 
-> Creates a value of type `union<*type1*, *type2*, ... >` from an *expression* of any of *type1* *type2*
+> Creates a value of type `union<*type1*, *type2*, ... >` from an *expression* of any of *type1*, *type2*, ... .
 
 *arrExpression* [ *indexExpression* ]
 
-> Get an element of an array.  *arrExpression* must have type [ ]T or [N]T for some type T.  *indexExpression* must have type `uint`.  The access is bounds-checked, and this will panic at runtime if the index is outside the bounds of the array. The result has type T.
+> Get an element of an array.  *arrExpression* must have type [ ]T or [N]T for some type T.  *indexExpression* must have type `uint`.  The access is bounds-checked, and this will error at runtime if the index is outside the bounds of the array. The result has type T.
 
 *mapExpression* [ *keyExpression* ]
 
-> Get a value from a map.  mapExpression must be a map type. keyExpression, which must be assignable to the map's key type, gives the key to look up in the map. The result, which is of type (V, bool) where V is the value type of the map, will be (undefined, false) is there is not a value associated with the key, or (value, true) if value is associated with the key.
+> Get a value from a map.  *mapExpression* must be a map type. *keyExpression*, which must be assignable to the map's key type, gives the key to look up in the map. The result, is an `option<any>` where `any` can be known to be of the value type of the map, will be `None` if there is not a value associated with the key, or `Some(`value`)` if value is associated with the key.
 
 *expression* . *name*
 
@@ -508,9 +482,9 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 > Function call.  The value of *funcExpression* must be a function reference. (Typically *funcExpression* will just be the name of a function.) The number of *argExpressions* must be consistent with the number of arguments in *funcExpression*'s type, and each *argExpression* must be assignable to the type of the corresponding argument of *funcExpression*.  The result has the type of *funcExpression's* return value. (Calls to functions without a returntype are statements, not expressions.)
 
-*arrayExpression* with { [ *indexExpression* ] = *valExpression* }
+*arrayExpression* `with` `{` `[` *indexExpression* `]` = *valExpression* `}`
 
-> Create a new array by copying an existing array with one element modified.  *arrayExpression*, which must be an array type, specifies the array to start with. *indexExpression*, which must have type `uint`, specifies which slot in the array should be modified.  *valExpression*, whose type must be assignable to the element type of the array, is the new value to put into the slot.  The result has the same type as *arrayExpression*. If the index is out of bounds, this will cause either a compile-time error or a runtime panic.  
+> Create a new array by copying an existing array with one element modified.  *arrayExpression*, which must be an array type, specifies the array to start with. *indexExpression*, which must have type `uint`, specifies which slot in the array should be modified.  *valExpression*, whose type must be assignable to the element type of the array, is the new value to put into the slot.  The result has the same type as *arrayExpression*. If the index is out of bounds, this will cause either a compile-time error or a runtime error.  
 
 *mapExpression* `with` { *keyExpression* = *valExpression* }
 
@@ -528,34 +502,34 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 *number*
 
+*number*`s`
+
 > An integer constant, in decimal format (or hexadecimal format, if it starts with "0x"). This will be interpreted as a `uint`, and it must be representable as a `uint`. If a decimal number is followed by the single character 's', it is interpreted as a signed integer `int`; in this case it must be representable as an `int`.
 
 *name*
 
 > A reference to a local variable, a global variable, or a function. It will have the type of the referenced variable or function.
 
-`asm` ( *expression1* , *expression2* , ... ) *type* { *instructions* }
+`asm` ( *expression1* , *expression2* , ... ) (*type*)? { *instructions* }
 
-> Escape to assembly code.  The arguments (*expression1*, *expression2*, etc.), if any, are pushed onto the AVM stack (with *expression1* at the top of the stack). Then the *instructions*, which are a sequence of AVM assembly instructions, are executed.  The assembly instructions are assumed to consume the arguments and leave on the stack a single value of type *type*, which becomes the result of this expression. (There is another form of `asm`, which produces no result value and is a statement.)
+> Escape to assembly code.  The arguments (*expression1*, *expression2*, etc.), if any, are pushed onto the AVM stack (with *expression1* at the top of the stack). Then the *instructions*, which are a sequence of AVM assembly instructions, are executed.  The assembly instructions are assumed to consume the arguments and leave on the stack a single value of type *type* if present, or leave no extra values on the stack otherwise. If *type* is present, it is the type of the expression, it is type `void` otherwise.
 
-`if` *condition* { (*codeblock*)? *expression* } [`else` `{` (*elseblock*)? *elseexpression* `}` | `else` *ifexpression* | *ifletexpression*]
+`if` *condition* { (*codeblockexpr*)? *expression* } [`else` `{` (*elseblockexpr* `}` | `else` *ifexpression* | *ifletexpression*]
 
 > *condition* must be a expression returning *bool*. 
-> If *condition* returns *true* then the statements in *codeblock* are executed if present, 
-> and then the value of *expression* is returned. 
-> If *condition* returns false, then either the *elseblock* is run, 
-> and *elseexpression* is returned, or the *ifexpression* or *ifletexpression* is returned.
-> The type of *elseexpression*, *ifexpression*, or *ifletexpression* must be assignable to  *expression*, and the type of the whole expression is treated as *expression*.
+> If *condition* returns *true* then codeblock expression *codeblockexpr* is executed and its value is returned. 
+> If *condition* returns false, then either the *elseblockexpr*, *ifexpression* or *ifletexpression* is returned based on which is present.
+> The type of *elseexpression*, *ifexpression*, or *ifletexpression* must be assignable to  *expression*, and the type of the whole expression is the type of *codeblockexpr*.
 
-`if let` Some(*nameLeft*) = *nameRight* *expcodeblock* [`else` [*elseexpcodeblock* | *if statement* | *if let statement*]]
+`if let` Some(*nameLeft*) = *nameRight* *clodeblockexpr* [`else` [*elseblockexpr* | *ifexpr* | *ifletexpr*]]
 
 > It is required that *nameLeft* is an identifier, and *nameRight* is an expression of some option type.
-> If *nameRight* returns the Some variant of an option type, a new local variable *nameLeft* is created with the inner value of *nameRight* inside *codeblock*,
-> and *codeblock* is run.  If *nameRight* is the None variant and *elseblock* is present, then *elseblock* is run instead.  
-> The types of *elseexpcodeblock*, *ifstatement* or *ifletstatement* must be assignable to *expcodeblock*. 
-> The expression returns the type of the *expcodeblock*.
+> If *nameRight* returns the Some variant of an option type, a new local variable *nameLeft* is created with the inner value of *nameRight* inside *codeblockexpr*,
+> and *codeblockexpr* is evaluated.  If *nameRight* is the None variant then *elseblockexpr*, *ifexpr* or *ifletexpr* is evaluated and returned.  
+> The types of *elseblockexpr*, *ifexpr* or *ifletexpr* must be assignable to *codeblockexpr*. 
+> The expression returns the type of the *codeblockexpr*.
 
-`loop` `<` *type* `>` *statementcodeblock*
+`loop` (`<` *type* `>`)? *statementcodeblock*
 
 > Executes the statements in *statementcodeblock* repeatedly until a return statement or a break is encountered. 
 > The *type* determines the type of the break statement if present. 
@@ -566,70 +540,59 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 `getbuffer8` `(` *offset* `,` *buffer* `)`
 
-> Gets the byte at index *offset* of *buffer*, *offset* must be an expression returning `uint`
-> and *buffer* must be an expression of type *buffer*. This is a `uint` expression.
-
 `getbuffer64` `(` *offset* `,` *buffer* `)`
-
-> Evaluates the 8 bytes at index *offset* of *buffer*, *offset* must be an expression returning `uint`
-> and *buffer* must be an expression of type *buffer*. This is a `uint` expression.
 
 `getbuffer256` `(` *offset* `,` *buffer* `)`
 
-> Gets the 32 bytes at index *offset* of *buffer*, *offset* must be an expression returning `uint`
+> Gets the byte, 8 bytes, or 32 bytes at index *offset* of *buffer* respectively, *offset* must be an expression returning `uint`
 > and *buffer* must be an expression of type *buffer*. This is a `uint` expression.
 
 `setbuffer8` `(` *offsetexpr* `,` *valueexpr* `,` *bufferexpr* `)`
 
-> Return the buffer created from setting the byte at *offsetexpr*,
-> to *valueexpr* in the buffer *bufferexpr*. *offsetexpr* and *valueexpr* must both be `uint` expressions,
-> and *bufferexpr* must be a `buffer` expression.
-
 `setbuffer64` `(` *offsetexpr* `,` *valueexpr* `,` *bufferexpr* `)`
-
-> Return the buffer created from setting the 8 bytes at *offsetexpr*,
-> to *valueexpr* in the buffer *bufferexpr*. *offsetexpr* and *valueexpr* must both be `uint` expressions,
-> and *bufferexpr* must be a `buffer` expression.
 
 `setbuffer256` `(` *offsetexpr* `,` *valueexpr* `,` *bufferexpr* `)`
 
-> Return the buffer created from setting the 32 butes at *offsetexpr*,
+> Return the buffer created from setting the byte, 8 bytes, or 32 bytes at *offsetexpr* respectively,
 > to *valueexpr* in the buffer *bufferexpr*. *offsetexpr* and *valueexpr* must both be `uint` expressions,
 > and *bufferexpr* must be a `buffer` expression.
 
 `any` `(` *expression* `)`
 
-> Casts the type of *expression* to *any*.
+> Casts the type of *expression* to *any*. This is always safe.
 
 [ `view` | `write`]* [`closure` | `_closure` ]  `(` *ident1* `:` *type1* `,` *ident2* `:` *type2* `,` ... `)` (`->` *returntype*)? *codeblockexpr*
 
 > Creates a new closure, that takes arguments *ident1*, *ident2*, ... of type *type1*, *type2*, ... respectively, and return type of *returntype* if present, or `void` otherwise.
-> The body of the function is defined by *codeblockexpr*, which consists of a possibly empty sequence of statements and a final expression.
-> The final expression is evaluated as the return value of the closure.
+> The body of the function is defined by codeblock expression *codeblockexpr*.
+> The final expression is evaluated as the return value *codeblockexpr*.
 > If `_closure` is used then the compiler will not warn if the closure is unused.
 
 `getGas` `(` `)` 
 
-> Returns the remaining arbGas left in the system. 
+> Returns the remaining arbGas left in the system as a `uint`. 
 
 `setGas` `(` *expression* `)`
 
-> The type of *expression* must be *uint*. The remaining *arbGas* is set to the value of *expression*.
+> The type of *expression* must be *uint*. The remaining *arbGas* is set to the value of *expression*. This is a void expression.
 
 *ident* `::` `<` *type1*, *type2*, ... `>`
 
 > A reference to a specialization of a generic function. *ident* must be a generic function name, 
 > and there must be the same number of *type*s specified as there are type variables on *ident*.
-> The function reference is treated as the type resulting from substitution of each type variable with the 
+> The function reference is treated as the type resulting from substitution of each type variable with the concrete types listed in *type1*, *type2* etc.
  
 `error`
 
 > Causes the system to error, moving to the error handler. This expresion returns type *every*.
 
-`string`
+`"` [a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~\\/-]* `"`
 
-> Creates a string literal. The type of this string literal is `(uint, buffer)`.
-> The `uint` stores the length of the string literal, and the `buffer` stores the raw data.
+> Creates a string literal. The type of this string literal is `string`.
+
+`"` (`0x`)? [a-fA-F0-9]* `"`
+
+> Hex string literal, of type `string`.
 
 `{` (*statement*)* (*expression*)? `}`
 
@@ -637,6 +600,10 @@ Mini never automatically converts types to make an operation succeed.  Programme
 > all locals defined within the codeblock are only valid within the codeblock.
 > If *expression* is present, the result of *expression* with equivalent type. 
 > Otherwise, the codeblock returns *void*.
+
+`(` *expression* `)`
+
+> Equivalent to *expression*.
 
 ### Path syntax
 
