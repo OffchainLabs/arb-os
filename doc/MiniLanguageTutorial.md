@@ -52,7 +52,7 @@ Within each group the order of declarations does not matter.
 >
 > The `view` modifier indicates that the function might read global variables or call other read functions.
 >
-> The `write` modifier indicates that the function might write to global variables or call other write functions.
+> The `write` modifier indicates that the function might write to state or call other write functions.
 >
 > The arguments are treated as local variables within the function, so code in the function can read them or assign to them.
 >
@@ -61,6 +61,22 @@ Within each group the order of declarations does not matter.
 > If the return type is `every`, then the function cannot return, because no return value can exist. The compiler will verify that the function cannot return. If the compiler is unable to verify this, it will generate an error.
 >
 > Declaring a function as `noreturn` is equivalent to declaring that the function returns `every`.  
+
+## Global State
+
+> Global state is state that can be accessed anywhere in the system, this consists of global variables, system gas, the inbox, the log, the error codepoint, and the register.
+> 
+> `View` operations consist of: calling a `view` function, reading a global variable, getting the system gas, and calling an asm expression that uses `view` instructions.
+> 
+> `Write` operations include: calling a `write` function, assigning to a global variable, setting the system gas, and calling an asm expression that uses `write` instructions
+> 
+> Instructions that are both `view` and `write` are
+> `inbox`, `inboxpeek`, `pushinsn`, `pushinsnimm`, `sideload`, `jump`, `cjump`, `auxpop`, and `auxpush`.
+>
+> `Write` instructions that are not `view` are `log`, `send`, `rset`, `errset`, and `setgas`.
+> 
+> `View` instructions that are not `write` are `rpush`, `errcodepoint`, `errpush`, and `pushgas`.
+
 
 ## Types
 
@@ -134,7 +150,7 @@ Mini has the following types:
 
 [ `view` | `write` ] `closure` `(` *type*, *type*, ... `)` (`->` *returntype*`)?
 
-> a closure type, acts like a function except that it can capture data from its contained scope.
+> an alias for the function type.
 
 *ident*
 
@@ -168,8 +184,6 @@ Two array types are equal if their field types are equal.
 Two struct types are equal if have the same number of fields, and each field has the same name and equal type, field-by-field.
 
 Two func types are equal if they use the same qualifiers, they have the same number of argument types, and each argument type is equal, argument-by-argument, and the return types are equal (or neither has a return type).
-
-Two closure types are equal if they use the same qualifiers, they have the same number of argument types, and each argument type is equal, argument-by-argument, and the return types are equal (or neither has a return type).
 
 Two map types are equal if their key types are equal and their value types are equal.
 
@@ -264,8 +278,6 @@ A value of type `V` is castable to storage of type `S` if:
 **identifier*
 
 > Creates or assigns to multiple variables based on unpacking a tuple. If the *nameorbinding* is an identifier it creates a new variable, if *nameorbinding* is **identifier* it assigns to an existing variable with that name.  *expression* must be a tuple type, with the number of fields in the tuple equal to the number of names on the left-hand side.  The compiler creates a new local variable for each name on the left-hand side, and infers the type of each new variable based on the type of the corresponding field of the right-hand side tuple.
->
-> [Potential improvement: This could become a more general pattern-matching assignment mechanism.  Currently it pattern-matches only for a one-level tuple.]
 
 `if let` `Some(`*nameLeft*`)` `=` *nameRight* *codeblock* [`else` [*codeblock* | *if statement* | *if let statement*]]?
 
@@ -531,8 +543,10 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 `loop` (`<` *type* `>`)? *statementcodeblock*
 
-> Executes the statements in *statementcodeblock* repeatedly until a return statement or a break is encountered. 
-> The *type* determines the type of the break statement if present. 
+> Executes the statements in *statementcodeblock* repeatedly until a return statement is encountered.
+> The *type* determines the type of the loop expression if present. 
+> 
+> [The current compiler does not support break statements, but they may be added in the future. In which case a loop may break with a break statement of corresponding type]
 
 `newbuffer` `(` `)`
 
