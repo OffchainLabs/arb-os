@@ -52,7 +52,7 @@ Within each group the order of declarations does not matter.
 >
 > The `view` modifier indicates that the function reads global state or calls other `view` functions. It is possible to create a `view` function that does not read global state, but the compiler throw a warning in this case.
 >
-> The `write` modifier indicates that the function writes to global state or calls other `write` functions. It is possible to create a `view` function that does not read global state, but the compiler throw a warning in this case. 
+> The `write` modifier indicates that the function writes to global state or calls other `write` functions. It is possible to create a `write` function that does not read global state, but the compiler throw a warning in this case. 
 >
 > The arguments are treated as local variables within the function, so code in the function can read them or assign to them.
 >
