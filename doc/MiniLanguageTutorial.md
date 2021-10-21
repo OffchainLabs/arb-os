@@ -50,9 +50,9 @@ Within each group the order of declarations does not matter.
 >
 > The `public` modifier indicates that the function can be called by code outside this source code file. Non-public functions cannot be called directly by outside code.  (However, pointers to non-public functions can be passed to outside code, and this would allow the pointed-to function to be called by outside code.)
 >
-> The `view` modifier indicates that the function might read global variables or call other read functions.
+> The `view` modifier indicates that the function might read global state or call other `view` functions.
 >
-> The `write` modifier indicates that the function might write to state or call other write functions.
+> The `write` modifier indicates that the function might write to global state or call other `write` functions.
 >
 > The arguments are treated as local variables within the function, so code in the function can read them or assign to them.
 >
