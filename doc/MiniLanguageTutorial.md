@@ -6,7 +6,7 @@ Mini is a programming language and compiler designed for writing code for the Ar
 
 ## Structure of a program
 
-A Mini program is written as a set of source code files.  You can write separate source code files, and they will automatically be compiled and linked them together to make an executable AVM program.
+A Mini program is written as a set of source code files.  You can write separate source code files, and they will automatically be compiled and linked together to make an executable AVM program.
 
 ## Top level declarations
 
@@ -50,9 +50,9 @@ Within each group the order of declarations does not matter.
 >
 > The `public` modifier indicates that the function can be called by code outside this source code file. Non-public functions cannot be called directly by outside code.  (However, pointers to non-public functions can be passed to outside code, and this would allow the pointed-to function to be called by outside code.)
 >
-> The `view` modifier indicates that the function might read global state or call other `view` functions.
+> The `view` modifier indicates that the function reads global state or calls other `view` functions. It is possible to create a `view` function that does not read global state, but the compiler throw a warning in this case.
 >
-> The `write` modifier indicates that the function might write to global state or call other `write` functions.
+> The `write` modifier indicates that the function writes to global state or calls other `write` functions. It is possible to create a `view` function that does not read global state, but the compiler throw a warning in this case. 
 >
 > The arguments are treated as local variables within the function, so code in the function can read them or assign to them.
 >
@@ -142,7 +142,8 @@ Mini has the following types:
 
 `option`< *type* >
 
-> Either Some(value) or None<*type*>, the specific variant being used can be determined by `if let` and `?`.
+> Either `Some(`value`)` or `None<`*type*`>`, the specific variant being used can be determined by `if let` and `?`.
+> The shortcut `None` can be used to create a value of `None<every>`, which is assignable to all `None<`T`>` for any type T.
 
 [ `view` | `write` | `public` ]* `func` ( *type1, type2, ...*) (-> *returntype*)?
 
@@ -167,7 +168,7 @@ Mini has the following types:
 
 `every`
 
-> A type that has no values, no value of this type can ever exist.
+> A type that has no values. No value of this type can ever exist.
 
 ## Equality and assignability for types
 
@@ -183,7 +184,8 @@ Two array types are equal if their field types are equal.
 
 Two struct types are equal if have the same number of fields, and each field has the same name and equal type, field-by-field.
 
-Two func types are equal if they use the same qualifiers, they have the same number of argument types, and each argument type is equal, argument-by-argument, and the return types are equal (or neither has a return type).
+Two func types are equal if they have the same purity, in other words, that the presence or non-presence of `view` and `write` modifiers is the same in both, 
+they must also have the same number of argument types, and each argument type is equal, argument-by-argument, and the return types are equal (or neither has a return type).
 
 Two map types are equal if their key types are equal and their value types are equal.
 
