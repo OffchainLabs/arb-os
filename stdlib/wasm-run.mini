@@ -20,34 +20,16 @@ func main() {
     let compiled = asm(ln, buf,) any { compilewasm };
 	debug(123);
 
-    let ba = bytearray_new(0); // bytearray_copy(setupFromUnmarshal(), 0, bytearray_new(0), 0, 67);
+    let ba = bytearray_new(0);
     let ba = bytearray_setByte(ba, 100, 123);
     let ba_buf = bytearray_buffer(ba);
     let i = 0;
     debug(ba_buf);
-    let res = asm(0,67,ba_buf,compiled) any { runwasm };
-    debug(res);
-	asm() any { halt };
+	while i < 1000 {
+	    let res = asm(0,67,ba_buf,compiled) any { runwasm };
+    	debug(res);
+		i = i + 1;
+	}
+	let a = asm() any { halt };
 }
 
-func setupFromUnmarshal() -> ByteArray {
-	let marshalledStruct = unsafecast<MarshalledBytes>((
-		67,
-		(
-            0x4041420000000000000000000000000000000000000000000000000000000000,
-			(
-				0x202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f,
-				(
-					0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f,
-					null,
-				),
-			),
-		),
-	));
-	if let Some(ba) = bytearray_unmarshalBytes(marshalledStruct) {
-	    return ba;
-	} else {
-		return bytearray_new(0);
-	}
-	return bytearray_new(0);
-}
