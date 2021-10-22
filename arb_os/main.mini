@@ -7,16 +7,20 @@ use accounts::AccountStore;
 use accounts::accountStore_init;
 use accounts::safeGetGlobalAccountStore;
 use accounts::safeSetGlobalAccountStore;
+use accounts::accountStore_transferEthBalance;
 use accounts::accountStore_createAccountFromEvmCode;
 use accounts::accountStore_upgradeContractFromEvmCode;
 
 use arbstatistics::arbStatistics_init;
 use arbowner::arbowner_init;
 
+use arbsys::arbosVersion;
+
 use blockhash::blockhash_init;
 
 use chainParameters::chainParams_init;
 use chainParameters::notifyParamsChanged;
+use chainParameters::chainParams_getOrDie;
 
 use std::codeSegment::codeSegment_init;
 use std::codeSegment::translateEvmCodeSegment;
@@ -79,6 +83,21 @@ view write func main(oldGlobals: GlobalsBeforeUpgrade) {
         }
 
         notifyParamsChanged();   // call this in case parameters changed during upgrade
+
+        if (chainParams_getOrDie(const::Atom_Param_ChainID) == const::ChainID_ArbitrumOne) && (arbosVersion() == 48) {
+            // some funds were stranded due to a bug
+            // return them to the account that should have had them
+            let acctStore = safeGetGlobalAccountStore();
+            if let Some(store) = accountStore_transferEthBalance(
+                acctStore,
+                address(0x9CDd145B60a7f292D0d8B037AbaC65b6A8b7f3e5),
+                address(0x5fa351a4202c772c8d828e9220068a829d67d85c),
+                20*1000000000*1000000000,  // 20 ETH
+            ) {
+                acctStore = store;
+            }
+            safeSetGlobalAccountStore(acctStore);
+        }
     } else {
         // this is a clean start, not an upgrade
         errorHandler_init();

@@ -515,29 +515,29 @@ public view write func initEvmCallStackForConstructor(
     );
     safeSetGlobalAccountStore(acctStore);
 
-    if let Some(uas) = ethTransferOrGrant(
-        acctStore,
-        request.caller,
-        request.calleeAddr,
-        request.value,
-        callvalueEscrowKey,
-    ) {
-        acctStore = uas;
+    let (startTxResult, *acctStore) = if request.maxGas < const::Charging_MinArbGasForContractTx {
+        (const::TxResultCode_belowMinimumTxGas, acctStore)
+    } else {
+        let (result, astore) = gasAccounting_startTxCharges(
+            request.maxGas,
+            request.gasPrice,
+            request.gasPayer,
+            acctStore,
+            if let Some(_) = request.incomingRequest.gasEstimationParams { true } else { false },
+        );
+        safeSetGlobalAccountStore(astore);
+        (result, astore)
+    };
 
-        let (startTxResult, *acctStore) = if request.maxGas < const::Charging_MinArbGasForContractTx {
-            (const::TxResultCode_belowMinimumTxGas, acctStore)
-        } else {
-            gasAccounting_startTxCharges(
-                request.maxGas, 
-                request.gasPrice, 
-                request.gasPayer, 
-                acctStore,
-                if let Some(_) = request.incomingRequest.gasEstimationParams { true } else { false },
-            )
-        };
-
-        if startTxResult == const::TxResultCode_success {
-            safeSetGlobalAccountStore(acctStore);   // commit the updated account store
+    if startTxResult == const::TxResultCode_success {
+        if let Some(uas) = ethTransferOrGrant(
+            acctStore,
+            request.caller,
+            request.calleeAddr,
+            request.value,
+            callvalueEscrowKey,
+        ) {
+            acctStore = uas;
 
             // set up a fake stack frame, so that errors in EVM->AVM translation will cause proper failure receipts
             globalCallStack = Some(struct {
@@ -608,11 +608,11 @@ public view write func initEvmCallStackForConstructor(
             asm(startPoint) { jump };
             error;
         } else {
-            // can't pay for gas error
-            evmTracer_pushReturnRevert(startTxResult, bytearray_new(0), 0);
+            // caller doesn't have the funds to provide callvalue
+            evmTracer_pushReturnRevert(const::TxResultCode_insufficientBalance, bytearray_new(0), 0);
             emitTxReceipt(
                 request.incomingRequest,
-                startTxResult,
+                const::TxResultCode_insufficientBalance,
                 None,
                 None,
                 None,
@@ -620,13 +620,14 @@ public view write func initEvmCallStackForConstructor(
                 true,
                 request.originalCaller,
             );
+            error;
         }
     } else {
-        // caller doesn't have the funds to provide callvalue
-        evmTracer_pushReturnRevert(const::TxResultCode_insufficientBalance, bytearray_new(0), 0);
+        // can't pay for gas error
+        evmTracer_pushReturnRevert(startTxResult, bytearray_new(0), 0);
         emitTxReceipt(
             request.incomingRequest,
-            const::TxResultCode_insufficientBalance,
+            startTxResult,
             None,
             None,
             None,
@@ -634,7 +635,6 @@ public view write func initEvmCallStackForConstructor(
             true,
             request.originalCaller,
         );
-        error;
     }
 
     // We should only reach this point if there was an error that prevented starting a tx.
