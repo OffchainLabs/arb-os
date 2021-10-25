@@ -108,7 +108,6 @@ impl JitWasm {
         let memory_cell7 = memory_cell.clone();
 
         let extra_cell: Rc<RefCell<Vec<u8>>> = Rc::new(RefCell::new(vec![]));
-        let extra_cell1 = extra_cell.clone();
 
         let cell = Rc::new(RefCell::new(buf));
         let cell1 = cell.clone();
@@ -278,15 +277,6 @@ impl JitWasm {
 
         let write_func = Func::wrap(&store, move |offset: i32, v: i32| {
             cell2.replace_with(|buf| buf.set_byte(offset as u128, v as u8));
-        });
-
-        let extra_write_func = Func::wrap(&store, move |offset: i32, v: i32| {
-            let mut vec = extra_cell1.borrow_mut();
-            let offset = offset as usize;
-            if vec.len() <= offset {
-                vec.resize(offset + 1, 0)
-            }
-            vec[offset as usize] = v as u8;
         });
 
         let rvec_func = Func::wrap(&store, move |ptr: i32, offset: i32, len: i32| {

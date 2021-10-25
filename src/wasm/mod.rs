@@ -2070,6 +2070,78 @@ fn process_test(
     init
 }
 
+fn check_read_type(module: &Module, ftype: &External) {
+    match (ftype, module.type_section()) {
+        (External::Function(idx), Some(sec)) => {
+            let Type::Function(typ) = &sec.types()[*idx as usize];
+            if typ.params().len() != 1 || typ.results().len() != 1 || typ.params()[0] != ValueType::I32 || typ.results()[0] != ValueType::I32 {
+                panic!("Bad env function")
+            }
+        }
+        _ => panic!("Bad env function"),
+    }
+}
+
+fn check_param1_type(module: &Module, ftype: &External) {
+    match (ftype, module.type_section()) {
+        (External::Function(idx), Some(sec)) => {
+            let Type::Function(typ) = &sec.types()[*idx as usize];
+            if typ.params().len() != 1 || typ.results().len() != 0 || typ.params()[0] != ValueType::I32 {
+                panic!("Bad env function")
+            }
+        }
+        _ => panic!("Bad env function"),
+    }
+}
+
+fn check_param2_type(module: &Module, ftype: &External) {
+    match (ftype, module.type_section()) {
+        (External::Function(idx), Some(sec)) => {
+            let Type::Function(typ) = &sec.types()[*idx as usize];
+            if typ.params().len() != 2 || typ.results().len() != 0 || typ.params()[0] != ValueType::I32 || typ.params()[1] != ValueType::I32 {
+                panic!("Bad env function")
+            }
+        }
+        _ => panic!("Bad env function"),
+    }
+}
+
+fn check_param3_type(module: &Module, ftype: &External) {
+    match (ftype, module.type_section()) {
+        (External::Function(idx), Some(sec)) => {
+            let Type::Function(typ) = &sec.types()[*idx as usize];
+            if typ.params().len() != 3 || typ.results().len() != 0 || typ.params()[0] != ValueType::I32 || typ.params()[1] != ValueType::I32 || typ.params()[2] != ValueType::I32 {
+                panic!("Bad env function")
+            }
+        }
+        _ => panic!("Bad env function"),
+    }
+}
+
+fn check_param4_type(module: &Module, ftype: &External) {
+    match (ftype, module.type_section()) {
+        (External::Function(idx), Some(sec)) => {
+            let Type::Function(typ) = &sec.types()[*idx as usize];
+            if typ.params().len() != 4 || typ.results().len() != 0 || typ.params()[0] != ValueType::I32 || typ.params()[1] != ValueType::I32 || typ.params()[2] != ValueType::I32 || typ.params()[3] != ValueType::I32 {
+                panic!("Bad env function")
+            }
+        }
+        _ => panic!("Bad env function"),
+    }
+}
+
+fn check_result1_type(module: &Module, ftype: &External) {
+    match (ftype, module.type_section()) {
+        (External::Function(idx), Some(sec)) => {
+            let Type::Function(typ) = &sec.types()[*idx as usize];
+            if typ.params().len() != 0 || typ.results().len() != 1 || typ.results()[0] != ValueType::I32 {
+                panic!("Bad env function")
+            }
+        }
+        _ => panic!("Bad env function"),
+    }
+}
+
 fn process_wasm_inner(
     buffer: &[u8],
     init: &mut Vec<Instruction>,
@@ -2182,7 +2254,9 @@ fn process_wasm_inner(
 
     for (idx, f) in get_func_imports(&module).iter().enumerate() {
         init.push(mk_func_label(idx));
+        println!("{:?}", f);
         if f.field().contains("read") {
+            check_read_type(&module, f.external());
             // init.push(debug_op("Read".to_string()));
             // Get buffer
             get_buffer(init);
@@ -2191,6 +2265,7 @@ fn process_wasm_inner(
             init.push(get64_from_buffer(0));
             init.push(simple_op(AVMOpcode::GetBuffer8));
         } else if f.field().contains("write") {
+            check_param2_type(&module, f.external());
             // init.push(debug_op("Write".to_string()));
             // Get buffer
             get_buffer(init);
@@ -2206,12 +2281,15 @@ fn process_wasm_inner(
             init.push(simple_op(AVMOpcode::SetBuffer8));
             set_buffer(init);
         } else if f.field().contains("getlen") {
+            check_result1_type(&module, f.external());
             get_buffer_len(init);
         } else if f.field().contains("setlen") {
+            check_param1_type(&module, f.external());
             init.push(get_frame());
             init.push(get64_from_buffer(0));
             set_buffer_len(init);
         } else if f.field().contains("usegas") {
+            check_param1_type(&module, f.external());
             let ok_label = label;
             label = label + 1;
             init.push(get_frame());
@@ -2231,6 +2309,7 @@ fn process_wasm_inner(
             init.push(simple_op(AVMOpcode::Sub));
             set_gas_left(init);
         } else if f.field().contains("rvec") {
+            check_param3_type(&module, f.external());
             let start_label = label;
             let end_label = label + 1;
             label = label + 2;
@@ -2297,6 +2376,7 @@ fn process_wasm_inner(
 
             init.push(mk_label(end_label));
         } else if f.field().contains("wvec") {
+            check_param3_type(&module, f.external());
             let start_label = label;
             let end_label = label + 1;
             label = label + 2;
@@ -2364,6 +2444,7 @@ fn process_wasm_inner(
 
             init.push(mk_label(end_label));
         } else if f.field().contains("tuple2buffer") {
+            check_param4_type(&module, f.external());
             // init.push(immed_op(AVMOpcode::DebugPrint, int_from_usize(443))); // bool, int, buffer
             // inside frame: ptr, idx1, idx2, len; counter
             let start_label = label;
@@ -2439,6 +2520,7 @@ fn process_wasm_inner(
 
             init.push(mk_label(end_label));
         } else if f.field().contains("tuplebytes") {
+            check_param2_type(&module, f.external());
             // init.push(debug_op("tuplebytes".to_string()));
             get_memory(init); // buffer
             init.push(simple_op(AVMOpcode::Rpush));
@@ -2473,6 +2555,7 @@ fn process_wasm_inner(
             init.push(simple_op(AVMOpcode::SetBuffer256)); // buffer
             set_memory(init);
         } else if f.field().contains("tuple2bytes") {
+            check_param3_type(&module, f.external());
             // init.push(debug_op("tuple2bytes".to_string()));
             get_memory(init); // buffer
             init.push(simple_op(AVMOpcode::Rpush));
@@ -2507,6 +2590,7 @@ fn process_wasm_inner(
             init.push(simple_op(AVMOpcode::SetBuffer256)); // buffer
             set_memory(init);
         } else if f.field().contains("uintimmed") {
+            check_param1_type(&module, f.external());
             get_memory(init); // buffer
             init.push(get_frame());
             init.push(get64_from_buffer(0)); // address, buffer
@@ -2519,6 +2603,7 @@ fn process_wasm_inner(
             init.push(immed_op(AVMOpcode::Tset, int_from_usize(5)));
             init.push(simple_op(AVMOpcode::Rset));
         } else if f.field().contains("specialimmed") {
+            check_param1_type(&module, f.external());
             init.push(push_value(Value::new_tuple(vec![
                 Value::new_buffer(vec![]), // frame
                 int_from_usize(0),         // call table
@@ -2527,11 +2612,13 @@ fn process_wasm_inner(
             init.push(immed_op(AVMOpcode::Tset, int_from_usize(5)));
             init.push(simple_op(AVMOpcode::Rset));
         } else if f.field().contains("globalimmed") {
+            check_param1_type(&module, f.external());
             init.push(push_value(empty_tuple()));
             init.push(simple_op(AVMOpcode::Rpush));
             init.push(immed_op(AVMOpcode::Tset, int_from_usize(5)));
             init.push(simple_op(AVMOpcode::Rset));
         } else if f.field().contains("pushinst") {
+            check_param1_type(&module, f.external());
             init.push(simple_op(AVMOpcode::Rpush));
             init.push(immed_op(AVMOpcode::Tget, int_from_usize(6))); // codepoint
             init.push(get_frame());
@@ -2541,6 +2628,7 @@ fn process_wasm_inner(
             init.push(immed_op(AVMOpcode::Tset, int_from_usize(6)));
             init.push(simple_op(AVMOpcode::Rset));
         } else if f.field().contains("pushimmed") {
+            check_param1_type(&module, f.external());
             init.push(simple_op(AVMOpcode::Rpush));
             init.push(immed_op(AVMOpcode::Tget, int_from_usize(6))); // codepoint
             init.push(simple_op(AVMOpcode::Rpush));
@@ -2552,6 +2640,7 @@ fn process_wasm_inner(
             init.push(immed_op(AVMOpcode::Tset, int_from_usize(6)));
             init.push(simple_op(AVMOpcode::Rset));
         } else if f.field().contains("cptable") {
+            check_param1_type(&module, f.external());
             init.push(simple_op(AVMOpcode::Rpush));
             init.push(immed_op(AVMOpcode::Tget, int_from_usize(6))); // codepoint
             init.push(get_frame());
