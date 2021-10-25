@@ -25,7 +25,6 @@ extern "C" {
     fn getlen() -> i32;
     fn write_buffer(idx: i32, c: i32);
     fn usegas(gas: i32);
-    fn wextra(idx: i32, c: i32);
     fn uintimmed(idx: *mut u8); // pointer to uint memory location
     fn specialimmed(idx: i32);
     fn globalimmed(idx: i32);
@@ -94,9 +93,8 @@ fn compute_hash(ops: &Vec<Instruction>) -> (Uint256, Uint256) {
     (hash, table_hash)
 }
 
-pub fn process(input: &[u8]) -> (Vec<u8>, Vec<u8>) {
+pub fn process(input: &[u8]) -> Vec<u8> {
     let mut output = vec![];
-    let mut extra = vec![];
 
     let ops = process_wasm(&input);
     usegas(10000);
@@ -134,53 +132,8 @@ pub fn process(input: &[u8]) -> (Vec<u8>, Vec<u8>) {
         }
     }
 
-    /*
-    let (hash, thash) = compute_hash(&res_ops);
-    push_bytes32(&mut output, &hash);
-    push_bytes32(&mut output, &thash);
-
-    for (idx, op) in res_ops.iter().rev().enumerate() {
-        usegas(1);
-        let inst = get_inst(&op);
-        extra.push(inst);
-        match &op.immediate {
-            None => extra.push(0),
-            Some (Value::Int(a)) => {
-                extra.push(1);
-                push_bytes32(&mut extra, a);
-            },
-            Some (Value::Tuple(tup)) => {
-                if tup.len() == 5 {
-                    extra.push(2) // main env
-                } else if tup.len() == 2 {
-                    match &tup[1] {
-                        Value::Int(a) => {
-                            extra.push(3);
-                            push_bytes32(&mut extra, &a);
-                        },
-                        _ => panic!("bad immed")
-                    }
-                } else {
-                    panic!("bad immed")
-                }
-            },
-            _ => {
-                panic!("bad immed")
-            }
-        }
-        if has_label(&ops[idx]) {
-            extra.push(1)
-        } else {
-            extra.push(0)
-        }
-    };
-    */
-
-    // println!("Op hash {}, Table hash {}, length {}", hash, thash, extra.len());
-
     output.push(255);
-    extra.push(255);
-    (output, extra)
+    output
 }
 
 #[wasm_bindgen]
@@ -192,7 +145,7 @@ pub fn test() -> u32 {
     }
     usegas(1);
 
-    let (output, extra) = process(&input);
+    let output = process(&input);
     /*
     let output = input.clone();
     let extra = input.clone();
@@ -203,21 +156,6 @@ pub fn test() -> u32 {
     }
     setlen(output.len() as i32);
 
-    for i in 0..extra.len() {
-        wextra(i as i32, extra[i as usize] as i32)
-    }
-
     0
 }
 
-/*
-#[wasm_bindgen]
-pub fn test() -> u32 {
-
-    let input = hex::decode("0061736d0100000001130460017f017f6000017f60027f7f0060017f00024e0403656e760d6765746c656e5f627566666572000103656e760d7365746c656e5f627566666572000303656e760b726561645f627566666572000003656e760c77726974655f627566666572000203020101070801047465737400040a0d010b00410041de01100341000b").unwrap();
-
-    let v = process(&input);
-
-    0
-}
-*/

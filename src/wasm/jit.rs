@@ -369,8 +369,6 @@ impl JitWasm {
                         imports.push(rvec_func.clone().into())
                     } else if name.contains("wvec") {
                         imports.push(wvec_func.clone().into())
-                    } else if name.contains("wextra") {
-                        imports.push(extra_write_func.clone().into())
                     } else if name.contains("uintimmed") {
                         imports.push(uint_immed_func.clone().into())
                     } else if name.contains("specialimmed") {

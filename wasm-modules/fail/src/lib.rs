@@ -15,7 +15,6 @@ extern "C" {
     fn getlen() -> i32;
     fn write_buffer(idx: i32, c: i32);
     fn usegas(gas: i32);
-    fn wextra(idx: i32, c: i32);
     fn uintimmed(idx: *mut u8); // pointer to uint memory location
     fn specialimmed(idx: i32);
     fn globalimmed(idx: i32);
