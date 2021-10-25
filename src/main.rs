@@ -471,8 +471,6 @@ fn main() -> Result<(), CompileError> {
                 code: code,
                 static_val: Value::new_tuple(vec![]),
                 arbos_version: 10,
-                // exported_funcs: vec![],
-                // imported_funcs: vec![],
                 globals: vec![],
                 type_tree: SerializableTypeTree::empty(),
                 file_info_chart: BTreeMap::new(),

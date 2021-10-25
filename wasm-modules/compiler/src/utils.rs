@@ -1853,6 +1853,9 @@ pub fn resolve_labels(arr: &Vec<Instruction>) -> (Vec<Instruction>, usize) {
     }
     // let res = arr.iter().map(|inst| inst_replace_labels(inst, &labels).unwrap()).collect();
     usegas(10000);
+    if tab.len() >= usize::pow(8, LEVEL as u32) {
+        panic!("Too many labels")
+    }
     // println!("Labels {}", tab.len());
     // (res, table_to_tuple(&tab, 0, 0, LEVEL - 1, tab.len()))
     (res, tab.len())
@@ -2194,8 +2197,7 @@ fn process_wasm_inner(
             init.push(get_frame());
             init.push(get64_from_buffer(0));
             init.push(simple_op(AVMOpcode::GetBuffer8));
-        }
-        if f.field().contains("write") {
+        } else if f.field().contains("write") {
             // init.push(debug_op("Write".to_string()));
             // Get buffer
             get_buffer(init);
@@ -2207,16 +2209,13 @@ fn process_wasm_inner(
             init.push(get64_from_buffer(0));
             init.push(simple_op(AVMOpcode::SetBuffer8));
             set_buffer(init);
-        }
-        if f.field().contains("getlen") {
+        } else if f.field().contains("getlen") {
             get_buffer_len(init);
-        }
-        if f.field().contains("setlen") {
+        } else if f.field().contains("setlen") {
             init.push(get_frame());
             init.push(get64_from_buffer(0));
             set_buffer_len(init);
-        }
-        if f.field().contains("usegas") {
+        } else if f.field().contains("usegas") {
             let ok_label = label;
             label = label + 1;
             init.push(get_frame());
@@ -2235,8 +2234,7 @@ fn process_wasm_inner(
             get_gas_left(init);
             init.push(simple_op(AVMOpcode::Sub));
             set_gas_left(init);
-        }
-        if f.field().contains("rvec") {
+        } else if f.field().contains("rvec") {
             let start_label = label;
             let end_label = label + 1;
             label = label + 2;
@@ -2302,8 +2300,7 @@ fn process_wasm_inner(
             jump(init, start_label);
 
             init.push(mk_label(end_label));
-        }
-        if f.field().contains("wvec") {
+        } else if f.field().contains("wvec") {
             let start_label = label;
             let end_label = label + 1;
             label = label + 2;
@@ -2370,8 +2367,7 @@ fn process_wasm_inner(
             jump(init, start_label);
 
             init.push(mk_label(end_label));
-        }
-        if f.field().contains("tuple2buffer") {
+        } else if f.field().contains("tuple2buffer") {
             // init.push(immed_op(AVMOpcode::DebugPrint, int_from_usize(443))); // bool, int, buffer
             // inside frame: ptr, idx1, idx2, len; counter
             let start_label = label;
@@ -2446,8 +2442,7 @@ fn process_wasm_inner(
             jump(init, start_label);
 
             init.push(mk_label(end_label));
-        }
-        if f.field().contains("tuplebytes") {
+        } else if f.field().contains("tuplebytes") {
             // init.push(debug_op("tuplebytes".to_string()));
             get_memory(init); // buffer
             init.push(simple_op(AVMOpcode::Rpush));
@@ -2481,8 +2476,7 @@ fn process_wasm_inner(
             )); // address, int, buffer
             init.push(simple_op(AVMOpcode::SetBuffer256)); // buffer
             set_memory(init);
-        }
-        if f.field().contains("tuple2bytes") {
+        } else if f.field().contains("tuple2bytes") {
             // init.push(debug_op("tuple2bytes".to_string()));
             get_memory(init); // buffer
             init.push(simple_op(AVMOpcode::Rpush));
@@ -2516,8 +2510,7 @@ fn process_wasm_inner(
             )); // address, int, buffer
             init.push(simple_op(AVMOpcode::SetBuffer256)); // buffer
             set_memory(init);
-        }
-        if f.field().contains("uintimmed") {
+        } else if f.field().contains("uintimmed") {
             get_memory(init); // buffer
             init.push(get_frame());
             init.push(get64_from_buffer(0)); // address, buffer
@@ -2529,8 +2522,7 @@ fn process_wasm_inner(
             init.push(simple_op(AVMOpcode::Rpush));
             init.push(immed_op(AVMOpcode::Tset, int_from_usize(5)));
             init.push(simple_op(AVMOpcode::Rset));
-        }
-        if f.field().contains("specialimmed") {
+        } else if f.field().contains("specialimmed") {
             init.push(push_value(Value::new_tuple(vec![
                 Value::new_buffer(vec![]), // frame
                 int_from_usize(0),         // call table
@@ -2538,14 +2530,12 @@ fn process_wasm_inner(
             init.push(simple_op(AVMOpcode::Rpush));
             init.push(immed_op(AVMOpcode::Tset, int_from_usize(5)));
             init.push(simple_op(AVMOpcode::Rset));
-        }
-        if f.field().contains("globalimmed") {
+        } else if f.field().contains("globalimmed") {
             init.push(push_value(empty_tuple()));
             init.push(simple_op(AVMOpcode::Rpush));
             init.push(immed_op(AVMOpcode::Tset, int_from_usize(5)));
             init.push(simple_op(AVMOpcode::Rset));
-        }
-        if f.field().contains("pushinst") {
+        } else if f.field().contains("pushinst") {
             init.push(simple_op(AVMOpcode::Rpush));
             init.push(immed_op(AVMOpcode::Tget, int_from_usize(6))); // codepoint
             init.push(get_frame());
@@ -2554,8 +2544,7 @@ fn process_wasm_inner(
             init.push(simple_op(AVMOpcode::Rpush));
             init.push(immed_op(AVMOpcode::Tset, int_from_usize(6)));
             init.push(simple_op(AVMOpcode::Rset));
-        }
-        if f.field().contains("pushimmed") {
+        } else if f.field().contains("pushimmed") {
             init.push(simple_op(AVMOpcode::Rpush));
             init.push(immed_op(AVMOpcode::Tget, int_from_usize(6))); // codepoint
             init.push(simple_op(AVMOpcode::Rpush));
@@ -2566,13 +2555,14 @@ fn process_wasm_inner(
             init.push(simple_op(AVMOpcode::Rpush));
             init.push(immed_op(AVMOpcode::Tset, int_from_usize(6)));
             init.push(simple_op(AVMOpcode::Rset));
-        }
-        if f.field().contains("cptable") {
+        } else if f.field().contains("cptable") {
             init.push(simple_op(AVMOpcode::Rpush));
             init.push(immed_op(AVMOpcode::Tget, int_from_usize(6))); // codepoint
             init.push(get_frame());
             init.push(get64_from_buffer(0)); // idx, codept
             set_jump_table(init);
+        } else {
+            panic!("Unknown env function");
         }
 
         // Return from function
