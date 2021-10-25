@@ -9,3 +9,8 @@ public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade
     return oldGlobals.globalChainParameters;
 }
 
+public func set_wasm_prog_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> any {
+    let (ln, buf) = #include "rlp-nohash.wasm";
+    let compiled = asm(ln, buf,) any { compilewasm };
+    return compiled;
+}

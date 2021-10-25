@@ -1,0 +1,35 @@
+
+use std::bytearray::ByteArray;
+use std::bytearray::MarshalledBytes;
+
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_get64;
+use std::bytearray::bytearray_set64;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_copy;
+use std::bytearray::bytearray_buffer;
+
+func main() {
+	let (ln, buf) = #include "wasm-tests/test-usegas.wasm";
+	debug(123456564);
+    let compiled = asm(ln, buf,) any { compilewasm };
+	debug(123);
+
+    let ba = bytearray_new(0);
+    let ba = bytearray_setByte(ba, 100, 123);
+    let ba_buf = bytearray_buffer(ba);
+    let i = 0;
+    debug(ba_buf);
+	while i < 1000 {
+	    let res = asm(0,67,ba_buf,compiled) any { runwasm };
+    	debug(res);
+		i = i + 1;
+	}
+	let a = asm() any { halt };
+}
+

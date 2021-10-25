@@ -22,13 +22,14 @@ pub enum Label {
     Closure(LabelId), // A closure uniquely identified by module & name
     Anon(LabelId),    // An anonymous label identified by func/closure + count
     Evm(usize),       // program counter in EVM contract
+    WasmFunc(usize),
 }
 
 impl Label {
     pub fn get_id(&self) -> LabelId {
         match self {
             Label::Func(id) | Label::Closure(id) | Label::Anon(id) => *id,
-            Label::Evm(n) => panic!("no unique id for evm label {}", n),
+            Label::Evm(n) | Label::WasmFunc(n) => panic!("no unique id for evm label {}", n),
         }
     }
 
@@ -45,6 +46,9 @@ impl Label {
             Label::Evm(_) => {
                 panic!("tried to avm_hash an EVM label");
             }
+            Label::WasmFunc(_) => {
+                panic!("tried to avm_hash an Wasm func label");
+            }
         }
     }
 }
@@ -56,6 +60,7 @@ impl fmt::Display for Label {
             Label::Closure(sid) => write!(f, "closure_{}", sid),
             Label::Anon(n) => write!(f, "label_{}", n),
             Label::Evm(pc) => write!(f, "EvmPC({})", pc),
+            Label::WasmFunc(pc) => write!(f, "WasmFunc({})", pc),
         }
     }
 }
@@ -87,6 +92,7 @@ pub struct Instruction<T = Opcode> {
     pub immediate: Option<Value>,
     #[serde(default)]
     pub debug_info: DebugInfo,
+    pub debug_str: Option<String>,
 }
 
 impl From<Instruction<AVMOpcode>> for Instruction {
@@ -95,11 +101,13 @@ impl From<Instruction<AVMOpcode>> for Instruction {
             opcode,
             immediate,
             debug_info,
+            debug_str,
         } = from;
         Self {
             opcode: opcode.into(),
             immediate,
             debug_info,
+            debug_str,
         }
     }
 }
@@ -110,6 +118,30 @@ impl<T> Instruction<T> {
             opcode,
             immediate,
             debug_info,
+            debug_str: None,
+        }
+    }
+
+    pub fn new_with_debug(
+        opcode: T,
+        immediate: Option<Value>,
+        debug_info: DebugInfo,
+        debug_str: Option<String>,
+    ) -> Self {
+        Instruction {
+            opcode,
+            immediate,
+            debug_info,
+            debug_str,
+        }
+    }
+
+    pub fn debug(str: String, opcode: T) -> Self {
+        Instruction {
+            opcode,
+            immediate: None,
+            debug_info: DebugInfo::from(None),
+            debug_str: Some(str),
         }
     }
 
@@ -606,11 +638,13 @@ fn _levels_needed(x: u128) -> (usize, u128) {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Value {
+    HashOnly(Uint256, u64),
     Int(Uint256),
     Tuple(Arc<Vec<Value>>),
     CodePoint(CodePt),
     Label(Label),
     Buffer(Buffer),
+    WasmCodePoint(Box<Value>, usize),
 }
 
 impl Value {
@@ -674,8 +708,12 @@ impl Value {
             Value::CodePoint(_) => 1,
             Value::Tuple(_) => 3,
             Value::Buffer(_) => 4,
+            Value::WasmCodePoint(_, _) => 5,
             Value::Label(_) => {
                 panic!("tried to run type instruction on a label");
+            }
+            Value::HashOnly(_, _) => {
+                panic!("tried to run type instruction on a hashed value");
             }
         }
     }
@@ -685,6 +723,7 @@ impl Value {
             Value::Int(_) => Ok(self),
             Value::CodePoint(_) => Ok(self),
             Value::Buffer(_) => Ok(self),
+            Value::HashOnly(_, _) => Ok(self),
             Value::Label(label) => {
                 let maybe_pc = label_map.get(&label);
                 match maybe_pc {
@@ -692,6 +731,10 @@ impl Value {
                     None => Err(label),
                 }
             }
+            Value::WasmCodePoint(v, code) => Ok(Value::WasmCodePoint(
+                Box::new(v.replace_labels(label_map)?),
+                code.clone(),
+            )),
             Value::Tuple(tup) => {
                 let mut new_vec = Vec::new();
                 for v in tup.iter() {
@@ -719,10 +762,13 @@ impl Value {
     }
 
     pub fn avm_hash(&self) -> Value {
-        //BUGBUG: should do same hash as AVM
         match self {
+            Value::HashOnly(ui, _) => Value::Int(ui.clone()),
             Value::Int(ui) => Value::Int(ui.avm_hash()),
-            Value::Buffer(buf) => Value::Int(buf.avm_hash()),
+            Value::Buffer(buf) => Value::avm_hash2(
+                &Value::Int(Uint256::from_u64(123)),
+                &Value::Int(buf.avm_hash()),
+            ),
             Value::Tuple(v) => {
                 // According to the C++ emulator, the AVM hash of a tuple is
                 //   H(3 || H(uint8(tlen) || A(tuple[0]) || ... || A(tuple[tlen-1])) || uint256(recursiveSize))
@@ -751,6 +797,9 @@ impl Value {
                 Value::Int(hash)
             }
             Value::CodePoint(cp) => Value::avm_hash2(&Value::Int(Uint256::one()), &cp.avm_hash()),
+            Value::WasmCodePoint(v, _) => {
+                Value::avm_hash2(&Value::Int(Uint256::from_usize(3)), &v.avm_hash())
+            }
             Value::Label(label) => {
                 Value::avm_hash2(&Value::Int(Uint256::from_usize(2)), &label.avm_hash())
             }
@@ -829,6 +878,8 @@ impl Value {
     pub fn pretty_print(&self, highlight: &str) -> String {
         match self {
             Value::Int(i) => Color::color(highlight, i),
+            Value::HashOnly(_, _) => format!(""),
+            Value::WasmCodePoint(_, _) => format!(""),
             Value::CodePoint(pc) => match pc {
                 CodePt::Null => Color::maroon("Err"),
                 _ => Color::color(highlight, pc),
@@ -912,8 +963,12 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Int(i) => i.fmt(f),
-            Value::Buffer(buf) => write!(f, "Buffer({})", buf.hex_encode()),
+            Value::Buffer(_) => {
+                write!(f, "Buffer({})", self.avm_hash())
+            }
+            Value::HashOnly(i, _) => write!(f, "HashOnly({})", i),
             Value::CodePoint(pc) => write!(f, "CodePoint({})", pc),
+            Value::WasmCodePoint(v, _) => write!(f, "WasmCodePoint({})", v),
             Value::Label(label) => write!(f, "Label({})", label),
             Value::Tuple(tup) => {
                 if tup.is_empty() {
@@ -1043,6 +1098,8 @@ pub enum AVMOpcode {
     SetBuffer8,
     SetBuffer64,
     SetBuffer256,
+    CompileWasm,
+    RunWasm,
 }
 
 impl Opcode {
@@ -1221,6 +1278,16 @@ impl Opcode {
             "ecpairing" => Opcode::AVMOpcode(AVMOpcode::EcPairing),
             "addmod" => Opcode::AVMOpcode(AVMOpcode::AddMod),
             "mulmod" => Opcode::AVMOpcode(AVMOpcode::MulMod),
+            "newbuffer" => Opcode::AVMOpcode(AVMOpcode::NewBuffer),
+            "getbuffer8" => Opcode::AVMOpcode(AVMOpcode::GetBuffer8),
+            "getbuffer64" => Opcode::AVMOpcode(AVMOpcode::GetBuffer64),
+            "getbuffer256" => Opcode::AVMOpcode(AVMOpcode::GetBuffer256),
+            "setbuffer8" => Opcode::AVMOpcode(AVMOpcode::SetBuffer8),
+            "setbuffer64" => Opcode::AVMOpcode(AVMOpcode::SetBuffer64),
+            "setbuffer256" => Opcode::AVMOpcode(AVMOpcode::SetBuffer256),
+            "runwasm" => Opcode::AVMOpcode(AVMOpcode::RunWasm),
+            "compilewasm" => Opcode::AVMOpcode(AVMOpcode::CompileWasm),
+            "halt" => Opcode::AVMOpcode(AVMOpcode::Halt),
             "noop" => Opcode::AVMOpcode(AVMOpcode::Noop),
             _ => {
                 panic!("opcode not supported in asm segment: {}", name);
@@ -1344,6 +1411,8 @@ impl AVMOpcode {
             AVMOpcode::SetBuffer8 => "setbuffer8",
             AVMOpcode::SetBuffer64 => "setbuffer64",
             AVMOpcode::SetBuffer256 => "setbuffer256",
+            AVMOpcode::RunWasm => "runwasm",
+            AVMOpcode::CompileWasm => "compilewasm",
         }
     }
 
@@ -1432,6 +1501,9 @@ impl AVMOpcode {
             0xa4 => Some(AVMOpcode::SetBuffer8),
             0xa5 => Some(AVMOpcode::SetBuffer64),
             0xa6 => Some(AVMOpcode::SetBuffer256),
+            0xa7 => Some(AVMOpcode::CompileWasm),
+            0xa8 => Some(AVMOpcode::RunWasm),
+            0xff => Some(AVMOpcode::Noop),
             _ => None,
         }
     }
@@ -1521,13 +1593,15 @@ impl AVMOpcode {
             AVMOpcode::SetBuffer8 => 0xa4,
             AVMOpcode::SetBuffer64 => 0xa5,
             AVMOpcode::SetBuffer256 => 0xa6,
+            AVMOpcode::CompileWasm => 0xa7,
+            AVMOpcode::RunWasm => 0xa8,
         }
     }
 }
 
 #[test]
 fn test_consistent_opcode_numbers() {
-    for i in 0..256 {
+    for i in 0..255 {
         if let Some(op) = AVMOpcode::from_number(i) {
             assert_eq!(i as u8, op.to_number());
         }

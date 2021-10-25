@@ -48,11 +48,13 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                     opcode: Opcode::AVMOpcode(AVMOpcode::Pop),
                     immediate: None,
                     debug_info: _,
+                    debug_str: _,
                 } => {
                     if let Instruction {
                         opcode: Opcode::AVMOpcode(AVMOpcode::Dup0),
                         immediate: None,
                         debug_info: _,
+                        debug_str: _,
                     } = code_out[code_out.len() - 2]
                     {
                         code_out.pop();
@@ -65,12 +67,14 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                     opcode: Opcode::AVMOpcode(AVMOpcode::AuxPush),
                     immediate: None,
                     debug_info: loc1,
+                    debug_str: _,
                 } => {
                     let insn2 = code_out[code_out.len() - 2].clone();
                     if let Instruction {
                         opcode: Opcode::AVMOpcode(AVMOpcode::AuxPop),
                         immediate: imm,
                         debug_info: loc2,
+                        debug_str: _,
                     } = insn2
                     {
                         code_out.pop();
@@ -86,6 +90,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                         opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
                         immediate: Some(val),
                         debug_info: _,
+                        debug_str: _,
                     } = insn2
                     {
                         code_out.pop();
@@ -103,6 +108,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                     opcode: Opcode::AVMOpcode(AVMOpcode::AuxPop),
                     immediate: Some(_),
                     debug_info: loc1,
+                    debug_str: _,
                 } => {
                     let insn1 = code_out[code_out.len() - 1].clone();
                     let insn2 = code_out[code_out.len() - 2].clone();
@@ -110,6 +116,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                         opcode: Opcode::AVMOpcode(AVMOpcode::AuxPush),
                         immediate: None,
                         debug_info: _,
+                        debug_str: _,
                     } = insn2
                     {
                         code_out.pop();
@@ -127,12 +134,14 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                     opcode: Opcode::AVMOpcode(AVMOpcode::AuxPop),
                     immediate: None,
                     debug_info: loc1,
+                    debug_str: _,
                 } => {
                     let insn2 = code_out[code_out.len() - 2].clone();
                     if let Instruction {
                         opcode: Opcode::AVMOpcode(AVMOpcode::AuxPush),
                         immediate: imm,
                         debug_info: loc2,
+                        debug_str: _,
                     } = insn2
                     {
                         code_out.pop();
@@ -150,6 +159,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                             opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
                             immediate: Some(val),
                             debug_info: _,
+                            debug_str: _,
                         } = insn2
                         {
                             code_out.pop();
@@ -168,6 +178,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                     opcode: Opcode::AVMOpcode(AVMOpcode::IsZero),
                     immediate: None,
                     debug_info: _,
+                    debug_str: _,
                 } => {
                     let insn2 = code_out[code_out.len() - 2].clone();
                     match insn2 {
@@ -175,6 +186,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                             opcode: Opcode::AVMOpcode(AVMOpcode::IsZero),
                             immediate: imm,
                             debug_info: loc2,
+                            debug_str: _,
                         } => {
                             code_out.pop();
                             code_out.pop();
@@ -195,12 +207,14 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                     opcode: Opcode::AVMOpcode(avm_opcode),
                     immediate: None,
                     debug_info: loc1,
+                    debug_str: _,
                 } => {
                     let insn2 = code_out[code_out.len() - 2].clone();
                     if let Instruction {
                         opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
                         immediate: Some(val),
                         debug_info: _,
+                        debug_str: _,
                     } = insn2
                     {
                         code_out.pop();

@@ -728,6 +728,17 @@ QuoteString: Vec<u8> = {
         let string = re.captures(q).unwrap().get(1).map_or(String::new(), |m| m.as_str().to_string());
         string.as_bytes().to_vec()
     },
+    <lno: @L> <q: r#"#include "s?[a-zA-Z0-9_ ./,:?'<+>()!@#$%^&*|~-]*""#> => {
+        let re = Regex::new(r#"#include "s?([a-zA-Z0-9_ ./,:?'<+>()!@#$%^&*|~-]*)""#).unwrap();
+        let fname = re.captures(q).unwrap().get(1).map_or(String::new(), |m| m.as_str().to_string());
+        let buffer = Vec::<u8>::new();
+        use std::fs::File;
+        use std::io::Read;
+        let mut file = File::open(fname).unwrap();
+        let mut buffer = Vec::<u8>::new();
+        file.read_to_end(&mut buffer).unwrap();
+        buffer
+    },
     <lno: @L> <q: r#"h"(0x)?[a-fA-F0-9]*""#> => {
         let re = Regex::new(r#"h"(0x)?([a-fA-F0-9]*)""#).unwrap();
         let mut string = re.captures(q).unwrap().get(2).map_or(String::new(), |m| m.as_str().to_string());

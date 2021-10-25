@@ -13,6 +13,7 @@ use impl2::set_newGlobal3_onUpgrade;
 type GlobalsBeforeUpgrade = struct {
     global1: uint,
     global2: option<int> ,
+    wasm_prog: any,
     _jump_table: any,
 };
 

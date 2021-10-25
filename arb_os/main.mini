@@ -49,6 +49,7 @@ use output::output_init;
 use output::txReceipts_init;
 
 use precompiles::precompiles_init;
+use std::rlp::rlp_init;
 
 use std::bytearray::bytearray_unmarshalBytes;
 use std::bytestream::bytestream_new;
@@ -102,6 +103,7 @@ view write func main(oldGlobals: GlobalsBeforeUpgrade) {
         errorHandler_init();
         chainParams_init();
         arbStatistics_init();
+        rlp_init();
 
         codeSegment_init();
         output_init();

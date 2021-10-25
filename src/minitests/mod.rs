@@ -156,7 +156,7 @@ fn test_expanding_int_array() {
 #[test]
 fn test_rlp() {
     let mut ui = Uint256::one();
-    for _i in 0..100 {
+    for _i in 0..10 {
         test_rlp_uint(ui.clone(), ui.rlp_encode(), None);
         let ui2 = ui.div(&Uint256::from_usize(2048)).unwrap(); // a valid address
         test_rlp_uint(ui2.clone(), ui2.rlp_encode(), None);

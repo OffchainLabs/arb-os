@@ -13,6 +13,7 @@ use crate::pos::{try_display_location, Location};
 use crate::run::blake2b::blake2bf_instruction;
 use crate::run::ripemd160port;
 use crate::uint256::Uint256;
+use crate::wasm::{process_wasm, JitWasm};
 use clap::Clap;
 use ethers_core::types::{Signature, H256};
 use std::cmp::{max, Ordering};
@@ -117,6 +118,24 @@ impl ValueStack {
         }
     }
 
+    /// If the top `Value` on the stack is a wasm code point, pops the value and returns it as a `WasmCodePt`,
+    /// otherwise returns an `ExecutionError`.
+    pub fn pop_wasm_codepoint(
+        &mut self,
+        state: &MachineState,
+    ) -> Result<(Value, usize), ExecutionError> {
+        let val = self.pop(state)?;
+        if let Value::WasmCodePoint(cp, buf) = val {
+            Ok((*cp, buf))
+        } else {
+            Err(ExecutionError::new(
+                "expected WasmCodePoint on stack",
+                state,
+                Some(val),
+            ))
+        }
+    }
+
     /// If the top `Value` on the stack is an integer, pops the value and returns it as a `Uint256`,
     /// otherwise returns an `ExecutionError`.
     pub fn pop_uint(&mut self, state: &MachineState) -> Result<Uint256, ExecutionError> {
@@ -197,7 +216,11 @@ impl fmt::Display for ValueStack {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Stack[")?;
         for i in self.contents.iter().rev() {
-            writeln!(f, "{};;", i)?;
+            if let Value::Tuple(_) = i {
+                writeln!(f, "Tuple;;")?;
+            } else {
+                writeln!(f, "{};;", i)?;
+            }
         }
         write!(f, "]")
     }
@@ -724,8 +747,8 @@ impl FromStr for ProfilerMode {
 /// Represents the state of execution of a AVM program including the code it is compiled from.
 #[derive(Debug)]
 pub struct Machine {
-    stack: ValueStack,
-    aux_stack: ValueStack,
+    pub stack: ValueStack,
+    pub aux_stack: ValueStack,
     pub state: MachineState,
     pub code: CodeStore,
     static_val: Value,
@@ -736,6 +759,9 @@ pub struct Machine {
     file_info_chart: BTreeMap<u64, FileInfo>,
     total_gas_usage: Uint256,
     trace_writer: Option<BufWriter<File>>,
+    wasm_instances: Vec<JitWasm>,
+    counter: usize,
+    pub debug_mode: bool,
     coverage: Option<HashSet<usize>>,
 }
 
@@ -754,7 +780,10 @@ impl Machine {
             file_info_chart: program.file_info_chart,
             total_gas_usage: Uint256::zero(),
             trace_writer: None,
+            wasm_instances: Vec::new(),
+            counter: 0,
             coverage: None,
+            debug_mode: false,
         }
     }
 
@@ -927,8 +956,12 @@ impl Machine {
                     println!("Register contents: {}", self.register);
                 }
                 if !self.stack.is_empty() {
+                    println!("Stack size: {}", self.stack.num_items());
+                }
+                if !self.stack.is_empty() {
                     println!("Stack top: {}", self.stack.top().unwrap());
                 }
+                println!("Gas used: {}", self.total_gas_usage);
                 if let Some(code) = self.next_opcode() {
                     if code.debug_info.attributes.breakpoint {
                         println!("We hit a breakpoint!");
@@ -936,6 +969,9 @@ impl Machine {
                     println!("Next Opcode: {}", code.opcode);
                     if let Some(imm) = code.immediate {
                         println!("Immediate: {}", imm);
+                    }
+                    if let Some(str) = code.debug_str {
+                        println!("*************************** Debug: {}", str);
                     }
                     if let Some(location) = code.debug_info.location {
                         let line = location.line.to_usize();
@@ -1030,12 +1066,13 @@ impl Machine {
     /// Runs self until the program counter reaches stop_pc, an error state is encountered or the
     /// machine reaches a stopped state for any other reason.  Returns the total gas used by self.
     pub fn run(&mut self, stop_pc: Option<CodePt>) -> u64 {
-        let mut gas_used = 0;
+        let orig_gas = self.total_gas_usage.clone().to_u64().unwrap();
         while self.state.is_running() {
             if let Some(spc) = stop_pc {
                 if let MachineState::Running(pc) = self.state {
                     if pc == spc {
-                        return gas_used;
+                        let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
+                        return final_gas - orig_gas;
                     }
                 }
             }
@@ -1048,7 +1085,6 @@ impl Machine {
                 }
             }
             let gas_this_instruction = if let Some(gas) = self.next_op_gas() {
-                gas_used += gas;
                 gas
             } else {
                 println!("Warning: next opcode does not have a gas cost");
@@ -1099,16 +1135,19 @@ impl Machine {
                             .total_gas_usage
                             .sub(&Uint256::from_u64(gas_this_instruction))
                             .unwrap();
-                        return gas_used - gas_this_instruction;
+                        let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
+                        return final_gas - orig_gas;
                     }
                 }
                 Err(e) => {
                     self.state = MachineState::Error(e);
-                    return gas_used;
+                    let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
+                    return final_gas - orig_gas;
                 }
             }
         }
-        gas_used
+        let final_gas = self.total_gas_usage.clone().to_u64().unwrap();
+        final_gas - orig_gas
     }
 
     /// Generates a `ProfilerData` from a run of self with args from address 0.
@@ -1341,6 +1380,8 @@ impl Machine {
                 AVMOpcode::SetBuffer8 => 100,
                 AVMOpcode::SetBuffer64 => 100,
                 AVMOpcode::SetBuffer256 => 100,
+                AVMOpcode::RunWasm => 1000100,
+                AVMOpcode::CompileWasm => 100,
             })
         } else {
             None
@@ -1403,8 +1444,15 @@ impl Machine {
     fn run_one_dont_catch_errors(&mut self, _debug: bool) -> Result<bool, ExecutionError> {
         if let MachineState::Running(pc) = self.state {
             if let Some(insn) = self.code.get_insn(pc) {
+                let _stack_len = self.stack.num_items();
                 if let Some(val) = &insn.immediate {
                     self.stack.push(val.clone());
+                }
+                if self.debug_mode {
+                    self.counter = self.counter + 1;
+                    if let Some(str) = &insn.debug_str {
+                        println!("{}", str);
+                    }
                 }
                 let gas_remaining_before = if let Some(gas) = self.next_op_gas() {
                     let gas256 = Uint256::from_u64(gas);
@@ -2154,7 +2202,6 @@ impl Machine {
                         }
                     }
                     AVMOpcode::NewBuffer => {
-                        // self.stack.push(Value::new_buffer(vec![0; 256]));
                         self.stack.push(Value::new_buffer(vec![]));
                         self.incr_pc();
                         Ok(true)
@@ -2226,7 +2273,7 @@ impl Machine {
                         let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
                         for i in 0..8 {
-                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[i]);
+                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[i + 24]);
                         }
                         self.stack.push(Value::copy_buffer(nbuf));
                         self.incr_pc();
@@ -2249,6 +2296,66 @@ impl Machine {
                             nbuf = nbuf.set_byte((offset + i) as u128, bytes[i]);
                         }
                         self.stack.push(Value::copy_buffer(nbuf));
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    AVMOpcode::RunWasm => {
+                        let v = self.stack.pop(&self.state)?;
+                        let arg = self.stack.pop_usize(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
+                        let (_, idx) = self.stack.pop_wasm_codepoint(&self.state)?;
+                        let (nbuf, _, len, gas_left, _, _) =
+                            self.wasm_instances[idx].run_immed(buf, arg, v);
+
+                        let gas256 = Uint256::from_u64(gas_left);
+                        self.total_gas_usage = self.total_gas_usage.sub(&gas256).unwrap();
+                        self.arb_gas_remaining = self.arb_gas_remaining.add(&gas256);
+
+                        let values =
+                            vec![Value::Int(Uint256::from_usize(len)), Value::Buffer(nbuf)];
+
+                        self.stack.push(Value::new_tuple(values));
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    AVMOpcode::CompileWasm => {
+                        let offset = self.stack.pop_usize(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
+                        let mut vec = vec![];
+                        for i in 0..offset {
+                            vec.push(buf.read_byte(i as u128));
+                        }
+                        let init = process_wasm(&vec);
+                        let (code_vec, _) = crate::wasm::resolve_labels(&init);
+                        let code_vec = crate::wasm::clear_labels(code_vec);
+                        let mut labels = vec![];
+                        let mut code_pt = self.code.create_segment();
+                        for i in (0..init.len()).rev() {
+                            let op = code_vec[i].clone();
+                            code_pt = self
+                                .code
+                                .push_insn(
+                                    crate::wasm::get_inst(&op) as usize,
+                                    op.immediate,
+                                    code_pt,
+                                )
+                                .unwrap();
+                            if crate::wasm::has_label(&init[i]) {
+                                labels.push(Value::CodePoint(code_pt))
+                            }
+                        }
+                        let mut labels_rev = vec![];
+                        for a in labels.iter().rev() {
+                            labels_rev.push(a.clone())
+                        }
+                        let tab = crate::wasm::make_table(&labels_rev);
+                        let val = Value::new_tuple(vec![Value::CodePoint(code_pt), tab.clone()]);
+                        let instance = JitWasm::new(&vec);
+                        self.wasm_instances.push(instance);
+                        self.stack.push(Value::WasmCodePoint(
+                            Box::new(val),
+                            self.wasm_instances.len() - 1,
+                        ));
                         self.incr_pc();
                         Ok(true)
                     }

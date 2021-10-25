@@ -11,6 +11,9 @@ use core::array::builtin_arrayGetSafe;
 
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_buffer;
+use std::bytearray::bytearray_wrap;
+use std::bytearray::bytearray_slice;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_setByte;
@@ -308,7 +311,35 @@ public func rlp_encodeList(
     Some((outBytes, totalWritten))
 }
 
-public func rlp_encodeMessageInfo(
+var wasm_prog : any;
+
+public write func rlp_init() {
+    let (ln, buf) = #include "rlp-nohash.wasm";
+    let compiled = asm(ln, buf,) any { compilewasm };
+    wasm_prog = compiled;
+}
+
+public view func rlp_encodeMessageInfo(
+    seqNum: uint,
+    gasPrice: uint,
+    gasLimit: uint,
+    to: address,
+    value: uint,
+    data: ByteArray,
+    v: uint,
+    r: uint,
+    s: uint
+) -> ByteArray {
+
+    let tx = (seqNum, gasPrice, gasLimit, to, value, (v,r,s), (bytearray_size(data), bytearray_slice(data), bytearray_buffer(data)));
+
+    let empty = newbuffer();
+    let res = asm(tx,0,empty,wasm_prog) (uint, buffer) { runwasm };
+    return bytearray_wrap(res.1, res.0);
+
+}
+
+public func rlp_encodeMessageInfo_old(
     seqNum: uint,
     gasPrice: uint,
     gasLimit: uint,

@@ -63,6 +63,30 @@ evmlogs: evm-test-logs
 evmdebug: arb_os/arbos.mexe .make/tools
 	$(run) evm-debug
 
+$(STDDIR)/rlpbench.mexe: $(BUILTINMAOS) $(STDDIR)/rlpbench.mini $(STDLIB)
+	$(CARGORUN) compile $(STDDIR)/rlpbench.mini $(STDLIB) -o $(STDDIR)/rlpbench.mexe $(COMPILEFLAGS) -t
+
+$(STDDIR)/rlpbench2.mexe: $(BUILTINMAOS) $(STDDIR)/rlpbench2.mini $(STDLIB)
+	$(CARGORUN) compile $(STDDIR)/rlpbench2.mini $(STDLIB) -o $(STDDIR)/rlpbench2.mexe $(COMPILEFLAGS) -t
+
+$(STDDIR)/rlpbench3.mexe: $(BUILTINMAOS) $(STDDIR)/rlpbench3.mini $(STDLIB)
+	$(CARGORUN) compile $(STDDIR)/rlpbench3.mini $(STDLIB) -o $(STDDIR)/rlpbench3.mexe $(COMPILEFLAGS) -t
+
+$(STDDIR)/rlpbench4.mexe: $(BUILTINMAOS) $(STDDIR)/rlpbench4.mini $(STDLIB)
+	$(CARGORUN) compile $(STDDIR)/rlpbench4.mini $(STDLIB) -o $(STDDIR)/rlpbench4.mexe $(COMPILEFLAGS) -t
+
+$(STDDIR)/rlpbench5.mexe: $(BUILTINMAOS) $(STDDIR)/rlpbench5.mini $(STDLIB)
+	$(CARGORUN) compile $(STDDIR)/rlpbench5.mini $(STDLIB) -o $(STDDIR)/rlpbench5.mexe $(COMPILEFLAGS) -t
+
+$(STDDIR)/wasm-run.mexe: $(BUILTINMAOS) $(STDDIR)/wasm-run.mini $(STDLIB)
+	$(CARGORUN) compile $(STDDIR)/wasm-run.mini -o $(STDDIR)/wasm-run.mexe $(COMPILEFLAGS) -t
+
+$(STDDIR)/codebuffer.mexe: $(BUILTINMAOS) $(STDDIR)/codebuffer.mini $(STDLIB)
+	$(CARGORUN) compile $(STDDIR)/codebuffer.mini $(STDLIB) -o $(STDDIR)/codebuffer.mexe
+
+$(STDDIR)/bufferopcodetest.mexe: compiler $(BUILTINMAOS) $(STDDIR)/bufferopcodetest.mini
+	$(CARGORUN) compile $(STDDIR)/bufferopcodetest.mini -o $(STDDIR)/bufferopcodetest.mexe $(COMPILEFLAGS) -t
+
 replay: replayTests
 	@printf $(done)
 

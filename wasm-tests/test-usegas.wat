@@ -1,0 +1,22 @@
+(module
+    (type (func (param i32) (result i32)))
+    (type (func (result i32)))
+    (type (func (param i32 i32)))
+    (type (func (param i32)))
+    (import "env" "getlen_buffer" (func (type 1)))
+    (import "env" "setlen_buffer" (func (type 3)))
+    (import "env" "read_buffer" (func (type 0)))
+    (import "env" "write_buffer" (func (type 2)))
+    (import "env" "usegas" (func (type 3)))
+    (func (export "test") (result i32) (local i32)
+        (local.set 0 (i32.const 500000))
+        (loop 
+          (local.set 0 (i32.sub (local.get 0) (i32.const 1)))
+          (i32.gt_u (local.get 0) (i32.const 0))
+          (br_if 0))
+
+        (call 3 (i32.const 0) (i32.const 222))
+        (call 4 (i32.const 500000))
+        (i32.const 0)
+    )
+)

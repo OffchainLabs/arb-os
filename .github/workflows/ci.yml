@@ -117,6 +117,46 @@ jobs:
           fail_ci_if_error: true
           verbose: false
 
+  wasm:
+    name: Run Wasm test suite
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-20.04]
+        rust: [stable]
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y \
+            libasound2-dev libudev-dev build-essential pkg-config libssl-dev
+
+      - name: Install rust ${{ matrix.rust }}
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+          components: ${{ matrix.rust == 'nightly' && 'llvm-tools-preview' || '' }}
+
+      - name: Cache rust build products
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ matrix.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.os }}-cargo-${{ matrix.rust }}-
+
+      - name: Run test suite
+        run: bash ./wasm-suite/run-tests.sh
+
   node:
     name: Node integration test
     runs-on: ubuntu-latest
@@ -126,8 +166,10 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # apt-get update && apt-get -y install sudo
+          # sudo apt install -y software-properties-common curl git
           sudo add-apt-repository -y ppa:longsleep/golang-backports
-          sudo apt-get update && sudo apt-get install -y \
+          sudo apt-get install -y \
             autoconf automake cmake libboost-dev libboost-filesystem-dev libgmp-dev \
             librocksdb-dev libssl-dev libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev \
             liblz4-dev libzstd-dev libtool golang-go clang-format cmake
@@ -138,11 +180,28 @@ jobs:
           #   cd rocksdb && make shared_lib && sudo make install
           #
           curl -sSL "https://github.com/gotestyourself/gotestsum/releases/download/v1.7.0/gotestsum_1.7.0_linux_amd64.tar.gz" | sudo tar -xz -C /usr/local/bin gotestsum
+          # build wasmer
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          source $HOME/.cargo/env
+          git clone https://github.com/wasmerio/wasmer
+          cd wasmer
+          git checkout ec36089cbf4a65b768501ba38f3d63baad6badf3
+          export ENABLE_LLVM=0
+          export RUSTFLAGS=
+          make build-wasmer
+          make build-capi
+          make package-capi
+          sudo mkdir -p /usr/local/lib
+          sudo mkdir -p /usr/local/include/wasmer
+          sudo cp package/lib/* /usr/local/lib
+          sudo cp package/include/* /usr/local/include/wasmer
 
       - name: Clone Arbitrum
         run: |
-          git clone --recursive https://github.com/OffchainLabs/arbitrum.git
-          cd arbitrum && git submodule update --init --recursive
+          git clone --recursive https://github.com/mrsmkl/arbitrum.git
+          cd arbitrum
+          git checkout mrsmkl/wasm-onestepproof
+          git submodule update --init --recursive
 
       - name: Copy over this branch's ArbOS
         run: |
@@ -153,9 +212,10 @@ jobs:
 
       - name: Build Arbitrum
         run: |
-          mkdir arbitrum/packages/arb-avm-cpp/debug/
+          mkdir arbitrum/packages/arb-avm-cpp/build/
           cd $_
-          cmake .. -DCMAKE_BUILD_TYPE=Debug
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          sudo ldconfig
           make -j
 
       - name: Test Node's C++ Database
@@ -165,9 +225,9 @@ jobs:
       - name: Test Node's Core
         run: |
           cd arbitrum/packages/arb-node-core/
-          gotestsum --format testname | tee issues | grep FAIL
+          gotestsum --format testname
 
       - name: Test Node's RPC
         run: |
           cd arbitrum/packages/arb-rpc-node/
-          gotestsum --format testname | tee issues | grep FAIL
+          gotestsum --format testname

@@ -44,6 +44,11 @@ impl SerializableTypeTree {
         }
         Self { inner }
     }
+    pub fn empty() -> Self {
+        Self {
+            inner: BTreeMap::new(),
+        }
+    }
     pub fn into_type_tree(self) -> TypeTree {
         let mut type_tree = HashMap::new();
         for (path, tipe) in self.inner.into_iter() {

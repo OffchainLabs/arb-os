@@ -88,6 +88,7 @@ pub fn expand_calls(code: Vec<Instruction>, label_gen: &mut LabelGenerator) -> V
                         opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
                         immediate: Some(Value::Label(_)),
                         debug_info: _,
+                        debug_str: _,
                     })
                 );
 
