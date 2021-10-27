@@ -289,7 +289,7 @@ A value of type `V` is castable to storage of type `S` if:
 `if let` `Some(`*ident*`)` `=` *expression* *codeblockstatement* [`else` [*codeblockstatement* | *if statement* | *if let statement*]]?
 
 > It is required that *ident* is an identifier, and *expression* is an expression of some option type. 
-> If *expression* returns the Some variant of an option type, within *codeblock* a new local variable *ident* is created with the inner value of the resut of *expression*,
+> If *expression* returns the Some variant of an option type, within *codeblock* a new local variable *ident* is created with the inner value of the result of *expression*,
 > and the type of *ident* matches that inner type,
 > and *codeblock* is run.  If *expression* is the None variant and *elseblock* is present, then, if present, the `else` statement is run instead.  
 > *expression* must always be an option type.
@@ -550,7 +550,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 `if let` Some(*ident*) = *expression* *clodeblockexpr* [`else` [*elseblockexpr* | *ifexpr* | *ifletexpr*]]
 
 > It is required that *ident* is an identifier, and *expression* is an expression of some option type.
-> If *expression* returns the Some variant of an option type, a new local variable *ident* is created with the inner value of *expression* inside *codeblockexpr*,
+> If *expression* returns the Some variant of an option type, a new local variable *ident* is created with the inner value of *expression* within the scope of *codeblockexpr*,
 > and *codeblockexpr* is evaluated.  If *expression* is the None variant then *elseblockexpr*, *ifexpr* or *ifletexpr* is evaluated and returned.  
 > The types of *elseblockexpr*, *ifexpr* or *ifletexpr* must be assignable to *codeblockexpr*. 
 > The expression returns the type of the *codeblockexpr*.
