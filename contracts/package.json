@@ -3,7 +3,7 @@
   "version": "1.0.1",
   "author": "Offchain Labs, Inc.",
   "license": "Apache-2.0",
-  "devDependencies": {
+  "dependencies": {
     "hardhat": "^2.6.4"
   },
   "scripts": {
