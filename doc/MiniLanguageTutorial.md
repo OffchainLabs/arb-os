@@ -580,7 +580,8 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 > Return the buffer created from setting the byte, 8 bytes, or 32 bytes at *offsetexpr* respectively,
 > to *valueexpr* in the buffer *bufferexpr*. *offsetexpr* and *valueexpr* must both be `uint` expressions,
-> and *bufferexpr* must be a `buffer` expression.
+> and *bufferexpr* must be a `buffer` expression. If *offsetexpr* evaluates to a value greater than usize::MAX, usize::MAX - 7, and usize::MAX - 31 respectively, the expression will throw a runtime error. 
+> The value of usize::MAX depends on the system running the emulator, and is 64 bits for a 64 bit system, 32 bits for a 32 bit system etc.
 
 `any` `(` *expression* `)`
 
