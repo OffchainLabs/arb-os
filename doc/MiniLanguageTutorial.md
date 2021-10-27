@@ -287,7 +287,7 @@ A value of type `V` is castable to storage of type `S` if:
 `if let` `Some(`*nameLeft*`)` `=` *nameRight* *codeblock* [`else` [*codeblock* | *if statement* | *if let statement*]]?
 
 > It is required that *nameLeft* is an identifier, and *nameRight* is an expression of some option type. 
-> If *nameRight* returns the Some variant of an option type, within *codeblock* a new local variable *nameLeft* is created with the inner value of *nameRight*, 
+> If *nameRight* returns the Some variant of an option type, within *codeblock* a new local variable *nameLeft* is created with the inner value and type of *nameRight*, 
 > and *codeblock* is run.  If *nameRight* is the None variant and *elseblock* is present, then, if present, the `else` statement is run instead.  
 > *nameRight* must always be an option type.
 
