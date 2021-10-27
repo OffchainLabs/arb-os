@@ -162,7 +162,7 @@ Mini has the following types:
 
 *ident* `<` *type1* `,` *type2* `,` ... `>`
 
-> A specialization of a generic type. *ident* must be the name of some generic type, 
+> A specialization of a generic type. *ident* must be the name of some generic type, and *type1*, *type2*, ...
 > and *type1*, *type2*, etc, replace each type variable of *ident* in order of their definition.
 
 `any`
