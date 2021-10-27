@@ -284,12 +284,12 @@ A value of type `V` is castable to storage of type `S` if:
 
 > Creates or assigns to multiple variables based on unpacking a tuple. If the *nameorbinding* is an identifier it creates a new variable, if *nameorbinding* is **identifier* it assigns to an existing variable with that name.  *expression* must be a tuple type, with the number of fields in the tuple equal to the number of names on the left-hand side.  The compiler creates a new local variable for each name on the left-hand side, and infers the type of each new variable based on the type of the corresponding field of the right-hand side tuple.
 
-`if let` `Some(`*nameLeft*`)` `=` *nameRight* *codeblock* [`else` [*codeblock* | *if statement* | *if let statement*]]?
+`if let` `Some(`*ident*`)` `=` *expression* *codeblock* [`else` [*codeblock* | *if statement* | *if let statement*]]?
 
-> It is required that *nameLeft* is an identifier, and *nameRight* is an expression of some option type. 
-> If *nameRight* returns the Some variant of an option type, within *codeblock* a new local variable *nameLeft* is created with the inner value and type of *nameRight*, 
-> and *codeblock* is run.  If *nameRight* is the None variant and *elseblock* is present, then, if present, the `else` statement is run instead.  
-> *nameRight* must always be an option type.
+> It is required that *ident* is an identifier, and *expression* is an expression of some option type. 
+> If *expression* returns the Some variant of an option type, within *codeblock* a new local variable *ident* is created with the inner value and type of *expression*, 
+> and *codeblock* is run.  If *expression* is the None variant and *elseblock* is present, then, if present, the `else` statement is run instead.  
+> *expression* must always be an option type.
 
 *expression*
 
@@ -544,11 +544,11 @@ Mini never automatically converts types to make an operation succeed.  Programme
 > If *condition* returns false, then either the *elseblockexpr*, *ifexpression* or *ifletexpression* is returned based on which is present.
 > The type of *elseexpression*, *ifexpression*, or *ifletexpression* must be assignable to  *expression*, and the type of the whole expression is the type of *codeblockexpr*.
 
-`if let` Some(*nameLeft*) = *nameRight* *clodeblockexpr* [`else` [*elseblockexpr* | *ifexpr* | *ifletexpr*]]
+`if let` Some(*ident*) = *expression* *clodeblockexpr* [`else` [*elseblockexpr* | *ifexpr* | *ifletexpr*]]
 
-> It is required that *nameLeft* is an identifier, and *nameRight* is an expression of some option type.
-> If *nameRight* returns the Some variant of an option type, a new local variable *nameLeft* is created with the inner value of *nameRight* inside *codeblockexpr*,
-> and *codeblockexpr* is evaluated.  If *nameRight* is the None variant then *elseblockexpr*, *ifexpr* or *ifletexpr* is evaluated and returned.  
+> It is required that *ident* is an identifier, and *expression* is an expression of some option type.
+> If *expression* returns the Some variant of an option type, a new local variable *ident* is created with the inner value of *expression* inside *codeblockexpr*,
+> and *codeblockexpr* is evaluated.  If *expression* is the None variant then *elseblockexpr*, *ifexpr* or *ifletexpr* is evaluated and returned.  
 > The types of *elseblockexpr*, *ifexpr* or *ifletexpr* must be assignable to *codeblockexpr*. 
 > The expression returns the type of the *codeblockexpr*.
 
