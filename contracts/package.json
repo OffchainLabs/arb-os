@@ -7,6 +7,8 @@
     "hardhat": "^2.6.4"
   },
   "scripts": {
+    "postinstall": "$npm_execpath clean:build",
+    "clean:build": "hardhat clean && hardhat compile",
     "build": "hardhat compile",
     "deploy:test": "hardhat run --network localhost scripts/deploy-test.js"
   }
