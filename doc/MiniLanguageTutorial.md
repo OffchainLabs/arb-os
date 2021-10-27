@@ -453,7 +453,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
  
 `cast` `<` *type* `>` `(` *expression* `)`
 
-> Performs a safe cast of the result of *expression* to *type*. See the casting subsection for more information.
+> Performs a cast of the result of *expression* to *type*. This is a safe operation, unlike `unsafecast` or `unioncast`. See the casting subsection for more information.
 
 `unioncast<` *type* `>(` *expression* `)`
 
