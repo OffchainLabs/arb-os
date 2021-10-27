@@ -606,6 +606,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 *ident* `::` `<` *type1*, *type2*, ... `>`
 
 > A reference to a specialization of a generic function. *ident* must be a generic function name, 
+> *type1*, *type2*, ... must all be types,
 > and there must be the same number of *type*s specified as there are type variables on *ident*.
 > The function reference is treated as the type resulting from substitution of each type variable with the concrete types listed in *type1*, *type2* etc.
  
