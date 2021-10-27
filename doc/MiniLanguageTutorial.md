@@ -155,7 +155,10 @@ Mini has the following types:
 
 *ident*
 
-> A named type
+> A named type or a type variable. It is only treated as a type variable in the context of a generic type or function,
+> and only if that identifier is listed as one of the type variables of that generic type or function. 
+> Otherwise, it is treated as a named type, if that named type is not defined in the file or is not imported with a use statement, 
+> it is not a valid type and will cause an error.
 
 *ident* `<` *type1* `,` *type2* `,` ... `>`
 
