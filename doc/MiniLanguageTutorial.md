@@ -590,7 +590,8 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 > Creates a new closure, that takes arguments *ident1*, *ident2*, ... of type *type1*, *type2*, ... respectively, and return type of *returntype* if present, or `void` otherwise.
 > The body of the function is defined by codeblock expression *codeblockexpr*.
-> The final expression is evaluated as the return value *codeblockexpr*.
+> *codeblockexpr* is evaluated and its value is returned.
+> This expression returns the type of *codeblockexpr*.
 > If `_closure` is used then the compiler will not warn if the closure is unused.
 
 `getGas` `(` `)` 
