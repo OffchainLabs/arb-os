@@ -142,7 +142,8 @@ Mini has the following types:
 
 `option`< *type* >
 
-> Either `Some(`value`)` or `None<`*type*`>`, the specific variant being used can be determined by `if let` and `?`.
+> Either `Some(`*value*`)` or `None<`*type*`>`, where *value* represents an arbitrary value of type *type*. 
+> The specific variant being used can be determined by `if let` and `?`.
 > The shortcut `None` can be used to create a value of `None<every>`, which is assignable to all `None<`T`>` for any type T.
 
 [ `view` | `write` | `public` ]* `func` ( *type1, type2, ...*) (-> *returntype*)?
