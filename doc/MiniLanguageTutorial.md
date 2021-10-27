@@ -534,7 +534,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 > The compiler assumes that the assembly instructions consume the arguments, and leave a single value on the stack of type *type*, 
 > if *type* is present, or leave no extra values on the stack otherwise. If *type* is present, *type* is the type of the expression, and the expression is type `void` otherwise.
 
-`if` *condition* { (*codeblockexpr*)? } [`else` `{` (*elseblockexpr* `}` | `else` *ifexpression* | *ifletexpression*]
+`if` *condition* *codeblockexpr* [`else` `{` (*elseblockexpr* `}` | `else` *ifexpression* | *ifletexpression*]
 
 > *condition* must be a expression returning *bool*. 
 > If *condition* returns *true* then codeblock expression *codeblockexpr* is executed and its value is returned. 
