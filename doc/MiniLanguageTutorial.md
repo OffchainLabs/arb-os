@@ -503,7 +503,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 > Create a new array by copying an existing array with one element modified.  *arrayExpression*, which must be an array type, specifies the array to start with. *indexExpression*, which must have type `uint`, specifies which slot in the array should be modified.  *valExpression*, whose type must be assignable to the element type of the array, is the new value to put into the slot.  The result has the same type as *arrayExpression*. If the index is out of bounds, this will cause either a compile-time error or a runtime error.  
 
-*mapExpression* `with` { *keyExpression* = *valExpression* }
+*mapExpression* `with` { `[` *keyExpression* `]` = *valExpression* }
 
 > Create a new map by copying an existing map with one element added or modified. *mapExpression*, which must be a map type, specifies the map to start with. *keyExpression*, which must be assignable to the map's key type, specifies the key to be added or modified. *valExpression*, which must match the map's value type, is the new value to be associated with the key.  The result has the same type as *mapExpression*.
 
