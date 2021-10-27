@@ -375,6 +375,9 @@ Mini never automatically converts types to make an operation succeed.  Programme
 *expression* != *expression*
 
 > Equality comparison, checking that value have the same AVM representation. The result has type `bool`.
+> 
+> Please see [the AVM spec](https://github.com/OffchainLabs/arbitrum/blob/master/docs/AVM_Specification.md) for more information,
+> in particular the `eq` opcode `0x14`.
 
 *expression* & *expression*
 
