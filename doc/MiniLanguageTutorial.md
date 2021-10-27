@@ -314,10 +314,10 @@ A value of type `V` is castable to storage of type `S` if:
  
 `assert` `(` *expression* `)`
 
-> Will throw an error when compiling in debug mode if a correct value for *expression* is not returned.
-> The type of *expression* must be `(bool,` *type*`)`, where *type* may be any type. 
+> The type of *expression* must be `(bool,` *type*`)`, where *type* may be any type.
+> Asserts are only evaluated when compiling in debug mode, otherwise *expression* will not run.
 > If the `bool` is `true`, then execution continues as normal, but if `bool` is `false`, 
-> then execution will halt with the value in the second field of the tuple being displayed.
+> then execution will throw an error, with the value in the second field of the tuple being displayed.
  
 `set` *nameident* ([`.` *fieldident* | `[` *indexexpression* `]` ])+ `=` *expression* `;`
 
