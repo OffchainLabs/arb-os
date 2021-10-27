@@ -529,7 +529,10 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 `asm` ( *expression1* , *expression2* , ... ) (*type*)? { *instructions* }
 
-> Escape to assembly code.  The arguments (*expression1*, *expression2*, etc.), if any, are pushed onto the AVM stack (with *expression1* at the top of the stack). Then the *instructions*, which are a sequence of AVM assembly instructions, are executed.  The assembly instructions are assumed to consume the arguments and leave on the stack a single value of type *type* if present, or leave no extra values on the stack otherwise. If *type* is present, it is the type of the expression, it is type `void` otherwise.
+> Escape to assembly code.  The arguments (*expression1*, *expression2*, etc.), if any, are pushed onto the AVM stack (with *expression1* at the top of the stack). 
+> Then the *instructions*, which are a sequence of AVM assembly instructions, are executed.  
+> The compiler assumes that the assembly instructions consume the arguments, and leave a single value on the stack of type *type*, 
+> if *type* is present, or leave no extra values on the stack otherwise. If *type* is present, *type* is the type of the expression, and the expression is type `void` otherwise.
 
 `if` *condition* { (*codeblockexpr*)? *expression* } [`else` `{` (*elseblockexpr* `}` | `else` *ifexpression* | *ifletexpression*]
 
