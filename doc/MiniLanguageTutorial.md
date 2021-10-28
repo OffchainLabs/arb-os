@@ -286,12 +286,13 @@ A value of type `V` is castable to storage of type `S` if:
 
 > Creates or assigns to multiple variables based on unpacking a tuple. If the *nameorbinding* is an identifier it creates a new variable, if *nameorbinding* is **identifier* it assigns to an existing variable with that name.  *expression* must be a tuple type, with the number of fields in the tuple equal to the number of names on the left-hand side.  The compiler creates a new local variable for each name on the left-hand side, and infers the type of each new variable based on the type of the corresponding field of the right-hand side tuple.
 
-`if let` `Some(`*ident*`)` `=` *expression* *codeblockstatement* [`else` [*codeblockstatement* | *if statement* | *if let statement*]]?
+`if let` `Some(`*ident*`)` `=` *expression* *codeblockstatement* [`else` [*elsestatementcodeblock* | *if statement* | *if let statement*]]?
 
 > It is required that *ident* is an identifier, and *expression* is an expression of some option type. 
 > If *expression* returns the Some variant of an option type, within *codeblock* a new local variable *ident* is created with the inner value of the result of *expression*,
 > and the type of *ident* matches that inner type,
-> and *codeblock* is run.  If *expression* is the None variant and *elseblock* is present, then, if present, the `else` statement is run instead.  
+> and *codeblock* is run.  If *expression* is the None variant and the `else` statement is present, 
+> codeblock statement *elsestatementcodeblock*, if statement *if statement* or *if let statement* is run instead.  
 > *expression* must always be an option type.
 
 *expression*
