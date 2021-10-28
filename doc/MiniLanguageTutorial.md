@@ -80,7 +80,7 @@ Within each group the order of declarations does not matter.
 
 ## Types
 
-Mini is a type-checked language.  The compiler should catch any inconsistent use of types. We believe there are only two ways that type errors can go undetected by the compiler, incorrect uses of the `unsafecast` or `unioncast` operators
+Mini is a type-checked language.  The compiler should catch any inconsistent use of types. We believe there are only two ways that type errors can go undetected by the compiler, incorrect uses of the `unsafecast` or `unioncast` operators, or `asm` expressions.
 
 Mini has the following types:
 
