@@ -266,9 +266,9 @@ A value of type `V` is castable to storage of type `S` if:
 
 > Like a loop, except *condition*  (which must be an expression of type `bool`) is evaluated before each iteration, and the loop terminates if *condition* is found to be false.
 
-`if` ( *condition* ) *codeblock* ([`else` [*codeblock* | *if statement* | *if let statement*]])?
+`if` ( *condition* ) *codeblock* ([`else` [*elsecodeblock* | *if statement* | *if let statement*]])?
 
-> If statements, with the expected behavior. If *condition* is true then the main *codeblock* is executed, otherwise, the `else` statement is executed if present. You can string together as many else ifs as you want.
+> *condition* must be a expression of type `bool`. If *condition* is true then the statement codeblock *codeblock* is executed, otherwise, the `else` statement is executed if present. *elsecodeblock* must be a statement codeblock. You can string together as many else ifs as you want.
 
 `let` *name* = *expression* ;
 
