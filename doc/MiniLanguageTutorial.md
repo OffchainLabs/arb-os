@@ -36,7 +36,7 @@ Within each group the order of declarations does not matter.
 
 > This declares a type alias, allowing name to be used as a synonym for the specified type. 
 > If `<` *ident1*, *ident2*, ... `>` is included, the type will be generic with *ident1*, *ident2*, etc as type variables.
-> In generic types the type variables will be available in the definition of *type*, and will be replaced by concrete types in specializations.
+> In generic types the type variables will be available in the definition of *type*, in any place a nominal type would be valid, and will be replaced by concrete types in specializations.
 
 `var` *name* `:` *type* `;`
 
