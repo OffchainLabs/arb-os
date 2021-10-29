@@ -1,5 +1,5 @@
 #
-# Copyright 2020, Offchain Labs, Inc. All rights reserved.
+# Copyright 2021, guanlong huang All rights reserved.
 #
 
 # Add your mexe as an output file
