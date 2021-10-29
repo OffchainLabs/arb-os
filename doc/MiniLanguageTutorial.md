@@ -58,6 +58,8 @@ Within each group the order of declarations does not matter.
 > The arguments are treated as local variables within the function, so code in the function can read them or assign to them.
 >
 > If there is a return type specified, the function will return a single value of the specified type. (We'll see below that the type can be a tuple, allowing multiple values to be packaged together into a single return value.)
+> 
+> If no return type is specified, then the function returns `void`, as void represents a lack of a value, this means no value is returned.
 >
 > If the return type is `every`, then the function cannot return, because no return value can exist. The compiler will verify that the function cannot return. If the compiler is unable to verify this, it will generate an error.
 >
