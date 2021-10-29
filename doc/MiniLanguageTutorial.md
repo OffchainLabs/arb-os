@@ -223,6 +223,8 @@ A value of type `V` is assignable to storage of type `S` if:
 * `V` and `S` are function types, with the same number of arguments, and if `V` is `view` or `write`, then `S` must also be `view` or `write` respectively, and each argument type of `V` is assignable to the corresponding argument type of `S`, and either (a) both `S` and `V` return void, or (b) the return type of `S` is assignable to the return type of `V`.  (Note that the return type is compared for assignability "backwards". This is needed to make calls through function references type-safe.)
 * `V` and `S` are map types, and the key type of `V` is assignable to the key type of `S`, and the value types of `V` and `S` are equal.
 * `V` and `S` are optional types, and the inner type of `V` is assignable to the inner type of `S`
+* `V` and `S` are union types with the same number of variants, and each variant of `V` is assignable to each variant of `S` variant by variant.
+* `V` and `S` are nominal types or specialized generic types, and the representation of `V` is assignable to the representation of `S`.
 
 These rules guarantee that assignability is transitive. 
 
