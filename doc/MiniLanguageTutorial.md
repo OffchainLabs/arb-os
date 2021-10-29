@@ -25,6 +25,7 @@ Within each group the order of declarations does not matter.
 `use` *path* `::` *name*;
 
 > This imports the type or function with name *name* in the mini file with virtual path *path*. The code in the local file can refer to the type as *name*.
+> Please see the section on path syntax for a description of what is a valid path.
 
 `const` *ident* `=` *unsignedInt* `;`
 
