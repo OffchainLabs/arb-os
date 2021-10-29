@@ -182,7 +182,8 @@ Mini has the following types:
 
 Two types are equal if they have the same structure. Type aliases, as defined by non-import declarations, do not create a new type but simply define a shorthand method for referring to the underlying type.  (For example, after the declaration "`type foo = uint`", foo and uint are the same type.)
 
-Every atomic type is equal to itself.
+Every atomic type is equal to itself. 
+This includes `uint`, `int`, `bool`, `buffer`, `bytes32`, `address`, `void` and `string`.
 
 Two tuple types are equal if they have the same number of fields and their field types are equal, field-by-field.
 
