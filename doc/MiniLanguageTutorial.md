@@ -642,5 +642,10 @@ Mini never automatically converts types to make an operation succeed.  Programme
 *ident* (`::` *ident*)*
 
 > This represents a virtual path with the leftmost identifier being the widest scope.
-
-
+> In particular, a valid path may contain a file name followed by a identifier,
+> or it may be a library specifier, either `std` or `core`, followed by a file name and identifier.
+> In the case of a file name followed by a identifier, the file name represents the mini file within the source folder with that name.
+> So if `"arb_os"` is the compile target `name` would represent `arb_os/name.mini`, and the identifier would represent the function or type of the same name in that file.
+> If it starts with a library prefix, the base folder is determined by the prefix, with
+> `std` corresponding to the `std` folder and `core` corresponding to the `builtin` folder.
+> The second and third parts of the path work the same as mentioned previously.
