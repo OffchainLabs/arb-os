@@ -457,6 +457,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 `newfixedarray` ( *size* )
 
 > Create a new fixed-array of `any` elements. *size*, which must be a `uint` constant, is the size of the new array.
+> The values of the array are initialized as empty tuples.
 
 `newfixedarray` ( *size* , *expression* )
 
