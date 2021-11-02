@@ -4,7 +4,6 @@
 
 
 use std::bytearray::ByteArray;
-use evmlogs::EvmLogs;
 
 use accounts::safeGetGlobalAccountStore;
 use accounts::safeSetGlobalAccountStore;
@@ -17,7 +16,6 @@ use accounts::account_getNextSeqNum;
 use evmCallStack::initEvmCallStack;
 use evmCallStack::initEvmCallStackForConstructor;
 
-use gasAccounting::GasUsage;
 use gasAccounting::TxFeeStats;
 
 use output::emitTxReceipt;
@@ -44,7 +42,7 @@ view write func fetchAndIncrSequenceNum(addr: address) -> uint {
             updatedAcct
         )
     );
-    return ret;
+    ret
 }
 
 type TxRequestData = struct {
@@ -69,18 +67,18 @@ type TxRequestData = struct {
 public view write func processL2Request(request: TxRequestData) -> option<()> {
     if let Some(sequenceNum) = request.seqNum {
         let expectedSeqNum = account_getNextSeqNum(accountStore_get(safeGetGlobalAccountStore(), request.caller));
-        if (sequenceNum != expectedSeqNum) {
+        if sequenceNum != expectedSeqNum {
             // bad sequence number error
             emitTxReceipt(
                 request.incomingRequest,
-                xif (sequenceNum < expectedSeqNum) {
+                if sequenceNum < expectedSeqNum {
                     const::TxResultCode_sequenceNumberTooLow
                 } else {
                     const::TxResultCode_sequenceNumberTooHigh
                 },
-                None<ByteArray>,
-                None<EvmLogs>,
-                None<GasUsage>,
+                None,
+                None,
+                None,
                 request.feeStats,
                 true,
                 request.originalCaller,
@@ -89,16 +87,16 @@ public view write func processL2Request(request: TxRequestData) -> option<()> {
         }
     }
 
-    if (request.calleeAddr == address(0)) {
+    if request.calleeAddr == address(0) {
         // this is a constructor call
-        if (request.nonMutating) {
+        if request.nonMutating {
             // revert error (tried to call constructor in a non-mutating call)
             emitTxReceipt(
                 request.incomingRequest,
                 const::TxResultCode_revert,
-                None<ByteArray>,
-                None<EvmLogs>,
-                None<GasUsage>,
+                None,
+                None,
+                None,
                 request.feeStats,
                 true,
                 request.originalCaller,
@@ -109,22 +107,22 @@ public view write func processL2Request(request: TxRequestData) -> option<()> {
         let codeBytes = request.calldata;
         set request.calldata = bytearray_new(0);
 
-        if (request.seqNum == None<uint>) {
+        if request.seqNum == None<uint> {
             // constructor always increments the caller's sequence number
             set request.seqNum = Some(fetchAndIncrSequenceNum(request.caller));
         }
 
         set request.calleeAddr = address(keccakOfRlpEncodedUintPair(uint(request.caller), request.seqNum?));
 
-        if (account_hasContract(accountStore_get(safeGetGlobalAccountStore(), request.calleeAddr))) {
+        if account_hasContract(accountStore_get(safeGetGlobalAccountStore(), request.calleeAddr)) {
             // there's already an account at that address, revert the call
             // should never happen -- this is just defensive code
             emitTxReceipt(
                 request.incomingRequest,
                 const::TxResultCode_cannotDeployAtAddress,
-                None<ByteArray>,
-                None<EvmLogs>,
-                None<GasUsage>,
+                None,
+                None,
+                None,
                 request.feeStats,
                 true,
                 request.originalCaller,
@@ -134,19 +132,19 @@ public view write func processL2Request(request: TxRequestData) -> option<()> {
             initEvmCallStackForConstructor(
                 codeBytes,
                 request,
-                None<uint>,
+                None,
             );
             //NOTREACHED
         }
     } else {
         // this is a non-constructor call
-        let callKind = xif (request.nonMutating) {
+        let callKind = if request.nonMutating {
             const::EVMCallType_staticcall
         } else {
             const::EVMCallType_call
         };
 
-        initEvmCallStack(callKind, request, None<ByteArray>, None<uint>);  // should never return
+        initEvmCallStack(callKind, request, None, None);  // should never return
     }
 
     //NOTREACHED

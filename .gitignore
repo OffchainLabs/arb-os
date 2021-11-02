@@ -11,8 +11,10 @@ builtin/*.mexe
 upgradetests/*.mexe
 stdlib/*.mao
 stdlib/*.mexe
+stdlib2/*.mexe
 minitests/*.mao
 minitests/*.mexe
+minitests/*/*.mexe
 testlogs/*
 arb_os/contractTemplates.mini
 .idea
@@ -33,6 +35,7 @@ arb_os/save_bridge_for_debugging.mini
 # Tooling
 flamegraph.svg
 perf.data
+**.dot
 
 # coverage files
 **.all
@@ -43,3 +46,8 @@ perf.data
 .make/
 arb_os/bridge_arbos_versions.mini
 arb_os/arbos-upgrade-base.mexe
+
+# user files
+rachel/
+emily/
+ed/

@@ -1,24 +1,33 @@
+#
+# Copyright 2020, Offchain Labs, Inc. All rights reserved.
+#
 
-# Add your new mexe here
-minitest_outputs = codeloadtest simple-closure closure
+# Add your mexe as an output file
+generics_files = basic simple nested func closure colorful queue
+generics_outputs = $(patsubst %,generics/%, $(generics_files))
+
+minitest_outputs = arithmetic codeloadtest globaltest simple-closure closure stack-safety quick wide-tuples $(generics_outputs)
 upgrade_outputs = regcopy_new regcopy_old upgrade1_new upgrade1_old
 looptest_outputs = upgrade2_new upgrade2_old
-builtin_outputs = arraytest globaltest kvstest maptest
+builtin_outputs = arraytest kvstest maptest
 stdlib_outputs = addressSetTest biguinttest blstest bytearraytest expandingIntArrayTest fixedpointtest keccaktest priorityqtest queuetest ripemd160test rlptest storageMapTest sha256test
+stdlib2_outputs = arraytest priorityqtest
 
 builtin_mexes = $(patsubst %,builtin/%.mexe, $(builtin_outputs))
 stdlib_mexes = $(patsubst %,stdlib/%.mexe, $(stdlib_outputs))
+stdlib2_mexes = $(patsubst %,stdlib2/%.mexe, $(stdlib2_outputs))
 minitest_mexes = $(patsubst %,minitests/%.mexe, $(minitest_outputs))
 upgrade_mexes = $(patsubst %,upgradetests/%.mexe, $(upgrade_outputs))
 looptest_mexes = $(patsubst %,looptest/%.mexe, $(looptest_outputs))
 
-test_mexes = $(builtin_mexes) $(stdlib_mexes) $(minitest_mexes) $(upgrade_mexes) $(looptest_mexes)
+libs_mexes = $(builtin_mexes) $(stdlib_mexes) $(minitest_mexes)
+test_mexes = $(builtin_mexes) $(stdlib_mexes) $(stdlib2_mexes) $(minitest_mexes) $(upgrade_mexes) $(looptest_mexes)
+
+target = ./target/release/mini
 
 compile = ./target/release/mini compile $(compile_options)
 upgrade = ./target/release/mini gen-upgrade-code
 run     = ./target/release/mini
-
-mini_files = */*.mini
 
 consts = arb_os/constants.json
 done = "\e[38;5;161;1mdone!\e[0;0m\n"
@@ -33,6 +42,10 @@ arbos: arb_os/arbos.mexe
 	@printf $(done)
 
 upgrade: arb_os/arbos-upgrade.mexe arb_os/upgrade.json
+	@printf $(done)
+
+libs: .make/libs
+	cargo test --release
 	@printf $(done)
 
 contracts: .make/solidity
@@ -70,6 +83,7 @@ ci: .make/all replayTests lcov-mini.info
 
 clean:
 	@rm -f {builtin,stdlib,upgradetests,minitests,looptest}/*.mexe arb_os/{arbos,arbos-upgrade}.mexe
+	@rm -f minitests/generics/*.mexe
 	@rm -f arbos/{upgrade.json,contractTemplates.mini}
 	@rm -rf contracts/artifacts contracts/cache
 	@rm -f */*.cov lcov.info lcov-mini.info .make/*
@@ -81,6 +95,9 @@ builtin/%.mexe: builtin/%.mini builtin/*.mini $(consts) .make/tools
 	$(compile) -c $(consts) $< -o $@ -t
 
 stdlib/%.mexe: stdlib/%.mini stdlib/*.mini builtin/*.mini $(consts) .make/tools
+	$(compile) -c $(consts) $< -o $@ -t
+
+stdlib2/%.mexe: stdlib2/%.mini stdlib2/*.mini builtin/*.mini $(consts) .make/tools
 	$(compile) -c $(consts) $< -o $@ -t
 
 minitests/%.mexe: minitests/%.mini minitests/*.mini stdlib/*.mini builtin/*.mini $(consts) .make/tools
@@ -154,7 +171,12 @@ arb_os/arbos-upgrade-base.mexe: $(arbos_source_no_bridge) .make/tools
 	cargo test --release
 	@touch .make/test
 
-.make/fmt: src/*.rs src/*/*.rs Cargo.* .make/install $(mini_files)
+.make/libs: $(libs_mexes)
+	cargo test --release -- test_arraytest test_if_else test_closures test_codeblocks test_basic test_codeload test_globaltest test_map test_kvstest test_fixedpoint test_error_system test_queuetest test_keccak test_pqtest test_storage_map test_expanding_int_array test_bytearray test_biguint test_rlp
+	exit 1
+	@touch .make/libs
+
+.make/fmt: src/*.rs src/*/*.rs Cargo.* .make/install
 	cargo fmt
 	@touch .make/fmt
 
@@ -162,7 +184,7 @@ arb_os/arbos-upgrade-base.mexe: $(arbos_source_no_bridge) .make/tools
 	make $(MAKEFLAGS) compile_options="$(compile_options)" replayTests .make/test
 	@touch .make/push
 
-.make/compiler: src/*.rs src/*/*.rs Cargo.* .make/install
+.make/compiler: src/*.rs src/*/*.rs src/*.lalrpop Cargo.* .make/install
 	cargo build --release
 	@touch .make/compiler
 

@@ -77,18 +77,19 @@ fn test_for_numeric_error_code(path: &Path) {
 }
 
 #[test]
+fn test_address_set() {
+    test_for_numeric_error_code(Path::new("stdlib/addressSetTest.mexe"));
+}
+
+#[test]
 fn test_arraytest() {
     test_for_error_string(Path::new("builtin/arraytest.mexe"));
+    test_for_error_string(Path::new("stdlib2/arraytest.mexe"));
 }
 
 #[test]
 fn test_kvstest() {
     test_for_error_string(Path::new("builtin/kvstest.mexe"));
-}
-
-#[test]
-fn test_address_set() {
-    test_for_numeric_error_code(Path::new("stdlib/addressSetTest.mexe"));
 }
 
 #[test]
@@ -102,13 +103,9 @@ fn test_queuetest() {
 }
 
 #[test]
-fn test_globaltest() {
-    test_for_numeric_error_code(Path::new("builtin/globaltest.mexe"));
-}
-
-#[test]
 fn test_pqtest() {
     test_for_numeric_error_code(Path::new("stdlib/priorityqtest.mexe"));
+    test_for_error_string(Path::new("stdlib2/priorityqtest.mexe"));
 }
 
 #[test]
@@ -127,7 +124,7 @@ fn test_keccak() {
 }
 
 #[test]
-fn test_bls() {
+fn test_bls_basic() {
     test_for_error_string(Path::new("stdlib/blstest.mexe"));
 }
 
@@ -257,6 +254,11 @@ fn test_rlp_list3(
 }
 
 #[test]
+fn test_arithmetic() {
+    test_for_error_string(Path::new("minitests/arithmetic.mexe"));
+}
+
+#[test]
 fn test_codeload() {
     test_for_numeric_error_code(Path::new("minitests/codeloadtest.mexe"));
 }
@@ -265,6 +267,37 @@ fn test_codeload() {
 fn test_closures() {
     test_for_error_string(Path::new("minitests/simple-closure.mexe"));
     test_for_error_string(Path::new("minitests/closure.mexe"));
+}
+
+#[test]
+fn test_generics() {
+    test_for_error_string(Path::new("minitests/generics/basic.mexe"));
+    test_for_error_string(Path::new("minitests/generics/simple.mexe"));
+    test_for_error_string(Path::new("minitests/generics/nested.mexe"));
+    test_for_error_string(Path::new("minitests/generics/func.mexe"));
+    test_for_error_string(Path::new("minitests/generics/closure.mexe"));
+    test_for_error_string(Path::new("minitests/generics/colorful.mexe"));
+    test_for_error_string(Path::new("minitests/generics/queue.mexe"));
+}
+
+#[test]
+fn test_globals() {
+    test_for_numeric_error_code(Path::new("minitests/globaltest.mexe"));
+}
+
+#[test]
+fn test_stack_safety() {
+    test_for_error_string(Path::new("minitests/stack-safety.mexe"));
+}
+
+#[test]
+fn test_quick() {
+    test_for_error_string(Path::new("minitests/quick.mexe"));
+}
+
+#[test]
+fn test_wide_tuples() {
+    test_for_error_string(Path::new("minitests/wide-tuples.mexe"));
 }
 
 #[test]
@@ -353,6 +386,11 @@ fn test_l2_to_l1_call() {
 #[test]
 fn test_evm_add_code() {
     crate::evm::basic_evm_add_test(None, false).unwrap();
+}
+
+#[test]
+fn arbos_ethcall_test() {
+    crate::evm::arbos_ethcall_test(None, false).unwrap();
 }
 
 #[test]
@@ -1394,4 +1432,52 @@ fn test_no_refund_across_txs() {
     let second_gas = receipts[0].get_gas_used();
 
     assert_close(&first_gas, &second_gas.add(&Uint256::from_u64(200_000)));
+}
+
+#[test]
+fn test_reverting_payable_constructor() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+
+    let my_addr = Uint256::from_u64(1025); // because deploy uses this address
+    let my_addr_rewritten = remap_l1_sender_address(my_addr.clone());
+
+    let amount = Uint256::_from_eth(20);
+    machine.runtime_env.insert_eth_deposit_message(
+        my_addr.clone(),
+        my_addr.clone(),
+        amount.clone(),
+        true,
+    );
+    let _ = machine.run(None);
+
+    let arbinfo = _ArbInfo::_new(false);
+    assert_eq!(
+        arbinfo
+            ._get_balance(&mut machine, &my_addr_rewritten)
+            .unwrap(),
+        amount.clone()
+    );
+
+    let mut contract = AbiForContract::new_from_file(&test_contract_path("PRConstructor")).unwrap();
+    if let Err(receipt) = contract.deploy(
+        &[ethabi::Token::Uint(U256::from(13))],
+        &mut machine,
+        amount.clone(),
+        None,
+        false,
+    ) {
+        if receipt.clone().unwrap().succeeded() {
+            panic!("unexpected success deploying PRConstructor contract");
+        }
+    }
+
+    assert_eq!(
+        arbinfo
+            ._get_balance(&mut machine, &my_addr_rewritten)
+            .unwrap(),
+        amount.clone()
+    );
+
+    machine.write_coverage("test_reverting_payable_constructor".to_string());
 }
