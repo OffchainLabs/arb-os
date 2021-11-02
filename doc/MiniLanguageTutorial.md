@@ -659,6 +659,13 @@ Mini never automatically converts types to make an operation succeed.  Programme
 > `std` corresponding to the `std` folder and `core` corresponding to the `builtin` folder.
 > The second and third parts of the path work the same as mentioned previously.
 
+## Shadowing
+
+In mini, new variables can be created with the same name as old variables, this is called shadowing.
+To prevent ambiguity when dealing with shadowed variables, a reference to the shadowed name is treated as referring to
+the most recently declared variable that is currently in scope. So if a variable is declared inside a codeblock with the same name as another variable outside the codeblock,
+references to the name inside the codeblock will refer to the inner variable, and references to the name after the end of the codeblock refer to the outer variable.
+
 ## AVM Representation
 
 Types in mini are internally represented as AVM values. An AVM value may be one of the following:
