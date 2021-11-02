@@ -406,13 +406,17 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 > Logical and / or.  Both operands must have type `bool`, and the result has type `bool`.  Execution will shortcut, so that the second expression is evaluated only if the outcome is still in doubt after evaluating the first expression.
 
-*expression* >> *expression*
+*leftexpression* >> *rightexpression*
 
-> Right shift operator
+> Right shift operator, it shifts the bits of *leftexpression* right by *rightexpression* bits.
+> *leftexpression* and *rightexpression* must be expressions of type `uint`. When a right shift occurs, the leftmost *rightexpression* bits are filled by 0s.
+> If both *leftexpression* and *rightexpression* are constants, then *leftexpression* may be of type `int` or `bytes32`.
 
 *expression* << *expression*
 
-> Left shift operator 
+> Left shift operator, it shifts the bits of *leftexpression* left by *rightexpression* bits.
+> *leftexpression* and *rightexpression* must be expressions of type `uint`. When a left shift occurs, the rightmost *rightexpression* bits are filled by 0s.
+> If both *leftexpression* and *rightexpression* are constants, then *leftexpression* may be of type `int` or `bytes32`.
 
 `uint`( *expression* )
 
