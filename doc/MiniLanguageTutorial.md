@@ -232,11 +232,13 @@ The compiler uses often uses type inference to infer the types of variables from
 
 A value of type `V` is castable to storage of type `S` if:
 
-* `S` is `any`, or
-* `V` equals `S`,
+* `S` is `any` and `V` is not of type `void`
+* `V` is `every`,
 * `V` is `bool` and `S` is one of `bool`, `address`, `bytes32`, `uint`, or `int`
-* `V` is `adress` and `S` is one of `address`, `bytes32`, `uint`, or `int`
+* `V` is `address` and `S` is one of `address`, `bytes32`, `uint`, or `int`
 * `V` is one of `bytes32`, `uint`, or `int` and `S` is one of `bytes32`, `uint`, or `int`
+* `V` is `void` and `S` is `void`
+* `V` is `buffer` and `S` is `buffer`
 * `V` and `S` are tuple types with the same number of fields, and each field of `V` is castable to the corresponding field of `S`,
 * `V` and `S` are fixed-size arrays of the same size, and the field type of `V` is castable to the field type of `S`,
 * `V` and `S` are arrays, and the field type of `V` is castable to the field type of `S`,
@@ -244,6 +246,8 @@ A value of type `V` is castable to storage of type `S` if:
 * `V` and `S` are function types, with the same number of arguments, and if `V` is `view` or `write`, then `S` must also be `view` or `write` respectively, and each argument type of `V` is castable to the corresponding argument type of `S`, and either (a) both `S` and `V` return void, or (b) the return type of `S` is castable to the return type of `V`.  (Note that the return type is compared for castability "backwards". This is needed to make calls through function references type-safe.)
 * `V` and `S` are map types, and the key type of `V` is castable to the key type of `S`, and the value type of `V` is castable to the value type of `S`.
 * `V` and `S` are optional types, and the inner type of `V` is castable to the inner type of `S`
+* `V` and `S` are union types with the same number of variants, and each variant of `V` is castable to each variant of `S` variant by variant.
+* `V` or `S` is a nominal or specialized generic type, and the representation of `V` is the same as the representation of `S`
 
 ## Codeblocks
 
