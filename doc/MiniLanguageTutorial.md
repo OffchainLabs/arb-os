@@ -341,7 +341,7 @@ A value of type `V` is castable to storage of type `S` if:
 > If the `bool` is `true`, then execution continues as normal, but if `bool` is `false`, 
 > then execution will throw an error, with the value in the second field of the tuple being displayed.
 
-###### `set` *nameident* ([`.` *fieldident* | `[` *indexexpression* `]` ])+ `=` *expression* `;`
+`set` *nameident* ([`.` *fieldident* | `[` *indexexpression* `]` ])+ `=` *expression* `;`
 
 > Sets the field and/or array element specified by the sequence of *fieldident*s and *indexexpression*s, to *expression*.
 > All *indexexpression*s must be of type `uint`.
