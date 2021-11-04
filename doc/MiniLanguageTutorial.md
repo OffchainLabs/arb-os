@@ -158,15 +158,17 @@ Mini has the following types:
 
 *ident*
 
-> A named type or a type variable. It is only treated as a type variable in the context of a generic type or function,
+> A nominal type or a type variable. It is only treated as a type variable in the context of a generic type or function,
 > and only if that identifier is listed as one of the type variables of that generic type or function. 
-> Otherwise, it is treated as a named type, if that named type is not defined in the file or is not imported with a use statement, 
+> Otherwise, it is treated as a nominal type, if that nominal type is not defined in the file or is not imported with a use statement, 
 > it is not a valid type and will cause an error.
+> The representation of a nominal type is the type on the left side of the type declaration with the same name as *ident*.
 
 *ident* `<` *type1* `,` *type2* `,` ... `>`
 
 > A specialization of a generic type. *ident* must be the name of some generic type, and *type1*, *type2*, ...
 > and *type1*, *type2*, etc, replace each type variable of *ident* in order of their definition.
+> The representation of a specialized generic type is the type on the left side of the generic type declaration with the same name as *ident*.
 
 `any`
 
@@ -333,8 +335,8 @@ A value of type `V` is castable to storage of type `S` if:
 > Asserts are only evaluated when compiling in debug mode, otherwise *expression* will not run.
 > If the `bool` is `true`, then execution continues as normal, but if `bool` is `false`, 
 > then execution will throw an error, with the value in the second field of the tuple being displayed.
- 
-`set` *nameident* ([`.` *fieldident* | `[` *indexexpression* `]` ])+ `=` *expression* `;`
+
+###### `set` *nameident* ([`.` *fieldident* | `[` *indexexpression* `]` ])+ `=` *expression* `;`
 
 > Sets the field and/or array element specified by the sequence of *fieldident*s and *indexexpression*s, to *expression*.
 > All *indexexpression*s must be of type `uint`.
@@ -670,14 +672,57 @@ To prevent ambiguity when dealing with shadowed variables, a reference to the sh
 the most recently declared variable that is currently in scope. So if a variable is declared inside a codeblock with the same name as another variable outside the codeblock,
 references to the name inside the codeblock will refer to the inner variable, and references to the name after the end of the codeblock refer to the outer variable.
 
-## AVM Representation
+## AVM Values
 
-Types in mini are internally represented as AVM values. An AVM value may be one of the following:
+An AVM value may be one of the following:
 
 1. `Int`: a 256 bit integer
 1. `CodePoint`: a codepoint, points to an instruction in the code.
 1. `Buffer`: a buffer that contains bytes.
 1. `Tuple(`...`)`: up to 8 AVM values.
+
+More complex values are usually encoded by storing multiple values inside a `Tuple`, included nested tuples.
+
+## Default Value
+
+Every type has a default value that is used for the initial value of globals with that type.
+The default values for each type are as follows:
+
+* `uint`, `int`, `bytes32`, `address`:  
+  `0`, represented in `AVM` as an `Int`.
+* `bool`:  
+  `false`, this is also a `0` `Int` in the underlying AVM.
+* `buffer`:  
+  A buffer with length `0`, attempting to read any bytes past the end of a buffer will be treated as reading `0` values.
+* `any`:  
+  A length `0` tuple, `()`.
+* `union`:  
+  The default value of a union type is the default value of its leftmost variant.
+* `tuple`:  
+  The default value of a tuple is a wrapping tuple, with leaves equal to the default values of each field type respectively. 
+* `struct`:  
+  The default value of a struct is a wrapping tuple, with leaves equal to the default values of each field type respectively.
+* `option`:  
+  The default value of all `option` types is the `None` variant, in AVM this is represented as a length 1 tuple containing an `Int` value `0`
+* `func`:  
+  The default value of all `func` types is a `CodePoint` 
+* `map`:  
+  An empty map, in AVM this is represented as a length 2 `Tuple` with both fields as an `Int` with value `0`.
+* `array`:  
+  An `array` of *type* has a default value of an array with length 1 containing the default value of *type*.
+  In AVM this is represented by a length 3 `Tuple` containing, `Int`s with a value of `0` for the first two fields, 
+  and a length 8 `Tuple` containing 
+* `fixed array`:  
+  A default value for a `fixed array` of type *type* and length *length* is a fixed array of length *length*, where every array element has a value of the default value of *type*.
+  See the AVM representation section for more information of how the memory for this value is layed out.
+* `nominal`, `specialized generic`:  
+  The default value for a nominal or specialized generic type is the default value of its representation.
+
+While non-specialized generic types should never be created, if they are they will have a default value of `()`.
+
+## AVM Representation
+
+Types in mini are internally represented as AVM values.
 
 1. uint:  
    Always an `Int`, any `Int` value is allowable for this type.
