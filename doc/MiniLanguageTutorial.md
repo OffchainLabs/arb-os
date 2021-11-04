@@ -105,7 +105,7 @@ Mini has the following types:
 
 `address`
 
-> a 20-byte Ethereum address (an atomic type with zero value of 0)
+> a 20-byte Ethereum address, can hold any value between 0 and `2^160-1`
  
 `buffer`
 
