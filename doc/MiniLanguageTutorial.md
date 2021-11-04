@@ -661,7 +661,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 *ident* (`::` *ident*)*
 
-> This represents a virtual path with the leftmost identifier being the widest scope.
+> This represents a path with the leftmost identifier being the widest scope.
 > In particular, a valid path may contain a file name followed by a identifier,
 > or it may be a library specifier, either `std` or `core`, followed by a file name and identifier.
 > In the case of a file name followed by a identifier, the file name represents the mini file within the source folder with that name.
@@ -669,6 +669,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 > If it starts with a library prefix, the base folder is determined by the prefix, with
 > `std` corresponding to the `std` folder and `core` corresponding to the `builtin` folder.
 > The second and third parts of the path work the same as mentioned previously.
+> A path represented in this format will be called a virtual path, to distinguish it from paths in use by the filesystem.
 
 ## Shadowing
 
