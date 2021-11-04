@@ -178,6 +178,11 @@ Mini has the following types:
 
 > A type that has no values. No value of this type can ever exist.
 
+### Generic types
+
+> Generic types that have not been specialized have no rule by which they can be parsed as types. However, internally they can be represented as types.
+> Therefore it is possible that one might appear if a bug in the compiler is present. In this case they will be be displayed as `generic` *integer*.
+
 ## Equality and assignability for types
 
 Two types are equal if they have the same structure. Type aliases, as defined by non-import declarations, do not create a new type but simply define a shorthand method for referring to the underlying type.  (For example, after the declaration "`type foo = uint`", foo and uint are the same type.)
