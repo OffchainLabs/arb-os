@@ -363,10 +363,11 @@ All statements be prefixed by *Attributes*, see the Attributes section for more 
 > then execution will throw an error, with the value in the second field of the tuple being displayed via a debugprint instruction.
 > In the rust emulator this means that it will be printed to standard out with a prefix of `debugprint: `.
 
-`set` *nameident* ([`.` *fieldident* | `[` *indexexpression* `]` ])+ `=` *expression* `;`
+`set` *nameident* ([`.` *fieldident* | `[` *keyexpression* `]` ])+ `=` *expression* `;`
 
-> Sets the field and/or array element specified by the sequence of *fieldident*s and *indexexpression*s, to *expression*.
-> All *indexexpression*s must be of type `uint`.
+> Sets the field, map, or array element specified by the sequence of *fieldident*s and *keyexpression*s, to *expression*.
+> All *keyexpressions*s that index into an array or fixed size array type must be of type `uint`.
+> For *keyexpressions*s that index into a map, the type of the *keyexpression* must be assignable to the key type of the map.
 
 ## Attributes
 
