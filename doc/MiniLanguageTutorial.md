@@ -299,7 +299,11 @@ All statements be prefixed by *Attributes*, see the Attributes section for more 
 
 `let` *name* = *expression* ;
 
-> Create a new local variable and initialize it with the value of *expression*.  The compiler infers that the new variable has the same type as *expression* .  The variable goes out of scope when execution leaves the current codeblock.  If the new variable has the same name as an already-existing variable, it will mask the existing variable definition for as long as the new variable is in scope.
+> Create a new local variable and initialize it with the value of *expression*.  
+> The compiler infers that the new variable has the same type as *expression*.  
+> The variable goes out of scope when execution leaves the current codeblock.  
+> If the new variable has the same name as an already-existing variable, it will mask the existing variable definition for as long as the new variable is in scope.
+> The type of *expression* cannot be *void*, or a compilation error will occur.
 
 `let` ( *nameorbinding1* , *nameorbinding2*, ... ) = *expression* ;
 
@@ -311,7 +315,12 @@ All statements be prefixed by *Attributes*, see the Attributes section for more 
 
 **identifier*
 
-> Creates or assigns to multiple variables based on unpacking a tuple. If the *nameorbinding* is an identifier it creates a new variable, if *nameorbinding* is **identifier* it assigns to an existing variable with that name.  *expression* must be a tuple type, with the number of fields in the tuple equal to the number of names on the left-hand side.  The compiler creates a new local variable for each name on the left-hand side, and infers the type of each new variable based on the type of the corresponding field of the right-hand side tuple.
+> Creates or assigns to multiple variables based on unpacking a tuple. 
+> If the *nameorbinding* is an identifier it creates a new variable, if *nameorbinding* is **identifier* it assigns to an existing variable with that name. 
+> *expression* must be a tuple type, with the number of fields in the tuple equal to the number of names on the left-hand side.
+> The compiler creates a new local variable for each name on the left-hand side, and infers the type of each new variable based on the type of the corresponding field of the right-hand side tuple.
+> In the case of assignments to existing variables, the corresponding field on the left hand side must be assignable to the type of the variable.
+> No assignment may use type *void* on the left hand side.
 
 `if let` `Some(`*ident*`)` `=` *expression* *codeblockstatement* [`else` [*elsestatementcodeblock* | *if statement* | *if let statement*]]?
 
