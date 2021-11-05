@@ -42,6 +42,7 @@ Within each group the order of declarations does not matter.
 `var` *name* `:` *type* `;`
 
 > This declares a global variable. The variable will be initially assigned the default value for the type.
+> Please see the Default Values section for more details.
 
 `#[` *Attributes* `]`? [ `view` | `write` | `public` ]* `func` *name* ( *argname1: type1, argname2: type2, ...* ) [-> *returntype*] *codeblock*
 
