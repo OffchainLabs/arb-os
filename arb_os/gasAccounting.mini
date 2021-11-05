@@ -790,7 +790,7 @@ public view write func gasAccounting_prepareTx(tx: TxRequestData) -> (
             0
         };
 
-        if tx.gasPrice < prices.perArbGasTotal {
+        if tx.gasPrice < prices.perArbGasTotal && !tx.feeStats.noFeeGasEstimationMode {
             return (const::TxResultCode_gasPriceTooLow, tx);
         }
 
