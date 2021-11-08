@@ -798,7 +798,7 @@ Types in mini are internally represented as AVM values.
 1. unsized array of *type*:  
    The depth of an unsized array is the smallest integer `x` such that 8^`x` > *length*, with a minimum depth of `1`, where *length* is the current length of the array.
    An array of depth `N` has a value of `Tuple(Int, Int,` a `Tuple` of length 8 of sized arrays of depth *N-1* `)`, where depth `0` represents an AVM value valid for *type*.
-   The first `Int` in the outer tuple must be the *length* of the array, and the second integer must be `8^(N-1)`.
+   The first `Int` in the outer tuple is the *length* of the array, and the second integer is `8^(N-1)`.
 1. sized array of *type* and length *length*:  
    A series of nested 8 tuples, each leaf of which contains a AVM value valid for *type*.
    The nested tuples are at uniform depth, and are the minimum depth such that there are enough slots for *length* values.
