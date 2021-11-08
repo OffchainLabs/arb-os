@@ -363,7 +363,7 @@ All statements be prefixed by *Attributes*, see the Attributes section for more 
 `assert` `(` *expression* `)`
 
 > The type of *expression* must be `(bool,` *type*`)`, where *type* may be any type.
-> Asserts are only evaluated when compiling in debug mode, otherwise *expression* will not run.
+> Asserts are only evaluated when the program has been compiled in debug mode, otherwise *expression* will not run.
 > If the `bool` is `true`, then execution continues as normal, but if `bool` is `false`, 
 > then execution will throw an error, with the value in the second field of the tuple being displayed via a debugprint instruction.
 > In the rust emulator this means that it will be printed to standard out with a prefix of `debugprint: `.
