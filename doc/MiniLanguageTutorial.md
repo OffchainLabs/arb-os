@@ -748,7 +748,8 @@ The default values for each type are as follows:
 * `union`:  
   The default value of a union type is the default value of its leftmost variant.
 * `tuple`:  
-  The default value of a tuple is a wrapping tuple, with leaves equal to the default values of each field type respectively. 
+  The default value of a tuple is a wrapping tuple, with leaves equal to the default values of each field type respectively.
+  The structure of a wrapping tuple will be described below in the Wrapping Tuple section.
 * `struct`:  
   The default value of a struct is a wrapping tuple, with leaves equal to the default values of each field type respectively.
 * `option`:  
