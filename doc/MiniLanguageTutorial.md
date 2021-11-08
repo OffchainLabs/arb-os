@@ -119,7 +119,7 @@ Mini has the following types:
 
 > Buffers are a type that contains an series of bytes.
 > Buffers internally can be of length up to 2^128-1, however, as both the `setbuffer` and `getbuffer` expressions may only handle indices
-> up to `2^("system bit width")-1`, this limitation does not impact maximum size unless the hardware running the system has a bit width over 128.
+> up to `2^("system register size in bits")-1`, this limitation does not impact maximum size unless the hardware running the system has a bit width over 128.
 
 `void`
 
@@ -632,7 +632,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 > Gets the byte, 8 bytes, or 32 bytes at index *offset* of *buffer* respectively, *offset* must be an expression returning `uint`
 > and *buffer* must be an expression of type *buffer*.
-> If *offset* evaluates to a value greater than `2^("system bit width)-1`, `2^("system bit width")-8`, and `2^("system bit width")-32` respectively, the expression will throw a runtime error.
+> If *offset* evaluates to a value greater than `2^("system register size in bits)-1`, `2^("system register size in bits")-8`, and `2^("system register size in bits")-32` respectively, the expression will throw a runtime error.
 > This is a `uint` expression.
 
 `setbuffer8` `(` *offsetexpr* `,` *valueexpr* `,` *bufferexpr* `)`
@@ -644,7 +644,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 > Return the buffer created from setting the byte, 8 bytes, or 32 bytes at *offsetexpr* respectively,
 > to *valueexpr* in the buffer *bufferexpr*. *offsetexpr* and *valueexpr* must both be `uint` expressions,
 > and *bufferexpr* must be a `buffer` expression. 
-> If *offsetexpr* evaluates to a value greater than `2^("system bit width)-1`, `2^("system bit width")-8`, and `2^("system bit width")-32` respectively, the expression will throw a runtime error. 
+> If *offsetexpr* evaluates to a value greater than `2^("system register size in bits)-1`, `2^("system register size in bits")-8`, and `2^("system register size in bits")-32` respectively, the expression will throw a runtime error. 
 
 `any` `(` *expression* `)`
 
