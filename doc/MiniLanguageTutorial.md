@@ -287,15 +287,16 @@ All statements be prefixed by *Attributes*, see the Attributes section for more 
 
 *codeblock*
 
-> The codeblock is executed, any variables declared inside the codeblock will only be accessible inside the codeblock.
+> The statement codeblock *codeblock* is executed, any variables declared inside the codeblock will only be accessible inside the codeblock.
 
 `loop` *codeblock*
 
-> An "infinite loop" which executes codeblock repeatedly. The only way to exit the loop is via a `return` statement (or an error).
+> An "infinite loop" which executes the statement codeblock *codeblock* repeatedly. The only way to exit the loop is via a `return` statement (or an error).
 
 `while` ( *condition* ) *codeblock*
 
 > Like a loop, except *condition*  (which must be an expression of type `bool`) is evaluated before each iteration, and the loop terminates if *condition* is found to be false.
+> *codeblock* must be a statement codeblock.
 
 `if` ( *condition* ) *codeblock* ([`else` [*elsecodeblock* | *if statement* | *if let statement*]])?
 
@@ -326,13 +327,13 @@ All statements be prefixed by *Attributes*, see the Attributes section for more 
 > In the case of assignments to existing variables, the corresponding field on the left hand side must be assignable to the type of the variable.
 > No assignment may use type *void* on the left hand side.
 
-`if let` `Some(`*ident*`)` `=` *expression* *codeblockstatement* [`else` [*elsestatementcodeblock* | *if statement* | *if let statement*]]?
+`if let` `Some(`*ident*`)` `=` *expression* *codeblock* [`else` [*elsestatementcodeblock* | *if statement* | *if let statement*]]?
 
 > It is required that *ident* is an identifier, and *expression* is an expression of some option type. 
-> If *expression* returns the Some variant of an option type, within *codeblock* a new local variable *ident* is created with the inner value of the result of *expression*,
+> If *expression* returns the Some variant of an option type, within statement codeblock *codeblock* a new local variable *ident* is created with the inner value of the result of *expression*,
 > and the type of *ident* matches that inner type,
 > and *codeblock* is run.  If *expression* is the None variant and the `else` statement is present, 
-> codeblock statement *elsestatementcodeblock*, if statement *if statement* or *if let statement* is run instead.  
+> codeblock statement *elsestatementcodeblock*, if statement *if statement*, or *if let statement* is run instead.  
 > *expression* must always be an option type.
 
 *expression*
