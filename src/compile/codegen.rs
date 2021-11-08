@@ -288,7 +288,7 @@ fn codegen(
 
         macro_rules! error {
             ($text:expr $(,$args:expr)* $(,)?) => {
-                return Err(CompileError::new("Internal error", format!($text, $(Color::red($args),)*), debug.locs()));
+                return Err(CompileError::new("Internal error", format!($text, $(Color::red($args),)*), debug.locs()))
             };
             (@$text:expr, $debug:expr) => {
                 return Err(CompileError::new("Internal error", format!($text), $debug.locs()));
