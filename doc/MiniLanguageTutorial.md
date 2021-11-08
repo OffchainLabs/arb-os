@@ -67,7 +67,7 @@ Within each group the order of declarations does not matter.
 > 
 > If no return type is specified, then the function returns `void`, as void represents a lack of a value, this means no value is returned.
 >
-> If the return type is `every`, then the function cannot return, because no return value can exist. The compiler will verify that the function cannot return. If the compiler is unable to verify this, it will generate an error.
+> If the return type is `every`, then the function cannot return, because no return value of type `every` can exist. If the compiler detects a return of any other type, it will not be able to verify that it cannot return, and it will generate an error.
 >
 > Declaring a function as `noreturn` is equivalent to declaring that the function returns `every`. 
 > 
