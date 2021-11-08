@@ -172,7 +172,7 @@ Mini has the following types:
 > and only if that identifier is listed as one of the type variables of that generic type or function. 
 > Otherwise, it is treated as a nominal type, if that nominal type is not defined in the file or is not imported with a use statement, 
 > it is not a valid type and will cause an error.
-> The representation of a nominal type is the type on the left side of the type declaration with the same name as *ident*.
+> We define the representation of a nominal type to be the type on the right side of the type declaration with the same name as *ident*.
 
 *ident* `<` *type1* `,` *type2* `,` ... `>`
 
