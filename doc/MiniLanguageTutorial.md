@@ -603,7 +603,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 > *condition* must be a expression returning *bool*. 
 > If *condition* returns *true* then codeblock expression *codeblockexpr* is executed and its value is returned. 
 > If *condition* returns false, then either the *elseblockexpr*, *ifexpression* or *ifletexpression* is returned based on which is present.
-> The type of *elseexpression*, *ifexpression*, or *ifletexpression* must be assignable to  *expression*, and the type of the whole expression is the type of *codeblockexpr*.
+> The type of *elseexpression*, *ifexpression*, or *ifletexpression* must be assignable to  *codeblockexpr*, and the type of the whole expression is the type of *codeblockexpr*.
 
 `if let` Some(*ident*) = *expression* *clodeblockexpr* [`else` [*elseblockexpr* | *ifexpr* | *ifletexpr*]]
 
