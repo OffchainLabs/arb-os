@@ -660,7 +660,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 `getGas` `(` `)` 
 
-> Returns the remaining arbGas left in the system as a `uint`. The expression is of type `uint`.
+> Returns the remaining AVM gas left in the system as a `uint`. The expression is of type `uint`.
 
 `setGas` `(` *expression* `)`
 
