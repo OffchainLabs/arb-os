@@ -219,6 +219,9 @@ Two union types are equal if they have the same number of variants and their var
 
 Two specialized generic or nominal types are equal if their representations are equal.
 
+Two type variables are equal if they share the same name.
+It is also necessarily the case that they are defined in the same location, as any generic type or function must be specialized to be used.
+
 `any` equals itself.
 
 `every` equals itself.
@@ -250,6 +253,7 @@ The compiler uses often uses type inference to infer the types of variables from
 A value of type `V` is castable to storage of type `S` if:
 
 * `S` is `any` and `V` is not of type `void`,
+* `V` is assignable to `S`,
 * `V` is `every`,
 * `V` is `bool` and `S` is one of `bool`, `address`, `bytes32`, `uint`, or `int`,
 * `V` is `address` and `S` is one of `address`, `bytes32`, `uint`, or `int`,
