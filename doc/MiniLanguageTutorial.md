@@ -178,7 +178,7 @@ Mini has the following types:
 
 > A specialization of a generic type. *ident* must be the name of some generic type, and *type1*, *type2*, ... must be types,
 > and *type1*, *type2*, etc, replace each type variable of *ident* in order of their definition.
-> The representation of a specialized generic type is the type on the left side of the generic type declaration with the same name as *ident*.
+> We define the representation of a specialized generic type to be the type on the left side of the generic type declaration with the same name as *ident*.
 
 `any`
 
