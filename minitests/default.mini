@@ -1,0 +1,27 @@
+/*
+ * Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
+ */
+
+var array: [12]uint;
+
+view write func main() {
+    
+    if let Some(issue) = test_1() {
+        asm(issue.1) { log };
+    } else {
+        asm("".1) { log };
+    }
+}
+
+view func test_1() -> option<string> {
+    
+    let local = newfixedarray(12, 0);
+
+    if local != array {
+        debug(("array".1, array));
+        debug(("local".1, local));
+        return Some("default not same");
+    }
+
+    None
+}

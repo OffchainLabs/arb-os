@@ -88,6 +88,11 @@ fn test_arraytest() {
 }
 
 #[test]
+fn test_default() {
+    test_for_error_string(Path::new("minitests/default.mexe"));
+}
+
+#[test]
 fn test_kvstest() {
     test_for_error_string(Path::new("builtin/kvstest.mexe"));
 }
