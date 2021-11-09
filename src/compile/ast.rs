@@ -844,11 +844,7 @@ impl Type {
                         chunk = 8 * chunk;
                         base = Value::new_tuple(vec![base; 8]);
                     }
-                    Value::new_tuple(vec![
-                        Value::from(size),  // size
-                        Value::from(chunk), // topstep
-                        Value::new_tuple(vec![base; 8]),
-                    ])
+                    Value::new_tuple(vec![base; 8])
                 }
                 emulated_builtin(*size, t.default_value(type_tree))
             }
