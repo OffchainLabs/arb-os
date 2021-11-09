@@ -193,5 +193,5 @@ write func shadow(shadow_arg: uint, bad_arg: uint, good_arg: uint) {    // every
 view write func unused_function() {}
 func recursive_function() { recursive_function(); }
 
-public func implicit_exporter() -> view func() { return implicit_export; }
-view func implicit_export() {}
+sensitive public func implicit_exporter() -> view func() { return implicit_export; }
+sensitive view func implicit_export() {}
