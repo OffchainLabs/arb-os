@@ -2,11 +2,17 @@
  * Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
  */
 
-var array: [12]uint;
+var sized_array: [12]uint;
+var array: []uint;
 
 view write func main() {
     
     if let Some(issue) = test_1() {
+        asm(issue.1) { log };
+    } else {
+        asm("".1) { log };
+    }
+    if let Some(issue) = test_2() {
         asm(issue.1) { log };
     } else {
         asm("".1) { log };
@@ -17,10 +23,23 @@ view func test_1() -> option<string> {
     
     let local = newfixedarray(12, 0);
 
+    if local != sized_array {
+        debug(("array".1, sized_array));
+        debug(("local".1, local));
+        return Some("default not same for sized array");
+    }
+
+    None
+}
+
+view func test_2() -> option<string> {
+
+    let local = newarray<uint>(0);
+
     if local != array {
         debug(("array".1, array));
         debug(("local".1, local));
-        return Some("default not same");
+        return Some("default not same for unsized array");
     }
 
     None
