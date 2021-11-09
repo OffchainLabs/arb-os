@@ -760,10 +760,10 @@ The default values for each type are as follows:
 * `map`:  
   An empty map, in AVM this is represented as a length 2 `Tuple` with both fields as an `Int` with value `0`.
 * `array`:  
-  An `array` of *type* has a default value of an array with length 1 containing the default value of *type*.
-  In AVM this is represented by:  
-  `Tuple(Int(1), Int(1), Tuple(Int(1), Int(1), Tuple(`*default*, *default*, *default*, *default*, *default*, *default*, *default*, *default*`)))`  
-  Where *default* represents the default value for type *type*.
+  An `array` of *type* has a default value with the following AVM representation:
+  `Tuple(Int(1), Int(1), Tuple(Int(1), Int(1), Tuple(`*default*, *default*, *default*, *default*, *default*, *default*, *default*, *default*`)))`
+  Where *default* represents the default value for type *type*. 
+  This is intended to be an array with length 1 containing the default value of *type*, however in practice it has an additional outer 3 `Tuple` surrounding it.
 * `fixed array`:  
   A default value for a `fixed array` of type *type* and length *length* is a fixed array of length *length*, where every array element has a value of the default value of *type*.
   See the AVM representation section for more information of how the memory for this value is layed out.
