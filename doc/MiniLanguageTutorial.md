@@ -268,7 +268,7 @@ A value of type `V` is castable to storage of type `S` if:
 * `V` and `S` are map types, and the key type of `V` is castable to the key type of `S`, and the value type of `V` is castable to the value type of `S`,
 * `V` and `S` are optional types, and the inner type of `V` is castable to the inner type of `S`,
 * `V` and `S` are union types with the same number of variants, and each variant of `V` is castable to each variant of `S` variant by variant,
-* `V` or `S` is a nominal or specialized generic type, and the representation of `V` is the same as the representation of `S`.
+* `V` or `S` is a nominal or specialized generic type, and the representation of `V` is castable to the representation of `S`.
 
 ## Codeblocks
 
