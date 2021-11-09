@@ -776,56 +776,63 @@ While non-specialized generic types should never be created, if they are they wi
 
 Types in mini are internally represented as AVM values.
 
-1. uint:  
+1. `uint`:  
    Always an `Int`, any `Int` value is allowable for this type.
-1. int:  
-   Always an `Int`, any `Int` value is allowable for this type.
-1. bool:  
+1. `int`:  
+   Always an `Int`, any `Int` value is allowable for this type. 
+   These `Int`s are interpreted in twos complement notation to derive any integer value from `-2^255` to `2^255-1`.
+1. `bool`:  
    Always an `Int`, the values `0` and `1` are allowed for this type, but nothing else.
-1. buffer:  
+   The value `0` is interpreted as `false`, and `1` as `true`.
+1. `buffer`:  
    Always a `Buffer`, any value is allowable for this type.
-1. bytes32:  
+1. `bytes32`:  
    Always an `Int`, any value is allowable for this type.
-1. address:  
-   Always an `Int`, only values up to `2^160-1` are allowed for this type, where the `Int` must be interpreted as unsigned.
-1. void:  
-   Represents lack of a value, whenever a value of type `void` is present, then it is assumed there is no value there.
-1. struct:  
+1. `address`:  
+   Always an `Int`, only values from `0` to `2^160-1` are allowed for this type.
+1. `void`:  
+   Represents lack of a value, whenever a value of type `void` is present, then it is assumed there is no AVM value there.
+   This manifests as a bug in various contexts.
+1. `struct`:  
    Represented by a wrapping tuple containing values of the types of each of its fields, in order from top to bottom.
-   Field names have no impact on the allowable values for the type.
-1. tuple:  
+   Field names have no impact on the allowable AVM values for the type.
+1. `tuple`:  
    Identical to structs, represented by a wrapping tuple containing values of the types of each of its fields, in order left to right.
-1. unsized array of *type*:  
-   The depth of an unsized array is the smallest integer `x` such that 8^`x` > *length*, with a minimum depth of `1`, where *length* is the current length of the array.
+1. `unsized array` of *type*:  
+   The depth of an unsized array is the smallest integer `x` such that 8^`x` >= *length*, with a minimum depth of `1`, where *length* is the current length of the array.
    An array of depth `N` has a value of `Tuple(Int, Int,` a `Tuple` of length 8 of sized arrays of depth *N-1* `)`, where depth `0` represents an AVM value valid for *type*.
    The first `Int` in the outer tuple is the *length* of the array, and the second integer is `8^(N-1)`.
-1. sized array of *type* and length *length*:  
+1. `sized array` of *type* and length *length*:  
    A series of nested 8 tuples, each leaf of which contains a AVM value valid for *type*.
    The nested tuples are at uniform depth, and are the minimum depth such that there are enough slots for *length* values.
    The minimum depth is a single 8 tuple. Sized arrays of length 0 allocate a single tuple with 8 slots.
-1. map with keys of *keytype* and values of *valuetype*:  
+1. `map` with keys of *keytype* and values of *valuetype*:  
    All maps consist of `Tuple(` *KvsNode* `, Int)`, the valid values for *KvsNode* will be explained below.
    A *KvsNode* may be one of 3 types, it may be an integer of value `0`, a `Tuple` of length 2, or a `Tuple` of length 8.
    In the case of a 2 `Tuple`, the first value in the tuple must be valid for *keytype*, and the second must be valid for `option<`*valuetype*`>`.
    In the case of an 8 tuple, each value in the tuple must be a valid *KvsNode*.
-1. string:  
+1. `string`:  
    As a string is equivalent to `(uint, buffer)`, the valid AVM values are those values that are valid for `(uint, buffer)`,
    in other words all values must be a `Tuple(Int, Buffer)`. Any possible value for this representation is allowable,
    although strings are always initialized such that `Int` represents the length of the `Buffer`. 
-1. any:  
+1. `any`:  
    Any AVM value may be used for any, the compiler makes no assumptions about the value of this type.
-1. option<*type*>:  
-   Either a length 1 tuple containing `0`, or a length 2 tuple where the first field is `1` and the second field is a valid value for *type*.
-1. every:  
+1. `option<`*type*`>`:  
+   Either a length 1 tuple containing `0`, which corresponds to the mini value `None<`*type*`>`,
+   or a length 2 tuple where the first field is `1` and the second field is a valid value *value* for *type*, this corresponds to `Some(`*value*`)`.
+1. `every`:  
    There are no valid AVM values for this type, the compiler assumes it will never exist.
-1. union<*type1*, *type2*, ... , *typeN*>:  
-   The valid AVM values for this type are the union of valid values for *type1*, *type2*, ... , *typeN*. In other words, an AVM value is valid for this type if and only if there is some type in *type1*, *type2*, ... , *typeN* for which the value is valid.
-1. func:  
+1. `union<`*type1*`,` *type2*`,` ... `,` *typeN*`>`:  
+   The valid AVM values for this type are the union of valid values for *type1*, *type2*, ... , *typeN*. 
+   In other words, an AVM value is valid for this type if and only if there is some type in *type1*, *type2*, ... , *typeN* for which the value is valid.
+   It is not in general possible to determine the exact mini value that a value of a `union` type derives from.
+   When downcasting to a specific variant, the AVM value is unchanged, and it is treated according to the rules of that specific variant.
+1. `func`:  
    All function types are represented internally as a `CodePoint` pointing to the start of the function in memory.
-1. nominal/generic:  
+1. `nominal`/`specialized generic`:  
    A nominal type has the same AVM representation as its representation.
    The representation of a nominal type is the type on the right half of the type declaration.
-   This also applies to specialized generic types, where the AVM representation is equivalent to the type resulting from
+   This also applies to specialized generic types, where the AVM representation is equivalent to that of the type resulting from
    replacing each type variable with the concrete type specified in the specialization.
 
 ## Wrapping tuple
