@@ -806,6 +806,12 @@ Types in mini are internally represented as AVM values.
    A series of nested 8 tuples, each leaf of which contains a AVM value valid for *type*.
    The nested tuples are at uniform depth, and are the minimum depth such that there are enough slots for *length* values.
    The minimum depth is a single 8 tuple. Sized arrays of length 0 allocate a single tuple with 8 slots.
+   
+   The leaves of a depth *N* tuple are ordered, starting with 0, by concatenating the ordering of each *N-1* depth tuple from left to right,
+   in the case of a depth `1` tuple, the tuple fields are ordered left to right.
+   
+   The AVM value located at index *n* corresponds to the item in the array at index *n*, with any *n* >= *size* not intended for access.
+   These values are initialized as the default value for *type*, and can generally be assumed to contain those values.
 1. `map` with keys of *keytype* and values of *valuetype*:  
    All maps consist of `Tuple(` *KvsNode* `, Int)`, the valid values for *KvsNode* will be explained below.
    A *KvsNode* may be one of 3 types, it may be an integer of value `0`, a `Tuple` of length 2, or a `Tuple` of length 8.
