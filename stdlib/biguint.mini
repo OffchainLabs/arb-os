@@ -600,3 +600,19 @@ public func biguint_modexp(x: []uint, e: []uint, m: []uint) -> option<[]uint> {
     }
     Some(ret)
 }
+
+public func uint_modexp(x: uint, e: uint, m: uint) -> option<uint> {
+    if m == 0 {
+        return None;
+    }
+    if e == 0 {
+        return Some(1);
+    }
+    let sub = uint_modexp(x, e/2, m)?;
+    sub = asm(sub, sub, m) uint { mulmod };
+    return Some(if (e%2) == 1 {
+       asm(sub, x, m) uint { mulmod }
+    } else {
+        sub
+    });
+}
