@@ -813,10 +813,17 @@ Types in mini are internally represented as AVM values.
    The AVM value located at index *n* corresponds to the item in the array at index *n*, with any *n* >= *size* not intended for access.
    These values are initialized as the default value for *type*, and can generally be assumed to contain those values.
 1. `map` with keys of *keytype* and values of *valuetype*:  
-   All maps consist of `Tuple(` *KvsNode* `, Int)`, the valid values for *KvsNode* will be explained below.
+   All maps consist of `Tuple(` *KvsNode* `, Int)`, where the *KvsNode* holds the key value pairs, and the `Int` corresponds to the size of the map, ie, how many key value pairs are present. 
+   The valid values for *KvsNode* will be explained below.
    A *KvsNode* may be one of 3 types, it may be an integer of value `0`, a `Tuple` of length 2, or a `Tuple` of length 8.
    In the case of a 2 `Tuple`, the first value in the tuple must be valid for *keytype*, and the second must be valid for `option<`*valuetype*`>`.
    In the case of an 8 tuple, each value in the tuple must be a valid *KvsNode*.
+   These correspond to mini values in the following way. `0` represents a branch with no key value pairs stored, the 2 `Tuple` represents a single key value pair, and an 8 `Tuple` represents
+   an intermediate *KvsNode* containing 8 other *KvsNode*s.
+   The location of a specific key value pair is determined by the hash of the key, cast to a `uint`, we will refer to this has as *hash*. See the `hash` expression for more details on how this is calculated.
+   The specific tuple field of a value inserted into a map is `(`*hash*`/8^`*depth*`)` `% 8`, where *depth* is the number of subtrees above the current one.
+   Intuitively, this checks the lowest three bits of *hash* at the top level, and at each subsequent level moves 3 bits to the left.
+   An 8 `Tuple` will always be present when at least two keys in the map share a path to that location in the tree.
 1. `string`:  
    As a string is equivalent to `(uint, buffer)`, the valid AVM values are those values that are valid for `(uint, buffer)`,
    in other words all values must be a `Tuple(Int, Buffer)`. Any possible value for this representation is allowable,
