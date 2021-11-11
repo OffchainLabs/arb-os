@@ -165,6 +165,7 @@ Mini has the following types:
 [ `view` | `write` ] `closure` `(` *type*, *type*, ... `)` (`->` *returntype*`)?
 
 > A reference to a function, while `public` can be included a type declaration, it has no effect on the internal type.
+> The use of `public` may be removed in the future, so it is recommended to not use it.
 
 *ident*
 
