@@ -116,6 +116,28 @@ public func biguint_toBytes(x: []uint) -> ByteArray {
     }
 }
 
+public func biguint_toUint(x: []uint) -> option<uint> {
+    let lenx = len(x);
+    if lenx > 4 {
+        return None;
+    }
+    if (lenx == 4) && (x[3] >= (1<<16)) {
+        return None;
+    }
+
+    return Some(
+        if lenx > 3 {
+            x[0] + mulDigit(x[1] + mulDigit(x[2] + mulDigit(x[3])))
+        } else if lenx > 2 {
+            x[0] + mulDigit(x[1] + mulDigit(x[2]))
+        } else if lenx > 1 {
+            x[0] + mulDigit(x[1])
+        } else {
+            x[0]
+        }
+    );
+}
+
 public func biguint_sizeBytes(x: []uint) -> uint {
     let lenDigits = realSize(x);
     if lenDigits == 0 {    return 0;    }
@@ -587,6 +609,14 @@ public func biguint_modexp(x: []uint, e: []uint, m: []uint) -> option<[]uint> {
     x = shrinkToFit(x);
     e = shrinkToFit(e);
     m = shrinkToFit(m);
+
+    if let Some(um) = biguint_toUint(m) {
+        if let Some(ux) = biguint_toUint(x) {
+            if let Some(ue) = biguint_toUint(e) {
+                return Some(shrinkToFit(biguint_fromUint(uint_modexp(ux, ue, um)?)));
+            }
+        }
+    }
 
     let ret = biguint_one();
     let b = 8*biguint_sizeBytes(e);
