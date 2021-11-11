@@ -2,20 +2,9 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-use std::biguint::biguint_add;
-use std::biguint::biguint_compare;
-use std::biguint::biguint_divmod;
 use std::biguint::biguint_equal;
 use std::biguint::biguint_fromUint;
-use std::biguint::biguint_isZero;
-use std::biguint::biguint_mod;
-use std::biguint::biguint_modmul;
 use std::biguint::biguint_modexp;
-use std::biguint::biguint_mul;
-use std::biguint::biguint_random;
-use std::biguint::biguint_square;
-use std::biguint::biguint_subtract;
-use std::biguint::biguint_zero;
 
 use std::queue::queue_new;
 use std::queue::queue_isEmpty;
@@ -50,7 +39,7 @@ func test() -> option<any> {
     ));
 
     q = queue_put(q, (
-        65537,
+        0x10001,
         0xccf4d91acbdba9e9795b09c107816a4538d193be735e2aef192d49bc86e179ad,
         0x73753b483ae0f07b9ad7fab2932e47bc8a67fa44d848770b26de2140aedf9996,
         0xccf4d91acbdba9e9795b09c107816a4538d193be735e2aef192d49bc86e179ad,
