@@ -7,6 +7,7 @@ use std::biguint::biguint_fromUint;
 use std::biguint::biguint_modexp;
 use std::biguint::biguint_toBytes;
 use std::biguint::biguint_fromBytes;
+use std::biguint::biguint_isZero;
 
 use std::queue::queue_new;
 use std::queue::queue_isEmpty;
@@ -16,8 +17,10 @@ use std::queue::queue_size;
 
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_set64;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_extract;
 
 use std::keccak::keccak256;
 
@@ -88,7 +91,7 @@ view write func test() -> option<any> {
     }
 
     entropy = bytearray_new(0);
-    entropy = bytearray_set256(entropy, 0, 4);
+    entropy = bytearray_set256(entropy, 0, 5);
 
     let rand = view write closure(bound: uint) -> uint {
         let keccak = uint(keccak256(entropy, 0, 32));
@@ -104,30 +107,45 @@ view write func test() -> option<any> {
             bytes = bytearray_set256(bytes, i*32, bytearray_get256(entropy, rand(1)));
             i = i + 1;
         }
-        biguint_fromBytes(bytes)
+        biguint_fromBytes(bytearray_extract(bytes, 0, 1))
     };
-    
-    let rounds = 10000000;
+
+    let rounds = 100;
     let step = 0;
     while step < rounds {
-        debug(("round".1, step, "of".1, rounds, entropy.contents));
+        entropy = bytearray_set64(entropy, 0, step);
+        debug((step, entropy.contents));
 
-        let base = rand_bytes(1, 4);
-        let exponent = rand_bytes(1, 4);
-        let modulus = rand_bytes(1, 4);
+        let base = rand_bytes(1, 2);
+        let exponent = rand_bytes(1, 2);
+        let modulus = rand_bytes(1, 2);
 
-        let modexp = biguint_toBytes(biguint_modexp(base, exponent, modulus)?);
+        if !biguint_isZero(modulus) {
 
-        let hashed = keccak256(modexp, 0, modexp.size);
+            let result = biguint_modexp(base, exponent, modulus)?;
+            let modexp = biguint_toBytes(result);
+            let hashed = keccak256(modexp, 0, 32);
 
-        entropy = bytearray_set256(entropy, 0, uint(hashed));
+            entropy = bytearray_set256(entropy, 0, uint(hashed));
+
+            debug((
+                step,
+                entropy.contents,
+                bytearray_get256(biguint_toBytes(base), 0),
+                bytearray_get256(biguint_toBytes(exponent), 0),
+                bytearray_get256(biguint_toBytes(modulus), 0),
+                bytearray_get256(biguint_toBytes(result), 0)
+            ));
+        }
 
         step = step + 1;
     }
 
-    debug(entropy.contents);
+    let accumulation = bytearray_get256(entropy, 0);
 
-    return Some(entropy);
-    
-    Some(0)
+    if accumulation != 0x48078cfed56339ea54962e72c37c7f588fc4f8e5bc173827ba75cb10a63a96a5 {
+        Some(accumulation)
+    } else {
+        Some(0)
+    }
 }
