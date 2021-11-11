@@ -827,7 +827,8 @@ Types in mini are internally represented as AVM values.
 1. `string`:  
    As a string is equivalent to `(uint, buffer)`, the valid AVM values are those values that are valid for `(uint, buffer)`,
    in other words all values must be a `Tuple(Int, Buffer)`. Any possible value for this representation is allowable,
-   although strings are always initialized such that `Int` represents the length of the `Buffer`. 
+   although strings are always initialized such that `Int` represents the length of the `Buffer`.
+   The contents of the buffer are the string contents interpreted as utf8. 
 1. `any`:  
    Any AVM value may be used for any, the compiler makes no assumptions about the value of this type.
 1. `option<`*type*`>`:  
