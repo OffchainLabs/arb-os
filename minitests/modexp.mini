@@ -1,0 +1,75 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::biguint::biguint_add;
+use std::biguint::biguint_compare;
+use std::biguint::biguint_divmod;
+use std::biguint::biguint_equal;
+use std::biguint::biguint_fromUint;
+use std::biguint::biguint_isZero;
+use std::biguint::biguint_mod;
+use std::biguint::biguint_modmul;
+use std::biguint::biguint_modexp;
+use std::biguint::biguint_mul;
+use std::biguint::biguint_random;
+use std::biguint::biguint_square;
+use std::biguint::biguint_subtract;
+use std::biguint::biguint_zero;
+
+use std::queue::queue_new;
+use std::queue::queue_isEmpty;
+use std::queue::queue_put;
+use std::queue::queue_get;
+use std::queue::queue_size;
+
+write func main() {
+    if let Some(res) = test() {
+	asm(res) { log };
+    } else {
+	asm("unwrap panic".1,) { log };
+    }
+}
+
+func test() -> option<any> {
+
+    let q = queue_new();
+
+    q = queue_put(q, (
+        0, // base
+        1, // exponent
+        1, // modulus
+        0, // expected result
+    ));
+
+    q = queue_put(q, (
+        3,
+        0xc19139cb84c680a6e14116da060561765e05aa45a1c72a34f082305b61f3f52,
+        0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47,
+        0xb3c4d79d41a91759a9e4c7e359b6b89eaec68e62effffffd,
+    ));
+
+    q = queue_put(q, (
+        65537,
+        0xccf4d91acbdba9e9795b09c107816a4538d193be735e2aef192d49bc86e179ad,
+        0x73753b483ae0f07b9ad7fab2932e47bc8a67fa44d848770b26de2140aedf9996,
+        0xccf4d91acbdba9e9795b09c107816a4538d193be735e2aef192d49bc86e179ad,
+    ));
+
+    while !queue_isEmpty(q) {
+        let (*q, case) = queue_get(q)?;
+        let case = unsafecast<(uint, uint, uint, uint)>(case);
+        
+        let base     = biguint_fromUint(case.0);
+        let exponent = biguint_fromUint(case.1);
+        let modulus  = biguint_fromUint(case.2);
+        let expected = biguint_fromUint(case.3);
+
+        let result = biguint_modexp(base, exponent, modulus)?;
+        if !biguint_equal(result, expected) {
+            return Some(("failed on test #".1, (queue_size(q) + 1), "expected:", expected, "but have:", result));
+        }
+    }
+
+    Some(0)
+}
