@@ -700,7 +700,7 @@ impl BasicGraph {
             // loops, these are rare and so we'll restrict our analysis to DAG's.
             // The next best thing is to use these graphs to improve blocks independently.
 
-            // Update blocks where value graphs produce more performant code
+            // Update blocks whose value graphs produce more performant code
             for &node in &nodes {
                 if let Some(values) = graphs.get(&node) {
                     let code = self.graph[node].get_code();

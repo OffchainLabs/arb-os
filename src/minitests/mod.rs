@@ -389,6 +389,11 @@ fn test_evm_add_code() {
 }
 
 #[test]
+fn arbos_ethcall_test() {
+    crate::evm::arbos_ethcall_test(None, false).unwrap();
+}
+
+#[test]
 pub fn test_tx_with_deposit() {
     match crate::evm::evm_tx_with_deposit(None, false, false) {
         Ok(result) => assert_eq!(result, true),
@@ -1427,4 +1432,52 @@ fn test_no_refund_across_txs() {
     let second_gas = receipts[0].get_gas_used();
 
     assert_close(&first_gas, &second_gas.add(&Uint256::from_u64(200_000)));
+}
+
+#[test]
+fn test_reverting_payable_constructor() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+
+    let my_addr = Uint256::from_u64(1025); // because deploy uses this address
+    let my_addr_rewritten = remap_l1_sender_address(my_addr.clone());
+
+    let amount = Uint256::_from_eth(20);
+    machine.runtime_env.insert_eth_deposit_message(
+        my_addr.clone(),
+        my_addr.clone(),
+        amount.clone(),
+        true,
+    );
+    let _ = machine.run(None);
+
+    let arbinfo = _ArbInfo::_new(false);
+    assert_eq!(
+        arbinfo
+            ._get_balance(&mut machine, &my_addr_rewritten)
+            .unwrap(),
+        amount.clone()
+    );
+
+    let mut contract = AbiForContract::new_from_file(&test_contract_path("PRConstructor")).unwrap();
+    if let Err(receipt) = contract.deploy(
+        &[ethabi::Token::Uint(U256::from(13))],
+        &mut machine,
+        amount.clone(),
+        None,
+        false,
+    ) {
+        if receipt.clone().unwrap().succeeded() {
+            panic!("unexpected success deploying PRConstructor contract");
+        }
+    }
+
+    assert_eq!(
+        arbinfo
+            ._get_balance(&mut machine, &my_addr_rewritten)
+            .unwrap(),
+        amount.clone()
+    );
+
+    machine.write_coverage("test_reverting_payable_constructor".to_string());
 }

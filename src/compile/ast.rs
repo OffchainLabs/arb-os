@@ -231,7 +231,7 @@ impl Type {
         let mut found = vec![];
         macro_rules! find {
             ($tipe:expr) => {
-                found.extend($tipe.find(take));
+                found.extend($tipe.find(take))
             };
         }
         match &self {

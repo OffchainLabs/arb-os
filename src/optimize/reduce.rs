@@ -700,6 +700,50 @@ impl ValueGraph {
             conn_counts.insert(node, conn_count(&graph, node));
         }
 
+        let mut entropy: SmallRng = SeedableRng::seed_from_u64(0);
+
+        /*let mut layout = HashMap::new();
+
+
+        fn optimize_layout(
+            node: NodeIndex,
+            graph: &StableGraph<ValueNode, ValueEdge>,
+            stack: &mut Vec<NodeIndex>,
+            layout: &mut HashMap<NodeIndex, (usize, Vec<EdgeIndex>, Vec<NodeIndex>)>,
+            //entropy: &mut SmallRng,
+        ) {
+            let mut deps: Vec<_> = graph.edges_directed(node, Direction::Outgoing).collect();
+
+            for perm in deps.iter().permutations(deps.len()).take(120) {
+
+                for edge in &perm {
+                    let input = edge.target();
+                    if !layout.contains_key(&input) {
+                        optimize_layout(input, graph, stack, layout);
+                    }
+                }
+
+            }
+
+            for edge in &deps {
+                let input = edge.target();
+                if !layout.contains_key(&input) {
+                    optimize_layout(input, graph, stack, layout);
+                }
+            }
+
+            let mut cost = usize::MAX;
+            let mut best = vec![];
+            let mut stack = vec![];
+
+            //
+
+
+            layout.insert(node, (cost, best, stack));
+        }
+
+        optimize_layout(self.output, &graph, &mut stack.clone(), &mut layout);*/
+
         /// Walk the `ValueGraph`, building the instructions in a bottom-up manner.
         fn descend(
             node: NodeIndex,
@@ -811,10 +855,11 @@ impl ValueGraph {
 
         let mut best = vec![];
         let mut best_cost = usize::MAX;
-        let mut entropy: SmallRng = SeedableRng::seed_from_u64(0);
 
         for _ in 0..(1 + optimization_level) {
-            // attempt to codegen a better set of instructions than the best found so far.
+            // Attempt to codegen a better set of instructions than the best found so far.
+            // There's a single-pass, dynamic programming variant of this but we'd need to
+            // make reorder_stack() pure or do a very tricky walk.
 
             let mut stack = stack.clone();
             let mut alt = header.clone();

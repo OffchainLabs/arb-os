@@ -6,6 +6,7 @@ use std::bytearray::ByteArray;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_get64;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_copy;
@@ -14,13 +15,20 @@ use std::bytestream::bytestream_new;
 
 use std::storageMap::storageMap_serialize;
 use std::storageMap::storageMap_deserialize;
+use std::storageMap::storageMap_new;
+use std::storageMap::storageMap_set;
 
 use accounts::pristineAccount;
 use accounts::account_setContractInfo;
+use accounts::account_setStorageCell;
+use accounts::account_setStorage;
 use accounts::account_getAllStorage;
 use accounts::account_getNextSeqNum;
 use accounts::account_getEthBalance;
 use accounts::account_setNextSeqNum;
+use accounts::account_getBalance;
+use accounts::account_addToEthBalance;
+use accounts::account_deductFromEthBalance;
 
 use chainParameters::chainParams_getOrDie;
 
@@ -60,6 +68,14 @@ public view write func arbosTest_txcall() {
             arbosTest_burnArbGas(topFrame, calldata);
         } else if funcCode == const::funcCode_ArbosTest_setNonce {
             arbosTest_setNonce(topFrame, calldata);
+        } else if funcCode == const::funcCode_ArbosTest_setBalance {
+            arbosTest_setBalance(topFrame, calldata);
+        } else if funcCode == const::funcCode_ArbosTest_setCode {
+            arbosTest_setCode(topFrame, calldata);
+        } else if funcCode == const::funcCode_ArbosTest_setState {
+            arbosTest_setState(topFrame, calldata);
+        } else if funcCode == const::funcCode_ArbosTest_store {
+            arbosTest_store(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 2, 0, 0);
@@ -217,5 +233,114 @@ view write func arbosTest_setNonce(topFrame: EvmCallFrame, calldata: ByteArray) 
             newNonce,
         ),
     );
+    evmOp_return(0, 0);
+}
+
+view write func arbosTest_setBalance(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if evmCallFrame_getCaller(topFrame) != address(0) {
+        evmOp_revert_knownPc(50, 0, 0);
+    }
+    if bytearray_size(calldata) != 68 {
+        evmOp_revert_knownPc(51, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let newBalance = bytearray_get256(calldata, 36);
+    let account =  evmCallStack_getAccountInCurrentContext(addr);
+    let oldBalance = account_getBalance(account);
+    if oldBalance <= newBalance {
+        account = account_addToEthBalance(account, newBalance - oldBalance);
+    } else {
+        if let Some(resaccount) = account_deductFromEthBalance(account, oldBalance - newBalance) {
+            account = resaccount;
+        } else {
+            evmOp_revert_knownPc(52, 0, 0);
+        }
+    }
+    evmCallStack_setAccountInCurrentContext(addr, account);
+    evmOp_return(0, 0);
+}
+
+view write func arbosTest_setCode(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if evmCallFrame_getCaller(topFrame) != address(0) {
+        evmOp_revert_knownPc(60, 0, 0);
+    }
+    if bytearray_size(calldata) < 4+3*32 {
+        evmOp_revert_knownPc(61, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let account =  evmCallStack_getAccountInCurrentContext(addr);
+
+    let codeSize = bytearray_get256(calldata, 4+2*32);
+    if bytearray_size(calldata) < 4 + 3*32 + codeSize {
+        evmOp_revert_knownPc(62, 0, 0);
+    }
+    let code = bytearray_extract(calldata, 4+3*32, codeSize);
+
+    let (startCodePoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(code), false);
+
+    account = account_setContractInfo(
+        account,
+        code,
+        evmJumpTable,
+        startCodePoint,
+        if let Some(storage) = account_getAllStorage(account) {
+            storage
+        } else {
+            storageMap_new()
+        },
+        false,
+    );
+
+    evmCallStack_setAccountInCurrentContext(addr, account);
+    evmOp_return(0, 0);
+}
+
+view write func arbosTest_setState(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if evmCallFrame_getCaller(topFrame) != address(0) {
+        evmOp_revert_knownPc(70, 0, 0);
+    }
+    if bytearray_size(calldata) < 4+3*32 {
+        evmOp_revert_knownPc(71, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let account =  evmCallStack_getAccountInCurrentContext(addr);
+
+    let storageSize = bytearray_get256(calldata, 4 + 2*32);
+    if bytearray_size(calldata) < 4+3*32 + storageSize {
+        evmOp_revert_knownPc(72, 0, 0);
+    }
+    let stateStorage = bytearray_extract(calldata, 4 + 3*32, storageSize);
+
+    if let Some(storage) = storageMap_deserialize(stateStorage) {
+        account = account_setStorage(account, storage);
+    } else {
+        evmOp_revert_knownPc(73, 0, 0);
+    }
+    evmCallStack_setAccountInCurrentContext(addr, account);
+    evmOp_return(0, 0);
+}
+
+view write func arbosTest_store(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if evmCallFrame_getCaller(topFrame) != address(0) {
+        evmOp_revert_knownPc(80, 0, 0);
+    }
+    if bytearray_size(calldata) != 4+3*32 {
+        evmOp_revert_knownPc(81, 0, 0);
+    }
+
+    let addr = address(bytearray_get256(calldata, 4));
+    let account =  evmCallStack_getAccountInCurrentContext(addr);
+
+    let key = bytearray_get256(calldata, 4+32);
+    let val = bytearray_get256(calldata, 4+32*2);
+    account = if let Some(resaccount) = account_setStorageCell(account, key, val) {
+        resaccount
+    } else {
+        let storage = storageMap_new();
+        storage = storageMap_set(storage, key, val);
+        account_setStorage(account, storage)
+    };
+    evmCallStack_setAccountInCurrentContext(addr, account);
+
     evmOp_return(0, 0);
 }

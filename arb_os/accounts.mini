@@ -12,6 +12,7 @@ use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_setByte;
 use std::bytestream::bytestream_new;
 use std::bls::BLSKey;
+use std::codeSegment::getDummyAcceptContractCode;
 use std::keccak::keccak256;
 use std::storageMap::StorageMap;
 use std::storageMap::storageMap_new;
@@ -31,7 +32,6 @@ use std::codeSegment::translateEvmCodeSegment;
 use decompression::AggregatorDecompressionState;
 use evmCallStack::evmCallStack_addStorageCharge;
 use evmCallStack::evmCallStack_isEmpty;
-
 
 type AccountStore = struct {
     accounts: map<address, Account>,
@@ -356,6 +356,29 @@ public func account_setBaseTxFeeL1Gas(account: Account, fee: uint) -> Account {
                     decompressionState: None,
                     feeCollector: account.addr,
                     baseTxFeeL1Gas: fee,
+                }
+            }
+        )
+    }
+}
+
+public view func account_setStorage(account: Account, storage: StorageMap) -> Account {
+    account with {
+        contractInfo: Some(
+            if let Some(contractInfo) = account.contractInfo {
+                contractInfo with {
+                    storage: storage
+                }
+            } else {
+                let fakeCode = bytearray_new(0);
+                fakeCode = bytearray_setByte(fakeCode, 0, 0xfe);
+                struct {
+                    contractStateVersion: const::ContractStateVersion_current,
+                    code: fakeCode,
+                    evmJumpTable: newmap<uint, view write func()>,
+                    startCodePoint: unsafecast<view write func()>
+                                    (getDummyAcceptContractCode()), // cast due to compiler error
+                    storage: storage,
                 }
             }
         )
