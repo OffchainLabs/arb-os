@@ -55,7 +55,6 @@ impl Effects for Opcode {
             TupleSet(..) => vec![ReadStack, PopStack, ReadStack, PopStack, PushStack],
             GetGlobalVar(..) => vec![ReadGlobal, PushStack],
             SetGlobalVar(..) => vec![ReadStack, PopStack, WriteGlobal],
-            UncheckedFixedArrayGet(..) => vec![Unsure],
             CjumpTo(..) => vec![ReadStack, PopStack, ReadStack, PopStack, WritePC],
             JumpTo(..) => vec![ReadStack, PopStack, WritePC],
             Return => vec![WritePC],

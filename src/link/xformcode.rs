@@ -85,33 +85,6 @@ pub fn fold_tuples(
                 code_out.push(opcode!(AuxPop));
                 code_out.push(opcode!(Jump));
             }
-            Opcode::UncheckedFixedArrayGet(sz) => {
-                let tup_size_val = Value::Int(Uint256::from_usize(TUPLE_SIZE));
-                let mut remaining_size = sz;
-                while remaining_size > TUPLE_SIZE {
-                    //TODO: can probably make this more efficient
-                    // stack: idx arr
-                    code_out.push(opcode!(Dup1, tup_size_val.clone()));
-                    code_out.push(opcode!(Mod));
-                    code_out.push(opcode!(Swap1));
-
-                    // stack: idx slot arr
-                    code_out.push(opcode!(Swap1, tup_size_val.clone()));
-                    code_out.push(opcode!(Div));
-
-                    // stack: subindex slot arr
-                    code_out.push(opcode!(Swap2));
-                    code_out.push(opcode!(Swap1));
-
-                    // stack: slot arr subindex
-                    code_out.push(opcode!(Tget));
-                    code_out.push(opcode!(Swap1));
-
-                    // stack: subindex subarr
-                    remaining_size = (remaining_size + (TUPLE_SIZE - 1)) / TUPLE_SIZE;
-                }
-                code_out.push(opcode!(Tget));
-            }
             _ => {
                 code_out.push(insn.clone());
             }

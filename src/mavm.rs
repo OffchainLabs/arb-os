@@ -960,7 +960,6 @@ pub enum Opcode {
     GetGlobalVar(usize),               // gets a global variable at a global index
     SetGlobalVar(usize),               // sets a global variable at a global index
     BackwardLabelTarget(usize),        // sets up a backward label as indexed by the jump table
-    UncheckedFixedArrayGet(usize),     // arg is size of array
     Label(Label),                      // a location in code
     JumpTo(Label),                     // Like a Jump, but with info about where it'll go
     CjumpTo(Label),                    // Like a Cjump, but with info about where it'll go
@@ -1153,7 +1152,6 @@ impl Opcode {
             Self::JumpTo(..) => 4,
             Self::CjumpTo(..) => 4,
             Self::Return => 7,
-            Self::UncheckedFixedArrayGet(size) => 2 + 16 * (size / 8),
             Self::MoveLocal(dest, source) => {
                 if dest == source {
                     0
@@ -1347,7 +1345,6 @@ impl Opcode {
             Opcode::Pop(_) => "PopN",
             Opcode::TupleGet(_, _) => "TupleGet",
             Opcode::TupleSet(_, _) => "TupleSet",
-            Opcode::UncheckedFixedArrayGet(_) => "UncheckedFixedArrayGet",
             Opcode::Return => "return",
             Opcode::FuncCall(_) => "FuncCall",
             _ => "to_name() not implemented",

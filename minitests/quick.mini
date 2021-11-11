@@ -23,6 +23,8 @@ write func main() {
 func test_1() -> option<string> {
 
     let a = 32;
+    let b = newfixedarray(0);
+    let c = b;
 
     if a == 32 {
         return None;

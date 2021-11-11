@@ -649,52 +649,6 @@ impl BasicGraph {
 
         let nodes: Vec<_> = self.graph.node_indices().collect();
 
-        // See if there's any simple local substitutions we can make
-        let mut known_locals = BTreeMap::new();
-        for node in &nodes {
-            if let Some(values) = graphs.get(node) {
-                known_locals.extend(values.known_locals());
-            }
-        }
-        // Give up on phi'd & phi'ing values. A future extension of this algo could handle them,
-        // but it's not as trivial as it may seem.
-        known_locals = known_locals
-            .into_iter()
-            .filter(|(slot, _)| !phid.contains(slot) && !phis.contains_key(slot))
-            .collect();
-
-        for &node in &nodes {
-            let mut block = self.graph[node].get_code_mut();
-            for index in 0..block.len() {
-                match block[index].opcode {
-                    Opcode::GetLocal(slot) => {
-                        if let Some(value) = known_locals.get(&slot) {
-                            let mut insn = block.get_mut(index).unwrap();
-                            insn.opcode = Opcode::AVMOpcode(AVMOpcode::Noop);
-                            insn.immediate = Some(value.clone());
-                        }
-                    }
-                    Opcode::SetLocal(slot) => {
-                        if let Some(_) = known_locals.get(&slot) {
-                            let mut insn = block.get_mut(index).unwrap();
-                            insn.opcode = Opcode::AVMOpcode(AVMOpcode::Pop);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-
-            if !graphs.contains_key(&node) {
-                continue;
-            }
-
-            if let Some(value_graph) = ValueGraph::new(&block, &phis) {
-                graphs.insert(node, value_graph);
-            }
-        }
-
-        show_all!();
-
         if self.cyclic {
             // While there's a reasonable path toward making the rest work for
             // loops, these are rare and so we'll restrict our analysis to DAG's.
@@ -717,7 +671,7 @@ impl BasicGraph {
         let mut defs = HashMap::new(); // the assigner for each assignment
         let mut uses = HashMap::new(); // the users for each assignment
         let mut dels = HashMap::new(); // the dropper for each assignment
-        for node in self.graph.node_indices() {
+        for &node in &nodes {
             for curr in self.graph[node].get_code() {
                 match curr.opcode {
                     Opcode::SetLocal(slot) => {
@@ -764,8 +718,6 @@ impl BasicGraph {
             .into_iter()
             .filter(|(slot, _)| !phid.contains(slot) && !phis.contains_key(slot))
             .collect();
-
-        //defs = defs.into_iter().take(2).collect();
 
         // Stacking a local means moving it from the aux stack to the data stack.
         // Using the stack'd value means passing it from value graph to value graph as an arg.
@@ -903,8 +855,31 @@ impl BasicGraph {
 
         show_all!();
 
-        for (node, values) in &graphs {
-            self.graph[*node] = BasicBlock::Code(values.codegen(optimization_level).0);
+        
+        let mut prior_cost = 0;
+        let mut after_cost = 0;
+        let mut reduced = HashMap::new();
+
+        for &node in &nodes {
+            // For blocks where graph reduce applies, tabulate how much better they perform.
+            // If it turns out the new code is worse, we won't commit the optimization.
+            
+            if let Some(values) = graphs.get(&node) {
+
+                let prior_code = self.graph[node].get_code();
+                
+                let (code, cost) = values.codegen(optimization_level);
+                reduced.insert(node, code);
+                
+                prior_cost += prior_code.iter().map(|x| x.opcode.base_cost()).sum::<usize>();
+                after_cost += cost;
+            }
+        }
+
+        if after_cost < prior_cost {
+            for (node, code) in &reduced {
+                self.graph[*node] = BasicBlock::Code(code.to_vec());
+            }
         }
     }
 }
