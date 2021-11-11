@@ -5,6 +5,8 @@
 use std::biguint::biguint_equal;
 use std::biguint::biguint_fromUint;
 use std::biguint::biguint_modexp;
+use std::biguint::biguint_toBytes;
+use std::biguint::biguint_fromBytes;
 
 use std::queue::queue_new;
 use std::queue::queue_isEmpty;
@@ -12,7 +14,16 @@ use std::queue::queue_put;
 use std::queue::queue_get;
 use std::queue::queue_size;
 
-write func main() {
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_get256;
+
+use std::keccak::keccak256;
+
+var entropy: ByteArray;
+
+view write func main() {
     if let Some(res) = test() {
 	asm(res) { log };
     } else {
@@ -20,39 +31,55 @@ write func main() {
     }
 }
 
-func test() -> option<any> {
+view write func test() -> option<any> {
 
     let q = queue_new();
 
     q = queue_put(q, (
-        0, // base
-        1, // exponent
-        1, // modulus
-        0, // expected result
+        biguint_fromUint(0), // base
+        biguint_fromUint(1), // exponent
+        biguint_fromUint(1), // modulus
+        biguint_fromUint(0), // expected result
     ));
 
     q = queue_put(q, (
-        3,
-        0xc19139cb84c680a6e14116da060561765e05aa45a1c72a34f082305b61f3f52,
-        0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47,
-        0xb3c4d79d41a91759a9e4c7e359b6b89eaec68e62effffffd,
+        biguint_fromUint(0x10001),
+        biguint_fromUint(0xccf4d91acbdba9e9795b09c107816a4538d193be735e2aef192d49bc86e179ad),
+        biguint_fromUint(0x73753b483ae0f07b9ad7fab2932e47bc8a67fa44d848770b26de2140aedf9996),
+        biguint_fromUint(0x595368ed0128efa3fb81d46fbfec3ef263055b883fea4813b19b87cc218e8731),
     ));
 
     q = queue_put(q, (
-        0x10001,
-        0xccf4d91acbdba9e9795b09c107816a4538d193be735e2aef192d49bc86e179ad,
-        0x73753b483ae0f07b9ad7fab2932e47bc8a67fa44d848770b26de2140aedf9996,
-        0xccf4d91acbdba9e9795b09c107816a4538d193be735e2aef192d49bc86e179ad,
+        biguint_fromBytes({
+            let base = bytearray_new(0);
+            base = bytearray_set256(base,  0, 0x630f4bef8d4648e496b55384a8373cde2f2abcf9cf542436cfc69b884ae8840e);
+            base = bytearray_set256(base, 32, 0x5726f10727c325c3be1cb08931c7bf42b9d163c9ecedd30abeec31d654ec3790);
+            base
+        }),
+        biguint_fromBytes({
+            let exp = bytearray_new(0);
+            exp = bytearray_set256(exp,  0, 0xccf4d91acbdba9e9795b09c107816a4538d193be735e2aef192d49bc86e179ad);
+            exp = bytearray_set256(exp, 32, 0xccf4d91acbdba9e9795b09c107816a4538d193be735e2aef192d49bc86e179ad);
+            exp
+        }),
+        biguint_fromBytes({
+            let mod = bytearray_new(0);
+            mod = bytearray_set256(mod,  0, 0x73753b483ae0f07b9ad7fab2932e47bc8a67fa44d848770b26de2140aedf9996);
+            mod = bytearray_set256(mod, 32, 0x73753b483ae0f07b9ad7fab2932e47bc8a67fa44d848770b26de2140aedf9996);
+            mod
+        }),
+        biguint_fromBytes({
+            let res = bytearray_new(0);
+            res = bytearray_set256(res,  0, 0x521c7db3320c62d2c9e27e53ecbc07105a0c2604d3c38828301391b747a149f8);
+            res = bytearray_set256(res, 32, 0xeb04d256a17429f1590942d176b1fe89f600926a47b8a5874c1444180ef6a3e2);
+            res
+        })
     ));
 
     while !queue_isEmpty(q) {
         let (*q, case) = queue_get(q)?;
-        let case = unsafecast<(uint, uint, uint, uint)>(case);
-        
-        let base     = biguint_fromUint(case.0);
-        let exponent = biguint_fromUint(case.1);
-        let modulus  = biguint_fromUint(case.2);
-        let expected = biguint_fromUint(case.3);
+        let case = unsafecast<([]uint, []uint, []uint, []uint)>(case);
+        let (base, exponent, modulus, expected) = case;
 
         let result = biguint_modexp(base, exponent, modulus)?;
         if !biguint_equal(result, expected) {
@@ -60,5 +87,47 @@ func test() -> option<any> {
         }
     }
 
+    entropy = bytearray_new(0);
+    entropy = bytearray_set256(entropy, 0, 4);
+
+    let rand = view write closure(bound: uint) -> uint {
+        let keccak = uint(keccak256(entropy, 0, 32));
+        entropy = bytearray_set256(entropy, 0, keccak);
+        bytearray_get256(entropy, 0) % bound
+    };
+
+    let rand_bytes = view write closure(lower: uint, upper: uint) -> []uint {
+        let bytes = bytearray_new(0);
+        let i = 0;
+        let length = lower + rand(upper - lower);
+        while i < length {
+            bytes = bytearray_set256(bytes, i*32, bytearray_get256(entropy, rand(1)));
+            i = i + 1;
+        }
+        biguint_fromBytes(bytes)
+    };
+    
+    let rounds = 10000000;
+    let step = 0;
+    while step < rounds {
+        debug(("round".1, step, "of".1, rounds, entropy.contents));
+
+        let base = rand_bytes(1, 4);
+        let exponent = rand_bytes(1, 4);
+        let modulus = rand_bytes(1, 4);
+
+        let modexp = biguint_toBytes(biguint_modexp(base, exponent, modulus)?);
+
+        let hashed = keccak256(modexp, 0, modexp.size);
+
+        entropy = bytearray_set256(entropy, 0, uint(hashed));
+
+        step = step + 1;
+    }
+
+    debug(entropy.contents);
+
+    return Some(entropy);
+    
     Some(0)
 }
