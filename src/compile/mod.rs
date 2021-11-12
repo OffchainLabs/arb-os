@@ -52,7 +52,7 @@ pub struct CompileStruct {
     pub warnings_are_errors: bool,
     #[clap(short, long)]
     pub output: Option<String>,
-    #[clap(short = 'O', long, default_value = "0")]
+    #[clap(short = 'O', long, default_value = "1024")]
     pub optimization_level: usize,
     #[clap(short, long)]
     pub format: Option<String>,

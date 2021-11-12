@@ -78,7 +78,7 @@ impl Effects for Opcode {
                 }
                 effects
             }
-            Pop(depth) => {
+            Pop(_) => {
                 let code = vec![Instruction::from(self.clone())];
                 let code = translate::expand_pops(code);
                 code.into_iter()

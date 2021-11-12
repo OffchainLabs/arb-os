@@ -274,6 +274,7 @@ impl ValueGraph {
 
         let mut graph = StableGraph::new();
         let mut locals = BTreeMap::new();
+        let mut local_reads = HashMap::new();
 
         let mut globals = graph.add_node(ValueNode::Meta("globals"));
         let mut global_readers = BTreeSet::new();
@@ -359,6 +360,8 @@ impl ValueGraph {
                             }
                         };
 
+                        local_reads.entry(slot).or_insert(vec![]).push(node);
+
                         if stacked.contains(&slot) {
                             // The local has been stack'd, so rather than creating a meta edge,
                             // which just ensures ordering, we instead cause future Push effects
@@ -435,25 +438,26 @@ impl ValueGraph {
             graph.add_edge(source, dest, ValueEdge::Meta("φ"));
         }
 
-        // represents stack'd locals that need to be dropped
-        let drop_locals = graph.add_node(ValueNode::Drop(unstack.len()));
-        for (index, slot) in unstack.iter().enumerate() {
+        // represents the output of the graph just before exiting
+        let output = graph.add_node(ValueNode::Meta("output"));
+
+        //
+        let mut drops = HashMap::new();
+        for slot in unstack.iter() {
+            stacked.remove(slot);
+
+            let drop = graph.add_node(ValueNode::Drop(1));
             let local = *locals.get(slot).unwrap();
 
             for node in neighbors(&graph, local) {
                 // the drop must occur after all uses of the local
-                graph.add_edge(drop_locals, node, ValueEdge::Order);
+                graph.add_edge(drop, node, ValueEdge::Order);
             }
 
-            graph.add_edge(drop_locals, local, ValueEdge::Connect(index));
-            stacked.remove(slot);
+            graph.add_edge(drop, local, ValueEdge::Connect(0));
+            graph.add_edge(output, drop, ValueEdge::Meta("drop"));
+            drops.insert(slot, drop);
         }
-
-        // represents the output of the graph just before exiting
-        let output = graph.add_node(ValueNode::Meta("output"));
-
-        // drop the locals we'll never use again right at the end
-        graph.add_edge(output, drop_locals, ValueEdge::Meta("drops"));
 
         /// Give up and print the value graph
         macro_rules! bail {
@@ -509,8 +513,8 @@ impl ValueGraph {
         }
 
         // state updates are part of the output
-        for (_, local) in locals {
-            graph.add_edge(output, local, ValueEdge::Meta("locals"));
+        for (_, local) in &locals {
+            graph.add_edge(output, *local, ValueEdge::Meta("locals"));
         }
         graph.add_edge(output, globals, ValueEdge::Meta("globals"));
 
@@ -596,6 +600,22 @@ impl ValueGraph {
         fold_constants(&mut graph);
         prune_graph(&mut graph, output);
 
+        for slot in unstack.iter() {
+            let consumed = local_reads
+                .get(slot)
+                .into_iter()
+                .flatten()
+                .any(|node| graph.contains_node(*node));
+            if consumed {
+                // Since there exists a node that consumes the stack'd value,
+                // we don't need an explicit drop. The last consumer will, in
+                // effect, unstack it for us when codegen sees no future use.
+                graph.remove_node(*drops.get(slot).unwrap());
+            }
+        }
+
+        prune_graph(&mut graph, output);
+
         if algo::is_cyclic_directed(&graph) {
             // By construction, a value graph is a DAG.
             // Each edge represents a dependency: compute this to compute that.
@@ -613,40 +633,6 @@ impl ValueGraph {
         };
 
         Some(values)
-    }
-
-    pub fn known_locals(&self) -> BTreeMap<SlotNum, Value> {
-        let mut known = BTreeMap::new();
-        let graph = &self.graph;
-
-        let locals = self
-            .graph
-            .node_indices()
-            .filter_map(|node| match &graph[node] {
-                ValueNode::Local(slot) => Some((*slot, node)),
-                _ => None,
-            });
-
-        for (slot, local) in locals {
-            let (deps, _, dep_edges, _) = node_data(&graph, local);
-            for (dep, edge) in deps.into_iter().zip(dep_edges.into_iter()) {
-                if let ValueEdge::Meta("write") = &graph[edge] {
-                    // We have our SetLocal. Now see if we know the value it read.
-                    let read = node_data(&graph, dep).0[0];
-                    match &graph[read] {
-                        ValueNode::Value(Value::Label(_)) => {
-                            // we can't do labels since this could induce a backwards jump
-                        }
-                        ValueNode::Value(value) => {
-                            known.insert(slot, value.clone());
-                        }
-                        _ => {}
-                    }
-                    break;
-                }
-            }
-        }
-        known
     }
 
     /// Flatten a `ValueGraph` into an efficient block of equivalent instructions
@@ -701,48 +687,6 @@ impl ValueGraph {
         }
 
         let mut entropy: SmallRng = SeedableRng::seed_from_u64(0);
-
-        /*let mut layout = HashMap::new();
-
-
-        fn optimize_layout(
-            node: NodeIndex,
-            graph: &StableGraph<ValueNode, ValueEdge>,
-            stack: &mut Vec<NodeIndex>,
-            layout: &mut HashMap<NodeIndex, (usize, Vec<EdgeIndex>, Vec<NodeIndex>)>,
-            //entropy: &mut SmallRng,
-        ) {
-            let mut deps: Vec<_> = graph.edges_directed(node, Direction::Outgoing).collect();
-
-            for perm in deps.iter().permutations(deps.len()).take(120) {
-
-                for edge in &perm {
-                    let input = edge.target();
-                    if !layout.contains_key(&input) {
-                        optimize_layout(input, graph, stack, layout);
-                    }
-                }
-
-            }
-
-            for edge in &deps {
-                let input = edge.target();
-                if !layout.contains_key(&input) {
-                    optimize_layout(input, graph, stack, layout);
-                }
-            }
-
-            let mut cost = usize::MAX;
-            let mut best = vec![];
-            let mut stack = vec![];
-
-            //
-
-
-            layout.insert(node, (cost, best, stack));
-        }
-
-        optimize_layout(self.output, &graph, &mut stack.clone(), &mut layout);*/
 
         /// Walk the `ValueGraph`, building the instructions in a bottom-up manner.
         fn descend(

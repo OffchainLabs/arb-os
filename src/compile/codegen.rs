@@ -591,19 +591,19 @@ fn codegen(
                             cgen.code.push(opcode!(Dup1, tup_size_val.clone()));
                             cgen.code.push(opcode!(Mod));
                             cgen.code.push(opcode!(Swap1));
-                            
+
                             // stack: idx slot arr
                             cgen.code.push(opcode!(Swap1, tup_size_val.clone()));
                             cgen.code.push(opcode!(Div));
-                            
+
                             // stack: subindex slot arr
                             cgen.code.push(opcode!(Swap2));
                             cgen.code.push(opcode!(Swap1));
-                            
+
                             // stack: slot arr subindex
                             cgen.code.push(opcode!(Tget));
                             cgen.code.push(opcode!(Swap1));
-                            
+
                             // stack: subindex subarr
                             *size = (*size + (TUPLE_SIZE - 1)) / TUPLE_SIZE;
                         }

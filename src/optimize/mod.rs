@@ -855,7 +855,6 @@ impl BasicGraph {
 
         show_all!();
 
-        
         let mut prior_cost = 0;
         let mut after_cost = 0;
         let mut reduced = HashMap::new();
@@ -863,15 +862,17 @@ impl BasicGraph {
         for &node in &nodes {
             // For blocks where graph reduce applies, tabulate how much better they perform.
             // If it turns out the new code is worse, we won't commit the optimization.
-            
-            if let Some(values) = graphs.get(&node) {
 
+            if let Some(values) = graphs.get(&node) {
                 let prior_code = self.graph[node].get_code();
-                
+
                 let (code, cost) = values.codegen(optimization_level);
                 reduced.insert(node, code);
-                
-                prior_cost += prior_code.iter().map(|x| x.opcode.base_cost()).sum::<usize>();
+
+                prior_cost += prior_code
+                    .iter()
+                    .map(|x| x.opcode.base_cost())
+                    .sum::<usize>();
                 after_cost += cost;
             }
         }
