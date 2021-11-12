@@ -14,12 +14,12 @@ A Mini source code file consists of a series of top-level declarations.
 An optional file scope attribute declaration sets an attribute for the whole file.
 Use declarations make functions and types from other files usable in the file they are contained in.
 Constant declarations add a constant.
-If present, a file scope attribute declaration must be the first declaration in the file, and only one file scope attribute delcaration may be present.
-See the Attributes section for more details.
 Use and constant declarations together form head declarations.
 Body declarations are any other declaration.
 
-The head declarations must come before all other declarations. It is an error to put a head declaration after a body declaration.
+The head declarations must come before all other declarations. It is an error to put a head declaration after a body declaration
+If present, a file scope attribute declaration must be the first declaration in the file, and only one file scope attribute delcaration may be present.
+See the Attributes section for more details.
 
 Within each group the order of declarations does not matter.
 
