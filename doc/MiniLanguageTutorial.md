@@ -76,18 +76,18 @@ Within each group the order of declarations does not matter.
 
 ## Global State
 
-> Global state is state that can be accessed anywhere in the system, this consists of global variables, system gas, the inbox, the log, the error codepoint, and the register.
-> 
-> `View` operations consist of: calling a `view` function, reading a global variable, getting the system gas, and calling an inline assembly expression that uses any `view` instructions.
-> 
-> `Write` operations include: calling a `write` function, assigning to a global variable, setting the system gas, and calling an inline assembly expression that uses any `write` instructions
-> 
-> Instructions that are both `view` and `write` are
-> `inbox`, `inboxpeek`, `pushinsn`, `pushinsnimm`, `sideload`, `jump`, `cjump`, `auxpop`, and `auxpush`.
->
-> `Write` instructions that are not `view` are `log`, `send`, `rset`, `errset`, and `setgas`.
-> 
-> `View` instructions that are not `write` are `rpush`, `errcodepoint`, `errpush`, and `pushgas`.
+Global state is state that can be accessed anywhere in the system, this consists of global variables, system gas, the inbox, the log, the error codepoint, and the register.
+
+`View` operations consist of: calling a `view` function, reading a global variable, getting the system gas, and calling an inline assembly expression that uses any `view` instructions.
+
+`Write` operations include: calling a `write` function, assigning to a global variable, setting the system gas, and calling an inline assembly expression that uses any `write` instructions
+
+Instructions that are both `view` and `write` are
+`inbox`, `inboxpeek`, `pushinsn`, `pushinsnimm`, `sideload`, `jump`, `cjump`, `auxpop`, and `auxpush`.
+
+`Write` instructions that are not `view` are `log`, `send`, `rset`, `errset`, and `setgas`.
+
+`View` instructions that are not `write` are `rpush`, `errcodepoint`, `errpush`, and `pushgas`.
 
 
 ## Types
