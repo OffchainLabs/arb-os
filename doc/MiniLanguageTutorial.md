@@ -38,18 +38,17 @@ Within each group the order of declarations does not matter.
 
 `type` *name* (`<` *ident1*, *ident2*, ... `>`)? = *type* `;`
 
-> This declares a type alias, allowing name to be used as a synonym for the specified type. 
+> This declares a type alias or generic type, allowing name to be used as a synonym for the specified type or as a generic type. 
 > If `<` *ident1*, *ident2*, ... `>` is included, the type will be generic with *ident1*, *ident2*, etc as type variables.
-> In generic types the type variables will be available in the definition of *type*, in any place a nominal type would be valid, and will be replaced by concrete types in specializations.
+> In generic types the type variables will be available in the definition of *type*, in any place a nominal type would be valid, and will be replaced by other types in specialization.
+> See the Generics section for more details.
 
 *Attributes*? `var` *name* `:` *type* `;`
 
 > This declares a global variable. The variable will be initially assigned the default value for the type.
-> Please see the Default Values section for more details. Please see the Attributes section for more details about *Attributes*.
+> Please see the Default Values and Attributes sections for more details. 
 
-*Attributes*? [ `view` | `write` | `public` ]* `func` *name* ( *argname1: type1, argname2: type2, ...* ) [-> *returntype*] *codeblock*
-
-*Attributes*? [ `view` | `write` | `public` ]* `func` *name* ( *argname1: type1, argname2: type2, ...* ) `noreturn` *codeblock*
+*Attributes*? [ `view` | `write` | `public` ]* `func` *name* ( *argname1: type1, argname2: type2, ...* ) [-> *returntype* | `noreturn`] *codeblock*
 
 > This declares a function and provides its code.
 > 
@@ -61,6 +60,8 @@ Within each group the order of declarations does not matter.
 >
 > The `write` modifier indicates that the function writes to global state or calls other `write` functions. It is possible to create a `write` function that does not read global state, but the compiler throw a warning in this case. 
 >
+> Any duplicate modifiers are ignored.
+> 
 > The arguments are treated as local variables within the function, so code in the function can read them or assign to them.
 >
 > If there is a return type specified, the function will return a single value of the specified type. (We'll see below that the type can be a tuple, allowing multiple values to be packaged together into a single return value.)
