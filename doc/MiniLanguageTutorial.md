@@ -92,29 +92,29 @@ Instructions that are both `view` and `write` are
 
 ## Types
 
-Mini is a type-checked language.  The compiler should catch any inconsistent use of types. We believe there are only two ways that type errors can go undetected by the compiler, incorrect uses of the `unsafecast` or `unioncast` operators, or `asm` expressions.
+Mini is a type-checked language.  The compiler should catch any inconsistent use of types. We believe the only ways that type errors can go undetected by the compiler are incorrect uses of the `unsafecast` or `unioncast` operators, or `asm` expressions.
 
 Mini has the following types:
 
 `bool`
 
-> true or false (an atomic type with the zero value `false`)
+> `true` or `false` (an atomic type with the zero value `false`)
 
 `uint`
 
-> a 256-bit unsigned big-endian integer (an atomic type with the zero value `0`, and a numeric type)
+> a 256-bit unsigned big-endian integer.
 
 `int`
 
-> a 256-bit signed (twos complement) big-endian integer (an atomic type with the zero value `0`, and a numeric type)
+> a 256-bit signed (twos complement) big-endian integer.
 
 `bytes32`
 
-> a string of 32 bytes (an atomic type with the zero value of 32 zero bytes)
+> a string of 32 bytes.
 
 `address`
 
-> a 20-byte Ethereum address, can hold any value between 0 and `2^160-1`
+> a 20-byte Ethereum address, can hold any value between `0` and `2^160-1`.
  
 `buffer`
 
@@ -125,28 +125,29 @@ Mini has the following types:
 `void`
 
 > Represents a lack of a type, it is the implicit return type of functions with no return type.
+> This type can cause bugs when embedded in other types.
 
 `string`
 
 > Represents a string of text. Internally, this is represented by `(uint, buffer)`, with the `uint` representing the length of the string, and the `buffer` representing the raw data.
 
-( *type1*, *type2*, ... )
+`(` *type1*`,` *type2*`,` ... `)`
 
 > a tuple, consisting of zero or more ordered, typed fields (a compound type)
 
-[ *size* ] *type*
+`[` *size* `]` *type*
 
-> a fixed-size array of values, all of the same type; *size* must be a constant nonzero unsigned integer (a compound type)
+> a fixed-size array of values, all of the same type; *size* must be a constant unsigned integer (a compound type)
 
-[ ] *type*
+`[]` *type*
 
 > an array of values, all of the same type (a compound type)
 
-`map` < *type* , *type* >
+`map` `<` *type* `,` *type* `>`
 
 > a hash map, which maps keys of one type to values of another type
 
-`union<` *type1*, *type2*, ... `>`
+`union<` *type1*`,` *type2*`,` ... `>`
 
 > an untagged union type that can hold values from any of *type1*, *type2*, etc. There must be explicit casts to convert to and from its component types. This is done via `newunion` and `unioncast`.
 
@@ -154,33 +155,37 @@ Mini has the following types:
 
 > a struct with one or more named, typed fields (a compound type)
 
-`option`< *type* >
+`option` `<` *type* `>`
 
 > Either `Some(`*value*`)` or `None<`*type*`>`, where *value* represents an arbitrary value of type *type*. 
 > The specific variant being used can be determined by `if let` and `?`.
-> The shortcut `None` can be used to create a value of `None<every>`, which is assignable to all `None<`T`>` for any type T.
+> The shortcut `None` can be used to create a value of `None<every>`, which is assignable to all `None<`*T*`>` for any type *T*.
 > The term "inner type" refers to the type specified by *type*.
 
-[ `view` | `write` | `public` ]* `func` ( *type1, type2, ...*) (-> *returntype*)?
+[ `view` | `write` | `public` ]* `func` ( *type1, type2, ...*) (`->` *returntype*)?
 
-[ `view` | `write` ] `closure` `(` *type*, *type*, ... `)` (`->` *returntype*`)?
+[ `view` | `write` | `public` ]* `closure` `(` *type*, *type*, ... `)` (`->` *returntype*)?
 
 > A reference to a function, while `public` can be included a type declaration, it has no effect on the internal type.
-> The use of `public` may be removed in the future, so it is recommended to not use it.
+> The use of `public` may be removed in the future, so it is recommended to not use it. 
+> While `view`, `write`, and `public` may each be used multiple times, the duplicate instances are ignored.
+> The ability to use duplicates of `view`, `write`, and `public` may be removed in the future.
 
 *ident*
 
-> A nominal type or a type variable. It is only treated as a type variable in the context of a generic type or function,
+> A nominal type or a type variable. It can only be treated as a type variable in the context of a generic type or function,
 > and only if that identifier is listed as one of the type variables of that generic type or function. 
-> Otherwise, it is treated as a nominal type, if that nominal type is not defined in the file or is not imported with a use statement, 
+> Otherwise, it is treated as a nominal type. If that nominal type is not defined in the file or is not imported with a use statement, 
 > it is not a valid type and will cause an error.
 > We define the representation of a nominal type to be the type on the right side of the type declaration with the same name as *ident*.
+> The representation of a nominal type impacts the assignability rules of the type among other areas.
 
 *ident* `<` *type1* `,` *type2* `,` ... `>`
 
-> A specialization of a generic type. *ident* must be the name of some generic type, and *type1*, *type2*, ... must be types,
-> and *type1*, *type2*, etc, replace each type variable of *ident* in order of their definition.
-> We define the representation of a specialized generic type to be the type on the right side of the generic type declaration with the same name as *ident*.
+> A specialization of a generic type. *ident* must be the name of some generic type, *type1*, *type2*, ... must be types,
+> and there must be the same number of types listed as there are type variables of *ident*.
+> We define the representation of a specialized generic type to be the type on the right side of the generic type declaration,
+> with *type1*, *type2*, etc, replacing each type variable of *ident* in order of their definition.
 
 `any`
 
