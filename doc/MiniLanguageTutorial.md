@@ -750,7 +750,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
  
 `error`
 
-> Causes the system to error, moving to the error handler. This expresion returns type *every*.
+> Causes the system to error, moving to the error handler. This expresion has type *every*.
 
 `"` [a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~\\/-]* `"`
 
