@@ -56,7 +56,11 @@ impl Computer {
 
         let code = translate::set_error_codepoints(code);
 
-        Ok(Computer { code, labels, HashMap::new() })
+        Ok(Computer {
+            code,
+            labels,
+            cached: HashMap::new(),
+        })
     }
 
     pub fn calc(&self, label: Label, args: Vec<Value>) -> Option<Value> {
