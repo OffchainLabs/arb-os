@@ -5,7 +5,7 @@
 use crate::compile::translate;
 use crate::compile::{CompileError, CompiledFunc};
 use crate::console::Color;
-use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, LabelId, Opcode, Value};
+use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
 use crate::opcode;
 use crate::run::{Machine, MachineState};
 use std::collections::HashMap;
@@ -13,6 +13,7 @@ use std::collections::HashMap;
 pub struct Computer {
     code: Vec<Instruction>,
     labels: HashMap<Label, CodePt>,
+    cached: HashMap<u64, Option<Value>>,
 }
 
 impl Computer {
@@ -42,13 +43,20 @@ impl Computer {
         }
 
         code.extend(vec![
-            opcode!(Error), // protect the accepting state from run-over
+            // protect the accepting state from run-over
+            opcode!(Error),
+            // This is the accepting state. Since no halt's exist in ArbOS, jumping here can be used
+            // to determine if an emulated function has successfully computed a result.
             opcode!(Halt),
+            // The C++ and rust emulators differ when it comes to building segments.
+            // Since we're using rust, we need the final instruction to be the error codepoint,
+            // so that the default value for a codepoint still produces an error when called.
+            opcode!(Error),
         ]);
 
         let code = translate::set_error_codepoints(code);
 
-        Ok(Computer { code, labels })
+        Ok(Computer { code, labels, HashMap::new() })
     }
 
     pub fn calc(&self, label: Label, args: Vec<Value>) -> Option<Value> {
@@ -59,7 +67,9 @@ impl Computer {
 
         let mut machine = Machine::from(self.code.clone());
 
-        let accept = Value::CodePoint(CodePt::Internal(self.code.len() - 1));
+        // Load the accept state as the return destination when jumping.
+        // If the machine reaches this state (i.e. does not error), we have a result.
+        let accept = Value::CodePoint(CodePt::Internal(self.code.len() - 2));
 
         machine.stack.contents.extend(args);
         machine.stack.push(accept);
@@ -68,6 +78,7 @@ impl Computer {
         machine.run(None);
 
         if machine.stack.contents.len() > 1 {
+            println!("Call {}", label.pretty_print(Color::RED));
             for item in &machine.stack.contents {
                 println!("Also {}", item.pretty_print(Color::PINK));
             }

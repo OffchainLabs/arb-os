@@ -290,9 +290,9 @@ pub fn labels_to_codepoints(
         }
     }
 
-    /*if let Some(error) = errors.first() {
-            return Err(error.clone());
-    }*/
+    if let Some(error) = errors.first() {
+        //return Err(error.clone());
+    }
 
     Ok((out, labels))
 }

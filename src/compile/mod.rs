@@ -7,7 +7,7 @@
 use crate::console::Color;
 use crate::link::xformcode;
 use crate::link::{link, postlink_compile, Import, LinkedProgram};
-use crate::mavm::{Instruction, Label, LabelId, Opcode};
+use crate::mavm::{Instruction, Label, LabelId};
 use crate::optimize::{BasicGraph, Computer};
 use crate::pos::{BytePos, Location};
 use crate::stringtable::{StringId, StringTable};
@@ -53,7 +53,7 @@ pub struct CompileStruct {
     pub warnings_are_errors: bool,
     #[clap(short, long)]
     pub output: Option<String>,
-    #[clap(short = 'O', long, default_value = "0")]
+    #[clap(short = 'O', long, default_value = "1024")]
     pub optimization_level: usize,
     #[clap(short, long)]
     pub precompute_functions: bool,
@@ -1085,13 +1085,6 @@ fn codegen_modules(
         }
     }
 
-    let jump_table = GlobalVar::new(
-        usize::MAX,
-        "_jump_table".to_string(),
-        Type::Any,
-        DebugInfo::default(),
-    );
-
     let pure_funcs = work_list
         .par_iter()
         .map(|(func, func_labels, string_table, _, module_path)| {
@@ -1115,8 +1108,8 @@ fn codegen_modules(
             let code = translate::replace_phi_nodes(code);
             let code = xformcode::fold_tuples(code, 0)?;
 
-            // a pure program has no globals other than the jump table
-            //let globals = vec![jump_table.clone()];
+            // a pure program has no globals, not even a jump table since
+            // the emulator can handle backward jumps
             let globals = vec![];
 
             // we won't handle closures so these aren't needed
@@ -1201,7 +1194,12 @@ fn codegen_modules(
     }
 
     let mut globals: Vec<_> = globals.into_iter().map(|x| x.1).collect();
-    globals.push(jump_table);
+    globals.push(GlobalVar::new(
+        usize::MAX,
+        "_jump_table".to_string(),
+        Type::Any,
+        DebugInfo::default(),
+    ));
 
     Ok((funcs, globals))
 }
