@@ -5,9 +5,10 @@
 //! Contains utilities for compiling mini source code.
 
 use crate::console::Color;
+use crate::link::xformcode;
 use crate::link::{link, postlink_compile, Import, LinkedProgram};
-use crate::mavm::{Instruction, Label, LabelId};
-use crate::optimize::BasicGraph;
+use crate::mavm::{Instruction, Label, LabelId, Opcode};
+use crate::optimize::{BasicGraph, Computer};
 use crate::pos::{BytePos, Location};
 use crate::stringtable::{StringId, StringTable};
 use ast::Func;
@@ -52,8 +53,10 @@ pub struct CompileStruct {
     pub warnings_are_errors: bool,
     #[clap(short, long)]
     pub output: Option<String>,
-    #[clap(short = 'O', long, default_value = "1024")]
+    #[clap(short = 'O', long, default_value = "0")]
     pub optimization_level: usize,
+    #[clap(short, long)]
+    pub precompute_functions: bool,
     #[clap(short, long)]
     pub format: Option<String>,
     #[clap(short, long)]
@@ -1082,6 +1085,60 @@ fn codegen_modules(
         }
     }
 
+    let jump_table = GlobalVar::new(
+        usize::MAX,
+        "_jump_table".to_string(),
+        Type::Any,
+        DebugInfo::default(),
+    );
+
+    let pure_funcs = work_list
+        .par_iter()
+        .map(|(func, func_labels, string_table, _, module_path)| {
+            let func_name = func.name.clone();
+            let debug_info = func.debug_info;
+
+            if !func.properties.is_pure() {
+                return Ok(None);
+            }
+
+            let (code, mut label_gen, _) = codegen::mavm_codegen_func(
+                func.clone(),
+                string_table,
+                &HashMap::new(),
+                func_labels,
+                release_build,
+            )?;
+
+            let code = translate::expand_calls(code, &mut label_gen);
+            let code = translate::untag_jumps(code);
+            let code = translate::replace_phi_nodes(code);
+            let code = xformcode::fold_tuples(code, 0)?;
+
+            // a pure program has no globals other than the jump table
+            //let globals = vec![jump_table.clone()];
+            let globals = vec![];
+
+            // we won't handle closures so these aren't needed
+            let captures = HashMap::new();
+            let frame_size = 0;
+
+            Ok(Some(CompiledFunc::new(
+                func_name,
+                module_path.to_vec(),
+                code,
+                captures,
+                frame_size,
+                globals,
+                type_tree.clone(),
+                debug_info,
+            )))
+        })
+        .collect::<Result<Vec<Option<CompiledFunc>>, CompileError>>()?;
+
+    let pure_funcs: Vec<CompiledFunc> = pure_funcs.into_iter().filter_map(|x| x).collect();
+    let computer = Computer::new(pure_funcs)?;
+
     let mut funcs = work_list
         .into_par_iter()
         .map(|(func, func_labels, string_table, globals, module_path)| {
@@ -1099,7 +1156,7 @@ fn codegen_modules(
             let mut graph = BasicGraph::new(code);
 
             graph.pop_useless_locals();
-            graph.graph_reduce(optimization_level);
+            graph.graph_reduce(&computer, optimization_level);
             graph.color(frame_size, optimization_level);
             let frame_size = graph.shrink_frame();
 
@@ -1112,7 +1169,7 @@ fn codegen_modules(
 
             let globals: Vec<_> = globals.into_iter().map(|g| g.1).collect();
 
-            let prog = CompiledFunc::new(
+            Ok(CompiledFunc::new(
                 func_name,
                 module_path,
                 code,
@@ -1121,9 +1178,7 @@ fn codegen_modules(
                 globals,
                 type_tree.clone(),
                 debug_info,
-            );
-
-            Ok(prog)
+            ))
         })
         .collect::<Result<Vec<CompiledFunc>, CompileError>>()?;
 
@@ -1146,12 +1201,7 @@ fn codegen_modules(
     }
 
     let mut globals: Vec<_> = globals.into_iter().map(|x| x.1).collect();
-    globals.push(GlobalVar::new(
-        usize::MAX,
-        "_jump_table".to_string(),
-        Type::Any,
-        DebugInfo::default(),
-    ));
+    globals.push(jump_table);
 
     Ok((funcs, globals))
 }
@@ -1326,6 +1376,18 @@ impl CompileError {
             title: String::from("Codegen Error"),
             description: description.to_string(),
             locations: location.into_iter().collect(),
+            is_warning: false,
+        }
+    }
+
+    pub fn internal<S>(description: S, locations: Vec<Location>) -> Self
+    where
+        S: std::string::ToString,
+    {
+        CompileError {
+            title: String::from("Internal Error"),
+            description: description.to_string(),
+            locations,
             is_warning: false,
         }
     }

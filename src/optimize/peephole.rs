@@ -3,7 +3,7 @@ use crate::mavm::{Instruction, Opcode};
 
 pub fn filter_pair(code: Vec<Instruction>, create: Opcode, cancel: Opcode) -> Vec<Instruction> {
     let mut queued = 0;
-    let mut output = vec![];
+    let mut output = Vec::with_capacity(code.len());
     let mut debug = DebugInfo::default();
 
     for curr in code {

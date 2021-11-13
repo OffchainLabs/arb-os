@@ -1580,6 +1580,10 @@ impl FuncProperties {
     pub fn purity(&self) -> (bool, bool) {
         (self.view, self.write)
     }
+
+    pub fn is_pure(&self) -> bool {
+        !self.view && !self.write && !self.sensitive
+    }
 }
 
 /// A statement in the mini language with associated `DebugInfo` that has not yet been type checked.

@@ -171,21 +171,6 @@ pub fn make_globals_tuple_debug(globals: &Vec<GlobalVar>, type_tree: &TypeTree) 
     TupleTree::fold_into_tuple(values)
 }
 
-/// Replaces all instances of CodePt::Null with the error codepoint.
-pub fn set_error_codepoints(mut code: Vec<Instruction>) -> Vec<Instruction> {
-    let error_codepoint = Value::CodePoint(CodePt::Internal(code.len() - 1));
-
-    for curr in &mut code {
-        let mut when = |codept: &Value| matches!(codept, Value::CodePoint(CodePt::Null));
-        let mut with = |_codept: Value| error_codepoint.clone();
-
-        if let Some(ref mut value) = curr.immediate {
-            *value = value.clone().replace(&mut with, &mut when);
-        }
-    }
-    code
-}
-
 /// Represents tuple structure of mini value.
 #[derive(Debug)]
 pub enum TupleTree {

@@ -4,31 +4,26 @@
 
 //! Provides routines for substituting instructions.
 
-use crate::compile::{ClosureAssignments, FrameSize};
+use crate::compile::{ClosureAssignments, CompileError, FrameSize};
+use crate::console::Color;
 use crate::link::TupleTree;
-use crate::mavm::{AVMOpcode, Instruction, LabelGenerator, LabelId, Opcode, Value};
+use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, LabelGenerator, LabelId, Opcode, Value};
 use std::collections::HashMap;
 
 /// De-virtualizes CjumpTo opcodes into simple Cjumps
-pub fn untag_jumps(code: Vec<Instruction>) -> Vec<Instruction> {
-    let mut out = Vec::with_capacity(code.len());
-
-    for curr in code {
+pub fn untag_jumps(mut code: Vec<Instruction>) -> Vec<Instruction> {
+    for curr in &mut code {
         match curr.opcode {
             Opcode::JumpTo(..) => {
-                let mut jump = curr.clone();
-                jump.opcode = Opcode::AVMOpcode(AVMOpcode::Jump);
-                out.push(jump);
+                curr.opcode = Opcode::AVMOpcode(AVMOpcode::Jump);
             }
             Opcode::CjumpTo(..) => {
-                let mut jump = curr.clone();
-                jump.opcode = Opcode::AVMOpcode(AVMOpcode::Cjump);
-                out.push(jump);
+                curr.opcode = Opcode::AVMOpcode(AVMOpcode::Cjump);
             }
-            _ => out.push(curr),
+            _ => {}
         }
     }
-    out
+    code
 }
 
 /// Translates MoveLocal phi-joins into equivalent gets and sets
@@ -226,4 +221,93 @@ pub fn pack_closures(
     }
 
     out
+}
+
+/// TODO
+pub fn replace_closures_with_errors(mut code: Vec<Instruction>) -> Vec<Instruction> {
+    for curr in &mut code {
+        match curr.opcode {
+            Opcode::Capture(..) | Opcode::ReserveCapture(..) | Opcode::MakeClosure(..) => {
+                curr.opcode = Opcode::AVMOpcode(AVMOpcode::Error);
+            }
+            _ => {}
+        }
+    }
+
+    code
+}
+
+/// TODO
+pub fn labels_to_codepoints(
+    code: Vec<Instruction>,
+) -> Result<(Vec<Instruction>, HashMap<Label, CodePt>), CompileError> {
+    let mut out = Vec::with_capacity(code.len());
+    let mut labels = HashMap::new();
+
+    for curr in code {
+        match curr.opcode {
+            Opcode::Label(label) => {
+                if let Some(_) = labels.get(&label) {
+                    return Err(CompileError::internal(
+                        format!("Found a duplicate of {:?}", label.pretty_print(Color::RED)),
+                        curr.debug_info.locs(),
+                    ));
+                }
+
+                labels.insert(label, CodePt::Internal(out.len()));
+            }
+            _ => {
+                out.push(curr);
+            }
+        }
+    }
+
+    let mut errors = vec![];
+
+    for curr in &mut out {
+        // replace any wide immediate values
+
+        if let Some(ref mut value) = curr.immediate {
+            let debug_info = curr.debug_info;
+
+            value.replace2(&mut |value| {
+                if let Value::Label(label) = value {
+                    let codept = match labels.get(label) {
+                        Some(codept) => *codept,
+                        None => {
+                            errors.push(CompileError::new(
+                                "Internal error",
+                                format!("Label {} not found", label.pretty_print(Color::PINK)),
+                                debug_info.locs(),
+                            ));
+                            CodePt::Null
+                        }
+                    };
+
+                    *value = Value::CodePoint(codept);
+                }
+            });
+        }
+    }
+
+    /*if let Some(error) = errors.first() {
+            return Err(error.clone());
+    }*/
+
+    Ok((out, labels))
+}
+
+/// Replaces all instances of CodePt::Null with the error codepoint.
+pub fn set_error_codepoints(mut code: Vec<Instruction>) -> Vec<Instruction> {
+    let error_codepoint = Value::CodePoint(CodePt::Internal(code.len() - 1));
+
+    for curr in &mut code {
+        let mut when = |codept: &Value| matches!(codept, Value::CodePoint(CodePt::Null));
+        let mut with = |_codept: Value| error_codepoint.clone();
+
+        if let Some(ref mut value) = curr.immediate {
+            *value = value.clone().replace(&mut with, &mut when);
+        }
+    }
+    code
 }

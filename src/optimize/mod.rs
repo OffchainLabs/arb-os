@@ -17,6 +17,9 @@ use reduce::ValueGraph;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::hash::Hasher;
 
+pub use compute::Computer;
+
+mod compute;
 mod effects;
 mod peephole;
 mod reduce;
@@ -537,7 +540,7 @@ impl BasicGraph {
         }
     }
 
-    pub fn graph_reduce(&mut self, optimization_level: usize) {
+    pub fn graph_reduce(&mut self, computer: &Computer, optimization_level: usize) {
         // Algorithm
         //   Where possible, create a value graph for each basic block.
         //   Apply reductions like constant folding to each value graph.
@@ -606,7 +609,7 @@ impl BasicGraph {
                 }
             }
 
-            if let Some(value_graph) = ValueGraph::new(block, &phis) {
+            if let Some(value_graph) = ValueGraph::new(block, &phis, computer) {
                 graphs.insert(node, value_graph);
             }
         }
@@ -795,6 +798,7 @@ impl BasicGraph {
             who_stacks: &HashMap<NodeIndex, BTreeSet<SlotNum>>,
             who_pops: &HashMap<NodeIndex, BTreeSet<SlotNum>>,
             stacked: &BTreeSet<SlotNum>,
+            computer: &Computer,
             done: &mut HashSet<NodeIndex>,
         ) {
             let block = blocks[node].get_code();
@@ -812,7 +816,10 @@ impl BasicGraph {
             let check_stack: BTreeSet<_> = stacked.union(&tostack).cloned().collect();
             assert!(unstack.is_subset(&check_stack), "unstack ⊄ stack ∪ tostack");
 
-            match ValueGraph::with_stack(block, stacked.clone(), &unstack, &tostack, phis) {
+            let values =
+                ValueGraph::with_stack(block, stacked.clone(), &unstack, &tostack, phis, computer);
+
+            match values {
                 Some(values) => {
                     graphs.insert(node, values);
                 }
@@ -835,7 +842,7 @@ impl BasicGraph {
             for child in blocks.neighbors_directed(node, Direction::Outgoing) {
                 if !done.contains(&child) {
                     stack_locals(
-                        child, blocks, phis, graphs, who_stacks, who_pops, &stacked, done,
+                        child, blocks, phis, graphs, who_stacks, who_pops, &stacked, computer, done,
                     );
                 }
             }
@@ -850,6 +857,7 @@ impl BasicGraph {
             &who_stacks,
             &pops,
             &BTreeSet::new(),
+            computer,
             &mut HashSet::new(),
         );
 

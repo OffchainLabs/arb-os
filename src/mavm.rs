@@ -47,6 +47,10 @@ impl Label {
             }
         }
     }
+
+    pub fn pretty_print(&self, highlight: &str) -> String {
+        Value::Label(*self).pretty_print(highlight)
+    }
 }
 
 impl fmt::Display for Label {
@@ -215,6 +219,23 @@ where
             None => write!(f, "{}", self.opcode),
         }
     }
+}
+
+#[macro_export]
+macro_rules! opcode {
+    ($opcode:ident) => {
+        Instruction::from(Opcode::AVMOpcode(AVMOpcode::$opcode))
+    };
+    ($opcode:ident, $immediate:expr) => {
+        Instruction::from_opcode_imm(
+            Opcode::AVMOpcode(AVMOpcode::$opcode),
+            $immediate,
+            DebugInfo::default(),
+        )
+    };
+    (@$($opcode:tt)+) => {
+        Instruction::from_opcode(Opcode::$($opcode)+)
+    };
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -1214,12 +1235,12 @@ impl Opcode {
             Opcode::TupleSet(slot, size) => {
                 format!("TupleSet {} {}", Color::pink(slot), Color::grey(size))
             }
-            Opcode::Label(label) => Value::Label(*label).pretty_print(label_color),
+            Opcode::Label(label) => label.pretty_print(label_color),
             Opcode::JumpTo(label) => {
-                format!("JumpTo {}", Value::Label(*label).pretty_print(label_color))
+                format!("JumpTo {}", label.pretty_print(label_color))
             }
             Opcode::CjumpTo(label) => {
-                format!("CjumpTo {}", Value::Label(*label).pretty_print(label_color))
+                format!("CjumpTo {}", label.pretty_print(label_color))
             }
             Opcode::Pop(depth) => format!("Pop {}", Color::pink(depth)),
             Opcode::FuncCall(prop) => format!(

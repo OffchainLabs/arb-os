@@ -7,6 +7,8 @@ use crate::console;
 use crate::console::Color;
 use crate::link::fold_tuples;
 use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
+use crate::opcode;
+use crate::optimize::compute::Computer;
 use crate::optimize::effects::{Effect, Effects};
 use crate::optimize::reorder::reorder_stack;
 use crate::run::{Machine, MachineState};
@@ -127,30 +129,16 @@ fn node_data(
     (deps, users, dep_edges, user_edges)
 }
 
+type DataGraph = StableGraph<ValueNode, ValueEdge>;
+
 /// Represents how values in a `BasicBlock` relate to one another
 /// The header & footer save metadata not directly encoded in the value relationships themselves
 #[derive(Default)]
 pub struct ValueGraph {
-    graph: StableGraph<ValueNode, ValueEdge>,
+    graph: DataGraph,
     header: Vec<Instruction>,
     footer: Vec<Instruction>,
     output: NodeIndex,
-}
-
-macro_rules! opcode {
-    ($opcode:ident) => {
-        Instruction::from(Opcode::AVMOpcode(AVMOpcode::$opcode))
-    };
-    ($opcode:ident, $immediate:expr) => {
-        Instruction::from_opcode_imm(
-            Opcode::AVMOpcode(AVMOpcode::$opcode),
-            $immediate,
-            DebugInfo::default(),
-        )
-    };
-    (@$($opcode:tt)+) => {
-        Instruction::from_opcode(Opcode::$($opcode)+)
-    };
 }
 
 impl ValueGraph {
@@ -198,13 +186,18 @@ impl ValueGraph {
 
     /// Create a value graph, if possible, for set of instructions without any prior
     /// knowledge of what's on the stack.
-    pub fn new(code: &[Instruction], phis: &HashMap<SlotNum, SlotNum>) -> Option<Self> {
+    pub fn new(
+        code: &[Instruction],
+        phis: &HashMap<SlotNum, SlotNum>,
+        computer: &Computer,
+    ) -> Option<Self> {
         Self::with_stack(
             code,
             BTreeSet::new(),
             &BTreeSet::new(),
             &BTreeSet::new(),
             phis,
+            computer,
         )
     }
 
@@ -219,6 +212,7 @@ impl ValueGraph {
         unstack: &BTreeSet<SlotNum>,
         tostack: &BTreeSet<SlotNum>,
         phis: &HashMap<SlotNum, SlotNum>,
+        computer: &Computer,
     ) -> Option<Self> {
         // Algorithm
         //   Strip away metadata so that the code solely reflects the block's actions
@@ -519,7 +513,7 @@ impl ValueGraph {
         graph.add_edge(output, globals, ValueEdge::Meta("globals"));
 
         /// Statically analyze the graph for values we can compute at compile time.
-        fn fold_constants(graph: &mut StableGraph<ValueNode, ValueEdge>) {
+        fn fold_constants(graph: &mut DataGraph) {
             // For all nodes that aren't stateful, try to pre-compute their values
 
             'next: for node in nodes(&graph) {
@@ -583,8 +577,51 @@ impl ValueGraph {
             }
         }
 
+        fn precompute_funcs(graph: &mut DataGraph, computer: &Computer) {
+            // Funcs that are pure are, by definition, dependent only on their args.
+            // Hence, knowing the args implies we can statically evaluate the result.
+            // This routine evaluates such funcs, eliding calls with their results.
+
+            'next: for node in nodes(&graph) {
+                if let ValueNode::Opcode(Opcode::FuncCall(prop)) = &graph[node] {
+                    if !prop.is_pure() || prop.nouts != 1 {
+                        // An analysis of global state would be necessary to handle impure funcs.
+                        // Pure funcs with 0 outputs are already elided during constant folding.
+                        continue;
+                    }
+
+                    let mut args = vec![];
+
+                    let (deps, _, dep_edges, _) = node_data(&graph, node);
+                    for dep in deps {
+                        match &graph[dep] {
+                            ValueNode::Value(value) => args.push(value.clone()),
+                            _ => continue 'next,
+                        }
+                    }
+
+                    let label = match args.pop() {
+                        Some(Value::Label(label)) => label,
+                        Some(_) => continue,
+                        None => panic!("FuncCalls should always have at least the jump dest"),
+                    };
+
+                    let result = match computer.calc(label, args) {
+                        Some(result) => result,
+                        None => continue,
+                    };
+
+                    graph[node] = ValueNode::Value(result);
+
+                    for edge in dep_edges {
+                        graph.remove_edge(edge);
+                    }
+                }
+            }
+        }
+
         /// Prunes nodes whose values are never consumed.
-        fn prune_graph(graph: &mut StableGraph<ValueNode, ValueEdge>, output: NodeIndex) {
+        fn prune_graph(graph: &mut DataGraph, output: NodeIndex) {
             loop {
                 let node_count = graph.node_count();
                 graph.retain_nodes(|this, node| {
@@ -597,6 +634,8 @@ impl ValueGraph {
             }
         }
 
+        fold_constants(&mut graph);
+        precompute_funcs(&mut graph, computer);
         fold_constants(&mut graph);
         prune_graph(&mut graph, output);
 
@@ -691,7 +730,7 @@ impl ValueGraph {
         /// Walk the `ValueGraph`, building the instructions in a bottom-up manner.
         fn descend(
             node: NodeIndex,
-            graph: &StableGraph<ValueNode, ValueEdge>,
+            graph: &DataGraph,
             stack: &mut Vec<NodeIndex>,
             conn_counts: &mut HashMap<NodeIndex, usize>,
             entropy: &mut SmallRng,

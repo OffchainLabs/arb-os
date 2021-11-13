@@ -4,6 +4,7 @@
 
 //! Provides types and utilities for linking together compiled mini programs
 
+use crate::compile::translate;
 use crate::compile::{
     comma_list, CompileError, CompiledFunc, CompiledProgram, DebugInfo, ErrorSystem, FileInfo,
     GlobalVar, Type, TypeTree,
@@ -29,7 +30,7 @@ pub use xformcode::{fold_tuples, TupleTree, TUPLE_SIZE};
 
 mod optimize;
 mod striplabels;
-mod xformcode;
+pub mod xformcode;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SerializableTypeTree {
@@ -390,7 +391,7 @@ pub fn postlink_compile(
         xformcode::make_globals_tuple(&program.globals, &jump_table_value, &program.type_tree);
     let write_offset = if test_mode { 1 } else { 2 };
     code[write_offset].immediate = Some(globals.clone());
-    code = xformcode::set_error_codepoints(code);
+    code = translate::set_error_codepoints(code);
 
     let code_final: Vec<_> = code
         .into_iter()

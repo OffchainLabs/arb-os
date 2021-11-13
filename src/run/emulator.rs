@@ -725,7 +725,7 @@ impl FromStr for ProfilerMode {
 #[derive(Debug)]
 pub struct Machine {
     pub stack: ValueStack,
-    aux_stack: ValueStack,
+    pub aux_stack: ValueStack,
     pub state: MachineState,
     pub code: CodeStore,
     static_val: Value,
@@ -2601,11 +2601,7 @@ fn ripemd160_compression(acc: Uint256, buf0: Uint256, buf1: Uint256) -> Uint256 
     let mut buf = buf0.to_bytes_be();
     buf.extend(buf1.to_bytes_be());
 
-    //println!("before {:?}", acc_buf);
-    //println!("buf    {:?}", buf);
     ripemd160port::process_msg_block(&mut acc_buf, &buf);
-    //println!("after  {:?}", acc_buf);
-    //println!("reversed {:?}", reverse32(acc_buf[0]));
 
     Uint256::from_u32_digits(&[
         reverse32(acc_buf[4]),

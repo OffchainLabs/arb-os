@@ -60,7 +60,7 @@ use bridge_arbos_versions::remapGlobalsForUpgrade;
 //     so we can rely on it not moving across upgrades.
 var __fixedLocationGlobal: view write func(uint);    // points to EVM op dispatch function
 
-view write func main(oldGlobals: GlobalsBeforeUpgrade) {
+sensitive view write func main(oldGlobals: GlobalsBeforeUpgrade) {
     if unsafecast<any>(oldGlobals) != any(()) {
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
 
