@@ -8,12 +8,14 @@ use crate::console::Color;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
 use crate::opcode;
 use crate::run::{Machine, MachineState};
-use std::collections::HashMap;
+use parking_lot::Mutex;
+use std::hash::{Hash, Hasher};
+use std::collections::hash_map::{DefaultHasher, HashMap};
 
 pub struct Computer {
     code: Vec<Instruction>,
     labels: HashMap<Label, CodePt>,
-    cached: HashMap<u64, Option<Value>>,
+    cache: Mutex<HashMap<u64, Option<Value>>>,
 }
 
 impl Computer {
@@ -59,14 +61,32 @@ impl Computer {
         Ok(Computer {
             code,
             labels,
-            cached: HashMap::new(),
+            cache: Mutex::new(HashMap::new()),
         })
     }
 
     pub fn calc(&self, label: Label, args: Vec<Value>) -> Option<Value> {
+
+        let mut hasher = DefaultHasher::new();
+        label.hash(&mut hasher);
+        args.hash(&mut hasher);
+        let hash = hasher.finish();
+
+        if let Some(cached) = self.cache.lock().get(&hash) {
+            return cached.clone();
+        }
+
+        macro_rules! cache {
+            ($value:expr) => {{
+                let value = $value;
+                self.cache.lock().insert(hash, value.clone());
+                value
+            }};
+        }
+
         let codept = match self.labels.get(&label) {
             Some(codept) => *codept,
-            None => return None,
+            None => return cache!(None),
         };
 
         let mut machine = Machine::from(self.code.clone());
@@ -93,17 +113,15 @@ impl Computer {
                 println!("Have {}", item.pretty_print(Color::PINK));
             }
             println!("{}", err);
-            return None;
+            return cache!(None);
         }
 
         let result = match machine.stack.contents.pop_back() {
             Some(result) => result,
-            _ => return None,
+            _ => return cache!(None),
         };
         assert!(machine.stack.contents.is_empty());
 
-        //println!("Computed {}", result.pretty_print(Color::PINK));
-
-        Some(result)
+        cache!(Some(result))
     }
 }

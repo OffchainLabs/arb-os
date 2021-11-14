@@ -6,11 +6,19 @@ use crate::compile::DebugInfo;
 use crate::console::Color;
 use crate::mavm::{AVMOpcode, Instruction, Opcode};
 use crate::optimize::peephole;
+use parking_lot::Mutex;
+use lazy_static::lazy_static;
 use petgraph::graph::NodeIndex;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, BTreeSet};
+use std::hash::{Hash, Hasher};
+use std::collections::hash_map::DefaultHasher;
 
 #[cfg(test)]
 use rand::prelude::*;
+
+lazy_static! {
+    static ref CACHE: Mutex<HashMap<u64, (Vec<Instruction>, Vec<NodeIndex>)>> = Mutex::new(HashMap::new());
+}
 
 /// Reorder the stack to place needed values on top.
 /// - needs represent the ordered, potentially duplicated, values we want at the top of the stack
@@ -25,6 +33,17 @@ pub fn reorder_stack(
     //   Annotate the stack & needs with how many copies need to be made & their order
     //   Move a sliding window around, fixing order & duping values as is needed
     //   Optimize to compute an efficient transformation of Swap's, Dup's, and Aux code.
+
+    let mut hasher = DefaultHasher::new();
+    stack.hash(&mut hasher);
+    needs.hash(&mut hasher);
+    let ordered_kills: BTreeSet<_> = kills.clone().into_iter().collect();
+    ordered_kills.hash(&mut hasher);
+    let hash = hasher.finish();
+
+    if let Some(cached) = CACHE.lock().get(&hash) {
+        return Ok(cached.clone());
+    }
 
     // Ensure needs are present on the stack & all kills are needed
     let stack_check: HashSet<_> = stack.clone().into_iter().collect();
@@ -224,7 +243,9 @@ pub fn reorder_stack(
     );
 
     let stack = stack.into_iter().map(|item| item.0).collect();
-    Ok((code, stack))
+    let result = (code, stack);
+    CACHE.lock().insert(hash, result.clone());
+    Ok(result)
 }
 
 #[test]

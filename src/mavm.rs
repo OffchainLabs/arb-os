@@ -11,6 +11,7 @@ use ethers_core::utils::keccak256;
 use serde::de::Visitor;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use std::hash::{Hash, Hasher};
 use std::{collections::HashMap, fmt, sync::Arc};
 
 /// A label who's value is the same across ArbOS versions
@@ -388,6 +389,12 @@ impl Buffer {
     }
 }
 
+impl Hash for Buffer {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.root.hash().hash(state);
+    }
+}
+
 struct BufferVisitor;
 
 impl<'de> Visitor<'de> for BufferVisitor {
@@ -635,7 +642,7 @@ fn _levels_needed(x: u128) -> (usize, u128) {
     (height, size)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Value {
     Int(Uint256),
     Tuple(Arc<Vec<Value>>),
