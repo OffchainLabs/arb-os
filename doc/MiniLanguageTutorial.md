@@ -349,14 +349,21 @@ A value of type `V` is castable to storage of type `S` if:
 
 ## Codeblocks
 
+Codeblocks are used in a number of different constructs in mini, however there are actually two distinct kinds of codeblocks.
+In general, only one of these two kinds may be used for a given construct, therefore it is necessary to describe the distinction between these variants.
+
 `{` [*statement*]* `}`
 
-> This is a statement codeblock, it is a sequence of zero or more statements, enclosed in curly braces.  Statement codeblocks form the bodies of functions, `if` and `loop` statements.  Local variables may be declared and used within a codeblock. A local variable that is declared within a codeblock can be used only within that same codeblock (or other codeblocks nested inside of it). 
+> This is a statement codeblock, it is a sequence of zero or more statements, enclosed in curly braces.  Statement codeblocks form the bodies of functions, `if` and `loop` statements, among other constructs.  Local variables may be declared and used within a codeblock. A local variable that is declared within a codeblock can be used only within that same codeblock (or other codeblocks nested inside of it). 
 
 `{` [*statement*]* *expression* `}`
 
 > This is an expression codeblock, the statements are executed in order, with the same behavior as statement codeblocks, and then *expression* is evaluated, with access to locals defined in *statement*s. 
 > The type of the codeblock is the same as the type of *expression*.
+
+The major distinction in usage between the two types is that statement codeblocks cannot be used as an expression, and cannot return a value.
+So in contexts where a value is needed, expression codeblocks are generally used, and in contexts where a return value isn't needed,
+statement contexts are generally used.
 
 ## Statements
 
