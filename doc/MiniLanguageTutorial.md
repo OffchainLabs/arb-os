@@ -197,9 +197,9 @@ Mini has the following types:
 
 ### Generics
 
-> Generic types and generic functions should each be thought of as a separate type of object from regular types and functions.
-> In particular, unless a generic type is specialized it can not be used as a type, and unless a generic function is specialized, it cannot be called or used as a value.
-> It is important to distinguish between unspecialized generics and generics specialized by type variables, for example consider this example mini program:
+Generic types and generic functions should be thought of as different objects than regular types and functions.
+In particular, unless a generic type is specialized it can not be used as a type, and unless a generic function is specialized, it cannot be called or used as a value.
+It is important to distinguish between unspecialized generics and generics specialized by type variables, for example consider this example mini program:
 ```rs
 type queue<T> = option<struct {
     item: T,
@@ -221,51 +221,51 @@ func single_queue<T>(item: T) -> queue<T> {
     });
 }
 ```
-> In this context, `queue<T>` is a generic type that is specialized by the type variable `T`, and `queue` by itself is a
-> non-specialized generic type. Also, `queue_new::<T>` is a reference to a generic function specialized with a type variable,
-> where `queue_new` is a non-specialized generic function. 
-> It is not permitted for `queue` by itself to be used as a type nor is `queue_new` by itself permitted to be used as a function.
+In this context, `queue<T>` is a generic type that is specialized by the type variable `T`, and `queue` by itself is a
+non-specialized generic type. Also, `queue_new::<T>` is a reference to a generic function specialized with a type variable,
+where `queue_new` is a non-specialized generic function. 
+It is not permitted for `queue` by itself to be used as a type nor is `queue_new` by itself permitted to be used as a function.
  
-> Type variables are deeply tied with generic types and generic functions, we introduced these in the Types section,
-> and we will expand on their use here.
-> A type variable represents an arbitrary type, that will be replaced with a specific type via the process of specialization.
-> Because they represent arbitrary types, their rules for equality, assignability, and castability must be such that they can be replaced with any concrete type and still produce valid assignments and casts.
-> Therefore, they are equal, assignable, and castable to themselves, can be assigned or casted to any, and can be assigned or casted from every,
-> as these actions can be done with all types.
+Type variables are deeply tied with generic types and generic functions, we introduced these in the Types section,
+and we will expand on their use here.
+A type variable represents an arbitrary type, that will be replaced with a specific type via the process of specialization.
+Because they represent arbitrary types, their rules for equality, assignability, and castability must be such that they can be replaced with any concrete type and still produce valid assignments and casts.
+Therefore, they are equal, assignable, and castable to themselves, can be assigned or casted to any, and can be assigned or casted from every,
+as these actions can be done with all types.
 
-> Specialization can occur in two different contexts, in the context of a specialized generic type, and a reference to a specialized generic function.
-> In both contexts the process operates similarly, with each use of a type variable being replaced with a different specified type. 
-> And the primary difference between the two specializations are the scopes under which it applies.
+Specialization can occur in two different contexts, in the context of a specialized generic type, and a reference to a specialized generic function.
+In both contexts the process operates similarly, with each use of a type variable being replaced with a different specified type. 
+And the primary difference between the two specializations are the scopes under which it applies.
 
-> For generic types, a specialization creates a new specialized generic type, for example `queue<uint>` would be a specialization of `queue`.
-> The type `queue<uint>` will be given a representation equal to the type on the right side of the type declaration, with each type variable replaced by the associated type.
-> For example, `queue<uint>` will have a representation of:
+For generic types, a specialization creates a new specialized generic type, for example `queue<uint>` would be a specialization of `queue`.
+The type `queue<uint>` will be given a representation equal to the type on the right side of the type declaration, with each type variable replaced by the associated type.
+For example, `queue<uint>` will have a representation of:
 ```rs
 option<struct {
     item: uint,
     rest: queue<uint>,
 }>
 ```
-> A specialization with type variables is also possible in contexts where type variables are present. For example, `queue<U>` would have representation:
+A specialization with type variables is also possible in contexts where type variables are present. For example, `queue<U>` would have representation:
 ```rs
 option<struct {
     item: U,
     rest: queue<U>,
 }>
 ``` 
-> This is important to distinguish from non specialized generics, as `queue<U>`, `queue<T>` and `queue<queue<T>>` are all different types, where there is only one non-specialized `queue`.
+This is important to distinguish from non specialized generics, as `queue<U>`, `queue<T>` and `queue<queue<T>>` are all different types, where there is only one non-specialized `queue`.
 
-> The other type of specialization is the specialization of generic functions.
-> A generic function like `single_queue` can be specified with a type to produce a specified generic function.
-> For example `single_queue::<uint>` is a reference to `single_queue` specialized by `uint`.
-> The type of the function obtained by specialization is a function type, which has `view` and `write` if and only if the generic function does,
-> whose argument types are the arguments with each type variable replaced by the specified type, and whose return type is the return type of the generic function, with each type variable replaced by the type specified.
-> For example the type of `single_queue::<uint>` is `func(uint) -> queue<uint>`.
+The other type of specialization is the specialization of generic functions.
+A generic function like `single_queue` can be specified with a type to produce a specified generic function.
+For example `single_queue::<uint>` is a reference to `single_queue` specialized by `uint`.
+The type of the function obtained by specialization is a function type, which has `view` and `write` if and only if the generic function does,
+whose argument types are the arguments with each type variable replaced by the specified type, and whose return type is the return type of the generic function, with each type variable replaced by the type specified.
+For example the type of `single_queue::<uint>` is `func(uint) -> queue<uint>`.
  
-> The code executed by a specialized generic function is identical to the code that would be generated by replacing every type variable in the unspecialized function with the type specified by the specialization. 
-> However, this transformation is not necessary, as the rules for type variables ensure that no type specific logic is necessary, and the code for the non-specialized generic function can be safely used.
-> The practical impact of this is that there is no possibility for a type error originating from inside the body of a specialized generic function, as any type errors will be caught in the non-specialized function.
-> Therefore, as long as a correct generic function name is used, the correct number of types is specified, and each type is valid in the scope the specialized generic function is being used, no errors should occur within a specialized generic function reference.
+The code executed by a specialized generic function is identical to the code that would be generated by replacing every type variable in the unspecialized function with the type specified by the specialization. 
+However, this transformation is not necessary, as the rules for type variables ensure that no type specific logic is necessary, and the code for the non-specialized generic function can be safely used.
+The practical impact of this is that there is no possibility for a type error originating from inside the body of a specialized generic function, as any type errors will be caught in the non-specialized function.
+Therefore, as long as a correct generic function name is used, the correct number of types is specified, and each type is valid in the scope the specialized generic function is being used, no errors should occur within a specialized generic function reference.
 
 These constructs define the extent of the generics system in mini.
 
