@@ -269,9 +269,10 @@ Therefore, as long as a correct generic function name is used, the correct numbe
 
 These constructs define the extent of the generics system in mini.
 
-## Equality and assignability for types
+## Equality, assignability, and castability for types
 
-Two types are equal if they have the same structure. Type aliases, as defined by non-import declarations, do not create a new type but simply define a shorthand method for referring to the underlying type.  (For example, after the declaration "`type foo = uint`", foo and uint are the same type.)
+Two types are equal if they have the same structure. Nominal types, as defined by type declarations, create types that are considered equal to their definitions. 
+(For example, after the declaration `type foo = uint`, `foo` and `uint` are considered equal, and `uint` is considered the representation of `foo`.)
 
 Every atomic type is equal to itself. 
 This includes `uint`, `int`, `bool`, `buffer`, `bytes32`, `address`, `void` and `string`.
@@ -280,12 +281,12 @@ Two tuple types are equal if they have the same number of fields and their field
 
 Two fixed-size array types are equal if they have the same size and their field types are equal.
 
-Two array types are equal if their field types are equal.
+Two variable-sized array types are equal if their field types are equal.
 
-Two struct types are equal if have the same number of fields, and each field has the same name and equal type, field-by-field.
+Two struct types are equal if have the same number of fields, each field has the same name and equal type, field-by-field.
 
 Two func types are equal if they have the same purity, in other words, that the presence or non-presence of `view` and `write` modifiers is the same in both, 
-they must also have the same number of argument types, and each argument type is equal, argument-by-argument, and the return types are equal (or neither has a return type).
+the same number of argument types, and each argument type is equal, argument-by-argument, and the return types are equal (or neither has a return type).
 
 Two map types are equal if their key types are equal and their value types are equal.
 
@@ -314,17 +315,17 @@ A value of type `V` is assignable to storage of type `S` if:
 * `V` and `S` are fixed-size arrays of the same size, and the field type of `V` is assignable to the field type of `S`,
 * `V` and `S` are arrays, and the field type of `V` is assignable to the field type of `S`,
 * `V` and `S` are structs, with the same number of fields, and each field of `V` has the same name as the corresponding field of `S`, and each field of `V` is assignable to the corresponding field of `S`,
-* `V` and `S` are function types, with the same number of arguments, and if `V` is `view` or `write`, then `S` must also be `view` or `write` respectively, and each argument type of `V` is assignable to the corresponding argument type of `S`, and either (a) both `S` and `V` return void, or (b) the return type of `S` is assignable to the return type of `V`.  (Note that the return type is compared for assignability "backwards". This is needed to make calls through function references type-safe.)
+* `V` and `S` are function types, with the same number of arguments, and if `V` is `view` or `write`, then `S` must also be `view` or `write` respectively, each argument type of `V` must be assignable to the corresponding argument type of `S`, and the return type of `S` is assignable to the return type of `V`.  (Note that the return type is compared for assignability "backwards". This is needed to make calls through function references type-safe.)
 * `V` and `S` are map types, and the key type of `V` is assignable to the key type of `S`, and the value types of `V` and `S` are equal.
 * `V` and `S` are optional types, and the inner type of `V` is assignable to the inner type of `S`
-* `V` and `S` are union types with the same number of variants, and each variant of `V` is assignable to each variant of `S` variant by variant.
+* `V` and `S` are union types with the same number of variants, and each variant of `V` in order must be assignable to each variant of `S`, variant-by-variant.
 * `V` and `S` are nominal types or specialized generic types, and the representation of `V` is assignable to the representation of `S`.
 
 These rules guarantee that assignability is transitive. 
 
 The compiler uses often uses type inference to infer the types of variables from the types of values assigned to them.  If a programmer wants the compiler to infer a different type, they should use an explicit type-casting operation to convert the value to the desired type.
 
-## Castability
+### Castability
 
 A value of type `V` is castable to storage of type `S` if:
 
@@ -338,12 +339,12 @@ A value of type `V` is castable to storage of type `S` if:
 * `V` is `buffer` and `S` is `buffer`,
 * `V` and `S` are tuple types with the same number of fields, and each field of `V` is castable to the corresponding field of `S`,
 * `V` and `S` are fixed-size arrays of the same size, and the field type of `V` is castable to the field type of `S`,
-* `V` and `S` are arrays, and the field type of `V` is castable to the field type of `S`,
+* `V` and `S` are variable-sized arrays, and the field type of `V` is castable to the field type of `S`,
 * `V` and `S` are structs, with the same number of fields, and each field of `V` is castable to the corresponding field of `S`, the names of each field do not need to match,
-* `V` and `S` are function types, with the same number of arguments, and if `V` is `view` or `write`, then `S` must also be `view` or `write` respectively, and each argument type of `V` is castable to the corresponding argument type of `S`, and either (a) both `S` and `V` return void, or (b) the return type of `S` is castable to the return type of `V`.  (Note that the return type is compared for castability "backwards". This is needed to make calls through function references type-safe.),
+* `V` and `S` are function types, with the same number of arguments, and if `V` is `view` or `write`, then `S` must also be `view` or `write` respectively, each argument type of `V` must be castable to the corresponding argument type of `S`, and the return type of `S` is castable to the return type of `V`.  (Note that the return type is compared for castability "backwards". This is needed to make casts through function references type-safe.),
 * `V` and `S` are map types, and the key type of `V` is castable to the key type of `S`, and the value type of `V` is castable to the value type of `S`,
 * `V` and `S` are optional types, and the inner type of `V` is castable to the inner type of `S`,
-* `V` and `S` are union types with the same number of variants, and each variant of `V` is castable to each variant of `S` variant by variant,
+* `V` and `S` are union types with the same number of variants, and each variant of `V` is castable to each variant of `S` variant-by-variant,
 * `V` or `S` is a nominal or specialized generic type, and the representation of `V` is castable to the representation of `S`.
 
 ## Codeblocks
