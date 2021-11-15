@@ -9,8 +9,8 @@ use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
 use crate::opcode;
 use crate::run::{Machine, MachineState};
 use parking_lot::Mutex;
-use std::hash::{Hash, Hasher};
 use std::collections::hash_map::{DefaultHasher, HashMap};
+use std::hash::{Hash, Hasher};
 
 pub struct Computer {
     code: Vec<Instruction>,
@@ -66,7 +66,6 @@ impl Computer {
     }
 
     pub fn calc(&self, label: Label, args: Vec<Value>) -> Option<Value> {
-
         let mut hasher = DefaultHasher::new();
         label.hash(&mut hasher);
         args.hash(&mut hasher);

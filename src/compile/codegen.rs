@@ -292,10 +292,10 @@ fn codegen(
 
         macro_rules! error {
             ($text:expr $(,$args:expr)* $(,)?) => {
-                return Err(CompileError::new("Internal error", format!($text, $(Color::red($args),)*), debug.locs()))
+                return Err(CompileError::internal(format!($text, $(Color::red($args),)*), debug.locs()))
             };
             (@$text:expr, $debug:expr) => {
-                return Err(CompileError::new("Internal error", format!($text), $debug.locs()));
+                return Err(CompileError::internal(format!($text), $debug.locs()));
             };
         }
 
@@ -871,8 +871,17 @@ fn codegen(
         }
     }
 
-    let debug = cgen.code.last().unwrap().debug_info;
     let scope = cgen.scopes.pop().expect("No scope");
+    let last = cgen.code.last().unwrap().clone();
+    let debug = last.debug_info;
+
+    // When a return ends a scope, it's nicer to move the phis and drops
+    // before it so that they appear in the same basic block.
+    let move_return = last.opcode == Opcode::Return;
+
+    if move_return {
+        cgen.code.pop();
+    }
 
     for (local, mut slot) in scope.locals {
         // We're closing a scope, so any final assignments need to be phi'd
@@ -895,6 +904,10 @@ fn codegen(
         // Annotate which slots are provably never used from this point on
         cgen.code
             .push(Instruction::from_opcode(Opcode::DropLocal(slot), debug));
+    }
+
+    if move_return {
+        cgen.code.push(last.clone());
     }
 
     Ok(())

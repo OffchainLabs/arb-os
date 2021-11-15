@@ -6,18 +6,19 @@ use crate::compile::DebugInfo;
 use crate::console::Color;
 use crate::mavm::{AVMOpcode, Instruction, Opcode};
 use crate::optimize::peephole;
-use parking_lot::Mutex;
 use lazy_static::lazy_static;
+use parking_lot::Mutex;
 use petgraph::graph::NodeIndex;
-use std::collections::{HashMap, HashSet, BTreeSet};
-use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
+use std::collections::{BTreeSet, HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 
 #[cfg(test)]
 use rand::prelude::*;
 
 lazy_static! {
-    static ref CACHE: Mutex<HashMap<u64, (Vec<Instruction>, Vec<NodeIndex>)>> = Mutex::new(HashMap::new());
+    static ref CACHE: Mutex<HashMap<u64, (Vec<Instruction>, Vec<NodeIndex>)>> =
+        Mutex::new(HashMap::new());
 }
 
 /// Reorder the stack to place needed values on top.

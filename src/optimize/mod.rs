@@ -9,7 +9,7 @@ use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
 use petgraph::algo;
 use petgraph::graph::{NodeIndex, UnGraph};
 use petgraph::stable_graph::StableGraph;
-use petgraph::visit::{Dfs, IntoNodeReferences};
+use petgraph::visit::{Dfs, IntoNeighborsDirected, IntoNodeReferences, Reversed};
 use petgraph::{Direction, Undirected};
 use rand::prelude::*;
 use rand::rngs::SmallRng;
@@ -635,20 +635,20 @@ impl BasicGraph {
                                 .into_iter()
                                 .map(|x| x.pretty_print(Color::PINK))
                                 .collect();
-                            if ssa != reduced || var_bisect.is_ok() {
-                                console::print_columns(
-                                    vec![ssa, values, reduced],
-                                    vec!["SSA", "values", "reduced"],
-                                );
-                                println!();
-                            }
+                            //if ssa != reduced || var_bisect.is_ok() {
+                            console::print_columns(
+                                vec![ssa, values, reduced],
+                                vec!["SSA", "values", "reduced"],
+                            );
+                            println!();
+                            //}
                         }
                     }
                 }
             };
         }
 
-        show_all!();
+        //show_all!();
 
         let nodes: Vec<_> = self.graph.node_indices().collect();
 
@@ -722,6 +722,99 @@ impl BasicGraph {
             .filter(|(slot, _)| !phid.contains(slot) && !phis.contains_key(slot))
             .collect();
 
+        let exits: HashSet<_> = self.graph.neighbors_undirected(self.output).collect();
+        //let mut doms = HashMap::new();
+
+        for (&slot, &def) in &defs {
+            // Codegen places a δ-drop every time a local goes out of scope.
+            // While this is safe, it's suboptimal since usually a value can
+            // be dropped at its final usage, eliminating the carry-over to
+            // the drop-pop. Now that we have basic blocks, we can find the
+            // optimal relocation of the δ-drop via the following algorithm
+            //
+            //   1. BFS in the reverse graph from the δ-drop to all usages
+            //   2. Calculate the dominance relationships from the δ-drop
+            //   3. Relocate to the earliest BFS node that dominates the def
+
+            let uses = match uses.get(&slot) {
+                Some(uses) => uses,
+                None => {
+                    // if no one uses the value, the setter should drop it
+                    dels.insert(slot, def);
+                    continue;
+                }
+            };
+
+            let dropper = *dels.get(&slot).expect("no dropper");
+            let reversed = Reversed(&self.graph);
+
+            let mut cease = BTreeSet::new(); // every end to this value's lifetime
+            let mut queue = BTreeSet::new(); // mechanism for bfs
+            let mut found = BTreeSet::new(); // those seen so far
+
+            cease.insert(dropper);
+            queue.insert(def);
+
+            while !queue.is_empty() {
+                let node = *queue.iter().next().unwrap();
+                queue.remove(&node);
+                found.insert(node);
+
+                if node == dropper || exits.contains(&node) {
+                    cease.insert(node);
+                    continue;
+                }
+
+                for after in self.graph.neighbors_directed(node, Direction::Outgoing) {
+                    if !found.contains(&after) {
+                        queue.insert(after);
+                    }
+                }
+            }
+
+            let mut queue = BTreeSet::new(); // mechanism for bfs
+            let mut maybe = BTreeSet::new(); // possible dropper
+
+            queue.insert(dropper);
+
+            while !queue.is_empty() {
+                let node = *queue.iter().next().unwrap();
+                queue.remove(&node);
+                maybe.insert(node);
+
+                if node == def || uses.contains(&node) {
+                    continue;
+                }
+
+                for prior in reversed.neighbors_directed(node, Direction::Outgoing) {
+                    if !maybe.contains(&prior) {
+                        queue.insert(prior);
+                    }
+                }
+            }
+
+            if cease.len() > 1 {
+                continue;
+            }
+
+            'next: for candidate in maybe {
+                for &node in &cease {
+                    let dominators = algo::dominators::simple_fast(reversed, node);
+                    let doms: HashSet<_> =
+                        dominators.dominators(def).into_iter().flatten().collect();
+
+                    if !doms.contains(&candidate) {
+                        continue 'next;
+                    }
+                }
+
+                dels.insert(slot, candidate);
+                bisect_nodes.insert(candidate);
+                println!("UPDATE {}", slot);
+                break;
+            }
+        }
+
         // Stacking a local means moving it from the aux stack to the data stack.
         // Using the stack'd value means passing it from value graph to value graph as an arg.
         // This is only safe, however, if we can determine where exactly to pop the value.
@@ -733,7 +826,6 @@ impl BasicGraph {
 
         // Find which locals we can move from the aux stack to the data stack.
         let mut pops = HashMap::new();
-        let exits: HashSet<_> = self.graph.neighbors_undirected(self.output).collect();
 
         for (slot, node) in defs.clone() {
             let mut poppers = BTreeSet::new();
