@@ -367,7 +367,7 @@ statement contexts are generally used.
 
 ## Statements
 
-All statements be prefixed by *Attributes*, see the Attributes section for more details.
+All statements may be prefixed by *Attributes*, see the Attributes section for more details.
 
 *codeblock*
 
@@ -375,11 +375,11 @@ All statements be prefixed by *Attributes*, see the Attributes section for more 
 
 `loop` *codeblock*
 
-> An "infinite loop" which executes the statement codeblock *codeblock* repeatedly. The only way to exit the loop is via a `return` statement (or an error).
+> An "infinite loop" which executes the statement codeblock *codeblock* repeatedly. The only way to exit the loop is via a `return` statement or a runtime error.
 
 `while` ( *condition* ) *codeblock*
 
-> Like a loop, except *condition*  (which must be an expression of type `bool`) is evaluated before each iteration, and the loop terminates if *condition* is found to be false.
+> Like a loop, except *condition*, which must be an expression of type `bool`, is evaluated before each iteration, and the loop terminates if *condition* is found to be false.
 > *codeblock* must be a statement codeblock.
 
 `if` ( *condition* ) *codeblock* ([`else` [*elsecodeblock* | *if statement* | *if let statement*]])?
@@ -396,29 +396,30 @@ All statements be prefixed by *Attributes*, see the Attributes section for more 
 
 `let` ( *nameorbinding1* , *nameorbinding2*, ... ) = *expression* ;
 
-> Where each nameorbinding may be:
+Where each nameorbinding may be:
 
 *identifier*
 
-> Or
+Or:
 
-**identifier*
+`*`*identifier*
 
 > Creates or assigns to multiple variables based on unpacking a tuple. 
-> If the *nameorbinding* is an identifier it creates a new variable, if *nameorbinding* is **identifier* it assigns to an existing variable with that name. 
+> If the *nameorbinding* is an identifier it creates a new variable, if *nameorbinding* is `*`*identifier* it assigns to an existing variable with that name. 
 > *expression* must be a tuple type, with the number of fields in the tuple equal to the number of names on the left-hand side.
 > The compiler creates a new local variable for each name on the left-hand side, and infers the type of each new variable based on the type of the corresponding field of the right-hand side tuple.
-> In the case of assignments to existing variables, the corresponding field on the left hand side must be assignable to the type of the variable.
-> No assignment may use type *void* on the left hand side.
+> In the case of assignments to existing variables, the corresponding field on the right hand side must be assignable to the type of the variable.
+> No assignment may use type *void* on the right hand side.
 
 `if let` `Some(`*ident*`)` `=` *expression* *codeblock* [`else` [*elsestatementcodeblock* | *if statement* | *if let statement*]]?
 
-> It is required that *ident* is an identifier, and *expression* is an expression of some option type. 
-> If *expression* returns the Some variant of an option type, within statement codeblock *codeblock* a new local variable *ident* is created with the inner value of the result of *expression*,
-> and the type of *ident* matches that inner type,
-> and *codeblock* is run.  If *expression* is the None variant and the `else` statement is present, 
-> codeblock statement *elsestatementcodeblock*, if statement *if statement*, or *if let statement* is run instead.  
-> *expression* must always be an option type.
+> It is required that *ident* is an identifier, and *expression* is an expression of some option type.  
+> 
+> If *expression* returns the Some variant, at the start of the statement codeblock *codeblock* a new local variable *ident* is created with the inner value of the result of *expression*,
+> and type of *expression*'s inner type. *codeblock* is then run with *ident* present.
+> 
+> If *expression* is the `None` variant and the `else` statement is present, 
+> statement codeblock *elsestatementcodeblock*, if statement *if statement*, or if let statement *if let statement* is run instead.  
 
 *expression*
 
@@ -430,15 +431,11 @@ All statements be prefixed by *Attributes*, see the Attributes section for more 
 
 `return` ;
 
-> Return from the current function. This is an error if the function has a *returntype*.
+> Return from the current function. This is an error if the function has a return type other than `void`.
 
 `return` *expression* ;
 
-> Return a value from the current function. The value of *expression* must be assignable to the function's *returntype*.
-
-`return` `None` `;`
-
-> In a function that returns *option\<type\>*, this returns *None\<type\>*.
+> Return a value from the current function. The value of *expression* must be assignable to the function's return type.
 
 `debug` `(` *expression* `)`
 
@@ -462,11 +459,11 @@ All statements be prefixed by *Attributes*, see the Attributes section for more 
 
 `#[` *ident* (`,` *ident*)* `]`
 
-> Attributes set some properties of the object they are attached to. The only possible attributes are `breakpoint` and `print`,
-> any other value for *ident* will cause an compilation error.
-> Attributes will apply to instructions generated by the file, function, or statement they are applied to, as well as any children of that object.
-> The `breakpoint` attribute creates a breakpoint that halts execution in the rust debugger,
-> and the `codegen_print` attribute causes the compiler to print the index and instruction details during the "postlink_compile" stage of compilation.
+Attributes set certain properties of the object they are attached to. The only possible attributes are `breakpoint` and `print`,
+any other value for *ident* will cause an compilation error.
+Attributes will apply to instructions generated by the file, function, or statement they are applied to, as well as any children of that object.
+The `breakpoint` attribute creates a breakpoint that halts execution in the rust debugger,
+and the `print` attribute causes the compiler to print the index and instruction details during the "postlink_compile" stage of compilation.
 
 A file scope Attribute Declaration is identical to other attribute declarations except it must use a `!` after the `#`:
 
