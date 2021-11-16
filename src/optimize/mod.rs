@@ -5,11 +5,11 @@
 use crate::compile::{FrameSize, SlotNum};
 use crate::console;
 use crate::console::Color;
-use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
+use crate::mavm::{AVMOpcode, Instruction, LabelId, Opcode, Value};
 use petgraph::algo;
 use petgraph::graph::{NodeIndex, UnGraph};
 use petgraph::stable_graph::StableGraph;
-use petgraph::visit::{Dfs, IntoNeighborsDirected, IntoNodeReferences, Reversed};
+use petgraph::visit::{Dfs, IntoNodeReferences};
 use petgraph::{Direction, Undirected};
 use rand::prelude::*;
 use rand::rngs::SmallRng;
@@ -60,6 +60,8 @@ pub struct BasicGraph {
     entry: NodeIndex,
     /// The output node of the graph
     output: NodeIndex,
+    /// The Func this graph represents
+    func_id: LabelId,
     /// Whether this graph contains a cycle
     cyclic: bool,
     /// Whether this graph contains code that's been marked for printing
@@ -84,6 +86,11 @@ impl BasicGraph {
         let entry = graph.add_node(BasicBlock::Meta("Entry"));
 
         let should_print = code.iter().any(|x| x.debug_info.attributes.codegen_print);
+
+        let func_id = match code.first().unwrap().opcode {
+            Opcode::Label(label) => label.get_id(),
+            _ => panic!("A Basic Graph must start with an entry point"),
+        };
 
         // create basic blocks by splitting on jumps and labels
         let mut block_data = vec![];
@@ -180,6 +187,7 @@ impl BasicGraph {
             graph,
             entry,
             output,
+            func_id,
             cyclic,
             should_print,
         }
@@ -563,6 +571,9 @@ impl BasicGraph {
             }
         }
 
+        // The func_id is used for debugging & to track computer calls
+        let func_id = self.func_id;
+
         // The proposed value graph for each basic block.
         // These are replaced as better ones are created.
         let mut graphs = HashMap::new();
@@ -609,7 +620,7 @@ impl BasicGraph {
                 }
             }
 
-            if let Some(value_graph) = ValueGraph::new(block, &phis, computer) {
+            if let Some(value_graph) = ValueGraph::new(block, &phis, func_id, computer) {
                 graphs.insert(node, value_graph);
             }
         }
@@ -635,13 +646,13 @@ impl BasicGraph {
                                 .into_iter()
                                 .map(|x| x.pretty_print(Color::PINK))
                                 .collect();
-                            //if ssa != reduced || var_bisect.is_ok() {
-                            console::print_columns(
-                                vec![ssa, values, reduced],
-                                vec!["SSA", "values", "reduced"],
-                            );
-                            println!();
-                            //}
+                            if ssa != reduced || var_bisect.is_ok() {
+                                console::print_columns(
+                                    vec![ssa, values, reduced],
+                                    vec!["SSA", "values", "reduced"],
+                                );
+                                println!();
+                            }
                         }
                     }
                 }
@@ -723,7 +734,6 @@ impl BasicGraph {
             .collect();
 
         let exits: HashSet<_> = self.graph.neighbors_undirected(self.output).collect();
-        //let mut doms = HashMap::new();
 
         for (&slot, &def) in &defs {
             // Codegen places a δ-drop every time a local goes out of scope.
@@ -732,9 +742,11 @@ impl BasicGraph {
             // the drop-pop. Now that we have basic blocks, we can find the
             // optimal relocation of the δ-drop via the following algorithm
             //
-            //   1. BFS in the reverse graph from the δ-drop to all usages
-            //   2. Calculate the dominance relationships from the δ-drop
-            //   3. Relocate to the earliest BFS node that dominates the def
+            //   1. Determine the extent of the value's lifetime
+            //   2. Topologically walk the lifetime backwards
+            //   3. Each time the walk collapses to a single node, it's safe
+            //   4. The moment the walk encounters a using node, it's not
+            //   5. The last safe node found is optimal
 
             let uses = match uses.get(&slot) {
                 Some(uses) => uses,
@@ -746,7 +758,6 @@ impl BasicGraph {
             };
 
             let dropper = *dels.get(&slot).expect("no dropper");
-            let reversed = Reversed(&self.graph);
 
             let mut cease = BTreeSet::new(); // every end to this value's lifetime
             let mut queue = BTreeSet::new(); // mechanism for bfs
@@ -772,47 +783,24 @@ impl BasicGraph {
                 }
             }
 
-            let mut queue = BTreeSet::new(); // mechanism for bfs
-            let mut maybe = BTreeSet::new(); // possible dropper
-
-            queue.insert(dropper);
+            let mut queue = cease.clone(); // mechanism for bfs
+            let mut ideal = dropper; // the best dropper
 
             while !queue.is_empty() {
-                let node = *queue.iter().next().unwrap();
+                let node = *queue.iter().next_back().unwrap();
                 queue.remove(&node);
-                maybe.insert(node);
 
+                if queue.is_empty() {
+                    ideal = node; // the earlier the better
+                }
                 if node == def || uses.contains(&node) {
-                    continue;
+                    break;
                 }
-
-                for prior in reversed.neighbors_directed(node, Direction::Outgoing) {
-                    if !maybe.contains(&prior) {
-                        queue.insert(prior);
-                    }
-                }
+                queue.extend(self.graph.neighbors_directed(node, Direction::Incoming));
             }
 
-            if cease.len() > 1 {
-                continue;
-            }
-
-            'next: for candidate in maybe {
-                for &node in &cease {
-                    let dominators = algo::dominators::simple_fast(reversed, node);
-                    let doms: HashSet<_> =
-                        dominators.dominators(def).into_iter().flatten().collect();
-
-                    if !doms.contains(&candidate) {
-                        continue 'next;
-                    }
-                }
-
-                dels.insert(slot, candidate);
-                bisect_nodes.insert(candidate);
-                println!("UPDATE {}", slot);
-                break;
-            }
+            bisect_nodes.insert(ideal);
+            dels.insert(slot, ideal);
         }
 
         // Stacking a local means moving it from the aux stack to the data stack.
@@ -890,6 +878,7 @@ impl BasicGraph {
             who_stacks: &HashMap<NodeIndex, BTreeSet<SlotNum>>,
             who_pops: &HashMap<NodeIndex, BTreeSet<SlotNum>>,
             stacked: &BTreeSet<SlotNum>,
+            func_id: LabelId,
             computer: &Computer,
             done: &mut HashSet<NodeIndex>,
         ) {
@@ -908,8 +897,15 @@ impl BasicGraph {
             let check_stack: BTreeSet<_> = stacked.union(&tostack).cloned().collect();
             assert!(unstack.is_subset(&check_stack), "unstack ⊄ stack ∪ tostack");
 
-            let values =
-                ValueGraph::with_stack(block, stacked.clone(), &unstack, &tostack, phis, computer);
+            let values = ValueGraph::with_stack(
+                block,
+                stacked.clone(),
+                &unstack,
+                &tostack,
+                phis,
+                func_id,
+                computer,
+            );
 
             match values {
                 Some(values) => {
@@ -934,7 +930,8 @@ impl BasicGraph {
             for child in blocks.neighbors_directed(node, Direction::Outgoing) {
                 if !done.contains(&child) {
                     stack_locals(
-                        child, blocks, phis, graphs, who_stacks, who_pops, &stacked, computer, done,
+                        child, blocks, phis, graphs, who_stacks, who_pops, &stacked, func_id,
+                        computer, done,
                     );
                 }
             }
@@ -949,6 +946,7 @@ impl BasicGraph {
             &who_stacks,
             &pops,
             &BTreeSet::new(),
+            func_id,
             computer,
             &mut HashSet::new(),
         );

@@ -149,7 +149,7 @@ pub fn mavm_codegen_func(
     globals: &HashMap<StringId, GlobalVar>,
     func_labels: &HashMap<StringId, Label>,
     release_build: bool,
-) -> Result<(Vec<Instruction>, LabelGenerator, u32), CompileError> {
+) -> Result<(Vec<Instruction>, LabelGenerator, FrameSize), CompileError> {
     let mut code = vec![];
     let debug = func.debug_info;
 
@@ -348,7 +348,13 @@ fn codegen(
                     }
                     TypeCheckedStatementKind::AssignGlobal(id, expr) => {
                         expr!(expr);
-                        let global = cgen.globals.get(id).expect("No global exists for stringId");
+                        let global = match cgen.globals.get(id) {
+                            Some(global) => global,
+                            None => error!(
+                                "Global {} is not present",
+                                cgen.string_table.name_from_id(*id)
+                            ),
+                        };
                         let offset = global.offset.unwrap();
                         cgen.code.push(opcode!(@SetGlobalVar(offset)));
                     }

@@ -53,7 +53,7 @@ pub struct CompileStruct {
     pub warnings_are_errors: bool,
     #[clap(short, long)]
     pub output: Option<String>,
-    #[clap(short = 'O', long, default_value = "0")]
+    #[clap(short = 'O', long, default_value = "2")]
     pub optimization_level: usize,
     #[clap(short, long)]
     pub precompute_functions: bool,
@@ -138,6 +138,7 @@ impl CompileStruct {
         let mut unlinked_progs = vec![];
         let mut file_info_chart = BTreeMap::new();
         let mut globals = vec![];
+        let mut computer = Computer::default();
 
         for filename in &self.input {
             let path = Path::new(filename);
@@ -145,7 +146,7 @@ impl CompileStruct {
                 Some(path) => Some(Path::new(path)),
                 None => None,
             };
-            let (progs, all_globals) = match compile_from_file(
+            let (progs, all_globals, the_computer) = match compile_from_file(
                 path,
                 &mut file_info_chart,
                 constants_path,
@@ -164,6 +165,7 @@ impl CompileStruct {
             };
 
             globals = all_globals;
+            computer = the_computer;
 
             unlinked_progs.extend(progs);
         }
@@ -174,21 +176,23 @@ impl CompileStruct {
             panic!("Too many globals defined in program, location of first global is not correct")
         }
 
-        let linked_prog = link(unlinked_progs, globals, &mut error_system, self.test_mode);
-
-        let postlinked_prog = match postlink_compile(
-            linked_prog,
-            file_info_chart.clone(),
+        let linked_prog = link(
+            unlinked_progs,
+            globals,
+            computer,
+            &mut error_system,
             self.test_mode,
-            self.debug_mode,
-        ) {
-            Ok(idk) => idk,
-            Err(err) => {
-                error_system.errors.push(err);
-                error_system.file_info_chart = file_info_chart;
-                return Err(error_system);
-            }
-        };
+        );
+
+        let postlinked_prog =
+            match postlink_compile(linked_prog, file_info_chart.clone(), self.test_mode) {
+                Ok(idk) => idk,
+                Err(err) => {
+                    error_system.errors.push(err);
+                    error_system.file_info_chart = file_info_chart;
+                    return Err(error_system);
+                }
+            };
 
         error_system.file_info_chart = file_info_chart;
 
@@ -475,7 +479,7 @@ pub fn compile_from_file(
     optimization_level: usize,
     release_build: bool,
     builtins: bool,
-) -> Result<(Vec<CompiledFunc>, Vec<GlobalVar>), CompileError> {
+) -> Result<(Vec<CompiledFunc>, Vec<GlobalVar>, Computer), CompileError> {
     let library = path
         .parent()
         .map(|par| {
@@ -567,7 +571,7 @@ pub fn compile_from_folder(
     optimization_level: usize,
     release_build: bool,
     builtins: bool,
-) -> Result<(Vec<CompiledFunc>, Vec<GlobalVar>), CompileError> {
+) -> Result<(Vec<CompiledFunc>, Vec<GlobalVar>, Computer), CompileError> {
     let constants_default = folder.join("constants.json");
     let constants_path = match constants_path {
         Some(path) => Some(path),
@@ -619,13 +623,13 @@ pub fn compile_from_folder(
         module.propagate_attributes();
     }
 
-    let (progs, globals) = codegen_modules(
+    let (progs, globals, computer) = codegen_modules(
         typechecked_modules,
         type_tree,
         optimization_level,
         release_build,
     )?;
-    Ok((progs, globals))
+    Ok((progs, globals, computer))
 }
 
 /// Converts the `Vec<String>` used to identify a path into a single formatted string
@@ -913,7 +917,7 @@ fn typecheck_programs(
                         &path,
                     )?;
 
-                checked_funcs.iter_mut().for_each(|(id, func)| {
+                for (id, func) in &mut checked_funcs {
                     let detected_view = func.is_view(type_tree);
                     let detected_write = func.is_write(type_tree);
 
@@ -982,7 +986,12 @@ fn typecheck_programs(
                             func.debug_info.locs(),
                         ));
                     }
-                });
+
+                    // don't allow an incorrect purity trip up future stages
+                    func.properties.write |= detected_view;
+                    func.properties.view |= detected_write;
+                }
+
                 Ok((
                     TypeCheckedModule::new(
                         checked_funcs,
@@ -1041,7 +1050,7 @@ fn codegen_modules(
     type_tree: TypeTree,
     optimization_level: usize,
     release_build: bool,
-) -> Result<(Vec<CompiledFunc>, Vec<GlobalVar>), CompileError> {
+) -> Result<(Vec<CompiledFunc>, Vec<GlobalVar>, Computer), CompileError> {
     let mut work_list = vec![];
     let mut globals_so_far = 0;
 
@@ -1095,13 +1104,26 @@ fn codegen_modules(
                 return Ok(None);
             }
 
-            let (code, mut label_gen, _) = codegen::mavm_codegen_func(
+            let (code, mut label_gen, frame_size) = codegen::mavm_codegen_func(
                 func.clone(),
                 string_table,
                 &HashMap::new(),
                 func_labels,
                 release_build,
             )?;
+
+            /*let codegened = codegen::mavm_codegen_func(
+                func.clone(),
+                string_table,
+                &HashMap::new(),
+                func_labels,
+                release_build,
+            );
+
+            let (code, mut label_gen, frame_size) = match codegened {
+                Ok(res) => res,
+                Err(_) => return Ok(None),
+            };*/
 
             let code = translate::expand_calls(code, &mut label_gen);
             let code = translate::untag_jumps(code);
@@ -1112,9 +1134,8 @@ fn codegen_modules(
             // the emulator can handle backward jumps
             let globals = vec![];
 
-            // we won't handle closures so these aren't needed
+            // we won't handle closures
             let captures = HashMap::new();
-            let frame_size = 0;
 
             Ok(Some(CompiledFunc::new(
                 func_name,
@@ -1201,7 +1222,7 @@ fn codegen_modules(
         DebugInfo::default(),
     ));
 
-    Ok((funcs, globals))
+    Ok((funcs, globals, computer))
 }
 
 pub fn comma_list(input: &[String]) -> String {

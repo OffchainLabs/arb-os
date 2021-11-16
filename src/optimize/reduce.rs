@@ -6,7 +6,7 @@ use crate::compile::{DebugInfo, SlotNum};
 use crate::console;
 use crate::console::Color;
 use crate::link::fold_tuples;
-use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
+use crate::mavm::{AVMOpcode, Instruction, LabelId, Opcode, Value};
 use crate::opcode;
 use crate::optimize::compute::Computer;
 use crate::optimize::effects::{Effect, Effects};
@@ -189,6 +189,7 @@ impl ValueGraph {
     pub fn new(
         code: &[Instruction],
         phis: &HashMap<SlotNum, SlotNum>,
+        func_id: LabelId,
         computer: &Computer,
     ) -> Option<Self> {
         Self::with_stack(
@@ -197,6 +198,7 @@ impl ValueGraph {
             &BTreeSet::new(),
             &BTreeSet::new(),
             phis,
+            func_id,
             computer,
         )
     }
@@ -212,6 +214,7 @@ impl ValueGraph {
         unstack: &BTreeSet<SlotNum>,
         tostack: &BTreeSet<SlotNum>,
         phis: &HashMap<SlotNum, SlotNum>,
+        func_id: LabelId,
         computer: &Computer,
     ) -> Option<Self> {
         // Algorithm
@@ -488,9 +491,6 @@ impl ValueGraph {
             footer_inputs.reverse();
         }
 
-        // see if we need to phi any stack'd locals
-        let phid = locals.iter().filter_map(|x| phis.get(x.0)).cloned();
-
         // locals still stack'd need to be placed at the top of the data stack
         for slot in &stacked {
             let local = locals.get(slot).unwrap();
@@ -577,7 +577,7 @@ impl ValueGraph {
             }
         }
 
-        fn precompute_funcs(graph: &mut DataGraph, computer: &Computer) {
+        fn precompute_funcs(graph: &mut DataGraph, computer: &Computer, func_id: LabelId) {
             // Funcs that are pure are, by definition, dependent only on their args.
             // Hence, knowing the args implies we can statically evaluate the result.
             // This routine evaluates such funcs, eliding calls with their results.
@@ -606,7 +606,7 @@ impl ValueGraph {
                         None => panic!("FuncCalls should always have at least the jump dest"),
                     };
 
-                    let result = match computer.calc(label, args) {
+                    let result = match computer.calc(func_id, label, args) {
                         Some(result) => result,
                         None => continue,
                     };
@@ -635,7 +635,7 @@ impl ValueGraph {
         }
 
         fold_constants(&mut graph);
-        precompute_funcs(&mut graph, computer);
+        precompute_funcs(&mut graph, computer, func_id);
         fold_constants(&mut graph);
         prune_graph(&mut graph, output);
 

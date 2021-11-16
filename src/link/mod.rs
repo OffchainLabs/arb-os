@@ -11,14 +11,16 @@ use crate::compile::{
 };
 use crate::console::Color;
 use crate::mavm::{AVMOpcode, Instruction, LabelId, Opcode, Value};
+use crate::optimize::Computer;
 use crate::pos::{try_display_location, Location};
 use crate::stringtable::StringId;
 use petgraph::dot::{Config, Dot};
 use petgraph::graph::DiGraph;
 use petgraph::visit::DfsPostOrder;
+use petgraph::Direction;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::{DefaultHasher, HashMap};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io;
@@ -188,6 +190,7 @@ pub type FuncGraph = DiGraph<CompiledFunc, usize>;
 pub fn link(
     funcs: Vec<CompiledFunc>,
     globals: Vec<GlobalVar>,
+    computer: Computer,
     error_system: &mut ErrorSystem,
     test_mode: bool,
 ) -> CompiledProgram {
@@ -266,11 +269,37 @@ pub fn link(
     }
     traversal.reverse();
 
+    let calls = computer.calls.lock();
+
     let mut unvisited: HashSet<_> = graph.node_indices().collect();
+    let mut simulated = BTreeSet::new();
     for node in traversal {
-        unvisited.remove(&node);
         let prog = &graph[node];
         linked_code.append(&mut prog.code.clone());
+        unvisited.remove(&node);
+
+        let func_id = prog.unique_id;
+
+        if let Some(calls) = calls.get(&func_id) {
+            for call in calls {
+                let callee = id_to_node.get(&call).unwrap();
+                simulated.insert(*callee);
+            }
+        }
+    }
+
+    let mut seen = HashSet::new();
+    while !simulated.is_empty() {
+        let node = *simulated.iter().next().unwrap();
+        simulated.remove(&node);
+        unvisited.remove(&node);
+        seen.insert(node);
+
+        for after in graph.neighbors_directed(node, Direction::Outgoing) {
+            if !seen.contains(&after) {
+                simulated.insert(after);
+            }
+        }
     }
 
     for node in graph.node_indices() {
@@ -319,68 +348,56 @@ pub fn postlink_compile(
     program: CompiledProgram,
     file_info_chart: BTreeMap<u64, FileInfo>,
     test_mode: bool,
-    mut debug: bool,
 ) -> Result<LinkedProgram, CompileError> {
-    let consider_debug_printing = |code: &Vec<Instruction>, did_print: bool, phase: &str| {
-        if true {
-            return;
-        }
-        if debug {
-            println!("========== {} ==========", phase);
-            for (idx, insn) in code.iter().enumerate() {
-                println!(
+    let mut all_file = File::create("perf/all.avm").expect("failed to open file");
+    let mut tag_file = File::create("perf/tag.avm").expect("failed to open file");
+
+    macro_rules! all {
+        ($($args:tt)*) => {
+            writeln!(&mut all_file, $($args)*).expect("failed to write file");
+        };
+    }
+    macro_rules! tag {
+        ($($args:tt)*) => {
+            writeln!(&mut tag_file, $($args)*).expect("failed to write file");
+        };
+    }
+    macro_rules! both {
+        ($($args:tt)*) => {
+            all!($($args)*);
+            tag!($($args)*);
+        };
+    }
+
+    macro_rules! phase {
+        ($code:expr, $title:expr) => {
+            all!("========== {} ==========", $title);
+            tag!("========== {} ==========", $title);
+            for (idx, insn) in $code.iter().enumerate() {
+                let text = format!(
                     "{}  {}",
                     Color::grey(format!("{:04}", idx)),
                     insn.pretty_print(Color::PINK)
                 );
-            }
-        } else if did_print {
-            println!("========== {} ==========", phase);
-            for (idx, insn) in code.iter().enumerate() {
+                all!("{}", text);
                 if insn.debug_info.attributes.codegen_print {
-                    println!(
-                        "{}  {}",
-                        Color::grey(format!("{:04}", idx)),
-                        insn.pretty_print(Color::PINK)
-                    );
+                    tag!("{}", text);
                 }
             }
-        }
-    };
+        };
+    }
 
-    let mut did_print = false;
+    let code = program.code;
+    phase!(code, "initial linking");
 
-    if debug {
-        println!("========== after initial linking ===========");
-        for (idx, insn) in program.code.iter().enumerate() {
-            println!(
-                "{}  {}",
-                Color::grey(format!("{:04}", idx)),
-                insn.pretty_print(Color::PINK)
-            );
-        }
-    } /*else {
-          for (idx, insn) in program.code.iter().enumerate() {
-              if insn.debug_info.attributes.codegen_print {
-                  println!(
-                      "{}  {}",
-                      Color::grey(format!("{:04}", idx)),
-                      insn.pretty_print(Color::PINK)
-                  );
-                  did_print = true;
-              }
-          }
-      }*/
-
-    let (code, jump_table) =
-        striplabels::fix_backward_labels(&program.code, program.globals.len() - 1);
-    consider_debug_printing(&code, did_print, "after fix_backward_labels");
+    let (code, jump_table) = striplabels::fix_backward_labels(&code, program.globals.len() - 1);
+    phase!(code, "fix_backward_labels");
 
     let code = xformcode::fold_tuples(code, program.globals.len())?;
-    consider_debug_printing(&code, did_print, "after fix_tuple_size");
+    phase!(code, "fix_tuple_size");
 
     let code = optimize::peephole(&code);
-    consider_debug_printing(&code, did_print, "after peephole optimization");
+    phase!(code, "peephole optimization");
 
     let (mut code, jump_table_final) = striplabels::strip_labels(code, &jump_table)?;
     let jump_table_len = jump_table_final.len();
@@ -411,43 +428,39 @@ pub fn postlink_compile(
         })
         .collect::<Result<Vec<_>, CompileError>>()?;
 
-    if debug {
-        println!("============ after strip_labels =============");
-        println!("static: {}", jump_table_value);
-        for (idx, insn) in code_final.iter().enumerate() {
-            println!("{:04}  {}", idx, insn.pretty_print(Color::PINK));
-        }
-        println!("============ after full compile/link =============");
+    both!("============ strip_labels =============");
+    both!("static: {}", jump_table_value);
+    for (idx, insn) in code_final.iter().enumerate() {
+        both!("{:04}  {}", idx, insn.pretty_print(Color::PINK));
     }
+    both!("============ full compile/link =============");
 
-    if debug {
-        let globals_shape = xformcode::make_uninitialized_tuple(program.globals.len());
-        let globals_index = xformcode::make_numbered_tuple(program.globals.len());
-        let globals_names = xformcode::make_named_tuple(&program.globals);
+    let globals_shape = xformcode::make_uninitialized_tuple(program.globals.len());
+    let globals_index = xformcode::make_numbered_tuple(program.globals.len());
+    let globals_names = xformcode::make_named_tuple(&program.globals);
 
-        println!("\nGlobal Vars {}\n", program.globals.len());
-        println!("shape {}\n", globals_shape.pretty_print(Color::PINK));
-        println!("names {}\n", globals_names.pretty_print(Color::MINT));
-        println!("index {}\n\n", globals_index.pretty_print(Color::MINT));
-        println!("Globals Tuple\n{}\n", globals.pretty_print(Color::GREY));
+    both!("\nGlobal Vars {}\n", program.globals.len());
+    both!("shape {}\n", globals_shape.pretty_print(Color::PINK));
+    both!("names {}\n", globals_names.pretty_print(Color::MINT));
+    both!("index {}\n\n", globals_index.pretty_print(Color::MINT));
+    both!("Globals Tuple\n{}\n", globals.pretty_print(Color::GREY));
 
-        println!(
-            "Globals Tuple Debug\n{}\n",
-            xformcode::make_globals_tuple_debug(&program.globals, &program.type_tree)
-                .replace_last_none(&jump_table_value)
-                .pretty_print(Color::GREY)
-        );
+    both!(
+        "Globals Tuple Debug\n{}\n",
+        xformcode::make_globals_tuple_debug(&program.globals, &program.type_tree)
+            .replace_last_none(&jump_table_value)
+            .pretty_print(Color::GREY)
+    );
 
-        let jump_shape = xformcode::make_uninitialized_tuple(jump_table_len);
-        println!(
-            "Jump Table {}\n{}\n",
-            jump_table_len,
-            jump_shape.pretty_print(Color::PINK)
-        );
+    let jump_shape = xformcode::make_uninitialized_tuple(jump_table_len);
+    both!(
+        "Jump Table {}\n{}\n",
+        jump_table_len,
+        jump_shape.pretty_print(Color::PINK)
+    );
 
-        let size = code_final.iter().count() as f64;
-        println!("Total Instructions {}", size);
-    }
+    let size = code_final.iter().count() as f64;
+    both!("Total Instructions {}", size);
 
     Ok(LinkedProgram {
         arbos_version: init_constant_table(Some(Path::new("arb_os/constants.json")))

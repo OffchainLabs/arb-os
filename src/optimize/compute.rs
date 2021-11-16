@@ -5,17 +5,21 @@
 use crate::compile::translate;
 use crate::compile::{CompileError, CompiledFunc};
 use crate::console::Color;
-use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
+use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, LabelId, Opcode, Value};
 use crate::opcode;
 use crate::run::{Machine, MachineState};
+use crate::uint256::Uint256;
 use parking_lot::Mutex;
-use std::collections::hash_map::{DefaultHasher, HashMap};
+use std::collections::hash_map::DefaultHasher;
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 
+#[derive(Default)]
 pub struct Computer {
     code: Vec<Instruction>,
     labels: HashMap<Label, CodePt>,
     cache: Mutex<HashMap<u64, Option<Value>>>,
+    pub calls: Mutex<HashMap<LabelId, HashSet<LabelId>>>,
 }
 
 impl Computer {
@@ -62,10 +66,19 @@ impl Computer {
             code,
             labels,
             cache: Mutex::new(HashMap::new()),
+            calls: Mutex::new(HashMap::new()),
         })
     }
 
-    pub fn calc(&self, label: Label, args: Vec<Value>) -> Option<Value> {
+    pub fn calc(&self, caller: LabelId, label: Label, args: Vec<Value>) -> Option<Value> {
+        // TODO
+
+        // Record that the caller requested a computation from this label.
+        // This will help determine which missing funcs in the final output
+        // were precomputed away rather than being truly unreachable.
+        let func_id = label.get_id();
+        self.calls.lock().entry(caller).or_default().insert(func_id);
+
         let mut hasher = DefaultHasher::new();
         label.hash(&mut hasher);
         args.hash(&mut hasher);
@@ -89,6 +102,7 @@ impl Computer {
         };
 
         let mut machine = Machine::from(self.code.clone());
+        machine.arb_gas_remaining = Uint256::from_usize(5000000);
 
         // Load the accept state as the return destination when jumping.
         // If the machine reaches this state (i.e. does not error), we have a result.
@@ -100,18 +114,19 @@ impl Computer {
         machine.state = MachineState::Running(codept);
         machine.run(None);
 
-        if machine.stack.contents.len() > 1 {
-            println!("Call {}", label.pretty_print(Color::RED));
-            for item in &machine.stack.contents {
-                println!("Also {}", item.pretty_print(Color::PINK));
-            }
-        }
-
         if let MachineState::Error(err) = &machine.state {
-            for item in &machine.stack.contents {
-                println!("Have {}", item.pretty_print(Color::PINK));
+            println!(
+                "{} {}\n\t{}",
+                Color::yellow("Failed to precompute:"),
+                label.pretty_print(Color::PINK),
+                err
+            );
+
+            if machine.arb_gas_remaining != Uint256::max_uint() {
+                for item in &machine.stack.contents {
+                    println!("Have {}", item.pretty_print(Color::PINK));
+                }
             }
-            println!("{}", err);
             return cache!(None);
         }
 
@@ -119,7 +134,14 @@ impl Computer {
             Some(result) => result,
             _ => return cache!(None),
         };
-        assert!(machine.stack.contents.is_empty());
+
+        if !machine.stack.is_empty() {
+            println!("Call {}", label.pretty_print(Color::RED));
+            for item in &machine.stack.contents {
+                println!("Also {}", item.pretty_print(Color::PINK));
+            }
+            panic!("Simulated machine has extra data on the stack");
+        }
 
         cache!(Some(result))
     }

@@ -731,7 +731,7 @@ pub struct Machine {
     static_val: Value,
     pub register: Value,
     pub err_codepoint: CodePt,
-    arb_gas_remaining: Uint256,
+    pub arb_gas_remaining: Uint256,
     pub runtime_env: RuntimeEnvironment,
     file_info_chart: BTreeMap<u64, FileInfo>,
     total_gas_usage: Uint256,
