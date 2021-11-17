@@ -737,7 +737,7 @@ impl BasicGraph {
             }
         }
 
-        // TODO: handle phis
+        // TODO: handle locals that phi each other in a future PR.
         defs = defs
             .into_iter()
             .filter(|(slot, _)| !phid.contains(slot) && !phis.contains_key(slot))

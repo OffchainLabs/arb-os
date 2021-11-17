@@ -26,9 +26,11 @@ pub struct RuntimeEnvironment {
     pub sends: Vec<Vec<u8>>,
     pub next_inbox_seq_num: Uint256,
     pub caller_seq_nums: HashMap<Uint256, Uint256>,
+    #[allow(dead_code)]
     next_id: Uint256, // used to assign unique (but artificial) txids to messages
     pub recorder: RtEnvRecorder,
     compressor: TxCompressor,
+    #[allow(dead_code)]
     charging_policy: Option<(Uint256, Uint256, Uint256)>,
     num_wallets: u64,
     chain_init_message: Vec<u8>,
@@ -743,8 +745,10 @@ pub struct ArbosReceipt {
     request_id: Uint256,
     return_code: Uint256,
     return_data: Vec<u8>,
+    #[allow(dead_code)]
     evm_logs: Vec<EvmLog>,
     gas_used: Uint256,
+    #[allow(dead_code)]
     gas_price_wei: Uint256,
     pub provenance: ArbosRequestProvenance,
     gas_so_far: Uint256,     // gas used so far in L1 block, including this tx

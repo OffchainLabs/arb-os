@@ -48,6 +48,11 @@ impl Computer {
                     // so instead error if these are hit
                     curr.opcode = Opcode::AVMOpcode(AVMOpcode::Error);
                 }
+                Opcode::AVMOpcode(AVMOpcode::Halt) => {
+                    // These aren't present but would be deadly if introduced in the future.
+                    // Making Halt error ensures uniqueness of the accepting state.
+                    curr.opcode = Opcode::AVMOpcode(AVMOpcode::Error);
+                }
                 Opcode::AVMOpcode(_) => {}
                 op => {
                     return Err(CompileError::internal(

@@ -31,7 +31,7 @@ pub fn reorder_stack(
     print: bool,
 ) -> Result<(Vec<Instruction>, Vec<NodeIndex>), &'static str> {
     // Algorithm
-    //   Annotate the stack & needs with how many copies need to be made & their order
+    //   Annotate the stack & needs with how many copies need to be made & their order.
     //   Move a sliding window around, fixing order & duping values as is needed
     //   Optimize to compute an efficient transformation of Swap's, Dup's, and Aux code.
 
