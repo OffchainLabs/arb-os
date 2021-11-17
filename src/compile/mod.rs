@@ -56,8 +56,6 @@ pub struct CompileStruct {
     #[clap(short = 'O', long, default_value = "0")]
     pub optimization_level: usize,
     #[clap(short, long)]
-    pub precompute_functions: bool,
-    #[clap(short, long)]
     pub format: Option<String>,
     #[clap(short, long)]
     pub consts_file: Option<String>,

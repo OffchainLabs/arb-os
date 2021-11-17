@@ -11,7 +11,7 @@ public func start() -> uint {
 
 func back_edge() -> uint {
     let a = externally_used;
-    if a == externally_used { 4 } else { 4 }
+    if a == externally_used { 4 } else { 4 } // trick the optimizer
 }
 
 func unused() -> uint {

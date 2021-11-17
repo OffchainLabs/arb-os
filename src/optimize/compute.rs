@@ -36,8 +36,14 @@ impl Computer {
         let code = translate::replace_closures_with_errors(code);
         let (mut code, labels) = translate::labels_to_codepoints(code)?;
 
-        for curr in &code {
+        for curr in &mut code {
             match curr.opcode {
+                Opcode::AVMOpcode(AVMOpcode::Hash) => {
+                    // The Hash opcode isn't correct, so we'll panic instead.
+                    // This check decreases performance, so we should add an
+                    // emulator flag that indicates a bad hash has occured.
+                    curr.opcode = Opcode::AVMOpcode(AVMOpcode::Error);
+                }
                 Opcode::AVMOpcode(_) => {}
                 op => {
                     return Err(CompileError::internal(
