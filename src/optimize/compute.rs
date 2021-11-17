@@ -5,21 +5,24 @@
 use crate::compile::translate;
 use crate::compile::{CompileError, CompiledFunc};
 use crate::console::Color;
-use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, LabelId, Opcode, Value};
+use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
 use crate::opcode;
 use crate::run::{Machine, MachineState};
 use crate::uint256::Uint256;
 use parking_lot::Mutex;
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 #[derive(Default)]
+/// Provides a mechanism for emulating pure funcs in ArbOS
 pub struct Computer {
+    /// The program's instructions
     code: Vec<Instruction>,
+    /// Associates labels to where to jump in order to call them
     labels: HashMap<Label, CodePt>,
+    /// Memoizes prior computations since emulation is expensive
     cache: Mutex<HashMap<u64, Option<Value>>>,
-    pub calls: Mutex<HashMap<LabelId, HashSet<LabelId>>>,
 }
 
 impl Computer {
@@ -66,19 +69,13 @@ impl Computer {
             code,
             labels,
             cache: Mutex::new(HashMap::new()),
-            calls: Mutex::new(HashMap::new()),
         })
     }
 
-    pub fn calc(&self, caller: LabelId, label: Label, args: Vec<Value>) -> Option<Value> {
-        // TODO
-
-        // Record that the caller requested a computation from this label.
-        // This will help determine which missing funcs in the final output
-        // were precomputed away rather than being truly unreachable.
-        let func_id = label.get_id();
-        self.calls.lock().entry(caller).or_default().insert(func_id);
-
+    /// Simulate a function call, returning the value should the computation succeed
+    ///   label  - the globally unique label of the func
+    ///   args   - the values on the stack
+    pub fn calc(&self, label: Label, args: Vec<Value>) -> Option<Value> {
         let mut hasher = DefaultHasher::new();
         label.hash(&mut hasher);
         args.hash(&mut hasher);

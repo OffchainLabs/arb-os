@@ -2,34 +2,6 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-use core::kvs::Kvs;
-use core::kvs::builtin_kvsNew;
-use core::kvs::builtin_kvsGet;
-use core::kvs::builtin_kvsSet;
-use core::kvs::builtin_kvsHasKey;
-use core::kvs::builtin_kvsDelete;
-use core::kvs::builtin_kvsForall;
-use core::kvs::builtin_kvsSize;
-
 write func main() {
-    if let Some(issue) = test_1() {
-        asm(issue.1) { log };
-    } else {
-        asm("".1) { log };
-    }
-}
-
-#[print]
-func test_1() -> option<string> {
-
-    let a = 32;
-    let b = newfixedarray(0);
-    let c = b;
-
-    if a == 32 {
-        return None;
-    }
-    
-    
-    None
+    asm("".1) { log };
 }

@@ -56,12 +56,14 @@ pub enum BasicEdge {
 pub struct BasicGraph {
     /// Basic blocks and the edges that connect them
     graph: StableGraph<BasicBlock, BasicEdge>,
+    /// The Func this graph represents
+    func_id: LabelId,
     /// The output node of the graph
     entry: NodeIndex,
     /// The output node of the graph
     output: NodeIndex,
-    /// The Func this graph represents
-    func_id: LabelId,
+    /// The Funcs this graph depends on (includes both calls & pointers)
+    funcs: HashSet<LabelId>,
     /// Whether this graph contains a cycle
     cyclic: bool,
     /// Whether this graph contains code that's been marked for printing
@@ -183,18 +185,20 @@ impl BasicGraph {
         }
 
         let cyclic = algo::is_cyclic_directed(&graph);
+        let funcs = HashSet::new();
         BasicGraph {
             graph,
+            func_id,
             entry,
             output,
-            func_id,
+            funcs,
             cyclic,
             should_print,
         }
     }
 
     /// Flattens a basic graph into an equivalent vector of `Instruction`s
-    pub fn flatten(self) -> Vec<Instruction> {
+    pub fn flatten(self) -> (Vec<Instruction>, HashSet<LabelId>) {
         let mut code = vec![];
         for node in self.graph.node_indices() {
             let block = &self.graph[node];
@@ -203,7 +207,7 @@ impl BasicGraph {
                 _ => {}
             }
         }
-        code
+        (code, self.funcs)
     }
 
     /// Prints a basic graph with colors
@@ -659,7 +663,13 @@ impl BasicGraph {
             };
         }
 
-        //show_all!();
+        show_all!();
+
+        // Having computed the value graphs, we know which funcs each block depends on.
+        // Future value graphs may further optimize the program, but won't elide these.
+        for (_, values) in &graphs {
+            self.funcs.extend(values.funcs.clone());
+        }
 
         let nodes: Vec<_> = self.graph.node_indices().collect();
 

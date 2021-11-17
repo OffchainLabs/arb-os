@@ -11,13 +11,11 @@ use crate::compile::{
 };
 use crate::console::Color;
 use crate::mavm::{AVMOpcode, Instruction, LabelId, Opcode, Value};
-use crate::optimize::Computer;
 use crate::pos::{try_display_location, Location};
 use crate::stringtable::StringId;
 use petgraph::dot::{Config, Dot};
 use petgraph::graph::DiGraph;
 use petgraph::visit::DfsPostOrder;
-use petgraph::Direction;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::{DefaultHasher, HashMap};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -190,7 +188,6 @@ pub type FuncGraph = DiGraph<CompiledFunc, usize>;
 pub fn link(
     funcs: Vec<CompiledFunc>,
     globals: Vec<GlobalVar>,
-    computer: Computer,
     error_system: &mut ErrorSystem,
     test_mode: bool,
 ) -> CompiledProgram {
@@ -269,35 +266,26 @@ pub fn link(
     }
     traversal.reverse();
 
-    let calls = computer.calls.lock();
-
     let mut unvisited: HashSet<_> = graph.node_indices().collect();
-    let mut simulated = BTreeSet::new();
+    let mut execution = BTreeSet::new();
     for node in traversal {
         let prog = &graph[node];
         linked_code.append(&mut prog.code.clone());
         unvisited.remove(&node);
-
-        let func_id = prog.unique_id;
-
-        if let Some(calls) = calls.get(&func_id) {
-            for call in calls {
-                let callee = id_to_node.get(&call).unwrap();
-                simulated.insert(*callee);
-            }
-        }
+        execution.insert(node);
     }
 
     let mut seen = HashSet::new();
-    while !simulated.is_empty() {
-        let node = *simulated.iter().next().unwrap();
-        simulated.remove(&node);
+    while !execution.is_empty() {
+        let node = *execution.iter().next().unwrap();
         unvisited.remove(&node);
+        execution.remove(&node);
         seen.insert(node);
 
-        for after in graph.neighbors_directed(node, Direction::Outgoing) {
-            if !seen.contains(&after) {
-                simulated.insert(after);
+        for other in &graph[node].dependencies {
+            let dependency = id_to_node.get(&other).expect("no label");
+            if !seen.contains(dependency) {
+                execution.insert(*dependency);
             }
         }
     }
@@ -313,7 +301,7 @@ pub fn link(
 
         if unvisited.contains(&node) && !name.starts_with('_') {
             error_system.warnings.push(CompileError::new_warning(
-                String::from("Compile warning"),
+                "Compile warning",
                 format!(
                     "func {} is unreachable",
                     Color::color(error_system.warn_color, name)
@@ -368,11 +356,16 @@ pub fn postlink_compile(
             tag!($($args)*);
         };
     }
+    macro_rules! title {
+        ($title:expr) => {
+            let bars = Color::grey("==========");
+            both!("{} {} {}", bars, Color::mint($title), bars);
+        };
+    }
 
     macro_rules! phase {
         ($code:expr, $title:expr) => {
-            all!("========== {} ==========", $title);
-            tag!("========== {} ==========", $title);
+            title!($title);
             for (idx, insn) in $code.iter().enumerate() {
                 let text = format!(
                     "{}  {}",
@@ -428,12 +421,14 @@ pub fn postlink_compile(
         })
         .collect::<Result<Vec<_>, CompileError>>()?;
 
-    both!("============ strip_labels =============");
-    both!("static: {}", jump_table_value);
+    title!("final output");
     for (idx, insn) in code_final.iter().enumerate() {
-        both!("{:04}  {}", idx, insn.pretty_print(Color::PINK));
+        both!(
+            "{}  {}",
+            Color::grey(format!("{:04}", idx)),
+            insn.pretty_print(Color::PINK)
+        );
     }
-    both!("============ full compile/link =============");
 
     let globals_shape = xformcode::make_uninitialized_tuple(program.globals.len());
     let globals_index = xformcode::make_numbered_tuple(program.globals.len());

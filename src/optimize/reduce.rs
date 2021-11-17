@@ -6,7 +6,7 @@ use crate::compile::{DebugInfo, SlotNum};
 use crate::console;
 use crate::console::Color;
 use crate::link::fold_tuples;
-use crate::mavm::{AVMOpcode, Instruction, LabelId, Opcode, Value};
+use crate::mavm::{AVMOpcode, Instruction, Label, LabelId, Opcode, Value};
 use crate::opcode;
 use crate::optimize::compute::Computer;
 use crate::optimize::effects::{Effect, Effects};
@@ -139,6 +139,9 @@ pub struct ValueGraph {
     header: Vec<Instruction>,
     footer: Vec<Instruction>,
     output: NodeIndex,
+    #[allow(dead_code)]
+    func_id: LabelId,
+    pub funcs: HashSet<LabelId>,
 }
 
 impl ValueGraph {
@@ -577,7 +580,7 @@ impl ValueGraph {
             }
         }
 
-        fn precompute_funcs(graph: &mut DataGraph, computer: &Computer, func_id: LabelId) {
+        fn precompute_funcs(graph: &mut DataGraph, computer: &Computer) {
             // Funcs that are pure are, by definition, dependent only on their args.
             // Hence, knowing the args implies we can statically evaluate the result.
             // This routine evaluates such funcs, eliding calls with their results.
@@ -606,7 +609,7 @@ impl ValueGraph {
                         None => panic!("FuncCalls should always have at least the jump dest"),
                     };
 
-                    let result = match computer.calc(func_id, label, args) {
+                    let result = match computer.calc(label, args) {
                         Some(result) => result,
                         None => continue,
                     };
@@ -635,7 +638,17 @@ impl ValueGraph {
         }
 
         fold_constants(&mut graph);
-        precompute_funcs(&mut graph, computer, func_id);
+
+        let mut funcs = HashSet::new();
+        for node in nodes(&graph) {
+            funcs.insert(match &graph[node] {
+                ValueNode::Value(Value::Label(Label::Func(id))) => *id,
+                ValueNode::Value(Value::Label(Label::Closure(id))) => *id,
+                _ => continue,
+            });
+        }
+
+        precompute_funcs(&mut graph, computer);
         fold_constants(&mut graph);
         prune_graph(&mut graph, output);
 
@@ -669,6 +682,8 @@ impl ValueGraph {
             header,
             footer,
             output,
+            func_id,
+            funcs,
         };
 
         Some(values)
@@ -700,7 +715,7 @@ impl ValueGraph {
 
         // Stack'd locals are always on top of the data stack when entering a basic block.
         // This is something codegen must guarantee later too.
-        for node in graph.node_indices() {
+        for node in nodes(&graph) {
             if let ValueNode::StackedLocal(_) = &graph[node] {
                 stack.push(node);
             }
@@ -709,7 +724,7 @@ impl ValueGraph {
         let mut header = self.header.clone();
 
         // Pop unused arguments. We can't just ignore them, since they were created elsewhere.
-        for node in graph.node_indices() {
+        for node in nodes(&graph) {
             if let ValueNode::Arg(_) = &graph[node] {
                 if conn_count(&graph, node) != 0 {
                     stack.insert(0, node);
@@ -721,7 +736,7 @@ impl ValueGraph {
 
         // Determine the number of times each node is used by another.
         let mut conn_counts = HashMap::new();
-        for node in graph.node_indices() {
+        for node in nodes(&graph) {
             conn_counts.insert(node, conn_count(&graph, node));
         }
 
