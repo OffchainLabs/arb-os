@@ -786,24 +786,29 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 ## Path syntax
 
-*ident* (`::` *ident*)*
+*ident* (`::` *ident*)+
 
-> This represents a path with the leftmost identifier being the widest scope.
-> In particular, a valid path may contain a file name followed by a identifier,
-> or it may be a library specifier, either `std` or `core`, followed by a file name and identifier.
+> This represents a path with the leftmost identifier being the widest scope, with each following identifier contained within the previous.
+> The final identifier represents a specific function or type.
+> 
+> A valid path may contain a file name followed by a identifier,
+> or it may be a library specifier, either `std` or `core`, followed by a file name then identifier.
+> 
 > In the case of a file name followed by a identifier, the file name represents the mini file within the source folder with that name.
-> So if `"arb_os"` is the compile target `name` would represent `arb_os/name.mini`, and the identifier would represent the function or type of the same name in that file.
+> So if `"arb_os"` is the compile target `filename` would represent `arb_os/filename.mini`, and the identifier would represent the function or type of the same name in that file.
 > If it starts with a library prefix, the base folder is determined by the prefix, with
-> `std` corresponding to the `std` folder and `core` corresponding to the `builtin` folder.
+> `std` corresponding to the `stdlib` folder and `core` corresponding to the `builtin` folder.
 > The second and third parts of the path work the same as mentioned previously.
+> Thus `std::queue::BoundedQueue` would refer to the type or function named `BoundedQueue` in `stdlib/queue.mini`.
+> 
 > A path represented in this format will be called a virtual path, to distinguish it from paths in use by the filesystem.
 
 ## Shadowing
 
 In mini, new variables can be created with the same name as old variables, this is called shadowing.
-To prevent ambiguity when dealing with shadowed variables, a reference to the shadowed name is treated as referring to
+To prevent ambiguity when dealing with shadowed variables, a use of the shadowed name is treated as referring to
 the most recently declared variable that is currently in scope. So if a variable is declared inside a codeblock with the same name as another variable outside the codeblock,
-references to the name inside the codeblock will refer to the inner variable, and references to the name after the end of the codeblock refer to the outer variable.
+any subsequent uses of the name inside the codeblock will refer to the inner variable, and references to the name after the end of the codeblock refer to the outer variable.
 
 ## AVM Values
 
