@@ -223,21 +223,9 @@ pub fn pack_closures(
     out
 }
 
-/// TODO
-pub fn replace_closures_with_errors(mut code: Vec<Instruction>) -> Vec<Instruction> {
-    for curr in &mut code {
-        match curr.opcode {
-            Opcode::Capture(..) | Opcode::ReserveCapture(..) | Opcode::MakeClosure(..) => {
-                curr.opcode = Opcode::AVMOpcode(AVMOpcode::Error);
-            }
-            _ => {}
-        }
-    }
-
-    code
-}
-
-/// TODO
+/// Strips away labels in the program, saving this info in a map that relates each
+/// label to its corresponding codepoint position. This process allows backwards jumps.
+/// Labels referenced but not defined are replaced with the error codepoint.
 pub fn labels_to_codepoints(
     code: Vec<Instruction>,
 ) -> Result<(Vec<Instruction>, HashMap<Label, CodePt>), CompileError> {
@@ -265,7 +253,7 @@ pub fn labels_to_codepoints(
     let mut errors = vec![];
 
     for curr in &mut out {
-        // replace any wide immediate values
+        // replace labels with their corresponding codepoints
 
         if let Some(ref mut value) = curr.immediate {
             let debug_info = curr.debug_info;
@@ -291,7 +279,8 @@ pub fn labels_to_codepoints(
     }
 
     if let Some(_error) = errors.first() {
-        // TODO filter out the real errors after fully qualifying the "sensitive" attribute
+        // TODO: add an integrity check since most errors of this sort are intentional and
+        // it'd be nice to panic on those that aren't.
     }
 
     Ok((out, labels))

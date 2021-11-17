@@ -33,7 +33,6 @@ impl Computer {
             code.extend(func.code);
         }
 
-        let code = translate::replace_closures_with_errors(code);
         let (mut code, labels) = translate::labels_to_codepoints(code)?;
 
         for curr in &mut code {
@@ -42,6 +41,11 @@ impl Computer {
                     // The Hash opcode isn't correct, so we'll panic instead.
                     // This check decreases performance, so we should add an
                     // emulator flag that indicates a bad hash has occured.
+                    curr.opcode = Opcode::AVMOpcode(AVMOpcode::Error);
+                }
+                Opcode::Capture(..) | Opcode::ReserveCapture(..) | Opcode::MakeClosure(..) => {
+                    // Simulating closures requires a linking step we don't have,
+                    // so instead error if these are hit
                     curr.opcode = Opcode::AVMOpcode(AVMOpcode::Error);
                 }
                 Opcode::AVMOpcode(_) => {}
