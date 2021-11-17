@@ -475,98 +475,98 @@ There are many types of expressions, which we'll catalog here.   Operator preced
 
 Mini never automatically converts types to make an operation succeed.  Programmers will need to do explicit conversions. The compiler will report an error if a conversion would be necessary.
 
-\- *expression*
+`-` *expression*
 
-> Unary minus. Defined only for type `int`, and produces an `int`. This will error if the result is not expressible in the `int` datatype (that is, if the value of expression is `MaxNegInt`).
+> Unary minus. Defined only for type `int`, and produces an `int`. This will error if the result is not expressible in the `int` datatype. This will only occur if the value of *expression* is `MaxNegInt`.
 
-! *expression*
+`!` *expression*
 
 > Logical negation, defined only for type `bool`, produces a `bool`.
 
-~ *expression*
+`~` *expression*
 
 > Bitwise negation.  Defined for numeric types and `bytes32`. Produces a result of the same type as the operand.
 
-*expression* ?
+*expression* `?`
 
-> The containing function must return either option or any, and *expression* must be an option type. If expression is the Some variant, then it evaluates as the inner value, otherwise, this will cause the function to return `None`.
+> The containing function must return either an option type or `any`, and *expression* must be an option type. If *expression* is the `Some` variant, then it evaluates as the inner value, otherwise, this will cause the function to return `None`.
 
-*expression* + *expression*
+*expression* `+` *expression*
 
-*expression* - *expression*
+*expression* `-` *expression*
 
 > Addition and subtraction.  Both operands must have the same numeric type, and the result is of that same type. These do 256-bit arithmetic and do not check for overflow or underflow.
 
-*expression* * *expression*
+*expression* `*` *expression*
 
-*expression* / *expression*
+*expression* `/` *expression*
 
-*expression* % *expression*
+*expression* `%` *expression*
 
 > Multiplication, integer division, and modulo. Both operands must have the same numeric type, and the result is of that same type. Multiplication does 256-bit arithmetic and does not check for overflow or underflow.  Division and modulo error if the second operand is zero.
 
-*expression* < *expression*
+*expression* `<` *expression*
 
-*expression* > *expression*
+*expression* `>` *expression*
 
-*expression* <= *expression*
+*expression* `<=` *expression*
 
-*expression* >= *expression*
+*expression* `>=` *expression*
 
 > Numeric comparisons. Both operands must have the same numeric type. The result has type `bool`.
 
-*expression* == *expression*
+*expression* `==` *expression*
 
-*expression* != *expression*
+*expression* `!=` *expression*
 
 > Equality comparison, checking that value have the same AVM representation. The result has type `bool`.
 > 
-> Please see [the AVM spec](https://github.com/OffchainLabs/arbitrum/blob/master/docs/AVM_Specification.md) for more information,
-> in particular the `eq` opcode `0x14`.
+> Please see [the AVM spec](https://github.com/OffchainLabs/arbitrum/blob/master/docs/AVM_Specification.md) in particular the `eq` opcode `0x14`,
+> and the AVM Representation section for more information.
 
-*expression* & *expression*
+*expression* `&` *expression*
 
-*expression* ^ *expression*
+*expression* `^` *expression*
 
-*expression* | *expression*
+*expression* `|` *expression*
 
-> Bitwise and, xor, and or.  Both operands must have the same atomic type, and the result will have that same type.
+> Bitwise and, xor, and or.  Both operands must have the same numeric type, and the result will have that same type.
 
-*expression* && *expression*
+*expression* `&&` *expression*
 
-*expression* || *expression*
+*expression* `||` *expression*
 
-> Logical and / or.  Both operands must have type `bool`, and the result has type `bool`.  Execution will shortcut, so that the second expression is evaluated only if the outcome is still in doubt after evaluating the first expression.
+> Logical and, and logical or.  Both operands must have type `bool`, and the result has type `bool`.  Execution will shortcut, so that the second expression is evaluated only if the outcome is still in doubt after evaluating the first expression.
 
-*leftexpression* >> *rightexpression*
+*leftexpression* `>>` *rightexpression*
 
 > Right shift operator, it shifts the bits of *leftexpression* right by *rightexpression* bits.
 > *leftexpression* and *rightexpression* must be expressions of type `uint`. When a right shift occurs, the leftmost *rightexpression* bits are filled by 0s.
 > If both *leftexpression* and *rightexpression* are constants, then *leftexpression* may be of type `int` or `bytes32`.
 
-*expression* << *expression*
+*leftexpression* `<<` *rightexpression*
 
 > Left shift operator, it shifts the bits of *leftexpression* left by *rightexpression* bits.
 > *leftexpression* and *rightexpression* must be expressions of type `uint`. When a left shift occurs, the rightmost *rightexpression* bits are filled by 0s.
 > If both *leftexpression* and *rightexpression* are constants, then *leftexpression* may be of type `int` or `bytes32`.
 
-`uint`( *expression* )
+`uint` `(` *expression* `)`
 
-`int`( *expression* )
+`int` `(` *expression* `)`
 
-`bytes32`( *expression* )
+`bytes32` `(` *expression* `)`
 
-`address` ( *expression* )
+`address` `(` *expression* `)`
 
-> Type conversions. The operand must be an atomic type. The result type is per the operator name.  Conversion to address truncates the operand value to 20 (lowest-order) bytes.
+> Type conversions. The operand must be a numeric type. The result type is per the operator name.  Conversion to `address` truncates the operand value to the 20 lowest-order bytes.
 
-`len` ( *expression* ) 
+`len` `(` *expression* `)` 
 
-> Get the length of *expression*, whose value must be a non-fixed size array.  Result is a `uint`.
+> Get the length of *expression*, whose value must be a variable sized array.  Result is a `uint`.
 
-`hash` ( *expression* )
+`hash` `(` *expression* `)`
 
-`hash` ( *expression* , *expression* )
+`hash` `(` *expression* `,` *expression* `)`
 
 > Compute the hash of the value(s).  The single-argument version can take a value of any type.  The two-argument version requires both arguments to be `bytes32`. Both produce a `bytes32`.
 >
@@ -576,46 +576,47 @@ Mini never automatically converts types to make an operation succeed.  Programme
 >
 > [Likely improvement: Eliminate the two-argument hash, on the rationale that the programmer can always make a tuple and hash that using the single-argument hash. Applying the single-argument hash to general values is a simpler and equally expressive mechanism.]
 
-`struct` { *name1* : *expression1* , *name2* : *expression2* , ... }
+`struct` `{` *name1* `:` *expression1* `,` *name2* `:` *expression2* `,` ... `}`
 
-> Create a new struct value. The types of the struct fields are inferred from the types of the expressions. Returns a struct value whose type is determined by the sequence of names and expression types given.
+> Create a new `struct` value. The types of the `struct` fields are inferred from the types of the expressions. Returns a `struct` value whose specific type is determined by the sequence of names and expression types given.
 
-( *expression1* , *expression2*, ... )
+`(` *expression1* `,` *expression2*`,` ... `)`
 
 > Create a new tuple value, whose type will be inferred from the number and types of the expressions.
 
-`newarray` < *type* > ( *expression* )
+`newarray` `<` *type* `>` `(` *expression* `)`
 
-> Create a new array object. *expression*, which must have type `uint`, gives the size of the array, and *type* is the type of its elements. The contents of the array are initialized to the zero value if *type* is an atomic type, or uninitialized otherwise.
+> Create a new variable-sized array object. *expression*, which must have type `uint`, gives the initial size of the new array, and *type* is the type of its elements. The contents of the array are initialized to the default value of *type*.
 
-`newfixedarray` ( *size* )
+`newfixedarray` `(` *size* `)`
 
-> Create a new fixed-array of `any` elements. *size*, which must be a `uint` constant, is the size of the new array.
-> The values of the array are initialized as empty tuples. The type of this expression is `[`*size*`]any`.
+> Create a new fixed-array of `any` elements. *size*, which must be a constant `uint`, is the size of the new array.
+> The values of the array are initialized as values of `()`. The type of this expression is `[`*size*`]any`.
 
-`newfixedarray` ( *size* , *expression* )
+`newfixedarray` `(` *size* `,` *expression* `)`
 
-> Create a new fixed-size array of elements, with every slot initialized to the value of *expression*. *size*, which must be a `uint` constant, is the size of the new array. The element type is inferred from the type of *expression*.
+> Create a new fixed-size array, with every slot initialized to the value of *expression*. *size*, which must be a `uint` constant, is the size of the new array. The element type is inferred from the type of *expression*.
 
-`newmap` < *type* ,  *type* > 
+`newmap` `<` *keytype* `,`  *valuetype* `>`
 
-> Create a new map object, initially empty.
+> Create a new map object of type `map<`*keytype*`,` *valuetype*`>`, initially empty.
  
 `cast` `<` *type* `>` `(` *expression* `)`
 
-> Performs a cast of the result of *expression* to *type*. This is a safe operation, unlike `unsafecast` or `unioncast`. See the casting subsection for more information.
+> Casts the result of *expression* to *type*. This is a safe operation, unlike `unsafecast` or `unioncast`. See the casting subsection for more information.
+> If the type of *expression* cannot be safely cast to *type*, then a compile error will occur.
 
-`unioncast<` *type* `>(` *expression* `)`
+`unioncast` `<` *type* `>` `(` *expression* `)`
 
-> Converts from a type of `union<`*type1*, *type2*,...`>` to *type*, where *type* must be a member of *type1*, *type2*,... . This is an unsafe operation, as which type the union contains is not checked. 
+> Converts from a type of `union<`*type1*`,` *type2*`,` ... `>` to *type*, where *type* must be a member of *type1*, *type2*, ... . This is an unsafe operation, as which type the union actually contains is not checked. 
 
-`unsafecast` < *type* > ( *expression*  )
+`unsafecast` `<` *type* `>` `(` *expression*  `)`
 
-> Evaluate *expression*, and then treat the in-memory representation of the result as an object having type *type*. This is an unsafe operation.  It is most often used to convert a value of type `any` into a more specific type, when the programmer knows the real type of the value.  
+> Evaluate *expression*, and then treat the in-memory representation of the result as an object having type *type*. This is an unsafe operation, as the programmer must ensure that the value being cast can be safely interpreted as *type*.  It is most often used to convert a value of type `any` into a more specific type, when the programmer knows the real type of the value.  
 
-`Some` (*expression*)
+`Some` `(`*expression*`)`
 
-> Creates an optional value with inner value equal to the result of *expression*
+> Creates an option typed value with the `Some` variant, the inner value is the result of *expression* and inner type is equal to the type of *expression*.
 
 `None`
 
@@ -625,84 +626,85 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 > Creates an optional value of type `option<` *type* `>` with no inner value.
 
-`newunion<` *type1*, *type2*, ... `>(` *expression* `)`
+`newunion` `<` *type1*`,` *type2*`,` ... `>` `(` *expression* `)`
 
-> Creates a value of type `union<*type1*, *type2*, ... >` from an *expression* of any of *type1*, *type2*, ... .
+> Creates a value of type `union<`*type1*`,` *type2*`,` ... `>` from an *expression* of any of *type1*, *type2*, ... .
 
-*arrExpression* [ *indexExpression* ]
+*arrExpression* `[` *indexExpression* `]`
 
-> Get an element of an array.  *arrExpression* must have type [ ]T or [N]T for some type T.  *indexExpression* must have type `uint`.  The access is bounds-checked, and this will error at runtime if the index is outside the bounds of the array. The result has type T.
+> Get an element of an array.  *arrExpression* must have type `[]`*T* or `[`*N*`]`*T* for some type *T* and some non negative integer *N*.  *indexExpression* must have type `uint`. The access is bounds-checked, and will throw a runtime error if the index is outside the bounds of the array. The result of this expression has type *T*.
 
-*mapExpression* [ *keyExpression* ]
+*mapExpression* `[` *keyExpression* `]`
 
-> Get a value from a map.  *mapExpression* must be a map type. *keyExpression*, which must be assignable to the map's key type, gives the key to look up in the map. The result, is an `option<any>` where `any` can be known to be of the value type of the map, will be `None` if there is not a value associated with the key, or `Some(`value`)` if value is associated with the key.
+> Get a value from a map.  *mapExpression* must be a map type. *keyExpression*, which must be assignable to the map's key type, gives the key to look up in the map. The result, is an `option<`*valuetype*`>` where *valuetype* is the type of the values of *mapExpression*. 
+> This expression will return a `None` if there is not a value associated with the key, or `Some(`*value*`)` if there is a value *value* associated with the result of *keyExpression* in the result of *mapExpression*.
 
-*expression* . *name*
+*expression* `.` *name*
 
 > Access a field of a struct.  The type of *expression* must be a struct that has a field called *name*. The result has the type of that field.
 
-*expression* . *number*
+*expression* `.` *number*
 
-> Access a field of a tuple.  *number*, which must be a constant `uint`, specifies which field number to access.  (The first field is number zero.) *expression* must be a tuple type with more than *number* fields. The result has the type of that field.
+> Access a field of a tuple.  *expression*, which must be an expression that has a tuple type, gives the tuple the field is taken from. *number*, which must be a constant `uint`, specifies which field number to access.  (The first field is number zero) The type of *expression* must have more than *number* fields. The result has the type of that field.
 
-*funcExpression* ( *argExpression1* , *argExpression2* , ... )
+*funcExpression* `(` *argExpression1* `,` *argExpression2* `,` ... `)`
 
-> Function call.  The value of *funcExpression* must be a function reference. (Typically *funcExpression* will just be the name of a function.) The number of *argExpressions* must be consistent with the number of arguments in *funcExpression*'s type, and each *argExpression* must be assignable to the type of the corresponding argument of *funcExpression*.  The result has the type of *funcExpression's* return value. (Calls to functions without a returntype are statements, not expressions.)
+> A function call. *funcExpression* must be an expression that returns a function type. (Typically *funcExpression* will just be the name of a function.) The number of *argExpressions* must be consistent with the number of arguments in *funcExpression*'s type, and each *argExpression* must be assignable to the type of the corresponding argument of *funcExpression*'s type.  The result has the type of *funcExpression's* return value.
 
-*arrayExpression* `with` `{` `[` *indexExpression* `]` = *valExpression* `}`
+*arrayExpression* `with` `{` `[` *indexExpression* `]` `=` *valExpression* `}`
 
 > Create a new array by copying an existing array with one element modified.  *arrayExpression*, which must be an array type, specifies the array to start with. *indexExpression*, which must have type `uint`, specifies which slot in the array should be modified.  *valExpression*, whose type must be assignable to the element type of the array, is the new value to put into the slot.  The result has the same type as *arrayExpression*. If the index is out of bounds, this will cause either a compile-time error or a runtime error.  
 
-*mapExpression* `with` { `[` *keyExpression* `]` = *valExpression* }
+*mapExpression* `with` `{` `[` *keyExpression* `]` `=` *valExpression* `}`
 
 > Create a new map by copying an existing map with one element added or modified. *mapExpression*, which must be a map type, specifies the map to start with. *keyExpression*, which must be assignable to the map's key type, specifies the key to be added or modified. *valExpression*, which must match the map's value type, is the new value to be associated with the key.  The result has the same type as *mapExpression*.
 
-*structExpression* `with` { *name* : *valExpression* }
+*structExpression* `with` `{` *name* `:` *valExpression* `}`
 
-> Create a new struct by copying an existing struct with one field modified.  *structExpression*, which must be a struct type with a field called *name*, specifies the struct to start with.  *valExpression*, which must have a type assignable to the named field, is the value that will be assigned to the named field in the newly created struct. 
+> Create a new struct by copying an existing struct with one field modified.  *structExpression*, which must be a struct type with a field called *name*, specifies the struct to start with. *name* is an identifier specifying the name of the field to modify. *valExpression*, which must have a type assignable to the named field, is the value that will be assigned to the named field in the newly created struct. 
 
 `false`
 
 `true`
 
-> Literal values. `false` and `true` are of type bool.
+> Literal values. `false` and `true` are of type `bool`.
 
 *number*
 
 *number*`s`
 
-> An integer constant, in decimal format (or hexadecimal format, if it starts with "0x"). This will be interpreted as a `uint`, and it must be representable as a `uint`. If a decimal number is followed by the single character 's', it is interpreted as a signed integer `int`; in this case it must be representable as an `int`.
+> An integer constant, in either decimal format or hexadecimal format, it is hexadecimal if it starts with "0x". This will be interpreted as a `uint`, and it must be representable as a `uint`. Most importantly, it must not overflow the maximum value for the type. If a decimal number is followed by the single character `s`, it is interpreted as a signed integer `int`; in this case it must be representable as an `int`. And thus must not overflow or underflow the maximum and minimum values for this type.
 
 *name*
 
-> A reference to a local variable, a global variable, or a function. It will have the type of the referenced variable or function.
+> A reference to a local variable, a global variable, or a function. It will have the type of the variable or function in scope with name *name*.
 
-`asm` ( *expression1* , *expression2* , ... ) (*type*)? { *instructions* }
+`asm` `(` *expression1* `,` *expression2* `,` ... `)` (*type*)? `{` *instructions* `}`
 
-> Escape to assembly code.  The arguments (*expression1*, *expression2*, etc.), if any, are pushed onto the AVM stack (with *expression1* at the top of the stack). 
+> Escape to assembly code.  The arguments, *expression1*, *expression2*, etc., if present, are pushed onto the AVM stack, with *expression1* at the top of the stack. 
 > Then the *instructions*, which are a sequence of AVM assembly instructions, are executed.  
-> The compiler assumes that the assembly instructions consume the arguments, and leave a single value on the stack of type *type*, 
-> if *type* is present, or leave no extra values on the stack otherwise. If *type* is present, *type* is the type of the expression, and the expression is type `void` otherwise.
+> The compiler assumes that the assembly instructions consume the arguments, and if *type* is present, leave a single value on the stack of type *type*, 
+> otherwise, it is assumed to leave no extra values on the stack. If *type* is present, *type* is the type of the expression. Otherwise, the expression is type `void`.
 
-`if` *condition* *codeblockexpr* [`else` `{` (*elseblockexpr* `}` | `else` *ifexpression* | *ifletexpression*]
+`if` *condition* *codeblockexpr* `else` [*elsecodeblockexpr* | *ifexpression* | *ifletexpression*]
 
 > *condition* must be a expression returning *bool*. 
-> If *condition* returns *true* then codeblock expression *codeblockexpr* is executed and its value is returned. 
-> If *condition* returns false, then either the *elseblockexpr*, *ifexpression* or *ifletexpression* is returned based on which is present.
-> The type of *elseexpression*, *ifexpression*, or *ifletexpression* must be assignable to  *codeblockexpr*, and the type of the whole expression is the type of *codeblockexpr*.
+> If *condition* returns `true` then codeblock expression *codeblockexpr* is executed and its value is returned. 
+> If *condition* returns `false`, then either the codeblock expression *elsecodeblockexpr*, if expression *ifexpression* or if let expression *ifletexpression* is returned, based on which is present.
+> The type of *elsecodeblockexpr*, *ifexpression*, or *ifletexpression* must be assignable to  *codeblockexpr*, and the type of the whole expression is the type of *codeblockexpr*.
 
-`if let` Some(*ident*) = *expression* *clodeblockexpr* [`else` [*elseblockexpr* | *ifexpr* | *ifletexpr*]]
+`if let` `Some(`*ident*`)` `=` *expression* *clodeblockexpr* `else` [*elseblockexpr* | *ifexpr* | *ifletexpr*]
 
 > It is required that *ident* is an identifier, and *expression* is an expression of some option type.
-> If *expression* returns the Some variant of an option type, a new local variable *ident* is created with the inner value of *expression* within the scope of *codeblockexpr*,
-> and *codeblockexpr* is evaluated.  If *expression* is the None variant then *elseblockexpr*, *ifexpr* or *ifletexpr* is evaluated and returned.  
+> If *expression* returns the `Some` variant of an option type, a new local variable *ident* is created with the inner value of *expression* at the start of *codeblockexpr*,
+> and *codeblockexpr* is evaluated and returned.  If *expression* is the `None` variant then *elseblockexpr*, *ifexpr* or *ifletexpr* is evaluated and returned.  
 > The types of *elseblockexpr*, *ifexpr* or *ifletexpr* must be assignable to *codeblockexpr*. 
-> The expression returns the type of the *codeblockexpr*.
+> The expression returns the type of *codeblockexpr*.
 
 `loop` (`<` *type* `>`)? *statementcodeblock*
 
 > Executes the statements in *statementcodeblock* repeatedly until a return statement is encountered.
-> The *type* determines the type of the loop expression if present. 
+> The type *type* determines the type of the loop expression if present. 
 > 
 > [The current compiler does not support break statements, but they may be added in the future. In which case a loop may break with a break statement of corresponding type]
 
@@ -717,7 +719,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 `getbuffer256` `(` *offset* `,` *buffer* `)`
 
 > Gets the byte, 8 bytes, or 32 bytes at index *offset* of *buffer* respectively, *offset* must be an expression returning `uint`
-> and *buffer* must be an expression of type *buffer*.
+> and *buffer* must be an expression of type `buffer`.
 > If *offset* evaluates to a value greater than `2^("system register size in bits)-1`, `2^("system register size in bits")-8`, and `2^("system register size in bits")-32` respectively, the expression will throw a runtime error.
 > This is a `uint` expression.
 
@@ -731,18 +733,18 @@ Mini never automatically converts types to make an operation succeed.  Programme
 > to *valueexpr* in the buffer *bufferexpr*. *offsetexpr* and *valueexpr* must both be `uint` expressions,
 > and *bufferexpr* must be a `buffer` expression. 
 > If *offsetexpr* evaluates to a value greater than `2^("system register size in bits)-1`, `2^("system register size in bits")-8`, and `2^("system register size in bits")-32` respectively, the expression will throw a runtime error. 
+> This is a `buffer` expression.
 
 `any` `(` *expression* `)`
 
-> Casts the type of *expression* to *any*. This is always safe.
+> Casts the type of the expression *expression* to *any*. This is always safe.
 
 [ `view` | `write`]* [`closure` | `_closure` ]  `(` *ident1* `:` *type1* `,` *ident2* `:` *type2* `,` ... `)` (`->` *returntype*)? *codeblockexpr*
 
-> Creates a new closure, that takes arguments *ident1*, *ident2*, ... of type *type1*, *type2*, ... respectively, and return type of *returntype* if present, or `void` otherwise.
-> The body of the function is defined by codeblock expression *codeblockexpr*.
-> *codeblockexpr* is evaluated and its value is returned.
-> This expression returns the type of *codeblockexpr*.
+> Creates a new closure, that takes arguments *ident1*, *ident2*, ... of type *type1*, *type2*, ... respectively, and a return type of *returntype* if present, or `void` otherwise.
+> The body of the closure is defined by codeblock expression *codeblockexpr*.
 > If `_closure` is used then the compiler will not warn if the closure is unused.
+> This function returns type `func(`*type1*`,` *type2*`,` ...`) ->` (either *returntype* or *void* if not present).
 
 `getGas` `(` `)` 
 
@@ -750,7 +752,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 `setGas` `(` *expression* `)`
 
-> The type of *expression* must be *uint*. The remaining *arbGas* is set to the value of *expression*. This is a void expression.
+> The type of expression *expression* must be `uint`. The remaining AVM gas for the system is set to the value of *expression*. This is a `void` expression.
 
 *ident* `::` `<` *type1*, *type2*, ... `>`
 
@@ -774,7 +776,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 `{` (*statement*)* (*expression*)? `}`
 
 > Codeblock expression. The *statement*s are executed in order, 
-> all locals defined within the codeblock are only valid within the codeblock.
+> and all locals defined within the codeblock are only valid within the codeblock.
 > If *expression* is present, the result of *expression* with equivalent type. 
 > Otherwise, the codeblock returns *void*.
 
