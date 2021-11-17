@@ -815,15 +815,15 @@ any subsequent uses of the name inside the codeblock will refer to the inner var
 An AVM value may be one of the following:
 
 1. `Int`: a 256 bit integer
-1. `CodePoint`: a codepoint, points to an instruction in the code.
+1. `CodePoint`: a codepoint, this points to an instruction in the code.
 1. `Buffer`: a buffer that contains bytes.
 1. `Tuple(`...`)`: up to 8 AVM values.
 
-More complex values are usually encoded by storing multiple values inside a `Tuple`, included nested tuples.
+More complex values are encoded by storing multiple values inside a `Tuple`, included nested tuples.
 
 ## Default Value
 
-Every type has a default value that is used for the initial value of globals with that type.
+Most types has a default value that is used for the initial value of globals with that type.
 The default values for each type are as follows:
 
 * `uint`, `int`, `bytes32`, `address`:  
@@ -833,20 +833,20 @@ The default values for each type are as follows:
 * `buffer`:  
   A buffer with length `0`, attempting to read any bytes past the end of a buffer will be treated as reading `0` values.
 * `any`:  
-  A length `0` tuple, `()`.
+  A length 0 tuple, `()`.
 * `union`:  
   The default value of a union type is the default value of its leftmost variant.
 * `tuple`:  
-  The default value of a tuple is a wrapping tuple, with leaves equal to the default values of each field type respectively.
+  The default value of a tuple is a wrapping tuple with the same length as the `tuple`, with leaves equal to the default values of each field type respectively.
   The structure of a wrapping tuple will be described below in the Wrapping Tuple section.
 * `struct`:  
-  The default value of a struct is a wrapping tuple, with leaves equal to the default values of each field type respectively.
+  The default value of a struct is a wrapping tuple with length equal to the number of the `struct`s fields, whose leaves are equal to the default values of each field type respectively.
 * `option`:  
-  The default value of all `option` types is the `None` variant, in AVM this is represented as a length 1 tuple containing an `Int` value `0`
+  The default value of all `option` types is the `None` variant, in AVM this is represented as a `Tuple` containing a single `0`, `Tuple(Int(0))`.
 * `func`:  
-  The default value of all `func` types is a `CodePoint` 
+  The default value of all `func` types is a `CodePoint` that causes an error when jumped to.
 * `map`:  
-  An empty map, in AVM this is represented as a length 2 `Tuple` with both fields as an `Int` with value `0`.
+  An empty map, in AVM this is represented as a length 2 `Tuple` with both fields as an `Int` with value `0`, `Tuple(Int(0), Int(0))`.
 * `array`:  
   An `array` of *type* has a default value with the following AVM representation:
   `Tuple(Int(1), Int(1), Tuple(Int(1), Int(1), Tuple(`*default*, *default*, *default*, *default*, *default*, *default*, *default*, *default*`)))`
@@ -854,11 +854,12 @@ The default values for each type are as follows:
   This is intended to be an array with length 1 containing the default value of *type*, however in practice it has an additional outer 3 `Tuple` surrounding it.
 * `fixed array`:  
   A default value for a `fixed array` of type *type* and length *length* is a fixed array of length *length*, where every array element has a value of the default value of *type*.
-  See the AVM representation section for more information of how the memory for this value is layed out.
+  See the AVM representation section for more information of how the AVM representation of this value is layed out.
 * `nominal`, `specialized generic`:  
   The default value for a nominal or specialized generic type is the default value of its representation.
 
 While non-specialized generic types should never be created, if they are they will have a default value of `()`.
+If the compiler attempts to calculate the default value of any other type, it will immediately abort execution.
 
 ## AVM Representation
 
@@ -882,21 +883,24 @@ Types in mini are internally represented as AVM values.
    Represents lack of a value, whenever a value of type `void` is present, then it is assumed there is no AVM value there.
    This manifests as a bug in various contexts.
 1. `struct`:  
-   Represented by a wrapping tuple containing values of the types of each of its fields, in order from top to bottom.
+   Represented by a wrapping tuple of length equal to the number of fields in the `struct`.
+   Each leaf contains values for the types of each of its fields, in order from top to bottom.
    Field names have no impact on the allowable AVM values for the type.
 1. `tuple`:  
-   Identical to structs, represented by a wrapping tuple containing values of the types of each of its fields, in order left to right.
+   Identical to structs, represented by a wrapping tuple of the same length as the `tuple`, that contains values for the types of each of its fields, in order left to right.
 1. `unsized array` of *type*:  
    The depth of an unsized array is the smallest integer `x` such that 8^`x` >= *length*, with a minimum depth of `1`, where *length* is the current length of the array.
-   An array of depth `N` has a value of `Tuple(Int, Int,` a `Tuple` of length 8 of sized arrays of depth *N-1* `)`, where depth `0` represents an AVM value valid for *type*.
+   An array of depth `N` has a value of:  
+   `Tuple(Int, Int,` a `Tuple` of length 8 of sized arrays of depth *N-1* `)`  
+   Where depth `0` represents an AVM value valid for *type*.
    The first `Int` in the outer tuple is the *length* of the array, and the second integer is `8^(N-1)`.
 1. `sized array` of *type* and length *length*:  
    A series of nested 8 tuples, each leaf of which contains a AVM value valid for *type*.
    The nested tuples are at uniform depth, and are the minimum depth such that there are enough slots for *length* values.
-   The minimum depth is a single 8 tuple. Sized arrays of length 0 allocate a single tuple with 8 slots.
-   
-   The leaves of a depth *N* tuple are ordered, starting with 0, by concatenating the ordering of each *N-1* depth tuple from left to right,
-   in the case of a depth `1` tuple, the tuple fields are ordered left to right.
+   However, there must always be at least a single 8 tuple, so length 0 and length 1 arrays are represented as an 8 tuple.
+
+   The leaves of a depth *N* tuple are ordered, starting with 0, by concatenating the ordering of each *N-1* depth tuple from left to right.
+   In the case of a depth `1` tuple, the tuple fields are ordered left to right.
    
    The AVM value located at index *n* corresponds to the item in the array at index *n*, with any *n* >= *size* not intended for access.
    These values are initialized as the default value for *type*, and can generally be assumed to contain those values.
