@@ -943,18 +943,20 @@ Types in mini are internally represented as AVM values.
 
 ## Wrapping tuple
 
-Mini uses the concept of a wrapping tuple to express tuples and structs of length greater than 8. These are expressed by nesting `Tuple`s
-inside of other types, in order to allow more "slots" to fit in a single value.
-The structure of a wrapping tuple is a single `Tuple` from length 0 to 8.
-If the length is 9 or greater, the base of the wrapping tuple of length *length*, is a nested `Tuple` of uniform depth *N*.
-Where *N*, is the greatest integer such that `8^`*N* `<=` *length*. A nested tuple of depth 1 is a single length 8 `Tuple`,
-and for all greater *N* it is a length 8 `Tuple` whose fields are all depth *N*`-1` tuples.
+Mini uses wrapping tuples to express data types such as tuples and structs that cannot necessarily fit in a single `Tuple`. 
+Wrapping tuples are formed by nesting `Tuple`s inside of other `Tuple`s, in order to allow more "slots" to fit in a single value.
 
-The order of the fields in a nested `Tuple` is the left to right order in a depth 1 tuple, and in a length *N* tuple,
-it is the order of the fields in each depth *N*`-1`, concatenated in left to right order.
+Specifically, the structure of a wrapping tuple from length 0 to 8 is a single `Tuple`.
+To explain the structure of wrapping tuples of length greater than 9, we will first introduce the concept of a nested tuple.
+The structure of a nested tuple is determined by its depth.
+A nested tuple of depth 1 is a single length 8 `Tuple`, and for all greater *N* it is a length 8 `Tuple` whose fields are all depth *N*`-1` tuples.
 
-A wrapping tuple of length *length* is a depth *N* nested tuple, where *N* is the greatest integer that `8^`*N*`<=`*length*,
-where, if `8^`*N*`=/=`*length*, the last *j* fields excepting the final field replaced by 8 `Tuple`s, 
-where *j*`=⌊(length-8^`*N*`)/7⌋` and the last field replaced by a tuple of length *k*`=((length-8^`*N*`)%7)+1`, 
-unless *k*`=1`, in which case the last field is replaced by a length *8* `Tuple`. 
+The order of the fields in a nested `Tuple` is left to right for depth 1 tuples, otherwise, it is the order of the fields in each depth *N*`-1` tuple, concatenated in left to right order.
+
+A wrapping tuple of length *length* > 8, is based on a depth *N* nested tuple, where *N* is the greatest integer that `8^`*N*`<=`*length*.
+If `8^`*N*`=/=`*length*, the last *j* fields excepting the final field are replaced by 8 `Tuple`s,
+where *j*`=⌊(length-8^`*N*`)/7⌋`, and the last field is replaced by a tuple of length *k*`=((length-8^`*N*`)%7)+1`,
+unless *k*`=1`, in which case the last field is replaced by a length *8* `Tuple`.
 If `8^`*N*`=`*length*, the wrapping tuple is simply a depth *N* nested tuple.
+
+The order of fields in a wrapping tuple is formed by concatenating, in order of the nested tuple fields, the field, or subfields of the tuple at that location in order.
