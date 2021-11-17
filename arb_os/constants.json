@@ -1,5 +1,5 @@
 {
-  "arbos_version": 47,
+  "arbos_version": 49,
   "integer": {
     "AVMSendType_batch": 0,
     "AVM_add": 1,
@@ -85,6 +85,7 @@
     "Address_ArbSys": 100,
     "Address_ArbosTest": 105,
     "Address_ReservedForEthBridge": 200,
+    "ChainID_ArbitrumOne": 42161,
     "Charging_MinArbGasForContractTx": 50,
     "Charging_MemoryChargeDenominator": 100000,
     "ContractStateVersion_original": 0,
