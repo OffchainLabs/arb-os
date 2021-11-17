@@ -12,9 +12,10 @@ use crate::uint256::Uint256;
 use parking_lot::Mutex;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::fs::File;
 use std::hash::{Hash, Hasher};
+use std::io::Write;
 
-#[derive(Default)]
 /// Provides a mechanism for emulating pure funcs in ArbOS
 pub struct Computer {
     /// The program's instructions
@@ -23,6 +24,8 @@ pub struct Computer {
     labels: HashMap<Label, CodePt>,
     /// Memoizes prior computations since emulation is expensive
     cache: Mutex<HashMap<u64, Option<Value>>>,
+    /// Log file for debugging simulation warnings
+    file: Mutex<File>,
 }
 
 impl Computer {
@@ -79,11 +82,13 @@ impl Computer {
         ]);
 
         let code = translate::set_error_codepoints(code);
+        let file = Mutex::new(File::create("logs/sims.txt").expect("failed to open file"));
 
         Ok(Computer {
             code,
             labels,
             cache: Mutex::new(HashMap::new()),
+            file,
         })
     }
 
@@ -127,16 +132,20 @@ impl Computer {
         machine.run(None);
 
         if let MachineState::Error(err) = &machine.state {
-            println!(
+            let mut file = self.file.lock();
+            writeln!(
+                &mut file,
                 "{} {}\n\t{}",
                 Color::yellow("Failed to precompute:"),
                 label.pretty_print(Color::PINK),
                 err
-            );
+            )
+            .expect("failed to write file");
 
             if machine.arb_gas_remaining != Uint256::max_uint() {
                 for item in &machine.stack.contents {
-                    println!("Have {}", item.pretty_print(Color::PINK));
+                    writeln!(&mut file, "Have {}", item.pretty_print(Color::PINK))
+                        .expect("failed to write file");
                 }
             }
             return cache!(None);

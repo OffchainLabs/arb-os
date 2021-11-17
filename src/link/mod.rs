@@ -313,7 +313,7 @@ pub fn link(
 
     let graph = graph.map(|_, prog| prog.name.clone(), |_, e| e);
 
-    let mut file = File::create("callgraph.dot").expect("failed to open file");
+    let mut file = File::create("logs/callgraph.dot").expect("failed to open file");
     let dot = Dot::with_config(&graph, &[Config::EdgeNoLabel]);
     writeln!(&mut file, "{:?}", dot).expect("failed to write .dot file");
 
@@ -337,8 +337,8 @@ pub fn postlink_compile(
     file_info_chart: BTreeMap<u64, FileInfo>,
     test_mode: bool,
 ) -> Result<LinkedProgram, CompileError> {
-    let mut all_file = File::create("perf/all.avm").expect("failed to open file");
-    let mut tag_file = File::create("perf/tag.avm").expect("failed to open file");
+    let mut all_file = File::create("logs/all.avm").expect("failed to open file");
+    let mut tag_file = File::create("logs/tag.avm").expect("failed to open file");
 
     macro_rules! all {
         ($($args:tt)*) => {

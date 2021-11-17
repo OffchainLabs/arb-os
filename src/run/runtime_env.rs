@@ -751,16 +751,22 @@ pub struct ArbosReceipt {
     #[allow(dead_code)]
     gas_price_wei: Uint256,
     pub provenance: ArbosRequestProvenance,
-    gas_so_far: Uint256,     // gas used so far in L1 block, including this tx
+    gas_so_far: Uint256, // gas used so far in L1 block, including this tx
+    #[allow(dead_code)]
     index_in_block: Uint256, // index of this tx in L1 block
-    logs_so_far: Uint256,    // EVM logs emitted so far in L1 block, NOT including this tx
+    #[allow(dead_code)]
+    logs_so_far: Uint256, // EVM logs emitted so far in L1 block, NOT including this tx
+    #[allow(dead_code)]
     fee_stats: Vec<Vec<Uint256>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct ArbosRequestProvenance {
+    #[allow(dead_code)]
     l1_sequence_num: Uint256,
+    #[allow(dead_code)]
     parent_request_id: Option<Uint256>,
+    #[allow(dead_code)]
     index_in_parent: Option<Uint256>,
 }
 
