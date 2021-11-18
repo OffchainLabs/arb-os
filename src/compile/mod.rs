@@ -977,7 +977,7 @@ fn typecheck_programs(
                         ));
                     }
 
-                    // don't allow an incorrect purity trip up future stages
+                    // don't allow an incorrect purity to trip up future stages
                     func.properties.write |= detected_view;
                     func.properties.view |= detected_write;
                 }
