@@ -78,14 +78,20 @@ pub fn peephole(mut code: Vec<Instruction>) -> Vec<Instruction> {
             }
             (_, Noop, _, None) => drop!(1),
             (_, Pop, _, Some(_)) => drop!(1),
-            (Pop, _, Some(_), _) => {
-                out.swap_remove(out.len() - 2);
-            }
             (Noop, _, Some(value), None) => {
                 let mut other = next.clone();
                 other.immediate = Some(value.clone());
                 drop!(2);
                 out.push(other);
+            }
+            (Pop, _, Some(_), _)
+            | (Swap1, Add, None, None)
+            | (Swap1, Mul, None, None)
+            | (Swap1, Equal, None, None)
+            | (Swap1, BitwiseAnd, None, None)
+            | (Swap1, BitwiseOr, None, None)
+            | (Swap1, BitwiseXor, None, None) => {
+                out.swap_remove(out.len() - 2);
             }
             _ => {
                 out.push(code.next().unwrap());
