@@ -900,7 +900,7 @@ impl ValueGraph {
         for _ in 0..rounds {
             // Attempt to codegen a better set of instructions than the best found so far.
             // There's a single-pass, dynamic programming variant of this but we'd need to
-            // make reorder_stack() pure or do a very tricky walk.
+            // make reorder_stack() pure and after around -O4096 the optimal solution is found.
 
             let mut stack = stack.clone();
             let mut alt = header.clone();
