@@ -31,8 +31,8 @@ pub enum ValueNode {
     Local(SlotNum),        // A local variable on the Aux stack
     StackedLocal(SlotNum), // A local variable that's been moved to the data stack
     StackLocal(SlotNum),   // Operation for placing a local on the data stack
-    Drop(usize),           // Mechanism for popping a group of values
-    Alias,                 //
+    Drop,                  // Mechanism for popping a value
+    Alias,                 // Mechanism for causing a node to consume another
     Meta(&'static str),    // A node that's just used to enforce some kind of ordering
 }
 
@@ -46,6 +46,7 @@ impl ValueNode {
         // Stack'd Local F => a future block might use this so we must _pop_ rather than _prune_
         // Stack Local   F => a future block might use this so we must _pop_ rather than _prune_
         // Drop          F => this is used to pop things that aren't prunable
+        // Alias         F => if the value this aliases can't be pruned, than neither can this one be
 
         match self {
             Self::Value(_) | Self::Opcode(_) => true,
@@ -77,9 +78,19 @@ fn nodes(graph: &StableGraph<ValueNode, ValueEdge>) -> Vec<NodeIndex> {
     graph.node_indices().collect()
 }
 
-/// Retrieves the `NodeIndex`s of a graph without borrowing
+/// Retrieves the undirected neighbors of a node
 fn neighbors(graph: &StableGraph<ValueNode, ValueEdge>, node: NodeIndex) -> Vec<NodeIndex> {
     graph.neighbors_undirected(node).collect()
+}
+
+/// Retrieves the directed neighbors of a node
+fn directed_neighbors(
+    graph: &StableGraph<ValueNode, ValueEdge>,
+    node: NodeIndex,
+) -> Vec<NodeIndex> {
+    graph
+        .neighbors_directed(node, Direction::Outgoing)
+        .collect()
 }
 
 /// Retrieves the number of times other nodes consume this `ValueNode`
@@ -135,12 +146,18 @@ type DataGraph = StableGraph<ValueNode, ValueEdge>;
 /// The header & footer save metadata not directly encoded in the value relationships themselves
 #[derive(Default)]
 pub struct ValueGraph {
+    /// How the values relate to one another
     graph: DataGraph,
+    /// Metadata instructions like the entry point & frame size
     header: Vec<Instruction>,
+    /// Metadata instructions like φ's and δ's
     footer: Vec<Instruction>,
+    /// The output node, who's construction means executing the full basic block
     output: NodeIndex,
     #[allow(dead_code)]
+    /// The func that owns the basic block used to make this graph
     func_id: LabelId,
+    /// The funcs this graph provably uses
     pub funcs: HashSet<LabelId>,
 }
 
@@ -161,7 +178,7 @@ impl ValueGraph {
                     ValueNode::Local(slot) => format!("Local {}", Color::mint(slot)),
                     ValueNode::StackLocal(slot) => format!("Stack {}", Color::mint(slot)),
                     ValueNode::StackedLocal(slot) => format!("Stack'd {}", Color::mint(slot)),
-                    ValueNode::Drop(count) => format!("Drop {}", Color::mint(count)),
+                    ValueNode::Drop => Color::blue("Drop"),
                     ValueNode::Alias => Color::blue("Alias"),
                     ValueNode::Meta(name) => name.to_string(),
                 }
@@ -211,6 +228,7 @@ impl ValueGraph {
     /// - unstack is the set of stack'd locals that this block must pop
     /// - tostack is the set of locals that this block will stack
     /// - phis denotes which locals phi which others
+    /// - computer is the mechanism for simulating calls to pure funcs
     pub fn with_stack(
         mut block: &[Instruction],
         mut stacked: BTreeSet<SlotNum>,
@@ -279,7 +297,7 @@ impl ValueGraph {
         let mut globals = graph.add_node(ValueNode::Meta("globals"));
         let mut global_readers = BTreeSet::new();
 
-        let mut stack: VecDeque<NodeIndex> = VecDeque::new();
+        let mut stack: VecDeque<NodeIndex> = VecDeque::new(); // values on the datastack
         let mut nargs = 0;
 
         for &slot in &stacked {
@@ -441,12 +459,12 @@ impl ValueGraph {
         // represents the output of the graph just before exiting
         let output = graph.add_node(ValueNode::Meta("output"));
 
-        //
+        // locals that are unstack'd by this block need to be dropped
         let mut drops = HashMap::new();
         for slot in unstack.iter() {
             stacked.remove(slot);
 
-            let drop = graph.add_node(ValueNode::Drop(1));
+            let drop = graph.add_node(ValueNode::Drop);
             let local = *locals.get(slot).unwrap();
 
             for node in neighbors(&graph, local) {
@@ -494,12 +512,13 @@ impl ValueGraph {
             footer_inputs.reverse();
         }
 
-        // locals still stack'd need to be placed at the top of the data stack
+        // locals still stack'd need to be placed in-order at the top of the data stack after exit
         for slot in &stacked {
             let local = locals.get(slot).unwrap();
             stack.push_back(*local);
         }
 
+        // the footer's needs (like the jump dest) are placed on top & will be consumed during exit
         for input in footer_inputs {
             stack.push_back(input);
         }
@@ -513,7 +532,9 @@ impl ValueGraph {
         for (_, local) in &locals {
             graph.add_edge(output, *local, ValueEdge::Meta("locals"));
         }
-        graph.add_edge(output, globals, ValueEdge::Meta("globals"));
+        if neighbors(&graph, globals).len() > 0 {
+            graph.add_edge(output, globals, ValueEdge::Meta("globals"));
+        }
 
         /// Statically analyze the graph for values we can compute at compile time.
         fn fold_constants(graph: &mut DataGraph) {
@@ -721,6 +742,32 @@ impl ValueGraph {
             conn_counts.insert(node, conn_count(&graph, node));
         }
 
+        /// Determine which nodes should employ randomization
+        fn randomize_check(
+            graph: &DataGraph,
+            node: NodeIndex,
+            seen: &mut HashSet<NodeIndex>,
+        ) -> HashSet<NodeIndex> {
+            let mut results = HashSet::new();
+            let mut include = false;
+
+            for child in directed_neighbors(graph, node) {
+                if !seen.contains(&child) {
+                    results.extend(randomize_check(graph, child, seen));
+                }
+                include |= conn_count(graph, child) > 1; // child's presence is stack-stateful
+                include |= meta_count(graph, child) != 0; // child's presence is order-stateful
+                include |= results.contains(&child); // a descendant's presence is stateful
+            }
+
+            if include {
+                results.insert(node);
+            }
+            seen.insert(node);
+            results
+        }
+        let randomize = randomize_check(&self.graph, self.output, &mut HashSet::new());
+
         let mut entropy: SmallRng = SeedableRng::seed_from_u64(0);
 
         /// Walk the `ValueGraph`, building the instructions in a bottom-up manner.
@@ -729,18 +776,30 @@ impl ValueGraph {
             graph: &DataGraph,
             stack: &mut Vec<NodeIndex>,
             conn_counts: &mut HashMap<NodeIndex, usize>,
+            randomize: &HashSet<NodeIndex>,
             entropy: &mut SmallRng,
             code: &mut Vec<Instruction>,
             done: &mut HashSet<NodeIndex>,
         ) {
             let mut deps: Vec<_> = graph.edges_directed(node, Direction::Outgoing).collect();
-            deps.shuffle(entropy);
+            if randomize.contains(&node) {
+                deps.shuffle(entropy);
+            }
 
             // ensure everything this node depends on has been codegened
             for edge in &deps {
                 let input = edge.target();
                 if !done.contains(&input) {
-                    descend(input, graph, stack, conn_counts, entropy, code, done);
+                    descend(
+                        input,
+                        graph,
+                        stack,
+                        conn_counts,
+                        randomize,
+                        entropy,
+                        code,
+                        done,
+                    );
                 }
             }
 
@@ -821,10 +880,8 @@ impl ValueGraph {
                 ValueNode::Alias => {
                     stack.push(node);
                 }
-                ValueNode::Drop(count) => {
-                    for _ in 0..*count {
-                        code.push(Instruction::from(Opcode::AVMOpcode(AVMOpcode::Pop)));
-                    }
+                ValueNode::Drop => {
+                    code.push(Instruction::from(Opcode::AVMOpcode(AVMOpcode::Pop)));
                 }
                 _ => {}
             }
@@ -834,8 +891,13 @@ impl ValueGraph {
 
         let mut best = vec![];
         let mut best_cost = usize::MAX;
+        let mut rounds = 1;
 
-        for _ in 0..(1 + optimization_level) {
+        if !randomize.is_empty() {
+            rounds += optimization_level;
+        }
+
+        for _ in 0..rounds {
             // Attempt to codegen a better set of instructions than the best found so far.
             // There's a single-pass, dynamic programming variant of this but we'd need to
             // make reorder_stack() pure or do a very tricky walk.
@@ -847,6 +909,7 @@ impl ValueGraph {
                 &graph,
                 &mut stack,
                 &mut conn_counts.clone(),
+                &randomize,
                 &mut entropy,
                 &mut alt,
                 &mut HashSet::new(),
