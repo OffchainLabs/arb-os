@@ -982,5 +982,12 @@ impl BasicGraph {
                 self.graph[*node] = BasicBlock::Code(code.to_vec());
             }
         }
+
+        for node in nodes {
+            let code = self.graph[node].get_code_mut();
+            for curr in code {
+                curr.debug_info.attributes.codegen_print |= self.should_print;
+            }
+        }
     }
 }

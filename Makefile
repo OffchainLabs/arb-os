@@ -86,7 +86,7 @@ clean:
 	@rm -f minitests/generics/*.mexe
 	@rm -f arbos/{upgrade.json,contractTemplates.mini}
 	@rm -rf contracts/artifacts contracts/cache
-	@rm -f */*.cov lcov.info lcov-mini.info .make/*
+	@rm -f */*.cov lcov.info lcov-mini.info logs/* .make/*
 
 
 # pattern rules

@@ -423,11 +423,12 @@ pub fn postlink_compile(
 
     title!("final output");
     for (idx, insn) in code.iter().enumerate() {
-        both!(
-            "{}  {}",
-            Color::grey(format!("{:04}", idx)),
-            insn.pretty_print(Color::PINK)
-        );
+        let text = Color::grey(format!("{:04}", idx));
+
+        if insn.debug_info.attributes.codegen_print {
+            tag!("{}  {}", text, insn.pretty_print(Color::PINK));
+        }
+        all!("{}  {}", text, insn.pretty_print(Color::PINK));
     }
 
     let globals_shape = xformcode::make_uninitialized_tuple(program.globals.len());

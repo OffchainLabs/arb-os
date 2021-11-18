@@ -694,25 +694,6 @@ impl ValueGraph {
         let mut stack = vec![];
         let graph = &self.graph;
 
-        let mut debug = DebugInfo::default();
-        debug.attributes.codegen_print = true;
-
-        macro_rules! opcode {
-            ($opcode:ident) => {
-                Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::$opcode), debug)
-            };
-            ($opcode:ident, $immediate:expr) => {
-                Instruction::from_opcode_imm(
-                    Opcode::AVMOpcode(AVMOpcode::$opcode),
-                    $immediate,
-                    debug,
-                )
-            };
-            (@$($opcode:tt)+) => {
-                Instruction::from_opcode(Opcode::$($opcode)+, debug)
-            };
-        }
-
         // Stack'd locals are always on top of the data stack when entering a basic block.
         // This is something codegen must guarantee later too.
         for node in nodes(&graph) {

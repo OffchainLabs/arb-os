@@ -241,7 +241,7 @@ macro_rules! opcode {
         )
     };
     (@$($opcode:tt)+) => {
-        Instruction::from_opcode(Opcode::$($opcode)+)
+        Instruction::from_opcode(Opcode::$($opcode)+, DebugInfo::default())
     };
 }
 
