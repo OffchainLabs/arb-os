@@ -733,6 +733,7 @@ pub struct Machine {
     pub err_codepoint: CodePt,
     pub arb_gas_remaining: Uint256,
     pub runtime_env: RuntimeEnvironment,
+    pub spec_divergence: bool,
     file_info_chart: BTreeMap<u64, FileInfo>,
     total_gas_usage: Uint256,
     trace_writer: Option<BufWriter<File>>,
@@ -751,6 +752,7 @@ impl Machine {
             err_codepoint: CodePt::Null,
             arb_gas_remaining: Uint256::zero().bitwise_neg(),
             runtime_env: env,
+            spec_divergence: false,
             file_info_chart: program.file_info_chart,
             total_gas_usage: Uint256::zero(),
             trace_writer: None,
@@ -1642,9 +1644,20 @@ impl Machine {
                         Ok(true)
                     }
                     AVMOpcode::Hash => {
-                        let res = self.stack.pop(&self.state)?.avm_hash();
+                        let top = self.stack.pop(&self.state)?;
+                        let res = top.avm_hash();
                         self.stack.push(res);
                         self.incr_pc();
+
+                        // The behavior of this opcode differs from that of the C++ emulator
+                        match &top {
+                            Value::Int(_) => {}
+                            Value::Tuple(tuple) => {
+                                self.spec_divergence |=
+                                    tuple.iter().any(|x| !matches!(x, Value::Int(_)))
+                            }
+                            _ => self.spec_divergence = true,
+                        }
                         Ok(true)
                     }
                     AVMOpcode::Add => {
@@ -2319,6 +2332,7 @@ impl From<Vec<Instruction>> for Machine {
             err_codepoint: CodePt::Null,
             arb_gas_remaining: Uint256::zero().bitwise_neg(),
             runtime_env: RuntimeEnvironment::default(),
+            spec_divergence: false,
             file_info_chart: BTreeMap::new(),
             total_gas_usage: Uint256::zero(),
             trace_writer: None,

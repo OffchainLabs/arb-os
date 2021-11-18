@@ -40,12 +40,6 @@ impl Computer {
 
         for curr in &mut code {
             match curr.opcode {
-                Opcode::AVMOpcode(AVMOpcode::Hash) => {
-                    // The Hash opcode isn't correct, so we'll panic instead.
-                    // This check decreases performance, so we should add an
-                    // emulator flag that indicates a bad hash has occured.
-                    curr.opcode = Opcode::AVMOpcode(AVMOpcode::Error);
-                }
                 Opcode::Capture(..) | Opcode::ReserveCapture(..) | Opcode::MakeClosure(..) => {
                     // Simulating closures requires a linking step we don't have,
                     // so instead error if these are hit
@@ -130,6 +124,16 @@ impl Computer {
 
         machine.state = MachineState::Running(codept);
         machine.run(None);
+
+        if machine.spec_divergence {
+            writeln!(
+                &mut self.file.lock(),
+                "Skipping {} since execution did something inconsistent with the C++ emulator",
+                label.pretty_print(Color::PINK),
+            )
+            .expect("failed to write file");
+            return cache!(None);
+        }
 
         if let MachineState::Error(err) = &machine.state {
             let mut file = self.file.lock();

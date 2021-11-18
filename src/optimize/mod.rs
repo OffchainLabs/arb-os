@@ -18,6 +18,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::hash::Hasher;
 
 pub use compute::Computer;
+pub use peephole::peephole;
 
 mod compute;
 mod effects;
@@ -813,70 +814,61 @@ impl BasicGraph {
             dels.insert(slot, ideal);
         }
 
-        // Stacking a local means moving it from the aux stack to the data stack.
-        // Using the stack'd value means passing it from value graph to value graph as an arg.
-        // This is only safe, however, if we can determine where exactly to pop the value.
-        // There are two kinds of places we must pop a given def
-        //   Whenever we exit the basic graph.
-        //     We can find this by dfs'ing from the def to all exits
-        //   Whenever a value goes out of scope
-        //     We place DropLocal annotations during codegen for this purpose
+        // Stacking a local means moving it from the aux stack to the data stack. Using
+        // the stack'd value means passing it from value graph to value graph as an arg.
+        // This is only safe, however, if we fully understand the lifetime of the value.
+        // This requires that we
+        //
+        //   1. have a value graph for all basic blocks in the value's lifetime
+        //   2. know where to pop the value (the δ-drop and any early returns)
 
-        // Find which locals we can move from the aux stack to the data stack.
-        let mut pops = HashMap::new();
+        let mut who_pops: HashMap<_, BTreeSet<_>> = HashMap::new(); // what's popped in each block
+        let mut who_stacks: HashMap<_, BTreeSet<_>> = HashMap::new(); // each def's stack'd blocks
 
-        for (slot, node) in defs.clone() {
-            let mut poppers = BTreeSet::new();
-            let mut new_bisect_nodes = HashSet::new();
-            let mut dfs = Dfs::new(&self.graph, node);
-            while let Some(alive) = dfs.next(&self.graph) {
-                if exits.contains(&alive) {
-                    // This block is an exit, so we need to make sure we pop this value
-                    // to clean up the stack.
-                    poppers.insert(alive);
-                }
+        for (slot, def) in defs.clone() {
+            let dropper = *dels.get(&slot).expect("no dropper");
 
-                new_bisect_nodes.insert(alive);
+            let mut queue = BTreeSet::new(); // mechanism for bfs
+            let mut found = BTreeSet::new(); // those seen so far
+            let mut cease = BTreeSet::new(); // end of lifetime
 
-                if let None = graphs.get(&alive) {
+            queue.insert(def);
+
+            while !queue.is_empty() {
+                let node = *queue.iter().next().unwrap();
+                queue.remove(&node);
+                found.insert(node);
+
+                if let None = graphs.get(&node) {
                     // We can't place this local on the stack since we don't understand
                     // how the values in a down-stream block relate to one another.
                     defs.remove(&slot);
                     break;
                 }
-            }
-            if defs.contains_key(&slot) {
-                let dropper = *dels.get(&slot).expect("no dropper");
 
-                let mut dfs = Dfs::new(&self.graph, dropper);
-                while let Some(node) = dfs.next(&self.graph) {
-                    // This exit happens after the annotated drop, so
-                    // we don't actually want to issue a pop.
-                    poppers.remove(&node);
-                    new_bisect_nodes.remove(&node);
+                if node == dropper || exits.contains(&node) {
+                    // This block ends the value's lifetime, so we must pop it to clean up the stack
+                    cease.insert(node);
+                    continue;
                 }
 
-                pops.entry(dropper).or_insert(BTreeSet::new()).insert(slot);
-                for popper in poppers {
-                    pops.entry(popper).or_insert(BTreeSet::new()).insert(slot);
-
-                    let mut dfs = Dfs::new(&self.graph, popper);
-                    while let Some(node) = dfs.next(&self.graph) {
-                        // don't include nodes after the exit
-                        new_bisect_nodes.remove(&node);
+                for after in self.graph.neighbors_directed(node, Direction::Outgoing) {
+                    if !found.contains(&after) {
+                        queue.insert(after);
                     }
-                    new_bisect_nodes.insert(popper);
                 }
-                bisect_nodes.extend(new_bisect_nodes);
+            }
+
+            if defs.contains_key(&slot) {
+                for popper in cease {
+                    who_pops.entry(popper).or_default().insert(slot);
+                }
+                bisect_nodes.extend(found);
             }
         }
 
-        let mut who_stacks = HashMap::new();
         for (slot, def) in defs {
-            who_stacks
-                .entry(def)
-                .or_insert(BTreeSet::new())
-                .insert(slot);
+            who_stacks.entry(def).or_default().insert(slot);
         }
 
         /// Stack the locals we can
@@ -954,7 +946,7 @@ impl BasicGraph {
             &phis,
             &mut graphs,
             &who_stacks,
-            &pops,
+            &who_pops,
             &BTreeSet::new(),
             func_id,
             computer,

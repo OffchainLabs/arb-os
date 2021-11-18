@@ -11,6 +11,7 @@ use crate::compile::{
 };
 use crate::console::Color;
 use crate::mavm::{AVMOpcode, Instruction, LabelId, Opcode, Value};
+use crate::optimize;
 use crate::pos::{try_display_location, Location};
 use crate::stringtable::StringId;
 use petgraph::dot::{Config, Dot};
@@ -28,7 +29,6 @@ use crate::compile::miniconstants::init_constant_table;
 use std::path::Path;
 pub use xformcode::{fold_tuples, TupleTree, TUPLE_SIZE};
 
-mod optimize;
 mod striplabels;
 pub mod xformcode;
 
@@ -389,8 +389,8 @@ pub fn postlink_compile(
     let code = xformcode::fold_tuples(code, program.globals.len())?;
     phase!(code, "fix_tuple_size");
 
-    let code = optimize::peephole(&code);
-    phase!(code, "peephole optimization");
+    let code = optimize::peephole(code.clone());
+    phase!(code, "peephole optimizations");
 
     let (mut code, jump_table_final) = striplabels::strip_labels(code, &jump_table)?;
     let jump_table_len = jump_table_final.len();
@@ -403,7 +403,7 @@ pub fn postlink_compile(
     code[write_offset].immediate = Some(globals.clone());
     code = translate::set_error_codepoints(code);
 
-    let code_final: Vec<_> = code
+    let code: Vec<_> = code
         .into_iter()
         .map(|insn| {
             if let Opcode::AVMOpcode(inner) = insn.opcode {
@@ -422,7 +422,7 @@ pub fn postlink_compile(
         .collect::<Result<Vec<_>, CompileError>>()?;
 
     title!("final output");
-    for (idx, insn) in code_final.iter().enumerate() {
+    for (idx, insn) in code.iter().enumerate() {
         both!(
             "{}  {}",
             Color::grey(format!("{:04}", idx)),
@@ -454,7 +454,7 @@ pub fn postlink_compile(
         jump_shape.pretty_print(Color::PINK)
     );
 
-    let size = code_final.iter().count() as f64;
+    let size = code.iter().count() as f64;
     both!("Total Instructions {}", size);
 
     Ok(LinkedProgram {
@@ -464,9 +464,9 @@ pub fn postlink_compile(
             .unwrap()
             .clone()
             .trim_to_u64(),
-        code: code_final,
+        code,
         static_val: Value::none(),
-        globals: program.globals.clone(),
+        globals: program.globals,
         file_info_chart,
         type_tree: SerializableTypeTree::from_type_tree(program.type_tree),
     })

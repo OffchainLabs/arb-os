@@ -232,16 +232,7 @@ pub fn reorder_stack(
     // and by eliding them we've essentially transformed the window function to
     // ignore ordered parts of the stack as it intelligently moves the window
     // directly to where values need to be swapped.
-    let code = peephole::filter_pair(
-        code,
-        Opcode::AVMOpcode(AVMOpcode::AuxPush),
-        Opcode::AVMOpcode(AVMOpcode::AuxPop),
-    );
-    let code = peephole::filter_pair(
-        code,
-        Opcode::AVMOpcode(AVMOpcode::AuxPop),
-        Opcode::AVMOpcode(AVMOpcode::AuxPush),
-    );
+    let code = peephole::peephole(code);
 
     let stack = stack.into_iter().map(|item| item.0).collect();
     let result = (code, stack);

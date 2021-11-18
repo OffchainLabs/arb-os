@@ -109,6 +109,12 @@ impl From<Instruction<AVMOpcode>> for Instruction {
     }
 }
 
+impl From<AVMOpcode> for Instruction<AVMOpcode> {
+    fn from(opcode: AVMOpcode) -> Self {
+        Self::from_opcode(opcode, DebugInfo::default())
+    }
+}
+
 impl From<Opcode> for Instruction {
     fn from(opcode: Opcode) -> Self {
         Self::from_opcode(opcode, DebugInfo::default())
