@@ -11,13 +11,13 @@ A Mini program is written as a set of source code files.  You can write separate
 ## Top level declarations
 
 A Mini source code file consists of a series of top-level declarations.  
-An optional file scope attribute declaration sets an attribute for the whole file.
-Use declarations make functions and types from other files usable in the file they are contained in.
+An optional file-scope attribute declaration sets an attribute for the whole file.
+A use declaration makes functions and types from other files usable in the file with the declaration.
 Constant declarations add a constant.
 Use and constant declarations together form head declarations.
-Body declarations are any other declaration.
+Body declarations are any other non-attribute declaration.
 
-The head declarations must come before all other declarations. It is an error to put a head declaration after a body declaration
+The head declarations must come before all other declarations. It is an error to put a head declaration after a body declaration.
 If present, a file scope attribute declaration must be the first declaration in the file, and only one file scope attribute delcaration may be present.
 See the Attributes section for more details.
 
@@ -25,20 +25,20 @@ Within each group the order of declarations does not matter.
 
 ### Head Declarations
 
-`use` *path* `::` *name*;
+`use` *path* `::` *name*`;`
 
-> This imports the type or function with name *name* in the mini file with virtual path *path*. The code in the local file can refer to the type as *name*.
+> This imports the type or function with name *name* in the mini file with virtual path *path*. The code in the file with this declaration can refer to the type as *name*.
 > Please see the section on path syntax for a description of how virtual paths work.
 
 `const` *ident* `=` *unsignedInt* `;`
 
-> This declares a constant with name *ident* and value *unsignedInt*. This constant is only usable in the file it is defined.
+> This declares a constant with name *ident* and value *unsignedInt*. This constant is only usable in the file it is defined in.
 
 ### Body declarations
 
-`type` *name* (`<` *ident1*, *ident2*, ... `>`)? = *type* `;`
+`type` *name* (`<` *ident1*`,` *ident2*`,` ... `>`)? = *type* `;`
 
-> This declares a type alias or generic type, allowing name to be used as a synonym for the specified type or as a generic type. 
+> This declares a type alias or a generic type, allowing *name* to be used as a synonym for the specified type, or as a generic type. 
 > If `<` *ident1*, *ident2*, ... `>` is included, the type will be generic with *ident1*, *ident2*, etc as type variables.
 > In generic types the type variables will be available in the definition of *type*, in any place a nominal type would be valid, and will be replaced by other types in specialization.
 > See the Generics section for more details.
@@ -48,7 +48,7 @@ Within each group the order of declarations does not matter.
 > This declares a global variable. The variable will be initially assigned the default value for the type.
 > Please see the Default Values and Attributes sections for more details. 
 
-*Attributes*? [ `view` | `write` | `public` ]* `func` *name* ( *argname1: type1, argname2: type2, ...* ) [-> *returntype* | `noreturn`] *codeblock*
+*Attributes*? [ `view` | `write` | `public` ]* `func` *name* `(` *argname1*`:` *type1*`,` *argname2*`:` *type2*`,` ... `)` [-> *returntype* | `noreturn`] *codeblock*
 
 > This declares a function and provides its code.
 > 
@@ -56,9 +56,9 @@ Within each group the order of declarations does not matter.
 >
 > The `public` modifier indicates that the function can be called by code outside this source code file. Non-public functions cannot be called directly by outside code.  (However, pointers to non-public functions can be passed to outside code, and this would allow the pointed-to function to be called by outside code.)
 >
-> The `view` modifier indicates that the function reads global state or calls other `view` functions. It is possible to create a `view` function that does not read global state, but the compiler throw a warning in this case.
+> The `view` modifier indicates that the function reads global state or calls other `view` functions. It is possible to create a `view` function that does not read global state, but the compiler will throw a warning in this case.
 >
-> The `write` modifier indicates that the function writes to global state or calls other `write` functions. It is possible to create a `write` function that does not read global state, but the compiler throw a warning in this case. 
+> The `write` modifier indicates that the function writes to global state or calls other `write` functions. It is possible to create a `write` function that does not read global state, but the compiler will throw a warning in this case. 
 >
 > Any duplicate modifiers are ignored.
 > 
@@ -66,7 +66,7 @@ Within each group the order of declarations does not matter.
 >
 > If there is a return type specified, the function will return a single value of the specified type. (We'll see below that the type can be a tuple, allowing multiple values to be packaged together into a single return value.)
 > 
-> If no return type is specified, then the function returns `void`, as void represents a lack of a value, this means no value is returned.
+> If no return type is specified, then the function returns `void`, as `void` represents a lack of a value, this means no value is returned.
 >
 > If the return type is `every`, then the function cannot return, because no return value of type `every` can exist. If the compiler detects a return of any other type, it will not be able to verify that it cannot return, and it will generate an error.
 >
@@ -92,35 +92,35 @@ Instructions that are both `view` and `write` are
 
 ## Types
 
-Mini is a type-checked language.  The compiler should catch any inconsistent use of types. We believe the only ways that type errors can go undetected by the compiler are incorrect uses of the `unsafecast` or `unioncast` operators, or `asm` expressions.
+Mini is a type-checked language.  The compiler should catch any inconsistent use of types. We believe the only ways that type errors can go undetected by the compiler are, incorrect uses of the `unsafecast` operator, `unioncast` operator, or an `asm` expression.
 
 Mini has the following types:
 
 `bool`
 
-> `true` or `false` (an atomic type with the zero value `false`)
+> `true` or `false`
 
 `uint`
 
-> a 256-bit unsigned big-endian integer.
+> A 256-bit unsigned big-endian integer.
 
 `int`
 
-> a 256-bit signed (twos complement) big-endian integer.
+> A 256-bit signed (twos complement) big-endian integer.
 
 `bytes32`
 
-> a string of 32 bytes.
+> A string of 32 bytes.
 
 `address`
 
-> a 20-byte Ethereum address, can hold any value between `0` and `2^160-1`.
+> A 20-byte Ethereum address, can hold any value between `0` and `2^160-1`.
  
 `buffer`
 
 > Buffers are a type that contains an series of bytes.
 > Buffers internally can be of length up to 2^128-1, however, as both the `setbuffer` and `getbuffer` expressions may only handle indices
-> up to `2^("system register size in bits")-1`, this limitation does not impact maximum size unless the hardware running the system has a bit width over 128.
+> up to `2^("system register size in bits")-1`, this limitation does not impact maximum size unless the hardware running the system register size is over 128.
 
 `void`
 
@@ -133,11 +133,11 @@ Mini has the following types:
 
 `(` *type1*`,` *type2*`,` ... `)`
 
-> a tuple, consisting of zero or more ordered, typed fields (a compound type)
+> A tuple, consisting of zero or more ordered, typed fields.
 
 `[` *size* `]` *type*
 
-> a fixed-size array of values, all of the same type; *size* must be a constant unsigned integer (a compound type)
+> A fixed-size array of values, all of the same type; *size* must be a constant unsigned integer (a compound type)
 
 `[]` *type*
 
@@ -160,7 +160,7 @@ Mini has the following types:
 > Either `Some(`*value*`)` or `None<`*type*`>`, where *value* represents an arbitrary value of type *type*. 
 > The specific variant being used can be determined by `if let` and `?`.
 > The shortcut `None` can be used to create a value of `None<every>`, which is assignable to all `None<`*T*`>` for any type *T*.
-> The term "inner type" refers to the type specified by *type*.
+> The term "inner type" refers to the type *type*.
 
 [ `view` | `write` | `public` ]* `func` ( *type1, type2, ...*) (`->` *returntype*)?
 
@@ -237,7 +237,7 @@ Specialization can occur in two different contexts, in the context of a speciali
 In both contexts the process operates similarly, with each use of a type variable being replaced with a different specified type. 
 And the primary difference between the two specializations are the scopes under which it applies.
 
-For generic types, a specialization creates a new specialized generic type, for example `queue<uint>` would be a specialization of `queue`.
+For generic types, a specialization creates a new type, for example `queue<uint>` would be a specialization of `queue`.
 The type `queue<uint>` will be given a representation equal to the type on the right side of the type declaration, with each type variable replaced by the associated type.
 For example, `queue<uint>` will have a representation of:
 ```rs
@@ -263,45 +263,35 @@ whose argument types are the arguments with each type variable replaced by the s
 For example the type of `single_queue::<uint>` is `func(uint) -> queue<uint>`.
  
 The code executed by a specialized generic function is identical to the code that would be generated by replacing every type variable in the unspecialized function with the type specified by the specialization. 
-However, this transformation is not necessary, as the rules for type variables ensure that no type specific logic is necessary, and the code for the non-specialized generic function can be safely used.
-The practical impact of this is that there is no possibility for a type error originating from inside the body of a specialized generic function, as any type errors will be caught in the non-specialized function.
+However, this transformation is not necessary, as the rules for type variables ensure that no type specific logic is necessary, and the same code can safely be used for any specialization.
+The practical impact of this is that there is no possibility for a type error originating from inside the body of a specialized generic function, as any type errors will be caught while typechecking the non-specialized function.
 Therefore, as long as a correct generic function name is used, the correct number of types is specified, and each type is valid in the scope the specialized generic function is being used, no errors should occur within a specialized generic function reference.
 
 These constructs define the extent of the generics system in mini.
 
 ## Equality, assignability, and castability for types
 
-Two types are equal if they have the same structure. Nominal types, as defined by type declarations, create types that are considered equal to their definitions. 
+Two types are equal if they have the same structure. Nominal types, as defined by type declarations, create types that are considered equal to their representations. 
 (For example, after the declaration `type foo = uint`, `foo` and `uint` are considered equal, and `uint` is considered the representation of `foo`.)
 
-Every atomic type is equal to itself. 
+The following define the rules for type equality:
+
+* Every atomic type is equal to itself. 
 This includes `uint`, `int`, `bool`, `buffer`, `bytes32`, `address`, `void` and `string`.
-
-Two tuple types are equal if they have the same number of fields and their field types are equal, field-by-field.
-
-Two fixed-size array types are equal if they have the same size and their field types are equal.
-
-Two variable-sized array types are equal if their field types are equal.
-
-Two struct types are equal if have the same number of fields, each field has the same name and equal type, field-by-field.
-
-Two func types are equal if they have the same purity, in other words, that the presence or non-presence of `view` and `write` modifiers is the same in both, 
-the same number of argument types, and each argument type is equal, argument-by-argument, and the return types are equal (or neither has a return type).
-
-Two map types are equal if their key types are equal and their value types are equal.
-
-Two option types are equal if their inner types are equal
-
-Two union types are equal if they have the same number of variants and their variants are equal, variant by variant.
-
-Two specialized generic or nominal types are equal if their representations are equal.
-
-Two type variables are equal if they share the same name.
+* Two tuple types are equal if they have the same number of fields and their field types are equal, field-by-field.
+* Two fixed-size array types are equal if they have the same size and their field types are equal.
+* Two variable-sized array types are equal if their field types are equal.
+* Two struct types are equal if they have the same number of fields, and each field has the same name and equal type, field-by-field.
+* Two func types are equal if they have the same purity, in other words, that the presence or non-presence of `view` and `write` modifiers is the same in both, 
+the same number of argument types, each argument type is equal, argument-by-argument, and the return types are equal (or neither has a return type).
+* Two map types are equal if their key types are equal and their value types are equal.
+* Two option types are equal if their inner types are equal.
+* Two union types are equal if they have the same number of variants and their variants are equal, variant by variant.
+* Two specialized generic or nominal types are equal if their representations are equal.
+* Two type variables are equal if they share the same name.
 It is also necessarily the case that they are defined in the same location, as any generic type or function must be specialized to be used.
-
-`any` equals itself.
-
-`every` equals itself.
+* `any` equals itself.
+* `every` equals itself.
 
 Unless specified as equal by the rules above, a pair of types is unequal.
 
@@ -313,12 +303,12 @@ A value of type `V` is assignable to storage of type `S` if:
 * `V` equals `S`,
 * `V` and `S` are tuple types with the same number of fields, and each field of `V` is assignable to the corresponding field of `S`,
 * `V` and `S` are fixed-size arrays of the same size, and the field type of `V` is assignable to the field type of `S`,
-* `V` and `S` are arrays, and the field type of `V` is assignable to the field type of `S`,
+* `V` and `S` are variable-sized arrays, and the field type of `V` is assignable to the field type of `S`,
 * `V` and `S` are structs, with the same number of fields, and each field of `V` has the same name as the corresponding field of `S`, and each field of `V` is assignable to the corresponding field of `S`,
-* `V` and `S` are function types, with the same number of arguments, and if `V` is `view` or `write`, then `S` must also be `view` or `write` respectively, each argument type of `V` must be assignable to the corresponding argument type of `S`, and the return type of `S` is assignable to the return type of `V`.  (Note that the return type is compared for assignability "backwards". This is needed to make calls through function references type-safe.)
-* `V` and `S` are map types, and the key type of `V` is assignable to the key type of `S`, and the value types of `V` and `S` are equal.
-* `V` and `S` are optional types, and the inner type of `V` is assignable to the inner type of `S`
-* `V` and `S` are union types with the same number of variants, and each variant of `V` in order must be assignable to each variant of `S`, variant-by-variant.
+* `V` and `S` are function types, with the same number of arguments, and if `V` is `view` or `write`, then `S` must also be `view` or `write` respectively, each argument type of `V` must be assignable to the corresponding argument type of `S`, and the return type of `S` is assignable to the return type of `V`, (Note that the return type is compared for assignability "backwards". This is needed to make calls through function references type-safe.)
+* `V` and `S` are map types, and the key type of `V` is assignable to the key type of `S`, and the value types of `V` and `S` are equal,
+* `V` and `S` are optional types, and the inner type of `V` is assignable to the inner type of `S`,
+* `V` and `S` are union types with the same number of variants, and each variant of `V` in order must be assignable to each variant of `S`, variant-by-variant,
 * `V` and `S` are nominal types or specialized generic types, and the representation of `V` is assignable to the representation of `S`.
 
 These rules guarantee that assignability is transitive. 
@@ -341,7 +331,7 @@ A value of type `V` is castable to storage of type `S` if:
 * `V` and `S` are fixed-size arrays of the same size, and the field type of `V` is castable to the field type of `S`,
 * `V` and `S` are variable-sized arrays, and the field type of `V` is castable to the field type of `S`,
 * `V` and `S` are structs, with the same number of fields, and each field of `V` is castable to the corresponding field of `S`, the names of each field do not need to match,
-* `V` and `S` are function types, with the same number of arguments, and if `V` is `view` or `write`, then `S` must also be `view` or `write` respectively, each argument type of `V` must be castable to the corresponding argument type of `S`, and the return type of `S` is castable to the return type of `V`.  (Note that the return type is compared for castability "backwards". This is needed to make casts through function references type-safe.),
+* `V` and `S` are function types, with the same number of arguments, and if `V` is `view` or `write`, then `S` must also be `view` or `write` respectively, each argument type of `V` must be castable to the corresponding argument type of `S`, and the return type of `S` is castable to the return type of `V`,  (Note that the return type is compared for castability "backwards". This is needed to make casts through function references type-safe.)
 * `V` and `S` are map types, and the key type of `V` is castable to the key type of `S`, and the value type of `V` is castable to the value type of `S`,
 * `V` and `S` are optional types, and the inner type of `V` is castable to the inner type of `S`,
 * `V` and `S` are union types with the same number of variants, and each variant of `V` is castable to each variant of `S` variant-by-variant,
@@ -377,26 +367,28 @@ All statements may be prefixed by *Attributes*, see the Attributes section for m
 
 > An "infinite loop" which executes the statement codeblock *codeblock* repeatedly. The only way to exit the loop is via a `return` statement or a runtime error.
 
-`while` ( *condition* ) *codeblock*
+`while` *condition* *codeblock*
 
 > Like a loop, except *condition*, which must be an expression of type `bool`, is evaluated before each iteration, and the loop terminates if *condition* is found to be false.
 > *codeblock* must be a statement codeblock.
 
-`if` ( *condition* ) *codeblock* ([`else` [*elsecodeblock* | *if statement* | *if let statement*]])?
+`if` *condition* *codeblock* (`else` [*elsecodeblock* | *if statement* | *if let statement*])?
 
-> *condition* must be a expression of type `bool`. If *condition* is true then the statement codeblock *codeblock* is executed, otherwise, the `else` statement is executed if present. *elsecodeblock* must be a statement codeblock. You can string together as many else ifs as you want.
+> *condition* must be a expression of type `bool`. If *condition* is true then the statement codeblock *codeblock* is executed, otherwise, either *elsecodeblock*, *if statement*, or *if let statement* is executed if present. 
+> *elsecodeblock* must be a statement codeblock, *if statement* must be a if statement, and *if let statement* must be an if let statement.
+> You can string together as many else ifs as you want.
 
-`let` *name* = *expression* ;
+`let` *name* `=` *expression* `;`
 
-> Create a new local variable and initialize it with the value of *expression*.  
-> The compiler infers that the new variable has the same type as *expression*.  
-> The variable goes out of scope when execution leaves the current codeblock.  
+> Create a new local variable and initialize it with the value of *expression*.
+> The compiler infers that the new variable has the same type as *expression*.
+> The variable goes out of scope when execution leaves the current codeblock.
 > If the new variable has the same name as an already-existing variable, it will mask the existing variable definition for as long as the new variable is in scope.
 > The type of *expression* cannot be *void*, or a compilation error will occur.
 
-`let` ( *nameorbinding1* , *nameorbinding2*, ... ) = *expression* ;
+`let` `(` *nameorbinding1* , *nameorbinding2*, ... `)` `=` *expression* `;`
 
-Where each nameorbinding may be:
+Where each *nameorbinding* may be:
 
 *identifier*
 
@@ -407,7 +399,7 @@ Or:
 > Creates or assigns to multiple variables based on unpacking a tuple. 
 > If the *nameorbinding* is an identifier it creates a new variable, if *nameorbinding* is `*`*identifier* it assigns to an existing variable with that name. 
 > *expression* must be a tuple type, with the number of fields in the tuple equal to the number of names on the left-hand side.
-> The compiler creates a new local variable for each name on the left-hand side, and infers the type of each new variable based on the type of the corresponding field of the right-hand side tuple.
+> The compiler creates a new local variable for each name on the left-hand side matching the *identifier* pattern, and infers the type of each new variable to be the type of the corresponding field of the right-hand side tuple.
 > In the case of assignments to existing variables, the corresponding field on the right hand side must be assignable to the type of the variable.
 > No assignment may use type *void* on the right hand side.
 
@@ -415,27 +407,27 @@ Or:
 
 > It is required that *ident* is an identifier, and *expression* is an expression of some option type.  
 > 
-> If *expression* returns the Some variant, at the start of the statement codeblock *codeblock* a new local variable *ident* is created with the inner value of the result of *expression*,
-> and type of *expression*'s inner type. *codeblock* is then run with *ident* present.
+> If *expression* returns the Some variant, at the start of the statement codeblock *codeblock* a new local variable *ident* is created and initialized as the inner value of the result of *expression*,
+> and *expression*'s inner type. *codeblock* is then run with *ident* present.
 > 
-> If *expression* is the `None` variant and the `else` statement is present, 
+> If *expression* is the `None` variant and the `else` statement is present, then either
 > statement codeblock *elsestatementcodeblock*, if statement *if statement*, or if let statement *if let statement* is run instead.  
 
-*expression*
+*expression*`;`
 
-> The expression is executed, this is primarily useful when the side effects of *expresssion* are desired, but the either the expression does not return a value or the value is not needed.
+> The expression is executed, this is primarily useful when the side effects of *expresssion* are desired, but either the expression returns `void` or the value is not needed.
 
-*name* = *expression* ;
+*name* `=` *expression* `;`
 
-> Assign a new value to an existing variable, which can be a global variable or a local variable. The type of *expression* must be assignable to the variable's type.
+> Assign a new value to the existing variable *name*, which can be a global variable or a local variable. The type of *expression* must be assignable to the variable's type.
 
-`return` ;
+`return` `;`
 
 > Return from the current function. This is an error if the function has a return type other than `void`.
 
-`return` *expression* ;
+`return` *expression* `;`
 
-> Return a value from the current function. The value of *expression* must be assignable to the function's return type.
+> Return the result of *expression* from the current function. The value of *expression* must be assignable to the function's return type.
 
 `debug` `(` *expression* `)`
 
@@ -452,8 +444,9 @@ Or:
 `set` *nameident* ([`.` *fieldident* | `[` *keyexpression* `]` ])+ `=` *expression* `;`
 
 > Sets the field, map, or array element specified by the sequence of *fieldident*s and *keyexpression*s, to *expression*.
-> All *keyexpressions*s that index into an array or fixed size array type must be of type `uint`.
-> For *keyexpressions*s that index into a map, the type of the *keyexpression* must be assignable to the key type of the map.
+> All *fieldident*s must be identifiers that specify a field in a struct, and *keyexpression*s must be indexes or map keys.
+> All *keyexpression*s that index into an array or fixed size array type must have type `uint`.
+> For *keyexpression*s that index into a map, the type of the *keyexpression* must be assignable to the key type of the map.
 
 ## Attributes
 
@@ -477,7 +470,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 `-` *expression*
 
-> Unary minus. Defined only for type `int`, and produces an `int`. This will error if the result is not expressible in the `int` datatype. This will only occur if the value of *expression* is `MaxNegInt`.
+> Unary minus. Defined only for type `int`, and produces an `int`. This will error if the result is not expressible in the `int` datatype. This will only occur if the value of *expression* is `-2^255`, the minimal representable value.
 
 `!` *expression*
 
@@ -489,7 +482,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 *expression* `?`
 
-> The containing function must return either an option type or `any`, and *expression* must be an option type. If *expression* is the `Some` variant, then it evaluates as the inner value, otherwise, this will cause the function to return `None`.
+> The containing function must return either an option type or `any`, and *expression* must be an option type. If *expression* is the `Some` variant, then this expression returns the inner value, otherwise, this will cause the function to return `None`.
 
 *expression* `+` *expression*
 
@@ -587,6 +580,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 `newarray` `<` *type* `>` `(` *expression* `)`
 
 > Create a new variable-sized array object. *expression*, which must have type `uint`, gives the initial size of the new array, and *type* is the type of its elements. The contents of the array are initialized to the default value of *type*.
+> See the Default Values section for more details.
 
 `newfixedarray` `(` *size* `)`
 
@@ -612,11 +606,11 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 `unsafecast` `<` *type* `>` `(` *expression*  `)`
 
-> Evaluate *expression*, and then treat the in-memory representation of the result as an object having type *type*. This is an unsafe operation, as the programmer must ensure that the value being cast can be safely interpreted as *type*.  It is most often used to convert a value of type `any` into a more specific type, when the programmer knows the real type of the value.  
+> Evaluate *expression*, and then treat the in-memory representation of the result as an value having type *type*. This is an unsafe operation, as the programmer must ensure that the value being cast can be safely interpreted as *type*.  It is most often used to convert a value of type `any` into a more specific type, when the programmer knows the real type of the value.  
 
 `Some` `(`*expression*`)`
 
-> Creates an option typed value with the `Some` variant, the inner value is the result of *expression* and inner type is equal to the type of *expression*.
+> Creates an option typed value with the `Some` variant, the inner value is the result of *expression* and the type is `option<`type of *expression*`>`.
 
 `None`
 
