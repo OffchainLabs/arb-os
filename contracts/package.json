@@ -10,6 +10,10 @@
     "postinstall": "$npm_execpath run clean:build",
     "clean:build": "hardhat clean && hardhat compile",
     "build": "hardhat compile",
+    "build:0.6": "SOLC_VERSION=0.6.11 hardhat compile",
+    "build:0.7": "SOLC_VERSION=0.7.5 hardhat compile",
+    "build:0.8": "SOLC_VERSION=0.8.10 hardhat compile",
+    "full:build": "$npm_execpath run build:0.6 && $npm_execpath run build:0.7 && $npm_execpath run build:0.8",
     "deploy:test": "hardhat run --network localhost scripts/deploy-test.js"
   }
 }

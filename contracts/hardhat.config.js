@@ -1,8 +1,17 @@
+const solcVersion = process.env.SOLC_VERSION || "0.8.10"
+
+if(solcVersion !== "0.6.11" && solcVersion !== "0.8.10" && solcVersion !== "0.7.5")
+  throw new Error("Select a supported solidity version.")
+
 /**
  * @type import('hardhat/config').HardhatUserConfig
  */
 module.exports = {
-  solidity: "0.6.11",
+  solidity: {
+    compilers: [
+      { version: solcVersion }
+    ],
+  },
   paths: {
     sources: "./arbos",
   },
