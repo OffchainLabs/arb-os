@@ -1348,7 +1348,7 @@ sensitive func restoreAvmStack(savedStack: Stack) {
     }
 }
 
-public view write func snapshotAuxStack() -> Stack {
+public sensitive view write func snapshotAuxStack() -> Stack {
     // Save a copy of everything from the auxstack, except the current callframe and return address (which are on top).
     // Keep the current callframe on top of the auxstack (except during asm blocks)
     //       because the compiler probably wants to use the callframe
@@ -1390,7 +1390,7 @@ public view write func cleanAvmAuxStackAndCall(funcToCall: view write func(), pu
     restoreAuxStackAndCall(funcToCall, None, pushFakeReturnAddress);
 }
 
-public view write func restoreAuxStackAndCall(
+public sensitive view write func restoreAuxStackAndCall(
     funcToCall: view write func(),
     maybeSavedAuxStack: option<Stack>,
     pushFakeReturnAddress: bool
