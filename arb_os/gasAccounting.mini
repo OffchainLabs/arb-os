@@ -779,8 +779,6 @@ public view write func gasAccounting_prepareTx(tx: TxRequestData) -> (
         set tx.feeStats = txFeeStats_setL2Prices(tx.feeStats, prices);
 
         let estimationCompGasLimit = if let Some(gep) = tx.incomingRequest.gasEstimationParams {
-            //debug((32321, tx.feeStats.noFeeGasEstimationMode, gep));
-            
             if gep.ignoreGasPrice {
                 set tx.feeStats.noFeeGasEstimationMode = true;
             }
@@ -798,9 +796,6 @@ public view write func gasAccounting_prepareTx(tx: TxRequestData) -> (
 
         let (fullyPaid, feeStats, _totalWeiPaid) = if let Some(aggInfo) = tx.incomingRequest.aggregator {
             set tx.feeStats.units.calldataUnit = aggInfo.calldataUnits;
-
-            debug((10001, tx.maxGas, prices.perArbGasTotal));
-            
             payForTxAndL1Gas(
                 tx.gasPayer,
                 tx.caller,
@@ -830,16 +825,11 @@ public view write func gasAccounting_prepareTx(tx: TxRequestData) -> (
             return (const::TxResultCode_insufficientGasFunds, tx);
         }
 
-        debug((10002, fullyPaid, tx.maxGas));
-
         // compute the number of ArbGas units corresponding to the aggregator fee, and deduct them from the tx
         // round up to the nearest integer number of units -- this will burn the wei that would pay
         //       for a fractional ArbGas unit (rounding down would credit the user with fractional
         //       ETH that we don't have)
         let roundedUpGasDelta = safeAdd(safeAdd(feeStats.weiPaid.tx, feeStats.weiPaid.calldataUnit), prices.perArbGasTotal - 1) / prices.perArbGasTotal;
-
-        debug((10002, roundedUpGasDelta, tx.maxGas, feeStats.units.calldataUnit));
-
         if tx.maxGas >= roundedUpGasDelta {
             set tx.maxGas = tx.maxGas - roundedUpGasDelta;
         } else {
@@ -941,9 +931,6 @@ view write func payForTxAndL1Gas(
             feeStats,
             paymentLimitWei,
         );
-
-        debug((10000, 1, feeStats.noFeeGasEstimationMode, fullyPaid));
-        
         feeStats = ufs with {
             price: ufs.price with {
                 tx: networkPrice + feeStats.price.tx
@@ -967,9 +954,6 @@ view write func payForTxAndL1Gas(
         let feeCollector = account_getFeeCollector(evmCallStack_getAccountInCurrentContext(aggregator));
         
         if ! {
-
-            debug((10000, 2, paymentLimitWei, totalWeiPaid));
-            
             let (fullyPaid, *feeStats, weiPaid) = tryToPayForL1Gas(
                 payer,
                 feeCollector,
@@ -978,9 +962,6 @@ view write func payForTxAndL1Gas(
                 feeStats,
                 safeSub(paymentLimitWei, totalWeiPaid),
             );
-
-            debug((10000, 3, 32));
-            
             set feeStats.price.tx = safeAdd(feeStats.price.tx, basePriceTx);
             set feeStats.price.calldataUnit = safeAdd(feeStats.price.calldataUnit, basePriceCalldataUnit);
             totalWeiPaid = safeAdd(totalWeiPaid, weiPaid);
@@ -1004,8 +985,6 @@ view write func tryToPayForL1Gas(
     
     let dontActuallyPay = feeStats.noFeeGasEstimationMode;
 
-    debug((10001, 1, dontActuallyPay, weiForTx, weiForCalldata, paymentLimit));
-    
     let totalDue = weiForTx + weiForCalldata;
     let fullyPaid = if totalDue <= paymentLimit {
         true
@@ -1013,8 +992,6 @@ view write func tryToPayForL1Gas(
         totalDue = paymentLimit;
         false
     };
-
-    debug((10001, 2, dontActuallyPay, weiForTx, weiForCalldata, paymentLimit, fullyPaid));
 
     let acctStore = safeGetGlobalAccountStore();
     let payerAcct = accountStore_get(acctStore, payer);
