@@ -148,7 +148,7 @@ public write func evmOps_init() {
 
 }
 
-public view write func dispatchForEvmOp(index: uint) {
+public sensitive view write func dispatchForEvmOp(index: uint) {
     asm(evmOpJumpTable[index]) {
         auxpop pop   // discard this function's call frame
         auxpop
@@ -737,7 +737,7 @@ public view func evmOp_gas() -> uint {
     gasLeft
 }
 
-public view write func evmOp_callAndReturn(
+public sensitive view write func evmOp_callAndReturn(
     gas: uint,
     callee: address,
     balance: uint,
@@ -791,7 +791,7 @@ public view write func evmOp_callAndReturn(
     }
 }
 
-public view write func evmOp_call(
+public sensitive view write func evmOp_call(
     gas: uint,
     calleeAsUint: uint,
     balance: uint,
@@ -856,7 +856,7 @@ public view write func evmOp_call(
     }
 }
 
-public view write func evmOp_callcode(
+public sensitive view write func evmOp_callcode(
     gas: uint,
     calleeAsUint: uint,
     balance: uint,
@@ -906,7 +906,7 @@ public view write func evmOp_callcode(
     }
 }
 
-public view write func evmOp_delegatecall(
+public sensitive view write func evmOp_delegatecall(
     gas: uint,
     calleeAsUint: uint,
     argsOffset: uint,
@@ -955,7 +955,7 @@ public view write func evmOp_delegatecall(
     }
 }
 
-public view write func evmOp_staticcall(
+public sensitive view write func evmOp_staticcall(
     gas: uint,
     calleeAsUint: uint,
     argsOffset: uint,
