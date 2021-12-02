@@ -2226,7 +2226,7 @@ impl Machine {
                         let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
                         for i in 0..8 {
-                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[i]);
+                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[24 + i]);
                         }
                         self.stack.push(Value::copy_buffer(nbuf));
                         self.incr_pc();

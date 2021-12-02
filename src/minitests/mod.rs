@@ -119,6 +119,11 @@ fn test_map() {
 }
 
 #[test]
+fn test_modexp() {
+    test_for_numeric_error_code(Path::new("minitests/modexp.mexe"));
+}
+
+#[test]
 fn test_keccak() {
     test_for_numeric_error_code(Path::new("stdlib/keccaktest.mexe"));
 }
