@@ -229,3 +229,18 @@ func kvs_forall_tree(
         state
    }
 }
+
+// This is a wrapper around builtin_kvsForAll that uses generics to do better typechecking.
+public func typesafe_kvsForall<K, V, S>(
+    s: map<K, V>,
+    applicator: func(K, V, S) -> S,
+    state: S,
+) -> S {
+    return unsafecast<S>(
+        builtin_kvsForall(
+            unsafecast<Kvs>(s),
+            unsafecast<func(any, any, any)->any>(applicator),
+            state,
+        )
+    );
+}
