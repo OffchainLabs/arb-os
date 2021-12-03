@@ -27,6 +27,7 @@ use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_copy;
 
 use gasAccounting::getRetryableTxPrice;
 
@@ -37,6 +38,7 @@ use retrybuffer::retryBuffer_getTxKeepalivePrice;
 use retrybuffer::retryBuffer_keepalive;
 use retrybuffer::retryBuffer_getBeneficiary;
 use retrybuffer::retryBuffer_delete;
+use retrybuffer::serializeAllRetryables;
 
 
 public view write func arbretryable_txcall() {
@@ -62,6 +64,8 @@ public view write func arbretryable_txcall() {
             arbRetryable_cancel(topFrame, calldata);
         } else if funcCode == const::funcCode_ArbRetryableTx_getSubmissionPrice {
             arbRetryable_getSubmissionPrice(topFrame, calldata);
+        } else if funcCode == const::funcCode_ArbRetryableTx_serializeAllRetryables {
+            arbRetryable_serializeAllRetryables(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownPc(1, 0, 0);
@@ -266,6 +270,28 @@ view write func arbRetryable_getSubmissionPrice(_topFrame: EvmCallFrame, calldat
         evmOp_revert_knownPc(81, 0, 0);
     }
 }
+
+// function serializeAllRetryables() external view returns(bytes memory);
+view write func arbRetryable_serializeAllRetryables(_topFrame: EvmCallFrame, _calldata: ByteArray) {
+    let ret = serializeAllRetryables(getRetryBufferInCurrentContext());
+    ret = bytearray_copy(
+        ret,
+        0,
+        bytearray_set256(
+            bytearray_set256(bytearray_new(0), 0, 32),
+            32,
+            bytearray_size(ret),
+        ),
+        64,
+        bytearray_size(ret)
+    );
+    if evmCallStack_setTopFrameMemory(ret) {
+        evmOp_return(0, bytearray_size(ret));
+    } else {
+        evmOp_revert_knownPc(90, 0, 0);
+    }
+}
+
 
 // event TicketCreated(bytes32 indexed ticketId);
 view write func _arbRetryable_emitTicketCreated(_topFrame: EvmCallFrame, txId: uint) {

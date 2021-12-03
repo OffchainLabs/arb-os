@@ -58,7 +58,7 @@ interface ArbRetryableTx {
     * @param ticketId unique ticket identifier
     * @return address of beneficiary for ticket
     */
-    function getBeneficiary(bytes32 ticketId) external view returns (address);
+    function getBeneficiary(bytes32 ticketId) external view returns(address);
 
     /** 
     * @notice Cancel ticketId and refund its callvalue to its beneficiary.
@@ -66,6 +66,12 @@ interface ArbRetryableTx {
     * @param ticketId unique ticket identifier
     */
     function cancel(bytes32 ticketId) external;
+
+    /**
+    * @notice Serialize all pending retryables
+    * @return Serialized retryables
+    */
+    function serializeAllRetryables() external view returns(bytes memory);
 
     event TicketCreated(bytes32 indexed ticketId);
     event LifetimeExtended(bytes32 indexed ticketId, uint newTimeout);

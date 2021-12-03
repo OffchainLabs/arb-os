@@ -358,6 +358,10 @@ public func bytearray_copy(
     to with { contents: toContents }
 }
 
+public func bytearray_concat(ba1: ByteArray, ba2: ByteArray) -> ByteArray {
+    bytearray_copy(ba1, 0, ba2, bytearray_size(ba2), bytearray_size(ba1))
+}
+
 public func bytearray_extract(from: ByteArray, offset: uint, nbytes: uint) -> ByteArray {
     if offset >= const::MaxByteArraySize {
         return bytearray_new(0);
