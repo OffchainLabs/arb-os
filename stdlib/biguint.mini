@@ -589,7 +589,7 @@ public func biguint_modexp(x: []uint, e: []uint, m: []uint) -> option<[]uint> {
     m = shrinkToFit(m);
 
     let ret = biguint_one();
-    let b = 8*biguint_sizeBytes(x);
+    let b = 8*biguint_sizeBytes(e);
     while b > 0 {
         b = b-1;
         ret = biguint_square(ret);
