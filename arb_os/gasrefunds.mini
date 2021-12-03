@@ -3,7 +3,7 @@
 //
 
 use core::kvs::Kvs;
-use core::kvs::builtin_kvsForall;
+use core::kvs::typesafe_kvsForall;
 
 use accounts::AccountStore;
 use accounts::accountStore_get;
@@ -37,30 +37,26 @@ public func gasRefundTracker_allocationsToRefund(
     tracker: GasRefundTracker,
     acctStore: AccountStore,
 ) -> uint {
-    unsafecast<uint>(
-        builtin_kvsForall(
-            unsafecast<Kvs>(tracker.allocations),
-            closure(rawKey: any, rawValue: any, rawState: any) -> any {
-                let (addr, storageIndex) = unsafecast<(address, uint)>(rawKey);
-                let allocs = unsafecast<uint>(rawValue);
-                let allocsSoFar = unsafecast<uint>(rawState);
-                let newCredit = if let Some(val) = account_getStorageCell(
-                    accountStore_get(acctStore, addr),
-                    storageIndex,
-                ) {
-                    if val == 0 {
-                        allocs
-                    } else if allocs > 1 {
-                       allocs - 1
-                    } else {
-                        0
-                    }
+    typesafe_kvsForall::<(address, uint), uint, uint>(
+        tracker.allocations,
+        closure(key: (address, uint), allocs: uint, allocsSoFar: uint) -> uint {
+            let (addr, storageIndex) = key;
+            let newCredit = if let Some(val) = account_getStorageCell(
+                accountStore_get(acctStore, addr),
+                storageIndex,
+            ) {
+                if val == 0 {
+                    allocs
+                } else if allocs > 1 {
+                   allocs - 1
                 } else {
                     0
-                };
-                return allocsSoFar + newCredit;
-            },
-            0,
-        )
+                }
+            } else {
+                0
+            };
+            return allocsSoFar + newCredit;
+        },
+        0,
     )
 }

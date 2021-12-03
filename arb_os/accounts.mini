@@ -31,7 +31,7 @@ use std::storageMap::storageMap_serialize;
 
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsSize;
-use core::kvs::builtin_kvsForall;
+use core::kvs::typesafe_kvsForall;
 use core::kvs::builtin_kvsDelete;
 
 use chainParameters::chainParams_getDefaultAggregator;
@@ -803,11 +803,11 @@ public func accountStore_forall(acctStore: AccountStore, closure_: func(Account,
         innerClosure: closure_,
         innerState: startState,
     };
-    wrappedState = unsafecast<asfa_wrappedState>(builtin_kvsForall(
-        unsafecast<Kvs>(acctStore.accounts),
-        unsafecast<func(any, any, any) -> any>(asfaClosure),
+    wrappedState = typesafe_kvsForall::<address, Account, asfa_wrappedState>(
+        acctStore.accounts,
+        asfaClosure,
         wrappedState,
-    ));
+    );
     wrappedState.innerState
 }
 

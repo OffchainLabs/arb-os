@@ -5,7 +5,7 @@
 // This implements a set-of-addresses data structure.
 
 use core::kvs::Kvs;
-use core::kvs::builtin_kvsForall;
+use core::kvs::typesafe_kvsForall;
 
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
@@ -141,16 +141,15 @@ public func addressPairSet_lookup_strict(   // look for specific match (i.e., sp
 }
 
 public func addressPairSet_serialize(aps: AddressPairSet) -> ByteArray {
-    let rawResult = builtin_kvsForall(
-        unsafecast<Kvs>(aps.contents),
-        unsafecast<func(any, any, any) -> any>(apss_closure),
+    return typesafe_kvsForall::<(uint, uint), bool, ByteArray>(
+        aps.contents,
+        apss_closure,
         bytearray_new(0),
     );
-    unsafecast<ByteArray>(rawResult)
 }
 
-func apss_closure(key:(uint, uint), value: uint, state: ByteArray) -> ByteArray {
-    if value == 0 {
+func apss_closure(key:(uint, uint), value: bool, state: ByteArray) -> ByteArray {
+    if !value {
         state
     } else {
         let sz = bytearray_size(state);
