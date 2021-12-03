@@ -1086,6 +1086,43 @@ impl<'a> _ArbGasInfo<'a> {
             )))
         }
     }
+
+    pub fn _get_current_tx_l1_gas_fees(
+        &self,
+        machine: &mut Machine,
+    ) -> Result<(Uint256, Uint256), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "getCurrentTxL1GasFees",
+            &[],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            let return_vals = ethabi::decode(
+                &[ethabi::ParamType::Uint(256), ethabi::ParamType::Uint(256)],
+                &receipts[0].get_return_data(),
+            )?;
+
+            match (&return_vals[0], &return_vals[1]) {
+                (ethabi::Token::Uint(ui0), ethabi::Token::Uint(ui1)) => {
+                    Ok((Uint256::from_u256(&ui0), Uint256::from_u256(&ui1)))
+                }
+                _ => panic!(),
+            }
+        } else {
+            Err(ethabi::Error::from(format!(
+                "tx failed: {}",
+                receipts[0]._get_return_code_text()
+            )))
+        }
+    }
 }
 
 pub struct _ArbAggregator {
@@ -2155,6 +2192,44 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
 
     machine.write_coverage("test_arbgasinfo".to_string());
     Ok(())
+}
+
+#[test]
+pub fn _evm_test_get_current_tx_l1_gas_fees() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let arbowner = _ArbOwner::_new(&wallet, false);
+    let arbgasinfo = _ArbGasInfo::_new(&wallet, false);
+
+    machine.runtime_env.insert_eth_deposit_message(
+        my_addr.clone(),
+        my_addr.clone(),
+        Uint256::_from_eth(100),
+        true,
+    );
+    let _ = machine.run(None);
+
+    let (tx_cost, calldata_cost) = arbgasinfo
+        ._get_current_tx_l1_gas_fees(&mut machine)
+        .unwrap();
+    assert!(tx_cost.is_zero());
+    assert!(calldata_cost.is_zero());
+
+    arbowner
+        ._set_fees_enabled(&mut machine, true, true)
+        .unwrap();
+
+    let (tx_cost, calldata_cost) = arbgasinfo
+        ._get_current_tx_l1_gas_fees(&mut machine)
+        .unwrap();
+    assert!(!tx_cost.is_zero());
+    assert!(!calldata_cost.is_zero());
+
+    machine.write_coverage("test_get_current_tx_l1_gas_fees".to_string());
 }
 
 #[cfg(test)]
