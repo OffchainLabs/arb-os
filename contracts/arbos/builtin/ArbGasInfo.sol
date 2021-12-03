@@ -34,7 +34,7 @@ interface ArbGasInfo {
     // reverts unless called by chain owner or designated gas oracle (if any)
     function setL1GasPriceEstimate(uint priceInWei) external;
 
-    // get L1 gas fees paid by the current transaction
+    // get L1 gas fees paid by the current transaction (txBaseFeeWei, calldataFeeWei)
     function getCurrentTxL1GasFees() external view returns(uint, uint);
 }
 
