@@ -317,7 +317,7 @@ impl fmt::Display for CodePt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Eq)]
 pub struct Buffer {
     root: Arc<BufferNode>,
     size: u128,
@@ -398,6 +398,12 @@ impl Buffer {
 impl Hash for Buffer {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.root.hash().hash(state);
+    }
+}
+
+impl PartialEq for Buffer {
+    fn eq(&self, other: &Buffer) -> bool {
+        self.avm_hash() == other.avm_hash()
     }
 }
 

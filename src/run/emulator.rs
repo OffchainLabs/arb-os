@@ -2182,11 +2182,11 @@ impl Machine {
                     AVMOpcode::GetBuffer64 => {
                         let offset = self.stack.pop_usize(&self.state)?;
                         let buf = self.stack.pop_buffer(&self.state)?;
-                        if offset + 7 < offset {
+                        if offset.overflowing_add(7).1 {
                             return Err(ExecutionError::new(
                                 "buffer overflow",
                                 &self.state,
-                                Some(Value::Int(Uint256::from_usize(offset))),
+                                Some(Value::from(offset)),
                             ));
                         }
                         let mut res = [0u8; 8];
@@ -2200,11 +2200,11 @@ impl Machine {
                     AVMOpcode::GetBuffer256 => {
                         let offset = self.stack.pop_usize(&self.state)?;
                         let buf = self.stack.pop_buffer(&self.state)?;
-                        if offset + 31 < offset {
+                        if offset.overflowing_add(31).1 {
                             return Err(ExecutionError::new(
                                 "buffer overflow",
                                 &self.state,
-                                Some(Value::Int(Uint256::from_usize(offset))),
+                                Some(Value::from(offset)),
                             ));
                         }
                         let mut res = [0u8; 32];
@@ -2227,11 +2227,11 @@ impl Machine {
                     }
                     AVMOpcode::SetBuffer64 => {
                         let offset = self.stack.pop_usize(&self.state)?;
-                        if offset + 7 < offset {
+                        if offset.overflowing_add(7).1 {
                             return Err(ExecutionError::new(
                                 "buffer overflow",
                                 &self.state,
-                                Some(Value::Int(Uint256::from_usize(offset))),
+                                Some(Value::from(offset)),
                             ));
                         }
                         let val = self.stack.pop_uint(&self.state)?;
@@ -2239,7 +2239,7 @@ impl Machine {
                         let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
                         for i in 0..8 {
-                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[i]);
+                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[24 + i]);
                         }
                         self.stack.push(Value::copy_buffer(nbuf));
                         self.incr_pc();
@@ -2247,11 +2247,11 @@ impl Machine {
                     }
                     AVMOpcode::SetBuffer256 => {
                         let offset = self.stack.pop_usize(&self.state)?;
-                        if offset + 31 < offset {
+                        if offset.overflowing_add(31).1 {
                             return Err(ExecutionError::new(
                                 "buffer overflow",
                                 &self.state,
-                                Some(Value::Int(Uint256::from_usize(offset))),
+                                Some(Value::from(offset)),
                             ));
                         }
                         let val = self.stack.pop_uint(&self.state)?;

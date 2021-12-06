@@ -16,9 +16,12 @@ use std::biguint::biguint_random;
 use std::biguint::biguint_square;
 use std::biguint::biguint_subtract;
 use std::biguint::biguint_zero;
+use std::biguint::uint_modexp;
 
 use std::random::RandomGenerator;
 use std::random::random_new;
+use std::random::random_next;
+use std::random::random_nextMod;
 
 
 write func main() {
@@ -143,6 +146,10 @@ func doTests(gen: RandomGenerator) -> (uint, RandomGenerator) {
         return (23, gen);
     }
 
+    if oneWordTest() != 0 {
+        return (24, gen);
+    }
+
     (0, gen)
 }
 
@@ -159,6 +166,38 @@ func modexpRegressionTest() -> uint {
         }
     } else {
         return 2;
+    }
+    return 0;
+}
+
+func oneWordTest() -> uint {
+    let r = random_new(bytes32(42));
+    let numTests = 10;
+    while numTests > 0 {
+        let (modB32, *r) = random_next(r);
+        let mod = uint(modB32);
+        let (base, *r) = random_nextMod(r, mod);
+        let (exp, *r) = random_nextMod(r, mod);
+        let uintWay = if let Some(x) = uint_modexp(base, exp, mod) {
+            x
+        } else {
+            return 1;
+            0
+        };
+        let biguintWay = if let Some(x) = biguint_modexp(
+            biguint_fromUint(base),
+            biguint_fromUint(exp),
+            biguint_fromUint(mod),
+        ) {
+            x
+        } else {
+            return 2;
+            newarray<uint>(1)
+        };
+        if biguint_compare(biguint_fromUint(uintWay), biguintWay) != int(0) {
+            return 3;
+        }
+        numTests = numTests - 1;
     }
     return 0;
 }
