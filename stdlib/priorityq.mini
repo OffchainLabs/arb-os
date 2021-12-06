@@ -115,7 +115,7 @@ public func priorityq_insert(pq: PriorityQ, item: any, priority: uint) -> Priori
     pq_pushUp(newpq, index)
 }
 
-public func priorityq_printAsArray(pq: PriorityQ) -> uint {
+public write func priorityq_printAsArray(pq: PriorityQ) -> uint {
     let ret = pq.size;
     let cont = pq.contents;
     let i = 0;

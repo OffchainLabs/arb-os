@@ -117,7 +117,7 @@ public view write func accounts_notifyParamsChanged() {    // called if the chai
 // safeGetGlobalAccountStore gets a copy of the global account store, if we are not in a user tx
 // if we're in a user tx, this will error, which will revert the tx
 //      that should never happen, but we check to be safe
-public view func safeGetGlobalAccountStore() -> AccountStore {
+public view write func safeGetGlobalAccountStore() -> AccountStore {
     if ! evmCallStack_isEmpty() {
         asm(668) { debugprint };
         error;

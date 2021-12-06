@@ -166,7 +166,7 @@ public write func evmCallStack_init() {
     returnFromCallNestingDepth = 0;
 }
 
-public view func getRetryBufferInCurrentContext() -> RetryBuffer {
+public view write func getRetryBufferInCurrentContext() -> RetryBuffer {
     let astore = if let Some(frame) = globalCallStack {
         frame.accountStore
     } else {
@@ -1541,7 +1541,7 @@ public view write func evmCallStack_setAccount(addr: address, acct: Account) -> 
     }
 }
 
-public view func evmCallStack_getAccountInCurrentContext(addr: address) -> Account {
+public view write func evmCallStack_getAccountInCurrentContext(addr: address) -> Account {
     accountStore_get(evmCallStack_getAccountStoreInCurrentContext(), addr)
 }
 
@@ -1557,7 +1557,7 @@ public view write func evmCallStack_setAccountInCurrentContext(addr: address, ac
     }
 }
 
-public view func evmCallStack_getAccountStoreInCurrentContext() -> AccountStore {
+public view write func evmCallStack_getAccountStoreInCurrentContext() -> AccountStore {
     if let Some(topFrame) = globalCallStack {
         accountStore_set(topFrame.accountStore, topFrame.runningAs, topFrame.runningAsAccount)
     } else {

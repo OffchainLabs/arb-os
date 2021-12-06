@@ -527,6 +527,7 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
     fn is_write(&mut self, type_tree: &TypeTree) -> bool {
         match &mut self.kind {
             TypeCheckedStatementKind::AssignGlobal(_, _) => true,
+            TypeCheckedStatementKind::DebugPrint(_) => true,
             _ => self
                 .child_nodes()
                 .iter_mut()

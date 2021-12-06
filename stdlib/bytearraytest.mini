@@ -28,7 +28,7 @@ write func main() {
     asm(tests()) { log };
 }
 
-func tests() -> uint {
+write func tests() -> uint {
 
     let buf = newbuffer();
     let buf2 = setbuffer8(buf, 10000, 12);

@@ -294,7 +294,7 @@ view func setRetryablePrices(oldRetryablePrices: RetryablePrices) -> RetryablePr
     }
 }
 
-public view func gasAccounting_getPricesInWei(aggregatorAddr: address) -> (uint, uint, uint, uint, uint, uint) {
+public view write func gasAccounting_getPricesInWei(aggregatorAddr: address) -> (uint, uint, uint, uint, uint, uint) {
     // This is intended to return data to users, so we add the network fee, in order to return the total price they'll pay.
     let prices = gasAccountingInfo.currentPrices;
     let addNetworkFeeRate = gasAccountingInfo.feeConfig.baseFeeMultiplier;
@@ -308,11 +308,11 @@ public view func gasAccounting_getPricesInWei(aggregatorAddr: address) -> (uint,
     )
 }
 
-view func gasAccounting_getTxBaseFeeWei(aggregatorAddr: option<address>) -> uint {
+view write func gasAccounting_getTxBaseFeeWei(aggregatorAddr: option<address>) -> uint {
     safeMul(getL1GasPriceEstimate(), gasAccounting_getTxBaseFeeL1Gas(aggregatorAddr))
 }
 
-public view func gasAccounting_getTxBaseFeeL1Gas(maybeAggregatorAddr: option<address>) -> uint {
+public view write func gasAccounting_getTxBaseFeeL1Gas(maybeAggregatorAddr: option<address>) -> uint {
     if feesEnabled() {
         let aggregatorAddr = if let Some(addr) = maybeAggregatorAddr {
             addr
@@ -353,7 +353,7 @@ public view func getCurrentBlockGasLimit() -> uint {
     gasAccountingInfo.gasAllocatedToThisBlock
 }
 
-public view func gasAccounting_getPricesInArbGas(aggregatorAddr: address) -> (uint, uint, uint) {
+public view write func gasAccounting_getPricesInArbGas(aggregatorAddr: address) -> (uint, uint, uint) {
     let prices = gasAccountingInfo.currentPrices;
     let arbGasPrice = prices.perArbGasTotal;
     let baseFeeMultiplier = gasAccountingInfo.feeConfig.baseFeeMultiplier;
@@ -585,7 +585,7 @@ public view write func gasAccounting_endTxCharges(
     ))
 }
 
-view func tryGasRepayments(
+view write func tryGasRepayments(
     totalGasRemaining: uint,
     gasUsedForCompute: uint,
     gasUsedForStorage: uint,
@@ -1215,7 +1215,7 @@ public func deferredPayments_add(dp: DeferredPayments, escrowKey: uint, recipien
     stack_push(dp, (escrowKey, recipient, amount))
 }
 
-public func deferredPayments_apply(acctStore: AccountStore, dp: DeferredPayments) -> option<AccountStore> {
+public write func deferredPayments_apply(acctStore: AccountStore, dp: DeferredPayments) -> option<AccountStore> {
     loop {
         if let Some(res) = stack_pop(dp) {
             let (*dp, item) = res;

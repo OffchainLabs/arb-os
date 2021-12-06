@@ -1119,6 +1119,7 @@ impl Opcode {
     pub fn is_write(&self, _: &TypeTree) -> bool {
         match self {
             Opcode::AVMOpcode(AVMOpcode::Log)
+            | Opcode::AVMOpcode(AVMOpcode::DebugPrint)
             | Opcode::AVMOpcode(AVMOpcode::Inbox)
             | Opcode::AVMOpcode(AVMOpcode::InboxPeek)
             | Opcode::AVMOpcode(AVMOpcode::Send)
