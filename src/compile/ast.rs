@@ -35,6 +35,8 @@ pub struct Attributes {
     #[serde(skip)]
     /// Whether generated instructions should be printed to the console.
     pub codegen_print: bool,
+    #[serde(skip)]
+    pub color_group: usize,
 }
 
 impl DebugInfo {
@@ -1483,6 +1485,7 @@ impl Func {
         public: bool,
         view: bool,
         write: bool,
+        sensitive: bool,
         closure: bool,
         args: Vec<FuncArg>,
         ret_type: Option<Type>,
@@ -1500,7 +1503,9 @@ impl Func {
         let nouts = ret_type.iter().count();
         let ret_type = ret_type.unwrap_or(Type::Void);
         let returns = ret_type != Type::Every;
-        let prop = FuncProperties::new(view, write, closure, public, returns, nargs, nouts);
+        let prop = FuncProperties::new(
+            view, write, sensitive, closure, public, returns, nargs, nouts,
+        );
         Func {
             name,
             id,
@@ -1524,6 +1529,9 @@ impl Func {
 pub struct FuncProperties {
     pub view: bool,
     pub write: bool,
+    #[serde(default)]
+    #[derivative(Hash = "ignore")]
+    pub sensitive: bool,
     pub closure: bool,
     #[serde(default)]
     #[derivative(Hash = "ignore")]
@@ -1550,6 +1558,7 @@ impl FuncProperties {
     pub fn new(
         view: bool,
         write: bool,
+        sensitive: bool,
         closure: bool,
         public: bool,
         returns: bool,
@@ -1559,6 +1568,7 @@ impl FuncProperties {
         FuncProperties {
             view,
             write,
+            sensitive,
             closure,
             public,
             returns,
@@ -1569,6 +1579,10 @@ impl FuncProperties {
 
     pub fn purity(&self) -> (bool, bool) {
         (self.view, self.write)
+    }
+
+    pub fn is_pure(&self) -> bool {
+        !self.view && !self.write && !self.sensitive
     }
 }
 

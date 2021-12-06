@@ -1321,7 +1321,7 @@ func ethTransferOrGrant(
     }
 }
 
-func saveAvmStack() -> Stack {
+sensitive func saveAvmStack() -> Stack {
     // pop all items from the AVM stack, push them into a Stack
     let ret = stack_new();
     while ! asm() bool { stackempty } {
@@ -1331,14 +1331,14 @@ func saveAvmStack() -> Stack {
     ret
 }
 
-public func emptyAvmStack() {
+public sensitive func emptyAvmStack() {
     // discard everything on the AVM stack
     while ! asm() bool { stackempty }  {
-        let _ = asm() any { };  // pop a value from AVM stack and discard it
+        asm() { pop }; // pop a value from AVM stack and discard it
     }
 }
 
-func restoreAvmStack(savedStack: Stack) {
+sensitive func restoreAvmStack(savedStack: Stack) {
     // restore AVM stack state, from a Stack that was created earlier by saveAvmStack
     while ! stack_isEmpty(savedStack) {
         if let Some(res) = stack_pop(savedStack) {
@@ -1348,7 +1348,7 @@ func restoreAvmStack(savedStack: Stack) {
     }
 }
 
-public view write func snapshotAuxStack() -> Stack {
+public sensitive view write func snapshotAuxStack() -> Stack {
     // Save a copy of everything from the auxstack, except the current callframe and return address (which are on top).
     // Keep the current callframe on top of the auxstack (except during asm blocks)
     //       because the compiler probably wants to use the callframe
@@ -1390,7 +1390,7 @@ public view write func cleanAvmAuxStackAndCall(funcToCall: view write func(), pu
     restoreAuxStackAndCall(funcToCall, None, pushFakeReturnAddress);
 }
 
-public view write func restoreAuxStackAndCall(
+public sensitive view write func restoreAuxStackAndCall(
     funcToCall: view write func(),
     maybeSavedAuxStack: option<Stack>,
     pushFakeReturnAddress: bool

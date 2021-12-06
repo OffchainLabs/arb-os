@@ -213,7 +213,7 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
         .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
 
     // generate a dummy function, so we don't end up with an empty code file, which is an error
-    writeln!(code, "\n\nfunc __dummy__() {{ return; }}\n\n")
+    writeln!(code, "\n\nsensitive func __dummy__() {{ return; }}\n\n")
         .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
 
     Ok(())

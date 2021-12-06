@@ -48,6 +48,8 @@ struct Scope {
     locals: BTreeMap<StringId, SlotNum>,
     /// A variable's slot just before its first shadow
     shadows: HashMap<StringId, SlotNum>,
+    /// All variables this scope creates
+    owned: Vec<SlotNum>,
 }
 
 impl Codegen<'_> {
@@ -55,6 +57,7 @@ impl Codegen<'_> {
     fn next_slot(&mut self) -> SlotNum {
         let next = self.next_assignable_slot;
         self.next_assignable_slot += 1;
+        self.current_scope().owned.push(next);
         next
     }
 
@@ -64,34 +67,38 @@ impl Codegen<'_> {
             Some(scope) => scope.clone(),
             None => Scope::default(),
         };
-        scope.shadows = HashMap::new();
+        scope.shadows.clear();
+        scope.owned.clear();
         self.scopes.push(scope);
+    }
+
+    /// Get the scope codegen is currently operating on.
+    fn current_scope(&mut self) -> &mut Scope {
+        self.scopes.last_mut().expect("no scope")
     }
 
     /// Create a new assignment for a local variable.
     fn set_local(&mut self, local: StringId, slot: SlotNum) {
-        let last = self.scopes.last_mut().expect("no scope");
-        last.locals.insert(local, slot);
-    }
-
-    /// Shadow a variable, saving the last unshadowed assignment for phi-ing if needed.
-    fn shadow(&mut self, local: StringId, slot: SlotNum) {
-        let last = self.scopes.last_mut().expect("no scope");
-
-        // for the first time shadowing, we save the old value if it exists
-        if let Some(old) = last.locals.get(&local) {
-            let old = *old;
-            if !last.shadows.contains_key(&local) {
-                last.shadows.insert(local, old);
-            }
-        }
-        last.locals.insert(local, slot);
+        self.current_scope().locals.insert(local, slot);
     }
 
     /// Get the currently accessible slot assignment for a variable in scope.
     fn get_local(&mut self, local: &StringId) -> Option<SlotNum> {
-        let last = self.scopes.last_mut().expect("no scope");
-        last.locals.get(local).cloned()
+        self.current_scope().locals.get(local).cloned()
+    }
+
+    /// Shadow a variable, saving the last unshadowed assignment for phi-ing if needed.
+    fn shadow(&mut self, local: StringId, slot: SlotNum) {
+        let scope = self.current_scope();
+
+        // for the first time shadowing, we save the old value if it exists
+        if let Some(old) = scope.locals.get(&local) {
+            let old = *old;
+            if !scope.shadows.contains_key(&local) {
+                scope.shadows.insert(local, old);
+            }
+        }
+        scope.locals.insert(local, slot);
     }
 
     /// Debug print the open scope's current assignments.
@@ -142,7 +149,7 @@ pub fn mavm_codegen_func(
     globals: &HashMap<StringId, GlobalVar>,
     func_labels: &HashMap<StringId, Label>,
     release_build: bool,
-) -> Result<(Vec<Instruction>, LabelGenerator, u32), CompileError> {
+) -> Result<(Vec<Instruction>, LabelGenerator, FrameSize), CompileError> {
     let mut code = vec![];
     let debug = func.debug_info;
 
@@ -179,14 +186,10 @@ pub fn mavm_codegen_func(
         _ => panic!("not a func"),
     };
 
-    if prop.returns {
-        code.push(opcode!(AuxPush));
-    }
-
     let prebuilt = !func.captures.is_empty();
+    let returns = prop.returns;
     let make_frame_offset = code.len();
-    code.push(opcode!(@MakeFrame(0, prebuilt)));
-    code.push(opcode!(AuxPush));
+    code.push(opcode!(@MakeFrame(0, returns, prebuilt)));
 
     let nargs = func.args.len();
     for i in 0..nargs {
@@ -215,10 +218,11 @@ pub fn mavm_codegen_func(
     declare.extend(func.captures.clone().into_iter().map(|x| x));
 
     codegen(func.child_nodes(), &mut cgen, 0, declare)?;
+    cgen.code.push(opcode!(@Label(cgen.label_gen.next())));
 
     let space_for_locals = cgen.next_assignable_slot;
 
-    code[make_frame_offset] = opcode!(@MakeFrame(space_for_locals, prebuilt));
+    code[make_frame_offset] = opcode!(@MakeFrame(space_for_locals, returns, prebuilt));
 
     Ok((code, label_gen, space_for_locals))
 }
@@ -288,10 +292,10 @@ fn codegen(
 
         macro_rules! error {
             ($text:expr $(,$args:expr)* $(,)?) => {
-                return Err(CompileError::new("Internal error", format!($text, $(Color::red($args),)*), debug.locs()))
+                return Err(CompileError::internal(format!($text, $(Color::red($args),)*), debug.locs()))
             };
             (@$text:expr, $debug:expr) => {
-                return Err(CompileError::new("Internal error", format!($text), $debug.locs()));
+                return Err(CompileError::internal(format!($text), $debug.locs()));
             };
         }
 
@@ -344,7 +348,13 @@ fn codegen(
                     }
                     TypeCheckedStatementKind::AssignGlobal(id, expr) => {
                         expr!(expr);
-                        let global = cgen.globals.get(id).expect("No global exists for stringId");
+                        let global = match cgen.globals.get(id) {
+                            Some(global) => global,
+                            None => error!(
+                                "Global {} is not present",
+                                cgen.string_table.name_from_id(*id)
+                            ),
+                        };
                         let offset = global.offset.unwrap();
                         cgen.code.push(opcode!(@SetGlobalVar(offset)));
                     }
@@ -375,7 +385,7 @@ fn codegen(
 
                         // Test the condition
                         cgen.code.push(opcode!(Dup0));
-                        cgen.code.push(opcode!(Tget, Value::from(0)));
+                        cgen.code.push(opcode!(@TupleGet(0, 2)));
                         cgen.code.push(opcode!(Cjump, Value::Label(ok_label)));
 
                         // failure state
@@ -383,9 +393,9 @@ fn codegen(
                         let text = format!("assert on line {} failed with", line);
                         let tuple =
                             Value::new_tuple(vec![Value::from(text.as_ref()), Value::none()]);
-                        cgen.code.push(opcode!(Tget, Value::from(1)));
+                        cgen.code.push(opcode!(@TupleGet(1, 2)));
                         cgen.code.push(opcode!(Noop, tuple));
-                        cgen.code.push(opcode!(Tset, Value::from(1)));
+                        cgen.code.push(opcode!(@TupleSet(1, 2)));
                         cgen.code.push(opcode!(DebugPrint));
                         cgen.code.push(opcode!(Error));
 
@@ -433,12 +443,12 @@ fn codegen(
                         let end_label = cgen.label_gen.next();
                         let else_label = cgen.label_gen.next();
                         cgen.code.push(opcode!(Dup0));
-                        cgen.code.push(opcode!(Tget, Value::from(0)));
+                        cgen.code.push(opcode!(@TupleGet(0, 2)));
                         cgen.code.push(opcode!(IsZero));
                         cgen.code.push(opcode!(Cjump, Value::Label(else_label)));
 
                         // Some(_) case
-                        cgen.code.push(opcode!(Tget, Value::from(1)));
+                        cgen.code.push(opcode!(@TupleGet(1, 2)));
 
                         // if-let is tricky since the local variable isn't defined in the same scope.
                         // To work around this, we get the next slot without advancing. This means
@@ -515,7 +525,18 @@ fn codegen(
                             expr!(&mut args[nargs - 1 - i], i);
                         }
                         expr!(fexpr, nargs + 1);
-                        cgen.code.push(opcode!(@FuncCall(*prop)));
+
+                        if prop.sensitive {
+                            // a sensitive func must be in its own basic block
+                            // since it does something that violates the func call ABI
+                            let prior = cgen.label_gen.next();
+                            let after = cgen.label_gen.next();
+                            cgen.code.push(opcode!(@Label(prior)));
+                            cgen.code.push(opcode!(@FuncCall(*prop)));
+                            cgen.code.push(opcode!(@Label(after)));
+                        } else {
+                            cgen.code.push(opcode!(@FuncCall(*prop)));
+                        }
                     }
                     TypeCheckedExprKind::Tuple(fields, _) => {
                         let nfields = fields.len();
@@ -540,7 +561,7 @@ fn codegen(
                         let container = vec![Value::new_tuple(Vec::new()); 8];
                         cgen.code.push(opcode!(Noop, Value::new_tuple(container)));
                         for i in 0..8 {
-                            cgen.code.push(opcode!(Tset, Value::from(i)));
+                            cgen.code.push(opcode!(@TupleSet(i, 8)));
                         }
 
                         let mut tuple_size: usize = 8;
@@ -551,7 +572,7 @@ fn codegen(
                             let container = vec![Value::new_tuple(Vec::new()); 8];
                             cgen.code.push(opcode!(Noop, Value::new_tuple(container)));
                             for i in 0..8 {
-                                cgen.code.push(opcode!(Tset, Value::from(i)));
+                                cgen.code.push(opcode!(@TupleSet(i, 8)));
                             }
                             tuple_size *= 8;
                         }
@@ -568,7 +589,31 @@ fn codegen(
                             cgen.code.push(opcode!(Error));
                             cgen.code.push(opcode!(@Label(cont_label)));
                         }
-                        cgen.code.push(opcode!(@UncheckedFixedArrayGet(*size)));
+
+                        let tup_size_val = Value::from(TUPLE_SIZE);
+                        while *size > TUPLE_SIZE {
+                            //TODO: can probably make this more efficient
+                            // stack: idx arr
+                            cgen.code.push(opcode!(Dup1, tup_size_val.clone()));
+                            cgen.code.push(opcode!(Mod));
+                            cgen.code.push(opcode!(Swap1));
+
+                            // stack: idx slot arr
+                            cgen.code.push(opcode!(Swap1, tup_size_val.clone()));
+                            cgen.code.push(opcode!(Div));
+
+                            // stack: subindex slot arr
+                            cgen.code.push(opcode!(Swap2));
+                            cgen.code.push(opcode!(Swap1));
+
+                            // stack: slot arr subindex
+                            cgen.code.push(opcode!(Tget));
+                            cgen.code.push(opcode!(Swap1));
+
+                            // stack: subindex subarr
+                            *size = (*size + (TUPLE_SIZE - 1)) / TUPLE_SIZE;
+                        }
+                        cgen.code.push(opcode!(Tget));
                     }
                     TypeCheckedExprKind::FixedArrayMod(arr, key, val, size, _) => {
                         expr!(val, 0);
@@ -755,18 +800,18 @@ fn codegen(
                         expr!(inner);
                         let option = Value::new_tuple(vec![Value::from(1), Value::none()]);
                         cgen.code.push(opcode!(Noop, option));
-                        cgen.code.push(opcode!(Tset, Value::from(1)));
+                        cgen.code.push(opcode!(@TupleSet(1, 2)));
                     }
                     TypeCheckedExprKind::Try(variant, _) => {
                         expr!(variant);
                         let success = cgen.label_gen.next();
                         cgen.code.push(opcode!(Dup0));
-                        cgen.code.push(opcode!(Tget, Value::from(0)));
+                        cgen.code.push(opcode!(@TupleGet(0, 2)));
                         cgen.code.push(opcode!(Cjump, Value::Label(success)));
                         cgen.code.push(opcode!(@Return));
                         clear_stack!();
                         cgen.code.push(opcode!(@Label(success)));
-                        cgen.code.push(opcode!(Tget, Value::from(1)));
+                        cgen.code.push(opcode!(@TupleGet(1, 2)));
                     }
                     TypeCheckedExprKind::ClosureLoad(id, captures, _) => {
                         // The closure ABI is based around the idea that a closure pointer is essentially
@@ -832,8 +877,17 @@ fn codegen(
         }
     }
 
-    let debug = cgen.code.last().unwrap().debug_info;
     let scope = cgen.scopes.pop().expect("No scope");
+    let last = cgen.code.last().unwrap().clone();
+    let debug = last.debug_info;
+
+    // When a return ends a scope, it's nicer to move the phis and drops
+    // before it so that they appear in the same basic block.
+    let move_return = last.opcode == Opcode::Return;
+
+    if move_return {
+        cgen.code.pop();
+    }
 
     for (local, mut slot) in scope.locals {
         // We're closing a scope, so any final assignments need to be phi'd
@@ -850,6 +904,16 @@ fn codegen(
                 ));
             }
         }
+    }
+
+    for slot in scope.owned {
+        // Annotate which slots are provably never used from this point on
+        cgen.code
+            .push(Instruction::from_opcode(Opcode::DropLocal(slot), debug));
+    }
+
+    if move_return {
+        cgen.code.push(last.clone());
     }
 
     Ok(())

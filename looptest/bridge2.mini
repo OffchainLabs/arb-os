@@ -37,6 +37,6 @@ public view func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> 
 }
 
 
-func __dummy__() { return; }
+sensitive func __dummy__() { return; }
 
 

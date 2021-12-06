@@ -86,21 +86,19 @@ impl<'a> TypeCheckedNode<'a> {
         for node in nodes.iter_mut() {
             match node {
                 TypeCheckedNode::Statement(stat) => {
-                    stat.debug_info.attributes.codegen_print =
-                        stat.debug_info.attributes.codegen_print || attributes.codegen_print;
+                    stat.debug_info.attributes.codegen_print |= attributes.codegen_print;
                     let child_attributes = stat.debug_info.attributes.clone();
                     TypeCheckedNode::propagate_attributes(stat.child_nodes(), &child_attributes);
                 }
                 TypeCheckedNode::Expression(expr) => {
-                    expr.debug_info.attributes.codegen_print =
-                        expr.debug_info.attributes.codegen_print || attributes.codegen_print;
+                    expr.debug_info.attributes.codegen_print |= attributes.codegen_print;
                     let child_attributes = expr.debug_info.attributes.clone();
                     TypeCheckedNode::propagate_attributes(expr.child_nodes(), &child_attributes);
                     if let TypeCheckedExprKind::Asm(_, ref mut vec, _) = expr.kind {
                         for insn in vec {
+                            let expr_print = expr.debug_info.attributes.codegen_print;
                             insn.debug_info.attributes.codegen_print =
-                                expr.debug_info.attributes.codegen_print
-                                    || attributes.codegen_print;
+                                expr_print || attributes.codegen_print;
                         }
                     }
                 }

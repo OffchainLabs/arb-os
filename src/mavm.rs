@@ -11,6 +11,7 @@ use ethers_core::utils::keccak256;
 use serde::de::Visitor;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use std::hash::{Hash, Hasher};
 use std::{collections::HashMap, fmt, sync::Arc};
 
 /// A label who's value is the same across ArbOS versions
@@ -46,6 +47,10 @@ impl Label {
                 panic!("tried to avm_hash an EVM label");
             }
         }
+    }
+
+    pub fn pretty_print(&self, highlight: &str) -> String {
+        Value::Label(*self).pretty_print(highlight)
     }
 }
 
@@ -101,6 +106,18 @@ impl From<Instruction<AVMOpcode>> for Instruction {
             immediate,
             debug_info,
         }
+    }
+}
+
+impl From<AVMOpcode> for Instruction<AVMOpcode> {
+    fn from(opcode: AVMOpcode) -> Self {
+        Self::from_opcode(opcode, DebugInfo::default())
+    }
+}
+
+impl From<Opcode> for Instruction {
+    fn from(opcode: Opcode) -> Self {
+        Self::from_opcode(opcode, DebugInfo::default())
     }
 }
 
@@ -181,13 +198,17 @@ impl Instruction {
 
     pub fn pretty_print(&self, highlight: &str) -> String {
         let label_color = Color::PINK;
-        match &self.immediate {
+        let text = match &self.immediate {
             Some(value) => format!(
                 "{} {}",
                 self.opcode.pretty_print(label_color),
                 value.pretty_print(highlight)
             ),
             None => format!("{}", self.opcode.pretty_print(label_color)),
+        };
+        match self.debug_info.attributes.color_group {
+            1 => Color::orange(text),
+            _ => text,
         }
     }
 }
@@ -205,6 +226,23 @@ where
             None => write!(f, "{}", self.opcode),
         }
     }
+}
+
+#[macro_export]
+macro_rules! opcode {
+    ($opcode:ident) => {
+        Instruction::from(Opcode::AVMOpcode(AVMOpcode::$opcode))
+    };
+    ($opcode:ident, $immediate:expr) => {
+        Instruction::from_opcode_imm(
+            Opcode::AVMOpcode(AVMOpcode::$opcode),
+            $immediate,
+            DebugInfo::default(),
+        )
+    };
+    (@$($opcode:tt)+) => {
+        Instruction::from_opcode(Opcode::$($opcode)+, DebugInfo::default())
+    };
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -354,6 +392,12 @@ impl Buffer {
                 self.size
             },
         }
+    }
+}
+
+impl Hash for Buffer {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.root.hash().hash(state);
     }
 }
 
@@ -610,7 +654,7 @@ fn _levels_needed(x: u128) -> (usize, u128) {
     (height, size)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Value {
     Int(Uint256),
     Tuple(Arc<Vec<Value>>),
@@ -864,7 +908,7 @@ impl Value {
                                 s = format!("{}{}", s, child);
                             }
                             false => {
-                                s = format!("{}{} {}", s, Color::grey(","), child);
+                                s = format!("{}{}{}", s, Color::grey(", "), child);
                             }
                         }
                     }
@@ -942,10 +986,11 @@ impl fmt::Display for Value {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub enum Opcode {
-    MakeFrame(FrameSize, bool),        // make a func frame: space, captures
-    GetLocal(SlotNum),                 // get a local variable within a func frame
-    SetLocal(SlotNum),                 // set a local variable within a func frame
-    MoveLocal(SlotNum, SlotNum),       // move into arg1 arg2 within a func frame
+    MakeFrame(FrameSize, bool, bool), // make a func frame: space, returns, prebuilt
+    GetLocal(SlotNum),                // get a local variable within a func frame
+    SetLocal(SlotNum),                // set a local variable within a func frame
+    MoveLocal(SlotNum, SlotNum),      // move into arg1 arg2 within a func frame
+    DropLocal(SlotNum),               // annotate a point after which the local is never used again
     ReserveCapture(SlotNum, StringId), // annotate where a capture should be placed within a func frame
     Capture(LabelId, StringId),        // annotate which value to retrieve for closure packing
     MakeClosure(LabelId),              // create a callable closure frame
@@ -955,11 +1000,11 @@ pub enum Opcode {
     GetGlobalVar(usize),               // gets a global variable at a global index
     SetGlobalVar(usize),               // sets a global variable at a global index
     BackwardLabelTarget(usize),        // sets up a backward label as indexed by the jump table
-    UncheckedFixedArrayGet(usize),     // arg is size of array
     Label(Label),                      // a location in code
     JumpTo(Label),                     // Like a Jump, but with info about where it'll go
     CjumpTo(Label),                    // Like a Cjump, but with info about where it'll go
     Return,                            // return from a func, popping the frame
+    Pop(usize),                        // pop a value deep within the stack
     AVMOpcode(AVMOpcode),              // a non-virtual, AVM opcode
 }
 
@@ -1092,14 +1137,97 @@ impl Opcode {
         }
     }
 
+    pub fn base_cost(&self) -> usize {
+        macro_rules! avm {
+            ($first:ident $(,$opcode:ident)*) => {
+                Opcode::AVMOpcode(AVMOpcode::$first $(| AVMOpcode::$opcode)*)
+            };
+        }
+
+        #[rustfmt::skip]
+        let cost = match self {
+            avm!(
+                Pop, Spush, Rpush, PCpush, AuxPush, AuxPop, Noop, ErrPush, ErrSet,
+                Dup0, Dup1, Dup2, Swap1, Swap2, PushGas, SetGas, NewBuffer, DebugPrint,
+                IsZero, BitwiseNeg
+            ) => 1,
+            avm!(
+                LessThan, GreaterThan, SLessThan, SGreaterThan, Equal,
+                Tget, Tlen, BitwiseAnd, BitwiseOr, BitwiseXor,
+                Rset, StackEmpty, AuxStackEmpty
+            ) => 2,
+            avm!(
+                Div, Mod, AddMod, MulMod, Hash, Jump, Cjump,
+                Byte, ShiftLeft, ShiftRight, ShiftArith
+            ) => 4,
+            avm!(Add, Sub, Mul, Type, Xget) => 3,
+            avm!(Zero, Error) => 5,
+            avm!(Sdiv, Smod, SignExtend) => 7,
+            avm!(EthHash2) => 8,
+            avm!(Halt, Sideload, GetBuffer8, GetBuffer64, GetBuffer256) => 10,
+            avm!(Exp, ErrCodePoint, PushInsn, PushInsnImm, OpenInsn) => 25,
+            avm!(Tset, Inbox, InboxPeek) => 40,
+            avm!(Xset) => 41,
+            avm!(Breakpoint, Log, Send, SetBuffer8, SetBuffer64, SetBuffer256) => 100,
+            avm!(Sha256f, Ripemd160f) => 250,
+            avm!(Keccakf, Blake2f) => 600,
+            avm!(EcPairing) => 1_000,
+            avm!(EcAdd) => 3_500,
+            avm!(EcRecover) => 20_000,
+            avm!(EcMul) => 82_000,
+            Self::MakeFrame(..) => 3,
+            Self::GetLocal(..) => 3,
+            Self::SetLocal(..) => 41,
+            Self::DropLocal(..) => 0,
+            Self::Capture(..) => 41,
+            Self::ReserveCapture(..) => 0,
+            Self::MakeClosure(..) => 1,
+            Self::FuncCall(..) => 10,
+            Self::TupleGet(offset, _) =>   2 +  2 * (offset / 8),
+            Self::TupleSet(offset, _) =>  40 + 42 * (offset / 8),
+            Self::GetGlobalVar(offset) =>  3 +  2 * (offset / 8),
+            Self::SetGlobalVar(offset) => 43 + 42 * (offset / 8),
+            Self::Label(..) => 0,
+            Self::BackwardLabelTarget(..) => 0,
+            Self::JumpTo(..) => 4,
+            Self::CjumpTo(..) => 4,
+            Self::Return => 7,
+            Self::MoveLocal(dest, source) => {
+                if dest == source {
+                    0
+                } else {
+                    43
+                }
+            }
+            Self::Pop(depth) => {
+                match depth {
+                    0 => 1,
+                    1 => 2,
+                    2 => 3,
+                    x => 1 + 2*(x-1),
+                }
+            }
+        };
+        cost
+    }
+
     pub fn pretty_print(&self, label_color: &str) -> String {
         match self {
-            Opcode::MakeFrame(space, prebuilt) => match prebuilt {
-                true => format!("MakeFrame<{}>", space),
-                false => format!("MakeFrame({})", space),
+            Opcode::MakeFrame(space, returns, prebuilt) => match prebuilt {
+                true => format!(
+                    "MakeFrame<{}, {}>",
+                    Color::mint(space),
+                    Color::color_if(*returns, Color::GREY, Color::MINT)
+                ),
+                false => format!(
+                    "MakeFrame {} {}",
+                    Color::mint(space),
+                    Color::color_if(*returns, Color::GREY, Color::MINT)
+                ),
             },
             Opcode::GetLocal(slot) => format!("GetLocal {}", Color::pink(slot)),
             Opcode::SetLocal(slot) => format!("SetLocal {}", Color::pink(slot)),
+            Opcode::DropLocal(slot) => format!("δ({})", Color::pink(slot)),
             Opcode::MoveLocal(dest, source) => {
                 format!("φ({}, {})", Color::pink(dest), Color::pink(source))
             }
@@ -1126,21 +1254,26 @@ impl Opcode {
             Opcode::TupleSet(slot, size) => {
                 format!("TupleSet {} {}", Color::pink(slot), Color::grey(size))
             }
-            Opcode::Label(label) => Value::Label(*label).pretty_print(label_color),
+            Opcode::Label(label) => label.pretty_print(label_color),
             Opcode::JumpTo(label) => {
-                format!("JumpTo {}", Value::Label(*label).pretty_print(label_color))
+                format!("JumpTo {}", label.pretty_print(label_color))
             }
             Opcode::CjumpTo(label) => {
-                format!("CjumpTo {}", Value::Label(*label).pretty_print(label_color))
+                format!("CjumpTo {}", label.pretty_print(label_color))
             }
+            Opcode::Pop(depth) => format!("Pop {}", Color::pink(depth)),
             Opcode::FuncCall(prop) => format!(
-                "FuncCall {}{}{} {}{}",
+                "FuncCall {}{}{}{} {}{}",
                 Color::mint(match prop.view {
-                    true => "view ",
+                    true => "υ ",
                     false => "",
                 }),
                 Color::mint(match prop.write {
-                    true => "write ",
+                    true => "ω ",
+                    false => "",
+                }),
+                Color::mint(match prop.sensitive {
+                    true => "Σ ",
                     false => "",
                 }),
                 Color::mint(prop.nargs),
@@ -1240,6 +1373,7 @@ impl Opcode {
             Opcode::GetLocal(_) => "GetLocal",
             Opcode::SetLocal(_) => "SetLocal",
             Opcode::MoveLocal(_, _) => "MoveLocal",
+            Opcode::DropLocal(_) => "DropLocal",
             Opcode::ReserveCapture(_, _) => "ReserveCapture",
             Opcode::Capture(_, _) => "Capture",
             Opcode::MakeClosure(_) => "MakeClosure",
@@ -1248,9 +1382,9 @@ impl Opcode {
             Opcode::Label(_) => "Label",
             Opcode::JumpTo(_) => "JumpTo",
             Opcode::CjumpTo(_) => "CjumpTo",
+            Opcode::Pop(_) => "PopN",
             Opcode::TupleGet(_, _) => "TupleGet",
             Opcode::TupleSet(_, _) => "TupleSet",
-            Opcode::UncheckedFixedArrayGet(_) => "UncheckedFixedArrayGet",
             Opcode::Return => "return",
             Opcode::FuncCall(_) => "FuncCall",
             _ => "to_name() not implemented",
@@ -1543,8 +1677,8 @@ fn test_consistent_opcode_numbers() {
 impl fmt::Display for Opcode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Opcode::MakeFrame(space, prebuilt) => {
-                write!(f, "MakeFrame({}, {})", space, prebuilt)
+            Opcode::MakeFrame(space, returns, prebuilt) => {
+                write!(f, "MakeFrame({}, {}, {})", space, returns, prebuilt)
             }
             Opcode::Label(label) => label.fmt(f),
             _ => write!(f, "{}", self.to_name()),

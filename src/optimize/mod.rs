@@ -3,16 +3,28 @@
  */
 
 use crate::compile::{FrameSize, SlotNum};
+use crate::console;
 use crate::console::Color;
-use crate::mavm::{AVMOpcode, Instruction, Opcode, Value};
-use petgraph::algo::{is_cyclic_directed, kosaraju_scc};
+use crate::mavm::{AVMOpcode, Instruction, LabelId, Opcode, Value};
+use petgraph::algo;
 use petgraph::graph::{NodeIndex, UnGraph};
 use petgraph::stable_graph::StableGraph;
 use petgraph::visit::{Dfs, IntoNodeReferences};
 use petgraph::{Direction, Undirected};
 use rand::prelude::*;
 use rand::rngs::SmallRng;
+use reduce::ValueGraph;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+use std::hash::Hasher;
+
+pub use compute::Computer;
+pub use peephole::peephole;
+
+mod compute;
+mod effects;
+mod peephole;
+mod reduce;
+mod reorder;
 
 /// Represents a block of instructions that has no control flow
 pub enum BasicBlock {
@@ -45,6 +57,14 @@ pub enum BasicEdge {
 pub struct BasicGraph {
     /// Basic blocks and the edges that connect them
     graph: StableGraph<BasicBlock, BasicEdge>,
+    /// The Func this graph represents
+    func_id: LabelId,
+    /// The output node of the graph
+    entry: NodeIndex,
+    /// The output node of the graph
+    output: NodeIndex,
+    /// The Funcs this graph depends on (includes both calls & pointers)
+    funcs: HashSet<LabelId>,
     /// Whether this graph contains a cycle
     cyclic: bool,
     /// Whether this graph contains code that's been marked for printing
@@ -66,9 +86,14 @@ impl BasicGraph {
         //   We assume all label-less jumps are not reentrant
 
         let mut graph: StableGraph<BasicBlock, BasicEdge> = StableGraph::new();
-        let _entry = graph.add_node(BasicBlock::Meta("Entry"));
+        let entry = graph.add_node(BasicBlock::Meta("Entry"));
 
         let should_print = code.iter().any(|x| x.debug_info.attributes.codegen_print);
+
+        let func_id = match code.first().unwrap().opcode {
+            Opcode::Label(label) => label.get_id(),
+            _ => panic!("A Basic Graph must start with an entry point"),
+        };
 
         // create basic blocks by splitting on jumps and labels
         let mut block_data = vec![];
@@ -160,16 +185,21 @@ impl BasicGraph {
             }
         }
 
-        let cyclic = is_cyclic_directed(&graph);
+        let cyclic = algo::is_cyclic_directed(&graph);
+        let funcs = HashSet::new();
         BasicGraph {
             graph,
+            func_id,
+            entry,
+            output,
+            funcs,
             cyclic,
             should_print,
         }
     }
 
     /// Flattens a basic graph into an equivalent vector of `Instruction`s
-    pub fn flatten(self) -> Vec<Instruction> {
+    pub fn flatten(self) -> (Vec<Instruction>, HashSet<LabelId>) {
         let mut code = vec![];
         for node in self.graph.node_indices() {
             let block = &self.graph[node];
@@ -178,11 +208,11 @@ impl BasicGraph {
                 _ => {}
             }
         }
-        code
+        (code, self.funcs)
     }
 
     /// Prints a basic graph with colors
-    pub fn print(&self) {
+    pub fn _print(&self) {
         let graph = &self.graph;
         let mut block_num = 0;
         let mut insn_num = 0;
@@ -302,7 +332,7 @@ impl BasicGraph {
                         *dest = *replace.get(dest).unwrap();
                         *source = *replace.get(source).unwrap();
                     }
-                    Opcode::MakeFrame(ref mut space, _) => {
+                    Opcode::MakeFrame(ref mut space, ..) => {
                         *space = replace.len() as FrameSize;
                     }
                     _ => {}
@@ -314,7 +344,7 @@ impl BasicGraph {
     }
 
     /// Efficiently assign frame slots to minimize the frame size.
-    pub fn color(&mut self, frame_size: FrameSize) {
+    pub fn color(&mut self, frame_size: FrameSize, optimization_level: usize) {
         // Algorithm
         //   Determine which values would overwrite each other if reassigned the same slot.
         //   Reassign values using as few slots as possible given this knowledge
@@ -425,7 +455,7 @@ impl BasicGraph {
 
         // Graph-contract all phi nodes. We can do this since mini is a scoped language.
         // What this does is force both sides of a phi to be colored the same way.
-        for component in kosaraju_scc(&phi_graph) {
+        for component in algo::kosaraju_scc(&phi_graph) {
             let mut nodes = component.into_iter();
             let slot = nodes.next().unwrap();
 
@@ -450,7 +480,7 @@ impl BasicGraph {
         let mut best_assignments = HashMap::new();
         let mut ncolors = usize::MAX;
 
-        for _ in 0..24 {
+        for _ in 0..(24 + 2 * optimization_level) {
             let mut colors: BTreeMap<u32, usize> = BTreeMap::new(); // colors to usage counts
             let mut assignments: HashMap<SlotNum, u32> = HashMap::new(); // slots to colors
 
@@ -519,7 +549,445 @@ impl BasicGraph {
         self.shrink_frame();
 
         if self.should_print {
-            self.print();
+            //self.print();
+        }
+    }
+
+    pub fn graph_reduce(&mut self, computer: &Computer, optimization_level: usize) {
+        // Algorithm
+        //   Where possible, create a value graph for each basic block.
+        //   Apply reductions like constant folding to each value graph.
+        //   Apply cross-block reductions like local-variable elision using the graphs.
+        //   Re-construct a, hopefully more performant, vec of instructions.
+
+        // Phi data is needed to ensure locals are never rearanged across phi-boundries.
+        // Since this requires knowledge that's often not local to a specific block, we must
+        // collect this info before constructing the value graphs.
+        let mut phis = HashMap::new();
+        let mut phid = HashSet::new();
+        for node in self.graph.node_indices() {
+            for curr in self.graph[node].get_code() {
+                if let Opcode::MoveLocal(dest, source) = curr.opcode {
+                    // A dest can be phi'd by many sources, but a source can only
+                    // phi a single dest. Hence, this map has to be source-to-dest.
+                    phis.insert(source, dest);
+                    phid.insert(dest);
+                }
+            }
+        }
+
+        // The func_id is used for debugging & to track computer calls
+        let func_id = self.func_id;
+
+        // The proposed value graph for each basic block.
+        // These are replaced as better ones are created.
+        let mut graphs = HashMap::new();
+
+        // We use environment variables to make debugging easier.
+        // GR_BISECT takes a bitstring & only applies graph_reduce() on blocks whose hashes match it.
+        // GR_PRINT pretty-prints every block we apply graph_reduce() on. Together these find bugs.
+        let (bitstring, length) = std::env::var("GR_BISECT")
+            .map(|x| (u64::from_str_radix(&x, 2).unwrap_or(0), x.len()))
+            .unwrap_or_default();
+        let var_bisect = std::env::var("GR_VAR_BISECT")
+            .map(|x| (u64::from_str_radix(&x, 2).unwrap_or(0), x.len()));
+        let always_print = std::env::var_os("GR_PRINT")
+            .filter(|x| !x.is_empty())
+            .is_some();
+        let mut global_hash = 0;
+        let mut bisect_nodes = HashSet::new();
+
+        // Compute each block's value graph where possible. In the rare case that a
+        // block contains code for which correctness cannot be easily varified, we
+        // simply don't optimize it.
+        for node in self.graph.node_indices() {
+            let block = self.graph[node].get_code();
+
+            if length > 0 || var_bisect.is_ok() {
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                for insn in block.iter() {
+                    if let Opcode::AVMOpcode(opcode) = insn.opcode {
+                        hasher.write_u8(opcode.to_number());
+                    }
+                    let mut immediate_hash = [0u8; 32];
+                    if let Some(value) = &insn.immediate {
+                        if let Value::Int(x) = value.avm_hash() {
+                            immediate_hash.copy_from_slice(&x.to_bytes_be());
+                        }
+                    }
+                    hasher.write(&immediate_hash);
+                }
+                let hash = hasher.finish();
+                global_hash ^= hash;
+                if hash % (1 << length) != bitstring {
+                    // Block's hash didn't match the bitstring, so we skip it.
+                    continue;
+                }
+            }
+
+            if let Some(value_graph) = ValueGraph::new(block, &phis, func_id, computer) {
+                graphs.insert(node, value_graph);
+            }
+        }
+
+        macro_rules! show_all {
+            () => {
+                // Pretty print SSA, the value graph, and graph-codegened results.
+                if self.should_print || always_print {
+                    for node in self.graph.node_indices() {
+                        if let BasicBlock::Meta(_) = &self.graph[node] {
+                            continue;
+                        }
+                        if var_bisect.is_ok() && !bisect_nodes.contains(&node) {
+                            continue;
+                        }
+                        if let Some(graph) = graphs.get(&node) {
+                            let code = self.graph[node].get_code();
+                            let ssa = code.iter().map(|x| x.pretty_print(Color::PINK)).collect();
+                            let values = graph.print_lines();
+                            let reduced = graph
+                                .codegen(optimization_level)
+                                .0
+                                .into_iter()
+                                .map(|x| x.pretty_print(Color::PINK))
+                                .collect();
+                            if ssa != reduced || var_bisect.is_ok() {
+                                console::print_columns(
+                                    vec![ssa, values, reduced],
+                                    vec!["SSA", "values", "reduced"],
+                                );
+                                println!();
+                            }
+                        }
+                    }
+                }
+            };
+        }
+
+        show_all!();
+
+        // Having computed the value graphs, we know which funcs each block depends on.
+        // Future value graphs may further optimize the program, but won't elide these.
+        for (_, values) in &graphs {
+            self.funcs.extend(values.funcs.clone());
+        }
+
+        let nodes: Vec<_> = self.graph.node_indices().collect();
+
+        if self.cyclic {
+            // While there's a reasonable path toward making the rest work for
+            // loops, these are rare and so we'll restrict our analysis to DAG's.
+            // The next best thing is to use these graphs to improve blocks independently.
+
+            // Update blocks whose value graphs produce more performant code
+            for &node in &nodes {
+                if let Some(values) = graphs.get(&node) {
+                    let code = self.graph[node].get_code();
+                    let cost = code.iter().map(|x| x.opcode.base_cost()).sum();
+                    let (reduced, reduced_cost) = values.codegen(optimization_level);
+                    if reduced_cost < cost {
+                        self.graph[node] = BasicBlock::Code(reduced);
+                    }
+                }
+            }
+            return;
+        }
+
+        let mut defs = HashMap::new(); // the assigner for each assignment
+        let mut uses = HashMap::new(); // the users for each assignment
+        let mut dels = HashMap::new(); // the dropper for each assignment
+        for &node in &nodes {
+            for curr in self.graph[node].get_code() {
+                match curr.opcode {
+                    Opcode::SetLocal(slot) => {
+                        // In the case of variable bisection, skip adding defs against the hash.
+
+                        if let Ok((bitstring, length)) = var_bisect {
+                            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                            hasher.write_u64(global_hash);
+                            hasher.write_u32(slot);
+                            let hash = hasher.finish();
+                            if hash % (1 << length) != bitstring {
+                                // Variable's hash didn't match the bitstring, so we skip it.
+                                continue;
+                            }
+                            bisect_nodes.insert(node);
+                        }
+
+                        // Since the graph is SSA, a slot can only be assigned once.
+                        defs.insert(slot, node);
+                    }
+                    Opcode::GetLocal(slot) => {
+                        let set = uses.entry(slot).or_insert(HashSet::new());
+                        set.insert(node);
+
+                        if defs.contains_key(&slot) {
+                            bisect_nodes.insert(node);
+                        }
+                    }
+                    Opcode::DropLocal(slot) => {
+                        // Since mini is a scoped language, only one drop is ever needed.
+                        dels.insert(slot, node);
+
+                        if defs.contains_key(&slot) {
+                            bisect_nodes.insert(node);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // TODO: handle locals that phi each other in a future PR.
+        defs = defs
+            .into_iter()
+            .filter(|(slot, _)| !phid.contains(slot) && !phis.contains_key(slot))
+            .collect();
+
+        let exits: HashSet<_> = self.graph.neighbors_undirected(self.output).collect();
+
+        for (&slot, &def) in &defs {
+            // Codegen places a δ-drop every time a local goes out of scope.
+            // While this is safe, it's suboptimal since usually a value can
+            // be dropped at its final usage, eliminating the carry-over to
+            // the drop-pop. Now that we have basic blocks, we can find the
+            // optimal relocation of the δ-drop via the following algorithm
+            //
+            //   1. Determine the extent of the value's lifetime
+            //   2. Topologically walk the lifetime backwards
+            //   3. Each time the walk collapses to a single node, it's safe
+            //   4. The moment the walk encounters a using node, it's not
+            //   5. The last safe node found is optimal
+
+            let uses = match uses.get(&slot) {
+                Some(uses) => uses,
+                None => {
+                    // if no one uses the value, the setter should drop it
+                    dels.insert(slot, def);
+                    continue;
+                }
+            };
+
+            let dropper = *dels.get(&slot).expect("no dropper");
+
+            let mut cease = BTreeSet::new(); // every end to this value's lifetime
+            let mut queue = BTreeSet::new(); // mechanism for bfs
+            let mut found = BTreeSet::new(); // those seen so far
+
+            cease.insert(dropper);
+            queue.insert(def);
+
+            while !queue.is_empty() {
+                let node = *queue.iter().next().unwrap();
+                queue.remove(&node);
+                found.insert(node);
+
+                if node == dropper || exits.contains(&node) {
+                    cease.insert(node);
+                    continue;
+                }
+
+                for after in self.graph.neighbors_directed(node, Direction::Outgoing) {
+                    if !found.contains(&after) {
+                        queue.insert(after);
+                    }
+                }
+            }
+
+            let mut queue = cease.clone(); // mechanism for bfs
+            let mut ideal = dropper; // the best dropper
+
+            while !queue.is_empty() {
+                let node = *queue.iter().next_back().unwrap();
+                queue.remove(&node);
+
+                if queue.is_empty() {
+                    ideal = node; // the earlier the better
+                }
+                if node == def || uses.contains(&node) {
+                    break;
+                }
+                queue.extend(self.graph.neighbors_directed(node, Direction::Incoming));
+            }
+
+            bisect_nodes.insert(ideal);
+            dels.insert(slot, ideal);
+        }
+
+        // Stacking a local means moving it from the aux stack to the data stack. Using
+        // the stack'd value means passing it from value graph to value graph as an arg.
+        // This is only safe, however, if we fully understand the lifetime of the value.
+        // This requires that we
+        //
+        //   1. have a value graph for all basic blocks in the value's lifetime
+        //   2. know where to pop the value (the δ-drop and any early returns)
+
+        let mut who_pops: HashMap<_, BTreeSet<_>> = HashMap::new(); // what's popped in each block
+        let mut who_stacks: HashMap<_, BTreeSet<_>> = HashMap::new(); // each def's stack'd blocks
+
+        for (slot, def) in defs.clone() {
+            let dropper = *dels.get(&slot).expect("no dropper");
+
+            let mut queue = BTreeSet::new(); // mechanism for bfs
+            let mut found = BTreeSet::new(); // those seen so far
+            let mut cease = BTreeSet::new(); // end of lifetime
+
+            queue.insert(def);
+
+            while !queue.is_empty() {
+                let node = *queue.iter().next().unwrap();
+                queue.remove(&node);
+                found.insert(node);
+
+                if let None = graphs.get(&node) {
+                    // We can't place this local on the stack since we don't understand
+                    // how the values in a down-stream block relate to one another.
+                    defs.remove(&slot);
+                    break;
+                }
+
+                if node == dropper || exits.contains(&node) {
+                    // This block ends the value's lifetime, so we must pop it to clean up the stack
+                    cease.insert(node);
+                    continue;
+                }
+
+                for after in self.graph.neighbors_directed(node, Direction::Outgoing) {
+                    if !found.contains(&after) {
+                        queue.insert(after);
+                    }
+                }
+            }
+
+            if defs.contains_key(&slot) {
+                for popper in cease {
+                    who_pops.entry(popper).or_default().insert(slot);
+                }
+                bisect_nodes.extend(found);
+            }
+        }
+
+        for (slot, def) in defs {
+            who_stacks.entry(def).or_default().insert(slot);
+        }
+
+        /// Stack the locals we can
+        fn stack_locals(
+            node: NodeIndex,
+            blocks: &StableGraph<BasicBlock, BasicEdge>,
+            phis: &HashMap<SlotNum, SlotNum>,
+            graphs: &mut HashMap<NodeIndex, ValueGraph>,
+            who_stacks: &HashMap<NodeIndex, BTreeSet<SlotNum>>,
+            who_pops: &HashMap<NodeIndex, BTreeSet<SlotNum>>,
+            stacked: &BTreeSet<SlotNum>,
+            func_id: LabelId,
+            computer: &Computer,
+            done: &mut HashSet<NodeIndex>,
+        ) {
+            let block = blocks[node].get_code();
+            let mut stacked = stacked.clone();
+
+            let tostack = match who_stacks.get(&node) {
+                Some(slots) => slots.clone(),
+                None => BTreeSet::new(),
+            };
+            let unstack = match who_pops.get(&node) {
+                Some(slots) => slots.clone(),
+                None => BTreeSet::new(),
+            };
+
+            let check_stack: BTreeSet<_> = stacked.union(&tostack).cloned().collect();
+            assert!(unstack.is_subset(&check_stack), "unstack ⊄ stack ∪ tostack");
+
+            let values = ValueGraph::with_stack(
+                block,
+                stacked.clone(),
+                &unstack,
+                &tostack,
+                phis,
+                func_id,
+                computer,
+            );
+
+            match values {
+                Some(values) => {
+                    graphs.insert(node, values);
+                }
+                None => {
+                    // No value graph exists, but we can restart this analysis since, by construction,
+                    // a local is only stack'd when its descendents have value graphs.
+                    assert!(
+                        !graphs.contains_key(&node),
+                        "assumption about construction is wrong"
+                    );
+                    stacked = BTreeSet::new();
+                }
+            };
+
+            stacked.extend(tostack);
+            for slot in unstack {
+                stacked.remove(&slot);
+            }
+
+            for child in blocks.neighbors_directed(node, Direction::Outgoing) {
+                if !done.contains(&child) {
+                    stack_locals(
+                        child, blocks, phis, graphs, who_stacks, who_pops, &stacked, func_id,
+                        computer, done,
+                    );
+                }
+            }
+            done.insert(node);
+        }
+
+        stack_locals(
+            self.entry,
+            &self.graph,
+            &phis,
+            &mut graphs,
+            &who_stacks,
+            &who_pops,
+            &BTreeSet::new(),
+            func_id,
+            computer,
+            &mut HashSet::new(),
+        );
+
+        show_all!();
+
+        let mut prior_cost = 0;
+        let mut after_cost = 0;
+        let mut reduced = HashMap::new();
+
+        for &node in &nodes {
+            // For blocks where graph reduce applies, tabulate how much better they perform.
+            // If it turns out the new code is worse, we won't commit the optimization.
+
+            if let Some(values) = graphs.get(&node) {
+                let prior_code = self.graph[node].get_code();
+
+                let (code, cost) = values.codegen(optimization_level);
+                reduced.insert(node, code);
+
+                prior_cost += prior_code
+                    .iter()
+                    .map(|x| x.opcode.base_cost())
+                    .sum::<usize>();
+                after_cost += cost;
+            }
+        }
+
+        if after_cost < prior_cost {
+            for (node, code) in &reduced {
+                self.graph[*node] = BasicBlock::Code(code.to_vec());
+            }
+        }
+
+        for node in nodes {
+            let code = self.graph[node].get_code_mut();
+            for curr in code {
+                curr.debug_info.attributes.codegen_print |= self.should_print;
+            }
         }
     }
 }
