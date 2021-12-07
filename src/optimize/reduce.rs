@@ -656,6 +656,23 @@ impl ValueGraph {
                     break;
                 }
             }
+
+            for node in nodes(&graph) {
+                let effects = match &graph[node] {
+                    ValueNode::Opcode(opcode) => opcode.effects(),
+                    _ => continue,
+                };
+
+                let pushes = effects.into_iter().any(|x| x == Effect::PushStack);
+
+                if pushes && conn_count(&graph, node) == 0 {
+                    // A node still present that creates an unconsumed value needs to have it popped
+
+                    let drop = graph.add_node(ValueNode::Drop);
+                    graph.add_edge(drop, node, ValueEdge::Connect(0));
+                    graph.add_edge(output, drop, ValueEdge::Meta("prune"));
+                }
+            }
         }
 
         fold_constants(&mut graph);

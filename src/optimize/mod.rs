@@ -651,7 +651,7 @@ impl BasicGraph {
                                 .into_iter()
                                 .map(|x| x.pretty_print(Color::PINK))
                                 .collect();
-                            if ssa != reduced || var_bisect.is_ok() {
+                            if self.should_print || ssa != reduced || var_bisect.is_ok() {
                                 console::print_columns(
                                     vec![ssa, values, reduced],
                                     vec!["SSA", "values", "reduced"],
