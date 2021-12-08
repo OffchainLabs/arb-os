@@ -83,6 +83,8 @@ public view write func arbosTest_txcall() {
             arbosTest_store(topFrame, calldata);
         } else if funcCode == const::funcCode_ArbosTest_getAllAccountAddresses {
             arbosTest_getAllAccountAddresses(topFrame, calldata);
+        } else if funcCode == const::funcCode_ArbosTest_getAllAccountHashes {
+            arbosTest_getAllAccountHashes(topFrame, calldata);
         } else if funcCode == const::funcCode_ArbosTest_getSerializedEVMState {
             arbosTest_getSerializedEVMState(topFrame, calldata);
         } else {
@@ -359,14 +361,13 @@ view write func arbosTest_getAllAccountAddresses(_topFrame: EvmCallFrame, callda
         evmOp_revert_knownPc(90, 0, 0);
     }
 
-    let ret = unsafecast<ByteArray>(accountStore_forall(
+    let ret = accountStore_forall::<ByteArray>(
         evmCallStack_getAccountStoreInCurrentContext(),
-        closure(acct: Account, rawState: any) -> any {
-            let state = unsafecast<ByteArray>(rawState);
-            return bytearray_set256(state, bytearray_size(state), uint(acct.addr));
+        closure(acct: Account, state: ByteArray) -> ByteArray {
+            bytearray_set256(state, bytearray_size(state), uint(acct.addr))
         },
         bytearray_new(0),
-    ));
+    );
     ret = bytearray_copy(
         ret,
         0,
@@ -385,9 +386,39 @@ view write func arbosTest_getAllAccountAddresses(_topFrame: EvmCallFrame, callda
     }
 }
 
+view write func arbosTest_getAllAccountHashes(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if bytearray_size(calldata) != 4 {
+        evmOp_revert_knownPc(100, 0, 0);
+    }
+
+    let ret = accountStore_forall::<ByteArray>(
+        evmCallStack_getAccountStoreInCurrentContext(),
+        closure(acct: Account, state: ByteArray) -> ByteArray {
+            bytearray_set256(state, bytearray_size(state), uint(hash(acct)))
+        },
+        bytearray_new(0),
+    );
+    ret = bytearray_copy(
+        ret,
+        0,
+        bytearray_set256(
+            bytearray_set256(bytearray_new(0), 0, 32),
+            32,
+            bytearray_size(ret),
+        ),
+        64,
+        bytearray_size(ret)
+    );
+    if evmCallStack_setTopFrameMemory(ret) {
+        evmOp_return(0, bytearray_size(ret));
+    } else {
+        evmOp_revert_knownPc(101, 0, 0);
+    }
+}
+
 view write func arbosTest_getSerializedEVMState(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if bytearray_size(calldata) != 36 {
-        evmOp_revert_knownPc(90, 0, 0);
+        evmOp_revert_knownPc(110, 0, 0);
     }
     let addr = address(bytearray_get256(calldata, 4));
     let ret = account_getSerializedEVMState(
@@ -407,6 +438,6 @@ view write func arbosTest_getSerializedEVMState(_topFrame: EvmCallFrame, calldat
     if evmCallStack_setTopFrameMemory(ret) {
         evmOp_return(0, bytearray_size(ret));
     } else {
-        evmOp_revert_knownPc(91, 0, 0);
+        evmOp_revert_knownPc(111, 0, 0);
     }
 }

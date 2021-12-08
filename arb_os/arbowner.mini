@@ -322,21 +322,19 @@ view write func arbowner_getTotalOfEthBalances(_topFrame: EvmCallFrame, calldata
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 150, 0, 0);
     }
     let acctStore = evmCallStack_getAccountStoreInCurrentContext();
-    let total = unsafecast<uint>(accountStore_forall(
+    let total = accountStore_forall::<uint>(
         acctStore,
-        unsafecast<func(Account, any) -> any>(totalEthClosure),
+        closure(acct: Account, balance: uint) -> uint {
+            balance + account_getBalance(acct)
+        },
         0
-    ));
+    );
     total = total + accountStore_sumOfAllEscrowBalances(acctStore);
     if evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, total)) {
         evmOp_return(0, 32);
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 151, 0, 0);
     }
-}
-
-func totalEthClosure(acct: Account, state: uint) -> uint {
-    state + account_getBalance(acct)
 }
 
 // function deployContract(bytes calldata constructorData, address deemedSender, uint deemedNonce) external payable returns(address);

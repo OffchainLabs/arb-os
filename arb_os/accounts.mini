@@ -789,32 +789,18 @@ public func account_usesOriginalStorageGasAlloc(acct: Account) -> bool {
     }
 }
 
-type asfa_wrappedState = struct {
-    innerClosure: func(Account, any) -> any,
-    innerState: any,
-};
-
 // Iterate over all of the accounts in an accountStore.
 // For each account, do    state = closure(account, state)
 // Return the resulting state
 // The order of traversal is deterministic but weird, and might change in future upgrades, so don't rely on it.
-public func accountStore_forall(acctStore: AccountStore, closure_: func(Account, any) -> any, startState: any) -> any {
-    let wrappedState = struct {
-        innerClosure: closure_,
-        innerState: startState,
-    };
-    wrappedState = typesafe_kvsForall::<address, Account, asfa_wrappedState>(
+public func accountStore_forall<S>(acctStore: AccountStore, innerClosure: func(Account, S) -> S, startState: S) -> S {
+    typesafe_kvsForall::<address, Account, S>(
         acctStore.accounts,
-        asfaClosure,
-        wrappedState,
-    );
-    wrappedState.innerState
-}
-
-func asfaClosure(_: any, acct: Account, wrappedState: asfa_wrappedState) -> asfa_wrappedState {
-    wrappedState with {
-        innerState: wrappedState.innerClosure(acct, wrappedState.innerState)
-    }
+        closure(_addr: address, acct: Account, state: S) -> S {
+            innerClosure(acct, state)
+        },
+        startState,
+    )
 }
 
 func hashForCodeRef(code: ByteArray, contractStateVersion: uint) -> bytes32 {
