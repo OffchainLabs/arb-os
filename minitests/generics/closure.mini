@@ -1,0 +1,43 @@
+/*
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
+ */
+
+type tupfunc<I> = func(I) -> (I, I);
+
+write func main() {
+    asm(tests().1) { log };
+}
+
+func tests() -> string {
+    
+    let lambda = make_lambda::<string>();
+    
+    if (lambda("duplicate") != ("duplicate", "duplicate")) {
+        return "Generics don't work with closures";
+    }
+    
+    let store = struct {
+        value: "wow",
+    };
+    
+    if (duplicate::<string>(store, lambda) != ("wow", "wow")) {
+        return "Generics don't work with passed closures";
+    }
+    
+    return "";
+}
+
+func make_lambda<T>() -> tupfunc<T> {
+    let lambda = closure(input: T) -> (T, T) {
+        return (input, input);
+    };
+    return lambda;
+}
+
+type storage<S> = struct {
+    value: S,
+};
+
+func duplicate<U>(store: storage<U>, lambda: tupfunc<U>) -> (U, U) {
+    return lambda(store.value);
+}

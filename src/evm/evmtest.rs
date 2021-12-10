@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::preinstalled_contracts::ArbosTest;
+use crate::evm::live_code::ArbosTest;
 use crate::run::{load_from_file_and_env, Machine, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use std::collections::HashMap;
@@ -103,6 +103,7 @@ fn run_one_test(
                 logfiles_path,
                 raw_filename,
             );
+            machine.write_coverage(raw_filename.to_string());
 
             match &v["post"] {
                 serde_json::Value::Null => {
@@ -236,7 +237,7 @@ fn do_call(
     }
 }
 
-fn serialize_storage(st: HashMap<Uint256, Uint256>) -> Vec<u8> {
+pub fn serialize_storage(st: HashMap<Uint256, Uint256>) -> Vec<u8> {
     let mut ret: Vec<u8> = vec![];
     for (k, v) in st {
         ret.extend(k.to_bytes_be());
@@ -245,7 +246,7 @@ fn serialize_storage(st: HashMap<Uint256, Uint256>) -> Vec<u8> {
     ret
 }
 
-fn deserialize_storage(buf: Vec<u8>) -> HashMap<Uint256, Uint256> {
+pub fn deserialize_storage(buf: Vec<u8>) -> HashMap<Uint256, Uint256> {
     let mut ret = HashMap::new();
     let mut offset = 0;
     while offset < buf.len() {
@@ -257,7 +258,7 @@ fn deserialize_storage(buf: Vec<u8>) -> HashMap<Uint256, Uint256> {
     ret
 }
 
-fn compare_storage(
+pub fn compare_storage(
     expected: &HashMap<Uint256, Uint256>,
     actual: &HashMap<Uint256, Uint256>,
 ) -> bool {

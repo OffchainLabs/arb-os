@@ -4,19 +4,12 @@
 
 use chainParameters::chainParams_chainId;
 
-use std::bls::BLSHashedMessage;
-use std::bls::BLSKey;
-use std::bls::bls_defaultDomain;
-use std::bls::bls_hashToPoint;
-use std::bls::bls_verifySignature;
-
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_setByte;
-use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
 use std::bytearray::bytearray_getCalldataUnits;
@@ -24,12 +17,8 @@ use std::bytearray::bytearray_getCalldataUnits;
 use std::bytestream::ByteStream;
 use std::bytestream::bytestream_new;
 use std::bytestream::bytestream_getByte;
-use std::bytestream::bytestream_get256;
 use std::bytestream::bytestream_getN;
-use std::bytestream::bytestream_skipBytes;
-use std::bytestream::bytestream_bytesReadSoFar;
 use std::bytestream::bytestream_getRemainingBytes;
-use std::bytestream::bytestream_getCalldataUnits;
 
 use std::expandingIntArray::ExpandingIntArray;
 use std::expandingIntArray::expandingIntArray_new;
@@ -40,28 +29,20 @@ use std::keccak::keccak256;
 
 use std::rlp::rlp_encodeUint;
 
-use std::queue::Queue;
-use std::queue::queue_put;
-
 use accounts::safeGetGlobalAccountStore;
 use accounts::accountStore_get;
 use accounts::account_getNextSeqNum;
 use accounts::account_getAggregatorDecompressionState;
-use accounts::account_getBlsKey;
 
 use evmCallStack::evmCallStack_getAccount;
 use evmCallStack::evmCallStack_addStorageCharge;
 use inbox::IncomingRequest;
-use inbox::GasEstimationParams;
 use gasAccounting::txFeeStats_zero;
 use messages::TxRequestData;
 
 use std::rlp::rlp_decodeAddress;
 use std::rlp::rlp_decodeUint;
 use std::rlp::rlp_encodeMessageInfo;
-use std::rlp::rlp_encodeAndHashMessageInfoForSignature;
-
-use retrybuffer::RetryableTx;
 
 use signedTx::recoverSigner;
 
@@ -71,44 +52,44 @@ type IndexedAddressTable = struct {
     byIndex: ExpandingIntArray,
     byAddress: map<address, uint>,
     size: uint
-}
+};
 
 var globalIndexedAddressTable: IndexedAddressTable;
 
-public impure func decompression_init() {
+public write func decompression_init() {
     globalIndexedAddressTable = addressTable_new();
 }
 
-public impure func getGlobalAddressTable() -> IndexedAddressTable {
-    return globalIndexedAddressTable;
+public view func getGlobalAddressTable() -> IndexedAddressTable {
+    globalIndexedAddressTable
 }
 
-public impure func setGlobalAddressTable(gat: IndexedAddressTable) {
+public write func setGlobalAddressTable(gat: IndexedAddressTable) {
     globalIndexedAddressTable = gat;
 }
 
 public func addressTable_new() -> IndexedAddressTable {
-    return struct {
+    struct {
         byIndex: expandingIntArray_set(expandingIntArray_new(), 0, 0),
         byAddress: newmap<address, uint> with { [address(0)] = 0 },
         size: 1
-    };
+    }
 }
 
 public func addressTable_size(iat: IndexedAddressTable) -> uint {
-    return iat.size;
+    iat.size
 }
 
 public func addressTable_getByIndex(iat: IndexedAddressTable, index: uint) -> option<address> {
-    return xif (index >= iat.size) {
-        None<address>
+    if index >= iat.size {
+        None
     } else {
         Some(address(expandingIntArray_get(iat.byIndex, index)))
-    };
+    }
 }
 
 public func addressTable_getByAddress(iat: IndexedAddressTable, addr: address) -> option<uint> {
-    return iat.byAddress[addr];
+    iat.byAddress[addr]
 }
 
 public func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: address) -> (
@@ -118,7 +99,7 @@ public func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: addre
 ) {
     // get the index corresponding to an address
     // if the address isn't in the table yet, add it to the table and return the resulting index
-    return xif let Some(val) = iat.byAddress[addr] {
+    if let Some(val) = iat.byAddress[addr] {
         (iat, val, false)
     } else {
         // allocate space in the table
@@ -132,11 +113,12 @@ public func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: addre
             iat.size,
             true,
         )
-    };
+    }
 }
 
-public impure func decompressAddress(
+public view write func decompressAddress(
     stream: ByteStream,
+    addIfNotInTable: bool,
 ) -> option<(ByteStream, address)> {
     // Returns None if insufficient data in stream
     // A compressed address is one of three things:
@@ -147,40 +129,43 @@ public impure func decompressAddress(
     // In the last case, the address is added to the globalIndexedAddressTable if it is not already there
 
     let (ustr, firstByte) = bytestream_getByte(stream)?;
-    return xif (firstByte == 0x80) {
+    if firstByte == 0x80 {
         // return the updated stream
         Some((ustr, address(0)))
-    } elseif (firstByte < 0x80 + 20) {
+    } else if firstByte < 0x80 + 20 {
         // don't update the stream, because we want to re-start from the beginning
         let (*stream, decodedUint) = rlp_decodeUint(stream)?;
         Some((stream, addressTable_getByIndex(globalIndexedAddressTable, decodedUint)?))
     } else {
         let (*stream, addr) = rlp_decodeAddress(stream)?;
-        let (giat, _, changed) = addressTable_getByAddressAlloc(globalIndexedAddressTable, addr);
-        if (changed) {
-            evmCallStack_addStorageCharge(2);   // charge current tx for 2 storage cells
-            globalIndexedAddressTable = giat;
+        if addIfNotInTable {
+            let (giat, _, changed) = addressTable_getByAddressAlloc(globalIndexedAddressTable, addr);
+            if (changed) {
+                evmCallStack_addStorageCharge(2, None<(address, uint)>);   // charge current tx for 2 storage cells
+                globalIndexedAddressTable = giat;
+            }
         }
+
         Some((stream, addr))
-    };
+    }
 }
 
 public func decompressTokenAmount(stream: ByteStream) -> option<(ByteStream, uint)> {
     let (*stream, base) = rlp_decodeUint(stream)?;
-    return Some(xif (base == 0) {
+    Some(if base == 0 {
         (stream, 0)
     } else {
         let (*stream, sh) = bytestream_getByte(stream)?;
         (stream, base * asm(10, sh) uint { exp })
-    });
+    })
 }
 
-public impure func decompressAndVerifyEcdsaSignedTx(
+public view write func decompressAndVerifyEcdsaSignedTx(
     ba: ByteArray,
     originalRequest: IncomingRequest
 ) -> option<TxRequestData> {
     let sz = bytearray_size(ba);
-    if (sz <= 66) {
+    if sz <= 66 {
         return None;
     }
 
@@ -189,9 +174,9 @@ public impure func decompressAndVerifyEcdsaSignedTx(
     let v = bytearray_getByte(ba, sz-1);
     let body = bytearray_extract(ba, 1, sz-66);
 
-    let (_, txRequest) = decompressTx(bytestream_new(body), None<address>)?;
+    let (_, txRequest) = decompressTx(bytestream_new(body), None)?;
 
-    let (seqNum, calldataUnitsDelta) = xif(originalRequest.kind == const::L1MessageType_L2ForGasEstimation) {
+    let (seqNum, calldataUnitsDelta) = if originalRequest.kind == const::L1MessageType_L2ForGasEstimation {
         let realSnum = account_getNextSeqNum(accountStore_get(safeGetGlobalAccountStore(), originalRequest.sender));
         (
             realSnum,
@@ -200,12 +185,12 @@ public impure func decompressAndVerifyEcdsaSignedTx(
         )
     } else {
         (
-            xif let Some(sn) = txRequest.seqNum { sn } else { 0 },
+            if let Some(sn) = txRequest.seqNum { sn } else { 0 },
             int(0)
         )
     };
 
-    if (v < 2) {
+    if v < 2 {
         // it's an EIP-155 signature, with the v value stored as 0/1 for space efficiency
         // recover the original v
         v = 35 + 2 * chainParams_chainId() + (1 - (v % 2));
@@ -221,7 +206,7 @@ public impure func decompressAndVerifyEcdsaSignedTx(
         r: r,
         s: s
     };
-    let signer = xif (originalRequest.kind == const::L1MessageType_L2ForGasEstimation) {
+    let signer = if originalRequest.kind == const::L1MessageType_L2ForGasEstimation {
         originalRequest.sender
     } else {
         recoverSigner(tx)?
@@ -246,36 +231,36 @@ public impure func decompressAndVerifyEcdsaSignedTx(
         1,
         bytearray_size(encodedMessage)
     );
-    if (calldataUnitsDelta != int(0)) {
+    if calldataUnitsDelta != int(0) {
         if let Some(aggInfo) = originalRequest.aggregator {
             set originalRequest.aggregator = Some(aggInfo with { calldataUnits: uint(int(aggInfo.calldataUnits) + calldataUnitsDelta) });
         }
     }
-    if (originalRequest.kind == const::L1MessageType_L2ForGasEstimation) {
-        if (tx.gasPrice == 0) {
+    if originalRequest.kind == const::L1MessageType_L2ForGasEstimation {
+        if tx.gasPrice == 0 || tx.gasPrice == ~0 {
             // gas estimation tx requested zero gas, so ignore gas funding and pay whatever price is necessary to run
-            set originalRequest.gasEstimationParams = xif let Some(gep) = originalRequest.gasEstimationParams {
+            set originalRequest.gasEstimationParams = if let Some(gep) = originalRequest.gasEstimationParams {
                 Some(gep with { ignoreGasPrice: true })
             } else {
-                None<GasEstimationParams>
+                None
             };
             tx = tx with { gasPrice: ~0 };
         }
-        if (tx.gasLimit == 0) {
+        if tx.gasLimit == 0 {
             // gas estimation tx requested zero maxGas, so ignore use max gas allowed
-            set originalRequest.gasEstimationParams = xif let Some(gep) = originalRequest.gasEstimationParams {
+            set originalRequest.gasEstimationParams = if let Some(gep) = originalRequest.gasEstimationParams {
                 Some(gep with { ignoreMaxGas: true })
             } else {
-                None<GasEstimationParams>
+                None
             };
         }
     }
 
-    return Some(
+    Some(
         {
             set txRequest.caller = signer;
             set txRequest.gasPayer = signer;
-            set txRequest.incomingRequest = xif (originalRequest.kind == const::L1MessageType_L2ForGasEstimation) {
+            set txRequest.incomingRequest = if originalRequest.kind == const::L1MessageType_L2ForGasEstimation {
                 originalRequest
             } else {
                 originalRequest with {
@@ -285,92 +270,10 @@ public impure func decompressAndVerifyEcdsaSignedTx(
             set txRequest.seqNum = Some(seqNum);
             txRequest
         }
-    );
+    )
 }
 
-public impure func decompressAndVerifyBLSSignedTxBatch(
-    ba: ByteArray,
-    originalRequest: IncomingRequest,
-    queueToFill: Queue,
-) -> option<Queue> {
-    let stream = bytestream_skipBytes(bytestream_new(ba), 1)?;
-
-    let (*stream, numMsgs) = rlp_decodeUint(stream)?;
-    let msgHashes = newarray<BLSHashedMessage>(numMsgs);
-    let signerKeys = newarray<BLSKey>(numMsgs);
-
-    let (*stream, sigx) = bytestream_get256(stream)?;
-    let (*stream, sigy) = bytestream_get256(stream)?;
-    let aggregatedSig = struct { x: sigx, y: sigy };
-
-    let i = 0;
-    while(i < numMsgs) {
-        // the signature on this tx covers all of the data associated with this tx
-        // we remember the start of the stream, so we can extract the full data later, once we know where the end is
-        let startStream = stream;
-
-        let (*stream, signerAddr) = decompressAddress(stream)?;
-        let (*stream, txSize) = rlp_decodeUint(stream)?;
-        let (*stream, txData) = bytestream_getN(stream, txSize)?;
-
-        let fullDataSize = bytestream_getCalldataUnits(
-            startStream,
-            bytestream_bytesReadSoFar(stream)-bytestream_bytesReadSoFar(startStream),
-        );
-
-        set signerKeys[i] = account_getBlsKey(accountStore_get(safeGetGlobalAccountStore(), signerAddr))?;
-
-        let aggregator = xif let Some(aggInfo) = originalRequest.aggregator {
-            xif let Some(agg) = aggInfo.aggregator {
-                agg
-            } else {
-                originalRequest.sender
-            }
-        } else {
-            originalRequest.sender
-        };
-
-        let (_, newTx) = decompressTx(bytestream_new(txData), Some(signerAddr))?;
-        let txHash = rlp_encodeAndHashMessageInfoForSignature(
-             struct {
-                 seqNum: newTx.seqNum?,
-                 gasPrice: newTx.gasPrice,
-                 gasLimit: newTx.maxGas,
-                 to: newTx.calleeAddr,
-                 value: newTx.value,
-                 data: newTx.calldata,
-                 v: 0,
-                 r: 0,
-                 s: 0,
-             },
-             Some(chainParams_chainId()),
-        );
-        set msgHashes[i] = bls_hashToPoint(
-            bls_defaultDomain(signerAddr),
-            bytearray_set256(bytearray_new(0), 0, uint(txHash)),
-        )?;
-
-        set newTx.incomingRequest = originalRequest with {
-            requestId: uint(hash(bytes32(signerAddr), txHash))
-        } with {
-            msgData: txData
-        } with {
-            aggregator: Some(struct {
-                aggregator: Some(aggregator),
-                calldataUnits: fullDataSize + 64*16/numMsgs,   // charge for your data plus your share of the signature
-            })
-        };
-
-        queueToFill = queue_put(queueToFill, newTx);
-        i = i+1;
-    }
-
-    bls_verifySignature(msgHashes, signerKeys, aggregatedSig)?;
-
-    return Some(queueToFill);
-}
-
-impure func decompressTx(
+view write func decompressTx(
     stream: ByteStream,
     maybeSender: option<address>,   // tx sender, or None if the caller doesn't know the sender yet
 ) -> option<(ByteStream, TxRequestData)> {
@@ -386,10 +289,10 @@ impure func decompressTx(
 
     let funcTableEntry = None<FunctionTableEntry>;
     let (*stream, firstByte) = bytestream_getByte(stream)?;  // peek at first byte of stream
-    if (firstByte != 0xff) {
+    if firstByte != 0xff {
         return None;     // this feature isn't fully tested, so disable it for now
     }
-    let (sender, seqNum) = xif let Some(senderAddr) = maybeSender {
+    let (sender, seqNum) = if let Some(senderAddr) = maybeSender {
         let (*stream, seqNumByte) = bytestream_getByte(stream)?;
         let dbSeqNum = account_getNextSeqNum(
             accountStore_get(
@@ -398,7 +301,7 @@ impure func decompressTx(
             )
         );
         let seqNum = (dbSeqNum & ~0xff) | seqNumByte;
-        if (seqNum < dbSeqNum) {
+        if seqNum < dbSeqNum {
             seqNum = seqNum + 256;
         }
         (senderAddr, seqNum)
@@ -409,17 +312,17 @@ impure func decompressTx(
 
     let (*stream, gasPrice) = rlp_decodeUint(stream)?;
 
-    let gasLimit = xif let Some(tableEntry) = funcTableEntry {
+    let gasLimit = if let Some(tableEntry) = funcTableEntry {
         tableEntry.maxGas
     } else {
         let (*stream, maxGas) = rlp_decodeUint(stream)?;
         maxGas
     };
 
-    let (*stream, toAddr) = decompressAddress(stream)?;
+    let (*stream, toAddr) = decompressAddress(stream, true)?;
     let value = 0;
-    let calldata = xif let Some(tableEntry) = funcTableEntry {
-        if (tableEntry.payable) {
+    let calldata = if let Some(tableEntry) = funcTableEntry {
+        if tableEntry.payable {
             let (*stream, val) = decompressTokenAmount(stream)?;
             value = val;
         }
@@ -436,7 +339,7 @@ impure func decompressTx(
         value = val;
         bytestream_getRemainingBytes(stream)
     };
-    return Some((
+    Some((
         stream,
         struct {
             maxGas: gasLimit,
@@ -451,22 +354,23 @@ impure func decompressTx(
             isConstructor: (toAddr == address(0)),
             incomingRequest: unsafecast<IncomingRequest>(0),  // caller will fill this in
             feeStats: txFeeStats_zero(),
-            fromRetryable: None<RetryableTx>,
+            fromRetryable: None,
+            originalCaller: sender,
         }
-    ));
+    ))
 }
 
 type FunctionTableEntry = struct {
     callDataPrefix: any,    //FIXME: really a ByteArray, but compiler previously didn't allow array of imported type
     maxGas: uint,
     payable: bool,
-}
+};
 
-type FunctionTable = []FunctionTableEntry
+type FunctionTable = []FunctionTableEntry;
 
 type AggregatorDecompressionState = struct {
     functionTable: FunctionTable,
-}
+};
 
 public func parseAggregatorFunctionTable(
     contents: ByteArray
@@ -474,12 +378,12 @@ public func parseAggregatorFunctionTable(
     let stream = bytestream_new(contents);
     let (*stream, numEntries) = rlp_decodeUint(stream)?;
 
-    if (numEntries > 1024) {   // hard limit on table size is 1024 entries, currently
+    if numEntries > 1024 {   // hard limit on table size is 1024 entries, currently
         return None;
     }
     let ret = newarray<FunctionTableEntry>(numEntries);
     let i = 0;
-    while (i < numEntries) {  //FORLOOP
+    while i < numEntries {  //FORLOOP
         let (ustr, funcCode) = bytestream_getN(stream, 4)?;
         stream = ustr;
         let (ustr, payableByte) = bytestream_getByte(stream)?;
@@ -496,17 +400,17 @@ public func parseAggregatorFunctionTable(
         i = i+1;
     }
 
-    return Some(struct { functionTable: ret });
+    Some(struct { functionTable: ret })
 }
 
-public impure func functionTableSize(addr: address) -> option<uint> {
+public view func functionTableSize(addr: address) -> option<uint> {
     let funcTable = (account_getAggregatorDecompressionState(evmCallStack_getAccount(addr)?)?).functionTable;
-    return Some(len(funcTable));
+    Some(len(funcTable))
 }
 
-public impure func getFromFunctionTable(addr: address, index: uint) -> option<(uint, bool, uint)> {
+public view func getFromFunctionTable(addr: address, index: uint) -> option<(uint, bool, uint)> {
     let funcTable = (account_getAggregatorDecompressionState(evmCallStack_getAccount(addr)?)?).functionTable;
-    return xif (index < len(funcTable)) {
+    if index < len(funcTable) {
         let tableEntry = funcTable[index];
         Some((
             bytearray_get256(unsafecast<ByteArray>(tableEntry.callDataPrefix), 0),
@@ -514,7 +418,7 @@ public impure func getFromFunctionTable(addr: address, index: uint) -> option<(u
             tableEntry.maxGas
         ))
     } else {
-        None<(uint, bool, uint)>
-    };
+        None
+    }
 }
 

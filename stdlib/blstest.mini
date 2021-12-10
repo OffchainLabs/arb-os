@@ -9,11 +9,11 @@ use std::bls::bls_hashToPoint;
 use std::bls::bls_verifySingleSig;
 
 
-impure func main() {
-	asm(tests(),) { log };
+write func main() {
+    asm(tests().1) { log };
 }
 
-func tests() -> uint {
+func tests() -> string {
     let domain2 = bytes32(0x2d889d03243d367c56457383bb04bcdadff3a522dbf9c97145d0a58c1e88d6f9);
 
     let message2 = bytearray_new(12);
@@ -48,17 +48,17 @@ func tests() -> uint {
     };
 
     if let Some(hashedmessage) = bls_hashToPoint(domain2, message2) {
-        if let Some(res) = bls_verifySingleSig(hashedmessage, pubkey, signature){
+        if let Some(_res) = bls_verifySingleSig(hashedmessage, pubkey, signature) {
             // This is the expected case.
         } else {
-            return 5;
+            return "single sig is wrong";
         }
-        if let Some(res2) = bls_verifySingleSig(hashedmessage, pubkey, bad_signature){
-            return 6;
+        if let Some(_res2) = bls_verifySingleSig(hashedmessage, pubkey, bad_signature) {
+            return "bad signature somehow checked-out";
         }
     } else {
-         return 7;
+         return "hash failed";
     }
 
-    return 0;   // passed all tests
+    ""
 }

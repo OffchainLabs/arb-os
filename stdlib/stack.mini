@@ -2,22 +2,22 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-type Stack = option<StackCell>
+type Stack = option<StackCell>;
 
 type StackCell = struct {
     top: [8]any,
     num: uint,
     rest: option<StackCell>
-}
+};
 
 
 public func stack_new() -> Stack {
-    return None<StackCell>;
+    None
 }
 
 public func stack_push(stack: Stack, value: any) -> Stack {
     if let Some(cell) = unsafecast<option<StackCell> >(stack) {
-        if (cell.num < 8) {
+        if cell.num < 8 {
             return Some(
                 cell with {
                     top: cell.top with { [cell.num] = value }
@@ -28,55 +28,55 @@ public func stack_push(stack: Stack, value: any) -> Stack {
         }
     }
 
-    return Some(struct {
+    Some(struct {
         top: newfixedarray(8) with { [0] = value },
         num: 1,
         rest: stack
-    });
+    })
 }
 
 public func stack_isEmpty(stack: Stack) -> bool {
-    return stack == None<StackCell>;
+    stack == None<StackCell>
 }
 
 public func stack_pop(stack: Stack) -> option<(Stack, any)> {
     let cell = stack?;
-    return xif (cell.num == 1) {
+    if cell.num == 1 {
         Some((unsafecast<Stack>(cell.rest), cell.top[0]))
     } else {
         Some((
             Some(cell with { num: cell.num - 1 }),
             cell.top[cell.num-1]
         ))
-    };
+    }
 }
 
 public func stack_size(stack: Stack) -> uint {
     let size = 0;
-    return xloop {
+    loop {
         if let Some(res) = stack_pop(stack) {
             stack = res.0;
             size = size+1;
         } else {
             return size;
         }
-    };
+    }
 }
 
 public func stack_discardDeepestItems(stack: Stack, numToDiscard: uint) -> Stack {
-    return stack_ddi2(stack, numToDiscard).0;
+    stack_ddi2(stack, numToDiscard).0
 }
 
 func stack_ddi2(stack: Stack, numToDiscard: uint) -> (Stack, uint) {
-    return xif let Some(res) = stack_pop(stack) {
+    if let Some(res) = stack_pop(stack) {
         let (ustack, val) = res;
         let (subStack, subNum) = stack_ddi2(ustack, numToDiscard);
-        xif (subNum == 0) {
+        if subNum == 0 {
             (stack_push(subStack, val), 0)
         } else {
             (subStack, subNum-1)
         }
     } else {
         (stack, numToDiscard)  // stack is empty
-    };
+    }
 }

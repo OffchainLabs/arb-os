@@ -16,20 +16,20 @@ use std::stack::stack_pop;
 
 type EvmTracer = struct {
     recordStack: Stack,
-}
+};
 
-public impure func evmTracer_clear() {
+public view write func evmTracer_clear() {
     outbox_setEvmTracer(evmTracer_new());
 }
 
 public func evmTracer_new() -> EvmTracer {
-    return struct {
+    struct {
         recordStack: stack_new(),
-    };
+    }
 }
 
-public impure func evmTracer_emit() {
-    let val = unsafecast<any>(());
+public view func evmTracer_emit() {
+    let val = any(());
     let theStack = outbox_getEvmTracer().recordStack;
     loop {
         if let Some(res) = stack_pop(theStack) {
@@ -39,22 +39,22 @@ public impure func evmTracer_emit() {
             debug((20000, val));
             return;
         }
-    }
+    };
 }
 
-public impure func evmTracer_emitAndClear() {
+public view write func evmTracer_emitAndClear() {
     evmTracer_emit();
     evmTracer_clear();
 }
 
-public impure func evmTracer_push(typecode: uint, item: any) {
+public view write func evmTracer_push(typecode: uint, item: any) {
     let oldTracer = outbox_getEvmTracer();
     outbox_setEvmTracer(oldTracer with {
         recordStack: stack_push(oldTracer.recordStack, (typecode, item))
     });
 }
 
-public impure func evmTracer_pushCall(
+public view write func evmTracer_pushCall(
     callType: uint,
     calldata: ByteArray,
     callvalue: uint,
@@ -69,7 +69,7 @@ public impure func evmTracer_pushCall(
     );
 }
 
-public impure func evmTracer_pushReturnRevert(
+public view write func evmTracer_pushReturnRevert(
     resultCode: uint,
     returndata: ByteArray,
     gasUsed: uint,
@@ -80,7 +80,7 @@ public impure func evmTracer_pushReturnRevert(
     );
 }
 
-public impure func evmTracer_pushCallAndResultNoExecution(
+public view write func evmTracer_pushCallAndResultNoExecution(
     callType: uint,
     calldata: ByteArray,
     callvalue: uint,
@@ -94,7 +94,7 @@ public impure func evmTracer_pushCallAndResultNoExecution(
     evmTracer_pushReturnRevert(resultCode, bytearray_new(0), 0);
 }
 
-public impure func evmTracer_pushCreate(
+public view write func evmTracer_pushCreate(
     code: ByteArray,
     addr: address,
 ) {
@@ -104,7 +104,7 @@ public impure func evmTracer_pushCreate(
     );
 }
 
-public impure func evmTracer_pushCreate2(
+public view write func evmTracer_pushCreate2(
     code: ByteArray,
     currentAddr: address,
     salt: uint,

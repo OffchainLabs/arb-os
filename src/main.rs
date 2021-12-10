@@ -31,13 +31,14 @@ mod link;
 mod mavm;
 #[cfg(test)]
 mod minitests;
+mod optimize;
 pub mod pos;
 mod run;
 mod stringtable;
 mod uint256;
 mod upload;
 
-///Command line options for run subcommand.
+/// Command line options for run subcommand.
 #[derive(Clap, Debug)]
 struct RunStruct {
     input: String,
@@ -47,7 +48,7 @@ struct RunStruct {
     coverage: Option<String>,
 }
 
-///Command line options for EvmDebug subcommand.
+/// Command line options for EvmDebug subcommand.
 #[derive(Clap, Debug)]
 struct EvmDebug {
     #[clap(short, long)]
@@ -56,7 +57,7 @@ struct EvmDebug {
     profiler: bool,
 }
 
-///Command line options for replay subcommand.
+/// Command line options for replay subcommand.
 #[derive(Clap, Debug)]
 struct Replay {
     input: String,
@@ -68,7 +69,7 @@ struct Replay {
     trace: Option<String>,
 }
 
-///Command line options for profiler subcommand.
+/// Command line options for profiler subcommand.
 #[derive(Clap, Debug)]
 struct Profiler {
     input: String,
@@ -76,7 +77,7 @@ struct Profiler {
     mode: ProfilerMode,
 }
 
-///Command line options for reformat subcommand.
+/// Command line options for reformat subcommand.
 #[derive(Clap, Debug)]
 struct Reformat {
     input: String,
@@ -85,7 +86,7 @@ struct Reformat {
     format: Option<String>,
 }
 
-///Command line options for evm-tests subcommand.
+/// Command line options for evm-tests subcommand.
 #[derive(Clap, Debug)]
 struct EvmTests {
     input: Vec<String>,
@@ -113,7 +114,7 @@ struct MakeParametersList {
     pub consts_file: Option<String>,
 }
 
-///Main enum for command line arguments.
+/// Main enum for command line arguments.
 #[derive(Clap, Debug)]
 enum Args {
     Compile(CompileStruct),
@@ -138,12 +139,12 @@ fn main() -> Result<(), CompileError> {
 
     match matches {
         Args::Compile(compile) => {
-            rayon::ThreadPoolBuilder::new()
-                .stack_size(8192 * 1024)
-                .build_global()
-                .expect("failed to initialize rayon thread pool");
-
-            let mut output = get_output(compile.output.clone()).unwrap();
+            let mut output = match compile.output {
+                Some(ref path) => File::create(path)
+                    .map(|f| Box::new(f) as Box<dyn io::Write>)
+                    .unwrap(),
+                None => Box::new(io::sink()),
+            };
 
             let error_system = match compile.invoke() {
                 Ok((program, error_system)) => {
@@ -342,7 +343,7 @@ fn main() -> Result<(), CompileError> {
     Ok(())
 }
 
-///Creates a `dyn Write` from an optional filename, if a filename is specified, creates a file
+/// Creates a `dyn Write` from an optional filename, if a filename is specified, creates a file
 /// handle, otherwise gives stdout.
 fn get_output(output_filename: Option<String>) -> Result<Box<dyn io::Write>, io::Error> {
     match output_filename {
