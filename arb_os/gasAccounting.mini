@@ -809,15 +809,16 @@ public view write func gasAccounting_prepareTx(tx: TxRequestData) -> (
             payForTxAndL1Gas(
                 tx.gasPayer,
                 tx.caller,
-                None<address>,
+                None,
                 gasAccountingInfo.feeConfig,
                 prices,
                 tx.feeStats,
                 tx.maxGas * prices.perArbGasTotal,
             )
         };
+
         set tx.feeStats = feeStats;
-        if !fullyPaid {
+        if !fullyPaid && !tx.feeStats.noFeeGasEstimationMode {
             // sender didn't have enough gas funds
             // we took all of the funds to make a partial payment to the aggregator
             // now fail the tx
@@ -829,7 +830,7 @@ public view write func gasAccounting_prepareTx(tx: TxRequestData) -> (
         //       for a fractional ArbGas unit (rounding down would credit the user with fractional
         //       ETH that we don't have)
         let roundedUpGasDelta = safeAdd(safeAdd(feeStats.weiPaid.tx, feeStats.weiPaid.calldataUnit), prices.perArbGasTotal - 1) / prices.perArbGasTotal;
-        if tx.maxGas > roundedUpGasDelta {
+        if tx.maxGas >= roundedUpGasDelta {
             set tx.maxGas = tx.maxGas - roundedUpGasDelta;
         } else {
             set tx.feeStats.units.calldataUnit = feeStats.units.calldataUnit;
@@ -839,7 +840,7 @@ public view write func gasAccounting_prepareTx(tx: TxRequestData) -> (
         if tx.incomingRequest.kind == const::L1MessageType_L2ForGasEstimation {
             let gasPrice = gasAccountingInfo.currentPrices.perArbGasTotal;
             let gasPayerFunds = account_getEthBalance(accountStore_get(safeGetGlobalAccountStore(), tx.gasPayer));
-            if tx.value >= gasPayerFunds {
+            if tx.value > gasPayerFunds {
                 (const::TxResultCode_insufficientBalance, tx)
             } else {
                 let affordableGas = (gasPayerFunds - tx.value) / gasPrice;
@@ -929,7 +930,6 @@ view write func payForTxAndL1Gas(
             safeMul(calldataUnits, networkUnitPrice),
             feeStats,
             paymentLimitWei,
-            feeStats.noFeeGasEstimationMode,
         );
         feeStats = ufs with {
             price: ufs.price with {
@@ -961,7 +961,6 @@ view write func payForTxAndL1Gas(
                 safeMul(calldataUnits, basePriceCalldataUnit),
                 feeStats,
                 safeSub(paymentLimitWei, totalWeiPaid),
-                feeStats.noFeeGasEstimationMode,
             );
             set feeStats.price.tx = safeAdd(feeStats.price.tx, basePriceTx);
             set feeStats.price.calldataUnit = safeAdd(feeStats.price.calldataUnit, basePriceCalldataUnit);
@@ -982,8 +981,10 @@ view write func tryToPayForL1Gas(
     weiForCalldata: uint,
     feeStats: TxFeeStats,
     paymentLimit: uint,
-    dontActuallyPay: bool,
 ) -> (bool, TxFeeStats, uint) {    // returns (fullyPaid, updatedFeeStats, totalWeiPaid)
+    
+    let dontActuallyPay = feeStats.noFeeGasEstimationMode;
+
     let totalDue = weiForTx + weiForCalldata;
     let fullyPaid = if totalDue <= paymentLimit {
         true
@@ -1223,7 +1224,7 @@ public func deferredPayments_apply(acctStore: AccountStore, dp: DeferredPayments
                 acctStore = uAcctStore;
             } else {
                 asm(11000) { debugprint };
-                return None<AccountStore>;
+                return None;
             }
         } else {
             return Some(acctStore);

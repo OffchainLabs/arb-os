@@ -105,8 +105,6 @@ struct TypeCheckedModule {
     imports: Vec<Import>,
     /// The path to the module
     path: Vec<String>,
-    /// The name of the module
-    name: String,
 }
 
 impl CompileStruct {
@@ -234,7 +232,6 @@ impl TypeCheckedModule {
         global_vars: Vec<GlobalVar>,
         imports: Vec<Import>,
         path: Vec<String>,
-        name: String,
     ) -> Self {
         Self {
             checked_funcs,
@@ -244,7 +241,6 @@ impl TypeCheckedModule {
             global_vars,
             imports,
             path,
-            name,
         }
     }
 
@@ -883,7 +879,7 @@ fn typecheck_programs(
                  string_table,
                  func_table,
                  path,
-                 name,
+                 name: _,
              }| {
                 let mut typecheck_issues = vec![];
                 let (mut checked_funcs, global_vars, string_table) =
@@ -959,7 +955,6 @@ fn typecheck_programs(
                         global_vars,
                         imports,
                         path,
-                        name,
                     ),
                     typecheck_issues,
                 ))
