@@ -1087,7 +1087,8 @@ impl<'a> _ArbGasInfo<'a> {
         }
     }
 
-    pub fn _get_current_tx_l1_gas_fees(
+    #[cfg(test)]
+    pub fn get_current_tx_l1_gas_fees(
         &self,
         machine: &mut Machine,
     ) -> Result<(Uint256, Uint256), ethabi::Error> {
@@ -2195,7 +2196,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
 }
 
 #[test]
-pub fn _evm_test_get_current_tx_l1_gas_fees() {
+pub fn evm_test_get_current_tx_l1_gas_fees() {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero(true);
 
@@ -2213,9 +2214,7 @@ pub fn _evm_test_get_current_tx_l1_gas_fees() {
     );
     let _ = machine.run(None);
 
-    let (tx_cost, calldata_cost) = arbgasinfo
-        ._get_current_tx_l1_gas_fees(&mut machine)
-        .unwrap();
+    let (tx_cost, calldata_cost) = arbgasinfo.get_current_tx_l1_gas_fees(&mut machine).unwrap();
     assert!(tx_cost.is_zero());
     assert!(calldata_cost.is_zero());
 
@@ -2223,9 +2222,7 @@ pub fn _evm_test_get_current_tx_l1_gas_fees() {
         ._set_fees_enabled(&mut machine, true, true)
         .unwrap();
 
-    let (tx_cost, calldata_cost) = arbgasinfo
-        ._get_current_tx_l1_gas_fees(&mut machine)
-        .unwrap();
+    let (tx_cost, calldata_cost) = arbgasinfo.get_current_tx_l1_gas_fees(&mut machine).unwrap();
     assert!(!tx_cost.is_zero());
     assert!(!calldata_cost.is_zero());
 
