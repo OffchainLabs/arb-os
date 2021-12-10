@@ -1630,7 +1630,7 @@ fn test_upgrade_arbos_to_different_version() -> Result<(), ethabi::Error> {
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys_orig_binding.arbos_version(&mut machine)?,
-        Uint256::from_u64(47),
+        Uint256::from_u64(49),
     );
 
     arbowner._add_chain_owner(&mut machine, my_addr.clone(), true, false)?;
@@ -1662,94 +1662,6 @@ fn test_upgrade_arbos_to_different_version() -> Result<(), ethabi::Error> {
     assert_eq!(arbos_version, arbos_version_orig);
 
     machine.write_coverage("test_upgrade_arbos_to_different_version".to_string());
-    Ok(())
-}
-
-#[test]
-fn test_upgrade_48_funds_transfer() -> Result<(), ethabi::Error> {
-    let mut machine = load_from_file(Path::new("arb_os/arbos_before.mexe"));
-    machine.start_at_zero(true);
-    machine.runtime_env.force_zero_gas_price = true;
-    let _ = machine.run(None);
-
-    let payer = Uint256::from_string_hex("9CDd145B60a7f292D0d8B037AbaC65b6A8b7f3e5").unwrap();
-    let recipient = Uint256::from_string_hex("5fa351a4202c772c8d828e9220068a829d67d85c").unwrap();
-    let init_recipient_balance = Uint256::from_u64(498875);
-
-    let xfer_amount = Uint256::_from_eth(20);
-    machine.runtime_env.insert_eth_deposit_message(
-        payer.clone(),
-        payer.clone(),
-        xfer_amount.clone(),
-        false,
-    );
-    machine.runtime_env.insert_eth_deposit_message(
-        recipient.clone(),
-        recipient.clone(),
-        init_recipient_balance.clone(),
-        false,
-    );
-    let _ = machine.run(None);
-
-    let arbinfo = _ArbInfo::_new(false);
-    assert_eq!(
-        arbinfo._get_balance(&mut machine, &payer).unwrap(),
-        xfer_amount.clone()
-    );
-    assert_eq!(
-        arbinfo._get_balance(&mut machine, &recipient).unwrap(),
-        init_recipient_balance.clone()
-    );
-
-    let wallet = machine.runtime_env.new_wallet();
-    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
-
-    let arbowner = _ArbOwner::_new(&wallet, false);
-
-    let arbsys_orig_binding = ArbSys::new(&wallet, false);
-    assert_eq!(
-        arbsys_orig_binding.arbos_version(&mut machine)?,
-        Uint256::from_u64(47),
-    );
-
-    arbowner._add_chain_owner(&mut machine, my_addr.clone(), true, false)?;
-    arbowner._add_chain_owner(
-        &mut machine,
-        remap_l1_sender_address(my_addr.clone()),
-        true,
-        false,
-    )?;
-
-    let mexe_path = Path::new("arb_os/arbos-upgrade.mexe");
-    let uploader = CodeUploader::_new_from_file(mexe_path);
-    let _previous_upgrade_hash = _try_upgrade(&arbowner, &mut machine, uploader, None)?.unwrap();
-
-    machine.runtime_env.force_zero_gas_price = false;
-
-    let wallet2 = machine.runtime_env.new_wallet();
-    let arbsys = ArbSys::new(&wallet2, false);
-    let arbos_version = arbsys.arbos_version(&mut machine)?;
-    assert_eq!(
-        arbos_version,
-        *init_constant_table(Some(Path::new("arb_os/constants.json")))
-            .unwrap()
-            .get("ArbosVersionNumber")
-            .unwrap()
-    );
-
-    let arbos_version_orig = arbsys_orig_binding.arbos_version(&mut machine)?;
-    assert_eq!(arbos_version, arbos_version_orig);
-
-    assert_eq!(
-        arbinfo._get_balance(&mut machine, &payer).unwrap(),
-        Uint256::zero()
-    );
-    assert_eq!(
-        arbinfo._get_balance(&mut machine, &recipient).unwrap(),
-        init_recipient_balance.add(&xfer_amount)
-    );
-
-    machine.write_coverage("test_upgrade_48_funds_transfer".to_string());
     Ok(())
 }
 

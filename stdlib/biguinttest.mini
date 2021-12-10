@@ -16,9 +16,12 @@ use std::biguint::biguint_random;
 use std::biguint::biguint_square;
 use std::biguint::biguint_subtract;
 use std::biguint::biguint_zero;
+use std::biguint::uint_modexp;
 
 use std::random::RandomGenerator;
 use std::random::random_new;
+use std::random::random_next;
+use std::random::random_nextMod;
 
 
 write func main() {
@@ -138,5 +141,63 @@ func doTests(gen: RandomGenerator) -> (uint, RandomGenerator) {
         return (22, gen);
     }
 
+    let res = modexpRegressionTest();
+    if res != 0 {
+        return (23, gen);
+    }
+
+    if oneWordTest() != 0 {
+        return (24, gen);
+    }
+
     (0, gen)
+}
+
+func modexpRegressionTest() -> uint {
+    let base = biguint_fromUint(3);
+    let exponent = biguint_fromUint(0xc19139cb84c680a6e14116da060561765e05aa45a1c72a34f082305b61f3f52);
+    let modulus = biguint_fromUint(0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47);
+
+    let result = biguint_modexp(base, exponent, modulus);
+    if let Some(val) = result {
+        let expected = biguint_fromUint(4407920970296243842837207485651524041948558517760411303933);
+        if !biguint_equal(val, expected) {
+            return 1;
+        }
+    } else {
+        return 2;
+    }
+    return 0;
+}
+
+func oneWordTest() -> uint {
+    let r = random_new(bytes32(42));
+    let numTests = 10;
+    while numTests > 0 {
+        let (modB32, *r) = random_next(r);
+        let mod = uint(modB32);
+        let (base, *r) = random_nextMod(r, mod);
+        let (exp, *r) = random_nextMod(r, mod);
+        let uintWay = if let Some(x) = uint_modexp(base, exp, mod) {
+            x
+        } else {
+            return 1;
+            0
+        };
+        let biguintWay = if let Some(x) = biguint_modexp(
+            biguint_fromUint(base),
+            biguint_fromUint(exp),
+            biguint_fromUint(mod),
+        ) {
+            x
+        } else {
+            return 2;
+            newarray<uint>(1)
+        };
+        if biguint_compare(biguint_fromUint(uintWay), biguintWay) != int(0) {
+            return 3;
+        }
+        numTests = numTests - 1;
+    }
+    return 0;
 }

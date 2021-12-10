@@ -1202,7 +1202,7 @@ fn typecheck_statement<'a>(
 
     macro_rules! error {
         ($text:expr $(,$args:expr)* $(,)?) => {
-            return Err(CompileError::new("Typecheck error", format!($text, $(Color::red($args),)*), debug_info.locs()));
+            return Err(CompileError::new("Typecheck error", format!($text, $(Color::red($args),)*), debug_info.locs()))
         };
     }
 
@@ -1510,7 +1510,7 @@ fn typecheck_expr(
 
     macro_rules! error {
         ($text:expr $(,$args:expr)* $(,)?) => {
-            return Err(CompileError::new("Typecheck error", format!($text, $(Color::red($args),)*), debug_info.locs()));
+            return Err(CompileError::new("Typecheck error", format!($text, $(Color::red($args),)*), debug_info.locs()))
         };
     }
 
