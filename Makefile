@@ -6,7 +6,7 @@
 generics_files = basic simple nested func closure colorful queue
 generics_outputs = $(patsubst %,generics/%, $(generics_files))
 
-minitest_outputs = arithmetic codeloadtest globaltest modexp simple-closure closure stack-safety quick wide-tuples $(generics_outputs)
+minitest_outputs = arithmetic codeloadtest default globaltest modexp simple-closure closure stack-safety quick wide-tuples $(generics_outputs)
 upgrade_outputs = regcopy_new regcopy_old upgrade1_new upgrade1_old
 looptest_outputs = upgrade2_new upgrade2_old
 builtin_outputs = arraytest kvstest maptest
