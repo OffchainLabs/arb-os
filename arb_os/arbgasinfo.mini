@@ -15,6 +15,7 @@ use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallStack_topFrame;
 use evmCallStack::evmCallFrame_getAccount;
 use evmCallStack::evmCallFrame_getCaller;
+use evmCallStack::evmCallStack_getCurrentTxFeeStats;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
@@ -54,6 +55,8 @@ public view write func arbgasinfo_txcall() {
             arbgasinfo_setL1GasPriceEstimate(topFrame, calldata);
         } else if funcCode == const::funcCode_ArbGasInfo_getL1GasPriceEstimate {
             arbgasinfo_getL1GasPriceEstimate(topFrame, calldata);
+        } else if funcCode == const::funcCode_ArbGasInfo_getCurrentTxL1GasFees {
+            arbgasinfo_getCurrentTxL1GasFees(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownPc(1, 0, 0);
@@ -179,3 +182,21 @@ view write func arbgasinfo_setL1GasPriceEstimate(topFrame: EvmCallFrame, calldat
     evmOp_return(0, 0);
 }
 
+// function getCurrentTxL1GasFees() external view returns(uint, uint);
+view write func arbgasinfo_getCurrentTxL1GasFees(_topFrame: EvmCallFrame, _calldata: ByteArray) {
+    let txFeeStats = evmCallStack_getCurrentTxFeeStats();
+    let mem = bytearray_set256(
+        bytearray_set256(
+            bytearray_new(0),
+            0,
+            txFeeStats.weiPaid.tx,
+        ),
+        32,
+        txFeeStats.weiPaid.calldataUnit,
+    );
+    if evmCallStack_setTopFrameMemory(mem) {
+        evmOp_return(0, 64);
+    } else {
+        evmOp_revert_knownPc(60, 0, 0);
+    }
+}

@@ -67,6 +67,7 @@ use std::stack::stack_push;
 use std::stack::stack_pop;
 use std::stack::stack_discardDeepestItems;
 
+use gasAccounting::TxFeeStats;
 use gasAccounting::gasAccounting_startTxCharges;
 use gasAccounting::gasAccounting_endTxCharges;
 use gasAccounting::gasAccounting_pauseTxCharges;
@@ -184,6 +185,10 @@ public view write func setRetryBufferInCurrentContext(rbuf: RetryBuffer) {
             accountStore_setRetryBuffer(safeGetGlobalAccountStore(), rbuf)
         );
     }
+}
+
+public view func evmCallStack_getCurrentTxFeeStats() -> TxFeeStats {
+    globalCurrentTxRequest.feeStats
 }
 
 public view func evmCallStack_isEmpty() -> bool {
