@@ -153,7 +153,7 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
         || ((opcode >= 0x5c) && (opcode <= 0x5f)) // invalid
         || ((opcode >= 0xa5) && (opcode <= 0xef)) // invalid
         || (opcode == 0xf3)  // RETURN
-        || (opcode >= 0xf6) && (opcode <= 0xf9)  // invalid
+        || ((opcode >= 0xf6) && (opcode <= 0xf9)) // invalid
         || (opcode == 0xfb)  // invalid
         || (opcode == 0xfc)  // invalid
         || (opcode == 0xfd)  // REVERT
