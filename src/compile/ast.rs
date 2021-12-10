@@ -829,9 +829,9 @@ impl Type {
                 Value::from(0), // set size to 0
             ]),
             Type::Array(t) => {
-                let fixed = Type::FixedArray(t.clone(), 1).default_value(type_tree);
+                let fixed = Type::FixedArray(t.clone(), 0).default_value(type_tree);
                 Value::new_tuple(vec![
-                    Value::from(1), // size
+                    Value::from(0), // size
                     Value::from(1), // topstep
                     fixed,          // array.mini builtin_arrayNew() unsafe casts this
                 ])
@@ -844,11 +844,7 @@ impl Type {
                         chunk = 8 * chunk;
                         base = Value::new_tuple(vec![base; 8]);
                     }
-                    Value::new_tuple(vec![
-                        Value::from(size),  // size
-                        Value::from(chunk), // topstep
-                        Value::new_tuple(vec![base; 8]),
-                    ])
+                    Value::new_tuple(vec![base; 8])
                 }
                 emulated_builtin(*size, t.default_value(type_tree))
             }
