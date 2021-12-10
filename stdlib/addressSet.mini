@@ -4,7 +4,13 @@
 
 // This implements a set-of-addresses data structure.
 
+use core::kvs::Kvs;
+use core::kvs::builtin_kvsForall;
+
 use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_set256;
 
 use std::storageMap::StorageMap;
 use std::storageMap::storageMap_new;
@@ -17,54 +23,147 @@ use std::storageMap::storageMap_serializeListOfNonzeros;
 type SetOfAddresses = struct {
     contents: StorageMap,
     inverted: bool,        // if true, then membership is inverted (an item is in the set iff it's NOT in contents)
-}
+};
 
 public func setOfAddresses_emptySet() -> SetOfAddresses {
-    return struct {
+    struct {
         contents: storageMap_new(),
         inverted: false,
-    };
+    }
 }
 
 public func setOfAddresses_all() -> SetOfAddresses {
-    return struct {
+    struct {
         contents: storageMap_new(),
         inverted: true
-    };
+    }
 }
 
 public func setOfAddresses_isEmpty(sa: SetOfAddresses) -> bool {
-    return (! sa.inverted) && (storageMap_size(sa.contents) == 0);
+    (! sa.inverted) && (storageMap_size(sa.contents) == 0)
 }
 
 public func setOfAddresses_isAll(sa: SetOfAddresses) -> bool {
-    return sa.inverted && (storageMap_size(sa.contents) == 0);
+    sa.inverted && (storageMap_size(sa.contents) == 0)
 }
 
 public func setOfAddresses_add(sa: SetOfAddresses, addr: address) -> SetOfAddresses {
-    return sa with {
-        contents: storageMap_set(sa.contents, uint(addr), xif (sa.inverted) { 0 } else { 1 })
-    };
+    sa with {
+        contents: storageMap_set(sa.contents, uint(addr), if sa.inverted { 0 } else { 1 })
+    }
 }
 
 public func setOfAddresses_remove(sa: SetOfAddresses, addr: address) -> SetOfAddresses {
-    return sa with {
-        contents: storageMap_set(sa.contents, uint(addr), xif (sa.inverted) { 1 } else { 0 })
-    };
+    sa with {
+        contents: storageMap_set(sa.contents, uint(addr), if sa.inverted { 1 } else { 0 })
+    }
 }
 
 public func setOfAddresses_contains(sa: SetOfAddresses, addr: address) -> bool {
-    return xif (storageMap_get(sa.contents, uint(addr)) == 0) {
+    if storageMap_get(sa.contents, uint(addr)) == 0 {
         sa.inverted
     } else {
         ! sa.inverted
-    };
+    }
 }
 
 public func setOfAddresses_serialize(sa: SetOfAddresses) -> option<ByteArray> {
-    return xif (sa.inverted) {
-        None<ByteArray>
+    if sa.inverted {
+        None
     } else {
         Some(storageMap_serializeListOfNonzeros(sa.contents))
-    };
+    }
 }
+
+
+type AddressPairSet = struct {
+    contents: map<(uint, uint), bool>,
+};
+
+public func addressPairSet_new() -> AddressPairSet {
+    struct { contents: newmap<(uint, uint), bool> }
+}
+
+public func addressPairSet_set(
+    aps: AddressPairSet,
+    first: option<address>,
+    second: option<address>,
+    newValue: bool,
+) -> AddressPairSet {
+    let addr1 = if let Some(a1) = first {
+        uint(a1)
+    } else {
+        const::WildcardForAddress
+    };
+    let addr2 = if let Some(a2) = second {
+        uint(a2)
+    } else {
+        const::WildcardForAddress
+    };
+
+    //assert(((addr1 != const::WildcardForAddress) || (addr2 != const::WildcardForAddress), ()));
+
+    aps with {
+        contents: aps.contents with { [(addr1, addr2)] = newValue }
+    }
+}
+
+public func addressPairSet_lookup(aps: AddressPairSet, addr1: address, addr2: address) -> bool {
+    let cont = aps.contents;
+    return (cont[(uint(addr1), const::WildcardForAddress)] == Some(true))
+        || (cont[(const::WildcardForAddress, uint(addr2))] == Some(true))
+        || (cont[(uint(addr1), uint(addr2))] == Some(true));
+}
+
+public func addressPairSet_lookup_options(
+    aps: AddressPairSet,
+    addr1: option<address>,
+    addr2: option<address>,
+) -> bool {
+    addressPairSet_lookup(
+        aps,
+        if let Some(a1) = addr1 { a1 } else { address(const::WildcardForAddress) },
+        if let Some(a2) = addr2 { a2 } else { address(const::WildcardForAddress) },
+    )
+}
+
+public func addressPairSet_lookup_strict(   // look for specific match (i.e., specific addr doesn't match wildcard)
+    aps: AddressPairSet,
+    addr1: option<address>,
+    addr2: option<address>,
+) -> bool {
+    aps.contents[
+        (
+            if let Some(a1) = addr1 { uint(a1) } else { const::WildcardForAddress },
+            if let Some(a2) = addr2 { uint(a2) } else { const::WildcardForAddress },
+        )
+    ] == Some(true)
+}
+
+public func addressPairSet_serialize(aps: AddressPairSet) -> ByteArray {
+    let rawResult = builtin_kvsForall(
+        unsafecast<Kvs>(aps.contents),
+        unsafecast<func(any, any, any) -> any>(apss_closure),
+        bytearray_new(0),
+    );
+    unsafecast<ByteArray>(rawResult)
+}
+
+func apss_closure(key:(uint, uint), value: uint, state: ByteArray) -> ByteArray {
+    if value == 0 {
+        state
+    } else {
+        let sz = bytearray_size(state);
+        bytearray_set256(
+            bytearray_set256(state, sz, key.0),
+            sz+32,
+            key.1
+        )
+    }
+}
+
+
+
+
+
+

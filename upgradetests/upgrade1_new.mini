@@ -2,18 +2,18 @@ type OldGlobals = struct {
     global1: uint,
     global2: option<int>,
     jump_table: any,
-}
+};
 
 type NewGlobals = struct {
     newGlobal1: option<int>,
     newGlobal2: uint,
     jump_table: any,
-}
+};
 
 var newGlobal1: option<int>;
 var newGlobal2: uint;
 
-impure func main(old: OldGlobals) -> uint{
+view write func main(old: OldGlobals) -> uint{
     asm(struct{
         newGlobal1: None<int>,
         newGlobal2: 0,

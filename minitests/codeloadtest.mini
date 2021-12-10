@@ -2,33 +2,34 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-impure func main() {
-	asm(tests(),) { log };
+
+view write func main() {
+    asm(tests()) { log };
 }
 
-impure func tests() -> uint {
-	let codept = loadFunc1();
+view write func tests() -> uint {
+    let codept = loadFunc1();
     let res = unsafecast<func() -> uint>(codept)();
-    if (res != 3) {
-        return 1;
+    if res != 3 {
+        1
+    } else {
+        0
     }
-
-    return 0;
 }
 
-impure func loadFunc1() -> func() {
+view write func loadFunc1() -> func() {
     let ret = asm() func() { errcodept };
 
     ret = addInsn(0x34, ret);    // jump
     ret = addInsnImm(0x43, 3, ret);  // [3] swap1
 
-    return ret;
+    ret
 }
 
-impure func addInsn(op: uint, codept: func()) -> func() {
-    return asm(op, codept) func() { pushinsn };
+view write func addInsn(op: uint, codept: func()) -> func() {
+    asm(op, codept) func() { pushinsn }
 }
 
-impure func addInsnImm(op: uint, imm: any, codept: func()) -> func() {
-    return asm(op, imm, codept) func() { pushinsnimm };
+view write func addInsnImm(op: uint, imm: any, codept: func()) -> func() {
+    asm(op, imm, codept) func() { pushinsnimm }
 }

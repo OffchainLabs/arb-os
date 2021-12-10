@@ -48,7 +48,7 @@ type PerBlockReceiptData = struct {
     totalGasUsed: uint,
     numTx: uint,
     numEvmLogs: uint,
-}
+};
 
 type OutputStatistics = struct {
     totalGasUsed: uint,
@@ -56,9 +56,9 @@ type OutputStatistics = struct {
     numEvmLogs: uint,
     numLogs: uint,
     numSends: uint,
-}
+};
 
-public impure func output_init() {
+public write func output_init() {
     logsQueuedForEndOfBlock = queue_new();
     outbox_init();
 }
@@ -93,8 +93,8 @@ var globalBlockReceiptData: struct {
 
 var logsQueuedForEndOfBlock: Queue;
 
-public impure func outputStats_endOfBlock(arbBlockNum: uint, ethBlockNum: uint, timestamp: uint) {
-    if ((inbox_currentTimestamp() >= globalBlockReceiptData.nextSendTimestamp) && !outbox_isEmpty() ){
+public view write func outputStats_endOfBlock(arbBlockNum: uint, ethBlockNum: uint, timestamp: uint) {
+    if (inbox_currentTimestamp() >= globalBlockReceiptData.nextSendTimestamp) && !outbox_isEmpty() {
         outbox_send();
         set globalBlockReceiptData.nextSendTimestamp = inbox_currentTimestamp() + chainParams_getSecondsPerSend();
     }
@@ -109,7 +109,7 @@ public impure func outputStats_endOfBlock(arbBlockNum: uint, ethBlockNum: uint, 
     set globalBlockReceiptData.statsAllTime = updatedStats;
 
     let q = logsQueuedForEndOfBlock;
-    while( ! queue_isEmpty(q) ){
+    while ! queue_isEmpty(q) {
         if let Some(res) = queue_get(q) {
             let (*q, logItem) = res;
             asm(logItem) { log };
@@ -142,7 +142,7 @@ public impure func outputStats_endOfBlock(arbBlockNum: uint, ethBlockNum: uint, 
     };
 }
 
-impure func outputStats_addTxLog(gasUsed: uint, numEvmLogs: uint) {
+view write func outputStats_addTxLog(gasUsed: uint, numEvmLogs: uint) {
     let stats = globalBlockReceiptData.statsThisBlock;
 
     set stats.numTx = 1 + stats.numTx;
@@ -153,15 +153,15 @@ impure func outputStats_addTxLog(gasUsed: uint, numEvmLogs: uint) {
     set globalBlockReceiptData.statsThisBlock = stats;
 }
 
-impure func outputStats_addNonTxLog() {
+view write func outputStats_addNonTxLog() {
     set globalBlockReceiptData.statsThisBlock.numLogs = 1 + globalBlockReceiptData.statsThisBlock.numLogs;
 }
 
-impure func outputStats_addSend() {
+view write func outputStats_addSend() {
     set globalBlockReceiptData.statsThisBlock.numSends = 1 + globalBlockReceiptData.statsThisBlock.numSends;
 }
 
-public impure func txReceipts_init() {  // will be called at beginning of main()
+public write func txReceipts_init() {  // will be called at beginning of main()
     globalBlockReceiptData = struct {
         data: struct {
             totalGasUsed: 0,
@@ -175,7 +175,7 @@ public impure func txReceipts_init() {  // will be called at beginning of main()
     };
 }
 
-impure func update_txReceiptsForBlock(
+view write func update_txReceiptsForBlock(
     gasUsed: uint,
     numEvmLogs: uint
 ) -> PerBlockReceiptData {
@@ -192,7 +192,7 @@ impure func update_txReceiptsForBlock(
     return ret;
 }
 
-public impure func emitTxReceipt(
+public view write func emitTxReceipt(
     l1message: IncomingRequest,
     resultCode: uint,
     maybeReturnData: option<ByteArray>,
@@ -200,10 +200,11 @@ public impure func emitTxReceipt(
     gasUsage: option<GasUsage>,
     feeStats: TxFeeStats,
     emitTracingInfo: bool,
+    originalSender: address,
 ) {
     arbStatistics_addTxReceipt();
 
-    let realGasUsage = xif let Some(gu) = gasUsage {
+    let realGasUsage = if let Some(gu) = gasUsage {
         gu
     } else {
         struct {
@@ -212,7 +213,7 @@ public impure func emitTxReceipt(
         }
     };
 
-    let (evmLogs, numEvmLogs) = xif let Some(el) = maybeEvmLogs {
+    let (evmLogs, numEvmLogs) = if let Some(el) = maybeEvmLogs {
         (el, evmlogs_numLogs(el))
     } else {
         (evmlogs_empty(), 0)
@@ -220,7 +221,7 @@ public impure func emitTxReceipt(
 
     outputStats_addTxLog(realGasUsage.gasUsed, numEvmLogs);
 
-    let returnData = xif let Some(rd) = maybeReturnData {
+    let returnData = if let Some(rd) = maybeReturnData {
         rd
     } else {
         bytearray_new(0)
@@ -232,7 +233,7 @@ public impure func emitTxReceipt(
         evmLogs: evmLogs,
     };
 
-    if (emitTracingInfo) {
+    if emitTracingInfo {
         evmTracer_emitAndClear();
     }
 
@@ -248,7 +249,8 @@ public impure func emitTxReceipt(
             numEvmLogs,
         ),
         feeStats,
-    )) { log };
+        originalSender,
+    ),) { log };
 }
 
 // The globalOutbox queues a sequence of outgoing messages that ArbOS wants to emit as sends.
@@ -262,7 +264,7 @@ var globalOutbox: struct {
     evmTracer: EvmTracer,
 };
 
-impure func outbox_init() {
+write func outbox_init() {
     globalOutbox = struct {
         batch: merkleTreeBuilder_new(),
         batchNumber: 0,
@@ -271,19 +273,19 @@ impure func outbox_init() {
     };
 }
 
-public impure func outbox_getEvmTracer() -> EvmTracer {
+public view func outbox_getEvmTracer() -> EvmTracer {
     return globalOutbox.evmTracer;
 }
 
-public impure func outbox_setEvmTracer(tracer: EvmTracer) {
+public view write func outbox_setEvmTracer(tracer: EvmTracer) {
     set globalOutbox.evmTracer = tracer;
 }
 
-impure func outbox_isEmpty() -> bool {
+view func outbox_isEmpty() -> bool {
     return globalOutbox.numInBatch == 0;
 }
 
-public impure func outbox_append(item: ByteArray) {
+public view write func outbox_append(item: ByteArray) {
     let batchNumber = globalOutbox.batchNumber;
     let numInBatch = globalOutbox.numInBatch;
 
@@ -298,7 +300,7 @@ public impure func outbox_append(item: ByteArray) {
     outputStats_addNonTxLog();
 }
 
-impure func outbox_send() {  // emit a send to summarize the current batch, then get ready for the next batch
+view write func outbox_send() {  // emit a send to summarize the current batch, then get ready for the next batch
     let (tree, rootHash) = merkleTreeBuilder_finish(globalOutbox.batch);
 
     // queue a log that includes the whole batch
@@ -341,28 +343,28 @@ impure func outbox_send() {  // emit a send to summarize the current batch, then
     };
 }
 
-public impure func queueMessageForSend(msg: ByteArray) {
+public view write func queueMessageForSend(msg: ByteArray) {
     evmCallStack_queueMessage(msg);
 }
 
-public impure func sendQueuedMessages(queue: Queue, evmLogs: EvmLogs) -> EvmLogs {
+public view write func sendQueuedMessages(queue: Queue, evmLogs: EvmLogs) -> EvmLogs {
     let sendTxIndexQ = queue_new();
-    return xloop {
+    loop {
         if let Some(res) = queue_get(queue) {
             let (*queue, rawMsg) = res;
             let msg = unsafecast<ByteArray>(rawMsg);
-            if (bytearray_getByte(unsafecast<ByteArray>(msg), 0) == const::SendType_sendTxToL1) {
+            if bytearray_getByte(unsafecast<ByteArray>(msg), 0) == const::SendType_sendTxToL1 {
                 sendTxIndexQ = queue_put(sendTxIndexQ, globalOutbox.numInBatch);
             }
             outbox_append(msg);
         } else {
-            return xif (queue_isEmpty(sendTxIndexQ)) {
+            return if queue_isEmpty(sendTxIndexQ) {
                 evmLogs
             } else {
                 evmlogs_forall(evmLogs, updateEvmLogForSendToL1, sendTxIndexQ).0
             };
         }
-    };
+    }
 }
 
 type LogWith4Topics = struct {  // the structure that ArbOS uses to represent (and emit) an EVM log with 4 topics
@@ -375,9 +377,9 @@ type LogWith4Topics = struct {  // the structure that ArbOS uses to represent (a
     topic1: uint,
     topic2: uint,
     topic3: uint,
-}
+};
 
-impure func updateEvmLogForSendToL1(rawLog: any, state: any) -> (any, any) {
+view func updateEvmLogForSendToL1(rawLog: any, state: any) -> (any, any) {
     // This is designed to be used by evmlogs_forall. When used by evmlogs_forall in its pass through
     //      the current set of logs, this morphs EVM logs with topic[0] == const::EVMLogTopicPlaceHolderForL2ToL1Send
     //      into proper EVM log items with batch-related fields filled in.
@@ -385,9 +387,11 @@ impure func updateEvmLogForSendToL1(rawLog: any, state: any) -> (any, any) {
     // Cast the log item to a struct that assumes 4 topics. The topics might not exist,
     //      but that's OK because we won't try to access them until after we have verified that they exist.
     let log = unsafecast<LogWith4Topics>(rawLog);
-    return xif ((asm(log) uint { tlen } == 6) && (log.topic0 == const::eventTopic_ArbSys_L2ToL1Transaction)) {
+    if (asm(log) uint { tlen } == 6)
+                && (log.topic0 == const::eventTopic_ArbSys_L2ToL1Transaction)
+                && (log.sender == address(const::Address_ArbSys)) {
         // Now we know that the log has 4 topics.
-        xif let Some(res) = queue_get(unsafecast<Queue>(state)) {
+        if let Some(res) = queue_get(unsafecast<Queue>(state)) {
             let (q, item) = res;
             set log.topic3 = globalOutbox.batchNumber;
             set log.data.buf = setbuffer256(log.data.buf, 32, unsafecast<uint>(item));
@@ -398,7 +402,7 @@ impure func updateEvmLogForSendToL1(rawLog: any, state: any) -> (any, any) {
             (log, state)
         }
     } else {
-        // The log doesn't have 4 topics, so we don't need to do anything to it.
+        // The log isn't an authorized L2-to-L1 call, so we shouldn't do anything to it.
         (rawLog, state)
-    };
+    }
 }

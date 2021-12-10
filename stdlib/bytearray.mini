@@ -5,17 +5,17 @@
 const MaxByteArraySize = 0x10000000000000000;
 
 
-type OpClosureFunc = func(any, uint) -> (uint, any)
+type OpClosureFunc = func(any, uint) -> (uint, any);
 type opClosure = struct {
-	f: OpClosureFunc,
-	val: any,
-} // usage: (newSlotContents, returnValue) = closure.f(closure.val, oldSlotContents)
+    f: OpClosureFunc,
+    val: any,
+}; // usage: (newSlotContents, returnValue) = closure.f(closure.val, oldSlotContents)
 
 type ByteArray = struct { 
     size: uint,
     sliceOffset: uint,
     contents: buffer,
-}
+};
 
 // bytearray_new makes a new ByteArray
 // it will initially have size zero,
@@ -23,62 +23,62 @@ type ByteArray = struct {
 //        size will expand to fit all writes (but max size is 2**64 bytes),
 //        and the capacity arg is a hint about how big it will get
 public func bytearray_new(_ignored: uint) -> ByteArray {
-    return struct {
+    struct {
         size: 0,
         sliceOffset: 0,
         contents: setbuffer256(newbuffer(), 32, 0),   // ensure that contents size is always >= 64
-    };
+    }
 }
 
 
 public func bytearray_fromSizeAndBuffer(size: uint, buf: buffer) -> ByteArray {
-    return struct {
+    struct {
         size: size,
         sliceOffset: 0,
         contents: buf,
-    };
+    }
 }
 
 public func bytearray_toSizeAndBuffer(ba: ByteArray) -> (uint, buffer) {
     let size = ba.size;
     let buf = newbuffer();  // make a fresh buffer, in case ba is a slice into a larger buffer
     let i = 0;
-    while(i+32 <= size) {
+    while i+32 <= size {
         buf = setbuffer256(buf, i, bytearray_get256(ba, i));
         i = i+32;
     }
-    while(i < size) {
+    while i < size {
         buf = setbuffer8(buf, i, bytearray_getByte(ba, i));
         i = i+1;
     }
-    return (size, buf);
+    (size, buf)
 }
 
 public func bytearray_getCalldataUnits(ba: ByteArray) -> uint {
-    return buffer_getCalldataUnits(ba.contents, ba.sliceOffset, ba.size);
+    buffer_getCalldataUnits(ba.contents, ba.sliceOffset, ba.size)
 }
 
 type MarshalledBytes = struct {
     nbytes: uint,
     contents: MarshalledBytesCell,
-}
+};
 
 type MarshalledBytesCell = struct {
     first: uint,
     rest: MarshalledBytesCell,
-}
+};
 
 public func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint {
     let nbytes = mb.nbytes;
     let contents = mb.contents;
-    if (nbytes < 1) {
+    if nbytes < 1 {
         return 0;
     }
-    while (nbytes > 32) {
+    while nbytes > 32 {
         contents = contents.rest;
         nbytes = nbytes-32;
     }
-    return contents.first >> (256-8);
+    contents.first >> (256-8)
 }
 
 public func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32 {
@@ -87,19 +87,19 @@ public func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32 {
 
     let ret = bytes32(mb.nbytes);
     let x = mb.contents;
-    while(cast<any>(x) != ()) {
+    while x != unsafecast<MarshalledBytesCell>(()) {
         let cell = x;
         ret = hash(ret, bytes32(cell.first));
         x = cell.rest;
     }
-    return ret;
+    ret
 }
 
 // bytearray_unmarshalBytes unmarshals a bytestack object that we got from L1
 //        returns a new bytearray holding the unmarshaled bytes, or None if unmarshalled array would be too large
 public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> option<ByteArray> {
     let nbytes = inBytes.nbytes;
-    if (nbytes > const::MaxByteArraySize) {
+    if nbytes > const::MaxByteArraySize {
         return None;
     }
     let nwords = (nbytes+31)/32;
@@ -108,17 +108,17 @@ public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> option<ByteArr
     // We'll also build 8-tuples of 32-byte words, and insert each tuple into the ExpIntArr with a single call.
     let eia = newbuffer();
 
-    while (nwords > 0) {
+    while nwords > 0 {
         nwords = nwords-1;
         eia = setbuffer256(eia, nwords*32, words.first);
         words = words.rest;
     }
 
-    return Some(struct {
+    Some(struct {
         size: inBytes.nbytes,
         sliceOffset: 0,
         contents: eia,
-    });
+    })
 }
 
 public func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes {
@@ -126,51 +126,51 @@ public func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes {
     let nwords = (nbytes+31)/32;
     let words = unsafecast<MarshalledBytesCell>(());
     let i = 0;
-    while (i < nwords) {
+    while i < nwords {
         words = struct {
             first: bytearray_get256(ba, 32*i),
             rest: words,
         };
         i = i+1;
     }
-    return struct {
+    struct {
         nbytes: nbytes,
         contents: words,
-    };
+    }
 }
 
 // bytearray_size gets the size of a ByteArray
 public func bytearray_size(ba: ByteArray) -> uint {
-    return ba.size;
+    ba.size
 }
 
 public func bytearray_buffer(ba: ByteArray) -> buffer {
-    return ba.contents;
+    ba.contents
 }
 
 public func bytearray_slice(ba: ByteArray) -> uint {
-    return ba.sliceOffset;
+    ba.sliceOffset
 }
 
 // bytearray_getByte reads one byte from a ByteArray
 public func bytearray_getByte(ba: ByteArray, offset: uint) -> uint {
-    if (offset >= ba.size) {
+    if offset >= ba.size {
         return 0;
     }
     offset = offset + ba.sliceOffset;
     let res = getbuffer8(ba.contents, offset);
-    return res;
+    res
 }
 
 // bytearray_get64 reads a chunk of 8 bytes from a ByteArray
 public func bytearray_get64(ba: ByteArray, offset: uint) -> uint {
-    if (offset >= ba.size) {
+    if offset >= ba.size {
         return 0;
     }
-    if (offset+8 > ba.size) {
+    if offset+8 > ba.size {
         let bytesToRead = ba.size-offset;
         offset = offset + ba.sliceOffset;
-        if (offset + bytesToRead >= 8) {
+        if offset + bytesToRead >= 8 {
             let mask = (1 << (8*bytesToRead)) - 1;
             return (mask & getbuffer64(ba.contents, offset+bytesToRead-8)) << (8*(8-bytesToRead));
         } else {
@@ -179,17 +179,17 @@ public func bytearray_get64(ba: ByteArray, offset: uint) -> uint {
     }
     offset = offset + ba.sliceOffset;
     let res = getbuffer64(ba.contents, offset);
-    return res;
+    res
 }
 
 // bytearray_get256 reads a chunk of 32 bytes from a ByteArray
 public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
-    return xif (offset >= ba.size) {
+    if offset >= ba.size {
         0
-    } elseif (offset+32 > ba.size) {
+    } else if offset+32 > ba.size {
         let bytesToRead = ba.size-offset;
         offset = offset + ba.sliceOffset;
-        xif (offset + bytesToRead >= 32) {
+        if offset + bytesToRead >= 32 {
             let mask = (1 << (8*bytesToRead)) - 1;
             (mask & getbuffer256(ba.contents, offset+bytesToRead-32)) << (8*(32-bytesToRead))
         } else {
@@ -198,102 +198,102 @@ public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
     } else {
         offset = offset + ba.sliceOffset;
         getbuffer256(ba.contents, offset)
-    };
+    }
 }
 
 func make(cont: ByteArray) -> ByteArray {
-    return struct {
+    struct {
         size: cont.size + cont.sliceOffset + 32,
         sliceOffset: 0,
         contents: cont.contents,
-    };
+    }
 }
 
 public func bytearray_wrap(cont: buffer, size: uint) -> ByteArray {
-    return struct {
+    struct {
         size: size,
         sliceOffset: 0,
         contents: cont,
-    };
+    }
 }
 
 func zero_fill_region(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray {
-    return xif(nbytes < ba.size) {
+    if nbytes < ba.size {
         // copy zeroes into the buffer
         bytearray_copy(bytearray_new(0), 0, ba, offset, 32*((nbytes+31)/32))
     } else {
         // copy into a clean buffer
         bytearray_copy(ba, 0, bytearray_new(0), 0, ba.size)
-    };
+    }
 }
 
 // bytearray_setbyte writes one byte to a ByteArray, returns the resulting ByteArray
 public func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
-    if (offset >= const::MaxByteArraySize) {
+    if offset >= const::MaxByteArraySize {
         return ba;    // ignore out-of-bounds write
     }
-    if (offset + ba.sliceOffset >= const::MaxByteArraySize) {
+    if offset + ba.sliceOffset >= const::MaxByteArraySize {
         ba = bytearray_copy(ba, 0, bytearray_new(0), 0, ba.size);
-        if (offset+1 > ba.size) {
+        if offset+1 > ba.size {
             ba = ba with { size: offset+1 };
         }
     } else {
-        if (offset > ba.size) {
+        if offset > ba.size {
             ba = zero_fill_region(ba, ba.size, offset-ba.size);
         }
-        if (offset+1 > ba.size) {
+        if offset+1 > ba.size {
             ba = ba with { size: offset+1 };
         }
         offset = offset + ba.sliceOffset;
     }
-    return ba with { contents: setbuffer8(ba.contents, offset, value) };
+    ba with { contents: setbuffer8(ba.contents, offset, value) }
 }
 
 // bytearray_set64 writes an 8-byte chunk to a ByteArray, returning the resulting ByteArray
 public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
-    if (offset >= const::MaxByteArraySize - 7) {
+    if offset >= const::MaxByteArraySize - 7 {
         return ba;    // ignore out-of-bounds write
     }
-    if (offset + ba.sliceOffset >= const::MaxByteArraySize - 7) {
+    if offset + ba.sliceOffset >= const::MaxByteArraySize - 7 {
         ba = bytearray_copy(ba, 0, bytearray_new(0), 0, ba.size);
-        if (offset+8 > ba.size) {
+        if offset+8 > ba.size {
             ba = ba with { size: offset+8 };
         }
     } else {
-        if (offset > ba.size) {
+        if offset > ba.size {
             ba = zero_fill_region(ba, ba.size, offset-ba.size);
         }
 
-        if (offset+8 > ba.size) {
+        if offset+8 > ba.size {
             ba = ba with { size: offset+8 };
         }
         offset = offset + ba.sliceOffset;
     }
 
-    return ba with { contents: setbuffer64(ba.contents, offset, value) };
+    ba with { contents: setbuffer64(ba.contents, offset, value) }
 }
 
 // bytearray_set256 writes a 32-byte chunk to a ByteArray, returning the resulting ByteArray
 public func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
-    if (offset >= const::MaxByteArraySize - 31) {
+    if offset >= const::MaxByteArraySize - 31 {
         return ba;    // ignore out-of-bounds write
     }
-    if (offset + ba.sliceOffset >= const::MaxByteArraySize - 31) {
+    if offset + ba.sliceOffset >= const::MaxByteArraySize - 31 {
         ba = bytearray_copy(ba, 0, bytearray_new(0), 0, ba.size);
-        if (offset+32 > ba.size) {
+        if offset+32 > ba.size {
             ba = ba with { size: offset+32 };
         }
     } else {
-        if (offset > ba.size) {
+        if offset > ba.size {
             ba = zero_fill_region(ba, ba.size, offset-ba.size);
         }
-        if (offset+32 > ba.size) {
+        if offset+32 > ba.size {
             ba = ba with { size: offset+32 };
         }
         offset = offset + ba.sliceOffset;
     }
 
-    return ba with { contents: setbuffer256(ba.contents, offset, value) };
+    ba with { contents: setbuffer256(ba.contents, offset, value) }
 }
 
 // bytearray_copy copies bytes from one ByteArray to another, 
@@ -305,37 +305,40 @@ public func bytearray_copy(
     toOffset: uint,
     nbytes: uint,
 ) -> ByteArray {
-    if (fromOffset + nbytes > from.size) {
+    if nbytes == 0 {
+        return to;
+    }
+    if fromOffset + nbytes > from.size {
         from = zero_fill_region(from, from.size, fromOffset+nbytes-from.size);
     }
-    if ((fromOffset >= const::MaxByteArraySize)
+    if (fromOffset >= const::MaxByteArraySize)
         || (toOffset >= const::MaxByteArraySize)
         || (nbytes > const::MaxByteArraySize)
         || (fromOffset + nbytes > const::MaxByteArraySize)
-        || (toOffset + nbytes > const::MaxByteArraySize) ) {
+        || (toOffset + nbytes > const::MaxByteArraySize) {
         return to;  // ignore out-of-bounds parameters
     }
 
-    if (to.size + to.sliceOffset + nbytes > const::MaxByteArraySize) {
+    if to.size + to.sliceOffset + nbytes > const::MaxByteArraySize {
         to = bytearray_copy(to, 0, bytearray_new(0), 0, to.size);
-    } elseif (toOffset > to.size) {
+    } else if toOffset > to.size {
         to = zero_fill_region(to, to.size, toOffset-to.size);
     }
-    if (to.size < toOffset + nbytes) {
+    if to.size < toOffset + nbytes {
         to = to with { size: toOffset + nbytes };
     }
     fromOffset = fromOffset + from.sliceOffset;
     toOffset = toOffset + to.sliceOffset;
     let toContents = to.contents;
     let fromContents = from.contents;
-    while (nbytes >= 32) {
+    while nbytes >= 32 {
         let val = getbuffer256(fromContents, fromOffset);
         toContents = setbuffer256(toContents, toOffset, val);
         fromOffset = 32+fromOffset;
         toOffset = 32+toOffset;
         nbytes = nbytes-32;
     }
-    if (toOffset < (const::MaxByteArraySize-32)) {
+    if toOffset < (const::MaxByteArraySize-32) {
         let val = getbuffer256(fromContents, fromOffset);
         let mask = (~0) - ((~0) >> (8*nbytes));
         toContents = setbuffer256(
@@ -344,7 +347,7 @@ public func bytearray_copy(
             (mask & val) | ((~mask) & getbuffer256(toContents, toOffset))
         );
     } else {
-        while (nbytes > 0) {
+        while nbytes > 0 {
             let val = getbuffer8(fromContents, fromOffset);
             toContents = setbuffer8(toContents, toOffset, val);
             fromOffset = 1+fromOffset;
@@ -352,33 +355,33 @@ public func bytearray_copy(
             nbytes = nbytes-1;
         }
     }
-    return to with { contents: toContents };
+    to with { contents: toContents }
 }
 
 public func bytearray_extract(from: ByteArray, offset: uint, nbytes: uint) -> ByteArray {
-    if (offset >= const::MaxByteArraySize) {
+    if offset >= const::MaxByteArraySize {
         return bytearray_new(0);
     }
-    if ((nbytes > const::MaxByteArraySize) || (offset+nbytes > const::MaxByteArraySize)) {
+    if (nbytes == 0) || (nbytes > const::MaxByteArraySize) || (offset+nbytes > const::MaxByteArraySize) {
         return bytearray_new(0);
     }
     
-    return struct { size: nbytes, sliceOffset: offset + from.sliceOffset, contents: from.contents };
+    struct { size: nbytes, sliceOffset: offset + from.sliceOffset, contents: from.contents }
 }
 
 
 public func bytearray_wrap_slice(cont: buffer, offset: uint, size: uint) -> ByteArray {
-    return struct {
+    struct {
         size: size,
         sliceOffset: offset,
         contents: cont,
-    };
+    }
 }
 
 public func buffer_getCalldataUnits(buf: buffer, offset: uint, nbytes: uint) -> uint {
     let nonzeroes = 0;
     let i = 0;
-    while (i+32 <= nbytes) {
+    while i+32 <= nbytes {
         let x = getbuffer256(buf, offset+i);
 
         // now we want to count the non-zero bytes in x
@@ -402,12 +405,11 @@ public func buffer_getCalldataUnits(buf: buffer, offset: uint, nbytes: uint) -> 
 
         i = i+32;
     }
-    while (i < nbytes) {
-        if (getbuffer8(buf, offset+i) != 0) {
+    while i < nbytes {
+        if getbuffer8(buf, offset+i) != 0 {
             nonzeroes = nonzeroes + 1;
         }
         i = i+1;
     }
-    return 4*nbytes + 12*nonzeroes;
+    4*nbytes + 12*nonzeroes
 }
-

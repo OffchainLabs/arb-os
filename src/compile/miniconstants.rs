@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved
  */
 
-//!Creates a fixed list of globally accessible constants.
+//! Creates a fixed list of globally accessible constants.
 
 use crate::compile::CompileError;
 use crate::evm::{contract_path, AbiForContract};
@@ -25,7 +25,7 @@ pub struct ConstantsFile {
     parameters_hex: BTreeMap<String, String>,
 }
 
-///Creates a fixed list of globally accessible constants.
+/// Creates a fixed list of globally accessible constants.
 pub fn init_constant_table(
     constants_path: Option<&Path>,
 ) -> Result<HashMap<String, Uint256>, CompileError> {

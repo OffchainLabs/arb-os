@@ -20,119 +20,119 @@ use std::keccak::hasher_pushN_be;
 use std::keccak::hasher_finish;
 
 
-impure func main() {
+write func main() {
     if let Some(x) = tests() {
-	    asm(x,) { log };
-	} else {
-	    asm(666,) { log };
-	}
+	asm(x) { log };
+    } else {
+	asm(666,) { log };
+    }
 }
 
 func tests() -> option<bytes32> {
-	let ba = bytearray_new(0);
-	let kecEmpty = keccak256(ba, 0, 0);
-    if (kecEmpty != bytes32(0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470)) {
-		return Some(bytes32(1));
-	}
-	if (! hasherMatches(ba)) { return Some(bytes32(101)); }
-    if (! hasherMatchesByBlocks(ba)) { return Some(bytes32(201)); }
+    let ba = bytearray_new(0);
+    let kecEmpty = keccak256(ba, 0, 0);
+    if kecEmpty != bytes32(0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470) {
+	return Some(bytes32(1));
+    }
+    if ! hasherMatches(ba)         { return Some(bytes32(101)); }
+    if ! hasherMatchesByBlocks(ba) { return Some(bytes32(201)); }
 
     ba = bytearray_new(0);
     ba = bytearray_setByte(ba, 0, 0xcc);
     let kecCC = keccak256(ba, 0, 1);
-    if (kecCC != bytes32(0xeead6dbfc7340a56caedc044696a168870549a6a7f6f56961e84a54bd9970b8a)) {
+    if kecCC != bytes32(0xeead6dbfc7340a56caedc044696a168870549a6a7f6f56961e84a54bd9970b8a) {
         return Some(bytes32(2));
     }
-	if (! hasherMatches(ba)) { return Some(bytes32(102)); }
-    if (! hasherMatchesByBlocks(ba)) { return Some(bytes32(202)); }
+    if ! hasherMatches(ba)         { return Some(bytes32(102)); }
+    if ! hasherMatchesByBlocks(ba) { return Some(bytes32(202)); }
 
     ba = bytearray_new(0);
     ba = bytearray_setByte(ba, 0, 0xcc);
     ba = bytearray_setByte(ba, 1, 0xaa);
     let kecCCAA = keccak256(ba, 0, 2);
-    if (kecCCAA != bytes32(0x33f234f4a499894af4036ace8c63b93a0bb7685472d79f3a9808cf95ed7047b4)) {
+    if kecCCAA != bytes32(0x33f234f4a499894af4036ace8c63b93a0bb7685472d79f3a9808cf95ed7047b4) {
         return Some(bytes32(3));
     }
-	if (! hasherMatches(ba)) { return Some(bytes32(103)); }
-    if (! hasherMatchesByBlocks(ba)) { return Some(bytes32(203)); }
+    if ! hasherMatches(ba)         { return Some(bytes32(103)); }
+    if ! hasherMatchesByBlocks(ba) { return Some(bytes32(203)); }
 
     let kec67 = keccak256(setupFromUnmarshal(), 0, 67);
-    if (kec67 != bytes32(0x3dd4c9bc4aa93bb5b8a21a06ecbef5336c378a7b9814a5a3a743406a54a3cc7b)) {
+    if kec67 != bytes32(0x3dd4c9bc4aa93bb5b8a21a06ecbef5336c378a7b9814a5a3a743406a54a3cc7b) {
         return Some(bytes32(4));
     }
-	if (! hasherMatches(setupFromUnmarshal())) { return Some(bytes32(104)); }
-    if (! hasherMatchesByBlocks(ba)) { return Some(bytes32(204)); }
+    if ! hasherMatches(setupFromUnmarshal()) { return Some(bytes32(104)); }
+    if ! hasherMatchesByBlocks(ba)           { return Some(bytes32(204)); }
 
     let kec67 = keccak256(
         bytearray_copy(setupFromUnmarshal(), 0, bytearray_new(0), 13, 67),
         13,
         67
     );
-    if (kec67 != bytes32(0x3dd4c9bc4aa93bb5b8a21a06ecbef5336c378a7b9814a5a3a743406a54a3cc7b)) {
+    if kec67 != bytes32(0x3dd4c9bc4aa93bb5b8a21a06ecbef5336c378a7b9814a5a3a743406a54a3cc7b) {
         return Some(bytes32(5));
     }
 
     let ba = bytearray_new(0);
     let i = 0;
-    while (i < 5) {
+    while i < 5 {
         ba = bytearray_set256(ba, i*32, 0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f);
         i = i+1;
     }
     let kec532 = keccak256(ba, 0, 5*32);
-    if (kec532 != bytes32(0xaa9038072c0559cb6890b2632b172625239a59d6d93c1ef69df62aebfdd2f4e2)) {
+    if kec532 != bytes32(0xaa9038072c0559cb6890b2632b172625239a59d6d93c1ef69df62aebfdd2f4e2) {
         return Some(bytes32(6));
     }
-	if (! hasherMatches(ba)) { return Some(bytes32(106)); }
-    if (! hasherMatchesByBlocks(ba)) { return Some(bytes32(206)); }
+    if ! hasherMatches(ba)         { return Some(bytes32(106)); }
+    if ! hasherMatchesByBlocks(ba) { return Some(bytes32(206)); }
 
-	return Some(bytes32(0));
+    Some(bytes32(0))
 }
 
 func setupFromUnmarshal() -> ByteArray {
-	let marshalledStruct = unsafecast<MarshalledBytes>((
-		67,
-		(
+    let marshalledStruct = unsafecast<MarshalledBytes>((
+	67,
+	(
             0x4041420000000000000000000000000000000000000000000000000000000000,
-			(
-				0x202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f,
-				(
-					0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f,
-					null,
-				),
-			),
+	    (
+		0x202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f,
+		(
+		    0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f,
+		    (),
 		),
-	));
-	return xif let Some(ba) = bytearray_unmarshalBytes(marshalledStruct) {
-	    ba
-	} else {
-	    error
-	};
+	    ),
+	),
+    ));
+    if let Some(ba) = bytearray_unmarshalBytes(marshalledStruct) {
+	ba
+    } else {
+	error
+    }
 }
 
 func hasherMatches(ba: ByteArray) -> bool {
     let hasher = hasher_new();
     let i = 0;
-    while (i < bytearray_size(ba)) {
+    while i < bytearray_size(ba) {
         hasher = hasher_pushByte(hasher, bytearray_getByte(ba, i));
         i = i + 1;
     }
-    return hasher_finish(hasher) == keccak256(ba, 0, bytearray_size(ba));
+    hasher_finish(hasher) == keccak256(ba, 0, bytearray_size(ba))
 }
 
 func hasherMatchesByBlocks(ba: ByteArray) -> bool {
     let hasher = hasher_new();
     let offset = 0;
     let size = bytearray_size(ba);
-    if (size > 27) {
+    if size > 27 {
         // put the hasher into a challenging alignment
         hasher = hasher_pushN_be(hasher, bytearray_get256(ba, offset), 27);
         offset = offset + 27;
     }
-    while (offset+32 < size) {
+    while offset+32 < size {
         hasher = hasher_pushN_be(hasher, bytearray_get256(ba, offset), 32);
         offset = offset + 32;
     }
     hasher = hasher_pushN_be(hasher, bytearray_get256(ba, offset), size-offset);
 
-    return hasher_finish(hasher) == keccak256(ba, 0, bytearray_size(ba));
+    hasher_finish(hasher) == keccak256(ba, 0, bytearray_size(ba))
 }

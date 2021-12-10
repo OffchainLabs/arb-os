@@ -11,14 +11,16 @@ builtin/*.mexe
 upgradetests/*.mexe
 stdlib/*.mao
 stdlib/*.mexe
+stdlib2/*.mexe
 minitests/*.mao
 minitests/*.mexe
+minitests/*/*.mexe
 testlogs/*
 arb_os/contractTemplates.mini
 .idea
 evm-tests/.travis.yml
 evm-test-logs/*
-**.cov
+**.bkp
 **~
 lcov.info
 lcov-mini.info
@@ -33,3 +35,19 @@ arb_os/save_bridge_for_debugging.mini
 # Tooling
 flamegraph.svg
 perf.data
+**.dot
+
+# coverage files
+**.all
+**.cov
+**.partial
+
+# auto-generated files
+.make/
+arb_os/bridge_arbos_versions.mini
+arb_os/arbos-upgrade-base.mexe
+
+# user files
+rachel/
+emily/
+ed/

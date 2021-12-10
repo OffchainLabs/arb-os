@@ -1,0 +1,14 @@
+
+type queue<T> = (T, option<queue<T> >);
+
+write func main() {
+    asm(tests().1) { log };
+}
+
+func tests() -> string {
+    return "";
+}
+
+func _example<T>() -> queue<T> {
+    return unsafecast<queue<T> >(0);
+}
