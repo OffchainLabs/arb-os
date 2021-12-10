@@ -5,33 +5,33 @@
 type RandomGenerator = bytes32;
 
 public func random_new(seed: bytes32) -> RandomGenerator {
-    return seed;
+    seed
 }
 
 public func random_refresh_seed(rand: RandomGenerator, refresh: bytes32) -> RandomGenerator {
-    return hash(rand, refresh);
+    hash(rand, refresh)
 }
 
 public func random_next(rand: RandomGenerator) -> (bytes32, RandomGenerator) {
-    return (
+    (
         hash(bytes32(0), rand), 
         hash(bytes32(1), rand),
-    );
+    )
 }
 
 public func random_nextMod(rand: RandomGenerator, modulus: uint) -> (uint, RandomGenerator) {
-    if (modulus == 0) {
+    if modulus == 0 {
         return (0, rand);
     }
     let limit = modulus * ((~0)/modulus);
     let (b, r) = random_next(rand);
     rand = r;
-    while (uint(b) >= limit) {
+    while uint(b) >= limit {
         let (ub, r) = random_next(rand);
         b = ub;
         rand = r;
     }
-    return (uint(b) % modulus, rand);
+    (uint(b) % modulus, rand)
 }
 
 public func randomly_permute_array(
@@ -40,7 +40,7 @@ public func randomly_permute_array(
     offset: uint,
     num: uint
 ) -> ([]any, RandomGenerator) {
-    while (num > 1) {
+    while num > 1 {
         let (rb, gen) = random_next(rand);
         rand = gen;
         let i = uint(rb) % num;   // This isn't perfectly uniform, but difference is negligible for this use.
@@ -48,5 +48,5 @@ public func randomly_permute_array(
                   with { [offset+num-1] = arr[offset+i] };
         num = num-1;
     }
-    return (arr, rand);
+    (arr, rand)
 }

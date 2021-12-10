@@ -3,8 +3,8 @@
 //
 
 
-use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVarDecl, Type, CodeBlock, StructField, FuncArg, FuncProperties, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant, OptionConst, FieldInitializer, new_func_arg, new_type_decl};
-use crate::compile::{InliningMode, ErrorSystem, CompileError};
+use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVar, Type, CodeBlock, AssignRef, StructField, FuncArg, FuncProperties, Statement, StatementKind, DebugInfo, Attributes, SubData, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant, OptionConst, FieldInitializer, new_func_arg, new_type_decl, check_generic_parameters};
+use crate::compile::{ErrorSystem, CompileError};
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
 use crate::link::Import;
@@ -16,9 +16,9 @@ use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
 use regex::Regex;
 
 grammar(
-    stringtable: &mut StringTable,                      // map of ids to strings
-    lines: &Lines,                                      // the lines of source code
-    file: u64,                                          // filename hash
+    string_table: &mut StringTable,                     // map of ids to strings
+    file_info: &Lines,                                  // the lines of source code
+    filename: u64,                                      // filename hash
     current_path: &[String],                            // path to what's being parsed
     constants: &mut HashMap<String, Uint256>,           // all constants (local *and* global)
     local_constants: &mut HashMap<String, Location>,    // constants created
@@ -38,70 +38,134 @@ match {
     _
 }
 
+Comma<T>: Vec<T> = {
+    <mut vec:(<T> ",")*> <last: T?> => {
+        vec.extend(last.into_iter());
+        vec
+    }
+};
+
 pub Decls: Vec<TopLevelDecl> = {
-	<a: ("#![" <Attributes> "]")?><mut i:HeadDecl*> <mut n:BodyDecl+> => {
+    <a: ("#![" <Attributes> "]")?> <mut i:HeadDecl*> <mut n:BodyDecl+> => {
         i.append(&mut n);
-        for decl in &mut i {
-            if let (TopLevelDecl::FuncDecl(func), Some(attr)) = (decl, a) {
-                func.debug_info.attributes.inline = func.debug_info.attributes.inline.and(&attr.inline);
-            }
-        };
         i
-        },
+    },
 }
 
 HeadDecl: TopLevelDecl = {
-    "use" <p: PathDecl> ";" => {
-        let (mut vec, name_lno) = p;
-        let filename = vec.pop().expect("Internal error: Path vector was empty");
-        let id = stringtable.get(filename.clone());
+    <lno: @L> "use" <mut p: PathDecl> ";" => {
+        let file = p.pop().expect("Internal error: Path vector was empty");
+        let id = string_table.get(file.clone());
         TopLevelDecl::UseDecl(Import::new(
-            vec, filename.clone(), Some(id), Some(lines.loc(name_lno, file)),
+            p, file, Some(id), file_info.location(BytePos::from(lno), filename),
         ))
     },
-    "const" <lno: @L> <n: IdentString> "=" <u: UnsignedInteger> ";" => { 
+    <lno: @L> "const" <n: IdentString> "=" <u: UnsignedInteger> ";" => { 
         
         if let Some(_) = constants.get(&n) {
             error_system.errors.push(
                 CompileError::new(
-                    String::from("Parser error"),
+                    "Parser error",
                     format!("Constant {} is declared twice", Color::red(&n)),
-                    vec![lines.loc(lno, file)],
+                    DebugInfo::here(file_info, lno, filename).locs(),
                 )
             )
         }
+        
         constants.insert(n.clone(), u);
-        local_constants.insert(n, lines.loc(lno, file));
+        local_constants.insert(n, file_info.location(BytePos::from(lno), filename).unwrap());
         TopLevelDecl::ConstDecl
     },
 }
 
-PathDecl: (Vec<String>, usize) = {
-    <mut base: (<IdentString> "::")+> <lno: @L> <i: IdentString> => {
-        base.push(i);
-        (base, lno)    // we want the right-most string
+PathDecl: Vec<String> = {
+    <i: IdentString> <mut folds: ("::" <IdentString>)+> => {
+        let mut output = vec![i];
+        output.append(&mut folds);
+        output
     },
 }
 
 BodyDecl: TopLevelDecl = {
-	TypeDecl => TopLevelDecl::TypeDecl(<>),
-	FuncDecl => TopLevelDecl::FuncDecl(<>),
-	GlobalVarDecl => TopLevelDecl::VarDecl(<>),
+    TypeDecl => TopLevelDecl::TypeDecl(<>),
+    FuncDecl => TopLevelDecl::FuncDecl(<>),
+    GlobalVarDecl => TopLevelDecl::VarDecl(<>),
 }
 
 TypeDecl: TypeDecl = {
-    "type" <Ident> "=" <Type> ";" => new_type_decl(<>),
+    "type" <i: Ident> <g: Generalization?> "=" <t: Type> ";" =>? {
+        let params: Vec<_> = g.into_iter().flatten().collect();
+        let names = check_generic_parameters(params.clone(), &string_table)?;
+        let tipe = t.make_generic(&names);
+        
+        for (index, (name, debug_info)) in params.into_iter().enumerate() {
+            let unused = tipe.find(&|tipe: &Type| *tipe == Type::GenericSlot(index)).is_empty();
+            if unused {
+                Err(CompileError::new(
+                    "Generics error",
+                    format!(
+                        "Type {}'s generic arg {} isn't used",
+                        Color::red(string_table.name_from_id(i)),
+                        Color::red(string_table.name_from_id(name)),
+                    ),
+                    debug_info.locs(),
+                ))?;
+            }
+        }
+        Ok(new_type_decl(i, tipe))
+    }
 }
 
 FuncDecl: Func = {
-    <attribs: ("#[" <Attributes> "]")?> <qualifiers: (<Qualifier>)*> "func" <lno: @L> <i:Ident> "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> => {
+    <attribs: ("#[" <Attributes> "]")?> <qualifiers: (<Qualifier>)*> "func" <lno: @L> <i: Ident> <g: Generalization?> "(" <mut args: FuncArgs> ")" <mut ret: Return?> <block: CodeBlock> =>? {
         let public = qualifiers.contains(&"public");
         let view = qualifiers.contains(&"view");
         let write = qualifiers.contains(&"write");
-        let debug = DebugInfo::new(Some(lines.loc(lno, file)), attribs.unwrap_or_default());
-        let name = stringtable.name_from_id(i).clone();
+        let debug = DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default());
+        let name = string_table.name_from_id(i).clone();
+
+        // Generalize over the generic parameters
+        let params: Vec<_> = g.into_iter().flatten().collect();
+        let generic_ids = check_generic_parameters(params.clone(), &string_table)?;
+        args.iter_mut().for_each(|arg| arg.tipe = arg.tipe.make_generic(&generic_ids));
+        if let Some(tipe) = &mut ret {
+            *tipe = tipe.make_generic(&generic_ids);
+        }
+
+        // Check that every generic argument is used in the func's signature.
+        // Otherwise, it's provably useless to include it and we should just error.
+        for (index, (name, debug_info)) in params.into_iter().enumerate() {
+            
+            let take = |tipe: &Type| *tipe == Type::GenericSlot(index);
+            
+            let mut used = match &ret {
+                Some(tipe) => !tipe.find(&take).is_empty(),
+                None => false,
+            };
+            
+            args.iter().for_each(|arg| used = used || !arg.tipe.find(&take).is_empty());
+            
+            if !used {
+                Err(CompileError::new(
+                    "Generics error",
+                    format!(
+                        "Func {}'s generic arg {} isn't in the signature",
+                        Color::red(string_table.name_from_id(i)),
+                        Color::red(string_table.name_from_id(name)),
+                    ),
+                    debug_info.locs(),
+                ))?;
+            }
+        }
         
-	Func::new(name, i, public, view, write, false, fa, t, cb, BTreeSet::new(), 0, debug)
+        let mut stats = block.body;
+        if let Some(expr) = block.ret_expr {
+            let debug_info = expr.debug_info;
+            let stat = StatementKind::Return(*expr);
+            stats.push(Statement::new(stat, debug_info));
+        }
+        
+	Ok(Func::new(name, i, public, view, write, false, args, ret, stats, BTreeSet::new(), generic_ids, debug))
     }
 }
 
@@ -115,26 +179,24 @@ FuncArgs: Vec<FuncArg> = {
 }
 
 FuncArg: FuncArg = {
-    <lno: @L> <i:Ident> ":" <t:Type> => new_func_arg(i, t, DebugInfo::here(lines, lno, file)),
+    <lno: @L> <i:Ident> ":" <t:Type> => new_func_arg(i, t, DebugInfo::here(file_info, lno, filename)),
 }
 
-GlobalVarDecl: GlobalVarDecl = {
-    "var" <lno: @L> <i:Ident> ":" <t:Type> ";" => GlobalVarDecl::new(
-        i, stringtable.name_from_id(i).clone(), t, lines.location(BytePos::from(lno), file)
-    ),
-}
-
-CodeBlock: Vec<Statement> = {
-    "{" <Statement*> "}" => <>
-}
-
-CodeBlockNew: CodeBlock = {
-    "{" <stats: Statement*> <expr: Expr?> "}" => CodeBlock::new(stats, expr.map(Box::new)),
+GlobalVarDecl: GlobalVar = {
+    <attribs: ("#[" <Attributes> "]")?> "var" <lno: @L> <i:Ident> ":" <t:Type> ";" => {
+        let mut debug_info = DebugInfo::here(file_info, lno, filename);
+        debug_info.attributes = attribs.unwrap_or_default();
+        GlobalVar::new(
+            i, string_table.name_from_id(i).clone(), t, debug_info
+        )
+    },
 }
 
 Statement: Statement = {
-    <lno: @L> <attribs: ("#[" <Attributes> "]")?> <kind:StatementKind> => Statement {
-        kind, debug_info: DebugInfo::new(Some(lines.loc(lno, file)), attribs.unwrap_or_default())
+    <lno: @L> <attribs: ("#[" <Attributes> "]")?> <kind: StatementKind> => {
+        let attribs = attribs.unwrap_or_default();
+        let debug_info = DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs);
+        Statement::new(kind, debug_info)
     },
 }
 
@@ -144,14 +206,12 @@ Attributes: Attributes = {
         for name in names.into_iter().chain(last.into_iter()) {
             match name.as_ref() {
                 "breakpoint" => attribs.breakpoint = true,
-                "inline" => attribs.inline = InliningMode::Always,
-                "noinline" => attribs.inline = InliningMode::Never,
                 "print" => attribs.codegen_print = true,
                 unrecognized => error_system.errors.push(
                     CompileError::new(
                         String::from("Lexer error"),
-                        format!("Unrecognized attribute {}", Color::red(&unrecognized)),
-                        vec![lines.loc(lno, file)],
+                        format!("Unrecognized attribute {}", Color::red(unrecognized)),
+                        file_info.location(BytePos::from(lno), filename).into_iter().collect()
                     )
                 ),
             }
@@ -161,38 +221,33 @@ Attributes: Attributes = {
 }
 
 StatementKind: StatementKind = {
-    "while" "(" <e: Expr> ")" <cb: CodeBlock> => StatementKind::While(e, cb),
-    <lno: @L> "loop" <cb: CodeBlock> => StatementKind::Expression(Expr::lno(ExprKind::Loop(cb), lines, lno, file)),
-    <lno: @L> "if" "let" "Some(" <l: Ident> ")" "=" <r:Expr> <t: CodeBlock> <e: ElseIf?> => StatementKind::Expression(
-        Expr::lno(ExprKind::IfLet(l, Box::new(r), CodeBlock::new(t, None), e), lines, lno, file)
-    ),
-    <lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> <r: ElseIf?> => StatementKind::Expression(
-        Expr::lno(ExprKind::If(Box::new(c), CodeBlock::new(t, None), r), lines, lno, file)
-    ),
-    "let" <p: MatchPattern> "=" <e: Expr> ";" => StatementKind::Let(p, e),
-    "let" <p: MatchPattern> ":" <lno: @L> <t: Type> "=" <e: Expr> ";" => {
-        StatementKind::Let(p, Expr::lno(ExprKind::Check(Box::new(e), t), lines, lno, file))
+    "while" <cond: Expr> <block: CodeBlockStat> => StatementKind::While(cond, block),
+    "let" <lno: @L> <i: Ident> "=" <e: Expr> ";" => {
+        let debug_info = DebugInfo::here(file_info, lno, filename);
+        StatementKind::Let(vec![AssignRef::new(i, true, debug_info)], e)
     },
-    <e: Expr> ";" => StatementKind::Expression(e),
+    "let" <lno: @L> <i: Ident> ":" <lno2: @L> <t: Type> "=" <e: Expr> ";" => {
+        let stat_debug_info = DebugInfo::here(file_info, lno, filename);
+        let tipe_debug_info = DebugInfo::here(file_info, lno2, filename);
+        let check = Expr::new(ExprKind::Check(Box::new(e), t), tipe_debug_info);
+        StatementKind::Let(vec![AssignRef::new(i, true, stat_debug_info)], check)
+    },
+    "let" "(" <c: Comma<<AssignRef>>> ")" "=" <e: Expr> ";" => StatementKind::Let(c, e),
     <i: Ident> "=" <e: Expr> ";" => StatementKind::Assign(i, e),
     "return" <e: Expr> ";" => StatementKind::Return(e),
     "return" ";" => StatementKind::ReturnVoid(),
-    <lno: @L> "return" "None" ";" => StatementKind::Return(
-        Expr::lno(ExprKind::Constant(Constant::Option(OptionConst::None(Type::Every))), lines, lno, file)
-    ),
     "break" <e: Expr?> ";" => StatementKind::Break(e, None),
     "debug" "(" <e: Expr> ")" ";" => StatementKind::DebugPrint(e),
     "assert" "(" <e: Expr> ")" ";" => StatementKind::Assert(e),
-    "asm" "(" <e: Expr> ")" "{" <body:AsmInsn*> "}" ";" => StatementKind::Asm(body, vec![e]),
-    "asm" "(" <a:CommaedExprs?> ")" "{" <body:AsmInsn*> "}" ";" => StatementKind::Asm(body, a.unwrap_or(vec![])),
+    <p: StatementExpr> => p,
     <lno: @L> "set" <i:Ident> <s: SubData+> "=" <e: Expr> ";" => {
 
         // This routine manually derives a series of nested with-statements to build an interior assignment.
         
-        let debug_info = DebugInfo::here(lines, lno, file);
+        let debug_info = DebugInfo::here(file_info, lno, filename);
         
         // the withs we assign at the end
-        let mut withs = Expr::new(ExprKind::VariableRef(i), debug_info);
+        let mut withs = Expr::new(ExprKind::VariableRef(i, vec![]), debug_info);
         
         // the intereior site we expand to right-derive the next step, taking the form
         //   a with { expr }
@@ -202,7 +257,7 @@ StatementKind: StatementKind = {
         
         // a nested set of sub-value identifier ops that lets us build up nodes for those like a.b.c by going through
         // each of those for a, a.b, a.b.c, etc
-        let mut nest = Expr::new(ExprKind::VariableRef(i), debug_info);
+        let mut nest = Expr::new(ExprKind::VariableRef(i, vec![]), debug_info);
         
         for inner in s {
             match inner {
@@ -223,7 +278,7 @@ StatementKind: StatementKind = {
                 }
                 SubData::Dot(id) => {
                     let inside = e.clone();
-                    let name = stringtable.name_from_id(id).to_string();
+                    let name = string_table.name_from_id(id).to_string();
                     *build = Expr::new(
                         ExprKind::StructMod(Box::new(nest.clone()), name.clone(), Box::new(inside)),
                         debug_info,
@@ -246,249 +301,327 @@ SubData: SubData = {
     "[" <e: Expr> "]" => SubData::ArrayOrMap(e),
 }
 
-MatchPattern: MatchPattern = {
-    <lno: @L> <i: Ident> => MatchPattern::new_bind(i, DebugInfo::here(lines, lno, file), ()),
-    <lno: @L> "*"<i: Ident> => MatchPattern::new_assign(i, DebugInfo::here(lines, lno, file), ()),
-    <lno: @L> "(" <c: CommaedMatchPatterns> ")" => MatchPattern::new_tuple(c, DebugInfo::here(lines, lno, file), ()),
-}
-
-CommaedMatchPatterns: Vec<MatchPattern> = {
-    <mut a: ( <MatchPattern> "," )+> <b: MatchPattern?> => {if let Some(c) = b { a.push(c) } a },
+AssignRef: AssignRef = {
+        <lno: @L> <i: Ident> => AssignRef::new(i, true,  DebugInfo::here(file_info, lno, filename)),
+    "*" <lno: @L> <i: Ident> => AssignRef::new(i, false, DebugInfo::here(file_info, lno, filename)),
 }
 
 StructFields: Vec<StructField> = {
-    <mut a: (<StructField> ",")*> <b: StructField> ","? => { a.push(b); a },
+    <mut a: (<StructField> ",")*> <b: StructField> ","? => { a.push(b); a},
 }
 
 StructField: StructField = {
-	<i: Ident> ":" <t: Type> => StructField::new(stringtable.name_from_id(i).to_string(), t),
+    <i: Ident> ":" <t: Type> => StructField::new(string_table.name_from_id(i).to_string(), t),
 }
 
 Type: Type = {
-	"uint" => Type::Uint,
-	"int" => Type::Int,
-	"bool" => Type::Bool,
-	"buffer" => Type::Buffer,
-	"bytes32" => Type::Bytes32,
-	"address" => Type::EthAddress,
-	"struct" "{" <StructFields> "}" => Type::Struct(<>),
-	<CommaedTypesInParens> => Type::Tuple(<>),
-	"[" "]" <Type> => Type::Array(Box::new(<>)),
-	"[" <s:UnsignedInteger> "]" <t:Type> => Type::FixedArray(
-		Box::new(t),
-		s.to_usize().unwrap(),
-	),
-	"map" "<" <t1:Type> "," <t2:Type> ","? ">" => Type::Map(Box::new(t1), Box::new(t2)),
-	"any" => Type::Any,
-	"option<" <t1:Type> ">" => Type::Option(Box::new(t1)),
-	"every" => Type::Every,
-	"union<" <t1:CommaedTypes> ">" => Type::Union(t1),
-    <q: Qualifier*> "func" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => {
+    "uint" => Type::Uint,
+    "int" => Type::Int,
+    "bool" => Type::Bool,
+    "buffer" => Type::Buffer,
+    "bytes32" => Type::Bytes32,
+    "address" => Type::EthAddress,
+    "void" => Type::Void,
+    "struct" "{" <StructFields> "}" => Type::Struct(<>),
+    <CommaedTypesInParens> => Type::Tuple(<>),
+    "[" "]" <Type> => Type::Array(Box::new(<>)),
+    "[" <s:UnsignedInteger> "]" <t:Type> => Type::FixedArray(
+	Box::new(t),
+	s.to_usize().unwrap(),
+    ),
+    "map" "<" <t1:Type> "," <t2:Type> ","? ">" => Type::Map(Box::new(t1), Box::new(t2)),
+    "string" => Type::Tuple(vec![Type::Uint, Type::Buffer]),
+    "any" => Type::Any,
+    "option<" <t1:Type> ">" => Type::Option(Box::new(t1)),
+    "every" => Type::Every,
+    "union<" <t1:CommaedTypes> ">" => Type::Union(t1),
+    <q: Qualifier*> "func" <a: CommaedTypesInParens> <r: Return?> => {
         let view = q.contains(&"view");
         let write = q.contains(&"write");
-        Type::Func(FuncProperties::new(view, write, false), a, Box::new(r.unwrap_or(Type::Void)))
+        let returns = r != Some(Type::Every);
+        let nargs = a.len();
+        let nouts = r.iter().count();
+        let prop = FuncProperties::new(view, write, false, false, returns, nargs, nouts);
+        Type::Func(prop, a, Box::new(r.unwrap_or(Type::Void)))
     },
-    <q: Qualifier*> "closure" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => {
+    <q: Qualifier*> "closure" <a: CommaedTypesInParens> <r: Return?> => {
         let view = q.contains(&"view");
         let write = q.contains(&"write");
-        Type::Func(FuncProperties::new(view, write, true), a, Box::new(r.unwrap_or(Type::Void)))
+        let returns = r != Some(Type::Every);
+        let nargs = a.len();
+        let nouts = r.iter().count();
+        let prop = FuncProperties::new(view, write, false, false, returns, nargs, nouts);
+        Type::Func(prop, a, Box::new(r.unwrap_or(Type::Void)))
     },
-    Ident => Type::Nominal(current_path.to_owned(), <>),
+    <i: Ident> <g: Specialization?> => {
+        Type::Nominal(current_path.to_owned(), i, g.into_iter().flatten().collect())
+    }
 };
 
+Generalization: Vec<(StringId, DebugInfo)> = {
+    "<" <g: Comma<(<@R> <Ident>)>> ">" => {
+        g.into_iter().map(|(lno, id)| { (id, DebugInfo::here(file_info, lno, filename)) }).collect()
+    },
+}
+
+Specialization: Vec<Type> = {
+    "<" <c: Comma<Type>> ">" => c,
+}
+
 CommaedTypesInParens: Vec<Type> = {
-	"(" ")" => vec![],
-	"(" <CommaedTypes> ")" => <>,
+    "(" ")" => vec![],
+    "(" <CommaedTypes> ")" => <>,
 }
 
 CommaedTypes: Vec<Type> = {
-	<mut t: (<Type> ",")*> <e: (Type)> ","? => {
+    <mut t: (<Type> ",")*> <e: (Type)> ","? => {
         t.push(e);
         t
     },
-};
+}
 
 Ident: StringId = {
-	IdentString => stringtable.get(<>),
-};
+    IdentString => string_table.get(<>),
+}
+
+CodeBlock: CodeBlock = {
+    "{" <stats: Statement*> <expr: Expr?> "}" => CodeBlock::new(stats, expr.map(Box::new)),
+}
+CodeBlockRet: CodeBlock = {
+    "{" <stats: Statement*> <expr: Expr> "}" => CodeBlock::new(stats, Some(Box::new(expr))),
+}
+CodeBlockStat: CodeBlock = {
+    "{" <stats: Statement*> "}" => CodeBlock::new(stats, None),
+}
+
+StatementExpr: StatementKind = {
+    <e: IfStat> => StatementKind::Expression(e),
+    <e: Expr> ";" => StatementKind::Expression(e),
+}
+
+IfStat: Expr = {
+    <lno: @L> "if" <cond: Expr> <block: CodeBlockStat> <el: ("else" <IfNext>)?> => {
+        Expr::lno(ExprKind::If(Box::new(cond), block, el), file_info, lno, filename)
+    },
+    <lno: @L> "if" "let" "Some(" <l: Ident> ")" "=" <r:Expr> <block: CodeBlockStat> <el: ("else" <IfNext>)?> => {
+        Expr::lno(ExprKind::IfLet(l, Box::new(r), block, el), file_info, lno, filename)
+    },
+}
+
+IfExpr: Expr = {
+    <lno: @L> "if" <cond: Expr> <block: CodeBlockRet> "else" <el: IfNext> => {
+        Expr::lno(ExprKind::If(Box::new(cond), block, Some(el)), file_info, lno, filename)
+    },
+    <lno: @L> "if" "let" "Some(" <l: Ident> ")" "=" <r:Expr> <block: CodeBlockRet> <el: ("else" <IfNext>)> => {
+        Expr::lno(ExprKind::IfLet(l, Box::new(r), block, Some(el)), file_info, lno, filename)
+    },
+}
+
+IfNext: CodeBlock = {
+    <IfStat> => CodeBlock::new(vec![], Some(Box::new(<>))),
+    <IfExpr> => CodeBlock::new(vec![], Some(Box::new(<>))),
+    <CodeBlock> => <>,
+}
 
 Expr: Expr = {
-    <lno: @L> <t:Expr> "with" "{" "[" <i:Expr> "]" "=" <v:Expr> "}" => Expr::new(
-        ExprKind::ArrayOrMapMod(Box::new(t), Box::new(i), Box::new(v)),
-	    DebugInfo::here(lines, lno, file),
-    ),
-    <lno: @L> <t: Expr> "with" "{" <i:Ident> ":" <e: Expr> "}" => Expr::new(
-        ExprKind::StructMod(Box::new(t), stringtable.name_from_id(i).to_string(), Box::new(e)),
-        DebugInfo::here(lines, lno, file),
-    ),
+    <lno: @L> <t:Expr> "with" "{" "[" <i:Expr> "]" "=" <v:Expr> "}" => {
+        Expr::lno(ExprKind::ArrayOrMapMod(Box::new(t), Box::new(i), Box::new(v)), file_info, lno, filename)
+    },
+    <lno: @L> <t: Expr> "with" "{" <i:Ident> ":" <e: Expr> "}" => {
+        let kind = ExprKind::StructMod(Box::new(t), string_table.name_from_id(i).to_string(), Box::new(e));
+        Expr::lno(kind, file_info, lno, filename)
+    },
     Expr1,
 }
 
 Expr1: Expr = {
-    <lno: @L> <l:Expr1> "||" <r:Expr2> => Expr::lno(ExprKind::ShortcutOr(Box::new(l), Box::new(r)), lines, lno, file),
+    <lno: @L> <l:Expr1> "||" <r:Expr2> => {
+        Expr::lno(ExprKind::ShortcutOr(Box::new(l), Box::new(r)), file_info, lno, filename)
+    },
     Expr2,
-};
+}
 
 Expr2: Expr = {
-    <lno: @L> <l:Expr2> "&&" <r:Expr3> => Expr::lno(ExprKind::ShortcutAnd(Box::new(l), Box::new(r)), lines, lno, file),
+    <lno: @L> <l:Expr2> "&&" <r:Expr3> => {
+        Expr::lno(ExprKind::ShortcutAnd(Box::new(l), Box::new(r)), file_info, lno, filename)
+    },
     Expr3,
-};
+}
 
 Expr3: Expr = {
-    <l:Expr3> <lno: @L> "<" <r:Expr4> => Expr::new_binary(BinaryOp::LessThan, l, r, lines, lno, file),
-    <l:Expr3> <lno: @L> ">" <r:Expr4> => Expr::new_binary(BinaryOp::GreaterThan, l, r, lines, lno, file),
-    <l:Expr3> <lno: @L> "<=" <r:Expr4> => Expr::new_binary(BinaryOp::LessEq, l, r, lines, lno, file),
-    <l:Expr3> <lno: @L> ">=" <r:Expr4> => Expr::new_binary(BinaryOp::GreaterEq, l, r, lines, lno, file),
-    <l:Expr3> <lno: @L> "==" <r:Expr4> => Expr::new_binary(BinaryOp::Equal, l, r, lines, lno, file),
-    <l:Expr3> <lno: @L> "!=" <r:Expr4> => Expr::new_binary(BinaryOp::NotEqual, l, r, lines, lno, file),
+    <lno: @L> <l:Expr3> "<" <r:Expr4>  => Expr::new_binary(BinaryOp::LessThan,    l, r, file_info, lno, filename),
+    <lno: @L> <l:Expr3> ">" <r:Expr4>  => Expr::new_binary(BinaryOp::GreaterThan, l, r, file_info, lno, filename),
+    <lno: @L> <l:Expr3> "<=" <r:Expr4> => Expr::new_binary(BinaryOp::LessEq,      l, r, file_info, lno, filename),
+    <lno: @L> <l:Expr3> ">=" <r:Expr4> => Expr::new_binary(BinaryOp::GreaterEq,   l, r, file_info, lno, filename),
+    <lno: @L> <l:Expr3> "==" <r:Expr4> => Expr::new_binary(BinaryOp::Equal,       l, r, file_info, lno, filename),
+    <lno: @L> <l:Expr3> "!=" <r:Expr4> => Expr::new_binary(BinaryOp::NotEqual,    l, r, file_info, lno, filename),
     Expr4,
 }
 
 Expr4: Expr = {
-    <l:Expr4> <lno: @L> "|" <r:Expr5> => Expr::new_binary(BinaryOp::BitwiseOr, l, r, lines, lno, file),
-    <l:Expr4> <lno: @L> "<<" <r:Expr5> => Expr::new_binary(BinaryOp::ShiftLeft, r, l, lines, lno, file),
-    <l:Expr4> <lno: @L> ">>" <r:Expr5> => Expr::new_binary(BinaryOp::ShiftRight, r, l, lines, lno, file),
+    <lno: @L> <l:Expr4> "|"  <r:Expr5> => Expr::new_binary(BinaryOp::BitwiseOr,  l, r, file_info, lno, filename),
+    <lno: @L> <l:Expr4> "<<" <r:Expr5> => Expr::new_binary(BinaryOp::ShiftLeft,  r, l, file_info, lno, filename),
+    <lno: @L> <l:Expr4> ">>" <r:Expr5> => Expr::new_binary(BinaryOp::ShiftRight, r, l, file_info, lno, filename),
     Expr5,
-};
+}
 
 Expr5: Expr = {
-    <l:Expr5> <lno: @L> "^" <r:Expr6> => Expr::new_binary(BinaryOp::BitwiseXor, l, r, lines, lno, file),
+    <lno: @L> <l:Expr5> "^" <r:Expr6> => Expr::new_binary(BinaryOp::BitwiseXor, l, r, file_info, lno, filename),
     Expr6,
-};
+}
 
 Expr6: Expr = {
-    <l:Expr6> <lno: @L> "&" <r:Expr7> => Expr::new_binary(BinaryOp::BitwiseAnd, l, r, lines, lno, file),
+    <lno: @L> <l:Expr6> "&" <r:Expr7> => Expr::new_binary(BinaryOp::BitwiseAnd, l, r, file_info, lno, filename),
     Expr7,
-};
+}
 
 Expr7: Expr = {
-    <l:Expr7> <lno: @L> "+" <r:Expr8> => Expr::new_binary(BinaryOp::Plus, l, r, lines, lno, file),
-    <l:Expr7> <lno: @L> "-" <r:Expr8> => Expr::new_binary(BinaryOp::Minus, l, r, lines, lno, file),
+    <lno: @L> <l:Expr7> "+" <r:Expr8> => Expr::new_binary(BinaryOp::Plus, l, r, file_info, lno, filename),
+    <lno: @L> <l:Expr7> "-" <r:Expr8> => Expr::new_binary(BinaryOp::Minus, l, r, file_info, lno, filename),
     Expr8,
-};
+}
 
 Expr8: Expr = {
-    <l:Expr8> <lno: @L> "*" <r:Expr9> => Expr::new_binary(BinaryOp::Times, l, r, lines, lno, file), 
-    <l:Expr8> <lno: @L> "/" <r:Expr9> => Expr::new_binary(BinaryOp::Div, l, r, lines, lno, file),
-    <l:Expr8> <lno: @L> "%" <r:Expr9> => Expr::new_binary(BinaryOp::Mod, l, r, lines, lno, file),
+    <lno: @L> <l:Expr8> "*" <r:Expr9> => Expr::new_binary(BinaryOp::Times, l, r, file_info, lno, filename),
+    <lno: @L> <l:Expr8> "/" <r:Expr9> => Expr::new_binary(BinaryOp::Div, l, r, file_info, lno, filename),
+    <lno: @L> <l:Expr8> "%" <r:Expr9> => Expr::new_binary(BinaryOp::Mod, l, r, file_info, lno, filename),
     Expr9,
-};
+}
 
 Expr9: Expr = {
-    <e: Expr9> <lno: @L> "?" => Expr::lno(ExprKind::Try(Box::new(e)), lines, lno, file),
+    <lno: @L> <e: Expr9> "?" => Expr::lno(ExprKind::Try(Box::new(e)), file_info, lno, filename),
     Expr10,
 }
 
 Expr10: Expr = {
-    <lno: @L> "-" <e: Expr10> => Expr::new_unary(UnaryOp::Minus, e, lines, lno, file),
-    <lno: @L> "!" <e: Expr10> => Expr::new_unary(UnaryOp::Not, e, lines, lno, file),
-    <lno: @L> "~" <e: Expr10> => Expr::new_unary(UnaryOp::BitwiseNeg, e, lines, lno, file),
+    <lno: @L> "-" <e: Expr10> => Expr::new_unary(UnaryOp::Minus, e, file_info, lno, filename),
+    <lno: @L> "!" <e: Expr10> => Expr::new_unary(UnaryOp::Not, e, file_info, lno, filename),
+    <lno: @L> "~" <e: Expr10> => Expr::new_unary(UnaryOp::BitwiseNeg, e, file_info, lno, filename),
     Expr11,
-};
+}
 
 Expr11: Expr = {
-    <lno: @L> <c: Const> => Expr::lno(ExprKind::Constant(c), lines, lno, file),
-    <lno: @L> "Some(" <e: Expr> ")" => Expr::lno(ExprKind::OptionInitializer(Box::new(e)), lines, lno, file),
-    <lno: @L> <f: Expr11> "(" <e: Expr> ")" => Expr::lno(
-        ExprKind::FunctionCall(Box::new(f), vec![e]), lines, lno, file
-    ),
-    <lno: @L> <f: Expr11> "(" <c: CommaedExprs?> ")" => Expr::lno(
-        ExprKind::FunctionCall(Box::new(f), c.unwrap_or(vec![])), lines, lno, file
-    ),
-    <e1:Expr11> <lno: @L> "[" <e2:Expr> "]" => Expr::lno(
-        ExprKind::ArrayOrMapRef(Box::new(e1), Box::new(e2)), lines, lno, file
-    ),
-    <e:Expr11> <lno: @L> "." <i:Ident> => Expr::lno(
-        ExprKind::DotRef(Box::new(e), stringtable.name_from_id(i).to_string()), lines, lno, file
-    ),
-    <e:Expr11> <lno: @L> "." <u:UnsignedInteger> => Expr::lno(
-        ExprKind::TupleRef(Box::new(e), u), lines, lno, file
-    ),
-    <lno: @L> "xif" <cond: Expr> <cb: CodeBlockNew> <el: ElseIf?> => Expr::lno(
-        ExprKind::If(Box::new(cond), cb, el), lines, lno, file
-    ),
-    <lno: @L> "xif" "let" "Some(" <l: Ident> ")" "=" <r:Expr> <t: CodeBlockNew> <el: ElseIf?> => Expr::lno(
-        ExprKind::IfLet(l, Box::new(r), t, el), lines, lno, file
-    ),
-    <lno: @L> "xloop" <cb: CodeBlock> => Expr::lno(ExprKind::Loop(cb), lines, lno, file),
+    IfExpr => <>,
+    <lno: @L> <c: Const> => {
+        Expr::lno(ExprKind::Constant(c), file_info, lno, filename)
+    },
+    <lno: @L> "Some(" <e: Expr> ")" => {
+        Expr::lno(ExprKind::OptionInitializer(Box::new(e)), file_info, lno, filename)
+    },
+    <lno: @L> <callable: Expr11> "(" <e: Expr> ")" => {
+        Expr::lno(ExprKind::FunctionCall(Box::new(callable), vec![e]), file_info, lno, filename)
+    },
+    <lno: @L> <callable: Expr11> "(" <c: CommaedExprs?> ")" => {
+        Expr::lno(ExprKind::FunctionCall(Box::new(callable), c.unwrap_or(vec![])), file_info, lno, filename)
+    },
+    <lno: @L> <e1:Expr11> "[" <e2:Expr> "]" => {
+        Expr::lno(ExprKind::ArrayOrMapRef(Box::new(e1), Box::new(e2)), file_info, lno, filename)
+    },
+    <lno: @L> <e:Expr11> "." <i:Ident> => {
+        Expr::lno(ExprKind::DotRef(Box::new(e), string_table.name_from_id(i).to_string()), file_info, lno, filename)
+    },
+    <lno: @L> <e:Expr11> "." <u:UnsignedInteger> => {
+        Expr::lno(ExprKind::TupleRef(Box::new(e), u), file_info, lno, filename)
+    },
+    <lno: @L> "loop" <block: CodeBlockStat> => {
+        Expr::lno(ExprKind::Loop(block, Type::Every), file_info, lno, filename)
+    },
+    <lno: @L> "loop" "<" <tipe: Type> ">" <block: CodeBlockStat> => {
+        Expr::lno(ExprKind::Loop(block, tipe), file_info, lno, filename)
+    },
     Expr12,
 }
 
-ElseIf: CodeBlock = {
-    ("else" <CodeBlockNew>) => <>,
-    <lno: @L> "elseif" <cond: Expr> <cb: CodeBlockNew> <el: ElseIf?> => CodeBlock::new(
-        vec![], Some(Box::new(Expr::lno(ExprKind::If(Box::new(cond), cb, el), lines, lno, file)))
-    ),
-    <lno: @L> "elseif" "let" "Some(" <l: Ident> ")" "=" <r:Expr> <t: CodeBlockNew> <el: ElseIf?> => CodeBlock::new(
-        vec![], Some(Box::new(Expr::lno(ExprKind::IfLet(l, Box::new(r), t, el), lines, lno, file)))
-    ),
-}
-
 Expr12: Expr = {
-    <lno: @L> "hash" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::Hash, e, lines, lno, file),
-    <lno: @L> "hash" "(" <l:Expr> "," <r:Expr> ","? ")" => Expr::new_binary(BinaryOp::Hash, l, r, lines, lno, file),
-    <lno: @L> "len" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::Len, e, lines, lno, file),
-    <lno: @L> "uint" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToUint, e, lines, lno, file),
-    <lno: @L> "int" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToInt, e, lines, lno, file),
-    <lno: @L> "bytes32" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToBytes32, e, lines, lno, file),
-    <lno: @L> "address" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToAddress, e, lines, lno, file),
-    <lno: @L> "newbuffer" "(" ")" => Expr::lno(ExprKind::NewBuffer, lines, lno, file),
-    <lno: @L> "getbuffer8" "(" <e: Expr> "," <f:Expr> ")" => Expr::new_binary(
-        BinaryOp::GetBuffer8, f, e, lines, lno, file
-    ),
-    <lno: @L> "getbuffer64" "(" <e: Expr> "," <f:Expr> ")" => Expr::new_binary(
-        BinaryOp::GetBuffer64, f, e, lines, lno, file
-    ),
-    <lno: @L> "getbuffer256" "(" <e: Expr> "," <f:Expr> ")" => Expr::new_binary(
-        BinaryOp::GetBuffer256, f, e, lines, lno, file
-    ),
-    <lno: @L> "setbuffer8" "(" <e: Expr> "," <f:Expr> "," <g:Expr> ")" => Expr::new_trinary(
-        TrinaryOp::SetBuffer8, f, g, e, lines, lno, file
-    ),
-    <lno: @L> "setbuffer64" "(" <e: Expr> "," <f:Expr> "," <g:Expr> ")" => Expr::new_trinary(
-        TrinaryOp::SetBuffer64, f, g, e, lines, lno, file
-    ),
-    <lno: @L> "setbuffer256" "(" <e: Expr> "," <f:Expr> "," <g:Expr> ")" => Expr::new_trinary(
-        TrinaryOp::SetBuffer256, f, g, e, lines, lno, file
-    ),
-    <lno: @L> "newarray" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::lno(
-        ExprKind::NewArray(Box::new(e), t), lines, lno, file
-    ),
-    <lno: @L> "newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ","? ")" => Expr::lno(
-        ExprKind::NewFixedArray(s.to_usize().unwrap(), Some(Box::new(e))), lines, lno, file
-    ),
-    <lno: @L> "newfixedarray" "(" <s:UnsignedInteger> ")" => Expr::lno(
-        ExprKind::NewFixedArray(s.to_usize().unwrap(), None), lines, lno, file
-    ),
-    <lno: @L> "newmap" "<" <k:Type> "," <v:Type> ","? ">" => Expr::lno(
-        ExprKind::NewMap(k, v), lines, lno, file
-    ),
-    <lno: @L> "newunion" "<" <t: CommaedTypes> ">" "(" <e: Expr> ")" => Expr::lno(
-        ExprKind::NewUnion(t, Box::new(e)), lines, lno, file
-    ),
-    <lno: @L> "unsafecast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::lno(
-        ExprKind::UnsafeCast(Box::new(e), t), lines, lno, file
-    ),
-    <lno: @L> "cast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::lno(
-        ExprKind::Cast(Box::new(e), t), lines, lno, file
-    ),
-    <lno: @L> "covariantcast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::lno(
-        ExprKind::CovariantCast(Box::new(e), t), lines, lno, file
-    ),
-    <lno: @L> "weakcast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::lno(
-        ExprKind::WeakCast(Box::new(e), t), lines, lno, file
-    ),
-    <lno: @L> "unioncast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::lno(
-        ExprKind::UnionCast(Box::new(e), t), lines, lno, file
-    ),
-    <qualifiers: (<Qualifier>)*> <lno: @L> "closure" "(" <fa:FuncArgs> ")" <t: (Return)?> <cb:CodeBlock> => {
+    <lno: @L> "hash" "(" <e: Expr> ")" => {
+        Expr::new_unary(UnaryOp::Hash, e, file_info, lno, filename)
+    },
+    <lno: @L> "hash" "(" <l:Expr> "," <r:Expr> ","? ")" => {
+        Expr::new_binary(BinaryOp::Hash, l, r, file_info, lno, filename)
+    },
+    <lno: @L> "len" "(" <e: Expr> ")" => {
+        Expr::new_unary(UnaryOp::Len, e, file_info, lno, filename)
+    },
+    <lno: @L> "uint" "(" <e: Expr> ")" => {
+        Expr::new_unary(UnaryOp::ToUint, e, file_info, lno, filename)
+    },
+    <lno: @L> "int" "(" <e: Expr> ")" => {
+        Expr::new_unary(UnaryOp::ToInt, e, file_info, lno, filename)
+    },
+    <lno: @L> "bytes32" "(" <e: Expr> ")" => {
+        Expr::new_unary(UnaryOp::ToBytes32, e, file_info, lno, filename)
+    },
+    <lno: @L> "address" "(" <e: Expr> ")" => {
+        Expr::new_unary(UnaryOp::ToAddress, e, file_info, lno, filename)
+    },
+    <lno: @L> "newbuffer" "(" ")" => {
+        Expr::lno(ExprKind::NewBuffer, file_info, lno, filename)
+    },
+    <lno: @L> "getbuffer8" "(" <e: Expr> "," <f:Expr> ")" => {
+        Expr::new_binary(BinaryOp::GetBuffer8, f, e, file_info, lno, filename)
+    },
+    <lno: @L> "getbuffer64" "(" <e: Expr> "," <f:Expr> ")" => {
+        Expr::new_binary(BinaryOp::GetBuffer64, f, e, file_info, lno, filename)
+    },
+    <lno: @L> "getbuffer256" "(" <e: Expr> "," <f:Expr> ")" => {
+        Expr::new_binary(BinaryOp::GetBuffer256, f, e, file_info, lno, filename)
+    },
+    <lno: @L> "setbuffer8" "(" <e: Expr> "," <f:Expr> "," <g:Expr> ")" => {
+        Expr::new_trinary(TrinaryOp::SetBuffer8, f, g, e, file_info, lno, filename)
+    },
+    <lno: @L> "setbuffer64" "(" <e: Expr> "," <f:Expr> "," <g:Expr> ")" => {
+        Expr::new_trinary(TrinaryOp::SetBuffer64, f, g, e, file_info, lno, filename)
+    },
+    <lno: @L> "setbuffer256" "(" <e: Expr> "," <f:Expr> "," <g:Expr> ")" => {
+        Expr::new_trinary(TrinaryOp::SetBuffer256, f, g, e, file_info, lno, filename)
+    },
+    <lno: @L> "newarray" "<" <t:Type> ">" "(" <e:Expr> ")" => {
+        Expr::lno(ExprKind::NewArray(Box::new(e), t), file_info, lno, filename)
+    },
+    <lno: @L> "newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ","? ")" => {
+        Expr::lno(ExprKind::NewFixedArray(s.to_usize().unwrap(), Box::new(e)), file_info, lno, filename)
+    },
+    <lno: @L> "newfixedarray" "(" <lno2: @L> <s:UnsignedInteger> ")" => {
+        let default = Expr::lno(ExprKind::Tuple(vec![]), file_info, lno2, filename);
+        let any_cast = Expr::lno(ExprKind::UnsafeCast(Box::new(default), Type::Any), file_info, lno2, filename);
+        Expr::lno(ExprKind::NewFixedArray(s.to_usize().unwrap(), Box::new(any_cast)), file_info, lno, filename)
+    },
+    <lno: @L> "newmap" "<" <k:Type> "," <v:Type> ","? ">" => {
+        Expr::lno(ExprKind::NewMap(k, v), file_info, lno, filename)
+    },
+    <lno: @L> "newunion" "<" <t: CommaedTypes> ">" "(" <e: Expr> ")" => {
+        Expr::lno(ExprKind::NewUnion(t, Box::new(e)), file_info, lno, filename)
+    },
+    <lno: @L> "unsafecast" "<" <t:Type> ">" "(" <e:Expr> ")" => {
+        Expr::lno(ExprKind::UnsafeCast(Box::new(e), t), file_info, lno, filename)
+    },
+    <lno: @L> "cast" "<" <t:Type> ">" "(" <e:Expr> ")" => {
+        Expr::lno(ExprKind::Cast(Box::new(e), t), file_info, lno, filename)
+    },
+    <lno: @L> "unioncast" "<" <t:Type> ">" "(" <e:Expr> ")" => {
+        Expr::lno(ExprKind::UnionCast(Box::new(e), t), file_info, lno, filename)
+    },
+    <lno: @L> "any" "(" <e:Expr> ")" => {
+        Expr::lno(ExprKind::UnsafeCast(Box::new(e), Type::Any), file_info, lno, filename)
+    },
+    <qualifiers: (<Qualifier>)*> <lno: @L> <u: ClosureUsage> "(" <fa:FuncArgs> ")" <t: (Return)?> <block:CodeBlock> => {
         let view = qualifiers.contains(&"view");
         let write = qualifiers.contains(&"write");
-        let debug = DebugInfo::here(lines, lno, file);
+        let debug = DebugInfo::here(file_info, lno, filename);
+
+        let mut stats = block.body;
+        if let Some(expr) = block.ret_expr {
+            let debug_info = expr.debug_info;
+            let stat = StatementKind::Return(*expr);
+            stats.push(Statement::new(stat, debug_info));
+        }
         
-        let name = format!("closure #{}", closures.len() + 1);
-        let id = stringtable.get(name.clone());
-        let closure = Func::new(name, id, false, view, write, true, fa, t, cb, BTreeSet::new(), 0, debug);
+        let name = match u {
+            true => format!("closure #{}", closures.len() + 1),
+            false => format!("_closure #{}", closures.len() + 1),
+        };
+        let id = string_table.get(name.clone());
+        let closure = Func::new(name, id, false, view, write, true, fa, t, stats, BTreeSet::new(), vec![], debug);
         
 	closures.insert(id, closure.clone());
         
@@ -497,27 +630,39 @@ Expr12: Expr = {
     Expr13,
 }
 
+ClosureUsage: bool = {
+    "closure" => true,
+    "_closure" => false,
+}
+
 Expr13: Expr = {
-    <lno: @L> "asm" "(" <e:Expr> ")" <rt:Type> "{" <body:AsmInsn*> "}" => Expr::lno(
-        ExprKind::Asm(rt, body, vec![e]), lines, lno, file
-    ),
-    <lno: @L> "asm" "(" <a:CommaedExprs?> ")" <rt:Type> "{" <body:AsmInsn*> "}" => Expr::lno(
-        ExprKind::Asm(rt, body, a.unwrap_or(vec![])), lines, lno, file
-    ),
-    <lno: @L> "struct" "{" <fi: FieldInitializers> "}" => Expr::lno(
-        ExprKind::StructInitializer(fi), lines, lno, file
-    ),
-    "(" <e: Expr> ")" => <>,
-    <lno: @L> <cb: CodeBlockNew> => Expr::lno(ExprKind::CodeBlock(cb), lines, lno, file),
-    <lno: @L> "(" <c: CommaedExprs?> ")" => Expr::lno(ExprKind::Tuple(c.unwrap_or(vec![])), lines, lno, file),
-    <lno: @L> "error" => Expr::lno(ExprKind::Error, lines, lno, file),
-    <lno: @L> "getGas" "(" ")" => Expr::lno(ExprKind::GetGas, lines, lno, file),
-    <lno: @L> "setGas" "(" <e:Expr> ")" => Expr::lno(ExprKind::SetGas(Box::new(e)), lines, lno, file),
+    <lno: @L> "asm" "(" <exprs: Comma<Expr>> ")" <rt: Type?> "{" <body:AsmInsn*> "}" => {
+        Expr::lno(ExprKind::Asm(rt.unwrap_or(Type::Void), body, exprs), file_info, lno, filename)
+    },
+    <lno: @L> "struct" "{" <fi: FieldInitializers> "}" => {
+        Expr::lno(ExprKind::StructInitializer(fi), file_info, lno, filename)
+    },
+    <lno: @L> "(" <c: CommaedExprs?> ")" => {
+        Expr::lno(ExprKind::Tuple(c.unwrap_or(vec![])), file_info, lno, filename)
+    },
+    <lno: @L> "None" => {
+        Expr::lno(ExprKind::Constant(Constant::Option(OptionConst::None(Type::Every))), file_info, lno, filename)
+    },
+    <lno: @L> <i: Ident> <s:("::" <Specialization>)?> => {
+        let spec = s.into_iter().flatten().collect();
+        Expr::lno(ExprKind::VariableRef(i, spec), file_info, lno, filename)
+    },
+    <lno: @L> <cb: CodeBlock> => {
+        Expr::lno(ExprKind::CodeBlock(cb), file_info, lno, filename)
+    },
+    <lno: @L> "getGas" "(" ")" => Expr::lno(ExprKind::GetGas, file_info, lno, filename),
+    <lno: @L> "setGas" "(" <e:Expr> ")" => Expr::lno(ExprKind::SetGas(Box::new(e)), file_info, lno, filename),
     <lno: @L> "check" "(" <e: Expr> "," <t: Type> ")" => Expr::lno(
-        ExprKind::Check(Box::new(e), t), lines, lno, file
+        ExprKind::Check(Box::new(e), t), file_info, lno, filename
     ),
-    <lno: @L> <i: Ident> => Expr::lno(ExprKind::VariableRef(i), lines, lno, file),
-    <lno: @L> <q: QuoteString> => Expr::lno(ExprKind::Quote(q), lines, lno, file),
+    <lno: @L> "error" => Expr::lno(ExprKind::Error, file_info, lno, filename),
+    <lno: @L> <q: QuoteString> => Expr::lno(ExprKind::Quote(q), file_info, lno, filename),
+    "(" <e: Expr> ")" => <>,
 }
 
 Const: Constant = {
@@ -526,15 +671,14 @@ Const: Constant = {
     "None<" <t: Type> ">" => Constant::Option(OptionConst::None(t)),
     "false" => Constant::Bool(false),
     "true" => Constant::Bool(true),
-    "null" => Constant::Null,
 }
 
 FieldInitializers: Vec<FieldInitializer> = {
-    <mut l: (<FieldInitializer> ",")*> <f: FieldInitializer> ","? => { l.push(f); l },
+    <mut l: (<FieldInitializer> ",")*> <f: FieldInitializer> ","? => { l.push(f); l},
 }
 
 FieldInitializer: FieldInitializer = {
-    <i: Ident> ":" <e: Expr> => FieldInitializer::new(stringtable.name_from_id(i).to_string(), e),
+    <i: Ident> ":" <e: Expr> => FieldInitializer::new(string_table.name_from_id(i).to_string(), e),
 }
 
 CommaedExprs: Vec<Expr> = {
@@ -547,8 +691,8 @@ CommaedExprs: Vec<Expr> = {
 }
 
 AsmInsn: Instruction = {
-    <lno: @L> <o: AsmOpcode> => Instruction::from_opcode(o, DebugInfo::here(lines, lno, file)),
-    <lno: @L> "[" <v:AsmVal> "]" <o:AsmOpcode> => Instruction::from_opcode_imm(o, v, DebugInfo::here(lines, lno, file)),
+    <lno: @L> <o: AsmOpcode> => Instruction::from_opcode(o, DebugInfo::here(file_info, lno, filename)),
+    <lno: @L> "[" <v:AsmVal> "]" <o:AsmOpcode> => Instruction::from_opcode_imm(o, v, DebugInfo::here(file_info, lno, filename)),
 }
 
 AsmOpcode: Opcode = {
@@ -575,7 +719,7 @@ IdentString: String = {
 };
 
 QuoteString: Vec<u8> = {
-    <lno: @L> <q: r#"s?"[a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~-]*""#> => {
+    <lno: @L> <q: r#"s?"[a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~\\/-]*""#> => {
         let re = Regex::new(r#"s?"(0x)?[a-fA-F0-9]+""#).unwrap();
         if re.is_match(q) {
             error_system.warnings.push(
@@ -585,11 +729,11 @@ QuoteString: Vec<u8> = {
                         "String {} looks like hex but will be treated as a string",
                         Color::color(error_system.warn_color, &q),
                     ),
-                    lines.location(BytePos::from(lno) + BytePos::from(1), file).into_iter().collect()
+                    file_info.location(BytePos::from(lno) + BytePos::from(1), filename).into_iter().collect()
                 )
             );
         }
-        let re = Regex::new(r#"s?"([a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~-]*)""#).unwrap();
+        let re = Regex::new(r#"s?"([a-zA-Z0-9_ .,:?'<+>()!@#$%^&*|~\\/-]*)""#).unwrap();
         let string = re.captures(q).unwrap().get(1).map_or(String::new(), |m| m.as_str().to_string());
         string.as_bytes().to_vec()
     },
@@ -611,8 +755,8 @@ UnsignedInteger: Uint256 = {
 }
 
 ConstVal: Uint256 = {
-    "const" "::" <lno: @L> <c: IdentString> =>? {
-        let loc = lines.loc(lno, file);
+    <lno: @L> "const" "::" <c: IdentString> =>? {
+        let loc = file_info.location(BytePos::from(lno) + BytePos::from(7), filename).into_iter().collect();
         match constants.get(&c) {
             Some(i) => {
                 if c.starts_with('_') {
@@ -623,7 +767,7 @@ ConstVal: Uint256 = {
                                 "Constant {} was used despite being marked as intentionally unused",
                                 Color::color(error_system.warn_color, &c),
                             ),
-                            vec![loc]
+                            loc
                         )
                     );
                 }
@@ -634,8 +778,8 @@ ConstVal: Uint256 = {
                 error_system.errors.push(
                     CompileError::new(
                         String::from("Parser error"),
-                        format!("Unrecognized constant {}", Color::color(error_system.warn_color, &c)),
-                        vec![loc]
+                        format!("Unrecognized constant {}", Color::red(&c)),
+                        loc
                     )
                 );
                 // intentionally skip error so as to not halt compilation

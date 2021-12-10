@@ -10,7 +10,7 @@ use emulator::{ExecutionError, StackTrace};
 use std::{fs::File, io::Read, path::Path};
 
 use crate::compile::FileInfo;
-pub use emulator::{Machine, ProfilerMode};
+pub use emulator::{Machine, MachineState, ProfilerMode};
 pub use runtime_env::{
     _bytes_from_bytestack, _bytestack_from_bytes, generic_compress_token_amount,
     replay_from_testlog_file, ArbosReceipt, RuntimeEnvironment,
@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 mod blake2b;
 mod emulator;
 mod ripemd160port;
-mod runtime_env;
+pub mod runtime_env;
 
 pub fn run_from_file(
     path: &Path,

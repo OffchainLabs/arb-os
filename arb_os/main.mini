@@ -7,18 +7,23 @@ use accounts::AccountStore;
 use accounts::accountStore_init;
 use accounts::safeGetGlobalAccountStore;
 use accounts::safeSetGlobalAccountStore;
+use accounts::accountStore_transferEthBalance;
 use accounts::accountStore_createAccountFromEvmCode;
 use accounts::accountStore_upgradeContractFromEvmCode;
 
 use arbstatistics::arbStatistics_init;
 use arbowner::arbowner_init;
 
+use arbsys::arbosVersion;
+
 use blockhash::blockhash_init;
 
 use chainParameters::chainParams_init;
+use chainParameters::notifyParamsChanged;
+use chainParameters::chainParams_getOrDie;
 
-use codeSegment::codeSegment_init;
-use codeSegment::translateEvmCodeSegment;
+use std::codeSegment::codeSegment_init;
+use std::codeSegment::translateEvmCodeSegment;
 
 use contractTemplates::getArbInfoCode;
 use contractTemplates::getArbInfoAddress;
@@ -27,6 +32,7 @@ use contractTemplates::getArbInfoStorage;
 use decompression::decompression_init;
 
 use errorHandler::errorHandler_init;
+use errorHandler::errorHandler_setUpgradeProtector;
 
 use evmCallStack::evmCallStack_init;
 
@@ -55,8 +61,11 @@ use bridge_arbos_versions::remapGlobalsForUpgrade;
 var __fixedLocationGlobal: view write func(uint);    // points to EVM op dispatch function
 
 view write func main(oldGlobals: GlobalsBeforeUpgrade) {
-    if (unsafecast<any>(oldGlobals) != ()) {
+    if unsafecast<any>(oldGlobals) != any(()) {
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
+
+        // create an upgrade-only error handler that saves and restores the contents of the register
+        errorHandler_setUpgradeProtector(oldGlobals);
 
         let (newGlobals, _oldArbosVersion) = remapGlobalsForUpgrade(oldGlobals);
 
@@ -70,6 +79,23 @@ view write func main(oldGlobals: GlobalsBeforeUpgrade) {
 
         if (initializePreinstalls(true) == None<()>) {
             error;   // don't try to run without preinstalls and precompiles
+        }
+
+        notifyParamsChanged();   // call this in case parameters changed during upgrade
+
+        if (chainParams_getOrDie(const::Atom_Param_ChainID) == const::ChainID_ArbitrumOne) && (arbosVersion() == 48) {
+            // some funds were stranded due to a bug
+            // return them to the account that should have had them
+            let acctStore = safeGetGlobalAccountStore();
+            if let Some(store) = accountStore_transferEthBalance(
+                acctStore,
+                address(0x9CDd145B60a7f292D0d8B037AbaC65b6A8b7f3e5),
+                address(0x5fa351a4202c772c8d828e9220068a829d67d85c),
+                20*1000000000*1000000000,  // 20 ETH
+            ) {
+                acctStore = store;
+            }
+            safeSetGlobalAccountStore(acctStore);
         }
     } else {
         // this is a clean start, not an upgrade
@@ -86,11 +112,10 @@ view write func main(oldGlobals: GlobalsBeforeUpgrade) {
         evmOps_init();
         __fixedLocationGlobal = dispatchForEvmOp;
         blockhash_init();
-        inbox_init();
         accountStore_init();
         arbowner_init();
         txReceipts_init();
-        if (initializePreinstalls(false) == None<()>) {
+        if initializePreinstalls(false) == None<()> {
             error;   // don't try to run without preinstalls and precompiles
         }
 
@@ -109,7 +134,7 @@ view write func initializePreinstalls(isUpgrade: bool) -> option<()> {
         bytestream_new(code),
         false
     );
-    acctStore = xif (isUpgrade) {
+    acctStore = if isUpgrade {
         accountStore_upgradeContractFromEvmCode(
             acctStore,
             getArbInfoAddress(),
@@ -133,5 +158,5 @@ view write func initializePreinstalls(isUpgrade: bool) -> option<()> {
 
     safeSetGlobalAccountStore(acctStore);
 
-    return Some(());
+    Some(())
 }

@@ -10,7 +10,7 @@ type GlobalsAfterUpgrade = struct {
 };
 
 public func remapGlobalsForUpgrade(_input_globals: GlobalsBeforeUpgrade) -> (GlobalsAfterUpgrade, uint) {
-    return (struct {
+    (struct {
         unused: 0,
-    }, 0);
+    }, 0)
 }

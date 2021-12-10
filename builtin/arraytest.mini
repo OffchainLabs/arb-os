@@ -16,58 +16,58 @@ use core::array::builtin_arrayOpConsecutiveSafe;
 use core::array::array_resize;
 
 type opClosure = struct {
-	f: func(any, any) -> (any, any),
-	val: any,
+    f: func(any, any) -> (any, any),
+    val: any,
 };
 
 
 write func main() {
-	asm(tests(),) { log };
+    asm(tests().1) { log };
 }
 
-func tests() -> uint {
-	let a = newarray<any>(17);
-	if (a[6] != null) {
-		return 1;
-	}
+func tests() -> string {
+    let a = newarray<any>(17);
+    if a[6] != unsafecast<any>(()) {
+	return "new small array isn't blank";
+    }
 
-	a = newarray<uint>(71);
-	if (a[66] != 0) {
-		return 2;
-	}
+    a = newarray<uint>(71);
+    if a[66] != any(0) {
+	return "new large array isn't blank";
+    }
 
-	a = newarray<uint>(64);
-	a = a with { [17] = 3 };
-	if (a[17] != 3) {
-		return 3;
-	}
+    a = newarray<uint>(64);
+    a = a with { [17] = 3 };
+    if a[17] != any(3) {
+	return "array assignment doesn't work";
+    }
 
-	a = newarray<uint>(111);
-	a = a with { [42] = 3 };
-	a = a with { [99] = 4 };
-	a = a with { [42] = 5 };
-	if (a[42] != 5) {
-		return 4;
-	}
+    a = newarray<uint>(111);
+    a = a with { [42] = 3 };
+    a = a with { [99] = 4 };
+    a = a with { [42] = 5 };
+    if a[42] != any(5) {
+	return "array overwrites don't work";
+    }
 
-	a = newarray<uint>(111);
-	a = a with { [42] = 3 };
-	a = a with { [99] = 4 };
-	a = a with { [42] = 5 };
-	if (a[99] != 4) {
-		return 5;
-	}
+    a = newarray<uint>(111);
+    a = a with { [42] = 3 };
+    a = a with { [99] = 4 };
+    a = a with { [42] = 5 };
+    if a[99] != any(4) {
+	return "array overwrites corrupt other entries";
+    }
 
-	let a = newarray<uint>(17);
-	a = a with { [11] = 3 };
-	let result = builtin_arrayOp(
-		unsafecast<array>(a),
-		11,
-		unsafecast<opClosure>(struct { f: addFunc, val: 4, })
-	);
-	if (result.1 != 7) {
-		return 6;
-	}
+    let a = newarray<uint>(17);
+    a = a with { [11] = 3 };
+    let result = builtin_arrayOp(
+	unsafecast<array>(a),
+	11,
+	unsafecast<opClosure>(struct { f: addFunc, val: 4, })
+    );
+    if result.1 != any(7) {
+	return "array closures don't work";
+    }
     
     let a = newarray<uint>(117);
     a = a with { [58] = 32 };
@@ -76,63 +76,63 @@ func tests() -> uint {
     a = a with { [64] = 96 };
     let a = unsafecast<array>(a);
     let pair = builtin_arrayGetConsecutive(a, 58);
-    if (pair.0 != 32 || pair.1 != 64) {
-        return 7;
+    if pair.0 != any(32) || pair.1 != any(64) {
+        return "consecutive array access doesn't work";
     }
     if let Some(updated) = builtin_arraySetSafe(a, 63, 80) {
         a = updated;
     } else {
-        return 8;
+        return "array set safe doesn't work";
     }
-    if let Some(issue) = builtin_arraySetSafe(a, 117, 4) {
-        return 8;
+    if let Some(_issue) = builtin_arraySetSafe(a, 117, 4) {
+        return "array set safe went out of bounds";
     }
     let pair = builtin_arrayGetConsecutive(a, 63);
-    if (pair.0 != 80 || pair.1 != 96) {
-        return 9;
+    if pair.0 != any(80) || pair.1 != any(96) {
+        return "consecutive array access didn't update";
     }
     
-    if (builtin_arrayGetSafe(a, 116) == None<any>) {
-        return 10;
+    if builtin_arrayGetSafe(a, 116) == None<any> {
+        return "safe indexing thinks it's out of bounds";
     }
-    if (builtin_arrayGetSafe(a, 117) != None<any>) {
-        return 10;
+    if builtin_arrayGetSafe(a, 117) != None<any> {
+        return "unsafe indexing thinks it's inbounds";
     }
-    if (builtin_arrayGetConsecutiveSafe(a, 116) != None<(any, any)>) {
-        return 11;
+    if builtin_arrayGetConsecutiveSafe(a, 116) != None<(any, any)> {
+        return "unsafe consecutive indexing thinks it's inbounds";
     }
-    if (builtin_arrayGetConsecutiveSafe(a, 62) == None<(any, any)>) {
-        return 11;
+    if builtin_arrayGetConsecutiveSafe(a, 62) == None<(any, any)> {
+        return "safe consecutive indexing thinks it's out of bounds";
     }
     
     a = array_resize(a, 117, 8);
     a = array_resize(a, 116, 8);
     let (a, old) = builtin_arraySwap(a, 63, 100);
-    if (old != 80) {
-        return 12;
+    if old != any(80) {
+        return "array swap doesn't work";
     }
     if let Some(change) = builtin_arraySwapSafe(a, 63, 102) {
         a = change.0;
-        if (change.1 != 100) {
-            return 12;
+        if change.1 != any(100) {
+            return "array swap safe doesn't work";
         }
     } else {
-        return 12;
+        return "array swap safe didn't update";
     }
-    if let Some(issue) = builtin_arraySwapSafe(a, 116, 104) {
-        return 12;
+    if let Some(_issue) = builtin_arraySwapSafe(a, 116, 104) {
+        return "unsafe array swap thinks it's inbounds";
     }
     
-    if let Some(issue) = builtin_arrayOpSafe(a, 116, unsafecast<opClosure>(struct { f: addFunc, val: 8, })) {
-        return 13;
+    if let Some(_issue) = builtin_arrayOpSafe(a, 116, unsafecast<opClosure>(struct { f: addFunc, val: 8, })) {
+        return "unsafe closure corrupted the array";
     }
     if let Some(change) = builtin_arrayOpSafe(a, 63, unsafecast<opClosure>(struct { f: addFunc, val: 8, })) {
         a = change.0;
-        if (change.1 != 110) {
-            return 13;
+        if change.1 != any(110) {
+            return "array closures don't work";
         }
     } else {
-        return 13;
+        return "safe array closure thinks something is wrong";
     }
     
     let (a, value_63, value_64) = 
@@ -143,8 +143,8 @@ func tests() -> uint {
             unsafecast<opClosure>(struct { f: addFunc, val: 24, })
         );
     
-    if (value_63 != 126 || value_64 != 120) {
-        return 14;
+    if value_63 != any(126) || value_64 != any(120) {
+        return "consecutive array op miscomputes";
     }
     
     if let Some(change) = builtin_arrayOpConsecutiveSafe(
@@ -154,24 +154,24 @@ func tests() -> uint {
         unsafecast<opClosure>(struct { f: addFunc, val: 24, })
     ) {
         a = change.0;
-        if (change.1 != 142 || change.2 != 144) {
-            return 15;
+        if change.1 != any(142) || change.2 != any(144) {
+            return "safe consecutive array op miscomputes";
         }
     }
     
-    if let Some(issue) = builtin_arrayOpConsecutiveSafe(
+    if let Some(_issue) = builtin_arrayOpConsecutiveSafe(
         a,
         115,
         unsafecast<opClosure>(struct { f: addFunc, val: 16, }),
         unsafecast<opClosure>(struct { f: addFunc, val: 24, })
     ) {
-        return 15;
+        return "unsafe consecutive array op thinks it's inbounds";
     }
     
-	return 0;
+    ""
 }
 
 func addFunc(thunk: uint, oldVal: uint) -> (uint, uint) {
-	let res = thunk + oldVal;
-	return (res, res,);
+    let res = thunk + oldVal;
+    (res, res)
 }

@@ -7,6 +7,13 @@ use accounts::accounts_notifyParamsChanged;
 use core::kvs::Kvs;
 use core::kvs::builtin_kvsForall;
 
+use std::addressSet::SetOfAddresses;
+use std::addressSet::setOfAddresses_emptySet;
+use std::addressSet::setOfAddresses_add;
+use std::addressSet::setOfAddresses_remove;
+use std::addressSet::setOfAddresses_contains;
+use std::addressSet::setOfAddresses_serialize;
+
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
@@ -17,31 +24,41 @@ use std::bytestream::bytestream_get256;
 
 use gasAccounting::gasAccounting_notifyParamsChanged;
 
+const ChainOwnerKeccak = 0x1567aa7175e04611d194275bb504cc64e920959dd01df9d86ab047367aa4c534;
 
 var globalChainParameters: map<uint, uint>;
 
 public view func chainParams_get(which: uint) -> option<uint> {
-    return globalChainParameters[which];
+    globalChainParameters[which]
 }
 
 public view func chainParams_getOrDie(which: uint) -> uint {
-    return xif let Some(val) = chainParams_get(which) {
+    if let Some(val) = chainParams_get(which) {
         val
     } else {
         error
-    };
+    }
 }
 
 public view write func chainParams_set(which: uint, value: uint) {
+    if globalChainParameters[which] == None<uint> {
+        error;
+    }
+    chainParams_create(which, value);
+}
+
+public view write func chainParams_create(which: uint, value: uint) {
     set globalChainParameters[which] = value;
+    notifyParamsChanged();
 }
 
 public write func chainParams_init() {
     globalChainParameters = chainParams_getDefaults();
+    chainOwners = setOfAddresses_emptySet();   // initially, only address 0 can act as the chain owner
 }
 
 public func chainParams_getDefaults() -> map<uint, uint> {
-    return newmap<uint, uint>
+    newmap<uint, uint>
         with { [const::Atom_Param_SecondsPerBlockNumerator] = const::Default_Param_SecondsPerBlockNumerator }
         with { [const::Atom_Param_SecondsPerBlockDenominator] = const::Default_Param_SecondsPerBlockDenominator }
         with { [const::Atom_Param_FeesEnabled] = const::Default_Param_FeesEnabled }
@@ -55,7 +72,6 @@ public func chainParams_getDefaults() -> map<uint, uint> {
         with { [const::Atom_Param_ChallengePeriodEthBlocks] = const::Default_Param_ChallengePeriodEthBlocks }
         with { [const::Atom_Param_SpeedLimitPerSecond] = const::Default_Param_SpeedLimitPerSecond }
         with { [const::Atom_Param_SecondsPerSend] = const::Default_Param_SecondsPerSend }
-        with { [const::Atom_Param_ChainOwner] = const::Default_Param_ChainOwner }
         with { [const::Atom_Param_L1GasPerL1CalldataUnit] = const::Default_Param_L1GasPerL1CalldataUnit }
         with { [const::Atom_Param_L1GasPerStorage] = const::Default_Param_L1GasPerStorage }
         with { [const::Atom_Param_AvmGasPerArbGas] = const::Default_Param_AvmGasPerArbGas }
@@ -72,30 +88,34 @@ public func chainParams_getDefaults() -> map<uint, uint> {
         with { [const::Atom_Param_RetryableTxLifetimeSeconds] = const::Default_Param_RetryableTxLifetimeSeconds }
         with { [const::Atom_Param_ArbitrumNonZeroBalanceCallStipend] = const::Default_Param_ArbitrumNonZeroBalanceCallStipend }
         with { [const::Atom_Param_GasPriceOracle] = const::Default_Param_GasPriceOracle }
-    ;
+        with { [const::Atom_Param_EnableL1ContractAddressAliasing] = const::Default_Param_EnableL1ContractAddressAliasing }
 }
 
 public view write func chainParams_gotParamsMessage(data: ByteArray) {
     let stream = bytestream_new(data);
     loop {
-        let paramId = xif let Some(res) = bytestream_get256(stream) {
+        let paramId = if let Some(res) = bytestream_get256(stream) {
             let (*stream, pid) = res;
             pid
         } else {
-            notifyParamsChanged();
             return;
             0
         };
-        let value = xif let Some(res) = bytestream_get256(stream) {
+        let value = if let Some(res) = bytestream_get256(stream) {
             let (*stream, val) = res;
             val
         } else {
-            notifyParamsChanged();
-            return;
-            0
+            error   // should never have an id without a matching value
         };
-        chainParams_set(paramId, value);
-    }
+
+        if paramId == const::ChainOwnerKeccak {
+            // special-case this, for backward compatibility
+            // use of this is deprecated, and it will be removed in a future ArbOS upgrade
+            addChainOwner(address(value));
+        } else {
+            chainParams_set(paramId, value);
+        }
+    };
 }
 
 public view write func notifyParamsChanged() {
@@ -104,15 +124,11 @@ public view write func notifyParamsChanged() {
 }
 
 public view func chainParams_chainId() -> uint {
-    return chainParams_getOrDie(const::Atom_Param_ChainID);
-}
-
-public view func chainParams_getOwner() -> address {
-    return address(chainParams_getOrDie(const::Atom_Param_ChainOwner));
+    chainParams_getOrDie(const::Atom_Param_ChainID)
 }
 
 public view func chainParams_getDefaultAggregator() -> address {
-    return address(chainParams_getOrDie(const::Atom_Param_DefaultAggregator));
+    address(chainParams_getOrDie(const::Atom_Param_DefaultAggregator))
 }
 
 public view write func chainParams_setDefaultAggregator(newDefault: address) {
@@ -120,24 +136,46 @@ public view write func chainParams_setDefaultAggregator(newDefault: address) {
 }
 
 public view func chainParams_getSecondsPerSend() -> uint {
-    return chainParams_getOrDie(const::Atom_Param_SecondsPerSend);
+    chainParams_getOrDie(const::Atom_Param_SecondsPerSend)
 }
 
 public view func chainParams_serializeAllParams() -> ByteArray {
-    return unsafecast<ByteArray>(
+    unsafecast<ByteArray>(
         builtin_kvsForall(
             unsafecast<Kvs>(globalChainParameters),
             unsafecast<func(any, any, any) -> any>(sapClosure),
             bytearray_new(0),
         )
-    );
+    )
 }
 
 func sapClosure(key: uint, value: uint, ba: ByteArray) -> ByteArray {
     let sz = bytearray_size(ba);
-    return bytearray_set256(
+    bytearray_set256(
         bytearray_set256(ba, sz, key),
         sz+32,
         value,
-    );
+    )
+}
+
+var chainOwners: SetOfAddresses;
+
+public view write func addChainOwner(newOwner: address) {
+    chainOwners = setOfAddresses_add(chainOwners, newOwner);
+}
+
+public view write func removeChainOwner(ownerToRemove: address) {
+    chainOwners = setOfAddresses_remove(chainOwners, ownerToRemove);
+}
+
+public view func serializedListOfChainOwners() -> ByteArray {
+    if let Some(ba) = setOfAddresses_serialize(chainOwners) {
+        ba
+    } else {
+        error
+    }
+}
+
+public view func hasChainOwnerPrivileges(addr: address) -> bool {
+    setOfAddresses_contains(chainOwners, addr) || (addr == address(0))
 }

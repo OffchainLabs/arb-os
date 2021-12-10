@@ -1,5 +1,5 @@
 {
-  "arbos_version": 37,
+  "arbos_version": 51,
   "integer": {
     "AVMSendType_batch": 0,
     "AVM_add": 1,
@@ -85,7 +85,12 @@
     "Address_ArbSys": 100,
     "Address_ArbosTest": 105,
     "Address_ReservedForEthBridge": 200,
+    "ChainID_ArbitrumOne": 42161,
     "Charging_MinArbGasForContractTx": 50,
+    "Charging_MemoryChargeDenominator": 100000,
+    "ContractStateVersion_original": 0,
+    "_ContractStateVersion_propStorageGas": 1,
+    "ContractStateVersion_current": 1,
     "EVMCallType_call": 0,
     "EVMCallType_callcode": 1,
     "EVMCallType_delegatecall": 2,
@@ -148,10 +153,10 @@
     "L1MessageType_L2FundedByL1": 7,
     "L1MessageType_endOfBlock": 6,
     "L1MessageType_rollupProtocolEvent": 8,
-    "L1MessageType_setChainParameters": 4,
+    "L1MessageType_setChainParameters_v36_and_below": 4,
+    "L1MessageType_setChainParameters": 11,
     "L1MessageType_submitRetryableTx": 9,
     "L2MessageType_batch": 3,
-    "L2MessageType_blsBatch": 8,
     "L2MessageType_heartbeat": 6,
     "L2MessageType_nonmutatingCall": 2,
     "L2MessageType_signedCompressedTx": 7,
@@ -161,6 +166,8 @@
     "LogType_send": 2,
     "LogType_sendMerkleTree": 3,
     "LogType_txReceipt": 0,
+    "MinArbitrumPrecompile": 100,
+    "MaxArbitrumPrecompile": 200,
     "NumEvmOps": 48,
     "SendType_sendTxToL1": 3,
     "TraceEvent_call": 0,
@@ -171,13 +178,14 @@
     "TxResultCode_cannotDeployAtAddress": 7,
     "TxResultCode_congestion": 2,
     "_TxResultCode_exceededTxGasLimit": 8,
+    "TxResultCode_executionRanOutOfGas": 16,
     "TxResultCode_formatError": 6,
     "TxResultCode_gasPriceTooLow": 11,
     "TxResultCode_insufficientBalance": 4,
+    "TxResultCode_insufficientGasFunds": 3,
     "TxResultCode_insufficientGasForBaseFee": 9,
     "TxResultCode_belowMinimumTxGas": 10,
     "TxResultCode_noGasForAutoRedeem": 12,
-    "TxResultCode_noGasFunds": 3,
     "TxResultCode_revert": 1,
     "TxResultCode_senderNotPermitted": 13,
     "TxResultCode_sequenceNumberTooLow": 14,
@@ -186,7 +194,11 @@
     "TxResultCode_unknownFailure": 255
   },
   "hex": {
-    "BLSSignatureDomainBase": "73a92f91d473214defd5ffa91d036007eb2e6487fffaa551835e988fb24aaa2b"
+    "BLSSignatureDomainBase": "73a92f91d473214defd5ffa91d036007eb2e6487fffaa551835e988fb24aaa2b",
+    "HashOfEmptyCode": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+    "L1ToL2MapConstant": "1111000000000000000000000000000000001111",
+    "MaxArraySize": "10000000000000000",
+    "WildcardForAddress": "010000000000000000000000000000000000000000"
   },
   "contract_folder": "contracts/artifacts/arbos/builtin",
   "contract": [
@@ -212,7 +224,6 @@
     "ChallengePeriodEthBlocks": 45818,
     "SpeedLimitPerSecond": 400000,
     "SecondsPerSend": 1800,
-    "ChainOwner": 0,
     "L1GasPerL1CalldataUnit": 1,
     "L1GasPerStorage": 2000,
     "AvmGasPerArbGas": 100,
@@ -227,8 +238,9 @@
     "L1GasPriceEstimateWeightNumerator": 1,
     "L1GasPriceEstimateWeightDenominator": 50,
     "RetryableTxLifetimeSeconds": 604800,
-    "ArbitrumNonZeroBalanceCallStipend": 200,
-    "GasPriceOracle": 0
+    "ArbitrumNonZeroBalanceCallStipend": 1000,
+    "GasPriceOracle": 0,
+    "EnableL1ContractAddressAliasing": 1
   },
   "parameters_hex": { }
 }

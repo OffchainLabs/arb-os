@@ -268,7 +268,7 @@ impl MachineState {
 /// Holds AVM bytecode in a list of segments, the runtime is held on segment 0.
 #[derive(Debug)]
 pub struct CodeStore {
-    segments: Vec<Vec<Instruction<AVMOpcode>>>,
+    pub segments: Vec<Vec<Instruction<AVMOpcode>>>,
 }
 
 impl CodeStore {
@@ -730,7 +730,7 @@ pub struct Machine {
     pub code: CodeStore,
     static_val: Value,
     pub register: Value,
-    err_codepoint: CodePt,
+    pub err_codepoint: CodePt,
     arb_gas_remaining: Uint256,
     pub runtime_env: RuntimeEnvironment,
     file_info_chart: BTreeMap<u64, FileInfo>,
@@ -1936,9 +1936,17 @@ impl Machine {
                     }
                     AVMOpcode::Blake2f => {
                         let t = self.stack.pop_buffer(&self.state)?;
-                        self.stack.push_buffer(blake2bf_instruction(t));
-                        self.incr_pc();
-                        Ok(true)
+                        if let Some(res) = blake2bf_instruction(t) {
+                            self.stack.push_buffer(res);
+                            self.incr_pc();
+                            Ok(true)
+                        } else {
+                            Err(ExecutionError::new(
+                                "too many steps in Blake2f",
+                                &self.state,
+                                None,
+                            ))
+                        }
                     }
                     AVMOpcode::Inbox => {
                         match self.runtime_env.get_from_inbox() {
@@ -2075,15 +2083,15 @@ impl Machine {
                     }
                     AVMOpcode::DebugPrint => {
                         let r1 = self.stack.pop(&self.state)?;
-                        println!("debugprint: {}", r1);
+                        println!("debugprint: {}", r1.pretty_print(Color::PINK));
                         println!(
                             "{}\n{}",
-                            try_display_location(
+                            Color::grey(try_display_location(
                                 insn.debug_info.location,
                                 &self.file_info_chart,
                                 true
-                            ),
-                            self.arb_gas_remaining
+                            )),
+                            Color::blue(&self.arb_gas_remaining),
                         );
                         check_debugprint_for_malformed_trace_info(&r1);
                         self.incr_pc();
@@ -2169,11 +2177,11 @@ impl Machine {
                     AVMOpcode::GetBuffer64 => {
                         let offset = self.stack.pop_usize(&self.state)?;
                         let buf = self.stack.pop_buffer(&self.state)?;
-                        if offset + 7 < offset {
+                        if offset.overflowing_add(7).1 {
                             return Err(ExecutionError::new(
                                 "buffer overflow",
                                 &self.state,
-                                Some(Value::Int(Uint256::from_usize(offset))),
+                                Some(Value::from(offset)),
                             ));
                         }
                         let mut res = [0u8; 8];
@@ -2187,11 +2195,11 @@ impl Machine {
                     AVMOpcode::GetBuffer256 => {
                         let offset = self.stack.pop_usize(&self.state)?;
                         let buf = self.stack.pop_buffer(&self.state)?;
-                        if offset + 31 < offset {
+                        if offset.overflowing_add(31).1 {
                             return Err(ExecutionError::new(
                                 "buffer overflow",
                                 &self.state,
-                                Some(Value::Int(Uint256::from_usize(offset))),
+                                Some(Value::from(offset)),
                             ));
                         }
                         let mut res = [0u8; 32];
@@ -2214,11 +2222,11 @@ impl Machine {
                     }
                     AVMOpcode::SetBuffer64 => {
                         let offset = self.stack.pop_usize(&self.state)?;
-                        if offset + 7 < offset {
+                        if offset.overflowing_add(7).1 {
                             return Err(ExecutionError::new(
                                 "buffer overflow",
                                 &self.state,
-                                Some(Value::Int(Uint256::from_usize(offset))),
+                                Some(Value::from(offset)),
                             ));
                         }
                         let val = self.stack.pop_uint(&self.state)?;
@@ -2226,7 +2234,7 @@ impl Machine {
                         let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
                         for i in 0..8 {
-                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[i]);
+                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[24 + i]);
                         }
                         self.stack.push(Value::copy_buffer(nbuf));
                         self.incr_pc();
@@ -2234,11 +2242,11 @@ impl Machine {
                     }
                     AVMOpcode::SetBuffer256 => {
                         let offset = self.stack.pop_usize(&self.state)?;
-                        if offset + 31 < offset {
+                        if offset.overflowing_add(31).1 {
                             return Err(ExecutionError::new(
                                 "buffer overflow",
                                 &self.state,
-                                Some(Value::Int(Uint256::from_usize(offset))),
+                                Some(Value::from(offset)),
                             ));
                         }
                         let val = self.stack.pop_uint(&self.state)?;

@@ -4,6 +4,7 @@
 
 use evmCallStack::emptyAvmStack;
 use evmCallStack::cleanAvmAuxStackAndCall;
+use evmCallStack::evmCallStack_returnFromCall;
 use evmCallStack::evmCallStack_isEmpty;
 use evmCallStack::evmCallStack_callHitError;
 use evmCallStack::evmCallStack_stackInfo;
@@ -37,26 +38,29 @@ public view write func errorHandler() {
     //      we could run out of AVM gas while we're running this handler or cleaning up the application's state.
     // If that happens, we'll get thrown back to this error handler again, but with AVM gas set to MaxUint256.
     // When we re-enter this handler, it will look like the application ran out of gas.
-    // That's OK, because the only "harm" done is that the double-error situation of application error plus gas underflow
-    //      gets detected as just a gas underflow.  The effect on the application will be the same either way.
+    // That's OK, because the only "harm" done is that the double-error situation of application error plus gas
+    //      underflow gets detected as just a gas underflow. The effect on the application will be the same either way.
 
-    if (inErrorHandler) {
+    let outOfGas = if inErrorHandler {
         debug(666);
+        false
     } else {
         inErrorHandler = true;
-        if (getGas() > (~0 - 500)) {
+        if getGas() > (~0 - 500) {
             // application ran out of gas
             // duplicate stackInfo call inside both arms of loop, to make sure it happens after the gas check
             let (txid, addrs, parentAddrs) = evmCallStack_stackInfo();
-            debug((665, txid, addrs, parentAddrs)) ;
+            debug((665, txid, addrs, parentAddrs));
+            true
         } else {
             // some other error
             let (txid, addrs, parentAddrs) = evmCallStack_stackInfo();
             debug((666, txid, addrs, parentAddrs));
+            false
         }
-    }
+    };
 
-    if (evmCallStack_isEmpty()) {
+    if evmCallStack_isEmpty() {
         // Oh no, we must have hit an unexpected error in ArbOS.
         // That shouldn't have happened, but we have to make the best of the situation.
         // So we'll clean up our stacks, then jump back to the main run loop.
@@ -66,8 +70,45 @@ public view write func errorHandler() {
     } else {
         // Application code must have hit an error.
         inErrorHandler = false;
+        let _ = evmCallStack_returnFromCall(
+            if outOfGas { const::TxResultCode_executionRanOutOfGas } else { const::TxResultCode_revert },
+            0,
+            0,
+            None
+        );
+
+        // throw a soft error, in case _returnFromCall didn't resolve the problem
         evmCallStack_callHitError(0);  // this will never return
     }
-    //NOTREACHED
+    // NOTREACHED
     error;
+}
+
+public view write func errorHandler_setUpgradeProtector(oldGlobals: any) {
+
+    // At this point in time, the old globals only exist on the stack.
+    // The register has been set to include the shape of the new globals + the new segment's jump table,
+    // which is needed to ensure any backward jumps go to the right codepoints.
+
+    // In order to ensure that an error while upgrading doesn't cause us to lose the old state forever,
+    // we set up a temporary upgrade-only error handler that restores the global state and jumps
+    // back to the old ArbOS, which can then revert the upgrade transaction.
+
+    // Get the old ArbOS error handler
+    let oldErrorHandler = asm() func() { errpush };
+
+    // Create a new code segment
+    let protector = asm() func() { errcodept };
+
+    // End the error handler protector by jumping to the old error handler
+    protector = asm(const::AVM_jump, oldErrorHandler, protector) func() { pushinsnimm };
+
+    // Before we jump back, switch back to the error handler being the old one
+    protector = asm(const::AVM_errset, oldErrorHandler, protector) func() { pushinsnimm };
+
+    // Before handling the error, revert to the old globals
+    protector = asm(const::AVM_rset, oldGlobals, protector) func() { pushinsnimm };
+
+    // Set the upgrade error handler
+    asm(protector) { errset };
 }

@@ -18,6 +18,7 @@ use evmCallStack::evmCallFrame_getCaller;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownCodePc;
+use evmOps::evmOp_revertIfStatic;
 
 use accounts::account_setAggregatorDecompressionState;
 
@@ -36,15 +37,15 @@ use decompression::parseAggregatorFunctionTable;
 public view write func arbFunctionTable_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
-        if (bytearray_size(calldata) < 4) {
+        if bytearray_size(calldata) < 4 {
             evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 0, 0, 0);
         }
         let funcCode = getFuncCode(calldata);
-        if (funcCode == 0xce2ae159) {
+        if funcCode == 0xce2ae159 {
             arbFunctionTable_upload(topFrame, calldata);
-        } elseif(funcCode == 0x88987068) {
+        } else if funcCode == 0x88987068 {
             arbFunctionTable_size(topFrame, calldata);
-        } elseif(funcCode == 0xb464631b) {
+        } else if funcCode == 0xb464631b {
             arbFunctionTable_get(topFrame, calldata);
         } else {
             // unrecognized function code
@@ -57,12 +58,13 @@ public view write func arbFunctionTable_txcall() {
 }
 
 func getFuncCode(ba: ByteArray) -> uint {
-    return (bytearray_get256(ba, 0) >> 224);
+    bytearray_get256(ba, 0) >> 224
 }
 
 // function upload(bytes calldata buf) external;
 view write func arbFunctionTable_upload(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) < (4+2*32)) {
+    evmOp_revertIfStatic();
+    if bytearray_size(calldata) < (4+2*32) {
         evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 190, 0, 0);
     }
 
@@ -83,7 +85,7 @@ view write func arbFunctionTable_upload(topFrame: EvmCallFrame, calldata: ByteAr
         evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 191, 0, 0);
     }
 
-    if (evmCallStack_setAccount(callerAddr, account)) {
+    if evmCallStack_setAccount(callerAddr, account) {
         evmOp_return(0, 0);
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 192, 0, 0);
@@ -92,22 +94,22 @@ view write func arbFunctionTable_upload(topFrame: EvmCallFrame, calldata: ByteAr
 
 // function size(address addr) external view returns(uint);
 view write func arbFunctionTable_size(_topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> uint
-    if (bytearray_size(calldata) != 36) {
+    if bytearray_size(calldata) != 36 {
         evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 200, 0, 0);
     }
 
     if let Some(size) = functionTableSize(address(bytearray_get256(calldata, 4))) {
-        if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, size))) {
+        if evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, size)) {
             evmOp_return(0, 32);
         }
     }
 
-        evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 201, 0, 0);
+    evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 201, 0, 0);
 }
 
 // function get(address addr, uint index) external view returns(uint, bool, uint);
 view write func arbFunctionTable_get(_topFrame: EvmCallFrame, calldata: ByteArray) { // (address, uint) -> (uint, bool, uint)
-    if (bytearray_size(calldata) != 68) {
+    if bytearray_size(calldata) != 68 {
         evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 210, 0, 0);
     }
 
@@ -116,7 +118,7 @@ view write func arbFunctionTable_get(_topFrame: EvmCallFrame, calldata: ByteArra
 
     if let Some(res) = getFromFunctionTable(addr, index) {
         let (funcCode, isPayable, gasLimit) = res;
-        if (evmCallStack_setTopFrameMemory(
+        if evmCallStack_setTopFrameMemory(
             bytearray_set256(
                 bytearray_set256(
                     bytearray_set256(
@@ -130,7 +132,7 @@ view write func arbFunctionTable_get(_topFrame: EvmCallFrame, calldata: ByteArra
                 64,
                 gasLimit,
             )
-        )) {
+        ) {
             evmOp_return(0, 96);
         }
     }

@@ -33,7 +33,7 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
-
+          
   test:
     name: Test with ${{ matrix.rust }} rust on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -41,6 +41,7 @@ jobs:
       matrix:
         os: [ubuntu-20.04]
         rust: [stable, nightly]
+      fail-fast: false
 
     steps:
       - name: Checkout
@@ -97,16 +98,15 @@ jobs:
           sudo npm install -g yarn && cd contracts && yarn install
 
       - name: Make and test ArbOS
-        run: make clean && make
+        run: make clean && make -j ci compile_options="-w"
 
-      - name: Check if ArbOS changed
+      - name: Check if ArbOS or replayTests changed
         run: git update-index --refresh && git diff-index HEAD --
 
       - name: Create code-coverage files if supported for rust ${{ matrix.rust }}
         if: matrix.rust == 'nightly'
         run: |
           grcov . --binary-path ./target/release/ -s . -t lcov --branch --ignore-not-existing --ignore "/*" -o lcov.info
-          make coverage
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1
@@ -116,3 +116,58 @@ jobs:
           files: ./lcov.info,./lcov-mini.info
           fail_ci_if_error: true
           verbose: false
+
+  node:
+    name: Node integration test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+
+      - name: Install dependencies
+        run: |
+          sudo add-apt-repository -y ppa:longsleep/golang-backports
+          sudo apt-get update && sudo apt-get install -y \
+            autoconf automake cmake libboost-dev libboost-filesystem-dev libgmp-dev \
+            librocksdb-dev libssl-dev libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev \
+            liblz4-dev libzstd-dev libtool golang-go clang-format cmake
+          sudo apt-get install librocksdb-dev
+          #
+          # If apt's rocksdb is ever out of date, we'll need to use the following
+          #   git clone -b v6.11.4 https://github.com/facebook/rocksdb
+          #   cd rocksdb && make shared_lib && sudo make install
+          #
+          curl -sSL "https://github.com/gotestyourself/gotestsum/releases/download/v1.7.0/gotestsum_1.7.0_linux_amd64.tar.gz" | sudo tar -xz -C /usr/local/bin gotestsum
+
+      - name: Clone Arbitrum
+        run: |
+          git clone --recursive https://github.com/OffchainLabs/arbitrum.git
+          cd arbitrum && git submodule update --init --recursive
+
+      - name: Copy over this branch's ArbOS
+        run: |
+          rm -r arbitrum/packages/arb-os/*
+          # We'd need `make testlogs` to generate these files
+          #   cp -r testlogs/* arbitrum/packages/arb-avm-cpp/tests/arbos-cases/
+          mv * arbitrum/packages/arb-os/ || true
+
+      - name: Build Arbitrum
+        run: |
+          mkdir arbitrum/packages/arb-avm-cpp/build/
+          cd $_
+          cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          make -j
+
+      - name: Test Node's C++ Database
+        run: |
+          ./arbitrum/packages/arb-avm-cpp/build/bin/avm_tests
+
+      - name: Test Node's Core
+        run: |
+          cd arbitrum/packages/arb-node-core/
+          gotestsum --format testname | tee issues | grep FAIL
+
+      - name: Test Node's RPC
+        run: |
+          cd arbitrum/packages/arb-rpc-node/
+          gotestsum --format testname | tee issues | grep FAIL

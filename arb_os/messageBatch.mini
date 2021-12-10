@@ -11,9 +11,11 @@ use std::bytestream::bytestream_get256;
 use std::bytestream::bytestream_skipBytes;
 use std::bytestream::bytestream_bytesReadSoFar;
 use std::bytestream::bytestream_getCalldataUnits;
+use std::bytestream::bytestream_atEof;
+
+use chainParameters::chainParams_getDefaultAggregator;
 
 use inbox::IncomingRequest;
-use inbox::GasEstimationParams;
 
 use std::rlp::rlp_decodeUint;
 
@@ -21,24 +23,25 @@ use std::rlp::rlp_decodeUint;
 type MessageBatch = struct {
     template: IncomingRequest,
     stream: ByteStream,
+    nested: bool,
     numSoFar: uint,
 };
 
 public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
-    return xif ( ((msg.kind == const::L1MessageType_L2) || (msg.kind == const::L1MessageType_L2ForGasEstimation))
-                  && (bytearray_getByte(msg.msgData, 0) == const::L2MessageType_batch) ) {
+    if ((msg.kind == const::L1MessageType_L2) || (msg.kind == const::L1MessageType_L2ForGasEstimation))
+                  && (bytearray_getByte(msg.msgData, 0) == const::L2MessageType_batch) {
         let stream = bytestream_new(msg.msgData);
         stream = bytestream_skipBytes(stream, 1)?;    // skip past type byte in message
 
         // aggregator credit goes to the original aggregator of the request, if any, otherwise to sender of request
-        let (aggregator, gasEstimationParams) = xif (msg.kind == const::L1MessageType_L2) {
+        let (aggregator, gasEstimationParams) = if msg.kind == const::L1MessageType_L2 {
             let agg = msg.sender;
             if let Some(aggInfo) = msg.aggregator {
                 if let Some(agg2) = aggInfo.aggregator {
                     agg = agg2;
                 }
             }
-            (agg, None<GasEstimationParams>)
+            (agg, None)
         } else {
             let (*stream, agg) = bytestream_get256(stream)?;
             let (*stream, limit) = bytestream_get256(stream)?;
@@ -52,6 +55,7 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
             )
         };
 
+        let nested = msg.provenance.parentRequestId != 0;
         Some(
             struct {
                 template: {
@@ -68,20 +72,21 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
                     msg
                 },
                 stream: stream,
+                nested: nested,
                 numSoFar: 0,
             }
         )
     } else {
         // it's not a batch
-        None<MessageBatch>
-    };
+        None
+    }
 }
 
-public func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)> {
+public view func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)> {
     // returns next message in the batch (and updated batch), or None if no more messages in batch
     let (stream, l2MsgLength) = rlp_decodeUint(batch.stream)?;
 
-    return xif let Some(res) = bytestream_getN(stream, l2MsgLength) {
+    if let Some(res) = bytestream_getN(stream, l2MsgLength) {
         let streamBeforeCalldata = stream;
         let (*stream, extractedL2data) = res;
 
@@ -98,15 +103,23 @@ public func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, Me
                         bytestream_bytesReadSoFar(stream) - bytestream_bytesReadSoFar(streamBeforeCalldata),
                     ),
                 });
+                if l2MsgLength == 0 // The aggregator is signaling an end of block
+                        && request.sender == chainParams_getDefaultAggregator() // They are the default aggregator
+                        && !batch.nested // This isn't a nested batch
+                        && bytestream_atEof(stream) // This is the end of the batch
+                {
+                    set request.kind = const::L1MessageType_endOfBlock;
+                }
                 request
             },
             {
-                set batch.stream = stream;
-                set batch.numSoFar = batch.numSoFar + 1;
-                batch
+                let tmpBatch = batch;
+                set tmpBatch.stream = stream;
+                set tmpBatch.numSoFar = tmpBatch.numSoFar + 1;
+                tmpBatch
             }
         ))
     } else {
-        None<(IncomingRequest, MessageBatch)>
-    };
+        None
+    }
 }

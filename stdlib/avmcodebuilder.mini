@@ -5,6 +5,9 @@
 use std::bytestream::ByteStream;
 use std::bytestream::bytestream_atEof;
 use std::bytestream::bytestream_getByte;
+use std::bytestream::bytestream_getN;
+
+use std::bytearray::bytearray_toSizeAndBuffer;
 
 use std::rlp::rlp_decodeUint;
 
@@ -89,26 +92,31 @@ func isSafeInstruction(insn: uint) -> bool {
 
 func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> option<(ByteStream, any)> {
     let (*stream, kind) = bytestream_getByte(stream)?;
-    return xif (kind == 0) {  // integer
+    return if (kind == 0) {  // integer
         let (*stream, val) = rlp_decodeUint(stream)?;
         Some((stream, val))
-    } elseif (kind == 1) { // codepoint
+    } else if (kind == 1) { // codepoint
         let (*stream, idx) = rlp_decodeUint(stream)?;
-        xif let Some(codePt) = codeMap[idx] {
+        if let Some(codePt) = codeMap[idx] {
             Some((stream, codePt))
         } else {
             None<(ByteStream, any)>
         }
-    } elseif (kind == 2) { // empty buffer
+    } else if (kind == 2) {    // empty buffer
         Some((stream, newbuffer()))
-    } elseif (kind == 10) {   // 0-tuple
+    } else if (kind == 3) {    // non-empty buffer
+        let (*stream, size) = rlp_decodeUint(stream)?;
+        let (*stream, ba) = bytestream_getN(stream, size)?;
+        let (_, buf) = bytearray_toSizeAndBuffer(ba);
+        Some((stream, buf))
+    } else if (kind == 10) {   // 0-tuple
         Some((stream, ()))
-    } elseif (kind == 11) {   // 1-tuple
+    } else if (kind == 11) {   // 1-tuple
         let val = unsafecast<[1]any>(None<any>);
         let (*stream, x) = unmarshalValue(stream, codeMap)?;
         set val[0] = x;
         Some((stream, val))
-    } elseif (kind == 12) {   // 2-tuple
+    } else if (kind == 12) {   // 2-tuple
         let val = unsafecast<[2]any>((0,0));
         let i = 0;
         while (i < 2) {
@@ -117,7 +125,7 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
             i = i+1;
         }
         Some((stream, val))
-    } elseif (kind == 13) {   // 3-tuple
+    } else if (kind == 13) {   // 3-tuple
         let val = unsafecast<[3]any>((0,0,0));
         let i = 0;
         while (i < 3) {
@@ -126,7 +134,7 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
             i = i+1;
         }
         Some((stream, val))
-    } elseif (kind == 14) {   // 4-tuple
+    } else if (kind == 14) {   // 4-tuple
         let val = unsafecast<[4]any>((0,0,0,0));
         let i = 0;
         while (i < 4) {
@@ -135,7 +143,7 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
             i = i+1;
         }
         Some((stream, val))
-    } elseif (kind == 15) {   // 5-tuple
+    } else if (kind == 15) {   // 5-tuple
         let val = unsafecast<[5]any>((0,0,0,0,0));
         let i = 0;
         while (i < 5) {
@@ -144,7 +152,7 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
             i = i+1;
         }
         Some((stream, val))
-    } elseif (kind == 16) {   // 6-tuple
+    } else if (kind == 16) {   // 6-tuple
         let val = unsafecast<[6]any>((0,0,0,0,0,0));
         let i = 0;
         while (i < 6) {
@@ -153,7 +161,7 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
             i = i+1;
         }
         Some((stream, val))
-    } elseif (kind == 17) {   // 7-tuple
+    } else if (kind == 17) {   // 7-tuple
         let val = unsafecast<[7]any>((0,0,0,0,0,0,0));
         let i = 0;
         while (i < 7) {
@@ -162,7 +170,7 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
             i = i+1;
         }
         Some((stream, val))
-    } elseif (kind == 18) {   // 8-tuple
+    } else if (kind == 18) {   // 8-tuple
         let val = unsafecast<[8]any>((0,0,0,0,0,0,0,0));
         let i = 0;
         while (i < 8) {

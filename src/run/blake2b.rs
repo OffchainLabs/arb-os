@@ -47,30 +47,24 @@ impl Clone for Blake2b {
     }
 }
 
-pub fn blake2bf_instruction(buf: Buffer) -> Buffer {
+pub fn blake2bf_instruction(buf: Buffer) -> Option<Buffer> {
     let mut b = [0u8; 213];
     for i in 0..b.len() {
         b[i] = buf.read_byte(i as u128);
     }
     b[212] = b[212] & 0x1u8;
-    match eth_blake2bf_from_bytes(b) {
-        Some(result) => {
-            let mut ret = Buffer::new_empty();
-            for i in 0..64 {
-                ret = ret.set_byte(i, result[i as usize]);
-            }
-            ret
-        }
-        None => {
-            panic!();
-        }
+    let result = eth_blake2bf_from_bytes(b)?;
+    let mut ret = Buffer::new_empty();
+    for i in 0..64 {
+        ret = ret.set_byte(i, result[i as usize]);
     }
+    Some(ret)
 }
 
 pub fn eth_blake2bf_from_bytes(b: [u8; 213]) -> Option<[u8; 64]> {
-    let mut num_rounds = u32::from_be_bytes(b[0..4].try_into().unwrap());
+    let num_rounds = u32::from_be_bytes(b[0..4].try_into().unwrap());
     if num_rounds > 0xffff {
-        num_rounds = 0xffff;
+        return None;
     }
     let mut offset = 4;
     let mut h = [0u64; 8];

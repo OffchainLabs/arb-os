@@ -1,20 +1,25 @@
+/*
+ * Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
+ */
+
 
 var global: uint;
 
-type Produce = func(uint, uint) -> (uint, buffer);
+type Produce = func(uint, uint) -> string;
 
 write func main() {
-	asm(tests().1) { log };
+    asm(tests().1) { log };
 }
 
-func tests() -> (uint, buffer) {
+func tests() -> string {
 
     let lambda = make_lambda();
 
-    if (lambda(48, 96) != "Closures are so cool!") {
-        return "Uh oh, closures don't work when passed around";
+    if lambda(48, 96) != "Closures are so cool!" {
+        "Uh oh, closures don't work when passed around"
+    } else {
+        ""
     }
-    return "";
 }
 
 func make_lambda() -> Produce {
@@ -22,18 +27,18 @@ func make_lambda() -> Produce {
     let a = 1024;
     let b = 512;
 
-    let lambda = closure(arg1: uint, arg2: uint) -> (uint, buffer) {
+    let lambda = closure(arg1: uint, arg2: uint) -> string {
         // this lambda has no captures
         
         let _ = arg1 + arg2;
         let b = "Closures are so cool!";
         
-        return b;
+        b
     };
 
-    if (lambda(a, b) != "Closures are so cool!") {
+    if lambda(a, b) != "Closures are so cool!" {
         return error;
     }
 
-    return lambda;
+    lambda
 }
