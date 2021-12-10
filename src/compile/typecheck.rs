@@ -3234,8 +3234,7 @@ fn typecheck_binary_op(
             )),
         },
         BinaryOp::Equal | BinaryOp::NotEqual => {
-            let mutual = subtype1.assignable(&subtype2, type_tree, HashSet::new())
-                && subtype2.assignable(&subtype1, type_tree, HashSet::new());
+            let mutual = subtype1.mutually_assignable(&subtype2, type_tree);
 
             if mutual {
                 Ok(TypeCheckedExprKind::Binary(
