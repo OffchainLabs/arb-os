@@ -24,11 +24,11 @@ use std::bytearray::marshalledBytes_hash;
 const TwoTo64 = 0x10000000000000000;
 const LargeOffset = 0xf000000000000000;
 
-write func main() {
+throw write func main() {
     asm(tests()) { log };
 }
 
-write func tests() -> uint {
+throw write func tests() -> uint {
 
     let buf = newbuffer();
     let buf2 = setbuffer8(buf, 10000, 12);
@@ -297,7 +297,7 @@ write func tests() -> uint {
     testCalldataUnitCounting()
 }
 
-func setupFromUnmarshal() -> ByteArray {
+throw func setupFromUnmarshal() -> ByteArray {
     let marshalledStruct = unsafecast<MarshalledBytes>((
 	67,
 	(

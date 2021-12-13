@@ -163,19 +163,19 @@ public sensitive view write func dispatchForEvmOp(index: uint) {
 // Compiled EVM code will call that function to implement the XXX instruction.
 // Most of the functions are fairly simple, and access the callframe or similar information.
 
-public view write func evmOp_stop() {
+public view write throw func evmOp_stop() {
     // return from the current call, with no calldata
     evmOp_return(0, 0);
 }
 
-public view write func evmOp_sha3(baseMemAddr: uint, nbytes: uint) -> bytes32 {
+public view write throw func evmOp_sha3(baseMemAddr: uint, nbytes: uint) -> bytes32 {
     if nbytes > 0 {
         evmCallStack_touchMemoryOffset(safeAdd(baseMemAddr, nbytes));
     }
     keccak256(evmCallStack_getTopFrameMemoryOrDie(), baseMemAddr, nbytes)
 }
 
-public view write func evmOp_address() -> address {
+public view write throw func evmOp_address() -> address {
     if let Some(topFrame) = evmCallStack_topFrame() {
         account_getAddress(evmCallFrame_runningAsAccount(topFrame))
     } else {
@@ -184,7 +184,7 @@ public view write func evmOp_address() -> address {
     }
 }
 
-public view write func evmOp_balance(addrAsUint: uint) -> uint {
+public view write throw func evmOp_balance(addrAsUint: uint) -> uint {
     let addr = address(addrAsUint);  // truncates if necessary
     if let Some(topFrame) = evmCallStack_topFrame() {
         account_getBalance(
@@ -196,7 +196,7 @@ public view write func evmOp_balance(addrAsUint: uint) -> uint {
     }
 }
 
-public view write func evmOp_selfbalance() -> uint {
+public view write throw func evmOp_selfbalance() -> uint {
     if let Some(topFrame) = evmCallStack_topFrame() {
         account_getBalance(
             evmCallFrame_runningAsAccount(topFrame)
@@ -207,7 +207,7 @@ public view write func evmOp_selfbalance() -> uint {
     }
 }
     
-public view write func evmOp_origin() -> address {
+public view write throw func evmOp_origin() -> address {
     if let Some(oldie) = evmCallStack_oldestCallFrame() {
         evmCallFrame_getCaller(oldie)
     } else {
@@ -216,7 +216,7 @@ public view write func evmOp_origin() -> address {
     }
 }
     
-public view write func evmOp_caller() -> address {
+public view write throw func evmOp_caller() -> address {
     if let Some(topFrame) = evmCallStack_topFrame() {
         evmCallFrame_getCaller(topFrame)
     } else {
@@ -225,7 +225,7 @@ public view write func evmOp_caller() -> address {
     }
 }
 
-public view write func evmOp_callvalue() -> uint {
+public view write throw func evmOp_callvalue() -> uint {
     if let Some(topFrame) = evmCallStack_topFrame() {
         evmCallFrame_getCallvalue(topFrame)
     } else {
@@ -234,7 +234,7 @@ public view write func evmOp_callvalue() -> uint {
     }
 }
 
-public view write func evmOp_calldataload(offset: uint) -> uint {
+public view write throw func evmOp_calldataload(offset: uint) -> uint {
     if let Some(topFrame) = evmCallStack_topFrame() {
         bytearray_get256(evmCallFrame_getCalldata(topFrame), offset)
     } else {
@@ -243,7 +243,7 @@ public view write func evmOp_calldataload(offset: uint) -> uint {
     }
 }
 
-public view write func evmOp_calldatasize() -> uint {
+public view write throw func evmOp_calldatasize() -> uint {
     if let Some(topFrame) = evmCallStack_topFrame() {
         bytearray_size(evmCallFrame_getCalldata(topFrame))
     } else {
@@ -252,7 +252,7 @@ public view write func evmOp_calldatasize() -> uint {
     }
 }
 
-public view write func evmOp_calldatacopy(memAddr: uint, calldataOffset: uint, nbytes: uint) {
+public view write throw func evmOp_calldatacopy(memAddr: uint, calldataOffset: uint, nbytes: uint) {
     if nbytes > 0 {
         evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
     }
@@ -272,7 +272,7 @@ public view write func evmOp_calldatacopy(memAddr: uint, calldataOffset: uint, n
     evm_runtimePanic(8);
 }
 
-public view write func evmOp_codesize() -> uint {
+public view write throw func evmOp_codesize() -> uint {
     if let Some(topFrame) = evmCallStack_topFrame() {
         account_getCodeSize(
             evmCallFrame_runningCodeFromAccount(topFrame)
@@ -283,7 +283,7 @@ public view write func evmOp_codesize() -> uint {
     }
 }
 
-public view write func evmOp_codecopy(memAddr: uint, codeOffset: uint, nbytes: uint) {
+public view write throw func evmOp_codecopy(memAddr: uint, codeOffset: uint, nbytes: uint) {
     if nbytes > 0 {
         evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
     }
@@ -311,7 +311,7 @@ public view write func evmOp_codecopy(memAddr: uint, codeOffset: uint, nbytes: u
     evm_runtimePanic(10);
 }
 
-public view write func evmOp_extcodesize(addrAsUint: uint) -> uint {
+public view write throw func evmOp_extcodesize(addrAsUint: uint) -> uint {
     let addr = address(addrAsUint);     // truncates if necessary
     if let Some(topFrame) = evmCallStack_topFrame() {
         return if evmCallFrame_constructorIsOnStackForAddress(topFrame, addr) {
@@ -325,7 +325,7 @@ public view write func evmOp_extcodesize(addrAsUint: uint) -> uint {
     0
 }
 
-public view write func evmOp_extcodecopy(addrAsUint: uint, memAddr: uint, codeOffset: uint, nbytes: uint) {
+public view write throw func evmOp_extcodecopy(addrAsUint: uint, memAddr: uint, codeOffset: uint, nbytes: uint) {
     if nbytes > 0 {
         evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
     }    
@@ -374,7 +374,7 @@ public view write func evmOp_extcodecopy(addrAsUint: uint, memAddr: uint, codeOf
     evm_runtimePanic(12);
 }
 
-public view write func evmOp_extcodehash(addrAsUint: uint) -> bytes32 {
+public view write throw func evmOp_extcodehash(addrAsUint: uint) -> bytes32 {
     let addr = address(addrAsUint);     // truncates if necessary
     if let Some(topFrame) = evmCallStack_topFrame() {
         let acct = evmCallFrame_getAccount(topFrame, addr);
@@ -408,7 +408,7 @@ public view func evmOp_returndatasize() -> uint {
     }
 }
 
-public view write func evmOp_returndatacopy(memAddr: uint, dataOffset: uint, nbytes: uint) {
+public view write throw func evmOp_returndatacopy(memAddr: uint, dataOffset: uint, nbytes: uint) {
     if nbytes > 0 {
         evmCallStack_touchMemoryOffset(safeAdd(memAddr, nbytes));
     }
@@ -449,7 +449,7 @@ public view func evmOp_number() -> uint {
     inbox_currentEthBlockNumber()
 }
 
-public view write func evmOp_mload(memAddr: uint) -> uint {
+public view write throw func evmOp_mload(memAddr: uint) -> uint {
     evmCallStack_touchMemoryOffset(safeAdd(memAddr, 31));
     if let Some(topFrame) = evmCallStack_topFrame() {
         return bytearray_get256(
@@ -462,7 +462,7 @@ public view write func evmOp_mload(memAddr: uint) -> uint {
     0
 }
 
-public view write func evmOp_mstore(memAddr: uint, value: uint) {
+public view write throw func evmOp_mstore(memAddr: uint, value: uint) {
     evmCallStack_touchMemoryOffset(safeAdd(memAddr, 31));
     if let Some(topFrame) = evmCallStack_topFrame() {
         let memory = bytearray_set256(
@@ -478,7 +478,7 @@ public view write func evmOp_mstore(memAddr: uint, value: uint) {
     evm_runtimePanic(17);
 }
 
-public view write func evmOp_mstore8(memAddr: uint, value:uint) {
+public view write throw func evmOp_mstore8(memAddr: uint, value:uint) {
     evmCallStack_touchMemoryOffset(memAddr);
     if let Some(topFrame) = evmCallStack_topFrame() {
         let memory = bytearray_setByte(
@@ -494,7 +494,7 @@ public view write func evmOp_mstore8(memAddr: uint, value:uint) {
     evm_runtimePanic(18);
 }
     
-public view write func evmOp_sload(storageAddr: uint) -> uint {
+public view write throw func evmOp_sload(storageAddr: uint) -> uint {
     if let Some(topFrame) = evmCallStack_topFrame() {
         if let Some(val) = account_getStorageCell(
             evmCallFrame_runningAsAccount(topFrame),
@@ -508,7 +508,7 @@ public view write func evmOp_sload(storageAddr: uint) -> uint {
     0
 }
 
-public view write func evmOp_sstore(storageAddr: uint, value: uint) {
+public view write throw func evmOp_sstore(storageAddr: uint, value: uint) {
     if let Some(topFrame) = evmCallStack_topFrame() {
         if topFrame.static {
             evmOp_revert_knownPc(0xfffffffffffffffe, 0, 0);
@@ -530,7 +530,7 @@ public view write func evmOp_sstore(storageAddr: uint, value: uint) {
     evm_runtimePanic(20);
 }
     
-public view write func evmOp_getjumpaddr(evm_pc: uint) -> view write func() {
+public view write throw func evmOp_getjumpaddr(evm_pc: uint) -> view write func() {
     // This one isn't actually an EVM instruction.
     // It's a "pseudo-instruction" that translates an EVM jump destination to an AVM codepoint in the compiled code.
     if let Some(topFrame) = evmCallStack_topFrame() {
@@ -552,7 +552,7 @@ public view write func evmOp_getjumpaddr(evm_pc: uint) -> view write func() {
     return error;
 }
 
-public view write func evmOp_msize() -> uint {
+public view write throw func evmOp_msize() -> uint {
     if let Some(topFrame) = evmCallStack_topFrame() {
         32*((bytearray_size(evmCallFrame_getMemory(topFrame))+31)/32)
     } else {
@@ -561,7 +561,7 @@ public view write func evmOp_msize() -> uint {
     }
 }
 
-public view write func evmOp_log0(
+public view write throw func evmOp_log0(
     memAddr: uint, 
     nbytes: uint
 ) {
@@ -591,7 +591,7 @@ public view write func evmOp_log0(
     error;
 }
 
-public view write func evmOp_log1(
+public view write throw func evmOp_log1(
     memAddr: uint, 
     nbytes: uint, 
     topic0: uint
@@ -623,7 +623,7 @@ public view write func evmOp_log1(
     error;
 }
 
-public view write func evmOp_log2(
+public view write throw func evmOp_log2(
     memAddr: uint, 
     nbytes: uint, 
     topic0: uint,
@@ -657,7 +657,7 @@ public view write func evmOp_log2(
     error;
 }
 
-public view write func evmOp_log3(
+public view write throw func evmOp_log3(
     memAddr: uint, 
     nbytes: uint, 
     topic0: uint,
@@ -693,7 +693,7 @@ public view write func evmOp_log3(
     error;
 }
 
-public view write func evmOp_log4(
+public view write throw func evmOp_log4(
     memAddr: uint, 
     nbytes: uint, 
     topic0: uint,
@@ -731,13 +731,13 @@ public view write func evmOp_log4(
     error;
 }
 
-public view func evmOp_gas() -> uint {
+public view throw func evmOp_gas() -> uint {
     let avmGasPerArbGas = chainParams_getOrDie(const::Atom_Param_AvmGasPerArbGas);
     let gasLeft = (getGas() + (avmGasPerArbGas - 1)) / avmGasPerArbGas;
     gasLeft
 }
 
-public sensitive view write func evmOp_callAndReturn(
+public sensitive view write throw func evmOp_callAndReturn(
     gas: uint,
     callee: address,
     balance: uint,
@@ -791,7 +791,7 @@ public sensitive view write func evmOp_callAndReturn(
     }
 }
 
-public sensitive view write func evmOp_call(
+public sensitive view write throw func evmOp_call(
     gas: uint,
     calleeAsUint: uint,
     balance: uint,
@@ -856,7 +856,7 @@ public sensitive view write func evmOp_call(
     }
 }
 
-public sensitive view write func evmOp_callcode(
+public sensitive view write throw func evmOp_callcode(
     gas: uint,
     calleeAsUint: uint,
     balance: uint,
@@ -906,7 +906,7 @@ public sensitive view write func evmOp_callcode(
     }
 }
 
-public sensitive view write func evmOp_delegatecall(
+public sensitive view write throw func evmOp_delegatecall(
     gas: uint,
     calleeAsUint: uint,
     argsOffset: uint,
@@ -955,7 +955,7 @@ public sensitive view write func evmOp_delegatecall(
     }
 }
 
-public sensitive view write func evmOp_staticcall(
+public sensitive view write throw func evmOp_staticcall(
     gas: uint,
     calleeAsUint: uint,
     argsOffset: uint,
@@ -1004,7 +1004,7 @@ public sensitive view write func evmOp_staticcall(
     }
 }
 
-public view write func evmOp_revert(memOffset: uint, memNbytes: uint) {
+public view write throw func evmOp_revert(memOffset: uint, memNbytes: uint) {
     if memNbytes > 0 {
         evmCallStack_touchMemoryOffset(safeAdd(memOffset, memNbytes));
     }
@@ -1013,13 +1013,13 @@ public view write func evmOp_revert(memOffset: uint, memNbytes: uint) {
     evm_runtimePanic(28);
 }
 
-public view write func evmOp_revert_knownCodePc(codeAddr: address, evmPc: uint, memOffset: uint, memNbytes: uint) {
+public view write throw func evmOp_revert_knownCodePc(codeAddr: address, evmPc: uint, memOffset: uint, memNbytes: uint) {
     let (txid, addrs, parentAddrs) = evmCallStack_stackInfo();
     debug((10000, codeAddr, evmPc, txid, addrs, parentAddrs));
     evmOp_revert(memOffset, memNbytes);
 }
 
-public view write func evmOp_revert_knownPc(evmPc: uint, memOffset: uint, memNbytes: uint) {
+public view write throw func evmOp_revert_knownPc(evmPc: uint, memOffset: uint, memNbytes: uint) {
     let codeAddr = if let Some(acct) = evmCallStack_runningCodeFromAccount() {
         account_getAddress(acct)
     } else {
@@ -1028,13 +1028,13 @@ public view write func evmOp_revert_knownPc(evmPc: uint, memOffset: uint, memNby
     evmOp_revert_knownCodePc(codeAddr, evmPc, memOffset, memNbytes);
 }
 
-public view write func evmOp_revertIfStatic() {
+public view write throw func evmOp_revertIfStatic() {
     if evmCallStack_inStaticCall() {
         evmOp_revert_knownPc(0xffffffffb, 0, 0);
     }
 }
 
-public view write func evmOp_return(memOffset: uint, memNbytes: uint) {
+public view write throw func evmOp_return(memOffset: uint, memNbytes: uint) {
     if memNbytes > 0 {
         evmCallStack_touchMemoryOffset(safeAdd(memOffset, memNbytes));
     }
@@ -1043,7 +1043,7 @@ public view write func evmOp_return(memOffset: uint, memNbytes: uint) {
     evm_runtimePanic(29);
 }
 
-public view write func evmOp_selfdestruct(ownerAsUint: uint) {
+public view write throw func evmOp_selfdestruct(ownerAsUint: uint) {
     if let Some(topFrame) = evmCallStack_topFrame() {
         if topFrame.static {
             evmOp_revert_knownPc(0xfffffffffffffffe, 0, 0);
@@ -1057,7 +1057,7 @@ public view write func evmOp_selfdestruct(ownerAsUint: uint) {
     }
 }
 
-public view write func evmOp_create(value: uint, offset: uint, length: uint) -> address {
+public view write throw func evmOp_create(value: uint, offset: uint, length: uint) -> address {
     if length > 0 {
         evmCallStack_touchMemoryOffset(safeAdd(offset, length));
     }
@@ -1085,7 +1085,7 @@ public view write func evmOp_create(value: uint, offset: uint, length: uint) -> 
     return error;
 }
 
-public view write func evmOp_create2(value: uint, offset: uint, length: uint, salt: uint) -> address {
+public view write throw func evmOp_create2(value: uint, offset: uint, length: uint, salt: uint) -> address {
     if length > 0 {
         evmCallStack_touchMemoryOffset(safeAdd(offset, length));
     }
@@ -1118,7 +1118,7 @@ public view write func evmOp_create2(value: uint, offset: uint, length: uint, sa
     return error;
 }
 
-public view write func doCreationOpcode(value: uint, constructorCode: ByteArray, newAddress: address) -> address {
+public view write throw func doCreationOpcode(value: uint, constructorCode: ByteArray, newAddress: address) -> address {
     // make sure there isn't already an account at the given address
     let originalAcct = if let Some(acct) = evmCallStack_getAccount(newAddress) {
         if account_hasContract(acct) || (account_getNextSeqNum(acct) != 0) {
@@ -1205,13 +1205,13 @@ public view write func doCreationOpcode(value: uint, constructorCode: ByteArray,
     address(0)
 }
 
-view write func evm_error() {
+view write throw func evm_error() {
     // This should be called when EVM code has generated an EVM error.
     evmOp_revert_knownPc(0xffffffffffffffff, 0, 0);  // should never return
 
 }
 
-view write func evm_runtimePanic(reasonCode: uint) {
+view write throw func evm_runtimePanic(reasonCode: uint) {
     // This should be called when something that "shouldn't ever happen" has occurred.
     // It should only be called if something has gone wrong in the trusted code.
     // If untrusted code has encountered an error, that will be handled elsewhere.

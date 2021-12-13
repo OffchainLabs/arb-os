@@ -25,7 +25,7 @@ func mulDigit(x: uint) -> uint {
     x << 80
 }
 
-func realSize(x: []uint) -> uint {
+throw func realSize(x: []uint) -> uint {
     let reducedSize = len(x);
     while (reducedSize > 1) && (x[reducedSize-1] == 0) {
         reducedSize = reducedSize-1;
@@ -33,7 +33,7 @@ func realSize(x: []uint) -> uint {
     reducedSize
 }
 
-func shrinkToFit(x: []uint) -> []uint {
+throw func shrinkToFit(x: []uint) -> []uint {
     let reducedSize = realSize(x);
     if reducedSize < len(x) {
         let ret = newarray<uint>(reducedSize);
@@ -47,7 +47,7 @@ func shrinkToFit(x: []uint) -> []uint {
     }
 }
 
-func shiftPowerOfDigit(x: []uint, n: uint) -> []uint {
+throw func shiftPowerOfDigit(x: []uint, n: uint) -> []uint {
     let ret = newarray<uint>(len(x) + n);
     let i = len(x);
     while i > 0 {
@@ -57,15 +57,15 @@ func shiftPowerOfDigit(x: []uint, n: uint) -> []uint {
     ret
 }
 
-public func biguint_zero() -> []uint {
+public throw func biguint_zero() -> []uint {
     newarray<uint>(1) with { [0] = 0 }
 }
 
-public func biguint_one() -> []uint {
+public throw func biguint_one() -> []uint {
     newarray<uint>(1) with { [0] = 1 }
 }
 
-public func biguint_fromUint(x: uint) -> []uint {
+public throw func biguint_fromUint(x: uint) -> []uint {
     let ret = newarray<uint>(4);  // assume this will be big enough
     let i = 0;
     while x > 0 {
@@ -76,7 +76,7 @@ public func biguint_fromUint(x: uint) -> []uint {
     ret
 }
 
-public func biguint_fromBytes(ba: ByteArray) -> []uint {
+public throw func biguint_fromBytes(ba: ByteArray) -> []uint {
     let nbytes = bytearray_size(ba);
     let nwords = (nbytes+9) / 10;
     let ret = newarray<uint>(nwords);
@@ -98,7 +98,7 @@ public func biguint_fromBytes(ba: ByteArray) -> []uint {
     ret
 }
 
-public func biguint_toBytes(x: []uint) -> ByteArray {
+public throw func biguint_toBytes(x: []uint) -> ByteArray {
     let nbytes = biguint_sizeBytes(x);
     let ndigits = (nbytes+9)/10;
     let ret = bytearray_new(0);
@@ -116,7 +116,7 @@ public func biguint_toBytes(x: []uint) -> ByteArray {
     }
 }
 
-public func biguint_toUint(x: []uint) -> option<uint> {
+public throw func biguint_toUint(x: []uint) -> option<uint> {
     let lenx = len(x);
     if lenx > 4 {
         return None;
@@ -138,7 +138,7 @@ public func biguint_toUint(x: []uint) -> option<uint> {
     );
 }
 
-public func biguint_sizeBytes(x: []uint) -> uint {
+public throw func biguint_sizeBytes(x: []uint) -> uint {
     let lenDigits = realSize(x);
     if lenDigits == 0 {    return 0;    }
     let topWord = x[lenDigits-1];
@@ -166,7 +166,7 @@ public func biguint_sizeBytes(x: []uint) -> uint {
     lenBytes + 10 * (lenDigits-1)
 }
 
-public func biguint_sizeBits(x: []uint) -> uint {
+public throw func biguint_sizeBits(x: []uint) -> uint {
     let bytesSize = biguint_sizeBytes(x);
     if bytesSize == 0 {    return 0;    }
 
@@ -190,7 +190,7 @@ public func biguint_sizeBits(x: []uint) -> uint {
     sz
 }
 
-public func biguint_random(nwords: uint, gen: RandomGenerator) -> ([]uint, RandomGenerator) {
+public throw func biguint_random(nwords: uint, gen: RandomGenerator) -> ([]uint, RandomGenerator) {
     let ret = newarray<uint>(nwords);
     while nwords > 0 {
         nwords = nwords - 1;
@@ -200,7 +200,7 @@ public func biguint_random(nwords: uint, gen: RandomGenerator) -> ([]uint, Rando
     (ret, gen)
 }
 
-public func biguint_marshal(x: []uint) -> any {
+public throw func biguint_marshal(x: []uint) -> any {
     let sz = realSize(x);
     let ret = unsafecast<any>(());
     let i = 0;
@@ -211,7 +211,7 @@ public func biguint_marshal(x: []uint) -> any {
     ret
 }
 
-public func biguint_isZero(x: []uint) -> bool {
+public throw func biguint_isZero(x: []uint) -> bool {
     let i = len(x);
     while i > 0 {
         i = i-1;
@@ -222,7 +222,7 @@ public func biguint_isZero(x: []uint) -> bool {
     true
 }
 
-public func biguint_compare(x: []uint, y: []uint) -> int {
+public throw func biguint_compare(x: []uint, y: []uint) -> int {
     let xSize = len(x);
     let ySize = len(y);
     let i = xSize;
@@ -243,11 +243,11 @@ public func biguint_compare(x: []uint, y: []uint) -> int {
     int(0)
 }
 
-public func biguint_equal(x: []uint, y: []uint) -> bool {
+public throw func biguint_equal(x: []uint, y: []uint) -> bool {
     biguint_compare(x, y) == int(0)
 }
 
-public func biguint_getBit(x: []uint, bnum: uint) -> uint {
+public throw func biguint_getBit(x: []uint, bnum: uint) -> uint {
     if bnum >= 80*len(x) {
         0
     } else {
@@ -255,7 +255,7 @@ public func biguint_getBit(x: []uint, bnum: uint) -> uint {
     }
 }
 
-public func biguint_shiftLeft(x: []uint, n: uint) -> []uint {
+public throw func biguint_shiftLeft(x: []uint, n: uint) -> []uint {
     let numBytesBefore = biguint_sizeBytes(x);
     let numBytesAfter = numBytesBefore + (n+7)/8;
     let numWordsBefore = (numBytesBefore + 9) / 10;
@@ -279,7 +279,7 @@ public func biguint_shiftLeft(x: []uint, n: uint) -> []uint {
     ret
 }
 
-public func biguint_shiftRight(x: []uint, n: uint) -> []uint {
+public throw func biguint_shiftRight(x: []uint, n: uint) -> []uint {
     let numWordsBefore = realSize(x);
     let digitsToShift = n/80;
     if n%80 != 0 {
@@ -298,7 +298,7 @@ public func biguint_shiftRight(x: []uint, n: uint) -> []uint {
     ret
 }
 
-public func biguint_add(x: []uint, y: []uint) -> []uint {
+public throw func biguint_add(x: []uint, y: []uint) -> []uint {
     let xSize = realSize(x);
     let ySize = realSize(y);
 
@@ -326,7 +326,7 @@ public func biguint_add(x: []uint, y: []uint) -> []uint {
     ret
 }
 
-public func biguint_subtract(x: []uint, y: []uint) -> option<[]uint> {
+public throw func biguint_subtract(x: []uint, y: []uint) -> option<[]uint> {
     let comp = biguint_compare(x, y);
     if comp < int(0) {
         None
@@ -357,7 +357,7 @@ public func biguint_subtract(x: []uint, y: []uint) -> option<[]uint> {
     }
 }
 
-public func biguint_mul(x: []uint, y: []uint) -> []uint {
+public throw func biguint_mul(x: []uint, y: []uint) -> []uint {
     let n = realSize(x)-1;
     let t = realSize(y)-1;
 
@@ -380,7 +380,7 @@ public func biguint_mul(x: []uint, y: []uint) -> []uint {
     ret
 }
 
-public func biguint_shortMul(x: []uint, y: uint) -> []uint {
+public throw func biguint_shortMul(x: []uint, y: uint) -> []uint {
     let xSize = realSize(x);
     let ret = newarray<uint>(xSize+1);
     let carry = 0;
@@ -395,7 +395,7 @@ public func biguint_shortMul(x: []uint, y: uint) -> []uint {
     ret
 }
 
-public func biguint_square(x: []uint) -> []uint {
+public throw func biguint_square(x: []uint) -> []uint {
     // based on Algorithm 14.16, page 597, Handbook of Applied Cryptography, http://cacr.uwaterloo.ca/hac/about/chap14.pdf
     let t = realSize(x);
     let ret = newarray<uint>(2*t);
@@ -420,7 +420,7 @@ public func biguint_square(x: []uint) -> []uint {
     ret
 }
 
-public func biguint_divmod(x: []uint, y: []uint) -> option<([]uint, []uint)> {
+public throw func biguint_divmod(x: []uint, y: []uint) -> option<([]uint, []uint)> {
     // based on Algorithm 14.20, page 598, Handbook of Applied Cryptography, http://cacr.uwaterloo.ca/hac/about/chap14.pdf
     if biguint_isZero(y) {
         return None;
@@ -498,7 +498,7 @@ public func biguint_divmod(x: []uint, y: []uint) -> option<([]uint, []uint)> {
     Some((q, biguint_shiftRight(x, shiftBits)))
 }
 
-public func biguint_mod(x: []uint, y: []uint) -> option<[]uint> {
+public throw func biguint_mod(x: []uint, y: []uint) -> option<[]uint> {
     // same as the divmod algorithm above, except we don't keep track of the quotient
     if biguint_isZero(y) {
         return None;
@@ -569,7 +569,7 @@ public func biguint_mod(x: []uint, y: []uint) -> option<[]uint> {
     Some(biguint_shiftRight(x, shiftBits))
 }
 
-public func biguint_shortDivMod(x: []uint, y: uint) -> option<([]uint, uint)> {
+public throw func biguint_shortDivMod(x: []uint, y: uint) -> option<([]uint, uint)> {
     if y == 0 {    return None;    }
 
     let xSize = realSize(x);
@@ -585,7 +585,7 @@ public func biguint_shortDivMod(x: []uint, y: uint) -> option<([]uint, uint)> {
     Some((quot, carry))
 }
 
-public func biguint_shortMod(x: []uint, m: uint) -> option<uint> {
+public throw func biguint_shortMod(x: []uint, m: uint) -> option<uint> {
     if m == 0 {    return None;    }
 
     let xSize = realSize(x);
@@ -599,11 +599,11 @@ public func biguint_shortMod(x: []uint, m: uint) -> option<uint> {
     Some(ret)
 }
 
-public func biguint_modmul(x: []uint, y: []uint, m: []uint) -> option<[]uint> {
+public throw func biguint_modmul(x: []uint, y: []uint, m: []uint) -> option<[]uint> {
     biguint_mod(biguint_mul(x, y), m)
 }
 
-public func biguint_modexp(x: []uint, e: []uint, m: []uint) -> option<[]uint> {
+public throw func biguint_modexp(x: []uint, e: []uint, m: []uint) -> option<[]uint> {
     if biguint_isZero(m) {    return None;    }
 
     x = shrinkToFit(x);
@@ -631,7 +631,7 @@ public func biguint_modexp(x: []uint, e: []uint, m: []uint) -> option<[]uint> {
     Some(ret)
 }
 
-public func uint_modexp(x: uint, e: uint, m: uint) -> option<uint> {
+public throw func uint_modexp(x: uint, e: uint, m: uint) -> option<uint> {
     if m == 0 {
         return None;
     }

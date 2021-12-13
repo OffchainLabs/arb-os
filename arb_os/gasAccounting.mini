@@ -133,16 +133,16 @@ type RetryablePrices = struct {
     nextUpdateTimestamp: uint,  // next time when retryable prices might be modified
 };
 
-public view write func gasAccounting_init() {    // initialize on boot, before we have gotten the chain init message
+public view write throw func gasAccounting_init() {    // initialize on boot, before we have gotten the chain init message
     initGasPriceEstimator();
     setupParameters(true);
 }
 
-public view write func gasAccounting_notifyParamsChanged() {
+public view write throw func gasAccounting_notifyParamsChanged() {
     setupParameters(false);
 }
 
-view write func setupParameters(isInit: bool) {
+view write throw func setupParameters(isInit: bool) {
     let l1GasPerL1CalldataUnit = chainParams_getOrDie(const::Atom_Param_L1GasPerL1CalldataUnit);
     let l1GasPerStorage = chainParams_getOrDie(const::Atom_Param_L1GasPerStorage);
     let arbGasDivisor = chainParams_getOrDie(const::Atom_Param_AvmGasPerArbGas);
@@ -194,7 +194,7 @@ view write func setupParameters(isInit: bool) {
     };
 }
 
-view func initCongestionState(isInit: bool) -> CongestionState {
+view throw func initCongestionState(isInit: bool) -> CongestionState {
     struct {
         gasPool: int(chainParams_getOrDie(const::Atom_Param_GasPoolMax)),
         lastArbBlockNumSeen: if isInit { 0 } else { inbox_currentArbBlockNumber() },
@@ -203,7 +203,7 @@ view func initCongestionState(isInit: bool) -> CongestionState {
     }
 }
 
-public view func getGasAccountingParams() -> (uint, uint, uint) {
+public view throw func getGasAccountingParams() -> (uint, uint, uint) {
     (
         chainParams_getOrDie(const::Atom_Param_SpeedLimitPerSecond),
         chainParams_getOrDie(const::Atom_Param_GasPoolMax),
@@ -211,11 +211,11 @@ public view func getGasAccountingParams() -> (uint, uint, uint) {
     )
 }
 
-public view func feesEnabled() -> bool {
+public view throw func feesEnabled() -> bool {
     chainParams_getOrDie(const::Atom_Param_FeesEnabled) != 0
 }
 
-view func setPrices(
+view throw func setPrices(
     _feeConfig: FeeConfig,
     params: PricingParameters,
     congestionState: CongestionState,
@@ -250,7 +250,7 @@ view func setPrices(
     }
 }
 
-view func setRetryablePrices(oldRetryablePrices: RetryablePrices) -> RetryablePrices {
+view throw func setRetryablePrices(oldRetryablePrices: RetryablePrices) -> RetryablePrices {
     if oldRetryablePrices.nextUpdateTimestamp >= inbox_currentTimestamp() {
         oldRetryablePrices
     } else {
@@ -294,7 +294,7 @@ view func setRetryablePrices(oldRetryablePrices: RetryablePrices) -> RetryablePr
     }
 }
 
-public view write func gasAccounting_getPricesInWei(aggregatorAddr: address) -> (uint, uint, uint, uint, uint, uint) {
+public view write throw func gasAccounting_getPricesInWei(aggregatorAddr: address) -> (uint, uint, uint, uint, uint, uint) {
     // This is intended to return data to users, so we add the network fee, in order to return the total price they'll pay.
     let prices = gasAccountingInfo.currentPrices;
     let addNetworkFeeRate = gasAccountingInfo.feeConfig.baseFeeMultiplier;
@@ -308,11 +308,11 @@ public view write func gasAccounting_getPricesInWei(aggregatorAddr: address) -> 
     )
 }
 
-view write func gasAccounting_getTxBaseFeeWei(aggregatorAddr: option<address>) -> uint {
+view write throw func gasAccounting_getTxBaseFeeWei(aggregatorAddr: option<address>) -> uint {
     safeMul(getL1GasPriceEstimate(), gasAccounting_getTxBaseFeeL1Gas(aggregatorAddr))
 }
 
-public view write func gasAccounting_getTxBaseFeeL1Gas(maybeAggregatorAddr: option<address>) -> uint {
+public view write throw func gasAccounting_getTxBaseFeeL1Gas(maybeAggregatorAddr: option<address>) -> uint {
     if feesEnabled() {
         let aggregatorAddr = if let Some(addr) = maybeAggregatorAddr {
             addr
@@ -329,7 +329,7 @@ public view write func gasAccounting_getTxBaseFeeL1Gas(maybeAggregatorAddr: opti
     }
 }
 
-public view write func gasAccounting_setTxBaseFeeL1Gas(aggregator: address, fee: uint) -> option<()> {
+public view write throw func gasAccounting_setTxBaseFeeL1Gas(aggregator: address, fee: uint) -> option<()> {
     if (fee < chainParams_getOrDie(const::Atom_Param_MinBaseTxFeeL1Gas))
          || (fee > chainParams_getOrDie(const::Atom_Param_MaxBaseTxFeeL1Gas)) {
         None
@@ -353,7 +353,7 @@ public view func getCurrentBlockGasLimit() -> uint {
     gasAccountingInfo.gasAllocatedToThisBlock
 }
 
-public view write func gasAccounting_getPricesInArbGas(aggregatorAddr: address) -> (uint, uint, uint) {
+public view write throw func gasAccounting_getPricesInArbGas(aggregatorAddr: address) -> (uint, uint, uint) {
     let prices = gasAccountingInfo.currentPrices;
     let arbGasPrice = prices.perArbGasTotal;
     let baseFeeMultiplier = gasAccountingInfo.feeConfig.baseFeeMultiplier;
@@ -370,7 +370,7 @@ public view write func gasAccounting_getPricesInArbGas(aggregatorAddr: address) 
     )
 }
 
-public view func gasAccounting_getStoragePriceInArbGas() -> uint {
+public view throw func gasAccounting_getStoragePriceInArbGas() -> uint {
     let prices = gasAccountingInfo.currentPrices;
     let arbGasPrice = prices.perArbGasTotal;
     if arbGasPrice == 0 {
@@ -388,7 +388,7 @@ public view func gasAccounting_getCurrentStorageGasAvailable() -> uint {
     }
 }
 
-public view func getAddressForReserveFundsDeposit() -> address {
+public view throw func getAddressForReserveFundsDeposit() -> address {
     address(chainParams_getOrDie(const::Atom_Param_CongestionFeeRecipient))
 }
 
@@ -429,7 +429,7 @@ public view func gasAccounting_summaryToPublish() -> (uint, uint, uint, uint, ui
 // If there is an Error, the Error handler will call us, to inform us that there might have been an out-of-gas situation.
 //    (It's up to us to figure out whether there actually was an out-of-gas situation, vs some unrelated error.)
 
-public view write func gasAccounting_startTxCharges(
+public view write throw func gasAccounting_startTxCharges(
     maxGas: uint,
     gasPrice: uint,
     payer: address,
@@ -489,7 +489,7 @@ public view write func gasAccounting_startTxCharges(
     (const::TxResultCode_success, acctStore)
 }
 
-public view write func gasAccounting_endTxCharges(
+public view write throw func gasAccounting_endTxCharges(
     storageAllocations: uint,
     feeStats: TxFeeStats,
     acctStore: option<AccountStore>,   // for determining storage refunds, if applicable
@@ -585,7 +585,7 @@ public view write func gasAccounting_endTxCharges(
     ))
 }
 
-view write func tryGasRepayments(
+view write throw func tryGasRepayments(
     totalGasRemaining: uint,
     gasUsedForCompute: uint,
     gasUsedForStorage: uint,
@@ -637,7 +637,7 @@ view write func tryGasRepayments(
     Some(payments)
 }
 
-public view write func gasAccounting_pauseTxCharges() -> (uint, uint) {
+public view write throw func gasAccounting_pauseTxCharges() -> (uint, uint) {
     // pause charging the currently running tx
     // return how many units of the tx's initial (allPurposeGas, storageOnlyGas) are still unused
 
@@ -653,7 +653,7 @@ public view write func gasAccounting_pauseTxCharges() -> (uint, uint) {
     }
 }
 
-public view write func gasAccounting_resumeTxCharges(allPurposeGas: uint, storageOnlyGas: uint) -> option<()> {
+public view write throw func gasAccounting_resumeTxCharges(allPurposeGas: uint, storageOnlyGas: uint) -> option<()> {
     // resume the charging of the tx for gas
     // allow the execution to have (allPurposeGas, storageOnlyGas) available to it
 
@@ -683,7 +683,7 @@ public view write func gasAccounting_resumeTxCharges(allPurposeGas: uint, storag
     }
 }
 
-view write func switchToChargingOS() -> uint {
+view write throw func switchToChargingOS() -> uint {
     // switch to charging the OS for gas, if we aren't already
     // return amount of the tx's gas that is still unused
     let avmGasRemaining = getGas();
@@ -697,7 +697,7 @@ view write func switchToChargingOS() -> uint {
     }
 }
 
-public view write func gasAccounting_chargeCurrentTxForStorage(units: uint) -> uint {
+public view write throw func gasAccounting_chargeCurrentTxForStorage(units: uint) -> uint {
     // charge the current tx's storage gas for units of storage allocated
     // if there is enough storage gas, return 0, otherwise return the amount of extra gas that needs to be collected
     let gasDue = units * gasAccounting_getStoragePriceInArbGas();
@@ -722,7 +722,7 @@ public view write func gasAccounting_recordAllocationForRefund(addr: address, st
     }
 }
 
-public view write func gasAccounting_startNewBlock(arbBlockNumber: uint, timestamp: uint) {
+public view write throw func gasAccounting_startNewBlock(arbBlockNumber: uint, timestamp: uint) {
     // it's the first tx of a new block, so do beginning-of-block work
     let updatedCongestionState = updateCongestionState(
         gasAccountingInfo.congestionState,
@@ -749,7 +749,7 @@ public view write func gasAccounting_startNewBlock(arbBlockNumber: uint, timesta
 
 // gasAccounting_prepareTx does gas accounting, to prepare a tx for execution. For each request, this
 //     determines (a) whether to approve the request for execution, and (b) what gas price the request will pay.
-public view write func gasAccounting_prepareTx(tx: TxRequestData) -> (
+public view write throw func gasAccounting_prepareTx(tx: TxRequestData) -> (
     uint,             // error code, or const::TxResultCode_success if no error
     TxRequestData,
 ) {
@@ -884,7 +884,7 @@ public view write func gasAccounting_prepareTx(tx: TxRequestData) -> (
     }
 }
 
-view write func payForTxAndL1Gas(
+view write throw func payForTxAndL1Gas(
     payer: address,
     sender: address,
     maybeActualAggregator: option<address>,
@@ -974,7 +974,7 @@ view write func payForTxAndL1Gas(
     (true, feeStats, totalWeiPaid)
 }
 
-view write func tryToPayForL1Gas(
+view write throw func tryToPayForL1Gas(
     payer: address,
     recipient: address,
     weiForTx: uint,
@@ -1036,7 +1036,7 @@ view write func tryToPayForL1Gas(
     }
 }
 
-view func updateCongestionState(state: CongestionState, toBlockNum: uint, toTimestamp: uint) -> CongestionState {
+view throw func updateCongestionState(state: CongestionState, toBlockNum: uint, toTimestamp: uint) -> CongestionState {
     // update the congestion state, based on advancing from state.lastTimestampSeen to toTimestamp
 
     let lastTimestampSeen = state.lastTimestampSeen;
@@ -1074,7 +1074,7 @@ view func updateCongestionState(state: CongestionState, toBlockNum: uint, toTime
     }
 }
 
-public view write func getRetryableTxPrice(calldataSize: uint) -> (uint, uint) {
+public view write throw func getRetryableTxPrice(calldataSize: uint) -> (uint, uint) {
     // returns (basePriceWei, calldataUnitByteWei, nextChangeTimestamp
     let prices = gasAccountingInfo.retryablePrices;
     if prices.nextUpdateTimestamp < inbox_currentTimestamp() {
@@ -1087,7 +1087,7 @@ public view write func getRetryableTxPrice(calldataSize: uint) -> (uint, uint) {
     )
 }
 
-public view func getFeesForRetryableTx(
+public view throw func getFeesForRetryableTx(
     calldataSize: uint,  // in bytes
 ) -> (uint, address, TxFeeStats) {
     if feesEnabled() {
@@ -1134,7 +1134,7 @@ public view write func setL1GasPriceEstimate(newPriceWei: uint) {
     set globalL1GasPriceEstimator.estimateWei = newPriceWei;
 }
 
-public view write func updateL1GasPriceEstimate(sender: address, price: uint) {
+public view write throw func updateL1GasPriceEstimate(sender: address, price: uint) {
     if isFairGasPriceSender(sender) {
         if price > 5 * globalL1GasPriceEstimator.estimateWei {
             price = 5 * globalL1GasPriceEstimator.estimateWei;
@@ -1163,7 +1163,7 @@ public view write func setFairGasPriceSender(sender: address, value: bool) {
     };
 }
 
-public view func getSerializedFairGasPriceSenders() -> option<ByteArray> {
+public view throw func getSerializedFairGasPriceSenders() -> option<ByteArray> {
     setOfAddresses_serialize(globalL1GasPriceEstimator.fairGasPriceSenders)
 }
 
@@ -1252,6 +1252,6 @@ public view write func allowedSenders_remove(addr: address) {
     set gasAccountingInfo.allowedSenders = setOfAddresses_remove(gasAccountingInfo.allowedSenders, addr);
 }
 
-public view func allowedSenders_serialize() -> option<ByteArray> {
+public view throw func allowedSenders_serialize() -> option<ByteArray> {
     setOfAddresses_serialize(gasAccountingInfo.allowedSenders)
 }

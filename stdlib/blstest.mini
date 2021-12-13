@@ -9,11 +9,11 @@ use std::bls::bls_hashToPoint;
 use std::bls::bls_verifySingleSig;
 
 
-write func main() {
+throw write func main() {
     asm(tests().1) { log };
 }
 
-func tests() -> string {
+throw func tests() -> string {
     let domain2 = bytes32(0x2d889d03243d367c56457383bb04bcdadff3a522dbf9c97145d0a58c1e88d6f9);
 
     let message2 = bytearray_new(12);

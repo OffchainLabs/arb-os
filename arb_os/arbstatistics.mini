@@ -24,7 +24,7 @@ use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 
 
-public view write func arbStatistics_txcall() {
+public view write throw func arbStatistics_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if bytearray_size(calldata) < 4 {
@@ -44,7 +44,7 @@ public view write func arbStatistics_txcall() {
 }
 
 // function getStats() external view returns(uint, uint, uint, uint, uint, uint);
-view write func arbStatistics_getStats(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write throw func arbStatistics_getStats(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if bytearray_size(calldata) != 4 {
         evmOp_revert_knownPc(10, 0, 0);
     }

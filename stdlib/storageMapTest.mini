@@ -14,11 +14,11 @@ use std::stack::stack_size;
 use std::stack::stack_pop;
 
 
-write func main() {
+throw write func main() {
     asm(tests()) { log };
 }
 
-func tests() -> uint {
+throw func tests() -> uint {
     let s = storageMap_new();
     if storageMap_get(s, 17) != 0 {
 	return 1;
@@ -183,7 +183,7 @@ func sumForKvsIterator(_key: uint, value: uint, state: any) -> any {
     value + unsafecast<uint>(state)
 }
 
-func storageMapDiffTest() -> uint {
+throw func storageMapDiffTest() -> uint {
     let m0 = storageMap_new();
     m0 = storageMap_set(m0, 13, 5);
     m0 = storageMap_set(m0, 14, 6);

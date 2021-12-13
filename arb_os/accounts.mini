@@ -93,7 +93,7 @@ type AggregatorInfo = struct {
 var globalAccountStore: AccountStore;   // needs to be initialized before use
 
 
-public view write func accountStore_init() {
+public view write throw func accountStore_init() {
     globalAccountStore = struct {
         accounts: newmap<address, Account>,
         retryBuffer: retryBuffer_new(),
@@ -110,14 +110,14 @@ public func escrowStore_new() -> EscrowStore {
     }
 }
 
-public view write func accounts_notifyParamsChanged() {    // called if the chain parameters have changed
+public view write throw func accounts_notifyParamsChanged() {    // called if the chain parameters have changed
     set globalAccountStore.retryBuffer = retryBuffer_setDefaultLifetime(globalAccountStore.retryBuffer);
 }
 
 // safeGetGlobalAccountStore gets a copy of the global account store, if we are not in a user tx
 // if we're in a user tx, this will error, which will revert the tx
 //      that should never happen, but we check to be safe
-public view write func safeGetGlobalAccountStore() -> AccountStore {
+public view write throw func safeGetGlobalAccountStore() -> AccountStore {
     if ! evmCallStack_isEmpty() {
         asm(668) { debugprint };
         error;
@@ -126,7 +126,7 @@ public view write func safeGetGlobalAccountStore() -> AccountStore {
 }
 
 // see comment on safeGet... above
-public view write func safeSetGlobalAccountStore(acctStore: AccountStore) {
+public view write throw func safeSetGlobalAccountStore(acctStore: AccountStore) {
     if ! evmCallStack_isEmpty() {
         asm(669) { debugprint };
         error;
@@ -193,7 +193,7 @@ public func accountStore_changeNumContracts(acctStore: AccountStore, delta: int)
     acctStore with { numContracts: uint(int(acctStore.numContracts) + delta) }
 }
 
-public func accountStore_destroyAccount(acctStore: AccountStore, addrToDestroy: address) -> AccountStore {
+public throw func accountStore_destroyAccount(acctStore: AccountStore, addrToDestroy: address) -> AccountStore {
     if let Some(contractInfo) = accountStore_get(acctStore, addrToDestroy).contractInfo {
         acctStore = accountStore_dropCodeRef(
             acctStore,
@@ -244,7 +244,7 @@ public func account_getAggregatorToPayAsOption(account: Account) -> option<addre
     account.aggregatorToPay
 }
 
-public view func account_getAggregatorToPay(account: Account) -> address {
+public view throw func account_getAggregatorToPay(account: Account) -> address {
     if let Some(atp) = account.aggregatorToPay {
         atp
     } else {
@@ -293,7 +293,7 @@ public func account_getAggregatorDecompressionState(account: Account) -> option<
     (account.aggregatorInfo?).decompressionState
 }
 
-public view func account_setAggregatorDecompressionState(
+public view throw func account_setAggregatorDecompressionState(
     account: Account,
     maybeState: option<AggregatorDecompressionState>,
 ) -> Account {
@@ -326,7 +326,7 @@ public func account_getFeeCollector(account: Account) -> address {
     }
 }
 
-public view func account_setFeeCollector(account: Account, newCollector: address) -> Account {
+public view throw func account_setFeeCollector(account: Account, newCollector: address) -> Account {
     account with {
         aggregatorInfo: Some(
             if let Some(aggInfo) = account.aggregatorInfo {
@@ -362,7 +362,7 @@ public func account_setBaseTxFeeL1Gas(account: Account, fee: uint) -> Account {
     }
 }
 
-public view func account_setStorage(account: Account, storage: StorageMap) -> Account {
+public view throw func account_setStorage(account: Account, storage: StorageMap) -> Account {
     account with {
         contractInfo: Some(
             if let Some(contractInfo) = account.contractInfo {
@@ -385,7 +385,7 @@ public view func account_setStorage(account: Account, storage: StorageMap) -> Ac
     }
 }
 
-public view write func accountStore_createAccountFromEvmCode(
+public view write throw func accountStore_createAccountFromEvmCode(
     store: AccountStore,
     newAddr: address,
     code: ByteArray,
@@ -443,7 +443,7 @@ public func accountStore_upgradeContractFromEvmCode(
     }
 }
 
-public func accountStore_createBuiltinContract(
+public throw func accountStore_createBuiltinContract(
     acctStore: AccountStore,
     addr: address,
     entryPoint: view write func(),
@@ -568,7 +568,7 @@ public func accountStore_getEscrowBalance(acctStore: AccountStore, key: uint) ->
     storageMap_get(acctStore.escrowStore.escrowedValues, key)
 }
 
-public func accountStore_sumOfAllEscrowBalances(acctStore: AccountStore) -> uint {
+public throw func accountStore_sumOfAllEscrowBalances(acctStore: AccountStore) -> uint {
     unsafecast<uint>(
         storageMap_forall(
             acctStore.escrowStore.escrowedValues,
@@ -733,7 +733,7 @@ type asfa_wrappedState = struct {
 // For each account, do    state = closure(account, state)
 // Return the resulting state
 // The order of traversal is deterministic but weird, and might change in future upgrades, so don't rely on it.
-public func accountStore_forall(acctStore: AccountStore, closure_: func(Account, any) -> any, startState: any) -> any {
+public throw func accountStore_forall(acctStore: AccountStore, closure_: func(Account, any) -> any, startState: any) -> any {
     let wrappedState = struct {
         innerClosure: closure_,
         innerState: startState,
@@ -752,7 +752,7 @@ func asfaClosure(_: any, acct: Account, wrappedState: asfa_wrappedState) -> asfa
     }
 }
 
-func hashForCodeRef(code: ByteArray, contractStateVersion: uint) -> bytes32 {
+throw func hashForCodeRef(code: ByteArray, contractStateVersion: uint) -> bytes32 {
     // This hash, meant as the key in the coderef table, is a collision-free function of this function's args.
     // For the original contractStateVersion (= 0) this is just the keccak256 of the code, so it is
     //       backward-compatible with the original hashing scheme.
@@ -762,7 +762,7 @@ func hashForCodeRef(code: ByteArray, contractStateVersion: uint) -> bytes32 {
 // If a CodeRef exists for code, increment its reference count.
 // If one doesn't exist, create and initialize one.
 // Return the attributes of the resulting CodeRef
-public view write func accountStore_createOrAddCodeRef(
+public view write throw func accountStore_createOrAddCodeRef(
     acctStore: AccountStore,
     contractStateVersion: uint,
     code: ByteArray
@@ -800,7 +800,7 @@ public func accountStore_addCodeRef(acctStore: AccountStore, codeHash: bytes32) 
     Some(acctStore)
 }
 
-public func accountStore_createCodeRef(
+public throw func accountStore_createCodeRef(
     acctStore: AccountStore,
     contractStateVersion: uint,
     code: ByteArray,

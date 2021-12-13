@@ -8,7 +8,7 @@ public func main() {
     asm(ret) { log };
 }
 
-func fact(n: uint) -> uint {
+throw func fact(n: uint) -> uint {
     let ret = 1;
     while n > 0 {
         ret = ret*n;

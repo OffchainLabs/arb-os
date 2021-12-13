@@ -7,11 +7,11 @@ var global: uint;
 
 type Produce = closure(uint, uint) -> string;
 
-view write func main() {
+view write throw func main() {
     asm(tests().1) { log };
 }
 
-view write func tests() -> string {
+view write throw func tests() -> string {
 
     let lambda = capture_2();
 
@@ -32,7 +32,7 @@ view write func tests() -> string {
     test_global_capture()
 }
 
-func capture_2() -> Produce {
+throw func capture_2() -> Produce {
     
     // Checks that captures work as expected
     

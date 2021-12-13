@@ -29,7 +29,7 @@ use std::rlp::keccakOfRlpEncodedUintPair;
 use inbox::IncomingRequest;
 
 
-view write func fetchAndIncrSequenceNum(addr: address) -> uint {
+view write throw func fetchAndIncrSequenceNum(addr: address) -> uint {
     // Fetch sequence number, and increment it
     let globalAS = safeGetGlobalAccountStore();
     let (ret, updatedAcct) = account_fetchAndIncrSeqNum(
@@ -64,7 +64,7 @@ type TxRequestData = struct {
 
 // Process a request.
 // Return None if message is malformatted; otherwise handle errors and return Some(()); if no error, never return
-public view write func processL2Request(request: TxRequestData) -> option<()> {
+public view write throw func processL2Request(request: TxRequestData) -> option<()> {
     if let Some(sequenceNum) = request.seqNum {
         let expectedSeqNum = account_getNextSeqNum(accountStore_get(safeGetGlobalAccountStore(), request.caller));
         if sequenceNum != expectedSeqNum {

@@ -25,7 +25,7 @@ public view write func errorHandler_init() {
     asm(pushAndJump) { errset };
 }
 
-public view write func errorHandler() {
+public view write throw func errorHandler() {
     // If we got here, it's because either:
     // 1.  some AVM instruction hit an Error, which could happen for several reasons
     //   A.  untrusted application code tried to do something erroneous, like dividing by zero

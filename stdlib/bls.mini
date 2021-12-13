@@ -61,7 +61,7 @@ public func bls_defaultDomain(sender: address) -> bytes32 {
     hash(bytes32(const::BLSSignatureDomainBase), bytes32(sender))
 }
 
-public func bls_hashAndVerifySingleSig(
+public throw func bls_hashAndVerifySingleSig(
     domain: bytes32,
     message: ByteArray,
     key: BLSKey,
@@ -71,7 +71,7 @@ public func bls_hashAndVerifySingleSig(
     bls_verifySingleSig(hashedMessage, key, signature)
 }
 
-public func bls_hashAndVerifySignature(
+public throw func bls_hashAndVerifySignature(
     numMsgs: uint,
     domain: bytes32,
     messages: []ByteArray,
@@ -93,7 +93,7 @@ public func bls_hashAndVerifySignature(
 // BLS top level functions which assume a pre-hashed input
 // ==================================================================
 
-public func bls_verifySingleSig(
+public throw func bls_verifySingleSig(
     message: BLSHashedMessage,
     key: BLSKey,
     signature: BLSSignature
@@ -107,7 +107,7 @@ public func bls_makeKey(x0: uint, x1: uint, y0: uint, y1: uint) -> option<BLSKey
     Some(struct { ax: x0, ay: x1, bx: y0, by: y1 })
 }
 
-public func bls_marshalPublicKey(key: BLSKey, ba: ByteArray, offset: uint) -> ByteArray {
+public throw func bls_marshalPublicKey(key: BLSKey, ba: ByteArray, offset: uint) -> ByteArray {
     bytearray_set256(
         bytearray_set256(
             bytearray_set256(
@@ -127,7 +127,7 @@ public func bls_marshalPublicKey(key: BLSKey, ba: ByteArray, offset: uint) -> By
     )
 }
 
-public func bls_verifySignature(
+public throw func bls_verifySignature(
     messages: []BLSHashedMessage,
     keys: []BLSKey,
     signature: BLSSignature
@@ -178,7 +178,7 @@ public func bls_verifySignature(
 // BLS Hash to Point in G1
 // ==================================================================
 
-public func bls_hashToPoint(
+public throw func bls_hashToPoint(
     domain: bytes32,
     message: ByteArray
 ) -> option<BLSHashedMessage> {
@@ -280,7 +280,7 @@ func inverse(a: uint) -> uint {
     modexp_3064_fd54(a)
 }
 
-func hashToField(
+throw func hashToField(
     domain: bytes32,
     messages: ByteArray
 ) -> (uint, uint) {
@@ -304,7 +304,7 @@ func hashToField(
     (a0, a1)
 }
 
-func expandMsgTo96(
+throw func expandMsgTo96(
     domain: bytes32,
     message: ByteArray
 ) -> ByteArray {

@@ -85,7 +85,7 @@ var globalInputQueue: struct {
     batchQ: IncomingRequestQueueStack,
 };
 
-public write func inbox_init() {
+public write throw func inbox_init() {
     globalInbox = struct {
         queue: incomingRequestQueue_new(),
         arbBlockNum: 0,
@@ -102,13 +102,13 @@ public write func inbox_init() {
     addressRemapExceptions = addressPairSet_new();
 }
 
-public view write func emitGenesisBlockReceipt() {
+public view write throw func emitGenesisBlockReceipt() {
     outputStats_endOfBlock(globalInbox.arbBlockNum, globalInbox.ethBlockNum, globalInbox.timestamp);
     blockhash_submitHash(globalInbox.ethBlockNum, globalInbox.inboxHashAccumulator);
     set globalInbox.arbBlockNum = globalInbox.arbBlockNum + 1;
 }
 
-public view write func inbox_get() -> IncomingRequest {
+public view write throw func inbox_get() -> IncomingRequest {
     // Get the next message, in order of arrival.
     // If no messages have arrived, this will block until one arrives.
     // This is a loop because some events don't generate a message that we can return,
@@ -142,7 +142,7 @@ public view write func inbox_get() -> IncomingRequest {
 }
 
 // translate a newly arrived message from the incoming format into the format we'll use internally
-view write func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, fromSideload: bool) -> IncomingRequest {
+view write throw func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, fromSideload: bool) -> IncomingRequest {
     if ! fromSideload {
         updateL1GasPriceEstimate(newMsgRaw.sender, newMsgRaw.gasPriceL1);
     }
@@ -175,7 +175,7 @@ view write func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, from
     }
 }
 
-view write func getFromL1Inbox(inbox: Inbox) -> Inbox {
+view write throw func getFromL1Inbox(inbox: Inbox) -> Inbox {
     // Get a message from the L1 inbox, and append it to the inbox.
     // Automatically generate an end-of-block message if that is needed.
     // If there are no messages available in the L1 inbox, this blocks until one is available
@@ -291,7 +291,7 @@ type AggregatorInfo = struct {
     calldataUnits: uint,
 };
 
-func hashIncomingRequest(req: IncomingRequest) -> bytes32 {  // a convenient hash over some fields of a request
+throw func hashIncomingRequest(req: IncomingRequest) -> bytes32 {  // a convenient hash over some fields of a request
     hash(
         bytes32(req.kind),
         hash(
@@ -313,7 +313,7 @@ func hashIncomingRequest(req: IncomingRequest) -> bytes32 {  // a convenient has
     )
 }
 
-public view write func mainRunLoop() {
+public view write throw func mainRunLoop() {
     loop {
         if let Some(res) = txRequestQueue_get(globalInputQueue.txQ) {   // consume from txQ first
             let (newQ, tx) = res;
@@ -355,7 +355,7 @@ public view write func mainRunLoop() {
 }
 
 /*
-public view write func inbox_getNextUnpackedRequest() -> TxRequestData {
+public view write throw func inbox_getNextUnpackedRequest() -> TxRequestData {
     return loop {
         if let Some(res) = txRequestQueue_get(globalInputQueue.txQ) {
             let (newQ, tx) = res;
@@ -493,7 +493,7 @@ public view write func inbox_getNextUnpackedRequest() -> TxRequestData {
 }
 */
 
-view write func handleUnpackedMessage(msg: IncomingRequest) {
+view write throw func handleUnpackedMessage(msg: IncomingRequest) {
     if msg.kind == const::L1MessageType_L2FundedByL1 {
         // record the calldata usage, so it can be reported in tx receipt
         set msg.aggregator = Some(struct {
@@ -592,7 +592,7 @@ view write func handleUnpackedMessage(msg: IncomingRequest) {
     }
 }
 
-view write func handleArrivingTx(tx: TxRequestData) {
+view write throw func handleArrivingTx(tx: TxRequestData) {
     let (resultCode, request) = if allowedSenders_contains(tx.caller) || tx.incomingRequest.adminMode {
         gasAccounting_prepareTx(tx)
     } else {
@@ -637,7 +637,7 @@ view write func handleArrivingTx(tx: TxRequestData) {
     }
 }
 
-view func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
+view throw func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
     let inStream = bytestream_new(request.msgData);
     let (*inStream, subtype) = bytestream_getByte(inStream)?;
     let (*inStream, maxGas) = bytestream_get256(inStream)?;
@@ -689,7 +689,7 @@ type IncomingRequestQueue = struct {
     q: Queue,
 };
 
-func incomingRequestQueue_new() -> IncomingRequestQueue {
+throw func incomingRequestQueue_new() -> IncomingRequestQueue {
     struct { q: queue_new() }
 }
 
@@ -697,12 +697,12 @@ func incomingRequestQueue_isEmpty(q: IncomingRequestQueue) -> bool {
     queue_isEmpty(q.q)
 }
 
-func incomingRequestQueue_get(q: IncomingRequestQueue) -> option<(IncomingRequestQueue, IncomingRequest)> {
+throw func incomingRequestQueue_get(q: IncomingRequestQueue) -> option<(IncomingRequestQueue, IncomingRequest)> {
     let (uq, item) = queue_get(q.q)?;
     Some((struct{ q: uq }, unsafecast<IncomingRequest>(item)))
 }
 
-func incomingRequestQueue_getOrDie(q: IncomingRequestQueue) -> (IncomingRequestQueue, IncomingRequest) {
+throw func incomingRequestQueue_getOrDie(q: IncomingRequestQueue) -> (IncomingRequestQueue, IncomingRequest) {
     if let Some(res) = incomingRequestQueue_get(q) {
         res
     } else {
@@ -710,7 +710,7 @@ func incomingRequestQueue_getOrDie(q: IncomingRequestQueue) -> (IncomingRequestQ
     }
 }
 
-func incomingRequestQueue_put(q: IncomingRequestQueue, req: IncomingRequest) -> IncomingRequestQueue {
+throw func incomingRequestQueue_put(q: IncomingRequestQueue, req: IncomingRequest) -> IncomingRequestQueue {
     struct { q: queue_put(q.q, req) }
 }
 
@@ -722,7 +722,7 @@ func incomingRequestQueueStack_new() -> IncomingRequestQueueStack {
     struct { qs: queuestack_new() }
 }
 
-func incomingRequestQueueStack_get(qs: IncomingRequestQueueStack) -> option<(IncomingRequestQueueStack, IncomingRequest)> {
+throw func incomingRequestQueueStack_get(qs: IncomingRequestQueueStack) -> option<(IncomingRequestQueueStack, IncomingRequest)> {
     let (uqs, rawMsg) = queuestack_get(qs.qs)?;
     Some((struct { qs: uqs }, unsafecast<IncomingRequest>(rawMsg)))
 }
@@ -736,18 +736,18 @@ type TxRequestQueue = struct {
     q: Queue,
 };
 
-func txRequestQueue_new() -> TxRequestQueue {
+throw func txRequestQueue_new() -> TxRequestQueue {
     struct { q: queue_new() }
 }
 
-func txRequestQueue_get(q: TxRequestQueue) -> option<(TxRequestQueue, TxRequestData)> {
+throw func txRequestQueue_get(q: TxRequestQueue) -> option<(TxRequestQueue, TxRequestData)> {
     let (uq, item) = queue_get(q.q)?;
     Some((struct{ q: uq }, unsafecast<TxRequestData>(item)))
 }
 
 var addressRemapExceptions: AddressPairSet;
 
-public view func mapL1SenderAddress(callerAddr: address, maybeCallee: option<address>) -> address {
+public view throw func mapL1SenderAddress(callerAddr: address, maybeCallee: option<address>) -> address {
     if chainParams_getOrDie(const::Atom_Param_EnableL1ContractAddressAliasing) == 0 {
         callerAddr
     } else if addressPairSet_lookup_options(addressRemapExceptions, Some(callerAddr), maybeCallee) {
@@ -769,6 +769,6 @@ public view write func addressRemapExceptions_set(sender: option<address>, dest:
     addressRemapExceptions = addressPairSet_set(addressRemapExceptions, sender, dest, value);
 }
 
-public view func serializeAllRemapExceptions() -> ByteArray {
+public view throw func serializeAllRemapExceptions() -> ByteArray {
     addressPairSet_serialize(addressRemapExceptions)
 }

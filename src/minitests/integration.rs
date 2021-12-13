@@ -182,6 +182,7 @@ fn test_error_system() {
             &[19],
             &[20],
             &[32],
+            &[46],
             &[51],
             &[51],
             &[51],
@@ -228,7 +229,7 @@ fn test_error_system() {
             &[197],
             &[197],
         ],
-        &[&[7], &[45], &[46], &[46], &[105], &[187]],
+        &[&[7], &[30], &[45], &[46], &[46], &[105], &[187]],
     );
 
     // check directory callgraph warnings
@@ -253,6 +254,6 @@ fn test_error_system() {
         "minitests/replicas.mini",
         vec!["replicas".to_string()].into_iter().collect(),
         &[],
-        &[&[2, 6]],
+        &[&[5, 9]],
     );
 }

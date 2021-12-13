@@ -16,7 +16,7 @@ type PriorityQ<T> = struct {
     contents: []PqItem<T>,
 };
 
-public func priorityq_new<T>() -> PriorityQ<T> {
+public throw func priorityq_new<T>() -> PriorityQ<T> {
     struct {
         size: 0,
         capacity: 8,
@@ -32,7 +32,7 @@ public func priorityq_size<T>(pq: PriorityQ<T>) -> uint {
     pq.size
 }
 
-public func priorityq_get<T>(pq: PriorityQ<T>) -> option<(T, PriorityQ<T>)> {
+public throw func priorityq_get<T>(pq: PriorityQ<T>) -> option<(T, PriorityQ<T>)> {
     if priorityq_isEmpty::<T>(pq) {
         None
     } else {
@@ -43,7 +43,7 @@ public func priorityq_get<T>(pq: PriorityQ<T>) -> option<(T, PriorityQ<T>)> {
     }
 }
 
-func pq_pushDown<T>(pq: PriorityQ<T>, index: uint) -> PriorityQ<T> {
+throw func pq_pushDown<T>(pq: PriorityQ<T>, index: uint) -> PriorityQ<T> {
     loop {
         let firstKidIdx = 2*index+1;
         if firstKidIdx >= pq.size {
@@ -84,7 +84,7 @@ func pq_pushDown<T>(pq: PriorityQ<T>, index: uint) -> PriorityQ<T> {
     }
 }
 
-func pq_pushUp<T>(pq: PriorityQ<T>, index: uint) -> PriorityQ<T> {
+throw func pq_pushUp<T>(pq: PriorityQ<T>, index: uint) -> PriorityQ<T> {
     let this = pq.contents[index];
     loop {
         if index == 0 {
@@ -102,7 +102,7 @@ func pq_pushUp<T>(pq: PriorityQ<T>, index: uint) -> PriorityQ<T> {
     }
 }
 
-public func priorityq_insert<T>(pq: PriorityQ<T>, item: T, priority: uint) -> PriorityQ<T> {
+public throw func priorityq_insert<T>(pq: PriorityQ<T>, item: T, priority: uint) -> PriorityQ<T> {
     if pq.size == pq.capacity {
         let newCapacity = 8*pq.capacity;
         pq = pq with { capacity: newCapacity }
@@ -114,7 +114,7 @@ public func priorityq_insert<T>(pq: PriorityQ<T>, item: T, priority: uint) -> Pr
     pq_pushUp::<T>(newpq, index)
 }
 
-public write func priorityq_printAsArray<T>(pq: PriorityQ<T>) -> uint {
+public write throw func priorityq_printAsArray<T>(pq: PriorityQ<T>) -> uint {
     let ret = pq.size;
     let cont = pq.contents;
     let i = 0;

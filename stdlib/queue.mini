@@ -9,7 +9,7 @@ type BoundedQueue = struct {
     contents: []any,
 };
 
-public func boundedQueue_new(capacity: uint) -> BoundedQueue {
+public throw func boundedQueue_new(capacity: uint) -> BoundedQueue {
     struct {
         capacity: capacity,
         nextPut: 0,
@@ -30,7 +30,7 @@ public func boundedQueue_size(q: BoundedQueue) -> uint {
     (q.nextPut + q.capacity - q.nextGet) % q.capacity
 }
 
-public func boundedQueue_put(q: BoundedQueue, val: any) -> BoundedQueue {
+public throw func boundedQueue_put(q: BoundedQueue, val: any) -> BoundedQueue {
     if boundedQueue_isFull(q) {
         q
     } else {
@@ -40,7 +40,7 @@ public func boundedQueue_put(q: BoundedQueue, val: any) -> BoundedQueue {
     }
 }
 
-public func boundedQueue_get(q: BoundedQueue) -> option<(BoundedQueue, any)> {
+public throw func boundedQueue_get(q: BoundedQueue) -> option<(BoundedQueue, any)> {
     if boundedQueue_isEmpty(q) {
         None
     } else {
@@ -52,7 +52,7 @@ public func boundedQueue_get(q: BoundedQueue) -> option<(BoundedQueue, any)> {
     }
 }
 
-public func boundedQueue_nth(q: BoundedQueue, n: uint) -> option<any> {
+public throw func boundedQueue_nth(q: BoundedQueue, n: uint) -> option<any> {
     if n < boundedQueue_size(q) {
         Some(q.contents[(q.nextGet + n) % q.capacity])
     } else {
@@ -60,7 +60,7 @@ public func boundedQueue_nth(q: BoundedQueue, n: uint) -> option<any> {
     }
 }
 
-public func boundedQueue_set_nth(q: BoundedQueue, n: uint, value: any) -> option<BoundedQueue> {
+public throw func boundedQueue_set_nth(q: BoundedQueue, n: uint, value: any) -> option<BoundedQueue> {
     if n < boundedQueue_size(q) {
         Some(q with { contents: q.contents with { [(q.nextGet + n) % q.capacity] = value } })
     } else {
@@ -68,7 +68,7 @@ public func boundedQueue_set_nth(q: BoundedQueue, n: uint, value: any) -> option
     }
 }
 
-public func boundedQueue_expand(q: BoundedQueue, newSize: uint) -> BoundedQueue {
+public throw func boundedQueue_expand(q: BoundedQueue, newSize: uint) -> BoundedQueue {
     if newSize <= q.capacity {
         error;
     }
@@ -86,7 +86,7 @@ public func boundedQueue_expand(q: BoundedQueue, newSize: uint) -> BoundedQueue 
 
 type Queue = BoundedQueue;
 
-public func queue_new() -> Queue {
+public throw func queue_new() -> Queue {
     boundedQueue_new(8)
 }
 
@@ -98,18 +98,18 @@ public func queue_size(q: Queue) -> uint {
     boundedQueue_size(q)
 }
 
-public func queue_put(q: Queue, val: any) -> Queue {
+public throw func queue_put(q: Queue, val: any) -> Queue {
     if boundedQueue_isFull(q) {
         q = boundedQueue_expand(q, 2*q.capacity);
     }
     boundedQueue_put(q, val)
 }
 
-public func queue_get(q: Queue) -> option<(Queue, any)> {
+public throw func queue_get(q: Queue) -> option<(Queue, any)> {
     boundedQueue_get(q)
 }
 
-public func queue_getOrDie(q: Queue) -> (Queue, any) {
+public throw func queue_getOrDie(q: Queue) -> (Queue, any) {
     if let Some(res) = queue_get(q) {
         res
     } else {
@@ -117,15 +117,15 @@ public func queue_getOrDie(q: Queue) -> (Queue, any) {
     }
 }
 
-public func queue_nth(q: Queue, n: uint) -> option<any> {
+public throw func queue_nth(q: Queue, n: uint) -> option<any> {
     boundedQueue_nth(q, n)
 }
 
-public func queue_set_nth(q: Queue, n: uint, value: any) -> option<Queue> {
+public throw func queue_set_nth(q: Queue, n: uint, value: any) -> option<Queue> {
     boundedQueue_set_nth(q, n, value)
 }
 
-public func queue_discardOne(q: Queue) -> Queue {
+public throw func queue_discardOne(q: Queue) -> Queue {
     // return q with first item removed; if no first item, return it q unmodified
     if let Some(res) = queue_get(q) {
         res.0
@@ -134,7 +134,7 @@ public func queue_discardOne(q: Queue) -> Queue {
     }
 }
 
-public func queue_map(q: Queue, clo: func(any, any) -> any, data: any) -> Queue {
+public throw func queue_map(q: Queue, clo: func(any, any) -> any, data: any) -> Queue {
     // for every item in q, calls clo(item, data) and builds a new queue of the return values
     let ret = queue_new();
     loop {
@@ -180,7 +180,7 @@ func queuestack_stripEmpties(qs: QueueStack) -> QueueStack {
     }
 }
 
-public func queuestack_get(qs: QueueStack) -> option<(QueueStack, any)> {
+public throw func queuestack_get(qs: QueueStack) -> option<(QueueStack, any)> {
     loop {
         let cell = qs?;
         if let Some(res) = queue_get(cell.head) {

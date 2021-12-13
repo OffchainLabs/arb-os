@@ -13,15 +13,15 @@ use std::sha256::sha256_byteArray;
 use std::sha256::sha256hasher_pushByte;
 use std::sha256::sha256hasher_push256;
 
-write func main() {
+throw write func main() {
     if let Some(x) = tests() {
-	    asm(x,) { log };
-	} else {
-	    asm(666,) { log };
-	}
+	asm(x) { log };
+    } else {
+	asm(666) { log };
+    }
 }
 
-func tests() -> option<bytes32> {
+throw func tests() -> option<bytes32> {
     let x = asm(0x6a09e667bb67ae853c6ef372a54ff53a510e527f9b05688c1f83d9ab5be0cd19, 0, 0) bytes32 { sha256f };
     if (x != bytes32(0xDA5698BE17B9B46962335799779FBECA8CE5D491C0D26243BAFEF9EA1837A9D8)) {
         return Some(bytes32(1));

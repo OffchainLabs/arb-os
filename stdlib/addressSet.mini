@@ -67,7 +67,7 @@ public func setOfAddresses_contains(sa: SetOfAddresses, addr: address) -> bool {
     }
 }
 
-public func setOfAddresses_serialize(sa: SetOfAddresses) -> option<ByteArray> {
+public throw func setOfAddresses_serialize(sa: SetOfAddresses) -> option<ByteArray> {
     if sa.inverted {
         None
     } else {
@@ -140,16 +140,16 @@ public func addressPairSet_lookup_strict(   // look for specific match (i.e., sp
     ] == Some(true)
 }
 
-public func addressPairSet_serialize(aps: AddressPairSet) -> ByteArray {
+public throw func addressPairSet_serialize(aps: AddressPairSet) -> ByteArray {
     let rawResult = builtin_kvsForall(
         unsafecast<Kvs>(aps.contents),
-        unsafecast<func(any, any, any) -> any>(apss_closure),
+        unsafecast<throw func(any, any, any) -> any>(apss_closure),
         bytearray_new(0),
     );
     unsafecast<ByteArray>(rawResult)
 }
 
-func apss_closure(key:(uint, uint), value: uint, state: ByteArray) -> ByteArray {
+throw func apss_closure(key:(uint, uint), value: uint, state: ByteArray) -> ByteArray {
     if value == 0 {
         state
     } else {

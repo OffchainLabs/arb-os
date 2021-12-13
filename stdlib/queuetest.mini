@@ -7,7 +7,7 @@ use std::queue::queue_isEmpty;
 use std::queue::queue_put;
 use std::queue::queue_get;
 
-write func main() {
+throw write func main() {
     if let Some(res) = tests() {
 	asm(res) { log };
     } else {
@@ -15,7 +15,7 @@ write func main() {
     }
 }
 
-func tests() -> option<uint> {
+throw func tests() -> option<uint> {
     
     let q = queue_new();
     

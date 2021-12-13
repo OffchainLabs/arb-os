@@ -116,7 +116,7 @@ public func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: addre
     }
 }
 
-public view write func decompressAddress(
+public view write throw func decompressAddress(
     stream: ByteStream,
     addIfNotInTable: bool,
 ) -> option<(ByteStream, address)> {
@@ -160,7 +160,7 @@ public func decompressTokenAmount(stream: ByteStream) -> option<(ByteStream, uin
     })
 }
 
-public view write func decompressAndVerifyEcdsaSignedTx(
+public view write throw func decompressAndVerifyEcdsaSignedTx(
     ba: ByteArray,
     originalRequest: IncomingRequest
 ) -> option<TxRequestData> {
@@ -273,7 +273,7 @@ public view write func decompressAndVerifyEcdsaSignedTx(
     )
 }
 
-view write func decompressTx(
+view write throw func decompressTx(
     stream: ByteStream,
     maybeSender: option<address>,   // tx sender, or None if the caller doesn't know the sender yet
 ) -> option<(ByteStream, TxRequestData)> {
@@ -372,7 +372,7 @@ type AggregatorDecompressionState = struct {
     functionTable: FunctionTable,
 };
 
-public func parseAggregatorFunctionTable(
+public throw func parseAggregatorFunctionTable(
     contents: ByteArray
 ) -> option<AggregatorDecompressionState> {
     let stream = bytestream_new(contents);
@@ -408,7 +408,7 @@ public view func functionTableSize(addr: address) -> option<uint> {
     Some(len(funcTable))
 }
 
-public view func getFromFunctionTable(addr: address, index: uint) -> option<(uint, bool, uint)> {
+public view throw func getFromFunctionTable(addr: address, index: uint) -> option<(uint, bool, uint)> {
     let funcTable = (account_getAggregatorDecompressionState(evmCallStack_getAccount(addr)?)?).functionTable;
     if index < len(funcTable) {
         let tableEntry = funcTable[index];

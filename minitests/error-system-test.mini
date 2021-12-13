@@ -43,7 +43,7 @@ var unused_global: uint;
 var used_global: uint;
 
 #[bad_attribute, print]
-public func hop() {
+public throw func hop() {
     used_global = crazy(4, 8, true, 4);
     asm(used_global) { log };
 }
@@ -191,7 +191,7 @@ write func shadow(shadow_arg: uint, bad_arg: uint, good_arg: uint) {    // every
 }
 
 view write func unused_function() {}
-func recursive_function() { recursive_function(); }
+throw func recursive_function() { recursive_function(); }
 
 sensitive public func implicit_exporter() -> view func() { return implicit_export; }
 sensitive view func implicit_export() {}

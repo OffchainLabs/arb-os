@@ -16,7 +16,7 @@ use std::queue::queue_put;
 use std::queue::queue_getOrDie;
 
 
-public func merkleize(data: []ByteArray) -> (any, bytes32) {
+public throw func merkleize(data: []ByteArray) -> (any, bytes32) {
     let length = len(data);
     let layer = newarray<(any, bytes32)>(length);
     let i = 0;
@@ -44,7 +44,7 @@ public func merkleize(data: []ByteArray) -> (any, bytes32) {
     return layer[0];
 }
 
-public func merkleizeFromQueue(queue: Queue) -> (any, bytes32) {
+public throw func merkleizeFromQueue(queue: Queue) -> (any, bytes32) {
     let num = queue_size(queue);
     let arr = newarray<ByteArray>(num);
     let i = 0;
@@ -61,7 +61,7 @@ type MerkleTreeBuilder = struct {
     contents: Queue,
 };
 
-public func merkleTreeBuilder_new() -> MerkleTreeBuilder {
+public throw func merkleTreeBuilder_new() -> MerkleTreeBuilder {
     return struct { contents: queue_new() };
 }
 
@@ -69,10 +69,10 @@ public func merkleTreeBuilder_isEmpty(mtb: MerkleTreeBuilder) -> bool {
     return queue_isEmpty(mtb.contents);
 }
 
-public func merkleTreeBuilder_add(mtb: MerkleTreeBuilder, item: ByteArray) -> MerkleTreeBuilder {
+public throw func merkleTreeBuilder_add(mtb: MerkleTreeBuilder, item: ByteArray) -> MerkleTreeBuilder {
     return mtb with { contents: queue_put(mtb.contents, item) };
 }
 
-public func merkleTreeBuilder_finish(mtb: MerkleTreeBuilder) -> (any, bytes32) {
+public throw func merkleTreeBuilder_finish(mtb: MerkleTreeBuilder) -> (any, bytes32) {
     return merkleizeFromQueue(mtb.contents);
 }

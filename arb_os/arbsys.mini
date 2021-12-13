@@ -56,7 +56,7 @@ use gasAccounting::gasAccounting_getCurrentStorageGasAvailable;
 use output::queueMessageForSend;
 
 
-public view write func arbsys_txcall() {
+public view write throw func arbsys_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if bytearray_size(calldata) < 4 {
@@ -106,7 +106,7 @@ public func arbosVersion() -> uint {
 }
 
 // function arbOSVersion() external pure returns (uint);
-view write func arbsys_arbOSVersion(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write throw func arbsys_arbOSVersion(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if bytearray_size(calldata) != 4 {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 5, 0, 0);
     }
@@ -119,7 +119,7 @@ view write func arbsys_arbOSVersion(_topFrame: EvmCallFrame, calldata: ByteArray
 }
 
 // function arbChainID() external view returns(uint);
-view write func arbsys_arbChainID(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write throw func arbsys_arbChainID(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if bytearray_size(calldata) != 4 {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 7, 0, 0);
     }
@@ -132,7 +132,7 @@ view write func arbsys_arbChainID(_topFrame: EvmCallFrame, calldata: ByteArray) 
 }
 
 // function arbBlockNumber() external view returns (uint);
-view write func arbsys_arbBlockNumber(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write throw func arbsys_arbBlockNumber(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if bytearray_size(calldata) != 4 {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 6, 0, 0);
     }
@@ -145,7 +145,7 @@ view write func arbsys_arbBlockNumber(_topFrame: EvmCallFrame, calldata: ByteArr
 }
 
 // function withdrawEth(address destination) external payable returns(uint);
-view write func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) {
+view write throw func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) {
     evmOp_revertIfStatic();
     if bytearray_size(calldata) != 36 {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 30, 0, 0);
@@ -173,7 +173,7 @@ view write func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) 
 }
 
 // function sendTxToL1(address destination, bytes calldata calldataForL1) external payable returns(uint);
-view write func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) {
+view write throw func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) {
     evmOp_revertIfStatic();
     let destAddr = address(bytearray_get256(calldata, 4));
     let nbytes = bytearray_get256(calldata, 4+2*32);
@@ -203,7 +203,7 @@ view write func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) {
     }
 }
 
-view write func sendTxToL1(caller: address, destination: address, callvalue: uint, calldata: ByteArray) -> uint {
+view write throw func sendTxToL1(caller: address, destination: address, callvalue: uint, calldata: ByteArray) -> uint {
     let calldataSize = bytearray_size(calldata);
     queueMessageForSend(
         bytearray_copy(
@@ -312,7 +312,7 @@ view write func sendTxToL1(caller: address, destination: address, callvalue: uin
 }
 
 // function getTransactionCount(address account) external view returns(uint256);
-view write func arbsys_getTransactionCount(topFrame: EvmCallFrame, calldata: ByteArray) {
+view write throw func arbsys_getTransactionCount(topFrame: EvmCallFrame, calldata: ByteArray) {
     if bytearray_size(calldata) != 36 {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 40, 0, 0);
     }
@@ -332,7 +332,7 @@ view write func arbsys_getTransactionCount(topFrame: EvmCallFrame, calldata: Byt
 }
 
 // function getStorageAt(address account, uint256 index) external view returns (uint256);
-view write func arbsys_getStorageAt(topFrame: EvmCallFrame, calldata: ByteArray) {
+view write throw func arbsys_getStorageAt(topFrame: EvmCallFrame, calldata: ByteArray) {
     let senderAddr = evmCallFrame_getCaller(topFrame);
     if senderAddr != address(0) {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 50, 0, 0);
@@ -359,7 +359,7 @@ view write func arbsys_getStorageAt(topFrame: EvmCallFrame, calldata: ByteArray)
 }
 
 // function isTopLevelCall() external view returns (bool);
-view write func arbsys_isTopLevelCall(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write throw func arbsys_isTopLevelCall(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if bytearray_size(calldata) != 4 {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 70, 0, 0);
     }
@@ -377,7 +377,7 @@ view write func arbsys_isTopLevelCall(_topFrame: EvmCallFrame, calldata: ByteArr
 }
 
 // function wasMyCallersAddressAliased() external view returns (bool);
-view write func arbsys_wasMyCallersAddressAliased(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write throw func arbsys_wasMyCallersAddressAliased(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if bytearray_size(calldata) != 4 {
         evmOp_revert_knownPc(80, 0, 0);
     }
@@ -395,7 +395,7 @@ view write func arbsys_wasMyCallersAddressAliased(_topFrame: EvmCallFrame, calld
 }
 
 // function myCallersAddressWithoutAliasing() external view returns (address);
-view write func arbsys_myCallersAddressWithoutAliasing(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write throw func arbsys_myCallersAddressWithoutAliasing(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if bytearray_size(calldata) != 4 {
         evmOp_revert_knownPc(85, 0, 0);
     }
@@ -412,7 +412,7 @@ view write func arbsys_myCallersAddressWithoutAliasing(_topFrame: EvmCallFrame, 
     }
 }
 
-view write func arbsys_mapL1SenderContractAddressToL2Alias(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write throw func arbsys_mapL1SenderContractAddressToL2Alias(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if bytearray_size(calldata) != 4 + 2*32 {
         evmOp_revert_knownPc(90, 0, 0);
     }
@@ -430,7 +430,7 @@ view write func arbsys_mapL1SenderContractAddressToL2Alias(_topFrame: EvmCallFra
     }
 }
 
-view write func arbsys_getStorageGasAvailable(topFrame: EvmCallFrame, calldata: ByteArray) {
+view write throw func arbsys_getStorageGasAvailable(topFrame: EvmCallFrame, calldata: ByteArray) {
     if bytearray_size(calldata) != 4 {
         evmOp_revert_knownPc(100, 0, 0);
     }

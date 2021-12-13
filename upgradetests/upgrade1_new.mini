@@ -13,7 +13,7 @@ type NewGlobals = struct {
 var newGlobal1: option<int>;
 var newGlobal2: uint;
 
-view write func main(old: OldGlobals) -> uint{
+view write throw func main(old: OldGlobals) -> uint{
     asm(struct{
         newGlobal1: None<int>,
         newGlobal2: 0,

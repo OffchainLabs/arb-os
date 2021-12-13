@@ -40,7 +40,7 @@ use std::rlp::rlp_encodeUint;
 use std::rlp::rlp_encodeAddress;
 
 
-public view write func arbAddressTable_txcall() {
+public view write throw func arbAddressTable_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if bytearray_size(calldata) < 4 {
@@ -76,7 +76,7 @@ func getFuncCode(ba: ByteArray) -> uint {
     (bytearray_get256(ba, 0) >> 224)
 }
 
-view write func arbAddressTable_register(_topFrame: EvmCallFrame, calldata: ByteArray) { // (address addr) -> uint
+view write throw func arbAddressTable_register(_topFrame: EvmCallFrame, calldata: ByteArray) { // (address addr) -> uint
 // return the index of addr in the address table
 // if addr isn't in the table already, add it to the table and return its new index
     evmOp_revertIfStatic();
@@ -96,7 +96,7 @@ view write func arbAddressTable_register(_topFrame: EvmCallFrame, calldata: Byte
     }
 }
 
-view write func arbAddressTable_lookup(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (address addr) -> uint
+view write throw func arbAddressTable_lookup(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (address addr) -> uint
 // return the index of addr in the address table; revert if it's not in the table
     if bytearray_size(calldata) != 36 {
         evmOp_revert_knownCodePc(address(const::Address_ArbAddressTable), 120, 0, 0);
@@ -113,7 +113,7 @@ view write func arbAddressTable_lookup(_topFrame: EvmCallFrame, calldata: ByteAr
     }
 }
 
-view write func arbAddressTable_addressExists(_topFrame: EvmCallFrame, calldata: ByteArray) { // (address addr) -> bool
+view write throw func arbAddressTable_addressExists(_topFrame: EvmCallFrame, calldata: ByteArray) { // (address addr) -> bool
 // return true iff addr is in the address table
     if bytearray_size(calldata) != 36 {
         evmOp_revert_knownCodePc(address(const::Address_ArbAddressTable), 130, 0, 0);
@@ -131,7 +131,7 @@ view write func arbAddressTable_addressExists(_topFrame: EvmCallFrame, calldata:
     }
 }
 
-view write func arbAddressTable_size(_topFrame: EvmCallFrame, calldata: ByteArray) { // () -> uint
+view write throw func arbAddressTable_size(_topFrame: EvmCallFrame, calldata: ByteArray) { // () -> uint
 // return the number of items in the address table
     if bytearray_size(calldata) != 4 {
         evmOp_revert_knownCodePc(address(const::Address_ArbAddressTable), 140, 0, 0);
@@ -144,7 +144,7 @@ view write func arbAddressTable_size(_topFrame: EvmCallFrame, calldata: ByteArra
     }
 }
 
-view write func arbAddressTable_lookupIndex(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint index) -> address
+view write throw func arbAddressTable_lookupIndex(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint index) -> address
 // return the address at slot index in the address table, or revert if index is beyond the end of the table
     if bytearray_size(calldata) != 36 {
         evmOp_revert_knownCodePc(address(const::Address_ArbAddressTable), 150, 0, 0);
@@ -161,7 +161,7 @@ view write func arbAddressTable_lookupIndex(_topFrame: EvmCallFrame, calldata: B
     }
 }
 
-view write func arbAddressTable_decompress(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (bytes buf, uint offset) -> (address, uint)
+view write throw func arbAddressTable_decompress(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (bytes buf, uint offset) -> (address, uint)
     // read a compressed address from buf at offset, return (resulting address, updated offset)
     // revert if buf is too short
     if bytearray_size(calldata) < 4+4*32 {
@@ -196,7 +196,7 @@ view write func arbAddressTable_decompress(_topFrame: EvmCallFrame, calldata: By
     }
 }
 
-view write func arbAddressTable_compress(_topFrame: EvmCallFrame, calldata: ByteArray) { // (address addr) -> bytes
+view write throw func arbAddressTable_compress(_topFrame: EvmCallFrame, calldata: ByteArray) { // (address addr) -> bytes
 // compress addr, based on the current address table contents, and return the resulting buffer
     if bytearray_size(calldata) != 36 {
         evmOp_revert_knownCodePc(address(const::Address_ArbAddressTable), 100, 0, 0);

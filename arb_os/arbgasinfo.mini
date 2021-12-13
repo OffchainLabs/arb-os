@@ -33,7 +33,7 @@ use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 
 
-public view write func arbgasinfo_txcall() {
+public view write throw func arbgasinfo_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if bytearray_size(calldata) < 4 {
@@ -65,7 +65,7 @@ public view write func arbgasinfo_txcall() {
 }
 
 // function getPricesInWeiWithAggregator(address aggregator) external view returns (uint, uint, uint, uint, uint, uint);
-view write func arbgasinfo_getPricesInWeiWithAggregator(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (address) -> (uint, ..., uint)
+view write throw func arbgasinfo_getPricesInWeiWithAggregator(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (address) -> (uint, ..., uint)
     if bytearray_size(calldata) != 36 {
         evmOp_revert_knownPc(10, 0, 0);
     }
@@ -74,7 +74,7 @@ view write func arbgasinfo_getPricesInWeiWithAggregator(_topFrame: EvmCallFrame,
 }
 
 // function getPricesInWei() external view returns (uint, uint, uint, uint, uint, uint);
-view write func arbgasinfo_getPricesInWei(topFrame: EvmCallFrame, calldata: ByteArray) { // () -> (uint, ..., uint)
+view write throw func arbgasinfo_getPricesInWei(topFrame: EvmCallFrame, calldata: ByteArray) { // () -> (uint, ..., uint)
     if bytearray_size(calldata) != 4 {
         evmOp_revert_knownPc(9, 0, 0);
     }
@@ -82,7 +82,7 @@ view write func arbgasinfo_getPricesInWei(topFrame: EvmCallFrame, calldata: Byte
     getPricesInWeiCommon(account_getAggregatorToPay(evmCallFrame_getAccount(topFrame, caller)));
 }
 
-view write func getPricesInWeiCommon(aggregatorAddr: address) {
+view write throw func getPricesInWeiCommon(aggregatorAddr: address) {
     let gasPricesWei = gasAccounting_getPricesInWei(aggregatorAddr);
     let mem = bytearray_new(0);
     mem = bytearray_set256(mem, 0*32, gasPricesWei.0);
@@ -99,7 +99,7 @@ view write func getPricesInWeiCommon(aggregatorAddr: address) {
 }
 
 // function getPricesInArbGasWithAggregator(address aggregator) external view returns (uint, uint, uint);
-view write func arbgasinfo_getPricesInArbGasWithAggregator(_topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> (uint, uint, uint)
+view write throw func arbgasinfo_getPricesInArbGasWithAggregator(_topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> (uint, uint, uint)
     if bytearray_size(calldata) != 36 {
         evmOp_revert_knownPc(20, 0, 0);
     }
@@ -108,7 +108,7 @@ view write func arbgasinfo_getPricesInArbGasWithAggregator(_topFrame: EvmCallFra
 }
 
 // function getPricesInArbGas() external view returns (uint, uint, uint);
-view write func arbgasinfo_getPricesInArbGas(topFrame: EvmCallFrame, calldata: ByteArray) { // () -> (uint, ..., uint)
+view write throw func arbgasinfo_getPricesInArbGas(topFrame: EvmCallFrame, calldata: ByteArray) { // () -> (uint, ..., uint)
     if bytearray_size(calldata) != 4 {
         evmOp_revert_knownPc(9, 0, 0);
     }
@@ -116,7 +116,7 @@ view write func arbgasinfo_getPricesInArbGas(topFrame: EvmCallFrame, calldata: B
     getPricesInArbGasCommon(account_getAggregatorToPay(evmCallFrame_getAccount(topFrame, caller)));
 }
 
-view write func getPricesInArbGasCommon(aggregatorAddr: address) {
+view write throw func getPricesInArbGasCommon(aggregatorAddr: address) {
     let gasPricesWei = gasAccounting_getPricesInArbGas(aggregatorAddr);
     let mem = bytearray_new(0);
     mem = bytearray_set256(mem, 0*32, gasPricesWei.0);
@@ -130,7 +130,7 @@ view write func getPricesInArbGasCommon(aggregatorAddr: address) {
 }
 
 // function getGasAccountingParams() external view returns (uint, uint, uint);
-view write func arbgasinfo_getGasAccountingParams(_topFrame: EvmCallFrame, calldata: ByteArray) { // () -> (uint, uint, uint)
+view write throw func arbgasinfo_getGasAccountingParams(_topFrame: EvmCallFrame, calldata: ByteArray) { // () -> (uint, uint, uint)
     if bytearray_size(calldata) != 4 {
         evmOp_revert_knownPc(30, 0, 0);
     }
@@ -147,7 +147,7 @@ view write func arbgasinfo_getGasAccountingParams(_topFrame: EvmCallFrame, calld
 }
 
 // function getL1GasPriceEstimate() external view returns(uint);
-view write func arbgasinfo_getL1GasPriceEstimate(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write throw func arbgasinfo_getL1GasPriceEstimate(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if bytearray_size(calldata) != 4 {
         evmOp_revert_knownPc(40, 0, 0);
     }
@@ -160,7 +160,7 @@ view write func arbgasinfo_getL1GasPriceEstimate(_topFrame: EvmCallFrame, callda
 }
 
 // function setL1GasPriceEstimate(uint priceInWei) external;
-view write func arbgasinfo_setL1GasPriceEstimate(topFrame: EvmCallFrame, calldata: ByteArray) {
+view write throw func arbgasinfo_setL1GasPriceEstimate(topFrame: EvmCallFrame, calldata: ByteArray) {
     evmOp_revertIfStatic();
     let caller = evmCallFrame_getCaller(topFrame);
     let oracle = if let Some(addrAsUint) = chainParams_get(const::Atom_Param_GasPriceOracle) {

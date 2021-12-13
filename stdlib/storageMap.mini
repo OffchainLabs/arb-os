@@ -180,7 +180,7 @@ public func storageMap_delete(s: StorageMap, key: uint) -> StorageMap {
 // this will return the state at the end
 // order of traversal is deterministic but weird and subject to change,
 //       so callers are advised not to rely on the ordering
-public func storageMap_forall(
+public throw func storageMap_forall(
     s: StorageMap,
     applicator: func(uint, uint, any) -> any,
     state: any
@@ -188,7 +188,7 @@ public func storageMap_forall(
     storageMap_forall_tree(s.tree, applicator, state)
 }
 
-public func storageMap_forall_tree(
+public throw func storageMap_forall_tree(
     t: StorageMapNode,
     applicator: func(uint, uint, any) -> any,
     state: any
@@ -217,7 +217,7 @@ type StorageMapDiff_State = struct {
     firstOne: bool,
 };
 
-public func storageMap_diff(s0: StorageMap, s1: StorageMap) -> Stack {
+public throw func storageMap_diff(s0: StorageMap, s1: StorageMap) -> Stack {
     let res1 = unsafecast<StorageMapDiff_State>(storageMap_forall(
         s0,
         unsafecast<func(uint, uint, any) -> any>(smdiffClosure),
@@ -254,7 +254,7 @@ func smdiffClosure(k: uint, v: uint, state: StorageMapDiff_State) -> StorageMapD
     }
 }
 
-public func storageMap_serialize(s: StorageMap) -> ByteArray {
+public throw func storageMap_serialize(s: StorageMap) -> ByteArray {
     unsafecast<ByteArray>(storageMap_forall(s, smSerHelper, bytearray_new(0)))
 }
 
@@ -271,7 +271,7 @@ public func storageMap_deserialize(ba: ByteArray) -> option<StorageMap> {
     Some(ret)
 }
 
-func smSerHelper(index: uint, value: uint, state: any) -> any {
+throw func smSerHelper(index: uint, value: uint, state: any) -> any {
     let ba = unsafecast<ByteArray>(state);
     let sz = bytearray_size(ba);
     bytearray_set256(
@@ -285,12 +285,12 @@ func smSerHelper(index: uint, value: uint, state: any) -> any {
     )
 }
 
-public func storageMap_serializeListOfNonzeros(s: StorageMap) -> ByteArray {
+public throw func storageMap_serializeListOfNonzeros(s: StorageMap) -> ByteArray {
     // list the keys that have non-zero values (but not the values)
     unsafecast<ByteArray>(storageMap_forall(s, smSerNZHelper, bytearray_new(0)))
 }
 
-func smSerNZHelper(index: uint, value: uint, state: any) -> any {
+throw func smSerNZHelper(index: uint, value: uint, state: any) -> any {
     let ba = unsafecast<ByteArray>(state);
     let sz = bytearray_size(ba);
     if value == 0 {

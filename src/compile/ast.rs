@@ -159,6 +159,11 @@ impl AbstractSyntaxTree for Type {
     fn is_write(&mut self, _: &TypeTree) -> bool {
         false
     }
+
+    /// for iteration purposes we say types themselves are not throw
+    fn is_throw(&mut self, _: &TypeTree) -> bool {
+        false
+    }
 }
 
 impl Type {
@@ -1485,6 +1490,8 @@ impl Func {
         public: bool,
         view: bool,
         write: bool,
+        throw: bool,
+        safe: bool,
         sensitive: bool,
         closure: bool,
         args: Vec<FuncArg>,
@@ -1504,7 +1511,7 @@ impl Func {
         let ret_type = ret_type.unwrap_or(Type::Void);
         let returns = ret_type != Type::Every;
         let prop = FuncProperties::new(
-            view, write, sensitive, closure, public, returns, nargs, nouts,
+            view, write, throw, safe, sensitive, closure, public, returns, nargs, nouts,
         );
         Func {
             name,
@@ -1529,6 +1536,12 @@ impl Func {
 pub struct FuncProperties {
     pub view: bool,
     pub write: bool,
+    #[serde(default)]
+    #[derivative(Hash = "ignore")]
+    pub throw: bool,
+    #[serde(default)]
+    #[derivative(Hash = "ignore")]
+    pub safe: bool,
     #[serde(default)]
     #[derivative(Hash = "ignore")]
     pub sensitive: bool,
@@ -1558,6 +1571,8 @@ impl FuncProperties {
     pub fn new(
         view: bool,
         write: bool,
+        throw: bool,
+        safe: bool,
         sensitive: bool,
         closure: bool,
         public: bool,
@@ -1568,6 +1583,8 @@ impl FuncProperties {
         FuncProperties {
             view,
             write,
+            throw,
+            safe,
             sensitive,
             closure,
             public,

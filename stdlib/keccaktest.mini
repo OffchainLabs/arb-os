@@ -20,15 +20,15 @@ use std::keccak::hasher_pushN_be;
 use std::keccak::hasher_finish;
 
 
-write func main() {
+throw write func main() {
     if let Some(x) = tests() {
 	asm(x) { log };
     } else {
-	asm(666,) { log };
+	asm(666) { log };
     }
 }
 
-func tests() -> option<bytes32> {
+throw func tests() -> option<bytes32> {
     let ba = bytearray_new(0);
     let kecEmpty = keccak256(ba, 0, 0);
     if kecEmpty != bytes32(0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470) {
@@ -88,7 +88,7 @@ func tests() -> option<bytes32> {
     Some(bytes32(0))
 }
 
-func setupFromUnmarshal() -> ByteArray {
+throw func setupFromUnmarshal() -> ByteArray {
     let marshalledStruct = unsafecast<MarshalledBytes>((
 	67,
 	(
@@ -109,7 +109,7 @@ func setupFromUnmarshal() -> ByteArray {
     }
 }
 
-func hasherMatches(ba: ByteArray) -> bool {
+throw func hasherMatches(ba: ByteArray) -> bool {
     let hasher = hasher_new();
     let i = 0;
     while i < bytearray_size(ba) {
@@ -119,7 +119,7 @@ func hasherMatches(ba: ByteArray) -> bool {
     hasher_finish(hasher) == keccak256(ba, 0, bytearray_size(ba))
 }
 
-func hasherMatchesByBlocks(ba: ByteArray) -> bool {
+throw func hasherMatchesByBlocks(ba: ByteArray) -> bool {
     let hasher = hasher_new();
     let offset = 0;
     let size = bytearray_size(ba);

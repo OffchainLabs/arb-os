@@ -910,6 +910,7 @@ fn typecheck_programs(
                 for (id, func) in &mut checked_funcs {
                     let detected_view = func.is_view(type_tree);
                     let detected_write = func.is_write(type_tree);
+                    let detected_throw = func.is_throw(type_tree);
 
                     let name = string_table.name_from_id(*id);
 
@@ -930,6 +931,17 @@ fn typecheck_programs(
                                 "Func {} is {} but was not declared so",
                                 Color::red(name),
                                 Color::red("write")
+                            ),
+                            func.debug_info.locs(),
+                        ));
+                    }
+
+                    if detected_throw && !func.properties.throw && !func.properties.safe {
+                        typecheck_issues.push(CompileError::new_type_error(
+                            format!(
+                                "Func {} is {} but was not declared so",
+                                Color::red(name),
+                                Color::red("throw")
                             ),
                             func.debug_info.locs(),
                         ));
@@ -959,6 +971,18 @@ fn typecheck_programs(
                         ));
                     }
 
+                    if !detected_throw && func.properties.throw {
+                        typecheck_issues.push(CompileError::new_warning(
+                            "Typecheck warning",
+                            format!(
+                                "Func {} is marked {} but isn't",
+                                Color::color(error_system.warn_color, name),
+                                Color::color(error_system.warn_color, "throw")
+                            ),
+                            func.debug_info.locs(),
+                        ));
+                    }
+
                     if !detected_view
                         && !detected_write
                         && func.properties.nouts == 0
@@ -978,8 +1002,9 @@ fn typecheck_programs(
                     }
 
                     // don't allow an incorrect purity to trip up future stages
-                    func.properties.write |= detected_view;
-                    func.properties.view |= detected_write;
+                    func.properties.view |= detected_view;
+                    func.properties.write |= detected_write;
+                    func.properties.throw |= detected_throw;
                 }
 
                 Ok((

@@ -36,7 +36,7 @@ type SignedTx = struct {
     s: uint
 };
 
-write func main(kind: uint, value: any) {
+throw write func main(kind: uint, value: any) {
     if kind == 0 {
         let ui = unsafecast<uint>(value);
         let ba = bytearray_new(0);
@@ -102,7 +102,7 @@ write func main(kind: uint, value: any) {
     testRlpHasher();
 }
 
-sensitive write func testRlpHasher() {
+sensitive write throw func testRlpHasher() {
     let seqNum = 0;
     let gasPrice = 31;
     let gasLimit = uint(hash(0));
@@ -156,7 +156,7 @@ sensitive write func testRlpHasher() {
     }
 }
 
-func randomByteArray() -> ByteArray {
+throw func randomByteArray() -> ByteArray {
     let ret = bytearray_new(0);
     let i = 0;
     while i < 5 {

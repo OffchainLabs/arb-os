@@ -21,11 +21,11 @@ type opClosure = struct {
 };
 
 
-write func main() {
+throw write func main() {
     asm(tests().1) { log };
 }
 
-func tests() -> string {
+throw func tests() -> string {
     let a = newarray<any>(17);
     if a[6] != unsafecast<any>(()) {
 	return "new small array isn't blank";

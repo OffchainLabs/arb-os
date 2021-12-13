@@ -11,7 +11,7 @@ use std::avmcodebuilder::avmCodeBuilder_finish;
 var global1: uint;
 var global2: option<int>;
 
-view write func main() {
+view write throw func main() {
     global1 = 5;
     global2 = Some(-3s);
 

@@ -1264,13 +1264,17 @@ impl Opcode {
             }
             Opcode::Pop(depth) => format!("Pop {}", Color::pink(depth)),
             Opcode::FuncCall(prop) => format!(
-                "FuncCall {}{}{}{} {}{}",
+                "FuncCall {}{}{}{}{} {}{}",
                 Color::mint(match prop.view {
                     true => "υ ",
                     false => "",
                 }),
                 Color::mint(match prop.write {
                     true => "ω ",
+                    false => "",
+                }),
+                Color::mint(match prop.throw {
+                    true => "τ ",
                     false => "",
                 }),
                 Color::mint(match prop.sensitive {

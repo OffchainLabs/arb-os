@@ -33,7 +33,7 @@ public func gasRefundTracker_add(
     tracker
 }
 
-public func gasRefundTracker_allocationsToRefund(
+public throw func gasRefundTracker_allocationsToRefund(
     tracker: GasRefundTracker,
     acctStore: AccountStore,
 ) -> uint {

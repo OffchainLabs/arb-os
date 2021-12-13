@@ -121,10 +121,13 @@ FuncDecl: Func = {
         let public    = qualifiers.contains(&"public");
         let view      = qualifiers.contains(&"view");
         let write     = qualifiers.contains(&"write");
+        let throw     = qualifiers.contains(&"throw");
+        let safe      = qualifiers.contains(&"safe");
         let sensitive = qualifiers.contains(&"sensitive");
         
         let debug = DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default());
         let name = string_table.name_from_id(i).clone();
+        let captures = BTreeSet::new();
 
         // Generalize over the generic parameters
         let params: Vec<_> = g.into_iter().flatten().collect();
@@ -166,9 +169,9 @@ FuncDecl: Func = {
             let stat = StatementKind::Return(*expr);
             stats.push(Statement::new(stat, debug_info));
         }
-        
+
 	Ok(Func::new(
-            name, i, public, view, write, sensitive, false, args, ret, stats, BTreeSet::new(), generic_ids, debug
+            name, i, public, view, write, throw, safe, sensitive, false, args, ret, stats, captures, generic_ids, debug
         ))
     }
 }
@@ -336,19 +339,23 @@ Type: Type = {
     <q: Qualifier*> "func" <a: CommaedTypesInParens> <r: Return?> => {
         let view = q.contains(&"view");
         let write = q.contains(&"write");
+        let throw = q.contains(&"throw");
+        let safe  = q.contains(&"safe");
         let returns = r != Some(Type::Every);
         let nargs = a.len();
         let nouts = r.iter().count();
-        let prop = FuncProperties::new(view, write, false, false, false, returns, nargs, nouts);
+        let prop = FuncProperties::new(view, write, throw, safe, false, false, false, returns, nargs, nouts);
         Type::Func(prop, a, Box::new(r.unwrap_or(Type::Void)))
     },
     <q: Qualifier*> "closure" <a: CommaedTypesInParens> <r: Return?> => {
-        let view = q.contains(&"view");
+        let view  = q.contains(&"view");
         let write = q.contains(&"write");
+        let throw = q.contains(&"throw");
+        let safe  = q.contains(&"safe");
         let returns = r != Some(Type::Every);
         let nargs = a.len();
         let nouts = r.iter().count();
-        let prop = FuncProperties::new(view, write, false, false, false, returns, nargs, nouts);
+        let prop = FuncProperties::new(view, write, throw, safe, false, false, false, returns, nargs, nouts);
         Type::Func(prop, a, Box::new(r.unwrap_or(Type::Void)))
     },
     <i: Ident> <g: Specialization?> => {
@@ -603,8 +610,10 @@ Expr12: Expr = {
         Expr::lno(ExprKind::UnsafeCast(Box::new(e), Type::Any), file_info, lno, filename)
     },
     <qualifiers: (<Qualifier>)*> <lno: @L> <u: ClosureUsage> "(" <fa:FuncArgs> ")" <t: (Return)?> <block:CodeBlock> => {
-        let view = qualifiers.contains(&"view");
+        let view  = qualifiers.contains(&"view");
         let write = qualifiers.contains(&"write");
+        let throw = qualifiers.contains(&"throw");
+        let safe  = qualifiers.contains(&"safe");
         let print = qualifiers.contains(&"__codegen_print");
         let mut debug = DebugInfo::here(file_info, lno, filename);
         debug.attributes.codegen_print = print;
@@ -622,7 +631,7 @@ Expr12: Expr = {
         };
         let id = string_table.get(name.clone());
         let closure = Func::new(
-            name, id, false, view, write, false, true, fa, t, stats, BTreeSet::new(), vec![], debug
+            name, id, false, view, write, throw, safe, false, true, fa, t, stats, BTreeSet::new(), vec![], debug
         );
         
 	closures.insert(id, closure.clone());
@@ -706,6 +715,8 @@ AsmVal: Value = {
 Qualifier: &'input str = {
     "view" => <>,
     "write" => <>,
+    "throw" => <>,
+    "safe" => <>,
     "public" => <>,
     "sensitive" => <>,
     "__codegen_print" => <>

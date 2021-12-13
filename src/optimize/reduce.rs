@@ -183,7 +183,7 @@ impl ValueGraph {
                     ValueNode::Meta(name) => name.to_string(),
                 }
             );
-            let spacing = 22_usize.saturating_sub(Color::uncolored(&node_string).len());
+            let spacing = 22_usize.saturating_sub(console::console_width(&node_string));
             let mut line = format!("{} {}", node_string, " ".repeat(spacing));
             let mut edges: Vec<_> = graph.edges_directed(node, Direction::Outgoing).collect();
             edges.sort_by_key(|edge| edge.weight().input_order());
@@ -413,6 +413,10 @@ impl ValueGraph {
                     }
                     ReadGlobal => {
                         graph.add_edge(node, globals, ValueEdge::Meta("view"));
+                        global_readers.insert(node);
+                    }
+                    MaybeThrow => {
+                        graph.add_edge(node, globals, ValueEdge::Meta("throw"));
                         global_readers.insert(node);
                     }
                     WriteGlobal => {
