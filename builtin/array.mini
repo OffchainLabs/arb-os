@@ -54,7 +54,7 @@ public throw func builtin_arrayGet(arr: array, index: uint) -> any {
     res
 }
 
-public throw func builtin_arrayGetSafe(arr: array, index: uint) -> option<any> {
+public safe func builtin_arrayGetSafe(arr: array, index: uint) -> option<any> {
     // Return None if access is out-of-bounds, otherwise return Some(result).
     if index >= arr.size {
 	return None;
@@ -83,7 +83,7 @@ public throw func builtin_arrayGetConsecutive(arr: array, index: uint) -> (any, 
     }
 }
 
-public throw func builtin_arrayGetConsecutiveSafe(arr: array, index: uint) -> option<(any, any)> {
+public safe func builtin_arrayGetConsecutiveSafe(arr: array, index: uint) -> option<(any, any)> {
     // Return Non if access is out-of-bounds, otherwise return Some((result, result'))
     if index+1 >= arr.size {
 	return None;
@@ -98,7 +98,7 @@ public throw func builtin_arraySet(arr: array, index: uint, value: any) -> array
     arr with { contents: arraySet2(arr.contents, arr.topstep, index, value) }
 }
 
-public throw func builtin_arraySetSafe(arr: array, index: uint, value:any) -> option<array> {
+public safe func builtin_arraySetSafe(arr: array, index: uint, value:any) -> option<array> {
     if index >= arr.size {
 	None
     } else {
@@ -133,7 +133,7 @@ public throw func builtin_arraySwap(a: array, index: uint, value: any) -> (array
     )
 }
 
-public throw func builtin_arraySwapSafe(a: array, index: uint, value: any) -> option<(array, any)> {
+public safe func builtin_arraySwapSafe(a: array, index: uint, value: any) -> option<(array, any)> {
     if index >= a.size {
 	return None;
     }
@@ -184,7 +184,7 @@ public throw func builtin_arrayOp(a: array, index: uint, applicator: opClosure) 
     )
 }
 
-public throw func builtin_arrayOpSafe(a: array, index: uint, applicator: opClosure) -> option<(array, any)> {
+public safe func builtin_arrayOpSafe(a: array, index: uint, applicator: opClosure) -> option<(array, any)> {
     if index >= a.size {
 	return None;
     }
@@ -226,7 +226,7 @@ public throw func builtin_arrayOpConsecutive(
     (arr2, ret1, ret2)
 }
 
-public throw func builtin_arrayOpConsecutiveSafe(
+public safe func builtin_arrayOpConsecutiveSafe(
     a: array, 
     index: uint, 
     closure1: opClosure, 
