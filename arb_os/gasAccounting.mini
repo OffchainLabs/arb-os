@@ -805,8 +805,8 @@ public view write func gasAccounting_prepareTx(tx: TxRequestData) -> (
                 ignoreMaxGas = true;
             }
             if ignoreGasPrice && ignoreMaxGas {
-                // high enough to never run out, but not so high as to make safeMath fail
-                set tx.maxGas = 1 << 128;
+                // high enough to never run out, but not so high as to overflow
+                set tx.maxGas = ~0 / prices.perArbGasTotal;
             }
             gep.computeGasLimit
         } else {
