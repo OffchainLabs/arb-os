@@ -35,6 +35,5 @@ interface ArbGasInfo {
     function setL1GasPriceEstimate(uint priceInWei) external;
 
     // get L1 gas fees paid by the current transaction (txBaseFeeWei, calldataFeeWei)
-    function getCurrentTxL1GasFees() external view returns(uint, uint);
+    function getCurrentTxL1GasFees() external view returns(uint);
 }
-
