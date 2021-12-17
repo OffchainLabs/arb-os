@@ -1091,7 +1091,7 @@ impl<'a> _ArbGasInfo<'a> {
     pub fn get_current_tx_l1_gas_fees(
         &self,
         machine: &mut Machine,
-    ) -> Result<(Uint256, Uint256), ethabi::Error> {
+    ) -> Result<Uint256, ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
             self.my_address.clone(),
             "getCurrentTxL1GasFees",
@@ -1106,17 +1106,7 @@ impl<'a> _ArbGasInfo<'a> {
         }
 
         if receipts[0].succeeded() {
-            let return_vals = ethabi::decode(
-                &[ethabi::ParamType::Uint(256), ethabi::ParamType::Uint(256)],
-                &receipts[0].get_return_data(),
-            )?;
-
-            match (&return_vals[0], &return_vals[1]) {
-                (ethabi::Token::Uint(ui0), ethabi::Token::Uint(ui1)) => {
-                    Ok((Uint256::from_u256(&ui0), Uint256::from_u256(&ui1)))
-                }
-                _ => panic!(),
-            }
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
         } else {
             Err(ethabi::Error::from(format!(
                 "tx failed: {}",
@@ -2214,17 +2204,15 @@ pub fn evm_test_get_current_tx_l1_gas_fees() {
     );
     let _ = machine.run(None);
 
-    let (tx_cost, calldata_cost) = arbgasinfo.get_current_tx_l1_gas_fees(&mut machine).unwrap();
+    let tx_cost = arbgasinfo.get_current_tx_l1_gas_fees(&mut machine).unwrap();
     assert!(tx_cost.is_zero());
-    assert!(calldata_cost.is_zero());
 
     arbowner
         ._set_fees_enabled(&mut machine, true, true)
         .unwrap();
 
-    let (tx_cost, calldata_cost) = arbgasinfo.get_current_tx_l1_gas_fees(&mut machine).unwrap();
+    let tx_cost = arbgasinfo.get_current_tx_l1_gas_fees(&mut machine).unwrap();
     assert!(!tx_cost.is_zero());
-    assert!(!calldata_cost.is_zero());
 
     machine.write_coverage("test_get_current_tx_l1_gas_fees".to_string());
 }
