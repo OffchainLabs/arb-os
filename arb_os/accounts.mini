@@ -752,6 +752,8 @@ public func account_getSerializedEVMState(acct: Account) -> ByteArray {
         ret = bytearray_setByte(ret, bytearray_size(ret), 0);
     }
 
+    ret = bytearray_set256(ret, bytearray_size(ret), uint(hash(acct)));
+
     return ret;
 }
 
