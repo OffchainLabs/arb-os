@@ -588,6 +588,12 @@ impl Type {
         }
     }
 
+    /// Returns true if both sides are assignable to each other
+    pub fn mutually_assignable(&self, other: &Self, type_tree: &TypeTree) -> bool {
+        self.assignable(other, type_tree, HashSet::new())
+            && other.assignable(self, type_tree, HashSet::new())
+    }
+
     pub fn first_mismatch(
         &self,
         rhs: &Self,
@@ -1704,6 +1710,7 @@ pub enum ExprKind {
     Loop(CodeBlock, Type),
     UnionCast(Box<Expr>, Type),
     NewBuffer,
+    Check(Box<Expr>, Type),
     Quote(Vec<u8>),
     Closure(Func),
 }
