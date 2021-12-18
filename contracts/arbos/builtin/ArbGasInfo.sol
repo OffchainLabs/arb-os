@@ -1,4 +1,4 @@
-pragma solidity >=0.4.21 <0.7.0;
+pragma solidity >=0.4.21 <0.9.0;
 
 interface ArbGasInfo {
     // return gas prices in wei, assuming the specified aggregator is used
@@ -35,6 +35,5 @@ interface ArbGasInfo {
     function setL1GasPriceEstimate(uint priceInWei) external;
 
     // get L1 gas fees paid by the current transaction (txBaseFeeWei, calldataFeeWei)
-    function getCurrentTxL1GasFees() external view returns(uint, uint);
+    function getCurrentTxL1GasFees() external view returns(uint);
 }
-
