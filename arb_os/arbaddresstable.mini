@@ -17,6 +17,7 @@ use evmCallStack::evmCallFrame_getCalldata;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownCodePc;
+use evmOps::evmOp_revert_knownPc;
 use evmOps::evmOp_revertIfStatic;
 
 use std::bytearray::bytearray_new;
@@ -48,20 +49,22 @@ public view write func arbAddressTable_txcall() {
         }
         let funcCode = getFuncCode(calldata);
 
-        if funcCode == 0x4420e486 {
+        if funcCode == const::funcCode_ArbAddressTable_register {
             arbAddressTable_register(topFrame, calldata);
-        } else if funcCode == 0xd4b6b5da {
+        } else if funcCode == const::funcCode_ArbAddressTable_lookup {
             arbAddressTable_lookup(topFrame, calldata);
-        } else if funcCode == 0xa5025222 {
+        } else if funcCode == const::funcCode_ArbAddressTable_addressExists {
             arbAddressTable_addressExists(topFrame, calldata);
-        } else if funcCode == 0x949d225d {
+        } else if funcCode == const::funcCode_ArbAddressTable_size {
             arbAddressTable_size(topFrame, calldata);
-        } else if funcCode == 0x8a186788 {
+        } else if funcCode == const::funcCode_ArbAddressTable_lookupIndex {
             arbAddressTable_lookupIndex(topFrame, calldata);
-        } else if funcCode == 0x31862ada {
+        } else if funcCode == const::funcCode_ArbAddressTable_decompress {
             arbAddressTable_decompress(topFrame, calldata);
-        } else if funcCode == 0xf6a455a2 {
+        } else if funcCode == const::funcCode_ArbAddressTable_compress {
             arbAddressTable_compress(topFrame, calldata);
+        } else if funcCode == const::funcCode_ArbAddressTable_hashRange {
+            arbAddressTable_hashRange(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbAddressTable), 1, 0, 0);
@@ -225,5 +228,34 @@ view write func arbAddressTable_compress(_topFrame: EvmCallFrame, calldata: Byte
         evmOp_return(0, 96);
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbAddressTable), 101, 0, 0);
+    }
+}
+
+// function hashRange(uint start, uint end, bytes32 startChain) external returns(bytes32);
+view write func arbAddressTable_hashRange(_topFrame: EvmCallFrame, calldata: ByteArray) {
+    if bytearray_size(calldata) != 4+3*32 {
+        evmOp_revert_knownPc(110, 0, 0);
+    }
+    let index = bytearray_get256(calldata, 4);
+    let end = bytearray_get256(calldata, 4+32);
+    let chain = bytes32(bytearray_get256(calldata, 4+2*32));
+    if index >= end {
+        evmOp_revert_knownPc(111, 0, 0);
+    }
+    if end > addressTable_size(getGlobalAddressTable()) {
+        evmOp_revert_knownPc(112, 0, 0);
+    }
+    while index < end {
+        if let Some(addr) = addressTable_getByIndex(getGlobalAddressTable(), index) {
+            chain = hash(chain, bytes32(addr));
+        } else {
+            evmOp_revert_knownPc(113, 0, 0);
+        }
+        index = index+1;
+    }
+    if evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, uint(chain))) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownPc(114, 0, 0);
     }
 }

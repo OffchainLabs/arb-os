@@ -921,86 +921,22 @@ impl<'a> ArbAddressTable<'a> {
             _ => panic!(),
         }
     }
-}
 
-/*
-pub struct ArbBLS<'a> {
-    pub contract_abi: AbiForContract,
-    wallet: &'a Wallet,
-    my_address: Uint256,
-    debug: bool,
-}
-
-impl<'a> ArbBLS<'a> {
-    pub fn new(wallet: &'a Wallet, debug: bool) -> Self {
-        let mut contract_abi =
-            AbiForContract::new_from_file(&builtin_contract_path("ArbBLS")).unwrap();
-        contract_abi.bind_interface_to_address(Uint256::from_u64(103));
-        ArbBLS {
-            contract_abi,
-            wallet: wallet,
-            my_address: Uint256::from_bytes(wallet.address().as_bytes()),
-            debug,
-        }
-    }
-
-    pub fn register(
+    pub fn _hash_range(
         &self,
         machine: &mut Machine,
-        x0: Uint256,
-        x1: Uint256,
-        y0: Uint256,
-        y1: Uint256,
-        use_ecdsa_signature: bool,
-    ) -> Result<(), ethabi::Error> {
-        let (receipts, sends) = if use_ecdsa_signature {
-            self.contract_abi.call_function_compressed(
-                self.my_address.clone(),
-                "register",
-                &[
-                    ethabi::Token::Uint(x0.to_u256()),
-                    ethabi::Token::Uint(x1.to_u256()),
-                    ethabi::Token::Uint(y0.to_u256()),
-                    ethabi::Token::Uint(y1.to_u256()),
-                ],
-                machine,
-                Uint256::zero(),
-                self.wallet,
-                self.debug,
-            )?
-        } else {
-            self.contract_abi.call_function(
-                self.my_address.clone(),
-                "register",
-                &[
-                    ethabi::Token::Uint(x0.to_u256()),
-                    ethabi::Token::Uint(x1.to_u256()),
-                    ethabi::Token::Uint(y0.to_u256()),
-                    ethabi::Token::Uint(y1.to_u256()),
-                ],
-                machine,
-                Uint256::zero(),
-                self.debug,
-            )?
-        };
-        if (receipts.len() != 1) || (sends.len() != 0) {
-            return Err(ethabi::Error::from("wrong number of receipts or sends"));
-        }
-        if !receipts[0].succeeded() {
-            return Err(ethabi::Error::from("reverted"));
-        }
-        Ok(())
-    }
-
-    pub fn get_public_key(
-        &self,
-        machine: &mut Machine,
-        addr: Uint256,
-    ) -> Result<(Uint256, Uint256, Uint256, Uint256), ethabi::Error> {
+        start: &Uint256,
+        end: &Uint256,
+        start_chain: &Uint256,
+    ) -> Result<Uint256, ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function(
             self.my_address.clone(),
-            "getPublicKey",
-            &[ethabi::Token::Address(addr.to_h160())],
+            "hashRange",
+            &[
+                ethabi::Token::Uint(start.to_u256()),
+                ethabi::Token::Uint(end.to_u256()),
+                ethabi::Token::Uint(start_chain.to_u256()),
+            ],
             machine,
             Uint256::zero(),
             self.debug,
@@ -1008,42 +944,13 @@ impl<'a> ArbBLS<'a> {
         if (receipts.len() != 1) || (sends.len() != 0) {
             return Err(ethabi::Error::from("wrong number of receipts or sends"));
         }
-        if !receipts[0].succeeded() {
-            return Err(ethabi::Error::from("reverted"));
-        }
-
-        let return_vals = ethabi::decode(
-            &[
-                ethabi::ParamType::Uint(256),
-                ethabi::ParamType::Uint(256),
-                ethabi::ParamType::Uint(256),
-                ethabi::ParamType::Uint(256),
-            ],
-            &receipts[0].get_return_data(),
-        )?;
-
-        match (
-            &return_vals[0],
-            &return_vals[1],
-            &return_vals[2],
-            &return_vals[3],
-        ) {
-            (
-                ethabi::Token::Uint(ui0),
-                ethabi::Token::Uint(ui1),
-                ethabi::Token::Uint(ui2),
-                ethabi::Token::Uint(ui3),
-            ) => Ok((
-                Uint256::from_u256(ui0),
-                Uint256::from_u256(ui1),
-                Uint256::from_u256(ui2),
-                Uint256::from_u256(ui3),
-            )),
-            _ => panic!(),
+        if receipts[0].succeeded() {
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
+        } else {
+            Err(ethabi::Error::from("reverted"))
         }
     }
 }
-*/
 
 pub struct ArbFunctionTable {
     pub contract_abi: AbiForContract,
