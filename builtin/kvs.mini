@@ -33,37 +33,37 @@
 type Kvs = struct {
     tree: KvsNode,
     size: uint,
-}
+};
 
-type KvsNode = [8]any
+type KvsNode = [8]any;
 
 type KvsCell = struct {
     key: any,
     value: option<any>,
-}
+};
 
 
 public func builtin_kvsNew() -> Kvs {
-    return struct {
+    struct {
         tree: unsafecast<KvsNode>(0),
         size: 0,
-    };
+    }
 }
 
 public func builtin_kvsSize(kvs: Kvs) -> uint {
-    return kvs.size;
+    kvs.size
 }
 
 public func builtin_kvsGet(kvs: Kvs, key: any) -> option<any> {
     let hashedKey = uint(hash(key));
     let s = kvs.tree;
-    return xloop {
-        if (s == unsafecast<KvsNode>(0)) {
+    loop {
+        if s == unsafecast<KvsNode>(0) {
             // empty subtree
             return None;
-        } elseif (asm(s,) uint { length } == 2) {
+        } else if asm(s,) uint { length } == 2 {
             // singleton item
-            if (key == unsafecast<KvsCell>(s).key) {
+            if key == unsafecast<KvsCell>(s).key {
                 return unsafecast<KvsCell>(s).value;
             } else {
                 return None;
@@ -73,11 +73,11 @@ public func builtin_kvsGet(kvs: Kvs, key: any) -> option<any> {
             s = unsafecast<KvsNode>(s[hashedKey & 0x7]);
             hashedKey = hashedKey / 8;
         }
-    };
+    }
 }
 
 public func builtin_kvsHasKey(kvs: Kvs, key: any) -> bool {
-    return builtin_kvsGet(kvs, key) != None<any>;
+    builtin_kvsGet(kvs, key) != None<any>
 }
 
 // An Unwinder remembers how to reassemble the tree as we traverse back up it.
@@ -88,32 +88,32 @@ type Unwinder = struct {
     kvs: [8]any,
     index: uint,
     next: option<Unwinder>,
-}
+};
 
 public func builtin_kvsSet(s: Kvs, key: any, value: any) -> Kvs {
     let (utree, maybeUnwinder, delta) = kvs_set2(s.tree, key, Some(value));
-    return xloop {
+    loop {
         if let Some(unwinder) = maybeUnwinder {
             utree = unwinder.kvs with {
                 [unwinder.index] = utree
             };
             maybeUnwinder = unwinder.next;
         } else {
-            if (delta != int(0)) {
+            if delta != int(0) {
                 s = s with { size: uint(int(s.size) + delta) };
             }
             return s with { tree: utree };
         }
-    };
+    }
 }
 
 func kvs_set2(s: KvsNode, key: any, value: option<any>) -> (KvsNode, option<Unwinder>, int) {
     let hashedKey = uint(hash(key));
     let reductionFactor = 1;
     let unwinder = None<Unwinder>;
-    return xloop {
-        if (s == unsafecast<KvsNode>(0)) {
-            if (value == None<any>) {
+    loop {
+        if s == unsafecast<KvsNode>(0) {
+            if value == None<any> {
                 // writing None to an empty slot; do nothing
                 return (s, unwinder, int(0));
             } else {
@@ -129,11 +129,11 @@ func kvs_set2(s: KvsNode, key: any, value: option<any>) -> (KvsNode, option<Unwi
                     int(1)
                 );
             }
-        } elseif (asm(s,) uint { length } == 2) {
+        } else if asm(s) uint { length } == 2 {
             let kid = unsafecast<KvsCell>(s);
-            if (kid.key == key) {
+            if kid.key == key {
                 // overwriting an existing item with same key
-                if (value == None<any>) {
+                if value == None<any> {
                     // delete existing item
                     return (
                         unsafecast<KvsNode>(0),
@@ -169,24 +169,24 @@ func kvs_set2(s: KvsNode, key: any, value: option<any>) -> (KvsNode, option<Unwi
             s = unsafecast<KvsNode>(s[slot]);
             reductionFactor = reductionFactor * 8;
         }
-    };
+    }
 }
 
 public func builtin_kvsDelete(s: Kvs, key: uint) -> Kvs {
     let (utree, maybeUnwinder, delta) = kvs_set2(s.tree, key, None<any>);
-    return xloop {
+    loop {
         if let Some(unwinder) = maybeUnwinder {
             utree = unwinder.kvs with {
                 [unwinder.index] = utree
             };
             maybeUnwinder = unwinder.next;
         } else {
-            if (delta != int(0)) {
+            if delta != int(0) {
                 s = s with { size: uint(int(s.size) + delta) };
             }
             return s with { tree: utree };
         }
-    };
+    }
 }
 
 // apply a closure to all items in the storageMap, in sequence
@@ -196,22 +196,22 @@ public func builtin_kvsDelete(s: Kvs, key: uint) -> Kvs {
 //       so callers are advised not to rely on the ordering
 public func builtin_kvsForall(
     s: Kvs,
-    closure: func(any, any, any) -> any,
+    applicator: func(any, any, any) -> any,
     state: any
 ) -> any {
-    return kvs_forall_tree(s.tree, closure, state);
+    kvs_forall_tree(s.tree, applicator, state)
 }
 
 func kvs_forall_tree(
     t: KvsNode,
-    closure: func(any, any, any) -> any,
+    applicator: func(any, any, any) -> any,
     state: any
 ) -> any {
-    return xif (t == unsafecast<KvsNode>(0)) {
+    if t == unsafecast<KvsNode>(0) {
         state
-    } elseif (asm(t,) uint { length } == 2) {
-        xif let Some(val) = unsafecast<KvsCell>(t).value {
-            closure(
+    } else if asm(t,) uint { length } == 2 {
+        if let Some(val) = unsafecast<KvsCell>(t).value {
+            applicator(
                 unsafecast<KvsCell>(t).key,
                 val,
                 state
@@ -222,10 +222,10 @@ func kvs_forall_tree(
         }
    } else {
         let i = 0;
-        while (i < 8) {
-            state = kvs_forall_tree(unsafecast<KvsNode>(t[i]), closure, state);
+        while i < 8 {
+            state = kvs_forall_tree(unsafecast<KvsNode>(t[i]), applicator, state);
             i = i+1;
         }
         state
-   };
+   }
 }

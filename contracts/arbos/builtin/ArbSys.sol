@@ -1,4 +1,4 @@
-pragma solidity >=0.4.21 <0.7.0;
+pragma solidity >=0.4.21 <0.9.0;
 
 /**
 * @title Precompiled contract that exists in every Arbitrum chain at address(100), 0x0000000000000000000000000000000000000064. Exposes a variety of system-level functionality.
@@ -55,6 +55,32 @@ interface ArbSys {
     * @return true if the caller of this was called directly from L1
     */
     function isTopLevelCall() external view returns (bool);
+
+    /**
+     * @notice check if the caller (of this caller of this) is an aliased L1 contract address
+     * @return true iff the caller's address is an alias for an L1 contract address
+     */
+    function wasMyCallersAddressAliased() external view returns (bool);
+
+    /**
+     * @notice return the address of the caller (of this caller of this), without applying L1 contract address aliasing
+     * @return address of the caller's caller, without applying L1 contract address aliasing
+     */
+    function myCallersAddressWithoutAliasing() external view returns (address);
+
+    /**
+     * @notice map L1 sender contract address to its L2 alias
+     * @param sender sender address
+     * @param dest destination address
+     * @return aliased sender address
+     */
+    function mapL1SenderContractAddressToL2Alias(address sender, address dest) external pure returns(address);
+
+    /**
+     * @notice get the caller's amount of available storage gas
+     * @return amount of storage gas available to the caller
+     */
+    function getStorageGasAvailable() external view returns(uint);
 
     event L2ToL1Transaction(address caller, address indexed destination, uint indexed uniqueId,
                             uint indexed batchNumber, uint indexInBatch,

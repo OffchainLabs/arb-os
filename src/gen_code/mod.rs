@@ -1,4 +1,9 @@
+//
+// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
+//
+
 use crate::compile::{AbstractSyntaxTree, StructField, Type, TypeCheckedNode, TypeTree};
+use crate::console::Color;
 use crate::link::LinkedProgram;
 use crate::GenUpgrade;
 use serde::{Deserialize, Serialize};
@@ -70,7 +75,12 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
     writeln!(code, "").unwrap();
     writeln!(
         code,
-        "// This file is machine-generated. Don't edit it unless you know what you're doing."
+        "//\n// This file is machine-generated. Don't edit it unless you know what you're doing."
+    )
+    .unwrap();
+    writeln!(
+        code,
+        "//\n// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.\n//"
     )
     .unwrap();
     writeln!(code, "").unwrap();
@@ -142,11 +152,11 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
     writeln!(code, "").unwrap();
     writeln!(
         code,
-        "public {}func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> (GlobalsAfterUpgrade, uint) {{",
+        "public {} func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> (GlobalsAfterUpgrade, uint) {{",
         if map.data.contains("_jump_table") {
             ""
         } else {
-            "impure "
+            "view"
         }
     )
     .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
@@ -203,7 +213,7 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
         .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
 
     // generate a dummy function, so we don't end up with an empty code file, which is an error
-    writeln!(code, "\n\nfunc __dummy__() {{ return; }}\n\n")
+    writeln!(code, "\n\nsensitive func __dummy__() {{ return; }}\n\n")
         .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
 
     Ok(())
@@ -228,16 +238,16 @@ fn write_subtypes(
         for (subtype, name) in vec_subtypes {
             writeln!(
                 code,
-                "type {}{}{} = {}",
+                "type {}{}{} = {};",
                 prefix.unwrap_or(""),
-                if let Type::Nominal(a, _) = subtype.clone() {
+                if let Type::Nominal(a, _, _) = subtype.clone() {
                     a.iter().map(|name| name.clone() + "_").collect::<String>()
                 } else {
                     format!("")
                 },
                 name,
                 {
-                    if let Type::Nominal(a, b) = subtype.clone() {
+                    if let Type::Nominal(a, b, _) = subtype.clone() {
                         let (displayed, subtypes) = type_tree
                             .get(&(a, b))
                             .unwrap()
@@ -277,10 +287,11 @@ fn get_globals_and_version_from_file(
             path.to_str().unwrap_or("")
         ))
     })?;
-    let globals: LinkedProgram = serde_json::from_str(&s).map_err(|_| {
+    let globals: LinkedProgram = serde_json::from_str(&s).map_err(|error| {
         GenCodeError::new(format!(
-            "Failed to deserialize file \"{}\"",
-            path.to_str().unwrap_or("")
+            "Failed to deserialize file \"{}\"\n{}",
+            Color::red(path.to_str().unwrap_or("")),
+            error
         ))
     })?;
 
@@ -293,9 +304,9 @@ fn get_globals_and_version_from_file(
 
     let mut old_state = state.clone();
     for global in globals.globals {
-        if global.name_id != usize::max_value() {
+        if global.id != usize::max_value() {
             let mut tipe = global.tipe;
-            if let Type::Nominal(file_path, id) = tipe {
+            if let Type::Nominal(file_path, id, _) = tipe {
                 tipe = type_tree
                     .get(&(file_path.clone(), id))
                     .cloned()
@@ -321,7 +332,7 @@ fn get_globals_and_version_from_file(
             .collect::<Vec<_>>();
         for diff in cool_temp {
             let new_type = {
-                let mut new = if let Type::Nominal(file_path, id) = diff.0 {
+                let mut new = if let Type::Nominal(file_path, id, _) = diff.0 {
                     type_tree
                         .get(&(file_path.clone(), id))
                         .cloned()
@@ -349,7 +360,7 @@ fn type_decl_string(
     type_tree: &TypeTree,
 ) -> String {
     format!(
-        "type {} = {}",
+        "type {} = {};",
         type_name,
         tipe.display_separator("_", prefix, true, type_tree).0
     )
@@ -370,7 +381,7 @@ fn replace_nominal(
                 let to_render = &mut *(*mut_state.1).borrow_mut();
                 to_render.insert((
                     tipe.clone(),
-                    if let Type::Nominal(path, id) = tipe {
+                    if let Type::Nominal(path, id, _) = tipe {
                         state
                             .get(&(path.clone(), *id))
                             .map(|(_, name)| name.clone())
@@ -381,11 +392,13 @@ fn replace_nominal(
                 ));
                 return false;
             }
-            if let Type::Nominal(path, id) = tipe {
-                mut_state.0.push(Type::Nominal(path.clone(), *id));
+            if let Type::Nominal(path, id, spec) = tipe {
+                mut_state
+                    .0
+                    .push(Type::Nominal(path.clone(), *id, spec.clone()));
                 let to_render = &mut *(*mut_state.1).borrow_mut();
                 to_render.insert((
-                    Type::Nominal(path.clone(), *id),
+                    Type::Nominal(path.clone(), *id, spec.clone()),
                     state
                         .get(&(path.clone(), *id))
                         .map(|(_, name)| name.clone())

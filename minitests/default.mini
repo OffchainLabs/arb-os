@@ -1,0 +1,52 @@
+/*
+ * Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
+ */
+
+type Nestable = struct {
+    name: string,
+    array: []string,
+};
+
+var sized_array: [12]uint;
+var array: []string;
+var nested: [][]Nestable;
+
+view write func main() {
+
+    if let Some(issue) = test() {
+        asm(issue.1) { log };
+    } else {
+        asm("".1) { log };
+    }
+}
+
+view func test() -> option<string> {
+
+    let sized_local = newfixedarray(12, 0);
+
+    if sized_local != sized_array {
+        debug(("array".1, sized_array));
+        debug(("local".1, sized_local));
+        return Some("default not same for sized array");
+    }
+
+    let local = newarray<string>(0);
+    let direct = unsafecast<[]string>(builtin_arrayNew(0, ""));
+
+    if local != array || direct != array {
+        debug(("array".1, array));
+        debug(("local".1, local));
+        debug(("direct".1, direct));
+        return Some("default not same for unsized array");
+    }
+
+    let nested_local = newarray<[]Nestable>(0);
+
+    if nested != nested_local {
+        debug(("array".1, nested));
+        debug(("local".1, nested_local));
+        return Some("default not same for nested array");
+    }
+
+    None
+}

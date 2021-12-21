@@ -2,42 +2,78 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-impure func main() {
-	asm(tests(),) { log };
+write func main() {
+    
+    if let Some(issue) = test_1() {
+        asm(issue.1) { log };
+    } else if let Some(issue) = test_2() {
+        asm(issue.1) { log };
+    } else {
+        asm("".1) { log };
+    }
 }
 
-func tests() -> uint {
-	let m = newmap<(uint, uint), uint>;
-	if (m[(17, 18,)] != None<uint>) {
-		return 1;
-	}
+func test_1() -> option<string> {
+    
+    let m = newmap<(uint, uint), uint>;
+    if m[(17, 18)] != None<uint> {
+	return Some("map<(uint, uint), uint> isn't empty");
+    }
 
-	let m = newmap<uint, uint>;
-	if (m[17] != None<uint>) {
-		return 2;
-	}
+    let m = newmap<uint, uint>;
+    if m[17] != None<uint> {
+	return Some("map<uint, uint> isn't empty");
+    }
 
-	let m = newmap<(uint, uint), uint>;
-	m = m with { [(999, 321,)] = 42 };
-	if ( m[(999, 321,)] != Some(42) ) { 
-		return 3;
-	}
+    let m = newmap<(uint, uint), uint>;
+    m = m with { [(999, 321)] = 42 };
+    if m[(999, 321)] != Some(42) { 
+	return Some("map assignment is wrong");
+    }
 
-	m = newmap<(uint, uint), uint>;
-	m = m with { [(999, 321,)] = 42 };
-	m = m with { [(0, 0,)] = 73 };
-	if ( m[(999, 321,)] != Some(42) ) { 
-		return 4;
-	}
+    m = newmap<(uint, uint), uint>;
+    m = m with { [(999, 321)] = 42 };
+    m = m with { [(  0,   0)] = 73 };
+    if m[(999, 321)] != Some(42) { 
+	return Some("map assignment is inconsistent");
+    }
 
-	m = newmap<(uint, uint), uint>;
-	m = m with { [(999, 321,)] = 42 };
-	m = m with { [(0, 0,)] = 73 };
-	m = m with { [(999, 321,)] = 13 };
-	m = m with { [(0, 0,)] = 173 };
-	if (m[(999, 321,)] != Some(13) ){
-		return 5;
-	}
+    m = newmap<(uint, uint), uint>;
+    m = m with { [(999, 321)] =  42 };
+    m = m with { [(  0,   0)] =  73 };
+    m = m with { [(999, 321)] =  13 };
+    m = m with { [(  0,   0)] = 173 };
+    if m[(999, 321)] != Some(13) {
+	return Some("map update is incorrect");
+    }
 
-	return 0;
+    None
+}
+
+
+func test_2() -> option<string> {
+
+    let m = newmap<(uint, uint), uint>;
+    set m[(999, 321)] = 42;
+    if m[(999, 321)] != Some(42) { 
+	return Some("map assignment is wrong");
+    }
+
+    m = newmap<(uint, uint), uint>;
+    set m[(999, 321)] = 42;
+    set m[(  0,   0)] = 73;
+    if m[(999, 321)] != Some(42) { 
+	return Some("map assignment is inconsistent");
+    }
+
+    m = newmap<(uint, uint), uint>;
+    set m[(999, 321)] =  42;
+    set m[(  0,   0)] =  73;
+    set m[(999, 321)] =  13;
+    set m[(  0,   0)] = 173;
+    if m[(999, 321)] != Some(13) {
+	return Some("map update is incorrect");
+    }
+    
+    None
 }

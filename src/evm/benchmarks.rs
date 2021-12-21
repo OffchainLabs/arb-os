@@ -34,8 +34,10 @@ pub fn make_benchmarks() -> Result<(), ethabi::Error> {
     for (bm_func, iterations, description, filename) in benchmarks {
         let filename = format!("benchmarks/{}.aoslog", filename);
         let gas_used = bm_func(iterations, Path::new(&filename))?;
-        println!("ArbGas for {}: {}", description, gas_used)
+        println!("ArbGas for {}: {}", description, gas_used);
+        eprint!("{}\t", gas_used);
     }
+    eprintln!();
     Ok(())
 }
 

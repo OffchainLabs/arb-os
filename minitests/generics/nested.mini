@@ -1,0 +1,57 @@
+/*
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
+ */
+
+type base<A>    = A;
+type tupe<S, U> = (S, U);
+type flip<T, W> = (tupe<T, W>, tupe<W, T>);
+
+write func main() {
+    asm(tests().1) { log };
+}
+
+sensitive func diff<A, B>(arg: flip<A, B>) -> flip<A, B> { return arg; }
+sensitive func same<A   >(arg: flip<A, A>) -> flip<A, A> { return arg; }
+sensitive func noop<A   >(arg: A         ) -> A          { return arg; }
+
+func tests() -> string {
+    let flip_flop = ((true, 1024), (1024, true));
+    let _diff_test = diff::<bool, uint>(flip_flop);
+    
+    let same_same = ((true, true), (true, true));
+    let _diff_test = diff::<bool, bool>(same_same);    
+    let _same_test = same::<bool>(same_same);
+    
+    let _a = 32;
+    let _b = noop::<uint>(32);
+    let _c = noop::<base<uint> >(32);
+    let _d = noop::<base<base<uint> > >(32);
+    _a = _b; _a = _c; _a = _d;
+    _b = _a; _b = _c; _b = _d;
+    _c = _a; _c = _b; _c = _d;
+    _d = _a; _d = _b; _d = _c;
+    
+    let _complex_1 = explicit::<bool, uint>(flip_flop);
+    let _complex_2 = explicit::<base<bool>, base<uint> >(flip_flop);
+    _complex_2 = _complex_1;
+    _complex_1 = _complex_2;
+    
+    let a = test();
+    let _ = a.0 + a.1;
+    
+    let source = (((true, true), 1024), (1024, (true, true)));
+    let _complex_1 = explicit::<(bool, bool), uint>(source);
+    let _complex_2 = explicit::<(base<bool>, base<bool>), base<uint> >(source);
+    _complex_2 = _complex_1;
+    _complex_1 = _complex_2;
+    
+    return "";
+}
+
+func explicit<A, B>(arg: flip<A, B>) -> tupe<tupe<A, B>, tupe<B, A> > {
+    return arg;
+}
+
+func test() -> (base<base<uint> >, base<uint>) {
+    return (1, 2);
+}

@@ -1,0 +1,7 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+write func main() {
+    asm("".1) { log };
+}

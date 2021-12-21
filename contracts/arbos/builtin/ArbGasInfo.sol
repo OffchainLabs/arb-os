@@ -1,4 +1,4 @@
-pragma solidity >=0.4.21 <0.7.0;
+pragma solidity >=0.4.21 <0.9.0;
 
 interface ArbGasInfo {
     // return gas prices in wei, assuming the specified aggregator is used
@@ -26,5 +26,14 @@ interface ArbGasInfo {
 
     // return gas accounting parameters (speedLimitPerSecond, gasPoolMax, maxTxGasLimit)
     function getGasAccountingParams() external view returns (uint, uint, uint);
-}
 
+    // get ArbOS's estimate of the L1 gas price in wei
+    function getL1GasPriceEstimate() external view returns(uint);
+
+    // set ArbOS's estimate of the L1 gas price in wei
+    // reverts unless called by chain owner or designated gas oracle (if any)
+    function setL1GasPriceEstimate(uint priceInWei) external;
+
+    // get L1 gas fees paid by the current transaction (txBaseFeeWei, calldataFeeWei)
+    function getCurrentTxL1GasFees() external view returns(uint);
+}

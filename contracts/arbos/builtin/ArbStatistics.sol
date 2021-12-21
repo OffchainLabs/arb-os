@@ -1,11 +1,11 @@
 
-pragma solidity >=0.4.21 <0.7.0;
+pragma solidity >=0.4.21 <0.9.0;
 
 interface ArbStatistics {
     // Get the following statistics for this chain:
     //      Number of Arbitrum blocks
     //      Number of accounts
-    //      Total storage allocated
+    //      Total storage allocated (includes storage that was later deallocated)
     //      Total ArbGas used
     //      Number of transaction receipt issued
     //      Number of contracts created

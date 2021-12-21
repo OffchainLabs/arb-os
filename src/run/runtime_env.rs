@@ -26,12 +26,15 @@ pub struct RuntimeEnvironment {
     pub sends: Vec<Vec<u8>>,
     pub next_inbox_seq_num: Uint256,
     pub caller_seq_nums: HashMap<Uint256, Uint256>,
+    #[allow(dead_code)]
     next_id: Uint256, // used to assign unique (but artificial) txids to messages
     pub recorder: RtEnvRecorder,
     compressor: TxCompressor,
+    #[allow(dead_code)]
     charging_policy: Option<(Uint256, Uint256, Uint256)>,
     num_wallets: u64,
     chain_init_message: Vec<u8>,
+    pub force_zero_gas_price: bool,
 }
 
 impl RuntimeEnvironment {
@@ -84,6 +87,7 @@ impl RuntimeEnvironment {
             charging_policy: charging_policy.clone(),
             num_wallets: 0,
             chain_init_message: RuntimeEnvironment::get_params_bytes(owner, chain_id),
+            force_zero_gas_price: false,
         };
 
         ret.send_chain_init_message();
@@ -102,10 +106,14 @@ impl RuntimeEnvironment {
 
     fn get_params_bytes(owner: Option<Uint256>, chain_id: u64) -> Vec<u8> {
         let mut buf = Vec::new();
-        let params_to_set = vec![
-            ("ChainOwner", owner.clone().unwrap_or(Uint256::zero())),
-            ("ChainID", Uint256::from_u64(chain_id)),
-        ];
+        let params_to_set = if let Some(the_owner) = owner {
+            vec![
+                ("ChainOwner", the_owner),
+                ("ChainID", Uint256::from_u64(chain_id)),
+            ]
+        } else {
+            vec![("ChainID", Uint256::from_u64(chain_id))]
+        };
         for (name, val) in params_to_set {
             buf.extend(&keccak256(name.as_bytes()));
             buf.extend(val.to_bytes_be());
@@ -212,7 +220,11 @@ impl RuntimeEnvironment {
     }
 
     pub fn get_gas_price(&self) -> Uint256 {
-        Uint256::_from_gwei(200)
+        if self.force_zero_gas_price {
+            Uint256::zero()
+        } else {
+            Uint256::_from_gwei(2)
+        }
     }
 
     pub fn insert_l2_message(&mut self, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
@@ -257,7 +269,7 @@ impl RuntimeEnvironment {
         &mut self,
         sender_addr: Uint256,
         max_gas: Uint256,
-        gas_price_bid: Uint256,
+        gas_price_bid: Option<Uint256>,
         to_addr: Uint256,
         value: Uint256,
         data: &[u8],
@@ -266,7 +278,7 @@ impl RuntimeEnvironment {
         let mut buf = vec![0u8];
         let seq_num = self.get_seq_num(&sender_addr.clone(), true);
         buf.extend(max_gas.to_bytes_be());
-        buf.extend(gas_price_bid.to_bytes_be());
+        buf.extend(gas_price_bid.unwrap_or(self.get_gas_price()).to_bytes_be());
         buf.extend(seq_num.to_bytes_be());
         buf.extend(to_addr.to_bytes_be());
         buf.extend(value.to_bytes_be());
@@ -283,7 +295,7 @@ impl RuntimeEnvironment {
     pub fn insert_gas_estimation_message(
         &mut self,
         max_gas: Uint256,
-        gas_price_bid: Uint256,
+        gas_price_bid: Option<Uint256>,
         to_addr: Uint256,
         value: Uint256,
         data: &[u8],
@@ -312,7 +324,7 @@ impl RuntimeEnvironment {
         &mut self,
         sender_addr: Uint256,
         max_gas: Uint256,
-        gas_price_bid: Uint256,
+        gas_price_bid: Option<Uint256>,
         to_addr: Uint256,
         value: Uint256,
         data: &[u8],
@@ -320,7 +332,7 @@ impl RuntimeEnvironment {
     ) -> Uint256 {
         let mut buf = vec![1u8];
         buf.extend(max_gas.to_bytes_be());
-        buf.extend(gas_price_bid.to_bytes_be());
+        buf.extend(gas_price_bid.unwrap_or(self.get_gas_price()).to_bytes_be());
         buf.extend(to_addr.to_bytes_be());
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
@@ -363,7 +375,7 @@ impl RuntimeEnvironment {
 
     pub fn make_compressed_and_signed_l2_message(
         &mut self,
-        gas_price: Uint256,
+        gas_price: Option<Uint256>,
         gas_limit: Uint256,
         to_addr: Uint256,
         value: Uint256,
@@ -374,6 +386,7 @@ impl RuntimeEnvironment {
         let sender = Uint256::from_bytes(wallet.address().as_bytes());
         let mut result = vec![7u8, 0xffu8];
         let seq_num = self.get_seq_num(&sender, !is_gas_estimation);
+        let gas_price = gas_price.unwrap_or(self.get_gas_price());
         result.extend(seq_num.rlp_encode());
         result.extend(gas_price.rlp_encode());
         result.extend(gas_limit.rlp_encode());
@@ -398,10 +411,11 @@ impl RuntimeEnvironment {
         (result, keccak256(tx.rlp().as_ref()).to_vec())
     }
 
+    /*
     pub fn _make_compressed_tx_for_bls(
         &mut self,
         sender: &Uint256,
-        gas_price: Uint256,
+        gas_price: Option<Uint256>,
         gas_limit: Uint256,
         to_addr: Uint256,
         value: Uint256,
@@ -409,9 +423,11 @@ impl RuntimeEnvironment {
     ) -> (Vec<u8>, Vec<u8>) {
         // returns (compressed tx to send, hash to sign)
         let mut result = self.compressor.compress_address(sender.clone());
+        let gas_price = gas_price.unwrap_or(self.get_gas_price());
 
         let mut buf = vec![0xffu8];
-        let seq_num = self.get_seq_num(&sender, true);
+        let seq_num = self.get_seq_num(&sender);
+
         buf.extend(seq_num.rlp_encode());
         buf.extend(gas_price.rlp_encode());
         buf.extend(gas_limit.rlp_encode());
@@ -437,6 +453,7 @@ impl RuntimeEnvironment {
                 .to_vec(),
         )
     }
+     */
 
     pub fn _insert_bls_batch(
         &mut self,
@@ -461,7 +478,7 @@ impl RuntimeEnvironment {
         &mut self,
         batch: &mut Vec<u8>,
         max_gas: Uint256,
-        gas_price_bid: Uint256,
+        gas_price_bid: Option<Uint256>,
         to_addr: Uint256,
         value: Uint256,
         calldata: Vec<u8>,
@@ -509,12 +526,21 @@ impl RuntimeEnvironment {
         sender_addr: Uint256,
         payee: Uint256,
         amount: Uint256,
+        adjust_payee_address: bool,
     ) {
         self.insert_tx_message_from_contract(
             sender_addr,
             Uint256::from_u64(100_000_000),
-            Uint256::zero(),
-            payee,
+            None,
+            {
+                let x = if adjust_payee_address {
+                    remap_l1_sender_address(payee)
+                } else {
+                    payee
+                };
+                println!("eth deposit to {}", x);
+                x
+            },
             amount,
             &[],
             true,
@@ -636,6 +662,26 @@ fn get_send_contents(log: Value) -> Option<Vec<u8>> {
     }
 }
 
+pub fn remap_l1_sender_address(addr: Uint256) -> Uint256 {
+    if addr.is_zero() {
+        addr
+    } else {
+        addr.add(&Uint256::from_string_hex("1111000000000000000000000000000000001111").unwrap())
+            .modulo(&Uint256::one().shift_left(160))
+            .unwrap()
+    }
+}
+
+pub fn _inverse_remap_l1_sender_address(addr: Uint256) -> Uint256 {
+    let two_to_the_160 = Uint256::one().shift_left(160);
+
+    addr.add(&two_to_the_160)
+        .sub(&Uint256::from_string_hex("1111000000000000000000000000000000001111").unwrap())
+        .unwrap()
+        .modulo(&two_to_the_160)
+        .unwrap()
+}
+
 // TxCompressor assumes that all client traffic uses it.
 // For example, it assumes nobody else affects ArbOS's address compression table.
 // This is fine for testing but wouldn't work in a less controlled setting.
@@ -699,20 +745,28 @@ pub struct ArbosReceipt {
     request_id: Uint256,
     return_code: Uint256,
     return_data: Vec<u8>,
+    #[allow(dead_code)]
     evm_logs: Vec<EvmLog>,
     gas_used: Uint256,
+    #[allow(dead_code)]
     gas_price_wei: Uint256,
     pub provenance: ArbosRequestProvenance,
-    gas_so_far: Uint256,     // gas used so far in L1 block, including this tx
+    gas_so_far: Uint256, // gas used so far in L1 block, including this tx
+    #[allow(dead_code)]
     index_in_block: Uint256, // index of this tx in L1 block
-    logs_so_far: Uint256,    // EVM logs emitted so far in L1 block, NOT including this tx
+    #[allow(dead_code)]
+    logs_so_far: Uint256, // EVM logs emitted so far in L1 block, NOT including this tx
+    #[allow(dead_code)]
     fee_stats: Vec<Vec<Uint256>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct ArbosRequestProvenance {
+    #[allow(dead_code)]
     l1_sequence_num: Uint256,
+    #[allow(dead_code)]
     parent_request_id: Option<Uint256>,
+    #[allow(dead_code)]
     index_in_parent: Option<Uint256>,
 }
 
@@ -923,7 +977,13 @@ impl ArbosReceipt {
             6 => "message format error",
             7 => "cannot deploy at address",
             8 => "exceeded tx gas limit",
-            9 => "below minimum ArbGas for contract tx",
+            9 => "insufficient gas for base fee",
+            10 => "below minimum ArbGas for contract tx",
+            11 => "gas price too low",
+            12 => "no gas for auto-redeem",
+            13 => "sender not permitted",
+            14 => "sequence number too low",
+            15 => "sequence number too high",
             _ => "unknown error",
         }
         .to_string()
