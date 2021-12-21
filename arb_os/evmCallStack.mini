@@ -67,6 +67,7 @@ use std::stack::stack_push;
 use std::stack::stack_pop;
 use std::stack::stack_discardDeepestItems;
 
+use gasAccounting::TxFeeStats;
 use gasAccounting::gasAccounting_startTxCharges;
 use gasAccounting::gasAccounting_endTxCharges;
 use gasAccounting::gasAccounting_pauseTxCharges;
@@ -186,6 +187,10 @@ public view write throw func setRetryBufferInCurrentContext(rbuf: RetryBuffer) {
     }
 }
 
+public view func evmCallStack_getCurrentTxFeeStats() -> TxFeeStats {
+    globalCurrentTxRequest.feeStats
+}
+
 public view func evmCallStack_isEmpty() -> bool {
     globalCallStack == None<EvmCallFrame>
 }
@@ -289,13 +294,7 @@ public view write throw func initEvmCallStack(
         let (startTxResult, acctStore) = if request.maxGas < const::Charging_MinArbGasForContractTx {
             (const::TxResultCode_belowMinimumTxGas, safeGetGlobalAccountStore())
         } else {
-            let (result, astore) = gasAccounting_startTxCharges(
-            	request.maxGas, 
-            	request.gasPrice, 
-            	request.gasPayer, 
-            	safeGetGlobalAccountStore(),
-            	if let Some(_) = request.incomingRequest.gasEstimationParams { true } else { false },
-            );
+            let (result, astore) = gasAccounting_startTxCharges(request, safeGetGlobalAccountStore());
             safeSetGlobalAccountStore(astore);
             (result, astore)
         };
@@ -518,13 +517,7 @@ public view write throw func initEvmCallStackForConstructor(
     let (startTxResult, *acctStore) = if request.maxGas < const::Charging_MinArbGasForContractTx {
         (const::TxResultCode_belowMinimumTxGas, acctStore)
     } else {
-        let (result, astore) = gasAccounting_startTxCharges(
-            request.maxGas,
-            request.gasPrice,
-            request.gasPayer,
-            acctStore,
-            if let Some(_) = request.incomingRequest.gasEstimationParams { true } else { false },
-        );
+        let (result, astore) = gasAccounting_startTxCharges(request, acctStore);
         safeSetGlobalAccountStore(astore);
         (result, astore)
     };

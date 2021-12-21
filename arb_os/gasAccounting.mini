@@ -430,15 +430,24 @@ public view func gasAccounting_summaryToPublish() -> (uint, uint, uint, uint, ui
 //    (It's up to us to figure out whether there actually was an out-of-gas situation, vs some unrelated error.)
 
 public view write throw func gasAccounting_startTxCharges(
-    maxGas: uint,
-    gasPrice: uint,
-    payer: address,
+    request: TxRequestData,
     acctStore: AccountStore,
-    gasEstimationMode: bool,
 ) -> (
     uint,          // const::TxResultCode_success if success, otherwise an error code
     AccountStore,  // acctStore, with payments deducted
 ) {
+    let maxGas = request.maxGas;
+    let gasPrice = request.gasPrice;
+    let payer = request.gasPayer;
+
+    let gasEstimationMode = false;
+    let setAsideWei = true;
+
+    if let Some(gep) = request.incomingRequest.gasEstimationParams {
+        setAsideWei = !(gep.ignoreGasPrice && gep.ignoreMaxGas);
+        gasEstimationMode = true;
+    }
+
     // Start charging a new Tx for ArbGas usage
     // The caller should already have verified that the payer has enough funds, but we'll return None if not.
 
@@ -456,18 +465,23 @@ public view write throw func gasAccounting_startTxCharges(
     };
 
     // escrow funds from the payer, enough to pay for maxGas at gasPrice
-    let weiToHold = safeMul(maxGas, gasPrice);
-    let (*acctStore, amount) = accountStore_addToEscrowUpToMax(acctStore, const::EscrowStoreID_txGas, payer, weiToHold);
-    if amount < weiToHold {
-        // payer doesn't have enough funds to pay for gas
-        // give the collected funds to the network fee recipient, then return failure
-        acctStore = accountStore_payFullyFromEscrow(
-            acctStore,
-            const::EscrowStoreID_txGas,
-            address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
-        );
-        return (const::TxResultCode_insufficientGasFunds, acctStore);
-    }
+    let weiToHold = if setAsideWei {
+        let wei = safeMul(maxGas, gasPrice);
+        let (*acctStore, amount) = accountStore_addToEscrowUpToMax(acctStore, const::EscrowStoreID_txGas, payer, wei);
+        if amount < wei {
+            // payer doesn't have enough funds to pay for gas
+            // give the collected funds to the network fee recipient, then return failure
+            acctStore = accountStore_payFullyFromEscrow(
+                acctStore,
+                const::EscrowStoreID_txGas,
+                address(chainParams_getOrDie(const::Atom_Param_NetworkFeeRecipient)),
+            );
+            return (const::TxResultCode_insufficientGasFunds, acctStore);
+        }
+        wei
+    } else {
+        0
+    };
 
     let gasUsedByOS = ((~0) - getGas()) / gasAccountingInfo.pricingParams.arbGasDivisor;
 
@@ -778,12 +792,21 @@ public view write throw func gasAccounting_prepareTx(tx: TxRequestData) -> (
         set tx.feeStats.units.tx = 1;
         set tx.feeStats = txFeeStats_setL2Prices(tx.feeStats, prices);
 
+        let ignoreGasPrice = false;
+        let ignoreMaxGas = false;
+
         let estimationCompGasLimit = if let Some(gep) = tx.incomingRequest.gasEstimationParams {
             if gep.ignoreGasPrice {
                 set tx.feeStats.noFeeGasEstimationMode = true;
+                ignoreGasPrice = true;
             }
             if gep.ignoreMaxGas {
                 set tx.maxGas = account_getEthBalance(accountStore_get(safeGetGlobalAccountStore(), tx.gasPayer)) / gasAccountingInfo.currentPrices.perArbGasTotal;
+                ignoreMaxGas = true;
+            }
+            if ignoreGasPrice && ignoreMaxGas {
+                // high enough to never run out, but not so high as to overflow
+                set tx.maxGas = ~0 / prices.perArbGasTotal;
             }
             gep.computeGasLimit
         } else {
@@ -843,9 +866,11 @@ public view write throw func gasAccounting_prepareTx(tx: TxRequestData) -> (
             if tx.value > gasPayerFunds {
                 (const::TxResultCode_insufficientBalance, tx)
             } else {
-                let affordableGas = (gasPayerFunds - tx.value) / gasPrice;
-                if (tx.maxGas == 0) || (tx.maxGas > affordableGas) {
-                    set tx.maxGas = affordableGas;
+                if !(ignoreMaxGas && ignoreGasPrice) {
+                    let affordableGas = (gasPayerFunds - tx.value) / gasPrice;
+                    if (tx.maxGas == 0) || (tx.maxGas > affordableGas) {
+                        set tx.maxGas = affordableGas;
+                    }
                 }
                 set tx.gasPrice = gasPrice;
                 (const::TxResultCode_success, tx)

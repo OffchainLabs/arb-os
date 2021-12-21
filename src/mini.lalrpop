@@ -233,6 +233,12 @@ StatementKind: StatementKind = {
         let debug_info = DebugInfo::here(file_info, lno, filename);
         StatementKind::Let(vec![AssignRef::new(i, true, debug_info)], e)
     },
+    "let" <lno: @L> <i: Ident> ":" <lno2: @L> <t: Type> "=" <e: Expr> ";" => {
+        let stat_debug_info = DebugInfo::here(file_info, lno, filename);
+        let tipe_debug_info = DebugInfo::here(file_info, lno2, filename);
+        let check = Expr::new(ExprKind::Check(Box::new(e), t), tipe_debug_info);
+        StatementKind::Let(vec![AssignRef::new(i, true, stat_debug_info)], check)
+    },
     "let" "(" <c: Comma<<AssignRef>>> ")" "=" <e: Expr> ";" => StatementKind::Let(c, e),
     <i: Ident> "=" <e: Expr> ";" => StatementKind::Assign(i, e),
     "return" <e: Expr> ";" => StatementKind::Return(e),
@@ -668,6 +674,9 @@ Expr13: Expr = {
     },
     <lno: @L> "getGas" "(" ")" => Expr::lno(ExprKind::GetGas, file_info, lno, filename),
     <lno: @L> "setGas" "(" <e:Expr> ")" => Expr::lno(ExprKind::SetGas(Box::new(e)), file_info, lno, filename),
+    <lno: @L> "check" "(" <e: Expr> "," <t: Type> ")" => Expr::lno(
+        ExprKind::Check(Box::new(e), t), file_info, lno, filename
+    ),
     <lno: @L> "error" => Expr::lno(ExprKind::Error, file_info, lno, filename),
     <lno: @L> <q: QuoteString> => Expr::lno(ExprKind::Quote(q), file_info, lno, filename),
     "(" <e: Expr> ")" => <>,

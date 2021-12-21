@@ -148,11 +148,14 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
         || (opcode == 0x1e)  // invalid
         || (opcode == 0x1f)  // invalid
         || ((opcode >= 0x21) && (opcode <= 0x2f)) // invalid
-        || ((opcode >= 0x48) && (opcode <= 0x4f)) // invalid
+        || ((opcode >= 0x49) && (opcode <= 0x4f)) // invalid
         || (opcode == 0x56)  // JUMP
         || ((opcode >= 0x5c) && (opcode <= 0x5f)) // invalid
         || ((opcode >= 0xa5) && (opcode <= 0xef)) // invalid
         || (opcode == 0xf3)  // RETURN
+        || ((opcode >= 0xf6) && (opcode <= 0xf9)) // invalid
+        || (opcode == 0xfb)  // invalid
+        || (opcode == 0xfc)  // invalid
         || (opcode == 0xfd)  // REVERT
         || (opcode == 0xfe)  // INVALID
         || (opcode == 0xff); // SELFDESTRUCT

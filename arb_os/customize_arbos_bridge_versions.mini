@@ -6,6 +6,5 @@ use bridge_arbos_versions::GlobalsBeforeUpgrade;
 
 
 public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> map<uint, uint> {
-    return oldGlobals.globalChainParameters;
+    oldGlobals.globalChainParameters
 }
-

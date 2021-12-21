@@ -1,4 +1,4 @@
-pragma solidity >=0.4.21 <0.7.0;
+pragma solidity >=0.4.21 <0.9.0;
 
 interface ArbOwner {
     // Support actions that can be taken by the chain's owner.

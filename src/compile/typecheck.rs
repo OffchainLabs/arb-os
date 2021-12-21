@@ -1533,9 +1533,33 @@ fn typecheck_expr(
 
     Ok(TypeCheckedExpr {
         kind: match &expr.kind {
+            ExprKind::Error => Ok(TypeCheckedExprKind::Error),
             ExprKind::NewBuffer => Ok(TypeCheckedExprKind::NewBuffer),
             ExprKind::Quote(buf) => Ok(TypeCheckedExprKind::Quote(buf.clone())),
-            ExprKind::Error => Ok(TypeCheckedExprKind::Error),
+            ExprKind::Check(expr, tipe) => {
+                let expr = typecheck_expr(
+                    expr,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    func,
+                    type_tree,
+                    string_table,
+                    undefinable_ids,
+                    closures,
+                    scopes,
+                )?;
+
+                if !tipe.mutually_assignable(&expr.get_type(), type_tree) {
+                    error!(
+                        "This expression was marked {} but is actually {}",
+                        Color::red(tipe.print(type_tree)),
+                        Color::red(expr.get_type().print(type_tree)),
+                    );
+                }
+
+                Ok(expr.kind)
+            }
             ExprKind::UnaryOp(op, subexpr) => {
                 let tc_sub = typecheck_expr(
                     subexpr,
@@ -3227,8 +3251,7 @@ fn typecheck_binary_op(
             )),
         },
         BinaryOp::Equal | BinaryOp::NotEqual => {
-            let mutual = subtype1.assignable(&subtype2, type_tree, HashSet::new())
-                && subtype2.assignable(&subtype1, type_tree, HashSet::new());
+            let mutual = subtype1.mutually_assignable(&subtype2, type_tree);
 
             if mutual {
                 Ok(TypeCheckedExprKind::Binary(
