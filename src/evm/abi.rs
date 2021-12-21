@@ -28,6 +28,7 @@ pub struct AbiForContract {
     pub code_bytes: Vec<u8>,
     pub contract: ethabi::Contract,
     pub address: Uint256,
+    #[allow(dead_code)]
     name: String,
 }
 

@@ -16,9 +16,9 @@ func unused() -> uint {
     return 8 + unused();
 }
 
-func disconnected_cycle1() { disconnected_cycle2(); }
-func disconnected_cycle2() { disconnected_cycle3(); }
-func disconnected_cycle3() { disconnected_cycle1(); }
+sensitive func disconnected_cycle1() { disconnected_cycle2(); }
+sensitive func disconnected_cycle2() { disconnected_cycle3(); }
+sensitive func disconnected_cycle3() { disconnected_cycle1(); }
 
 public func externally_used() -> uint {
     return 4;

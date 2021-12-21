@@ -10,7 +10,6 @@ use std::bytearray::bytearray_get64;
 use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_copy;
 
-
 public func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32 {
     if nbytes == 32 {
         return hash(bytearray_get256(ba, offset));

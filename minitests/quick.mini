@@ -3,9 +3,5 @@
 //
 
 write func main() {
-    asm(tests().1) { log };
-}
-
-func tests() -> string {
-    ""
+    asm("".1) { log };
 }

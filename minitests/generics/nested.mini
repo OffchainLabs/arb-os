@@ -10,9 +10,9 @@ write func main() {
     asm(tests().1) { log };
 }
 
-func diff<A, B>(arg: flip<A, B>) -> flip<A, B> { return arg; }
-func same<A   >(arg: flip<A, A>) -> flip<A, A> { return arg; }
-func noop<A   >(arg: A         ) -> A          { return arg; }
+sensitive func diff<A, B>(arg: flip<A, B>) -> flip<A, B> { return arg; }
+sensitive func same<A   >(arg: flip<A, A>) -> flip<A, A> { return arg; }
+sensitive func noop<A   >(arg: A         ) -> A          { return arg; }
 
 func tests() -> string {
     let flip_flop = ((true, 1024), (1024, true));

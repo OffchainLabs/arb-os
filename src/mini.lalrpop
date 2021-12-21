@@ -118,9 +118,11 @@ TypeDecl: TypeDecl = {
 
 FuncDecl: Func = {
     <attribs: ("#[" <Attributes> "]")?> <qualifiers: (<Qualifier>)*> "func" <lno: @L> <i: Ident> <g: Generalization?> "(" <mut args: FuncArgs> ")" <mut ret: Return?> <block: CodeBlock> =>? {
-        let public = qualifiers.contains(&"public");
-        let view = qualifiers.contains(&"view");
-        let write = qualifiers.contains(&"write");
+        let public    = qualifiers.contains(&"public");
+        let view      = qualifiers.contains(&"view");
+        let write     = qualifiers.contains(&"write");
+        let sensitive = qualifiers.contains(&"sensitive");
+        
         let debug = DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default());
         let name = string_table.name_from_id(i).clone();
 
@@ -165,7 +167,9 @@ FuncDecl: Func = {
             stats.push(Statement::new(stat, debug_info));
         }
         
-	Ok(Func::new(name, i, public, view, write, false, args, ret, stats, BTreeSet::new(), generic_ids, debug))
+	Ok(Func::new(
+            name, i, public, view, write, sensitive, false, args, ret, stats, BTreeSet::new(), generic_ids, debug
+        ))
     }
 }
 
@@ -225,6 +229,12 @@ StatementKind: StatementKind = {
     "let" <lno: @L> <i: Ident> "=" <e: Expr> ";" => {
         let debug_info = DebugInfo::here(file_info, lno, filename);
         StatementKind::Let(vec![AssignRef::new(i, true, debug_info)], e)
+    },
+    "let" <lno: @L> <i: Ident> ":" <lno2: @L> <t: Type> "=" <e: Expr> ";" => {
+        let stat_debug_info = DebugInfo::here(file_info, lno, filename);
+        let tipe_debug_info = DebugInfo::here(file_info, lno2, filename);
+        let check = Expr::new(ExprKind::Check(Box::new(e), t), tipe_debug_info);
+        StatementKind::Let(vec![AssignRef::new(i, true, stat_debug_info)], check)
     },
     "let" "(" <c: Comma<<AssignRef>>> ")" "=" <e: Expr> ";" => StatementKind::Let(c, e),
     <i: Ident> "=" <e: Expr> ";" => StatementKind::Assign(i, e),
@@ -335,7 +345,7 @@ Type: Type = {
         let returns = r != Some(Type::Every);
         let nargs = a.len();
         let nouts = r.iter().count();
-        let prop = FuncProperties::new(view, write, false, false, returns, nargs, nouts);
+        let prop = FuncProperties::new(view, write, false, false, false, returns, nargs, nouts);
         Type::Func(prop, a, Box::new(r.unwrap_or(Type::Void)))
     },
     <q: Qualifier*> "closure" <a: CommaedTypesInParens> <r: Return?> => {
@@ -344,7 +354,7 @@ Type: Type = {
         let returns = r != Some(Type::Every);
         let nargs = a.len();
         let nouts = r.iter().count();
-        let prop = FuncProperties::new(view, write, false, false, returns, nargs, nouts);
+        let prop = FuncProperties::new(view, write, false, false, false, returns, nargs, nouts);
         Type::Func(prop, a, Box::new(r.unwrap_or(Type::Void)))
     },
     <i: Ident> <g: Specialization?> => {
@@ -601,7 +611,9 @@ Expr12: Expr = {
     <qualifiers: (<Qualifier>)*> <lno: @L> <u: ClosureUsage> "(" <fa:FuncArgs> ")" <t: (Return)?> <block:CodeBlock> => {
         let view = qualifiers.contains(&"view");
         let write = qualifiers.contains(&"write");
-        let debug = DebugInfo::here(file_info, lno, filename);
+        let print = qualifiers.contains(&"__codegen_print");
+        let mut debug = DebugInfo::here(file_info, lno, filename);
+        debug.attributes.codegen_print = print;
 
         let mut stats = block.body;
         if let Some(expr) = block.ret_expr {
@@ -615,7 +627,9 @@ Expr12: Expr = {
             false => format!("_closure #{}", closures.len() + 1),
         };
         let id = string_table.get(name.clone());
-        let closure = Func::new(name, id, false, view, write, true, fa, t, stats, BTreeSet::new(), vec![], debug);
+        let closure = Func::new(
+            name, id, false, view, write, false, true, fa, t, stats, BTreeSet::new(), vec![], debug
+        );
         
 	closures.insert(id, closure.clone());
         
@@ -651,6 +665,9 @@ Expr13: Expr = {
     },
     <lno: @L> "getGas" "(" ")" => Expr::lno(ExprKind::GetGas, file_info, lno, filename),
     <lno: @L> "setGas" "(" <e:Expr> ")" => Expr::lno(ExprKind::SetGas(Box::new(e)), file_info, lno, filename),
+    <lno: @L> "check" "(" <e: Expr> "," <t: Type> ")" => Expr::lno(
+        ExprKind::Check(Box::new(e), t), file_info, lno, filename
+    ),
     <lno: @L> "error" => Expr::lno(ExprKind::Error, file_info, lno, filename),
     <lno: @L> <q: QuoteString> => Expr::lno(ExprKind::Quote(q), file_info, lno, filename),
     "(" <e: Expr> ")" => <>,
@@ -699,6 +716,8 @@ Qualifier: &'input str = {
     "view" => <>,
     "write" => <>,
     "public" => <>,
+    "sensitive" => <>,
+    "__codegen_print" => <>
 };
 
 IdentStr: &'input str = {

@@ -86,21 +86,19 @@ impl<'a> TypeCheckedNode<'a> {
         for node in nodes.iter_mut() {
             match node {
                 TypeCheckedNode::Statement(stat) => {
-                    stat.debug_info.attributes.codegen_print =
-                        stat.debug_info.attributes.codegen_print || attributes.codegen_print;
+                    stat.debug_info.attributes.codegen_print |= attributes.codegen_print;
                     let child_attributes = stat.debug_info.attributes.clone();
                     TypeCheckedNode::propagate_attributes(stat.child_nodes(), &child_attributes);
                 }
                 TypeCheckedNode::Expression(expr) => {
-                    expr.debug_info.attributes.codegen_print =
-                        expr.debug_info.attributes.codegen_print || attributes.codegen_print;
+                    expr.debug_info.attributes.codegen_print |= attributes.codegen_print;
                     let child_attributes = expr.debug_info.attributes.clone();
                     TypeCheckedNode::propagate_attributes(expr.child_nodes(), &child_attributes);
                     if let TypeCheckedExprKind::Asm(_, ref mut vec, _) = expr.kind {
                         for insn in vec {
+                            let expr_print = expr.debug_info.attributes.codegen_print;
                             insn.debug_info.attributes.codegen_print =
-                                expr.debug_info.attributes.codegen_print
-                                    || attributes.codegen_print;
+                                expr_print || attributes.codegen_print;
                         }
                     }
                 }
@@ -1516,9 +1514,33 @@ fn typecheck_expr(
 
     Ok(TypeCheckedExpr {
         kind: match &expr.kind {
+            ExprKind::Error => Ok(TypeCheckedExprKind::Error),
             ExprKind::NewBuffer => Ok(TypeCheckedExprKind::NewBuffer),
             ExprKind::Quote(buf) => Ok(TypeCheckedExprKind::Quote(buf.clone())),
-            ExprKind::Error => Ok(TypeCheckedExprKind::Error),
+            ExprKind::Check(expr, tipe) => {
+                let expr = typecheck_expr(
+                    expr,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    func,
+                    type_tree,
+                    string_table,
+                    undefinable_ids,
+                    closures,
+                    scopes,
+                )?;
+
+                if !tipe.mutually_assignable(&expr.get_type(), type_tree) {
+                    error!(
+                        "This expression was marked {} but is actually {}",
+                        Color::red(tipe.print(type_tree)),
+                        Color::red(expr.get_type().print(type_tree)),
+                    );
+                }
+
+                Ok(expr.kind)
+            }
             ExprKind::UnaryOp(op, subexpr) => {
                 let tc_sub = typecheck_expr(
                     subexpr,
@@ -3210,8 +3232,7 @@ fn typecheck_binary_op(
             )),
         },
         BinaryOp::Equal | BinaryOp::NotEqual => {
-            let mutual = subtype1.assignable(&subtype2, type_tree, HashSet::new())
-                && subtype2.assignable(&subtype1, type_tree, HashSet::new());
+            let mutual = subtype1.mutually_assignable(&subtype2, type_tree);
 
             if mutual {
                 Ok(TypeCheckedExprKind::Binary(
