@@ -237,7 +237,7 @@ public view write func decompressAndVerifyEcdsaSignedTx(
         }
     }
     if originalRequest.kind == const::L1MessageType_L2ForGasEstimation {
-        if tx.gasPrice == 0 {
+        if tx.gasPrice == 0 || tx.gasPrice == ~0 {
             // gas estimation tx requested zero gas, so ignore gas funding and pay whatever price is necessary to run
             set originalRequest.gasEstimationParams = if let Some(gep) = originalRequest.gasEstimationParams {
                 Some(gep with { ignoreGasPrice: true })

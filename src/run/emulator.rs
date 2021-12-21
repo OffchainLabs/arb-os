@@ -1949,9 +1949,17 @@ impl Machine {
                     }
                     AVMOpcode::Blake2f => {
                         let t = self.stack.pop_buffer(&self.state)?;
-                        self.stack.push_buffer(blake2bf_instruction(t));
-                        self.incr_pc();
-                        Ok(true)
+                        if let Some(res) = blake2bf_instruction(t) {
+                            self.stack.push_buffer(res);
+                            self.incr_pc();
+                            Ok(true)
+                        } else {
+                            Err(ExecutionError::new(
+                                "too many steps in Blake2f",
+                                &self.state,
+                                None,
+                            ))
+                        }
                     }
                     AVMOpcode::Inbox => {
                         match self.runtime_env.get_from_inbox() {
