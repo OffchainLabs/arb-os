@@ -50,7 +50,7 @@ func rlp_uintSize(val: uint) -> uint {
     }
 }
 
-public func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray, uint) {
+public throw func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray, uint) {
     // RLP-encode val, writing the result to ba at offset
     // return (updated_ba, nbytes_written)
 
@@ -112,7 +112,7 @@ func rlp_hashUint(hasher: Hasher, val: uint) -> Hasher {
     }
 }
 
-func rlp_hashAddress(hasher: Hasher, addr: address) -> Hasher {
+throw func rlp_hashAddress(hasher: Hasher, addr: address) -> Hasher {
     if addr == address(0) {
         return rlp_hashUint(hasher, 0);
     }
@@ -128,7 +128,7 @@ func rlp_addressSize(addr: address) -> uint {
     }
 }
 
-public func rlp_encodeAddress(addr: address, ba: ByteArray, offset: uint) -> (ByteArray, uint) {
+public throw func rlp_encodeAddress(addr: address, ba: ByteArray, offset: uint) -> (ByteArray, uint) {
     if addr == address(0) {
         return rlp_encodeUint(0, ba, offset);
     }
@@ -152,7 +152,7 @@ func rlp_bytesSize(ba: ByteArray, offset: uint, nbytes: uint) -> uint {
     }
 }
 
-public func rlp_encodeBytes(
+public throw func rlp_encodeBytes(
     inBytes: ByteArray, inOffset: uint, nbytes: uint,
     outBytes: ByteArray, outOffset: uint
 ) -> (ByteArray, uint) {
@@ -237,7 +237,7 @@ func rlp_hashBytes(hasher: Hasher, ba: ByteArray, offset: uint, nbytes: uint) ->
     }
 }
 
-public func rlp_decodeBytes(inStream: ByteStream) -> option<(ByteStream, ByteArray)> {
+public throw func rlp_decodeBytes(inStream: ByteStream) -> option<(ByteStream, ByteArray)> {
     let (uis, firstByte) = bytestream_getByte(inStream)?;
     inStream = uis;
     let result = bytearray_new(0);
@@ -262,7 +262,7 @@ public func rlp_decodeBytes(inStream: ByteStream) -> option<(ByteStream, ByteArr
     copyFromStreamToArray(inStream, result, 0, nbytes)
 }
 
-public func rlp_encodeList(
+public throw func rlp_encodeList(
     encodedItems: []ByteArray,
     encItemsOffset: uint,
     numEncItems: uint,
@@ -308,7 +308,7 @@ public func rlp_encodeList(
     Some((outBytes, totalWritten))
 }
 
-public func rlp_encodeMessageInfo(
+public throw func rlp_encodeMessageInfo(
     seqNum: uint,
     gasPrice: uint,
     gasLimit: uint,
@@ -349,7 +349,7 @@ public func rlp_encodeMessageInfo(
     }
 }
 
-public func rlp_encodeAndHashMessageInfoForSignature(tx: SignedTx, eip155chainId: option<uint>) -> bytes32 {
+public throw func rlp_encodeAndHashMessageInfoForSignature(tx: SignedTx, eip155chainId: option<uint>) -> bytes32 {
     let contentsSize = rlp_uintSize(tx.seqNum)
                      + rlp_uintSize(tx.gasPrice)
                      + rlp_uintSize(tx.gasLimit)
@@ -395,7 +395,7 @@ public func rlp_encodeAndHashMessageInfoForSignature(tx: SignedTx, eip155chainId
     hasher_finish(hasher)
 }
 
-public func rlp_decodeMessageInfo(inStream: ByteStream) -> option<(ByteStream, SignedTx)> {
+public throw func rlp_decodeMessageInfo(inStream: ByteStream) -> option<(ByteStream, SignedTx)> {
     // read and discard the list header info (which we don't need)
     let (us, firstByte) = bytestream_getByte(inStream)?;
     inStream = us;
@@ -431,7 +431,7 @@ public func rlp_decodeMessageInfo(inStream: ByteStream) -> option<(ByteStream, S
     )
 }
 
-func copyFromStreamToArray(
+throw func copyFromStreamToArray(
     inStream: ByteStream,
     ba: ByteArray,
     offset: uint,
@@ -454,7 +454,7 @@ func copyFromStreamToArray(
     Some( (inStream, ba) )
 }
 
-public func rlp_encodeUintPair(
+public throw func rlp_encodeUintPair(
     ui1: uint,
     ui2: uint,
     ba: ByteArray,
@@ -472,7 +472,7 @@ public func rlp_encodeUintPair(
     (ba, 1+rlpLen1+rlpLen2)
 }
 
-public func keccakOfRlpEncodedUintPair(ui1: uint, ui2: uint) -> bytes32 {
+public throw func keccakOfRlpEncodedUintPair(ui1: uint, ui2: uint) -> bytes32 {
     let ba = bytearray_new(64);
     let (uba, nbytes) = rlp_encodeUintPair(ui1, ui2, ba, 0);
     keccak256(uba, 0, nbytes)

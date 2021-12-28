@@ -46,7 +46,7 @@ public view func avmCodeBuilder_new(requireSafe: bool) -> AvmCodeBuilder {
     };
 }
 
-public view write func avmCodeBuilder_append(builder: AvmCodeBuilder, stream: ByteStream) -> option<AvmCodeBuilder> {
+public view write throw func avmCodeBuilder_append(builder: AvmCodeBuilder, stream: ByteStream) -> option<AvmCodeBuilder> {
     let requireSafe = builder.requireSafe;
     let code = builder.code;
     let size = builder.size;
@@ -90,7 +90,7 @@ func isSafeInstruction(insn: uint) -> bool {
         && ((insn < 0x60) || (insn > 0x7f));   // various unsafe instructions
 }
 
-func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> option<(ByteStream, any)> {
+throw func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> option<(ByteStream, any)> {
     let (*stream, kind) = bytestream_getByte(stream)?;
     return if (kind == 0) {  // integer
         let (*stream, val) = rlp_decodeUint(stream)?;

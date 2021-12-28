@@ -183,7 +183,7 @@ impl ValueGraph {
                     ValueNode::Meta(name) => name.to_string(),
                 }
             );
-            let spacing = 22_usize.saturating_sub(Color::uncolored(&node_string).len());
+            let spacing = 22_usize.saturating_sub(console::console_width(&node_string));
             let mut line = format!("{} {}", node_string, " ".repeat(spacing));
             let mut edges: Vec<_> = graph.edges_directed(node, Direction::Outgoing).collect();
             edges.sort_by_key(|edge| edge.weight().input_order());
@@ -413,6 +413,10 @@ impl ValueGraph {
                     }
                     ReadGlobal => {
                         graph.add_edge(node, globals, ValueEdge::Meta("view"));
+                        global_readers.insert(node);
+                    }
+                    MaybeThrow => {
+                        graph.add_edge(node, globals, ValueEdge::Meta("throw"));
                         global_readers.insert(node);
                     }
                     WriteGlobal => {
@@ -654,6 +658,23 @@ impl ValueGraph {
                 });
                 if graph.node_count() == node_count {
                     break;
+                }
+            }
+
+            for node in nodes(&graph) {
+                let effects = match &graph[node] {
+                    ValueNode::Opcode(opcode) => opcode.effects(),
+                    _ => continue,
+                };
+
+                let pushes = effects.into_iter().any(|x| x == Effect::PushStack);
+
+                if pushes && conn_count(&graph, node) == 0 {
+                    // A node still present that creates an unconsumed value needs to have it popped
+
+                    let drop = graph.add_node(ValueNode::Drop);
+                    graph.add_edge(drop, node, ValueEdge::Connect(0));
+                    graph.add_edge(output, drop, ValueEdge::Meta("prune"));
                 }
             }
         }

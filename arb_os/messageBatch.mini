@@ -82,7 +82,7 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
     }
 }
 
-public view func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)> {
+public view throw func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)> {
     // returns next message in the batch (and updated batch), or None if no more messages in batch
     let (stream, l2MsgLength) = rlp_decodeUint(batch.stream)?;
 

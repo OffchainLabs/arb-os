@@ -32,7 +32,7 @@ public view func chainParams_get(which: uint) -> option<uint> {
     globalChainParameters[which]
 }
 
-public view func chainParams_getOrDie(which: uint) -> uint {
+public throw view func chainParams_getOrDie(which: uint) -> uint {
     if let Some(val) = chainParams_get(which) {
         val
     } else {
@@ -40,14 +40,14 @@ public view func chainParams_getOrDie(which: uint) -> uint {
     }
 }
 
-public view write func chainParams_set(which: uint, value: uint) {
+public view write throw func chainParams_set(which: uint, value: uint) {
     if globalChainParameters[which] == None<uint> {
         error;
     }
     chainParams_create(which, value);
 }
 
-public view write func chainParams_create(which: uint, value: uint) {
+public view write throw func chainParams_create(which: uint, value: uint) {
     set globalChainParameters[which] = value;
     notifyParamsChanged();
 }
@@ -91,7 +91,7 @@ public func chainParams_getDefaults() -> map<uint, uint> {
         with { [const::Atom_Param_EnableL1ContractAddressAliasing] = const::Default_Param_EnableL1ContractAddressAliasing }
 }
 
-public view write func chainParams_gotParamsMessage(data: ByteArray) {
+public view write throw func chainParams_gotParamsMessage(data: ByteArray) {
     let stream = bytestream_new(data);
     loop {
         let paramId = if let Some(res) = bytestream_get256(stream) {
@@ -118,28 +118,28 @@ public view write func chainParams_gotParamsMessage(data: ByteArray) {
     };
 }
 
-public view write func notifyParamsChanged() {
+public view write throw func notifyParamsChanged() {
     gasAccounting_notifyParamsChanged();
     accounts_notifyParamsChanged();
 }
 
-public view func chainParams_chainId() -> uint {
+public view throw func chainParams_chainId() -> uint {
     chainParams_getOrDie(const::Atom_Param_ChainID)
 }
 
-public view func chainParams_getDefaultAggregator() -> address {
+public view throw func chainParams_getDefaultAggregator() -> address {
     address(chainParams_getOrDie(const::Atom_Param_DefaultAggregator))
 }
 
-public view write func chainParams_setDefaultAggregator(newDefault: address) {
+public view write throw func chainParams_setDefaultAggregator(newDefault: address) {
     chainParams_set(const::Atom_Param_DefaultAggregator, uint(newDefault));
 }
 
-public view func chainParams_getSecondsPerSend() -> uint {
+public view throw func chainParams_getSecondsPerSend() -> uint {
     chainParams_getOrDie(const::Atom_Param_SecondsPerSend)
 }
 
-public view func chainParams_serializeAllParams() -> ByteArray {
+public view throw func chainParams_serializeAllParams() -> ByteArray {
     unsafecast<ByteArray>(
         builtin_kvsForall(
             unsafecast<Kvs>(globalChainParameters),
@@ -149,7 +149,7 @@ public view func chainParams_serializeAllParams() -> ByteArray {
     )
 }
 
-func sapClosure(key: uint, value: uint, ba: ByteArray) -> ByteArray {
+throw func sapClosure(key: uint, value: uint, ba: ByteArray) -> ByteArray {
     let sz = bytearray_size(ba);
     bytearray_set256(
         bytearray_set256(ba, sz, key),
@@ -168,7 +168,7 @@ public view write func removeChainOwner(ownerToRemove: address) {
     chainOwners = setOfAddresses_remove(chainOwners, ownerToRemove);
 }
 
-public view func serializedListOfChainOwners() -> ByteArray {
+public view throw func serializedListOfChainOwners() -> ByteArray {
     if let Some(ba) = setOfAddresses_serialize(chainOwners) {
         ba
     } else {

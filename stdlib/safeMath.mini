@@ -2,7 +2,7 @@
 // Copyright 2021, Offchain Labs, Inc. All rights reserved.
 //
 
-public func safeAdd(x: uint, y: uint) -> uint {
+public throw func safeAdd(x: uint, y: uint) -> uint {
     let ret = x + y;
     if ret < x {
         error;
@@ -19,7 +19,7 @@ public func trySafeAdd(x: uint, y: uint) -> option<uint> {
     }
 }
 
-public func safeSub(x: uint, y: uint) -> uint {
+public throw func safeSub(x: uint, y: uint) -> uint {
     if x < y {
         error;
     }
@@ -34,7 +34,7 @@ public func trySafeSub(x: uint, y: uint) -> option<uint> {
     }
 }
 
-public func safeMul(x: uint, y: uint) -> uint {
+public throw func safeMul(x: uint, y: uint) -> uint {
     let ret = x * y;
     if (x != 0) && (y != (ret/x)) {
         error;
@@ -51,7 +51,7 @@ public func trySafeMul(x: uint, y: uint) -> option<uint> {
     }
 }
 
-public func safeToInt(x: uint) -> int {
+public throw func safeToInt(x: uint) -> int {
     let ret = int(x);
     if ret < int(0) {
         error;
@@ -59,7 +59,7 @@ public func safeToInt(x: uint) -> int {
     int(ret)
 }
 
-public func safeAddInt(x: int, y: int) -> int {
+public throw func safeAddInt(x: int, y: int) -> int {
     let ret = x + y;
     if x > int(0) {
         if ret < y {
@@ -73,7 +73,7 @@ public func safeAddInt(x: int, y: int) -> int {
     ret
 }
 
-public func safeSubInt(x: int, y: int) -> int {
+public throw func safeSubInt(x: int, y: int) -> int {
     let ret = x - y;
     if y > int(0) {
         if ret > x {
@@ -106,7 +106,7 @@ public func trySafeSubInt(x: int, y: int) -> option<int> {
     }
 }
 
-public func safeMulInt(x: int, y: int) -> int {
+public throw func safeMulInt(x: int, y: int) -> int {
     let ret = x * y;
     if (x != int(0)) && (y != (ret/x)) {
         error;
@@ -123,7 +123,7 @@ public func trySafeMulInt(x: int, y: int) -> option<int> {
     }
 }
 
-public func safeToUint(x: int) -> uint {
+public throw func safeToUint(x: int) -> uint {
     if x < int(0) {
         error;
     }

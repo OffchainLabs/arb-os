@@ -21,6 +21,7 @@ pub enum Effect {
     WriteLocal(u32),
     ReadGlobal,
     WriteGlobal,
+    MaybeThrow,
     WritePC,
     Unsure,
 }
@@ -62,6 +63,9 @@ impl Effects for Opcode {
                 let mut effects = vec![];
                 if prop.view {
                     effects.push(ReadGlobal);
+                }
+                if prop.throw {
+                    effects.push(MaybeThrow);
                 }
                 for _ in 0..(prop.nargs + 1) {
                     effects.push(ReadStack);

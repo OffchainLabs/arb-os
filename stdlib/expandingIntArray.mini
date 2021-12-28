@@ -120,7 +120,7 @@ public func expandingIntArray_setN(
     }
 }
 
-public func expandingIntArray_op(
+public throw func expandingIntArray_op(
     arr: ExpandingIntArray,
     index: uint,
     applicator: opClosure
@@ -136,7 +136,7 @@ public func expandingIntArray_op(
     )
 }
 
-func ear_op2(
+throw func ear_op2(
     tree: [8]any,
     chunk: uint,
     index: uint,
@@ -163,7 +163,7 @@ func ear_op2(
     }
 }
 
-public func expandingIntArray_opConsecutive(
+public throw func expandingIntArray_opConsecutive(
     arr: ExpandingIntArray,
     index: uint,
     loClosure: opClosure,

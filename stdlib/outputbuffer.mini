@@ -7,29 +7,29 @@ type OutputBuffer = struct {
     size: uint,
 };
 
-public func outputBuffer_new() -> OutputBuffer {
+public throw func outputBuffer_new() -> OutputBuffer {
     return struct {
         buf: newbuffer(),
         size: 0,
     };
 }
 
-public func outputBuffer_size(ob: OutputBuffer) -> uint {
+public throw func outputBuffer_size(ob: OutputBuffer) -> uint {
     return ob.size;
 }
 
-public func outputBuffer_toBufferAndSize(ob: OutputBuffer) -> (buffer, uint) {
+public throw func outputBuffer_toBufferAndSize(ob: OutputBuffer) -> (buffer, uint) {
     return (ob.buf, ob.size);
 }
 
-public func outputBuffer_appendByte(ob: OutputBuffer, val: uint) -> OutputBuffer {
+public throw func outputBuffer_appendByte(ob: OutputBuffer, val: uint) -> OutputBuffer {
     return struct {
         buf: setbuffer8(ob.buf, ob.size, val),
         size: ob.size + 1,
     };
 }
 
-public func outputBuffer_append256(ob: OutputBuffer, val: uint) -> OutputBuffer {
+public throw func outputBuffer_append256(ob: OutputBuffer, val: uint) -> OutputBuffer {
     return struct {
         buf: setbuffer256(ob.buf, ob.size, val),
         size: ob.size + 32,

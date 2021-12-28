@@ -7,11 +7,11 @@ var global: uint;
 
 type Produce = func(uint, uint) -> string;
 
-write func main() {
+throw write func main() {
     asm(tests().1) { log };
 }
 
-func tests() -> string {
+throw func tests() -> string {
 
     let lambda = make_lambda();
 
@@ -22,7 +22,7 @@ func tests() -> string {
     }
 }
 
-func make_lambda() -> Produce {
+throw func make_lambda() -> Produce {
     
     let a = 1024;
     let b = 512;

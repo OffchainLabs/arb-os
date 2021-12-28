@@ -11,7 +11,7 @@ var sized_array: [12]uint;
 var array: []string;
 var nested: [][]Nestable;
 
-view write func main() {
+view write throw func main() {
 
     if let Some(issue) = test() {
         asm(issue.1) { log };
@@ -20,7 +20,7 @@ view write func main() {
     }
 }
 
-view func test() -> option<string> {
+view write throw func test() -> option<string> {
 
     let sized_local = newfixedarray(12, 0);
 

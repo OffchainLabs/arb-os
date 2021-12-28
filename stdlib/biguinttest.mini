@@ -24,12 +24,12 @@ use std::random::random_next;
 use std::random::random_nextMod;
 
 
-write func main() {
+throw write func main() {
     asm(2*1000*1000*1000) { setgas };
     asm(tests()) { log };
 }
 
-func tests() -> uint {
+throw func tests() -> uint {
     let gen = random_new(bytes32(0));
     if ! biguint_isZero(biguint_zero()) {
         return 1;
@@ -45,7 +45,7 @@ func tests() -> uint {
     0
 }
 
-func doTests(gen: RandomGenerator) -> (uint, RandomGenerator) {
+throw func doTests(gen: RandomGenerator) -> (uint, RandomGenerator) {
     let (w, *gen) = biguint_random(5, gen);
     let (x, *gen) = biguint_random(6, gen);
     let (y, *gen) = biguint_random(4, gen);
@@ -153,7 +153,7 @@ func doTests(gen: RandomGenerator) -> (uint, RandomGenerator) {
     (0, gen)
 }
 
-func modexpRegressionTest() -> uint {
+throw func modexpRegressionTest() -> uint {
     let base = biguint_fromUint(3);
     let exponent = biguint_fromUint(0xc19139cb84c680a6e14116da060561765e05aa45a1c72a34f082305b61f3f52);
     let modulus = biguint_fromUint(0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47);
@@ -170,7 +170,7 @@ func modexpRegressionTest() -> uint {
     return 0;
 }
 
-func oneWordTest() -> uint {
+throw func oneWordTest() -> uint {
     let r = random_new(bytes32(42));
     let numTests = 10;
     while numTests > 0 {

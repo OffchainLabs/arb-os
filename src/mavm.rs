@@ -1119,6 +1119,7 @@ impl Opcode {
     pub fn is_write(&self, _: &TypeTree) -> bool {
         match self {
             Opcode::AVMOpcode(AVMOpcode::Log)
+            | Opcode::AVMOpcode(AVMOpcode::DebugPrint)
             | Opcode::AVMOpcode(AVMOpcode::Inbox)
             | Opcode::AVMOpcode(AVMOpcode::InboxPeek)
             | Opcode::AVMOpcode(AVMOpcode::Send)
@@ -1263,13 +1264,17 @@ impl Opcode {
             }
             Opcode::Pop(depth) => format!("Pop {}", Color::pink(depth)),
             Opcode::FuncCall(prop) => format!(
-                "FuncCall {}{}{}{} {}{}",
+                "FuncCall {}{}{}{}{} {}{}",
                 Color::mint(match prop.view {
                     true => "υ ",
                     false => "",
                 }),
                 Color::mint(match prop.write {
                     true => "ω ",
+                    false => "",
+                }),
+                Color::mint(match prop.throw {
+                    true => "τ ",
                     false => "",
                 }),
                 Color::mint(match prop.sensitive {
