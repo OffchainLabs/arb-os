@@ -16,6 +16,14 @@ contract BlockNum {
         return block.number;
     }
 
+    function getOrigin() public returns (address) {
+        return tx.origin;
+    }
+
+    function getBlockNumTimestamp() public returns (uint, uint) {
+        return (block.number, block.timestamp);
+    }
+
     function getSender() public view returns (address) {
         return msg.sender;
     }
