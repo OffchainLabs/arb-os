@@ -8,8 +8,16 @@ if(solcVersion !== "0.6.11" && solcVersion !== "0.8.10" && solcVersion !== "0.7.
  */
 module.exports = {
   solidity: {
-    compilers: [
-      { version: solcVersion }
+     compilers: [
+      {
+        version: solcVersion,
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 100,
+          },
+        },
+      }
     ],
   },
   paths: {
