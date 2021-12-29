@@ -11,11 +11,11 @@ use core::kvs::builtin_kvsDelete;
 use core::kvs::builtin_kvsForall;
 use core::kvs::builtin_kvsSize;
 
-write func main() {
+write throw func main() {
     asm(tests().1) { log };
 }
 
-func tests() -> (uint, buffer) {
+throw func tests() -> (uint, buffer) {
     let s = builtin_kvsNew();
     if builtin_kvsGet(s, 17) != None<any> {
 	return "new map isn't empty";

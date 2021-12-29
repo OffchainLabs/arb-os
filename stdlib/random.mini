@@ -34,7 +34,7 @@ public func random_nextMod(rand: RandomGenerator, modulus: uint) -> (uint, Rando
     (uint(b) % modulus, rand)
 }
 
-public func randomly_permute_array(
+public throw func randomly_permute_array(
     rand: RandomGenerator,
     arr: []any,
     offset: uint,

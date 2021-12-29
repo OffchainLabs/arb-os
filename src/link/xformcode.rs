@@ -14,7 +14,7 @@ pub const TUPLE_SIZE: usize = 8;
 
 /// Takes a slice of instructions from a single function scope, and changes tuples of size greater
 /// than TUPLE_SIZE to nested tuples with each subtuple at most TUPLE_SIZE
-pub fn fix_tuple_size(
+pub fn fold_tuples(
     code: Vec<Instruction>,
     num_globals: usize,
 ) -> Result<Vec<Instruction>, CompileError> {
@@ -39,11 +39,15 @@ pub fn fix_tuple_size(
         }
 
         match insn.opcode {
-            Opcode::MakeFrame(space, prebuilt) => {
+            Opcode::MakeFrame(space, returns, prebuilt) => {
+                if returns {
+                    code_out.push(opcode!(AuxPush));
+                }
                 locals_tree = TupleTree::new(space as usize, true);
                 if !prebuilt {
                     code_out.push(opcode!(Noop, TupleTree::make_empty(&locals_tree)));
                 }
+                code_out.push(opcode!(AuxPush));
             }
             Opcode::TupleGet(offset, size) => {
                 let ttree = TupleTree::new(size, false);
@@ -80,33 +84,6 @@ pub fn fix_tuple_size(
                 code_out.push(opcode!(Pop));
                 code_out.push(opcode!(AuxPop));
                 code_out.push(opcode!(Jump));
-            }
-            Opcode::UncheckedFixedArrayGet(sz) => {
-                let tup_size_val = Value::Int(Uint256::from_usize(TUPLE_SIZE));
-                let mut remaining_size = sz;
-                while remaining_size > TUPLE_SIZE {
-                    //TODO: can probably make this more efficient
-                    // stack: idx arr
-                    code_out.push(opcode!(Dup1, tup_size_val.clone()));
-                    code_out.push(opcode!(Mod));
-                    code_out.push(opcode!(Swap1));
-
-                    // stack: idx slot arr
-                    code_out.push(opcode!(Swap1, tup_size_val.clone()));
-                    code_out.push(opcode!(Div));
-
-                    // stack: subindex slot arr
-                    code_out.push(opcode!(Swap2));
-                    code_out.push(opcode!(Swap1));
-
-                    // stack: slot arr subindex
-                    code_out.push(opcode!(Tget));
-                    code_out.push(opcode!(Swap1));
-
-                    // stack: subindex subarr
-                    remaining_size = (remaining_size + (TUPLE_SIZE - 1)) / TUPLE_SIZE;
-                }
-                code_out.push(opcode!(Tget));
             }
             _ => {
                 code_out.push(insn.clone());
@@ -192,21 +169,6 @@ pub fn make_globals_tuple_debug(globals: &Vec<GlobalVar>, type_tree: &TypeTree) 
         })
         .collect();
     TupleTree::fold_into_tuple(values)
-}
-
-/// Replaces all instances of CodePt::Null with the error codepoint.
-pub fn set_error_codepoints(mut code: Vec<Instruction>) -> Vec<Instruction> {
-    let error_codepoint = Value::CodePoint(CodePt::Internal(code.len() - 1));
-
-    for curr in &mut code {
-        let mut when = |codept: &Value| matches!(codept, Value::CodePoint(CodePt::Null));
-        let mut with = |_codept: Value| error_codepoint.clone();
-
-        if let Some(ref mut value) = curr.immediate {
-            *value = value.clone().replace(&mut with, &mut when);
-        }
-    }
-    code
 }
 
 /// Represents tuple structure of mini value.

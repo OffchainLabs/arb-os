@@ -11,7 +11,7 @@ use std::ripemd160::ripemd160hasher_pushByte;
 use std::ripemd160::ripemd160hasher_push256;
 
 write func main() {
-	asm(tests(),) { log };
+    asm(tests()) { log };
 }
 
 func tests() -> uint {

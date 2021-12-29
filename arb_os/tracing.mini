@@ -28,7 +28,7 @@ public func evmTracer_new() -> EvmTracer {
     }
 }
 
-public view func evmTracer_emit() {
+public view write func evmTracer_emit() {
     let val = any(());
     let theStack = outbox_getEvmTracer().recordStack;
     loop {

@@ -10,14 +10,14 @@ public func start() -> uint {
 }
 
 func back_edge() -> uint {
-     let _ = externally_used;
-     return 4;
+    let a = externally_used;
+    if a == externally_used { 4 } else { 4 } // trick the optimizer
 }
 
 func unused() -> uint {
-     return externally_unused();
+    return externally_unused();
 }
 
 func _purposefully_unused() -> uint {
-     return 4;
+    return 4;
 }

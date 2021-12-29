@@ -4,13 +4,7 @@
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 
-use evmCallStack::EvmCallFrame;
-
 
 public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> map<uint, uint> {
     oldGlobals.globalChainParameters
-}
-
-public func set_globalCallStack_onUpgrade(_oldGlobals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
-    None
 }

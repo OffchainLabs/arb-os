@@ -26,7 +26,7 @@ use std::keccak::keccak256;
 
 var entropy: ByteArray;
 
-view write func main() {
+view write throw func main() {
     if let Some(res) = test() {
 	asm(res) { log };
     } else {
@@ -34,7 +34,7 @@ view write func main() {
     }
 }
 
-view write func test() -> option<any> {
+view write throw func test() -> option<any> {
 
     let q = queue_new();
 
@@ -93,13 +93,13 @@ view write func test() -> option<any> {
     entropy = bytearray_new(0);
     entropy = bytearray_set256(entropy, 0, 5);
 
-    let rand = view write closure(bound: uint) -> uint {
+    let rand = throw view write closure(bound: uint) -> uint {
         let keccak = uint(keccak256(entropy, 0, 32));
         entropy = bytearray_set256(entropy, 0, keccak);
         bytearray_get256(entropy, 0) % bound
     };
 
-    let rand_bytes = view write closure(lower: uint, upper: uint) -> []uint {
+    let rand_bytes = throw view write closure(lower: uint, upper: uint) -> []uint {
         let bytes = bytearray_new(0);
         let i = 0;
         let length = lower + rand(upper - lower);

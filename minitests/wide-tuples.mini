@@ -2,7 +2,6 @@
  * Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
  */
 
-
 write func main() {
     
     if let Some(issue) = test_1() {
@@ -22,7 +21,6 @@ func test_1() -> option<string> {
     
     a
 }
-
 
 func test_2() -> option<string> {
     

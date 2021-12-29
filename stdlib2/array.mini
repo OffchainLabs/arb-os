@@ -25,7 +25,7 @@ public func array_new<T>(size: uint, base_val: T) -> array<T> {
     }
 }
 
-public func array_get<T>(arr: array<T>, index: uint) -> T {
+public throw func array_get<T>(arr: array<T>, index: uint) -> T {
     if index >= arr.size {
 	error;  // out of bounds access
     }
@@ -39,7 +39,7 @@ public func array_get<T>(arr: array<T>, index: uint) -> T {
     unsafecast<T>(res)
 }
 
-public func array_get_consecutive<T>(arr: array<T>, index: uint) -> (T, T) {
+public throw func array_get_consecutive<T>(arr: array<T>, index: uint) -> (T, T) {
     // Get two consecutive items at [index] and [index+1]
     // This will be faster than two separate arrayGets, in the common case.
     if index+1 >= arr.size {
@@ -60,14 +60,14 @@ public func array_get_consecutive<T>(arr: array<T>, index: uint) -> (T, T) {
     }
 }
 
-public func array_set<T>(arr: array<T>, index: uint, value: T) -> array<T> {
+public throw func array_set<T>(arr: array<T>, index: uint, value: T) -> array<T> {
     if index >= arr.size {
 	error;
     }
     arr with { contents: arraySetInternal::<T>(arr.contents, arr.topstep, index, value) }
 }
 
-func arraySetInternal<T>(b: block<T>, chunkSize: uint, index: uint, value: T) -> block<T> {
+throw func arraySetInternal<T>(b: block<T>, chunkSize: uint, index: uint, value: T) -> block<T> {
     if 1 == chunkSize {
 	// at a leaf of the tree
 	b with {[index] = value}
@@ -82,7 +82,7 @@ func arraySetInternal<T>(b: block<T>, chunkSize: uint, index: uint, value: T) ->
     }
 }
 
-public func array_swap<T>(a: array<T>, index: uint, value: T) -> (array<T>, T) {
+public throw func array_swap<T>(a: array<T>, index: uint, value: T) -> (array<T>, T) {
     // Write a new value into a slot of the array, returning the old value that was in that slot
     if index >= a.size {
 	error;
@@ -99,7 +99,7 @@ type arraySwapSubResult<T> = struct {
     val:  T,
 };
 
-func arraySwapInternal<T>(b: block<T>, chunk: uint, index: uint, value: T) -> arraySwapSubResult<T> {
+throw func arraySwapInternal<T>(b: block<T>, chunk: uint, index: uint, value: T) -> arraySwapSubResult<T> {
     if 1 == chunk {
 	struct {
 	    bloc: b with {[index] = value},
@@ -117,7 +117,7 @@ func arraySwapInternal<T>(b: block<T>, chunk: uint, index: uint, value: T) -> ar
     }
 }
 
-public func array_resize<T>(a: array<T>, newSize: uint, baseVal: T) -> array<T> {
+public throw func array_resize<T>(a: array<T>, newSize: uint, baseVal: T) -> array<T> {
     // Resize an array.
     // If the new size is larger, copy over all of the old contents, and fill the added elements with baseVal.
     // If the new size is smaller, copy over all of the old contents that will fit.
@@ -136,21 +136,21 @@ public func array_resize<T>(a: array<T>, newSize: uint, baseVal: T) -> array<T> 
     ret
 }
 
-public func array_get_safe<T>(arr: array<T>, index: uint) -> option<T> {
+public throw func array_get_safe<T>(arr: array<T>, index: uint) -> option<T> {
     if index >= arr.size {
 	return None;
     }
     Some(array_get::<T>(arr, index))  // won't error, because we bounds-checked
 }
 
-public func array_set_safe<T>(arr: array<T>, index: uint, value: T) -> option<array<T> > {
+public throw func array_set_safe<T>(arr: array<T>, index: uint, value: T) -> option<array<T> > {
     if index >= arr.size {
 	return None;
     }
     Some(array_set::<T>(arr, index, value))
 }
 
-public func array_get_consecutive_safe<T>(arr: array<T>, index: uint) -> option<(T, T)> {
+public throw func array_get_consecutive_safe<T>(arr: array<T>, index: uint) -> option<(T, T)> {
     // Return Non if access is out-of-bounds, otherwise return Some((result, result'))
     if index+1 >= arr.size {
 	return None;
@@ -158,7 +158,7 @@ public func array_get_consecutive_safe<T>(arr: array<T>, index: uint) -> option<
     Some(array_get_consecutive::<T>(arr, index))
 }
 
-public func array_swap_safe<T>(a: array<T>, index: uint, value: T) -> option<(array<T>, T)> {
+public throw func array_swap_safe<T>(a: array<T>, index: uint, value: T) -> option<(array<T>, T)> {
     if index >= a.size {
 	return None;
     }
