@@ -38,14 +38,6 @@ contract EvmTests {
         if (reread != 73) {
             emit TestFail(5, reread);
         }
-
-        uint memSize;
-        assembly {
-            memSize := msize()
-        }
-        if (memSize != 50016) {
-            emit TestFail(6, memSize);
-        }
     }
 
     function makeLog0() public {
