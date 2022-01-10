@@ -794,7 +794,7 @@ impl Value {
                 }
 
                 let content_hash = keccak256(&content_bytes);
-                all_bytes.extend(content_hash);
+                all_bytes.extend(&content_hash);
                 all_bytes.extend(Uint256::from_usize(total_size).to_bytes_be());
 
                 let hash = Uint256::from_bytes(&keccak256(&all_bytes));
