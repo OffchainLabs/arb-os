@@ -240,7 +240,8 @@
     "RetryableTxLifetimeSeconds": 604800,
     "ArbitrumNonZeroBalanceCallStipend": 1000,
     "GasPriceOracle": 0,
-    "EnableL1ContractAddressAliasing": 1
+    "EnableL1ContractAddressAliasing": 1,
+    "MaxContractSize": 49152
   },
   "parameters_hex": { }
 }

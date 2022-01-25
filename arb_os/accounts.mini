@@ -33,7 +33,6 @@ use decompression::AggregatorDecompressionState;
 use evmCallStack::evmCallStack_addStorageCharge;
 use evmCallStack::evmCallStack_isEmpty;
 
-const MaxNewCodeSize = 49152;
 
 type AccountStore = struct {
     accounts: map<address, Account>,
@@ -802,14 +801,14 @@ public func accountStore_addCodeRef(acctStore: AccountStore, codeHash: bytes32) 
     Some(acctStore)
 }
 
-public throw func accountStore_createCodeRef(
+public throw view func accountStore_createCodeRef(
     acctStore: AccountStore,
     contractStateVersion: uint,
     code: ByteArray,
     evmJumpTable: map<uint, view write func()>,
     startCodePoint: view write func(),
 ) -> option<AccountStore> {
-    if bytearray_size(code) > const::MaxNewCodeSize {
+    if bytearray_size(code) > chainParams_getOrDie(const::Atom_Param_MaxContractSize) {
         None<AccountStore>
     } else {
         let codeHash = hashForCodeRef(code, contractStateVersion);  // overflow OK
