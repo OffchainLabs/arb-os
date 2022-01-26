@@ -1,0 +1,40 @@
+//
+// Copyright 2022, Offchain Labs, Inc. All rights reserved.
+//
+
+type RateEstimator = struct {
+    timeConstant: uint,
+    maxEstimate: uint,
+    estimate: uint,
+    usageSince: uint,
+    lastTimeSeen: uint,
+};
+
+public func rateEstimator_new(timeConstant: uint, maxEstimate: uint, initialEstimate: uint, currentTime: uint) -> RateEstimator {
+    struct {
+        timeConstant: timeConstant,
+        maxEstimate: maxEstimate,
+        estimate: initialEstimate,
+        usageSince: 0,
+        lastTimeSeen: currentTime,
+    }
+}
+
+public func rateEstimator_get(ra: RateEstimator) -> uint {
+    ra.estimate
+}
+
+public func rateEstimator_update(ra: RateEstimator, newUsage: uint, currentTime: uint) -> RateEstimator {
+    if currentTime <= ra.lastTimeSeen {
+        ra with { usageSince: ra.usageSince + newUsage }
+    } else {
+        let newEstimate = (ra.estimate * ra.timeConstant + ra.usageSince + newUsage) / (ra.timeConstant + currentTime - ra.lastTimeSeen);
+        ra with {
+            estimate: if newEstimate > ra.maxEstimate { ra.maxEstimate } else { newEstimate }
+        } with {
+            usageSince: 0
+        } with {
+            lastTimeSeen: currentTime
+        }
+    }
+}

@@ -53,6 +53,11 @@ use std::addressSet::setOfAddresses_remove;
 use std::addressSet::setOfAddresses_contains;
 use std::addressSet::setOfAddresses_serialize;
 
+use std::rateEstimator::RateEstimator;
+use std::rateEstimator::rateEstimator_new;
+use std::rateEstimator::rateEstimator_get;
+use std::rateEstimator::rateEstimator_update;
+
 use std::safeMath::safeAdd;
 use std::safeMath::safeSub;
 use std::safeMath::safeMul;
@@ -98,6 +103,7 @@ type CongestionState = struct {
     gasPool: int,         // amount of gas available for use (note: signed value; if negative, we have overused gas)
     lastArbBlockNumSeen: uint,
     lastTimestampSeen: uint,
+    gasUsageRateEstimator: RateEstimator,
     congestionPriceWei: uint,
 };
 
@@ -199,6 +205,12 @@ view throw func initCongestionState(isInit: bool) -> CongestionState {
         gasPool: int(chainParams_getOrDie(const::Atom_Param_GasPoolMax)),
         lastArbBlockNumSeen: if isInit { 0 } else { inbox_currentArbBlockNumber() },
         lastTimestampSeen: if isInit { 0 } else { inbox_currentTimestamp() },
+        gasUsageRateEstimator: rateEstimator_new(
+            chainParams_getOrDie(const::Atom_Param_GasUsageTimeConstant),
+            chainParams_getOrDie(const::Atom_Param_GasUsageMaxEstimateRatio) * chainParams_getOrDie(const::Atom_Param_SpeedLimitPerSecond),
+            0,
+            inbox_currentTimestamp(),
+        ),
         congestionPriceWei: 0,
     }
 }
@@ -393,9 +405,10 @@ public view throw func getAddressForReserveFundsDeposit() -> address {
 }
 
 public view write func gasAccounting_addToGasPool(delta: uint) {
+    let cstate = gasAccountingInfo.congestionState;
     gasAccountingInfo = gasAccountingInfo with {
-        congestionState: gasAccountingInfo.congestionState with {
-            gasPool: gasAccountingInfo.congestionState.gasPool + int(delta)
+        congestionState: cstate with {
+            gasPool: cstate.gasPool + int(delta)
         }
     };
 }
@@ -495,6 +508,11 @@ public view write throw func gasAccounting_startTxCharges(
         gasEstimationMode: gasEstimationMode,
     });
     set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(gasUsedByOS));
+    set gasAccountingInfo.congestionState.gasUsageRateEstimator = rateEstimator_update(
+        gasAccountingInfo.congestionState.gasUsageRateEstimator,
+        gasUsedByOS,
+        0,   // OK to pass zero here -- callee will ignore this field if zero
+    );
 
     arbStatistics_addToGasUsed(gasUsedByOS);
 
@@ -566,6 +584,11 @@ public view write throw func gasAccounting_endTxCharges(
     };
 
     set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(gasUsedForCompute));
+    set gasAccountingInfo.congestionState.gasUsageRateEstimator = rateEstimator_update(
+        gasAccountingInfo.congestionState.gasUsageRateEstimator,
+        gasUsedForCompute,
+        0,    // OK to pass zero here -- callee will ignore this field if zero
+    );
     set gasAccountingInfo.gasRemainingThisBlock = if gasAccountingInfo.gasRemainingThisBlock >= gasUsedForCompute {
         gasAccountingInfo.gasRemainingThisBlock - gasUsedForCompute
     } else {
@@ -680,6 +703,11 @@ public view write throw func gasAccounting_resumeTxCharges(allPurposeGas: uint, 
             let osGasUsed = ((~0) - getGas()) / gasAccountingInfo.pricingParams.arbGasDivisor;
 
             set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(osGasUsed));
+            set gasAccountingInfo.congestionState.gasUsageRateEstimator = rateEstimator_update(
+                gasAccountingInfo.congestionState.gasUsageRateEstimator,
+                osGasUsed,
+                0,  // OK to pass zero here -- callee will ignore this field if zero
+            );
             arbStatistics_addToGasUsed(osGasUsed);
 
             setGas(safeMul(allPurposeGas, gasAccountingInfo.pricingParams.arbGasDivisor));   // start charging the application
@@ -1071,6 +1099,12 @@ view throw func updateCongestionState(state: CongestionState, toBlockNum: uint, 
     let gasPoolMax = chainParams_getOrDie(const::Atom_Param_GasPoolMax);
     let speedLimit = chainParams_getOrDie(const::Atom_Param_SpeedLimitPerSecond);
 
+    let rateEstimator = rateEstimator_update(state.gasUsageRateEstimator, 0, toTimestamp);
+    let rateFactor = rateEstimator_get(rateEstimator) * gasPoolMax / (2 *speedLimit);
+    if rateFactor > gasPoolMax {
+        rateFactor = gasPoolMax;
+    }
+
     // doing a per-second loop isn't elegant, but cost is low enough that it shouldn't be a problem
     // eventually we should solve this analytically to avoid the per-second loop
     while (lastTimestampSeen < toTimestamp) && ( (gasPool < int(gasPoolMax)) || (totalPrice > basePrice) ) {
@@ -1088,13 +1122,14 @@ view throw func updateCongestionState(state: CongestionState, toBlockNum: uint, 
         // now 0 <= maxtc <= gasPoolMax
 
         // constants here are chosen so that adjustment is by factor between 7/8 and 9/8 per mainnet block, as in EIP-1559
-        totalPrice = totalPrice * (121 * gasPoolMax - 2 * uint(maxtc)) / (120 * gasPoolMax);
+        totalPrice = totalPrice * (120 * gasPoolMax + rateFactor - uint(maxtc)) / (120 * gasPoolMax);
         if totalPrice < basePrice { totalPrice = basePrice; }
     }
     struct {
         gasPool: gasPool,
         lastArbBlockNumSeen: toBlockNum,
         lastTimestampSeen: toTimestamp,
+        gasUsageRateEstimator: rateEstimator,
         congestionPriceWei: safeSub(totalPrice, basePrice),
     }
 }

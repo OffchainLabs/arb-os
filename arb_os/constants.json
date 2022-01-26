@@ -1,5 +1,5 @@
 {
-  "arbos_version": 53,
+  "arbos_version": 54,
   "integer": {
     "AVMSendType_batch": 0,
     "AVM_add": 1,
@@ -241,7 +241,9 @@
     "ArbitrumNonZeroBalanceCallStipend": 1000,
     "GasPriceOracle": 0,
     "EnableL1ContractAddressAliasing": 1,
-    "MaxContractSize": 49152
+    "MaxContractSize": 49152,
+    "GasUsageTimeConstant": 60,
+    "GasUsageMaxEstimateRatio": 4
   },
   "parameters_hex": { }
 }
