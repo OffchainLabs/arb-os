@@ -129,7 +129,7 @@ arb_os/contractTemplates.mini: .make/tools
 
 # Upgrade tests
 
-upgradetests/upgrade1_new.mexe: upgradetests/upgrade1_new.mini $(consts) $(globals) .make/tools
+upgradetests/upgrade1_new.mexe: upgradetests/upgrade1_new.mini $(consts) .make/tools
 	$(compile) -c $(consts) $< -o $@
 
 looptest/upgrade2_new.mexe: looptest/upgrade2_new.mini looptest/*.mini looptest/upgrade2.toml .make/tools
@@ -146,7 +146,7 @@ looptest/upgrade2_old.mexe: looptest/upgrade2_old.mini stdlib/*.mini builtin/*.m
 
 
 # ArbOS upgrade
-arbos_source_all = $(wildcard arb_os/*.mini) $(consts) stdlib/*.mini builtin/*.mini arb_os/contractTemplates.mini
+arbos_source_all = $(wildcard arb_os/*.mini) $(consts) $(globals) stdlib/*.mini builtin/*.mini arb_os/contractTemplates.mini
 arbos_source_no_bridge = $(filter-out arb_os/bridge_arbos_versions.mini, $(arbos_source_all))
 
 arb_os/upgrade.json: arb_os/arbos-upgrade.mexe .make/tools
