@@ -24,17 +24,17 @@ public func rateEstimator_get(ra: RateEstimator) -> uint {
     ra.estimate
 }
 
-public func rateEstimator_update(ra: RateEstimator, newUsage: uint, currentTime: uint) -> RateEstimator {
-    if currentTime <= ra.lastTimeSeen {
-        ra with { usageSince: ra.usageSince + newUsage }
-    } else {
-        let newEstimate = (ra.estimate * ra.timeConstant + ra.usageSince + newUsage) / (ra.timeConstant + currentTime - ra.lastTimeSeen);
-        ra with {
-            estimate: if newEstimate > ra.maxEstimate { ra.maxEstimate } else { newEstimate }
-        } with {
-            usageSince: 0
-        } with {
-            lastTimeSeen: currentTime
-        }
+public func rateEstimator_addUsage(ra: RateEstimator, newUsage: uint) -> RateEstimator {
+    set ra.usageSince = ra.usageSince + newUsage;
+    ra
+}
+
+public func rateEstimator_advanceTime(ra: RateEstimator, currentTime: uint) -> RateEstimator {
+    if currentTime > ra.lastTimeSeen {
+        let newEstimate = (ra.estimate * ra.timeConstant + ra.usageSince) / (ra.timeConstant + currentTime - ra.lastTimeSeen);
+        set ra.estimate = if newEstimate > ra.maxEstimate { ra.maxEstimate } else { newEstimate };
+        set ra.usageSince = 0;
+        set ra.lastTimeSeen = currentTime;
     }
+    ra
 }

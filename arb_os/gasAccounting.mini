@@ -56,7 +56,8 @@ use std::addressSet::setOfAddresses_serialize;
 use std::rateEstimator::RateEstimator;
 use std::rateEstimator::rateEstimator_new;
 use std::rateEstimator::rateEstimator_get;
-use std::rateEstimator::rateEstimator_update;
+use std::rateEstimator::rateEstimator_addUsage;
+use std::rateEstimator::rateEstimator_advanceTime;
 
 use std::safeMath::safeAdd;
 use std::safeMath::safeSub;
@@ -508,10 +509,9 @@ public view write throw func gasAccounting_startTxCharges(
         gasEstimationMode: gasEstimationMode,
     });
     set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(gasUsedByOS));
-    set gasAccountingInfo.congestionState.gasUsageRateEstimator = rateEstimator_update(
+    set gasAccountingInfo.congestionState.gasUsageRateEstimator = rateEstimator_addUsage(
         gasAccountingInfo.congestionState.gasUsageRateEstimator,
         gasUsedByOS,
-        0,   // OK to pass zero here -- callee will ignore this field if zero
     );
 
     arbStatistics_addToGasUsed(gasUsedByOS);
@@ -584,10 +584,9 @@ public view write throw func gasAccounting_endTxCharges(
     };
 
     set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(gasUsedForCompute));
-    set gasAccountingInfo.congestionState.gasUsageRateEstimator = rateEstimator_update(
+    set gasAccountingInfo.congestionState.gasUsageRateEstimator = rateEstimator_addUsage(
         gasAccountingInfo.congestionState.gasUsageRateEstimator,
         gasUsedForCompute,
-        0,    // OK to pass zero here -- callee will ignore this field if zero
     );
     set gasAccountingInfo.gasRemainingThisBlock = if gasAccountingInfo.gasRemainingThisBlock >= gasUsedForCompute {
         gasAccountingInfo.gasRemainingThisBlock - gasUsedForCompute
@@ -703,10 +702,9 @@ public view write throw func gasAccounting_resumeTxCharges(allPurposeGas: uint, 
             let osGasUsed = ((~0) - getGas()) / gasAccountingInfo.pricingParams.arbGasDivisor;
 
             set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(osGasUsed));
-            set gasAccountingInfo.congestionState.gasUsageRateEstimator = rateEstimator_update(
+            set gasAccountingInfo.congestionState.gasUsageRateEstimator = rateEstimator_addUsage(
                 gasAccountingInfo.congestionState.gasUsageRateEstimator,
                 osGasUsed,
-                0,  // OK to pass zero here -- callee will ignore this field if zero
             );
             arbStatistics_addToGasUsed(osGasUsed);
 
@@ -1099,7 +1097,7 @@ view throw func updateCongestionState(state: CongestionState, toBlockNum: uint, 
     let gasPoolMax = chainParams_getOrDie(const::Atom_Param_GasPoolMax);
     let speedLimit = chainParams_getOrDie(const::Atom_Param_SpeedLimitPerSecond);
 
-    let rateEstimator = rateEstimator_update(state.gasUsageRateEstimator, 0, toTimestamp);
+    let rateEstimator = rateEstimator_advanceTime(state.gasUsageRateEstimator, toTimestamp);
     let rateFactor = rateEstimator_get(rateEstimator) * gasPoolMax / (2 *speedLimit);
     if rateFactor > gasPoolMax {
         rateFactor = gasPoolMax;
