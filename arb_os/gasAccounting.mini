@@ -208,7 +208,6 @@ view throw func initCongestionState(isInit: bool) -> CongestionState {
         lastTimestampSeen: if isInit { 0 } else { inbox_currentTimestamp() },
         gasUsageRateEstimator: rateEstimator_new(
             chainParams_getOrDie(const::Atom_Param_GasUsageTimeConstant),
-            chainParams_getOrDie(const::Atom_Param_GasUsageMaxEstimateRatio) * chainParams_getOrDie(const::Atom_Param_SpeedLimitPerSecond),
             0,
             inbox_currentTimestamp(),
         ),

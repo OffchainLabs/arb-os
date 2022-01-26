@@ -91,7 +91,6 @@ public func chainParams_getDefaults() -> map<uint, uint> {
         with { [const::Atom_Param_EnableL1ContractAddressAliasing] = const::Default_Param_EnableL1ContractAddressAliasing }
         with { [const::Atom_Param_MaxContractSize] = const::Default_Param_MaxContractSize }
         with { [const::Atom_Param_GasUsageTimeConstant] = const::Default_Param_GasUsageTimeConstant }
-        with { [const::Atom_Param_GasUsageMaxEstimateRatio] = const::Default_Param_GasUsageMaxEstimateRatio }
 }
 
 public view write throw func chainParams_gotParamsMessage(data: ByteArray) {

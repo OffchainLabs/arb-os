@@ -242,8 +242,7 @@
     "GasPriceOracle": 0,
     "EnableL1ContractAddressAliasing": 1,
     "MaxContractSize": 49152,
-    "GasUsageTimeConstant": 60,
-    "GasUsageMaxEstimateRatio": 4
+    "GasUsageTimeConstant": 60
   },
   "parameters_hex": { }
 }

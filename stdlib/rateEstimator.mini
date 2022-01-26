@@ -4,16 +4,14 @@
 
 type RateEstimator = struct {
     timeConstant: uint,
-    maxEstimate: uint,
     estimate: uint,
     usageSince: uint,
     lastTimeSeen: uint,
 };
 
-public func rateEstimator_new(timeConstant: uint, maxEstimate: uint, initialEstimate: uint, currentTime: uint) -> RateEstimator {
+public func rateEstimator_new(timeConstant: uint, initialEstimate: uint, currentTime: uint) -> RateEstimator {
     struct {
         timeConstant: timeConstant,
-        maxEstimate: maxEstimate,
         estimate: initialEstimate,
         usageSince: 0,
         lastTimeSeen: currentTime,
@@ -31,8 +29,7 @@ public func rateEstimator_addUsage(ra: RateEstimator, newUsage: uint) -> RateEst
 
 public func rateEstimator_advanceTime(ra: RateEstimator, currentTime: uint) -> RateEstimator {
     if currentTime > ra.lastTimeSeen {
-        let newEstimate = (ra.estimate * ra.timeConstant + ra.usageSince) / (ra.timeConstant + currentTime - ra.lastTimeSeen);
-        set ra.estimate = if newEstimate > ra.maxEstimate { ra.maxEstimate } else { newEstimate };
+        set ra.estimate = (ra.estimate * ra.timeConstant + ra.usageSince) / (ra.timeConstant + currentTime - ra.lastTimeSeen);
         set ra.usageSince = 0;
         set ra.lastTimeSeen = currentTime;
     }

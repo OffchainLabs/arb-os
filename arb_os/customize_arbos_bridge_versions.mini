@@ -12,17 +12,11 @@ use std::rateEstimator::rateEstimator_new;
 public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> map<uint, uint> {
     oldGlobals.globalChainParameters
         with { [const::Atom_Param_GasUsageTimeConstant] = const::Default_Param_GasUsageTimeConstant }
-        with { [const::Atom_Param_GasUsageMaxEstimateRatio] = const::Default_Param_GasUsageMaxEstimateRatio }
 }
 
 public func set_gasAccountingInfo_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> GasAccountingInfo {
     let gai = oldGlobals.gasAccountingInfo;
     let cs = gai.congestionState;
-    let speedLimit = if let Some(limit) = oldGlobals.globalChainParameters[const::Atom_Param_SpeedLimitPerSecond] {
-        limit
-    } else {
-        const::Default_Param_SpeedLimitPerSecond
-    };
     struct {
         txState: gai.txState,
         feeConfig: gai.feeConfig,
@@ -34,7 +28,6 @@ public func set_gasAccountingInfo_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) ->
             lastTimestampSeen: cs.lastTimestampSeen,
             gasUsageRateEstimator: rateEstimator_new(
                 const::Default_Param_GasUsageTimeConstant,
-                speedLimit * const::Default_Param_GasUsageMaxEstimateRatio,
                 0,
                 cs.lastTimestampSeen,
             ),
