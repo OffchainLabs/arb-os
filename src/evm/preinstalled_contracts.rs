@@ -2770,7 +2770,7 @@ fn test_congestion_price_adjustment() {
 
     let arbtest = ArbosTest::new(false);
     let mut seen_any_congestion = false;
-    for _ in 0..1200 {
+    for _ in 0..2400 {
         let res_code = match arbtest._burn_arb_gas(
             &mut machine,
             my_address.clone(),
