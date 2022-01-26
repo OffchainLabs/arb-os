@@ -30,6 +30,7 @@ upgrade = ./target/release/mini gen-upgrade-code
 run     = ./target/release/mini
 
 consts = arb_os/constants.json
+globals = arb_os/globals.txt
 done = "\e[38;5;161;1mdone!\e[0;0m\n"
 
 # user targets
@@ -106,7 +107,7 @@ minitests/%.mexe: minitests/%.mini minitests/*.mini stdlib/*.mini builtin/*.mini
 upgradetests/%.mexe: upgradetests/%.mini upgradetests/*.mini stdlib/*.mini builtin/*.mini $(consts) .make/tools
 	$(compile) -c $(consts) $< -o $@ -t
 
-arb_os/arbos.mexe: arb_os/*.mini arb_os/bridge_arbos_versions.mini arb_os/contractTemplates.mini stdlib/*.mini builtin/*.mini $(consts) .make/tools
+arb_os/arbos.mexe: arb_os/*.mini arb_os/bridge_arbos_versions.mini arb_os/contractTemplates.mini stdlib/*.mini builtin/*.mini $(consts) $(globals) .make/tools
 	$(compile) arb_os -o $@ -m
 
 parameters.json: arb_os/constants.json .make/tools
@@ -128,7 +129,7 @@ arb_os/contractTemplates.mini: .make/tools
 
 # Upgrade tests
 
-upgradetests/upgrade1_new.mexe: upgradetests/upgrade1_new.mini $(consts) .make/tools
+upgradetests/upgrade1_new.mexe: upgradetests/upgrade1_new.mini $(consts) $(globals) .make/tools
 	$(compile) -c $(consts) $< -o $@
 
 looptest/upgrade2_new.mexe: looptest/upgrade2_new.mini looptest/*.mini looptest/upgrade2.toml .make/tools
