@@ -9,6 +9,9 @@
 use std::safeMath::safeAdd;
 use std::safeMath::safeSub;
 use std::safeMath::safeMul;
+use std::safeMath::trySafeAdd;
+use std::safeMath::trySafeMul;
+
 
 type FixedPoint = struct {
     val: uint,
@@ -62,6 +65,13 @@ public throw func fixedPoint_add(x: FixedPoint, y: FixedPoint) -> option<FixedPo
     }
 }
 
+public func fixedPoint_tryAddRescale(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {
+    Some(fixedPoint_new(
+        trySafeAdd(trySafeMul(x.val, y.shiftFactor)?, trySafeMul(y.val, x.shiftFactor)?)?,
+        trySafeMul(x.shiftFactor, y.shiftFactor)?,
+    ))
+}
+
 public throw func fixedPoint_plusOne(x: FixedPoint) -> FixedPoint {
     x with { val: safeAdd(x.val, x.shiftFactor) }
 }
@@ -94,8 +104,16 @@ public throw func fixedPoint_mulByUint(x: FixedPoint, i: uint) -> FixedPoint {
     x with { val: safeMul(x.val, i) }
 }
 
+public func fixedPoint_tryMulByUint(x: FixedPoint, i: uint) -> option<FixedPoint> {
+    Some(x with { val: trySafeMul(x.val, i)? })
+}
+
 public throw func fixedPoint_mulByUintTrunc(x: FixedPoint, i: uint) -> uint {
     safeMul(x.val, i) / x.shiftFactor
+}
+
+public func fixedPoint_tryMulByUintTrunc(x: FixedPoint, i: uint) -> option<uint> {
+    Some(trySafeMul(x.val, i)? / x.shiftFactor)
 }
 
 public throw func fixedPoint_div(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {

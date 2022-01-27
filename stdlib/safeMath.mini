@@ -26,6 +26,14 @@ public throw func safeSub(x: uint, y: uint) -> uint {
     x - y
 }
 
+public func saturatingSub(x: uint, y: uint) -> uint {
+    if x < y {
+        0
+    } else {
+        x-y
+    }
+}
+
 public func trySafeSub(x: uint, y: uint) -> option<uint> {
     if x < y {
         None

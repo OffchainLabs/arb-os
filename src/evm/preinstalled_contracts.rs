@@ -2770,7 +2770,7 @@ fn test_congestion_price_adjustment() {
 
     let arbtest = ArbosTest::new(false);
     let mut seen_any_congestion = false;
-    for _ in 0..2400 {
+    for _ in 0..1200 {
         let res_code = match arbtest._burn_arb_gas(
             &mut machine,
             my_address.clone(),
@@ -2789,7 +2789,7 @@ fn test_congestion_price_adjustment() {
     // the chain should be congested now
     machine
         .runtime_env
-        ._advance_time(Uint256::one(), None, false);
+        ._advance_time(Uint256::one(), None, true);
     let _ = machine.run(None);
 
     let prices = arbgasinfo

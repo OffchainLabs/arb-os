@@ -25,6 +25,7 @@ use accounts::account_setBaseTxFeeL1Gas;
 use arbstatistics::arbStatistics_addToStorage;
 use arbstatistics::arbStatistics_addToGasUsed;
 
+use chainParameters::chainParams_get;
 use chainParameters::chainParams_getOrDie;
 use chainParameters::hasChainOwnerPrivileges;
 
@@ -41,9 +42,13 @@ use messages::TxRequestData;
 
 use std::fixedpoint::FixedPoint;
 use std::fixedpoint::fixedPoint_new;
+use std::fixedpoint::fixedPoint_tryAddRescale;
+use std::fixedpoint::fixedPoint_tryMulByUint;
 use std::fixedpoint::fixedPoint_mulByUintTrunc;
+use std::fixedpoint::fixedPoint_tryMulByUintTrunc;
 use std::fixedpoint::fixedPoint_plusOne;
 use std::fixedpoint::fixedPoint_div;
+use std::fixedpoint::fixedPoint_integerPart;
 
 use std::addressSet::SetOfAddresses;
 use std::addressSet::setOfAddresses_emptySet;
@@ -62,7 +67,6 @@ use std::rateEstimator::rateEstimator_advanceTime;
 use std::safeMath::safeAdd;
 use std::safeMath::safeSub;
 use std::safeMath::safeMul;
-use std::safeMath::safeAddInt;
 use std::safeMath::safeSubInt;
 use std::safeMath::trySafeAdd;
 use std::safeMath::trySafeSub;
@@ -105,6 +109,7 @@ type CongestionState = struct {
     lastArbBlockNumSeen: uint,
     lastTimestampSeen: uint,
     gasUsageRateEstimator: RateEstimator,
+    gasPoolTarget: uint,
     congestionPriceWei: uint,
 };
 
@@ -202,8 +207,9 @@ view write throw func setupParameters(isInit: bool) {
 }
 
 view throw func initCongestionState(isInit: bool) -> CongestionState {
+    let gasPoolMax = chainParams_getOrDie(const::Atom_Param_GasPoolMax);
     struct {
-        gasPool: int(chainParams_getOrDie(const::Atom_Param_GasPoolMax)),
+        gasPool: int(gasPoolMax),
         lastArbBlockNumSeen: if isInit { 0 } else { inbox_currentArbBlockNumber() },
         lastTimestampSeen: if isInit { 0 } else { inbox_currentTimestamp() },
         gasUsageRateEstimator: rateEstimator_new(
@@ -211,6 +217,19 @@ view throw func initCongestionState(isInit: bool) -> CongestionState {
             0,
             inbox_currentTimestamp(),
         ),
+        gasPoolTarget: {
+            if let Some(x) = chainParams_get(const::Atom_Param_GasPoolFullnessTargetPercent) {
+                if x > 100 {
+                    gasPoolMax
+                } else if x < 50 {
+                    gasPoolMax / 2
+                } else {
+                    gasPoolMax * x / 100
+                }
+            } else {
+                gasPoolMax / 2
+            }
+        },
         congestionPriceWei: 0,
     }
 }
@@ -1088,45 +1107,86 @@ view write throw func tryToPayForL1Gas(
 
 view throw func updateCongestionState(state: CongestionState, toBlockNum: uint, toTimestamp: uint) -> CongestionState {
     // update the congestion state, based on advancing from state.lastTimestampSeen to toTimestamp
-
     let lastTimestampSeen = state.lastTimestampSeen;
+    if toTimestamp <= lastTimestampSeen {
+        return state;
+    }
+    let elapsedTime = toBlockNum - lastTimestampSeen;
     let basePrice = gasAccountingInfo.currentPrices.perArbGasBase;
     let totalPrice = safeAdd(basePrice, state.congestionPriceWei);
     let gasPool = state.gasPool;
     let gasPoolMax = chainParams_getOrDie(const::Atom_Param_GasPoolMax);
     let speedLimit = chainParams_getOrDie(const::Atom_Param_SpeedLimitPerSecond);
 
+    // compute rateRatio = recent gas consumption rate / speed limit
     let rateEstimator = rateEstimator_advanceTime(state.gasUsageRateEstimator, toTimestamp);
-    let rateFactor = rateEstimator_get(rateEstimator) * gasPoolMax / (2 *speedLimit);
-    if rateFactor > gasPoolMax {
-        rateFactor = gasPoolMax;
+    let rateRatio = fixedPoint_new(rateEstimator_get(rateEstimator), speedLimit);
+    if fixedPoint_integerPart(rateRatio) >= 2 {
+        rateRatio = fixedPoint_new(2, 1);
     }
 
-    // doing a per-second loop isn't elegant, but cost is low enough that it shouldn't be a problem
-    // eventually we should solve this analytically to avoid the per-second loop
-    while (lastTimestampSeen < toTimestamp) && ( (gasPool < int(gasPoolMax)) || (totalPrice > basePrice) ) {
-        lastTimestampSeen = lastTimestampSeen + 1;
-        gasPool = safeAddInt(gasPool, int(speedLimit));
-        if gasPool > int(gasPoolMax) {
-            gasPool = int(gasPoolMax);
-        }
+    // update gas pool, and compute poolRatio = max(0, 2 - (average gas pool fullness / target gas pool fullness))
+    let gasPoolBefore = gasPool;
+    let timeToFull = uint(int(gasPoolMax)-gasPool) / speedLimit;
+    let averageGasPool = if elapsedTime > timeToFull {
+        gasPool = int(gasPoolMax);
+        let spaceBefore = int(gasPoolMax) - gasPool;
+        int(gasPoolMax) - spaceBefore * spaceBefore / int(2 * speedLimit * elapsedTime)
+    } else {
+        gasPool = gasPool + int(elapsedTime * speedLimit);
+        (gasPoolBefore + gasPool) / int(2)
+    };
+    let poolRatio = if int(2 * state.gasPoolTarget) > averageGasPool {
+        fixedPoint_new(
+            uint(int(2 * state.gasPoolTarget) - averageGasPool),
+            state.gasPoolTarget
+        )
+    } else {
+        fixedPoint_new(0, 1)
+    };
 
-        let maxtc = if gasPool > int(0) {
-            gasPool
+    let avgOfRatios = if let Some(sor) = fixedPoint_tryAddRescale(rateRatio, poolRatio) {
+        if let Some(aor) = fixedPoint_tryMulByUint(sor, 2) {
+            aor
         } else {
-            int(0)
-        };
-        // now 0 <= maxtc <= gasPoolMax
+            fixedPoint_new(1, 1)
+        }
+    } else {
+        fixedPoint_new(1, 1)
+    };
+    let averageOfRatiosBasisPoints = if let Some(aorbp) = fixedPoint_tryMulByUintTrunc(avgOfRatios, 10000) {
+        aorbp
+    } else {
+        10000
+    };
 
-        // constants here are chosen so that adjustment is by factor between 7/8 and 9/8 per mainnet block, as in EIP-1559
-        totalPrice = totalPrice * (120 * gasPoolMax + rateFactor - uint(maxtc)) / (120 * gasPoolMax);
-        if totalPrice < basePrice { totalPrice = basePrice; }
+    if averageOfRatiosBasisPoints >= 10000 {
+        // price should go up, or stay the same
+        if averageOfRatiosBasisPoints > 20000 {
+            averageOfRatiosBasisPoints = 20000;
+        }
+        let priceIncreaseBasisPoints = (averageOfRatiosBasisPoints - 10000) * elapsedTime / 120;
+        totalPrice = totalPrice + totalPrice * priceIncreaseBasisPoints / 10000;
+    } else {
+        let priceDecreaseBasisPoints = (10000 - averageOfRatiosBasisPoints) * elapsedTime / 120;
+        totalPrice = if priceDecreaseBasisPoints >= 10000 {
+            basePrice
+        } else {
+            let tp = totalPrice - totalPrice * priceDecreaseBasisPoints / 10000;
+            if tp < basePrice {
+                basePrice
+            } else {
+                tp
+            }
+        };
     }
+
     struct {
         gasPool: gasPool,
         lastArbBlockNumSeen: toBlockNum,
         lastTimestampSeen: toTimestamp,
         gasUsageRateEstimator: rateEstimator,
+        gasPoolTarget: state.gasPoolTarget,
         congestionPriceWei: safeSub(totalPrice, basePrice),
     }
 }
