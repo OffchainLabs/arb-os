@@ -455,7 +455,7 @@ public view write throw func gasAccounting_startTxCharges(
 
     let allPurposeGas = {
         let txGasLimit = chainParams_getOrDie(const::Atom_Param_TxGasLimit);
-        if maxGas < txGasLimit {
+        if maxGas < txGasLimit || request.incomingRequest.adminMode {
             maxGas
         } else {
             // after deducting gas charges for L1, more gas than the tx gas limit still remains unused

@@ -6,5 +6,7 @@ use bridge_arbos_versions::GlobalsBeforeUpgrade;
 
 
 public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> map<uint, uint> {
-    oldGlobals.globalChainParameters
+    oldGlobals.globalChainParameters with {
+        [const::Atom_Param_MaxContractSize] = const::Default_Param_MaxContractSize
+    }
 }

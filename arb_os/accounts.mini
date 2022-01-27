@@ -33,6 +33,7 @@ use decompression::AggregatorDecompressionState;
 use evmCallStack::evmCallStack_addStorageCharge;
 use evmCallStack::evmCallStack_isEmpty;
 
+
 type AccountStore = struct {
     accounts: map<address, Account>,
     retryBuffer: RetryBuffer,
@@ -783,7 +784,7 @@ public view write throw func accountStore_createOrAddCodeRef(
     } else {
         let (startCodePoint, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(code), false);
         Some((
-            accountStore_createCodeRef(acctStore, contractStateVersion, code, evmJumpTable, startCodePoint),
+            accountStore_createCodeRef(acctStore, contractStateVersion, code, evmJumpTable, startCodePoint)?,
             unsafecast<view write func()>(startCodePoint),
             unsafecast<map<uint, view write func()> >(evmJumpTable),
             true,
@@ -800,21 +801,25 @@ public func accountStore_addCodeRef(acctStore: AccountStore, codeHash: bytes32) 
     Some(acctStore)
 }
 
-public throw func accountStore_createCodeRef(
+public throw view func accountStore_createCodeRef(
     acctStore: AccountStore,
     contractStateVersion: uint,
     code: ByteArray,
     evmJumpTable: map<uint, view write func()>,
     startCodePoint: view write func(),
-) -> AccountStore {
-    let codeHash = hashForCodeRef(code, contractStateVersion);  // overflow OK
-    set acctStore.codeRefTable[codeHash] = struct {
-        refCount: 1,
-        code: code,
-        evmJumpTable: evmJumpTable,
-        startCodePoint: startCodePoint,
-    };
-    acctStore
+) -> option<AccountStore> {
+    if bytearray_size(code) > chainParams_getOrDie(const::Atom_Param_MaxContractSize) {
+        None<AccountStore>
+    } else {
+        let codeHash = hashForCodeRef(code, contractStateVersion);  // overflow OK
+        set acctStore.codeRefTable[codeHash] = struct {
+            refCount: 1,
+            code: code,
+            evmJumpTable: evmJumpTable,
+            startCodePoint: startCodePoint,
+        };
+        Some(acctStore)
+    }
 }
 
 // Decrement the reference count of a CodeRef, and remove it if ref count is now zero.
