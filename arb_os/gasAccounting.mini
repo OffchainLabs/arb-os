@@ -43,7 +43,7 @@ use messages::TxRequestData;
 use std::fixedpoint::FixedPoint;
 use std::fixedpoint::fixedPoint_new;
 use std::fixedpoint::fixedPoint_tryAddRescale;
-use std::fixedpoint::fixedPoint_tryMulByUint;
+use std::fixedpoint::fixedPoint_tryDivByUint;
 use std::fixedpoint::fixedPoint_mulByUintTrunc;
 use std::fixedpoint::fixedPoint_tryMulByUintTrunc;
 use std::fixedpoint::fixedPoint_plusOne;
@@ -1146,7 +1146,7 @@ view throw func updateCongestionState(state: CongestionState, toBlockNum: uint, 
     };
 
     let avgOfRatios = if let Some(sor) = fixedPoint_tryAddRescale(rateRatio, poolRatio) {
-        if let Some(aor) = fixedPoint_tryMulByUint(sor, 2) {
+        if let Some(aor) = fixedPoint_tryDivByUint(sor, 2) {
             aor
         } else {
             fixedPoint_new(1, 1)

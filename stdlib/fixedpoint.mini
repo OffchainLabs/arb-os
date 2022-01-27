@@ -129,6 +129,10 @@ public throw func fixedPoint_div(x: FixedPoint, y: FixedPoint) -> option<FixedPo
     }
 }
 
+public func fixedPoint_tryDivByUint(x: FixedPoint, y: uint) -> option<FixedPoint> {
+    Some(struct { val: x.val, shiftFactor: trySafeMul(x.shiftFactor, y)? })
+}
+
 public func fixedPoint_integerPart(x: FixedPoint) -> uint {
     x.val / x.shiftFactor
 }
