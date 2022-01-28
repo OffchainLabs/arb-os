@@ -1160,26 +1160,14 @@ view throw func updateCongestionState(state: CongestionState, toBlockNum: uint, 
     } else {
         10000
     };
+    if averageOfRatiosBasisPoints > 20000 {
+        averageOfRatiosBasisPoints = 20000;
+    }
 
-    if averageOfRatiosBasisPoints >= 10000 {
-        // price should go up, or stay the same
-        if averageOfRatiosBasisPoints > 20000 {
-            averageOfRatiosBasisPoints = 20000;
-        }
-        let priceIncreaseBasisPoints = (averageOfRatiosBasisPoints - 10000) * elapsedTime / 120;
-        totalPrice = totalPrice + totalPrice * priceIncreaseBasisPoints / 10000;
-    } else {
-        let priceDecreaseBasisPoints = (10000 - averageOfRatiosBasisPoints) * elapsedTime / 120;
-        totalPrice = if priceDecreaseBasisPoints >= 10000 {
-            basePrice
-        } else {
-            let tp = totalPrice - totalPrice * priceDecreaseBasisPoints / 10000;
-            if tp < basePrice {
-                basePrice
-            } else {
-                tp
-            }
-        };
+    let exponentInBasisPoints = (int(averageOfRatiosBasisPoints) - int(10000)) * int(elapsedTime) / int(120);
+    totalPrice = totalPrice * approxExpBasisPoints(exponentInBasisPoints) / 10000;
+    if totalPrice < basePrice {
+        totalPrice = basePrice;
     }
 
     struct {
