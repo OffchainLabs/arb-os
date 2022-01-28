@@ -71,6 +71,7 @@ use std::safeMath::safeSubInt;
 use std::safeMath::trySafeAdd;
 use std::safeMath::trySafeSub;
 use std::safeMath::trySafeMul;
+use std::safeMath::approxExpBasisPoints;
 
 use std::stack::Stack;
 use std::stack::stack_new;
@@ -1111,7 +1112,7 @@ view throw func updateCongestionState(state: CongestionState, toBlockNum: uint, 
     if toTimestamp <= lastTimestampSeen {
         return state;
     }
-    let elapsedTime = toBlockNum - lastTimestampSeen;
+    let elapsedTime = toTimestamp - lastTimestampSeen;
     let basePrice = gasAccountingInfo.currentPrices.perArbGasBase;
     let totalPrice = safeAdd(basePrice, state.congestionPriceWei);
     let gasPool = state.gasPool;
