@@ -13,6 +13,7 @@ public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade
     oldGlobals.globalChainParameters
         with { [const::Atom_Param_GasUsageTimeConstant] = const::Default_Param_GasUsageTimeConstant }
         with { [const::Atom_Param_GasPoolFullnessTargetPercent] = const::Default_Param_GasPoolFullnessTargetPercent }
+        with { [const::Atom_Param_L1GasEstimatorSampleUpdate] = const::Default_Param_L1GasEstimatorSampleUpdate }
 }
 
 public func set_gasAccountingInfo_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> GasAccountingInfo {

@@ -1242,12 +1242,16 @@ public view write func setL1GasPriceEstimate(newPriceWei: uint) {
 
 public view write throw func updateL1GasPriceEstimate(sender: address, price: uint) {
     if isFairGasPriceSender(sender) {
+        let samples = chainParams_getOrDie(const::Atom_Param_L1GasEstimatorSampleUpdate);
         if price > 5 * globalL1GasPriceEstimator.estimateWei {
             price = 5 * globalL1GasPriceEstimator.estimateWei;
         } else if price < globalL1GasPriceEstimator.estimateWei / 5 {
             price = globalL1GasPriceEstimator.estimateWei / 5;
         }
-        set globalL1GasPriceEstimator.estimateWei = safeAdd(price, safeMul(19, globalL1GasPriceEstimator.estimateWei)) / 20;
+        set globalL1GasPriceEstimator.estimateWei = safeAdd(
+            safeMul(samples, globalL1GasPriceEstimator.estimateWei),
+            price,
+        ) / (samples + 1);
     }
 }
 
