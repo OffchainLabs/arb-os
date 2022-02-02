@@ -1480,7 +1480,11 @@ fn test_reverting_payable_constructor() {
         if receipt.clone().unwrap().succeeded() {
             panic!("unexpected success deploying PRConstructor contract");
         }
-        assert_ne!(receipt.clone().unwrap().get_return_data().len(), 0);
+        let error = Value::Buffer(Buffer::from_bytes(
+            receipt.clone().unwrap().get_return_data(),
+        ));
+        println!("error {}", error.pretty_print(Color::PINK));
+        assert!(error.pretty_print(Color::PINK).contains("revert message"));
     }
 
     assert_eq!(
