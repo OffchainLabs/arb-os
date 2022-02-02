@@ -1480,6 +1480,7 @@ fn test_reverting_payable_constructor() {
         if receipt.clone().unwrap().succeeded() {
             panic!("unexpected success deploying PRConstructor contract");
         }
+        assert_ne!(receipt.clone().unwrap().get_return_data().len(), 0);
     }
 
     assert_eq!(
