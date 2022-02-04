@@ -244,7 +244,8 @@
     "MaxContractSize": 49152,
     "GasUsageTimeConstant": 60,
     "GasPoolFullnessTargetPercent": 80,
-    "L1GasEstimatorSampleUpdate": 19
+    "L1GasEstimatorSampleUpdate": 19,
+    "PoolFullnessRatioWeightBasisPoints": 6000
   },
   "parameters_hex": { }
 }

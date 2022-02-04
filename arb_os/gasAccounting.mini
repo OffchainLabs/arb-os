@@ -44,8 +44,8 @@ use std::fixedpoint::FixedPoint;
 use std::fixedpoint::fixedPoint_new;
 use std::fixedpoint::fixedPoint_tryAddRescale;
 use std::fixedpoint::fixedPoint_tryDivByUint;
+use std::fixedpoint::fixedPoint_mulByUint;
 use std::fixedpoint::fixedPoint_mulByUintTrunc;
-use std::fixedpoint::fixedPoint_tryMulByUintTrunc;
 use std::fixedpoint::fixedPoint_plusOne;
 use std::fixedpoint::fixedPoint_div;
 use std::fixedpoint::fixedPoint_integerPart;
@@ -111,6 +111,7 @@ type CongestionState = struct {
     lastTimestampSeen: uint,
     gasUsageRateEstimator: RateEstimator,
     gasPoolTarget: uint,
+    gasPoolWeight: uint,
     congestionPriceWei: uint,
 };
 
@@ -229,6 +230,17 @@ view throw func initCongestionState(isInit: bool) -> CongestionState {
                 }
             } else {
                 gasPoolMax / 2
+            }
+        },
+        gasPoolWeight: {
+            if let Some(x) = chainParams_get(const::Atom_Param_GasPoolFullnessTargetPercent) {
+                if x > 10000 {
+                    10000
+                } else {
+                    x
+                }
+            } else {
+                const::Atom_Param_PoolFullnessRatioWeightBasisPoints
             }
         },
         congestionPriceWei: 0,
@@ -1118,6 +1130,8 @@ view throw func updateCongestionState(state: CongestionState, toBlockNum: uint, 
     let gasPool = state.gasPool;
     let gasPoolMax = chainParams_getOrDie(const::Atom_Param_GasPoolMax);
     let speedLimit = chainParams_getOrDie(const::Atom_Param_SpeedLimitPerSecond);
+    let gasPoolTarget = state.gasPoolTarget;
+    let gasPoolWeight = state.gasPoolWeight;
 
     // compute rateRatio = recent gas consumption rate / speed limit
     let rateEstimator = rateEstimator_advanceTime(state.gasUsageRateEstimator, toTimestamp);
@@ -1137,34 +1151,28 @@ view throw func updateCongestionState(state: CongestionState, toBlockNum: uint, 
         gasPool = gasPool + int(elapsedTime * speedLimit);
         (gasPoolBefore + gasPool) / int(2)
     };
-    let poolRatio = if int(2 * state.gasPoolTarget) > averageGasPool {
+    let poolRatio = if int(2 * gasPoolTarget) > averageGasPool {
         fixedPoint_new(
-            uint(int(2 * state.gasPoolTarget) - averageGasPool),
-            state.gasPoolTarget
+            uint(int(2 * gasPoolTarget) - averageGasPool),
+            gasPoolTarget
         )
     } else {
         fixedPoint_new(0, 1)
     };
 
-    let avgOfRatios = if let Some(sor) = fixedPoint_tryAddRescale(rateRatio, poolRatio) {
-        if let Some(aor) = fixedPoint_tryDivByUint(sor, 2) {
-            aor
-        } else {
-            fixedPoint_new(1, 1)
-        }
-    } else {
-        fixedPoint_new(1, 1)
-    };
-    let averageOfRatiosBasisPoints = if let Some(aorbp) = fixedPoint_tryMulByUintTrunc(avgOfRatios, 10000) {
-        aorbp
+    // take the weighted average of the ratios
+    let poolRatio = fixedPoint_mulByUint(poolRatio, gasPoolWeight);
+    let rateRatio = fixedPoint_mulByUint(rateRatio, 10000 - gasPoolWeight);
+    let averageOfRatios = if let Some(avg) = fixedPoint_tryAddRescale(poolRatio, rateRatio) {
+        fixedPoint_mulByUintTrunc(avg, 1)
     } else {
         10000
     };
-    if averageOfRatiosBasisPoints > 20000 {
-        averageOfRatiosBasisPoints = 20000;
+    if averageOfRatios > 20000 {
+        averageOfRatios = 20000;
     }
 
-    let exponentInBasisPoints = (int(averageOfRatiosBasisPoints) - int(10000)) * int(elapsedTime) / int(120);
+    let exponentInBasisPoints = (int(averageOfRatios) - int(10000)) * int(elapsedTime) / int(120);
     totalPrice = totalPrice * approxExpBasisPoints(exponentInBasisPoints) / 10000;
     if totalPrice < basePrice {
         totalPrice = basePrice;
@@ -1175,7 +1183,8 @@ view throw func updateCongestionState(state: CongestionState, toBlockNum: uint, 
         lastArbBlockNumSeen: toBlockNum,
         lastTimestampSeen: toTimestamp,
         gasUsageRateEstimator: rateEstimator,
-        gasPoolTarget: state.gasPoolTarget,
+        gasPoolTarget: gasPoolTarget,
+        gasPoolWeight: gasPoolWeight,
         congestionPriceWei: safeSub(totalPrice, basePrice),
     }
 }

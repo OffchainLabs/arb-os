@@ -39,6 +39,7 @@ public func set_gasAccountingInfo_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) ->
                 cs.lastTimestampSeen,
             ),
             gasPoolTarget: gasPoolMax * const::Default_Param_GasPoolFullnessTargetPercent / 100,
+            gasPoolWeight: const::Atom_Param_PoolFullnessRatioWeightBasisPoints,
             congestionPriceWei: cs.congestionPriceWei,
         },
         speedLimitPerSecond: gai.speedLimitPerSecond,
