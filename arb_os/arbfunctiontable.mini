@@ -70,7 +70,7 @@ view write throw func arbFunctionTable_upload(topFrame: EvmCallFrame, calldata: 
 
     let abiEncodedOffset = bytearray_get256(calldata, 4);
     if abiEncodedOffset != 32 {
-        evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 190, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 191, 0, 0);
     }
 
     let callerAddr = evmCallFrame_getCaller(topFrame);
