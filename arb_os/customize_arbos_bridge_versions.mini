@@ -14,6 +14,7 @@ public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade
         with { [const::Atom_Param_GasUsageTimeConstant] = const::Default_Param_GasUsageTimeConstant }
         with { [const::Atom_Param_GasPoolFullnessTargetPercent] = const::Default_Param_GasPoolFullnessTargetPercent }
         with { [const::Atom_Param_L1GasEstimatorSampleUpdate] = const::Default_Param_L1GasEstimatorSampleUpdate }
+        with { [const::Atom_Param_PoolFullnessRatioWeightBasisPoints] = const::Default_Param_PoolFullnessRatioWeightBasisPoints }
 }
 
 public func set_gasAccountingInfo_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> GasAccountingInfo {
@@ -39,6 +40,7 @@ public func set_gasAccountingInfo_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) ->
                 cs.lastTimestampSeen,
             ),
             gasPoolTarget: gasPoolMax * const::Default_Param_GasPoolFullnessTargetPercent / 100,
+            gasPoolWeight: const::Atom_Param_PoolFullnessRatioWeightBasisPoints,
             congestionPriceWei: cs.congestionPriceWei,
         },
         speedLimitPerSecond: gai.speedLimitPerSecond,
