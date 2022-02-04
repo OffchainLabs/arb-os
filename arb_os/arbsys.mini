@@ -176,6 +176,10 @@ view write throw func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteA
 view write throw func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) {
     evmOp_revertIfStatic();
     let destAddr = address(bytearray_get256(calldata, 4));
+    let abiEncodedOffset = bytearray_get256(calldata, 36);
+    if abiEncodedOffset != 64 {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 225, 0, 0);
+    }
     let nbytes = bytearray_get256(calldata, 4+2*32);
     let expectedCalldataSize = safeAdd(4 + 3*32, safeMul(32, safeAdd(nbytes, 31) / 32));
     if bytearray_size(calldata) != expectedCalldataSize {
