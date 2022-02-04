@@ -1160,11 +1160,11 @@ view throw func updateCongestionState(state: CongestionState, toBlockNum: uint, 
         fixedPoint_new(0, 1)
     };
 
-    // take the weighted average of the ratios
+    // take the weighted average of the ratios, in basis points
     let poolRatio = fixedPoint_mulByUint(poolRatio, gasPoolWeight);
     let rateRatio = fixedPoint_mulByUint(rateRatio, 10000 - gasPoolWeight);
     let averageOfRatios = if let Some(avg) = fixedPoint_tryAddRescale(poolRatio, rateRatio) {
-        fixedPoint_mulByUintTrunc(avg, 1)
+        fixedPoint_integerPart(avg)
     } else {
         10000
     };
