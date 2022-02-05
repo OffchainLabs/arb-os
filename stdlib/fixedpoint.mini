@@ -104,16 +104,8 @@ public throw func fixedPoint_mulByUint(x: FixedPoint, i: uint) -> FixedPoint {
     x with { val: safeMul(x.val, i) }
 }
 
-public func fixedPoint_tryMulByUint(x: FixedPoint, i: uint) -> option<FixedPoint> {
-    Some(x with { val: trySafeMul(x.val, i)? })
-}
-
 public throw func fixedPoint_mulByUintTrunc(x: FixedPoint, i: uint) -> uint {
     safeMul(x.val, i) / x.shiftFactor
-}
-
-public func fixedPoint_tryMulByUintTrunc(x: FixedPoint, i: uint) -> option<uint> {
-    Some(trySafeMul(x.val, i)? / x.shiftFactor)
 }
 
 public throw func fixedPoint_div(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {
@@ -127,10 +119,6 @@ public throw func fixedPoint_div(x: FixedPoint, y: FixedPoint) -> option<FixedPo
             Some(fixedPoint_new(safeMul(x.val, y.shiftFactor), denom))
         }
     }
-}
-
-public func fixedPoint_tryDivByUint(x: FixedPoint, y: uint) -> option<FixedPoint> {
-    Some(struct { val: x.val, shiftFactor: trySafeMul(x.shiftFactor, y)? })
 }
 
 public func fixedPoint_integerPart(x: FixedPoint) -> uint {

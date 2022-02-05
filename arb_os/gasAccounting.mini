@@ -43,7 +43,6 @@ use messages::TxRequestData;
 use std::fixedpoint::FixedPoint;
 use std::fixedpoint::fixedPoint_new;
 use std::fixedpoint::fixedPoint_tryAddRescale;
-use std::fixedpoint::fixedPoint_tryDivByUint;
 use std::fixedpoint::fixedPoint_mulByUint;
 use std::fixedpoint::fixedPoint_mulByUintTrunc;
 use std::fixedpoint::fixedPoint_plusOne;
