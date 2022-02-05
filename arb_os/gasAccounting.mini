@@ -25,6 +25,7 @@ use accounts::account_setBaseTxFeeL1Gas;
 use arbstatistics::arbStatistics_addToStorage;
 use arbstatistics::arbStatistics_addToGasUsed;
 
+use chainParameters::chainParams_get;
 use chainParameters::chainParams_getOrDie;
 use chainParameters::hasChainOwnerPrivileges;
 
@@ -41,9 +42,12 @@ use messages::TxRequestData;
 
 use std::fixedpoint::FixedPoint;
 use std::fixedpoint::fixedPoint_new;
+use std::fixedpoint::fixedPoint_tryAddRescale;
+use std::fixedpoint::fixedPoint_mulByUint;
 use std::fixedpoint::fixedPoint_mulByUintTrunc;
 use std::fixedpoint::fixedPoint_plusOne;
 use std::fixedpoint::fixedPoint_div;
+use std::fixedpoint::fixedPoint_integerPart;
 
 use std::addressSet::SetOfAddresses;
 use std::addressSet::setOfAddresses_emptySet;
@@ -53,14 +57,20 @@ use std::addressSet::setOfAddresses_remove;
 use std::addressSet::setOfAddresses_contains;
 use std::addressSet::setOfAddresses_serialize;
 
+use std::rateEstimator::RateEstimator;
+use std::rateEstimator::rateEstimator_new;
+use std::rateEstimator::rateEstimator_get;
+use std::rateEstimator::rateEstimator_addUsage;
+use std::rateEstimator::rateEstimator_advanceTime;
+
 use std::safeMath::safeAdd;
 use std::safeMath::safeSub;
 use std::safeMath::safeMul;
-use std::safeMath::safeAddInt;
 use std::safeMath::safeSubInt;
 use std::safeMath::trySafeAdd;
 use std::safeMath::trySafeSub;
 use std::safeMath::trySafeMul;
+use std::safeMath::approxExpBasisPoints;
 
 use std::stack::Stack;
 use std::stack::stack_new;
@@ -98,6 +108,9 @@ type CongestionState = struct {
     gasPool: int,         // amount of gas available for use (note: signed value; if negative, we have overused gas)
     lastArbBlockNumSeen: uint,
     lastTimestampSeen: uint,
+    gasUsageRateEstimator: RateEstimator,
+    gasPoolTarget: uint,
+    gasPoolWeight: uint,
     congestionPriceWei: uint,
 };
 
@@ -195,10 +208,40 @@ view write throw func setupParameters(isInit: bool) {
 }
 
 view throw func initCongestionState(isInit: bool) -> CongestionState {
+    let gasPoolMax = chainParams_getOrDie(const::Atom_Param_GasPoolMax);
     struct {
-        gasPool: int(chainParams_getOrDie(const::Atom_Param_GasPoolMax)),
+        gasPool: int(gasPoolMax),
         lastArbBlockNumSeen: if isInit { 0 } else { inbox_currentArbBlockNumber() },
         lastTimestampSeen: if isInit { 0 } else { inbox_currentTimestamp() },
+        gasUsageRateEstimator: rateEstimator_new(
+            chainParams_getOrDie(const::Atom_Param_GasUsageTimeConstant),
+            0,
+            inbox_currentTimestamp(),
+        ),
+        gasPoolTarget: {
+            if let Some(x) = chainParams_get(const::Atom_Param_GasPoolFullnessTargetPercent) {
+                if x > 100 {
+                    gasPoolMax
+                } else if x < 50 {
+                    gasPoolMax / 2
+                } else {
+                    gasPoolMax * x / 100
+                }
+            } else {
+                gasPoolMax / 2
+            }
+        },
+        gasPoolWeight: {
+            if let Some(x) = chainParams_get(const::Atom_Param_GasPoolFullnessTargetPercent) {
+                if x > 10000 {
+                    10000
+                } else {
+                    x
+                }
+            } else {
+                const::Atom_Param_PoolFullnessRatioWeightBasisPoints
+            }
+        },
         congestionPriceWei: 0,
     }
 }
@@ -393,9 +436,10 @@ public view throw func getAddressForReserveFundsDeposit() -> address {
 }
 
 public view write func gasAccounting_addToGasPool(delta: uint) {
+    let cstate = gasAccountingInfo.congestionState;
     gasAccountingInfo = gasAccountingInfo with {
-        congestionState: gasAccountingInfo.congestionState with {
-            gasPool: gasAccountingInfo.congestionState.gasPool + int(delta)
+        congestionState: cstate with {
+            gasPool: cstate.gasPool + int(delta)
         }
     };
 }
@@ -495,6 +539,10 @@ public view write throw func gasAccounting_startTxCharges(
         gasEstimationMode: gasEstimationMode,
     });
     set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(gasUsedByOS));
+    set gasAccountingInfo.congestionState.gasUsageRateEstimator = rateEstimator_addUsage(
+        gasAccountingInfo.congestionState.gasUsageRateEstimator,
+        gasUsedByOS,
+    );
 
     arbStatistics_addToGasUsed(gasUsedByOS);
 
@@ -566,6 +614,10 @@ public view write throw func gasAccounting_endTxCharges(
     };
 
     set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(gasUsedForCompute));
+    set gasAccountingInfo.congestionState.gasUsageRateEstimator = rateEstimator_addUsage(
+        gasAccountingInfo.congestionState.gasUsageRateEstimator,
+        gasUsedForCompute,
+    );
     set gasAccountingInfo.gasRemainingThisBlock = if gasAccountingInfo.gasRemainingThisBlock >= gasUsedForCompute {
         gasAccountingInfo.gasRemainingThisBlock - gasUsedForCompute
     } else {
@@ -680,6 +732,10 @@ public view write throw func gasAccounting_resumeTxCharges(allPurposeGas: uint, 
             let osGasUsed = ((~0) - getGas()) / gasAccountingInfo.pricingParams.arbGasDivisor;
 
             set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(osGasUsed));
+            set gasAccountingInfo.congestionState.gasUsageRateEstimator = rateEstimator_addUsage(
+                gasAccountingInfo.congestionState.gasUsageRateEstimator,
+                osGasUsed,
+            );
             arbStatistics_addToGasUsed(osGasUsed);
 
             setGas(safeMul(allPurposeGas, gasAccountingInfo.pricingParams.arbGasDivisor));   // start charging the application
@@ -1063,38 +1119,71 @@ view write throw func tryToPayForL1Gas(
 
 view throw func updateCongestionState(state: CongestionState, toBlockNum: uint, toTimestamp: uint) -> CongestionState {
     // update the congestion state, based on advancing from state.lastTimestampSeen to toTimestamp
-
     let lastTimestampSeen = state.lastTimestampSeen;
+    if toTimestamp <= lastTimestampSeen {
+        return state;
+    }
+    let elapsedTime = toTimestamp - lastTimestampSeen;
     let basePrice = gasAccountingInfo.currentPrices.perArbGasBase;
     let totalPrice = safeAdd(basePrice, state.congestionPriceWei);
     let gasPool = state.gasPool;
     let gasPoolMax = chainParams_getOrDie(const::Atom_Param_GasPoolMax);
     let speedLimit = chainParams_getOrDie(const::Atom_Param_SpeedLimitPerSecond);
+    let gasPoolTarget = state.gasPoolTarget;
+    let gasPoolWeight = state.gasPoolWeight;
 
-    // doing a per-second loop isn't elegant, but cost is low enough that it shouldn't be a problem
-    // eventually we should solve this analytically to avoid the per-second loop
-    while (lastTimestampSeen < toTimestamp) && ( (gasPool < int(gasPoolMax)) || (totalPrice > basePrice) ) {
-        lastTimestampSeen = lastTimestampSeen + 1;
-        gasPool = safeAddInt(gasPool, int(speedLimit));
-        if gasPool > int(gasPoolMax) {
-            gasPool = int(gasPoolMax);
-        }
-
-        let maxtc = if gasPool > int(0) {
-            gasPool
-        } else {
-            int(0)
-        };
-        // now 0 <= maxtc <= gasPoolMax
-
-        // constants here are chosen so that adjustment is by factor between 7/8 and 9/8 per mainnet block, as in EIP-1559
-        totalPrice = totalPrice * (121 * gasPoolMax - 2 * uint(maxtc)) / (120 * gasPoolMax);
-        if totalPrice < basePrice { totalPrice = basePrice; }
+    // compute rateRatio = recent gas consumption rate / speed limit
+    let rateEstimator = rateEstimator_advanceTime(state.gasUsageRateEstimator, toTimestamp);
+    let rateRatio = fixedPoint_new(rateEstimator_get(rateEstimator), speedLimit);
+    if fixedPoint_integerPart(rateRatio) >= 2 {
+        rateRatio = fixedPoint_new(2, 1);
     }
+
+    // update gas pool, and compute poolRatio = max(0, 2 - (average gas pool fullness / target gas pool fullness))
+    let gasPoolBefore = gasPool;
+    let timeToFull = uint(int(gasPoolMax)-gasPool) / speedLimit;
+    let averageGasPool = if elapsedTime > timeToFull {
+        gasPool = int(gasPoolMax);
+        let spaceBefore = int(gasPoolMax) - gasPool;
+        int(gasPoolMax) - spaceBefore * spaceBefore / int(2 * speedLimit * elapsedTime)
+    } else {
+        gasPool = gasPool + int(elapsedTime * speedLimit);
+        (gasPoolBefore + gasPool) / int(2)
+    };
+    let poolRatio = if int(2 * gasPoolTarget) > averageGasPool {
+        fixedPoint_new(
+            uint(int(2 * gasPoolTarget) - averageGasPool),
+            gasPoolTarget
+        )
+    } else {
+        fixedPoint_new(0, 1)
+    };
+
+    // take the weighted average of the ratios, in basis points
+    let poolRatio = fixedPoint_mulByUint(poolRatio, gasPoolWeight);
+    let rateRatio = fixedPoint_mulByUint(rateRatio, 10000 - gasPoolWeight);
+    let averageOfRatios = if let Some(avg) = fixedPoint_tryAddRescale(poolRatio, rateRatio) {
+        fixedPoint_integerPart(avg)
+    } else {
+        10000
+    };
+    if averageOfRatios > 20000 {
+        averageOfRatios = 20000;
+    }
+
+    let exponentInBasisPoints = (int(averageOfRatios) - int(10000)) * int(elapsedTime) / int(120);
+    totalPrice = totalPrice * approxExpBasisPoints(exponentInBasisPoints) / 10000;
+    if totalPrice < basePrice {
+        totalPrice = basePrice;
+    }
+
     struct {
         gasPool: gasPool,
         lastArbBlockNumSeen: toBlockNum,
         lastTimestampSeen: toTimestamp,
+        gasUsageRateEstimator: rateEstimator,
+        gasPoolTarget: gasPoolTarget,
+        gasPoolWeight: gasPoolWeight,
         congestionPriceWei: safeSub(totalPrice, basePrice),
     }
 }
@@ -1161,12 +1250,16 @@ public view write func setL1GasPriceEstimate(newPriceWei: uint) {
 
 public view write throw func updateL1GasPriceEstimate(sender: address, price: uint) {
     if isFairGasPriceSender(sender) {
+        let samples = chainParams_getOrDie(const::Atom_Param_L1GasEstimatorSampleUpdate);
         if price > 5 * globalL1GasPriceEstimator.estimateWei {
             price = 5 * globalL1GasPriceEstimator.estimateWei;
         } else if price < globalL1GasPriceEstimator.estimateWei / 5 {
             price = globalL1GasPriceEstimator.estimateWei / 5;
         }
-        set globalL1GasPriceEstimator.estimateWei = safeAdd(price, safeMul(19, globalL1GasPriceEstimator.estimateWei)) / 20;
+        set globalL1GasPriceEstimator.estimateWei = safeAdd(
+            safeMul(samples, globalL1GasPriceEstimator.estimateWei),
+            price,
+        ) / (samples + 1);
     }
 }
 

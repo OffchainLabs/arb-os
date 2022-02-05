@@ -2789,7 +2789,7 @@ fn test_congestion_price_adjustment() {
     // the chain should be congested now
     machine
         .runtime_env
-        ._advance_time(Uint256::one(), None, false);
+        ._advance_time(Uint256::one(), None, true);
     let _ = machine.run(None);
 
     let prices = arbgasinfo

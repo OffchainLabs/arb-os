@@ -4,7 +4,7 @@ contract PRConstructor {
 
     constructor(uint val) payable public {
 
-        require(val == 0);
+        require(val == 0, "revert message");
 
     }
 

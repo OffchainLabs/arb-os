@@ -35,6 +35,7 @@ pub use typecheck::{AbstractSyntaxTree, TypeCheckedNode};
 
 mod ast;
 mod codegen;
+mod globals;
 pub mod miniconstants;
 mod source;
 pub mod translate;
@@ -59,6 +60,8 @@ pub struct CompileStruct {
     pub format: Option<String>,
     #[clap(short, long)]
     pub consts_file: Option<String>,
+    #[clap(short, long)]
+    pub globals_file: Option<String>,
     #[clap(short, long)]
     pub must_use_global_consts: bool,
     #[clap(short, long)]
@@ -92,7 +95,7 @@ struct Module {
 
 /// Represents the contents of a source file after type checking is done.
 #[derive(Clone, Debug)]
-struct TypeCheckedModule {
+pub struct TypeCheckedModule {
     /// Collection of functions defined locally within the source file that have been validated by
     /// typechecking
     checked_funcs: BTreeMap<StringId, TypeCheckedFunc>,
@@ -141,10 +144,15 @@ impl CompileStruct {
                 Some(path) => Some(Path::new(path)),
                 None => None,
             };
+            let globals_path = match &self.globals_file {
+                Some(path) => Some(Path::new(path)),
+                None => None,
+            };
             let (progs, all_globals) = match compile_from_file(
                 path,
                 &mut file_info_chart,
                 constants_path,
+                globals_path,
                 self.must_use_global_consts,
                 &mut error_system,
                 self.optimization_level,
@@ -464,6 +472,7 @@ pub fn compile_from_file(
     path: &Path,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     constants_path: Option<&Path>,
+    globals_path: Option<&Path>,
     must_use_global_consts: bool,
     error_system: &mut ErrorSystem,
     optimization_level: usize,
@@ -496,6 +505,7 @@ pub fn compile_from_file(
             "main",
             file_info_chart,
             constants_path,
+            globals_path,
             must_use_global_consts,
             error_system,
             optimization_level,
@@ -515,6 +525,7 @@ pub fn compile_from_file(
             })?,
             file_info_chart,
             constants_path,
+            globals_path,
             must_use_global_consts,
             error_system,
             optimization_level,
@@ -556,6 +567,7 @@ pub fn compile_from_folder(
     main: &str,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     constants_path: Option<&Path>,
+    globals_path: Option<&Path>,
     must_use_global_consts: bool,
     error_system: &mut ErrorSystem,
     optimization_level: usize,
@@ -567,6 +579,14 @@ pub fn compile_from_folder(
         Some(path) => Some(path),
         None => match constants_default.exists() {
             true => Some(constants_default.as_path()),
+            false => None,
+        },
+    };
+    let globals_default = folder.join("globals.txt");
+    let globals_path = match globals_path {
+        Some(path) => Some(path),
+        None => match globals_default.exists() {
+            true => Some(globals_default.as_path()),
             false => None,
         },
     };
@@ -612,6 +632,8 @@ pub fn compile_from_folder(
     for module in &mut typechecked_modules {
         module.propagate_attributes();
     }
+
+    globals::order_globals(globals_path, &mut typechecked_modules)?;
 
     let (progs, globals) = codegen_modules(
         typechecked_modules,
@@ -1066,17 +1088,8 @@ fn codegen_modules(
     release_build: bool,
 ) -> Result<(Vec<CompiledFunc>, Vec<GlobalVar>), CompileError> {
     let mut work_list = vec![];
-    let mut globals_so_far = 0;
 
     for mut module in typechecked_modules {
-        // assign globals to the right of all prior
-        let mut global_vars = HashMap::new();
-        for mut global in module.global_vars {
-            global.offset = Some(globals_so_far);
-            global_vars.insert(global.id, global);
-            globals_so_far += 1;
-        }
-
         // add universal labels to functions
         for (_, func) in &mut module.checked_funcs {
             let unique_id = Import::unique_id(&module.path, &func.name);
@@ -1096,6 +1109,9 @@ fn codegen_modules(
                 None => panic!("Import without id {:#?}", &import),
             }
         }
+
+        let global_vars: HashMap<_, _> =
+            module.global_vars.into_iter().map(|g| (g.id, g)).collect();
 
         for (_, func) in module.checked_funcs {
             work_list.push((

@@ -1,0 +1,37 @@
+//
+// Copyright 2022, Offchain Labs, Inc. All rights reserved.
+//
+
+type RateEstimator = struct {
+    timeConstant: uint,
+    estimate: uint,
+    usageSince: uint,
+    lastTimeSeen: uint,
+};
+
+public func rateEstimator_new(timeConstant: uint, initialEstimate: uint, currentTime: uint) -> RateEstimator {
+    struct {
+        timeConstant: timeConstant,
+        estimate: initialEstimate,
+        usageSince: 0,
+        lastTimeSeen: currentTime,
+    }
+}
+
+public func rateEstimator_get(ra: RateEstimator) -> uint {
+    ra.estimate
+}
+
+public func rateEstimator_addUsage(ra: RateEstimator, newUsage: uint) -> RateEstimator {
+    set ra.usageSince = ra.usageSince + newUsage;
+    ra
+}
+
+public func rateEstimator_advanceTime(ra: RateEstimator, currentTime: uint) -> RateEstimator {
+    if currentTime > ra.lastTimeSeen {
+        set ra.estimate = (ra.estimate * ra.timeConstant + ra.usageSince) / (ra.timeConstant + currentTime - ra.lastTimeSeen);
+        set ra.usageSince = 0;
+        set ra.lastTimeSeen = currentTime;
+    }
+    ra
+}
