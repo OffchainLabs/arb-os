@@ -181,7 +181,7 @@ arb_os/arbos-upgrade-base.mexe: $(arbos_source_no_bridge) .make/tools
 	cargo fmt
 	@touch .make/fmt
 
-.make/push: .make/fmt
+.make/push: .make/fmt arb_os/arbos.mexe
 	make $(MAKEFLAGS) compile_options="$(compile_options)" replayTests .make/test
 	@touch .make/push
 
