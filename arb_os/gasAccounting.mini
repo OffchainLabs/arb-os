@@ -228,18 +228,18 @@ view throw func initCongestionState(isInit: bool) -> CongestionState {
                     gasPoolMax * x / 100
                 }
             } else {
-                gasPoolMax / 2
+                gasPoolMax * const::Default_Param_GasPoolFullnessTargetPercent / 100
             }
         },
         gasPoolWeight: {
-            if let Some(x) = chainParams_get(const::Atom_Param_GasPoolFullnessTargetPercent) {
+            if let Some(x) = chainParams_get(const::Atom_Param_PoolFullnessRatioWeightBasisPoints) {
                 if x > 10000 {
                     10000
                 } else {
                     x
                 }
             } else {
-                const::Atom_Param_PoolFullnessRatioWeightBasisPoints
+                const::Default_Param_PoolFullnessRatioWeightBasisPoints
             }
         },
         congestionPriceWei: 0,
@@ -444,6 +444,14 @@ public view write func gasAccounting_addToGasPool(delta: uint) {
     };
 }
 
+public view write throw func gasAccounting_deductFromGasPool(amount: uint) {
+    let cstate = gasAccountingInfo.congestionState;
+    set cstate.gasPool = safeSubInt(cstate.gasPool, int(amount));
+    set cstate.gasUsageRateEstimator = rateEstimator_addUsage(cstate.gasUsageRateEstimator, amount);
+    set gasAccountingInfo.congestionState = cstate;
+    arbStatistics_addToGasUsed(amount);
+}
+
 public view func gasAccounting_summaryToPublish() -> (uint, uint, uint, uint, uint, int) {
     // get summary of gas prices and pool at present, for inclusion in block summary log
     let prices = gasAccountingInfo.currentPrices;
@@ -538,13 +546,7 @@ public view write throw func gasAccounting_startTxCharges(
         refundTracker: gasRefundTracker_new(),
         gasEstimationMode: gasEstimationMode,
     });
-    set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(gasUsedByOS));
-    set gasAccountingInfo.congestionState.gasUsageRateEstimator = rateEstimator_addUsage(
-        gasAccountingInfo.congestionState.gasUsageRateEstimator,
-        gasUsedByOS,
-    );
-
-    arbStatistics_addToGasUsed(gasUsedByOS);
+    gasAccounting_deductFromGasPool(gasUsedByOS);
 
     setGas(safeMul(allPurposeGas, gasAccountingInfo.pricingParams.arbGasDivisor));
 
@@ -613,20 +615,15 @@ public view write throw func gasAccounting_endTxCharges(
         deferredPayments_new()
     };
 
-    set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(gasUsedForCompute));
-    set gasAccountingInfo.congestionState.gasUsageRateEstimator = rateEstimator_addUsage(
-        gasAccountingInfo.congestionState.gasUsageRateEstimator,
-        gasUsedForCompute,
-    );
+    gasAccounting_deductFromGasPool(gasUsedForCompute);
+    arbStatistics_addToStorage(storageAllocations);
+
     set gasAccountingInfo.gasRemainingThisBlock = if gasAccountingInfo.gasRemainingThisBlock >= gasUsedForCompute {
         gasAccountingInfo.gasRemainingThisBlock - gasUsedForCompute
     } else {
         0
     };
     set gasAccountingInfo.txState = None<TxGasState>;
-
-    arbStatistics_addToStorage(storageAllocations);
-    arbStatistics_addToGasUsed(gasUsedForCompute);
 
     Some((
         confirmed,
@@ -731,12 +728,7 @@ public view write throw func gasAccounting_resumeTxCharges(allPurposeGas: uint, 
             // stop charging the OS, and record the OS gas usage as overhead
             let osGasUsed = ((~0) - getGas()) / gasAccountingInfo.pricingParams.arbGasDivisor;
 
-            set gasAccountingInfo.congestionState.gasPool = safeSubInt(gasAccountingInfo.congestionState.gasPool, int(osGasUsed));
-            set gasAccountingInfo.congestionState.gasUsageRateEstimator = rateEstimator_addUsage(
-                gasAccountingInfo.congestionState.gasUsageRateEstimator,
-                osGasUsed,
-            );
-            arbStatistics_addToGasUsed(osGasUsed);
+            gasAccounting_deductFromGasPool(osGasUsed);
 
             setGas(safeMul(allPurposeGas, gasAccountingInfo.pricingParams.arbGasDivisor));   // start charging the application
 
