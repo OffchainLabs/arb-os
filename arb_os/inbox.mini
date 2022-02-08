@@ -33,7 +33,6 @@ use chainParameters::chainParams_chainId;
 use chainParameters::chainParams_getOrDie;
 use chainParameters::hasChainOwnerPrivileges;
 
-use gasAccounting::allowedSenders_contains;
 use gasAccounting::gasAccounting_prepareTx;
 use gasAccounting::updateL1GasPriceEstimate;
 use gasAccounting::txFeeStats_zero;

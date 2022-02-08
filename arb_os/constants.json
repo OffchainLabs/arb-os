@@ -187,7 +187,7 @@
     "TxResultCode_belowMinimumTxGas": 10,
     "TxResultCode_noGasForAutoRedeem": 12,
     "TxResultCode_revert": 1,
-    "TxResultCode_senderNotPermitted": 13,
+    "_TxResultCode_senderNotPermitted": 13,
     "TxResultCode_sequenceNumberTooLow": 14,
     "TxResultCode_sequenceNumberTooHigh": 15,
     "TxResultCode_success": 0,

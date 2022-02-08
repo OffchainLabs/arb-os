@@ -817,9 +817,6 @@ public view write throw func gasAccounting_prepareTx(tx: TxRequestData) -> (
 ) {
     let adminMode = tx.incomingRequest.adminMode;
     let senderIsOwner = hasChainOwnerPrivileges(tx.caller);
-    if (!allowedSenders_contains(tx.caller)) && !adminMode {
-        return (const::TxResultCode_senderNotPermitted, tx);
-    }
 
     if tx.incomingRequest.arbBlockNumber > gasAccountingInfo.congestionState.lastArbBlockNumSeen && !senderIsOwner {
         gasAccounting_startNewBlock(tx.incomingRequest.arbBlockNumber, tx.incomingRequest.timestamp);
