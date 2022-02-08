@@ -289,7 +289,7 @@ public view write throw func initEvmCallStack(
         // call is to a contract
 
         globalCurrentTxRequest = request;
-        globalCurrentRetryableRequest = None<IncomingRequestAndLogs>;
+        globalCurrentRetryableRequest = None;
 
         let (startTxResult, acctStore) = if request.maxGas < const::Charging_MinArbGasForContractTx {
             (const::TxResultCode_belowMinimumTxGas, safeGetGlobalAccountStore())
@@ -314,7 +314,7 @@ public view write throw func initEvmCallStack(
             safeSetGlobalAccountStore(acctStore);
 
             globalCurrentTxRequest = request;
-            globalCurrentRetryableRequest = None<IncomingRequestAndLogs>;
+            globalCurrentRetryableRequest = None;
 
             // pay callvalue from caller to the called contract
             // payment will only be recorded inside the new callframe, so it will be nullified if the call reverts

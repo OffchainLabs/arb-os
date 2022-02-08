@@ -815,17 +815,17 @@ public view write throw func gasAccounting_prepareTx(tx: TxRequestData) -> (
     uint,             // error code, or const::TxResultCode_success if no error
     TxRequestData,
 ) {
-    if (!allowedSenders_contains(tx.caller)) && (!tx.incomingRequest.adminMode) {
+    let adminMode = tx.incomingRequest.adminMode;
+    let senderIsOwner = hasChainOwnerPrivileges(tx);
+    if (!allowedSenders_contains(tx.caller)) && !adminMode {
         return (const::TxResultCode_senderNotPermitted, tx);
     }
 
-    if tx.incomingRequest.arbBlockNumber > gasAccountingInfo.congestionState.lastArbBlockNumSeen {
+    if tx.incomingRequest.arbBlockNumber > gasAccountingInfo.congestionState.lastArbBlockNumSeen && !senderIsOwner {
         gasAccounting_startNewBlock(tx.incomingRequest.arbBlockNumber, tx.incomingRequest.timestamp);
     }
 
-    if (tx.incomingRequest.sender != address(0))
-                && feesEnabled()
-                && (! tx.incomingRequest.adminMode) {
+    if (tx.incomingRequest.sender != address(0)) && feesEnabled() && !adminMode {
         if let Some(txSeqNum) = tx.seqNum {
             // don't charge the user if sequence number is wrong
             let expectedSeqNum = account_getNextSeqNum(accountStore_get(safeGetGlobalAccountStore(), tx.caller));
@@ -923,7 +923,7 @@ public view write throw func gasAccounting_prepareTx(tx: TxRequestData) -> (
                 set tx.gasPrice = gasPrice;
                 (const::TxResultCode_success, tx)
             }
-        } else if tx.incomingRequest.adminMode || (gasAccountingInfo.gasRemainingThisBlock > 0) || (estimationCompGasLimit > 0) {
+        } else if adminMode || (gasAccountingInfo.gasRemainingThisBlock > 0) || (estimationCompGasLimit > 0) {
             (const::TxResultCode_success, tx with { gasPrice: gasAccountingInfo.currentPrices.perArbGasTotal })
         } else {
             // the current block doesn't have enough gas left to run the tx
