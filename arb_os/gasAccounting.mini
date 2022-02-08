@@ -228,7 +228,7 @@ view throw func initCongestionState(isInit: bool) -> CongestionState {
                     gasPoolMax * x / 100
                 }
             } else {
-                const::Default_Param_GasPoolFullnessTargetPercent
+                gasPoolMax * const::Default_Param_GasPoolFullnessTargetPercent / 100
             }
         },
         gasPoolWeight: {
