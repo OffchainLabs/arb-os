@@ -31,6 +31,7 @@ use blockhash::blockhash_submitHash;
 use chainParameters::chainParams_gotParamsMessage;
 use chainParameters::chainParams_chainId;
 use chainParameters::chainParams_getOrDie;
+use chainParameters::hasChainOwnerPrivileges;
 
 use gasAccounting::allowedSenders_contains;
 use gasAccounting::gasAccounting_prepareTx;
@@ -452,11 +453,7 @@ view write throw func handleUnpackedMessage(msg: IncomingRequest) {
 }
 
 view write throw func handleArrivingTx(tx: TxRequestData) {
-    let (resultCode, request) = if allowedSenders_contains(tx.caller) || tx.incomingRequest.adminMode {
-        gasAccounting_prepareTx(tx)
-    } else {
-        (const::TxResultCode_senderNotPermitted, tx)
-    };
+    let (resultCode, request) = gasAccounting_prepareTx(tx);
 
     if resultCode == const::TxResultCode_success {
         if processL2Request(request) == None<()> {
