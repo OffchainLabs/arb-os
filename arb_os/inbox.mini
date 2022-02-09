@@ -168,7 +168,7 @@ view write throw func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox
             indexInParent: ~0,
         },
         aggregator: None,
-        adminMode: senderIsOwner || (fromSideload && (newMsgRaw.kind != const::L1MessageType_L2ForGasEstimation)),
+        adminMode: (senderIsOwner || fromSideload) && (newMsgRaw.kind != const::L1MessageType_L2ForGasEstimation),
         gasEstimationParams: None,
     }
 }
