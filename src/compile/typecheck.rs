@@ -9,7 +9,7 @@ use super::ast::{
     GlobalVar, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp, Type, TypeTree,
     UnaryOp,
 };
-use crate::compile::ast::{FieldInitializer, FuncProperties};
+use crate::compile::ast::FuncProperties;
 use crate::compile::{CompileError, ErrorSystem};
 use crate::console::{human_readable_index, Color};
 use crate::link::Import;
@@ -46,6 +46,7 @@ pub trait AbstractSyntaxTree {
     }
     fn is_view(&mut self, type_tree: &TypeTree) -> bool;
     fn is_write(&mut self, type_tree: &TypeTree) -> bool;
+    fn is_throw(&mut self, type_tree: &TypeTree) -> bool;
 }
 
 /// Represents a mutable reference to any AST node.
@@ -78,6 +79,13 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
             TypeCheckedNode::Type(_) => false,
         }
     }
+    fn is_throw(&mut self, type_tree: &TypeTree) -> bool {
+        match self {
+            TypeCheckedNode::Statement(stat) => stat.is_throw(type_tree),
+            TypeCheckedNode::Expression(exp) => exp.is_throw(type_tree),
+            TypeCheckedNode::Type(_) => false,
+        }
+    }
 }
 
 impl<'a> TypeCheckedNode<'a> {
@@ -86,21 +94,19 @@ impl<'a> TypeCheckedNode<'a> {
         for node in nodes.iter_mut() {
             match node {
                 TypeCheckedNode::Statement(stat) => {
-                    stat.debug_info.attributes.codegen_print =
-                        stat.debug_info.attributes.codegen_print || attributes.codegen_print;
+                    stat.debug_info.attributes.codegen_print |= attributes.codegen_print;
                     let child_attributes = stat.debug_info.attributes.clone();
                     TypeCheckedNode::propagate_attributes(stat.child_nodes(), &child_attributes);
                 }
                 TypeCheckedNode::Expression(expr) => {
-                    expr.debug_info.attributes.codegen_print =
-                        expr.debug_info.attributes.codegen_print || attributes.codegen_print;
+                    expr.debug_info.attributes.codegen_print |= attributes.codegen_print;
                     let child_attributes = expr.debug_info.attributes.clone();
                     TypeCheckedNode::propagate_attributes(expr.child_nodes(), &child_attributes);
                     if let TypeCheckedExprKind::Asm(_, ref mut vec, _) = expr.kind {
                         for insn in vec {
+                            let expr_print = expr.debug_info.attributes.codegen_print;
                             insn.debug_info.attributes.codegen_print =
-                                expr.debug_info.attributes.codegen_print
-                                    || attributes.codegen_print;
+                                expr_print || attributes.codegen_print;
                         }
                     }
                 }
@@ -128,6 +134,11 @@ impl AbstractSyntaxTree for TypeCheckedFunc {
         self.code
             .iter_mut()
             .any(|statement| statement.is_write(type_tree))
+    }
+    fn is_throw(&mut self, type_tree: &TypeTree) -> bool {
+        self.code
+            .iter_mut()
+            .any(|statement| statement.is_throw(type_tree))
     }
 }
 
@@ -529,11 +540,17 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
     fn is_write(&mut self, type_tree: &TypeTree) -> bool {
         match &mut self.kind {
             TypeCheckedStatementKind::AssignGlobal(_, _) => true,
+            TypeCheckedStatementKind::DebugPrint(_) => true,
             _ => self
                 .child_nodes()
                 .iter_mut()
                 .any(|node| node.is_write(type_tree)),
         }
+    }
+    fn is_throw(&mut self, type_tree: &TypeTree) -> bool {
+        self.child_nodes()
+            .iter_mut()
+            .any(|node| node.is_throw(type_tree))
     }
 }
 
@@ -718,6 +735,20 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                 .any(|node| node.is_write(type_tree)),
         }
     }
+    fn is_throw(&mut self, type_tree: &TypeTree) -> bool {
+        match &mut self.kind {
+            TypeCheckedExprKind::FunctionCall(func, args, _, prop) => {
+                prop.throw
+                    || func.is_throw(type_tree)
+                    || args.iter_mut().any(|expr| expr.is_throw(type_tree))
+            }
+            TypeCheckedExprKind::Error => true,
+            _ => self
+                .child_nodes()
+                .iter_mut()
+                .any(|node| node.is_throw(type_tree)),
+        }
+    }
 }
 
 impl TypeCheckedExpr {
@@ -794,20 +825,6 @@ impl TypeCheckedExpr {
             TypeCheckedExprKind::IfLet(.., t) => t.clone(),
             TypeCheckedExprKind::Loop(.., t) => t.clone(),
         }
-    }
-}
-
-type TypeCheckedFieldInitializer = FieldInitializer<TypeCheckedExpr>;
-
-impl AbstractSyntaxTree for TypeCheckedFieldInitializer {
-    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
-        vec![TypeCheckedNode::Expression(&mut self.value)]
-    }
-    fn is_view(&mut self, type_tree: &TypeTree) -> bool {
-        self.value.is_view(type_tree)
-    }
-    fn is_write(&mut self, type_tree: &TypeTree) -> bool {
-        self.value.is_write(type_tree)
     }
 }
 
@@ -890,7 +907,7 @@ pub fn sort_top_level_decls(
 pub fn typecheck_top_level_decls(
     funcs: Vec<Func>,
     named_types: &HashMap<usize, Type>,
-    mut global_vars: Vec<GlobalVar>,
+    global_vars: Vec<GlobalVar>,
     imports: &Vec<Import>,
     string_table: StringTable,
     func_table: HashMap<usize, Type>,
@@ -904,12 +921,11 @@ pub fn typecheck_top_level_decls(
     ),
     CompileError,
 > {
-    if let Some(var) = global_vars
-        .iter()
-        .position(|var| &var.name == "__fixedLocationGlobal")
-    {
-        global_vars.swap(0, var)
+    let fixed = "__fixedLocationGlobal";
+    if let Some(index) = global_vars.iter().position(|g| g.name == fixed) {
+        assert_eq!(index, 0);
     }
+
     let global_vars_map = global_vars
         .iter()
         .map(|var| (var.id, var.tipe.clone()))
@@ -1516,9 +1532,33 @@ fn typecheck_expr(
 
     Ok(TypeCheckedExpr {
         kind: match &expr.kind {
+            ExprKind::Error => Ok(TypeCheckedExprKind::Error),
             ExprKind::NewBuffer => Ok(TypeCheckedExprKind::NewBuffer),
             ExprKind::Quote(buf) => Ok(TypeCheckedExprKind::Quote(buf.clone())),
-            ExprKind::Error => Ok(TypeCheckedExprKind::Error),
+            ExprKind::Check(expr, tipe) => {
+                let expr = typecheck_expr(
+                    expr,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    func,
+                    type_tree,
+                    string_table,
+                    undefinable_ids,
+                    closures,
+                    scopes,
+                )?;
+
+                if !tipe.mutually_assignable(&expr.get_type(), type_tree) {
+                    error!(
+                        "This expression was marked {} but is actually {}",
+                        Color::red(tipe.print(type_tree)),
+                        Color::red(expr.get_type().print(type_tree)),
+                    );
+                }
+
+                Ok(expr.kind)
+            }
             ExprKind::UnaryOp(op, subexpr) => {
                 let tc_sub = typecheck_expr(
                     subexpr,
@@ -3210,8 +3250,7 @@ fn typecheck_binary_op(
             )),
         },
         BinaryOp::Equal | BinaryOp::NotEqual => {
-            let mutual = subtype1.assignable(&subtype2, type_tree, HashSet::new())
-                && subtype2.assignable(&subtype1, type_tree, HashSet::new());
+            let mutual = subtype1.mutually_assignable(&subtype2, type_tree);
 
             if mutual {
                 Ok(TypeCheckedExprKind::Binary(
@@ -3645,6 +3684,16 @@ impl AbstractSyntaxTree for TypeCheckedCodeBlock {
                 .ret_expr
                 .as_mut()
                 .map(|expr| expr.is_write(type_tree))
+                .unwrap_or(false)
+    }
+    fn is_throw(&mut self, type_tree: &TypeTree) -> bool {
+        self.body
+            .iter_mut()
+            .any(|statement| statement.is_throw(type_tree))
+            || self
+                .ret_expr
+                .as_mut()
+                .map(|expr| expr.is_throw(type_tree))
                 .unwrap_or(false)
     }
 }

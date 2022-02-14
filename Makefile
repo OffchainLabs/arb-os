@@ -6,7 +6,7 @@
 generics_files = basic simple nested func closure colorful queue
 generics_outputs = $(patsubst %,generics/%, $(generics_files))
 
-minitest_outputs = arithmetic codeloadtest globaltest simple-closure closure stack-safety quick wide-tuples $(generics_outputs)
+minitest_outputs = arithmetic codeloadtest default globaltest modexp simple-closure closure stack-safety quick wide-tuples $(generics_outputs)
 upgrade_outputs = regcopy_new regcopy_old upgrade1_new upgrade1_old
 looptest_outputs = upgrade2_new upgrade2_old
 builtin_outputs = arraytest kvstest maptest
@@ -30,6 +30,7 @@ upgrade = ./target/release/mini gen-upgrade-code
 run     = ./target/release/mini
 
 consts = arb_os/constants.json
+globals = arb_os/globals.txt
 done = "\e[38;5;161;1mdone!\e[0;0m\n"
 
 # user targets
@@ -86,7 +87,7 @@ clean:
 	@rm -f minitests/generics/*.mexe
 	@rm -f arbos/{upgrade.json,contractTemplates.mini}
 	@rm -rf contracts/artifacts contracts/cache
-	@rm -f */*.cov lcov.info lcov-mini.info .make/*
+	@rm -f */*.cov lcov.info lcov-mini.info logs/* .make/*
 
 
 # pattern rules
@@ -106,7 +107,7 @@ minitests/%.mexe: minitests/%.mini minitests/*.mini stdlib/*.mini builtin/*.mini
 upgradetests/%.mexe: upgradetests/%.mini upgradetests/*.mini stdlib/*.mini builtin/*.mini $(consts) .make/tools
 	$(compile) -c $(consts) $< -o $@ -t
 
-arb_os/arbos.mexe: arb_os/*.mini arb_os/bridge_arbos_versions.mini arb_os/contractTemplates.mini stdlib/*.mini builtin/*.mini $(consts) .make/tools
+arb_os/arbos.mexe: arb_os/*.mini arb_os/bridge_arbos_versions.mini arb_os/contractTemplates.mini stdlib/*.mini builtin/*.mini $(consts) $(globals) .make/tools
 	$(compile) arb_os -o $@ -m
 
 parameters.json: arb_os/constants.json .make/tools
@@ -145,7 +146,7 @@ looptest/upgrade2_old.mexe: looptest/upgrade2_old.mini stdlib/*.mini builtin/*.m
 
 
 # ArbOS upgrade
-arbos_source_all = $(wildcard arb_os/*.mini) $(consts) stdlib/*.mini builtin/*.mini arb_os/contractTemplates.mini
+arbos_source_all = $(wildcard arb_os/*.mini) $(consts) $(globals) stdlib/*.mini builtin/*.mini arb_os/contractTemplates.mini
 arbos_source_no_bridge = $(filter-out arb_os/bridge_arbos_versions.mini, $(arbos_source_all))
 
 arb_os/upgrade.json: arb_os/arbos-upgrade.mexe .make/tools
@@ -180,7 +181,7 @@ arb_os/arbos-upgrade-base.mexe: $(arbos_source_no_bridge) .make/tools
 	cargo fmt
 	@touch .make/fmt
 
-.make/push: .make/fmt
+.make/push: .make/fmt arb_os/arbos.mexe
 	make $(MAKEFLAGS) compile_options="$(compile_options)" replayTests .make/test
 	@touch .make/push
 

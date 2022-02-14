@@ -194,7 +194,7 @@ public func builtin_kvsDelete(s: Kvs, key: uint) -> Kvs {
 // this will return the state at the end
 // order of traversal is deterministic but weird and subject to change,
 //       so callers are advised not to rely on the ordering
-public func builtin_kvsForall(
+public throw func builtin_kvsForall(
     s: Kvs,
     applicator: func(any, any, any) -> any,
     state: any
@@ -202,7 +202,7 @@ public func builtin_kvsForall(
     kvs_forall_tree(s.tree, applicator, state)
 }
 
-func kvs_forall_tree(
+throw func kvs_forall_tree(
     t: KvsNode,
     applicator: func(any, any, any) -> any,
     state: any

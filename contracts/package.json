@@ -1,18 +1,19 @@
 {
-  "name": "arbos-contracts",
-  "version": "1.0.0",
+  "name": "arbos-precompiles",
+  "version": "1.0.1",
   "author": "Offchain Labs, Inc.",
   "license": "Apache-2.0",
-  "devDependencies": {
-    "@typechain/ethers-v5": "^7.0.1",
-    "@typechain/hardhat": "^2.3.0",
-    "hardhat": "^2.0.11",
-    "ts-generator": "^0.1.1",
-    "typechain": "^5.1.2"
+  "dependencies": {
+    "hardhat": "^2.6.4"
   },
   "scripts": {
+    "postinstall": "$npm_execpath run clean:build",
+    "clean:build": "hardhat clean && hardhat compile",
     "build": "hardhat compile",
-    "typechain": "hardhat typechain",
+    "build:0.6": "SOLC_VERSION=0.6.11 hardhat compile",
+    "build:0.7": "SOLC_VERSION=0.7.5 hardhat compile",
+    "build:0.8": "SOLC_VERSION=0.8.10 hardhat compile",
+    "full:build": "$npm_execpath run build:0.6 && $npm_execpath run build:0.7 && $npm_execpath run build:0.8",
     "deploy:test": "hardhat run --network localhost scripts/deploy-test.js"
   }
 }

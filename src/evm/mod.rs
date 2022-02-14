@@ -35,14 +35,6 @@ mod evmtest;
 mod live_code;
 pub mod preinstalled_contracts;
 
-#[derive(Clone)]
-pub struct CallInfo<'a> {
-    function_name: &'a str,
-    args: &'a [ethabi::Token],
-    payment: Uint256,
-    mutating: bool,
-}
-
 pub fn test_contract_path2(solidity_name: &str, json_name: &str) -> String {
     format!(
         "contracts/artifacts/arbos/test/{}.sol/{}.json",

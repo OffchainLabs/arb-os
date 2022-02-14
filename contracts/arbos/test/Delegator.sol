@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: Unlicense
-pragma solidity ^0.6.11;
+pragma solidity >=0.4.21 <0.9.0;
 
 contract Worker {
     mapping(uint256 => uint256) public values;

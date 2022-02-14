@@ -36,7 +36,7 @@ use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 
 
-public view write func arbaggregator_txcall() {
+public view write throw func arbaggregator_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if bytearray_size(calldata) < 4 {
@@ -70,7 +70,7 @@ public view write func arbaggregator_txcall() {
 }
 
 // function getPreferredAggregator(address addr) external view returns (address, bool);
-view write func arbaggregator_getPreferredAggregator(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write throw func arbaggregator_getPreferredAggregator(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if bytearray_size(calldata) != 36 {
         evmOp_revert_knownPc(10, 0, 0);
     }
@@ -92,7 +92,7 @@ view write func arbaggregator_getPreferredAggregator(_topFrame: EvmCallFrame, ca
 }
 
 // function setPreferredAggregator(address prefAgg) external;
-view write func arbaggregator_setPreferredAggregator(topFrame: EvmCallFrame, calldata: ByteArray) {
+view write throw func arbaggregator_setPreferredAggregator(topFrame: EvmCallFrame, calldata: ByteArray) {
     evmOp_revertIfStatic();
     if bytearray_size(calldata) != 36 {
         evmOp_revert_knownPc(20, 0, 0);
@@ -115,7 +115,7 @@ view write func arbaggregator_setPreferredAggregator(topFrame: EvmCallFrame, cal
 }
 
 // function getDefaultAggregator() external view returns (address);
-view write func arbaggregator_getDefaultAggregator(_topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> address
+view write throw func arbaggregator_getDefaultAggregator(_topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> address
     if bytearray_size(calldata) != 4 {
         evmOp_revert_knownPc(30, 0, 0);
     }
@@ -128,7 +128,7 @@ view write func arbaggregator_getDefaultAggregator(_topFrame: EvmCallFrame, call
 }
 
 // function setDefaultAggregator(address newDefault) external;
-view write func arbaggregator_setDefaultAggregator(topFrame: EvmCallFrame, calldata: ByteArray) { // (address)
+view write throw func arbaggregator_setDefaultAggregator(topFrame: EvmCallFrame, calldata: ByteArray) { // (address)
     evmOp_revertIfStatic();
     let caller = evmCallFrame_getCaller(topFrame);
     if bytearray_size(calldata) != 36 {
@@ -143,7 +143,7 @@ view write func arbaggregator_setDefaultAggregator(topFrame: EvmCallFrame, calld
 }
 
 // function getFeeCollector(address aggregator) external view returns (address);
-view write func arbaggregator_getFeeCollector(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (address) -> address
+view write throw func arbaggregator_getFeeCollector(_topFrame: EvmCallFrame, calldata: ByteArray) {  // (address) -> address
     if bytearray_size(calldata) != 36 {
         evmOp_revert_knownPc(50, 0, 0);
     }
@@ -158,7 +158,7 @@ view write func arbaggregator_getFeeCollector(_topFrame: EvmCallFrame, calldata:
 }
 
 // function setFeeCollector(address aggregator, address newFeeCollector) external;
-view write func arbaggregator_setFeeCollector(topFrame: EvmCallFrame, calldata: ByteArray) {
+view write throw func arbaggregator_setFeeCollector(topFrame: EvmCallFrame, calldata: ByteArray) {
     evmOp_revertIfStatic();
     let caller = evmCallFrame_getCaller(topFrame);
     if bytearray_size(calldata) != 68 {
@@ -179,7 +179,7 @@ view write func arbaggregator_setFeeCollector(topFrame: EvmCallFrame, calldata: 
 }
 
 // function getTxBaseFee(address aggregator) external view returns (uint);
-view write func arbaggregator_getTxBaseFee(_topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> uint
+view write throw func arbaggregator_getTxBaseFee(_topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> uint
     if bytearray_size(calldata) != 36 {
         evmOp_revert_knownPc(70, 0, 0);
     }
@@ -193,7 +193,7 @@ view write func arbaggregator_getTxBaseFee(_topFrame: EvmCallFrame, calldata: By
 }
 
 // function setTxBaseFee(address aggregator, uint feeInL1Gas) external;
-view write func arbaggregator_setTxBaseFee(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, uint)
+view write throw func arbaggregator_setTxBaseFee(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, uint)
     let caller = evmCallFrame_getCaller(topFrame);
     if bytearray_size(calldata) != 68 {
         evmOp_revert_knownPc(80, 0, 0);

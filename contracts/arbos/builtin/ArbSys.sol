@@ -1,4 +1,4 @@
-pragma solidity >=0.4.21 <0.7.0;
+pragma solidity >=0.4.21 <0.9.0;
 
 /**
 * @title Precompiled contract that exists in every Arbitrum chain at address(100), 0x0000000000000000000000000000000000000064. Exposes a variety of system-level functionality.
@@ -80,7 +80,7 @@ interface ArbSys {
      * @notice get the caller's amount of available storage gas
      * @return amount of storage gas available to the caller
      */
-    function getStorageGasAvailable() external returns(uint);
+    function getStorageGasAvailable() external view returns(uint);
 
     event L2ToL1Transaction(address caller, address indexed destination, uint indexed uniqueId,
                             uint indexed batchNumber, uint indexInBatch,

@@ -88,6 +88,11 @@ fn test_arraytest() {
 }
 
 #[test]
+fn test_default() {
+    test_for_error_string(Path::new("minitests/default.mexe"));
+}
+
+#[test]
 fn test_kvstest() {
     test_for_error_string(Path::new("builtin/kvstest.mexe"));
 }
@@ -116,6 +121,11 @@ fn test_bytearray() {
 #[test]
 fn test_map() {
     test_for_error_string(Path::new("builtin/maptest.mexe"));
+}
+
+#[test]
+fn test_modexp() {
+    test_for_numeric_error_code(Path::new("minitests/modexp.mexe"));
 }
 
 #[test]
@@ -1470,6 +1480,11 @@ fn test_reverting_payable_constructor() {
         if receipt.clone().unwrap().succeeded() {
             panic!("unexpected success deploying PRConstructor contract");
         }
+        let error = Value::Buffer(Buffer::from_bytes(
+            receipt.clone().unwrap().get_return_data(),
+        ));
+        println!("error {}", error.pretty_print(Color::PINK));
+        assert!(error.pretty_print(Color::PINK).contains("revert message"));
     }
 
     assert_eq!(
@@ -1480,4 +1495,66 @@ fn test_reverting_payable_constructor() {
     );
 
     machine.write_coverage("test_reverting_payable_constructor".to_string());
+}
+
+#[test]
+fn test_tx_origin() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+
+    let mut blocknum_contract =
+        AbiForContract::new_from_file(&test_contract_path("BlockNum")).unwrap();
+    let _ = blocknum_contract.deploy(&[], &mut machine, Uint256::zero(), None, false);
+
+    let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add")).unwrap();
+    let _ = add_contract.deploy(&[], &mut machine, Uint256::zero(), None, false);
+
+    let (receipts, _) = add_contract
+        .call_function(
+            Uint256::from_u64(13958134),
+            "requireMyCallerIsOrigin",
+            &[ethabi::Token::Address(blocknum_contract.address.to_h160())],
+            &mut machine,
+            Uint256::zero(),
+            false,
+        )
+        .unwrap();
+    assert_eq!(receipts.len(), 1);
+    assert!(receipts[0].succeeded());
+
+    machine.write_coverage("test_tx_origin".to_string());
+}
+
+#[test]
+fn test_blocknum_timestamp() {
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
+    machine.start_at_zero(true);
+
+    let mut blocknum_contract =
+        AbiForContract::new_from_file(&test_contract_path("BlockNum")).unwrap();
+    let _ = blocknum_contract.deploy(&[], &mut machine, Uint256::zero(), None, false);
+
+    let (receipts, _) = blocknum_contract
+        .call_function(
+            Uint256::from_u64(13958134),
+            "getBlockNumTimestamp",
+            &[],
+            &mut machine,
+            Uint256::zero(),
+            false,
+        )
+        .unwrap();
+    assert_eq!(receipts.len(), 1);
+    assert!(receipts[0].succeeded());
+    let data = receipts[0].get_return_data();
+    assert_eq!(
+        machine.runtime_env.current_block_num,
+        Uint256::from_bytes(&data[0..32])
+    );
+    assert_eq!(
+        machine.runtime_env.current_timestamp,
+        Uint256::from_bytes(&data[32..64])
+    );
+
+    machine.write_coverage("test_blocknum_timestamp".to_string());
 }

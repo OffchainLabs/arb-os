@@ -67,7 +67,7 @@ public func setOfAddresses_contains(sa: SetOfAddresses, addr: address) -> bool {
     }
 }
 
-public func setOfAddresses_serialize(sa: SetOfAddresses) -> option<ByteArray> {
+public throw func setOfAddresses_serialize(sa: SetOfAddresses) -> option<ByteArray> {
     if sa.inverted {
         None
     } else {
@@ -148,8 +148,8 @@ public func addressPairSet_serialize(aps: AddressPairSet) -> ByteArray {
     );
 }
 
-func apss_closure(key:(uint, uint), value: bool, state: ByteArray) -> ByteArray {
-    if !value {
+throw func apss_closure(key:(uint, uint), value: uint, state: ByteArray) -> ByteArray {
+    if value == 0 {
         state
     } else {
         let sz = bytearray_size(state);

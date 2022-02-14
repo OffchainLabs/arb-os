@@ -9,6 +9,9 @@
 use std::safeMath::safeAdd;
 use std::safeMath::safeSub;
 use std::safeMath::safeMul;
+use std::safeMath::trySafeAdd;
+use std::safeMath::trySafeMul;
+
 
 type FixedPoint = struct {
     val: uint,
@@ -30,7 +33,7 @@ public func fixedPoint_isZero(x: FixedPoint) -> bool {
     x.val == 0
 }
 
-public func fixedPoint_fromUintMatch(x: uint, fp: FixedPoint) -> FixedPoint {
+public throw func fixedPoint_fromUintMatch(x: uint, fp: FixedPoint) -> FixedPoint {
     fp with { val: safeMul(x, fp.shiftFactor) }
 }
 
@@ -42,11 +45,11 @@ public func fixedPoint_getDenom(x: FixedPoint) -> uint {
     x.shiftFactor
 }
 
-public func fixedPoint_equal(x: FixedPoint, y: FixedPoint) -> bool {
+public throw func fixedPoint_equal(x: FixedPoint, y: FixedPoint) -> bool {
     safeMul(x.val, y.shiftFactor) == safeMul(y.val, x.shiftFactor)
 }
 
-public func fixedPoint_compare(x: FixedPoint, y: FixedPoint) -> int {
+public throw func fixedPoint_compare(x: FixedPoint, y: FixedPoint) -> int {
     let xProd = safeMul(x.val, y.shiftFactor);
     let yProd = safeMul(y.val, x.shiftFactor);
     if      xProd  > yProd {    int(1)    }
@@ -54,7 +57,7 @@ public func fixedPoint_compare(x: FixedPoint, y: FixedPoint) -> int {
     else                   {   -int(1)    }
 }
 
-public func fixedPoint_add(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {
+public throw func fixedPoint_add(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {
     if x.shiftFactor == y.shiftFactor {
         Some(x with { val: safeAdd(x.val, y.val) })
     } else {
@@ -62,7 +65,14 @@ public func fixedPoint_add(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {
     }
 }
 
-public func fixedPoint_plusOne(x: FixedPoint) -> FixedPoint {
+public func fixedPoint_tryAddRescale(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {
+    Some(fixedPoint_new(
+        trySafeAdd(trySafeMul(x.val, y.shiftFactor)?, trySafeMul(y.val, x.shiftFactor)?)?,
+        trySafeMul(x.shiftFactor, y.shiftFactor)?,
+    ))
+}
+
+public throw func fixedPoint_plusOne(x: FixedPoint) -> FixedPoint {
     x with { val: safeAdd(x.val, x.shiftFactor) }
 }
 
@@ -74,7 +84,7 @@ public func fixedPoint_minusOne(x: FixedPoint) -> option<FixedPoint> {
     }
 }
 
-public func fixedPoint_sub(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {
+public throw func fixedPoint_sub(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {
     if x.shiftFactor == y.shiftFactor {
         Some(x with { val: safeSub(x.val, y.val) })
     } else {
@@ -82,7 +92,7 @@ public func fixedPoint_sub(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {
     }
 }
 
-public func fixedPoint_mul(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {
+public throw func fixedPoint_mul(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {
     if x.shiftFactor == y.shiftFactor {
         Some(x with { val: safeMul(x.val, y.val) / x.shiftFactor })
     } else {
@@ -90,15 +100,15 @@ public func fixedPoint_mul(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {
     }
 }
 
-public func fixedPoint_mulByUint(x: FixedPoint, i: uint) -> FixedPoint {
+public throw func fixedPoint_mulByUint(x: FixedPoint, i: uint) -> FixedPoint {
     x with { val: safeMul(x.val, i) }
 }
 
-public func fixedPoint_mulByUintTrunc(x: FixedPoint, i: uint) -> uint {
+public throw func fixedPoint_mulByUintTrunc(x: FixedPoint, i: uint) -> uint {
     safeMul(x.val, i) / x.shiftFactor
 }
 
-public func fixedPoint_div(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {
+public throw func fixedPoint_div(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {
     if (x.shiftFactor == y.shiftFactor) && (x.shiftFactor != 0) {
         Some(fixedPoint_new(x.val, y.val))
     } else {

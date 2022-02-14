@@ -1,7 +1,8 @@
-pragma solidity >=0.4.21 <0.7.0;
+pragma solidity >=0.4.21 <0.9.0;
 
 import "./Fibonacci.sol";
 import "../builtin/ArbSys.sol";
+import "./BlockNum.sol";
 
 
 contract Add {
@@ -25,11 +26,11 @@ contract Add {
     }
 
     function withdrawMyEth() public payable {
-	ArbSys(address(100)).withdrawEth.value(msg.value)(address(1025));
+	ArbSys(address(100)).withdrawEth{ value: msg.value }(address(1025));
     }
 
     function withdraw5000() public {
-	ArbSys(address(100)).withdrawEth.value(5000)(address(1025));
+	ArbSys(address(100)).withdrawEth{ value: 5000 }(address(1025));
     }
 
     function isTopLevel() public returns (bool) {
@@ -44,5 +45,9 @@ contract Add {
     function payTo(address addr) public payable {
         (bool success,) = addr.call{ value: msg.value }("");
         require(success);
+    }
+
+    function requireMyCallerIsOrigin(address blockNumAddr) public {
+        require(msg.sender == BlockNum(blockNumAddr).getOrigin());
     }
 }

@@ -8,11 +8,11 @@ use std2::priorityq::priorityq_insert;
 use std2::priorityq::priorityq_get;
 
 
-write func main() {
+throw write func main() {
     asm(tests().1) { log };
 }
 
-func tests() -> string {
+throw func tests() -> string {
     let q = priorityq_new::<string>();
     if ( ! priorityq_isEmpty::<string>(q)) {
 	return "new queue isn't empty";

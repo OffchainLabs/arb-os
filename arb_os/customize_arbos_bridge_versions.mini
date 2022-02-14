@@ -4,8 +4,49 @@
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 
+use gasAccounting::GasAccountingInfo;
+
+use std::rateEstimator::rateEstimator_new;
+
 
 public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> map<uint, uint> {
-    return oldGlobals.globalChainParameters;
+    oldGlobals.globalChainParameters
+        with { [const::Atom_Param_GasUsageTimeConstant] = const::Default_Param_GasUsageTimeConstant }
+        with { [const::Atom_Param_GasPoolFullnessTargetPercent] = const::Default_Param_GasPoolFullnessTargetPercent }
+        with { [const::Atom_Param_L1GasEstimatorSampleUpdate] = const::Default_Param_L1GasEstimatorSampleUpdate }
+        with { [const::Atom_Param_PoolFullnessRatioWeightBasisPoints] = const::Default_Param_PoolFullnessRatioWeightBasisPoints }
 }
 
+public func set_gasAccountingInfo_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> GasAccountingInfo {
+    let gai = oldGlobals.gasAccountingInfo;
+    let cs = gai.congestionState;
+    let gasPoolMax = if let Some(gpm) = oldGlobals.globalChainParameters[const::Atom_Param_GasPoolMax] {
+        gpm
+    } else {
+        const::Default_Param_GasPoolMax
+    };
+    struct {
+        txState: gai.txState,
+        feeConfig: gai.feeConfig,
+        currentPrices: gai.currentPrices,
+        gasRemainingThisBlock: gai.gasRemainingThisBlock,
+        congestionState: struct {
+            gasPool: cs.gasPool,
+            lastArbBlockNumSeen: cs.lastArbBlockNumSeen,
+            lastTimestampSeen: cs.lastTimestampSeen,
+            gasUsageRateEstimator: rateEstimator_new(
+                const::Default_Param_GasUsageTimeConstant,
+                0,
+                cs.lastTimestampSeen,
+            ),
+            gasPoolTarget: gasPoolMax * const::Default_Param_GasPoolFullnessTargetPercent / 100,
+            gasPoolWeight: const::Atom_Param_PoolFullnessRatioWeightBasisPoints,
+            congestionPriceWei: cs.congestionPriceWei,
+        },
+        speedLimitPerSecond: gai.speedLimitPerSecond,
+        pricingParams: gai.pricingParams,
+        gasAllocatedToThisBlock: gai.gasAllocatedToThisBlock,
+        retryablePrices: gai.retryablePrices,
+        allowedSenders: gai.allowedSenders,
+    }
+}

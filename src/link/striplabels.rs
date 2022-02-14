@@ -11,9 +11,6 @@ use std::collections::{HashMap, HashSet};
 /// Replaces labels with code points in code_in, and in copies of jump_table. A
 /// tuple of these modified values is returned if the function is successful, and the label causing
 /// the error is returned otherwise.
-///
-/// The maybe_evm_pcs argument appends a list of PCs to the immediate of the first instruction, if
-/// set to Some, this should only be done for modules.
 pub fn strip_labels(
     code_in: Vec<Instruction>,
     jump_table: &[Label],
@@ -27,9 +24,9 @@ pub fn strip_labels(
                 let old_value = label_map.insert(label, CodePt::new_internal(after_count));
                 if let Some(CodePt::Internal(x)) = old_value {
                     return Err(CompileError::new(
-                        String::from("Compile error: Internal error"),
+                        "Internal error",
                         format!("Duplicate instance of internal label {:?}", x),
-                        insn.debug_info.location.into_iter().collect(),
+                        insn.debug_info.locs(),
                     ));
                 }
             }

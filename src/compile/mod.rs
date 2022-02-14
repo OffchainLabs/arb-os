@@ -5,9 +5,10 @@
 //! Contains utilities for compiling mini source code.
 
 use crate::console::Color;
+use crate::link::xformcode;
 use crate::link::{link, postlink_compile, Import, LinkedProgram};
 use crate::mavm::{Instruction, Label, LabelId};
-use crate::optimize::BasicGraph;
+use crate::optimize::{BasicGraph, Computer};
 use crate::pos::{BytePos, Location};
 use crate::stringtable::{StringId, StringTable};
 use ast::Func;
@@ -34,9 +35,10 @@ pub use typecheck::{AbstractSyntaxTree, TypeCheckedNode};
 
 mod ast;
 mod codegen;
+mod globals;
 pub mod miniconstants;
 mod source;
-mod translate;
+pub mod translate;
 mod typecheck;
 lalrpop_mod!(mini);
 
@@ -52,10 +54,14 @@ pub struct CompileStruct {
     pub warnings_are_errors: bool,
     #[clap(short, long)]
     pub output: Option<String>,
+    #[clap(short = 'O', long, default_value = "2")]
+    pub optimization_level: usize,
     #[clap(short, long)]
     pub format: Option<String>,
     #[clap(short, long)]
     pub consts_file: Option<String>,
+    #[clap(short, long)]
+    pub globals_file: Option<String>,
     #[clap(short, long)]
     pub must_use_global_consts: bool,
     #[clap(short, long)]
@@ -89,7 +95,7 @@ struct Module {
 
 /// Represents the contents of a source file after type checking is done.
 #[derive(Clone, Debug)]
-struct TypeCheckedModule {
+pub struct TypeCheckedModule {
     /// Collection of functions defined locally within the source file that have been validated by
     /// typechecking
     checked_funcs: BTreeMap<StringId, TypeCheckedFunc>,
@@ -105,8 +111,6 @@ struct TypeCheckedModule {
     imports: Vec<Import>,
     /// The path to the module
     path: Vec<String>,
-    /// The name of the module
-    name: String,
 }
 
 impl CompileStruct {
@@ -140,12 +144,18 @@ impl CompileStruct {
                 Some(path) => Some(Path::new(path)),
                 None => None,
             };
+            let globals_path = match &self.globals_file {
+                Some(path) => Some(Path::new(path)),
+                None => None,
+            };
             let (progs, all_globals) = match compile_from_file(
                 path,
                 &mut file_info_chart,
                 constants_path,
+                globals_path,
                 self.must_use_global_consts,
                 &mut error_system,
+                self.optimization_level,
                 self.release_build,
                 !self.no_builtins,
             ) {
@@ -170,19 +180,15 @@ impl CompileStruct {
 
         let linked_prog = link(unlinked_progs, globals, &mut error_system, self.test_mode);
 
-        let postlinked_prog = match postlink_compile(
-            linked_prog,
-            file_info_chart.clone(),
-            self.test_mode,
-            self.debug_mode,
-        ) {
-            Ok(idk) => idk,
-            Err(err) => {
-                error_system.errors.push(err);
-                error_system.file_info_chart = file_info_chart;
-                return Err(error_system);
-            }
-        };
+        let postlinked_prog =
+            match postlink_compile(linked_prog, file_info_chart.clone(), self.test_mode) {
+                Ok(idk) => idk,
+                Err(err) => {
+                    error_system.errors.push(err);
+                    error_system.file_info_chart = file_info_chart;
+                    return Err(error_system);
+                }
+            };
 
         error_system.file_info_chart = file_info_chart;
 
@@ -234,7 +240,6 @@ impl TypeCheckedModule {
         global_vars: Vec<GlobalVar>,
         imports: Vec<Import>,
         path: Vec<String>,
-        name: String,
     ) -> Self {
         Self {
             checked_funcs,
@@ -244,7 +249,6 @@ impl TypeCheckedModule {
             global_vars,
             imports,
             path,
-            name,
         }
     }
 
@@ -343,6 +347,8 @@ pub struct CompiledFunc {
     pub captures: ClosureAssignments,
     /// The size of the function's frame
     pub frame_size: FrameSize,
+    /// The funcs this func depends on (includes both calls & pointers)
+    pub dependencies: HashSet<LabelId>,
     /// All globals accessible to this func
     pub globals: Vec<GlobalVar>,
     /// Tree of the types
@@ -360,6 +366,7 @@ impl CompiledFunc {
         code: Vec<Instruction>,
         captures: ClosureAssignments,
         frame_size: FrameSize,
+        dependencies: HashSet<LabelId>,
         globals: Vec<GlobalVar>,
         type_tree: TypeTree,
         debug_info: DebugInfo,
@@ -371,6 +378,7 @@ impl CompiledFunc {
             code,
             captures,
             frame_size,
+            dependencies,
             globals,
             type_tree,
             unique_id,
@@ -464,8 +472,10 @@ pub fn compile_from_file(
     path: &Path,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     constants_path: Option<&Path>,
+    globals_path: Option<&Path>,
     must_use_global_consts: bool,
     error_system: &mut ErrorSystem,
+    optimization_level: usize,
     release_build: bool,
     builtins: bool,
 ) -> Result<(Vec<CompiledFunc>, Vec<GlobalVar>), CompileError> {
@@ -495,8 +505,10 @@ pub fn compile_from_file(
             "main",
             file_info_chart,
             constants_path,
+            globals_path,
             must_use_global_consts,
             error_system,
+            optimization_level,
             release_build,
             builtins,
         )
@@ -513,8 +525,10 @@ pub fn compile_from_file(
             })?,
             file_info_chart,
             constants_path,
+            globals_path,
             must_use_global_consts,
             error_system,
+            optimization_level,
             release_build,
             builtins,
         )
@@ -553,8 +567,10 @@ pub fn compile_from_folder(
     main: &str,
     file_info_chart: &mut BTreeMap<u64, FileInfo>,
     constants_path: Option<&Path>,
+    globals_path: Option<&Path>,
     must_use_global_consts: bool,
     error_system: &mut ErrorSystem,
+    optimization_level: usize,
     release_build: bool,
     builtins: bool,
 ) -> Result<(Vec<CompiledFunc>, Vec<GlobalVar>), CompileError> {
@@ -563,6 +579,14 @@ pub fn compile_from_folder(
         Some(path) => Some(path),
         None => match constants_default.exists() {
             true => Some(constants_default.as_path()),
+            false => None,
+        },
+    };
+    let globals_default = folder.join("globals.txt");
+    let globals_path = match globals_path {
+        Some(path) => Some(path),
+        None => match globals_default.exists() {
+            true => Some(globals_default.as_path()),
             false => None,
         },
     };
@@ -609,7 +633,14 @@ pub fn compile_from_folder(
         module.propagate_attributes();
     }
 
-    let (progs, globals) = codegen_modules(typechecked_modules, type_tree, release_build)?;
+    globals::order_globals(globals_path, &mut typechecked_modules)?;
+
+    let (progs, globals) = codegen_modules(
+        typechecked_modules,
+        type_tree,
+        optimization_level,
+        release_build,
+    )?;
     Ok((progs, globals))
 }
 
@@ -883,7 +914,7 @@ fn typecheck_programs(
                  string_table,
                  func_table,
                  path,
-                 name,
+                 name: _,
              }| {
                 let mut typecheck_issues = vec![];
                 let (mut checked_funcs, global_vars, string_table) =
@@ -898,9 +929,10 @@ fn typecheck_programs(
                         &path,
                     )?;
 
-                checked_funcs.iter_mut().for_each(|(id, func)| {
+                for (id, func) in &mut checked_funcs {
                     let detected_view = func.is_view(type_tree);
                     let detected_write = func.is_write(type_tree);
+                    let detected_throw = func.is_throw(type_tree);
 
                     let name = string_table.name_from_id(*id);
 
@@ -926,9 +958,20 @@ fn typecheck_programs(
                         ));
                     }
 
+                    if detected_throw && !func.properties.throw && !func.properties.safe {
+                        typecheck_issues.push(CompileError::new_type_error(
+                            format!(
+                                "Func {} is {} but was not declared so",
+                                Color::red(name),
+                                Color::red("throw")
+                            ),
+                            func.debug_info.locs(),
+                        ));
+                    }
+
                     if !detected_view && func.properties.view {
                         typecheck_issues.push(CompileError::new_warning(
-                            String::from("Typecheck warning"),
+                            "Typecheck warning",
                             format!(
                                 "Func {} is marked {} but isn't",
                                 Color::color(error_system.warn_color, name),
@@ -940,7 +983,7 @@ fn typecheck_programs(
 
                     if !detected_write && func.properties.write {
                         typecheck_issues.push(CompileError::new_warning(
-                            String::from("Typecheck warning"),
+                            "Typecheck warning",
                             format!(
                                 "Func {} is marked {} but isn't",
                                 Color::color(error_system.warn_color, name),
@@ -949,7 +992,43 @@ fn typecheck_programs(
                             func.debug_info.locs(),
                         ));
                     }
-                });
+
+                    if !detected_throw && func.properties.throw {
+                        typecheck_issues.push(CompileError::new_warning(
+                            "Typecheck warning",
+                            format!(
+                                "Func {} is marked {} but isn't",
+                                Color::color(error_system.warn_color, name),
+                                Color::color(error_system.warn_color, "throw")
+                            ),
+                            func.debug_info.locs(),
+                        ));
+                    }
+
+                    if !detected_view
+                        && !detected_write
+                        && func.properties.nouts == 0
+                        && !func.properties.sensitive
+                    {
+                        typecheck_issues.push(CompileError::new_warning(
+                            "Optimizer warning",
+                            format!(
+                                "Func {} is prunable since it's {} and {}. Should it be marked {}?",
+                                Color::color(error_system.warn_color, name),
+                                Color::color(error_system.warn_color, "pure"),
+                                Color::color(error_system.warn_color, "void"),
+                                Color::color(error_system.warn_color, "sensitive"),
+                            ),
+                            func.debug_info.locs(),
+                        ));
+                    }
+
+                    // don't allow an incorrect purity to trip up future stages
+                    func.properties.view |= detected_view;
+                    func.properties.write |= detected_write;
+                    func.properties.throw |= detected_throw;
+                }
+
                 Ok((
                     TypeCheckedModule::new(
                         checked_funcs,
@@ -959,7 +1038,6 @@ fn typecheck_programs(
                         global_vars,
                         imports,
                         path,
-                        name,
                     ),
                     typecheck_issues,
                 ))
@@ -1006,20 +1084,12 @@ fn check_global_constants(
 fn codegen_modules(
     typechecked_modules: Vec<TypeCheckedModule>,
     type_tree: TypeTree,
+    optimization_level: usize,
     release_build: bool,
 ) -> Result<(Vec<CompiledFunc>, Vec<GlobalVar>), CompileError> {
     let mut work_list = vec![];
-    let mut globals_so_far = 0;
 
     for mut module in typechecked_modules {
-        // assign globals to the right of all prior
-        let mut global_vars = HashMap::new();
-        for mut global in module.global_vars {
-            global.offset = Some(globals_so_far);
-            global_vars.insert(global.id, global);
-            globals_so_far += 1;
-        }
-
         // add universal labels to functions
         for (_, func) in &mut module.checked_funcs {
             let unique_id = Import::unique_id(&module.path, &func.name);
@@ -1040,6 +1110,9 @@ fn codegen_modules(
             }
         }
 
+        let global_vars: HashMap<_, _> =
+            module.global_vars.into_iter().map(|g| (g.id, g)).collect();
+
         for (_, func) in module.checked_funcs {
             work_list.push((
                 func,
@@ -1050,6 +1123,56 @@ fn codegen_modules(
             ));
         }
     }
+
+    let pure_funcs = work_list
+        .par_iter()
+        .map(|(func, func_labels, string_table, _, module_path)| {
+            let func_name = func.name.clone();
+            let debug_info = func.debug_info;
+
+            if !func.properties.is_pure() {
+                return Ok(None);
+            }
+
+            let (code, mut label_gen, frame_size) = codegen::mavm_codegen_func(
+                func.clone(),
+                string_table,
+                &HashMap::new(),
+                func_labels,
+                release_build,
+            )?;
+
+            let code = translate::expand_calls(code, &mut label_gen);
+            let code = translate::untag_jumps(code);
+            let code = translate::replace_phi_nodes(code);
+            let code = xformcode::fold_tuples(code, 0)?;
+
+            // a pure program has no globals, not even a jump table since
+            // the emulator can handle backward jumps
+            let globals = vec![];
+
+            // we won't handle closures
+            let captures = HashMap::new();
+
+            // we won't do reachability analysis for this program
+            let dependencies = HashSet::new();
+
+            Ok(Some(CompiledFunc::new(
+                func_name,
+                module_path.to_vec(),
+                code,
+                captures,
+                frame_size,
+                dependencies,
+                globals,
+                type_tree.clone(),
+                debug_info,
+            )))
+        })
+        .collect::<Result<Vec<Option<CompiledFunc>>, CompileError>>()?;
+
+    let pure_funcs: Vec<CompiledFunc> = pure_funcs.into_iter().filter_map(|x| x).collect();
+    let computer = Computer::new(pure_funcs)?;
 
     let mut funcs = work_list
         .into_par_iter()
@@ -1068,10 +1191,12 @@ fn codegen_modules(
             let mut graph = BasicGraph::new(code);
 
             graph.pop_useless_locals();
-            graph.color(frame_size);
+            graph.graph_reduce(&computer, optimization_level);
+            graph.color(frame_size, optimization_level);
             let frame_size = graph.shrink_frame();
 
-            let code = graph.flatten();
+            let (code, dependencies) = graph.flatten();
+            let code = translate::expand_pops(code);
             let code = translate::expand_calls(code, &mut label_gen);
             let code = translate::untag_jumps(code);
             let code = translate::replace_phi_nodes(code);
@@ -1079,18 +1204,17 @@ fn codegen_modules(
 
             let globals: Vec<_> = globals.into_iter().map(|g| g.1).collect();
 
-            let prog = CompiledFunc::new(
+            Ok(CompiledFunc::new(
                 func_name,
                 module_path,
                 code,
                 captures,
                 frame_size,
+                dependencies,
                 globals,
                 type_tree.clone(),
                 debug_info,
-            );
-
-            Ok(prog)
+            ))
         })
         .collect::<Result<Vec<CompiledFunc>, CompileError>>()?;
 
@@ -1293,6 +1417,18 @@ impl CompileError {
             title: String::from("Codegen Error"),
             description: description.to_string(),
             locations: location.into_iter().collect(),
+            is_warning: false,
+        }
+    }
+
+    pub fn internal<S>(description: S, locations: Vec<Location>) -> Self
+    where
+        S: std::string::ToString,
+    {
+        CompileError {
+            title: String::from("Internal Error"),
+            description: description.to_string(),
+            locations,
             is_warning: false,
         }
     }
