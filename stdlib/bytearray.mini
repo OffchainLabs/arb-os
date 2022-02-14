@@ -358,7 +358,7 @@ public throw func bytearray_copy(
     to with { contents: toContents }
 }
 
-public func bytearray_concat(ba1: ByteArray, ba2: ByteArray) -> ByteArray {
+public throw func bytearray_concat(ba1: ByteArray, ba2: ByteArray) -> ByteArray {
     bytearray_copy(ba1, 0, ba2, bytearray_size(ba2), bytearray_size(ba1))
 }
 

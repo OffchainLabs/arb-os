@@ -144,7 +144,7 @@ public view throw func chainParams_getSecondsPerSend() -> uint {
     chainParams_getOrDie(const::Atom_Param_SecondsPerSend)
 }
 
-public view func chainParams_serializeAllParams() -> ByteArray {
+public view throw func chainParams_serializeAllParams() -> ByteArray {
     typesafe_kvsForall::<uint, uint, ByteArray>(globalChainParameters, sapClosure, bytearray_new(0))
 }
 

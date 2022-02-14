@@ -272,7 +272,7 @@ view write throw func arbRetryable_getSubmissionPrice(_topFrame: EvmCallFrame, c
 }
 
 // function serializeAllRetryables() external view returns(bytes memory);
-view write func arbRetryable_serializeAllRetryables(_topFrame: EvmCallFrame, _calldata: ByteArray) {
+view write throw func arbRetryable_serializeAllRetryables(_topFrame: EvmCallFrame, _calldata: ByteArray) {
     let ret = serializeAllRetryables(getRetryBufferInCurrentContext());
     ret = bytearray_copy(
         ret,

@@ -725,7 +725,7 @@ public func account_getCode(acct: Account) -> option<ByteArray> {
     Some((acct.contractInfo?).code)
 }
 
-public func account_getSerializedEVMState(acct: Account) -> ByteArray {
+public throw func account_getSerializedEVMState(acct: Account) -> ByteArray {
     let ret = bytearray_new(0);
     ret = bytearray_set256(ret, 0, uint(acct.addr));
     ret = bytearray_set256(ret, 32, acct.nextSeqNum);
@@ -757,7 +757,7 @@ public func account_getSerializedEVMState(acct: Account) -> ByteArray {
     return ret;
 }
 
-func getSerializedContractInfo(ba: ByteArray, contractInfo: AccountContractInfo) -> ByteArray {
+throw func getSerializedContractInfo(ba: ByteArray, contractInfo: AccountContractInfo) -> ByteArray {
     ba = bytearray_set256(ba, bytearray_size(ba), bytearray_size(contractInfo.code));
     ba = bytearray_copy(
         contractInfo.code,
@@ -777,7 +777,7 @@ func getSerializedContractInfo(ba: ByteArray, contractInfo: AccountContractInfo)
     );
 }
 
-func getSerializedAggregatorInfo(ba: ByteArray, aggregatorInfo: AggregatorInfo) -> ByteArray {
+throw func getSerializedAggregatorInfo(ba: ByteArray, aggregatorInfo: AggregatorInfo) -> ByteArray {
     ba = bytearray_set256(ba, bytearray_size(ba), uint(aggregatorInfo.feeCollector));
     ba = bytearray_set256(ba, bytearray_size(ba), aggregatorInfo.baseTxFeeL1Gas);
     return ba;
@@ -795,7 +795,7 @@ public func account_usesOriginalStorageGasAlloc(acct: Account) -> bool {
 // For each account, do    state = closure(account, state)
 // Return the resulting state
 // The order of traversal is deterministic but weird, and might change in future upgrades, so don't rely on it.
-public func accountStore_forall<S>(acctStore: AccountStore, innerClosure: func(Account, S) -> S, startState: S) -> S {
+public throw func accountStore_forall<S>(acctStore: AccountStore, innerClosure: func(Account, S) -> S, startState: S) -> S {
     typesafe_kvsForall::<address, Account, S>(
         acctStore.accounts,
         closure(_addr: address, acct: Account, state: S) -> S {

@@ -236,7 +236,7 @@ view write throw func arbAddressTable_compress(_topFrame: EvmCallFrame, calldata
 }
 
 // function hashRange(uint start, uint end, bytes32 startChain) external returns(bytes32);
-view write func arbAddressTable_hashRange(_topFrame: EvmCallFrame, calldata: ByteArray) {
+view write throw func arbAddressTable_hashRange(_topFrame: EvmCallFrame, calldata: ByteArray) {
     if bytearray_size(calldata) != 4+3*32 {
         evmOp_revert_knownPc(110, 0, 0);
     }

@@ -598,17 +598,17 @@ public view write throw func redeemRetryableTxInTx(txToRedeem: uint) -> (bool, B
     }
 }
 
-public func serializeAllRetryables(rbuf: RetryBuffer) -> ByteArray {
+public throw func serializeAllRetryables(rbuf: RetryBuffer) -> ByteArray {
     typesafe_kvsForall::<uint, RetryableTx, ByteArray>(
         rbuf.byTxId,
-        closure(_: uint, rtx: RetryableTx, buf: ByteArray) -> ByteArray {
+        throw closure(_: uint, rtx: RetryableTx, buf: ByteArray) -> ByteArray {
             bytearray_concat(buf, serializeRetryable(rtx))
         },
         bytearray_new(0),
     )
 }
 
-func serializeRetryable(rtx: RetryableTx) -> ByteArray {
+throw func serializeRetryable(rtx: RetryableTx) -> ByteArray {
     let ret = bytearray_new(0);
     ret = bytearray_set256(ret, 0, rtx.txId);
     ret = bytearray_set256(ret, 32, uint(rtx.sender));
