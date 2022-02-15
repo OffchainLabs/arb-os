@@ -907,7 +907,7 @@ pub fn sort_top_level_decls(
 pub fn typecheck_top_level_decls(
     funcs: Vec<Func>,
     named_types: &HashMap<usize, Type>,
-    mut global_vars: Vec<GlobalVar>,
+    global_vars: Vec<GlobalVar>,
     imports: &Vec<Import>,
     string_table: StringTable,
     func_table: HashMap<usize, Type>,
@@ -921,12 +921,11 @@ pub fn typecheck_top_level_decls(
     ),
     CompileError,
 > {
-    if let Some(var) = global_vars
-        .iter()
-        .position(|var| &var.name == "__fixedLocationGlobal")
-    {
-        global_vars.swap(0, var)
+    let fixed = "__fixedLocationGlobal";
+    if let Some(index) = global_vars.iter().position(|g| g.name == fixed) {
+        assert_eq!(index, 0);
     }
+
     let global_vars_map = global_vars
         .iter()
         .map(|var| (var.id, var.tipe.clone()))

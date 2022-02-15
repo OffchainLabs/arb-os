@@ -1205,15 +1205,11 @@ view write throw func evmCallStack_returnFromCall_impl(
             if let Some(msg) = topFrame.sendOnFailure {
                 outbox_append(msg);
             }
-            evmTracer_pushReturnRevert(
-                resultCode,
-                if globalCurrentTxRequest.isConstructor { bytearray_new(0) } else { returnData },
-                gasUsage.gasUsed,
-            );
+            evmTracer_pushReturnRevert(resultCode, returnData, gasUsage.gasUsed);
             emitTxReceipt(
                 globalCurrentTxRequest.incomingRequest,
                 resultCode,
-                if globalCurrentTxRequest.isConstructor { None } else { Some(returnData) },
+                Some(returnData),
                 None,
                 Some(gasUsage),
                 feeStats,

@@ -1658,7 +1658,7 @@ fn test_upgrade_arbos_to_different_version() -> Result<(), ethabi::Error> {
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
     assert_eq!(
         arbsys_orig_binding.arbos_version(&mut machine)?,
-        Uint256::from_u64(52),
+        Uint256::from_u64(53),
     );
 
     arbowner._add_chain_owner(&mut machine, my_addr.clone(), true, false)?;
@@ -2789,7 +2789,7 @@ fn test_congestion_price_adjustment() {
     // the chain should be congested now
     machine
         .runtime_env
-        ._advance_time(Uint256::one(), None, false);
+        ._advance_time(Uint256::one(), None, true);
     let _ = machine.run(None);
 
     let prices = arbgasinfo
