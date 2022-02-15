@@ -25,6 +25,7 @@ use accounts::accountStore_get;
 use accounts::accountStore_set;
 use accounts::account_addToEthBalance;
 use accounts::account_checkAndIncrSeqNum;
+use accounts::account_getNextSeqNum;
 
 use blockhash::blockhash_submitHash;
 
@@ -36,6 +37,7 @@ use chainParameters::hasChainOwnerPrivileges;
 use gasAccounting::gasAccounting_prepareTx;
 use gasAccounting::updateL1GasPriceEstimate;
 use gasAccounting::txFeeStats_zero;
+use gasAccounting::feesEnabled;
 
 use messages::TxRequestData;
 use messages::processL2Request;
@@ -152,7 +154,8 @@ view write throw func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox
         set newMsgRaw.timestamp = globalInbox.timestamp;
     }
 
-    let senderIsOwner = hasChainOwnerPrivileges(newMsgRaw.sender);
+    let senderIsOwner = hasChainOwnerPrivileges(newMsgRaw.sender) || newMsgRaw.sender == address(0);
+    let gasEstimation = newMsgRaw.kind == const::L1MessageType_L2ForGasEstimation;
 
     struct {
         kind: newMsgRaw.kind,
@@ -168,7 +171,7 @@ view write throw func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox
             indexInParent: ~0,
         },
         aggregator: None,
-        adminMode: (senderIsOwner || fromSideload) && (newMsgRaw.kind != const::L1MessageType_L2ForGasEstimation),
+        doNotCharge: (senderIsOwner || fromSideload || !feesEnabled()) && !gasEstimation,
         gasEstimationParams: None,
     }
 }
@@ -268,7 +271,7 @@ type IncomingRequest = struct {
     msgData: ByteArray,       // kind-specific data
     provenance: RequestProvenance,
     aggregator: option<AggregatorInfo>,
-    adminMode: bool,          // true iff this is a sideloaded message inserted for private execution by a node
+    doNotCharge: bool,        // true if the request's sender shouldn't be charged gas fees
     gasEstimationParams: option<GasEstimationParams>,  // used if this is a gas estimation message
 };
 
@@ -452,43 +455,40 @@ view write throw func handleUnpackedMessage(msg: IncomingRequest) {
 }
 
 view write throw func handleArrivingTx(tx: TxRequestData) {
-    let (resultCode, request) = gasAccounting_prepareTx(tx);
 
-    if resultCode == const::TxResultCode_success {
-        if processL2Request(request) == None<()> {
-            // reject for message format error
-            emitTxReceipt(
-                request.incomingRequest,
-                const::TxResultCode_formatError,
-                None,
-                None,
-                None,
-                request.feeStats,
-                false,      // don't emit tracing info because the tx was bogus
-                tx.originalCaller,
-            );
+    if let Some(seqNum) = tx.seqNum {
+        let expectedSeqNum = account_getNextSeqNum(accountStore_get(safeGetGlobalAccountStore(), tx.caller));
+        if seqNum != expectedSeqNum {
+            let errorCode = if seqNum < expectedSeqNum {
+                const::TxResultCode_sequenceNumberTooLow
+            } else {
+                const::TxResultCode_sequenceNumberTooHigh
+            };
+            return emitTxReceipt(tx.incomingRequest, errorCode, None, None, None, tx.feeStats, true, tx.originalCaller);
         }
-    } else {
+    }
+
+    let (resultCode, request) = gasAccounting_prepareTx(tx);
+    let stats = request.feeStats;
+    let original = tx.originalCaller;
+
+    if resultCode != const::TxResultCode_success {
         // before emitting a failure receipt, try to increment caller's sequence number
-        if (resultCode != const::TxResultCode_sequenceNumberTooLow) && (resultCode != const::TxResultCode_sequenceNumberTooHigh) {
-            if let Some(seqNum) = request.seqNum {
-                let gAcctStore = safeGetGlobalAccountStore();
-                if let Some(acct) = account_checkAndIncrSeqNum(accountStore_get(gAcctStore, request.caller), seqNum) {
-                    safeSetGlobalAccountStore(accountStore_set(gAcctStore, request.caller, acct));
-                }
+
+        if let Some(seqNum) = request.seqNum {
+            let gAcctStore = safeGetGlobalAccountStore();
+            if let Some(acct) = account_checkAndIncrSeqNum(accountStore_get(gAcctStore, request.caller), seqNum) {
+                safeSetGlobalAccountStore(accountStore_set(gAcctStore, request.caller, acct));
             }
         }
+        return emitTxReceipt(request.incomingRequest, resultCode, None, None, None, stats, true, original);
+    }
 
-        emitTxReceipt(
-            request.incomingRequest,
-            resultCode,
-            None,
-            None,
-            None,
-            request.feeStats,
-            true,
-            request.originalCaller,
-        );
+    if let Some(resultCode) = processL2Request(request) {
+        emitTxReceipt(request.incomingRequest, resultCode, None, None, None, stats, true, original);
+    } else {
+        // the message had a format error, so don't emit tracing info because the tx was bogus
+        emitTxReceipt(request.incomingRequest, const::TxResultCode_formatError, None, None, None, stats, false, original);        
     }
 }
 

@@ -507,7 +507,7 @@ public view write throw func gasAccounting_startTxCharges(
 
     let allPurposeGas = {
         let txGasLimit = chainParams_getOrDie(const::Atom_Param_TxGasLimit);
-        if maxGas < txGasLimit || request.incomingRequest.adminMode {
+        if maxGas < txGasLimit || request.incomingRequest.doNotCharge {
             maxGas
         } else {
             // after deducting gas charges for L1, more gas than the tx gas limit still remains unused
@@ -815,142 +815,116 @@ public view write throw func gasAccounting_prepareTx(tx: TxRequestData) -> (
     uint,             // error code, or const::TxResultCode_success if no error
     TxRequestData,
 ) {
-    let adminMode = tx.incomingRequest.adminMode;
+    let doNotCharge = tx.incomingRequest.doNotCharge;
     let senderIsOwner = hasChainOwnerPrivileges(tx.caller);
 
     if tx.incomingRequest.arbBlockNumber > gasAccountingInfo.congestionState.lastArbBlockNumSeen && !senderIsOwner {
         gasAccounting_startNewBlock(tx.incomingRequest.arbBlockNumber, tx.incomingRequest.timestamp);
     }
 
-    if (tx.incomingRequest.sender != address(0)) && feesEnabled() && !adminMode {
-        if let Some(txSeqNum) = tx.seqNum {
-            // don't charge the user if sequence number is wrong
-            let expectedSeqNum = account_getNextSeqNum(accountStore_get(safeGetGlobalAccountStore(), tx.caller));
-            if txSeqNum < expectedSeqNum {
-                return (const::TxResultCode_sequenceNumberTooLow, tx);
-            } else if txSeqNum > expectedSeqNum {
-                return (const::TxResultCode_sequenceNumberTooHigh, tx);
-            }
-        }
-
-        let prices = gasAccountingInfo.currentPrices;
-        set tx.feeStats.units.tx = 1;
-        set tx.feeStats = txFeeStats_setL2Prices(tx.feeStats, prices);
-
-        let ignoreGasPrice = false;
-        let ignoreMaxGas = false;
-
-        let estimationCompGasLimit = if let Some(gep) = tx.incomingRequest.gasEstimationParams {
-            if gep.ignoreGasPrice {
-                set tx.feeStats.noFeeGasEstimationMode = true;
-                ignoreGasPrice = true;
-            }
-            if gep.ignoreMaxGas {
-                set tx.maxGas = account_getEthBalance(accountStore_get(safeGetGlobalAccountStore(), tx.gasPayer)) / gasAccountingInfo.currentPrices.perArbGasTotal;
-                ignoreMaxGas = true;
-            }
-            if ignoreGasPrice && ignoreMaxGas {
-                // high enough to never run out, but not so high as to overflow
-                set tx.maxGas = ~0 / prices.perArbGasTotal;
-            }
-            gep.computeGasLimit
-        } else {
-            0
-        };
-
-        if tx.gasPrice < prices.perArbGasTotal && !tx.feeStats.noFeeGasEstimationMode {
-            return (const::TxResultCode_gasPriceTooLow, tx);
-        }
-
-        let (fullyPaid, feeStats, _totalWeiPaid) = if let Some(aggInfo) = tx.incomingRequest.aggregator {
-            set tx.feeStats.units.calldataUnit = aggInfo.calldataUnits;
-            payForTxAndL1Gas(
-                tx.gasPayer,
-                tx.caller,
-                aggInfo.aggregator,
-                gasAccountingInfo.feeConfig,
-                prices,
-                tx.feeStats,
-                tx.maxGas * prices.perArbGasTotal,
-            )
-        } else {
-            payForTxAndL1Gas(
-                tx.gasPayer,
-                tx.caller,
-                None,
-                gasAccountingInfo.feeConfig,
-                prices,
-                tx.feeStats,
-                tx.maxGas * prices.perArbGasTotal,
-            )
-        };
-
-        set tx.feeStats = feeStats;
-        if !fullyPaid && !tx.feeStats.noFeeGasEstimationMode {
-            // sender didn't have enough gas funds
-            // we took all of the funds to make a partial payment to the aggregator
-            // now fail the tx
-            return (const::TxResultCode_insufficientGasFunds, tx);
-        }
-
-        // compute the number of ArbGas units corresponding to the aggregator fee, and deduct them from the tx
-        // round up to the nearest integer number of units -- this will burn the wei that would pay
-        //       for a fractional ArbGas unit (rounding down would credit the user with fractional
-        //       ETH that we don't have)
-        let roundedUpGasDelta = safeAdd(safeAdd(feeStats.weiPaid.tx, feeStats.weiPaid.calldataUnit), prices.perArbGasTotal - 1) / prices.perArbGasTotal;
-        if tx.maxGas >= roundedUpGasDelta {
-            set tx.maxGas = tx.maxGas - roundedUpGasDelta;
-        } else {
-            set tx.feeStats.units.calldataUnit = feeStats.units.calldataUnit;
-            return (const::TxResultCode_insufficientGasForBaseFee, tx);
-        }
-
-        if tx.incomingRequest.kind == const::L1MessageType_L2ForGasEstimation {
-            let gasPrice = gasAccountingInfo.currentPrices.perArbGasTotal;
-            let gasPayerFunds = account_getEthBalance(accountStore_get(safeGetGlobalAccountStore(), tx.gasPayer));
-            if tx.value > gasPayerFunds {
-                (const::TxResultCode_insufficientBalance, tx)
-            } else {
-                if !(ignoreMaxGas && ignoreGasPrice) {
-                    let affordableGas = (gasPayerFunds - tx.value) / gasPrice;
-                    if (tx.maxGas == 0) || (tx.maxGas > affordableGas) {
-                        set tx.maxGas = affordableGas;
-                    }
-                }
-                set tx.gasPrice = gasPrice;
-                (const::TxResultCode_success, tx)
-            }
-        } else if adminMode || (gasAccountingInfo.gasRemainingThisBlock > 0) || (estimationCompGasLimit > 0) {
-            (const::TxResultCode_success, tx with { gasPrice: gasAccountingInfo.currentPrices.perArbGasTotal })
-        } else {
-            // the current block doesn't have enough gas left to run the tx
-            (const::TxResultCode_congestion, tx)
-        }
-    } else {
+    if doNotCharge || !feesEnabled() {
         // fees are disabled, or this tx isn't chargeable, so just approve it, but set the units in feeStats first
         if let Some(_) = tx.incomingRequest.gasEstimationParams {
             if tx.maxGas == 0 {
                 set tx.maxGas = 100000000000000000;
             }
         }
-        (
-            const::TxResultCode_success,
-            tx with {
-                feeStats: tx.feeStats with {
-                    units: tx.feeStats.units with {
-                        tx: 1
-                    } with {
-                        calldataUnit: if let Some(aggInfo) = tx.incomingRequest.aggregator {
-                            aggInfo.calldataUnits
-                        } else {
-                            0
-                        }
-                    }
+        set tx.gasPrice = 0; // ensure that we don't later reject the transaction for lack of gas funds
+        set tx.feeStats.units.tx = 1;
+        set tx.feeStats.units.calldataUnit = if let Some(aggInfo) = tx.incomingRequest.aggregator {
+            aggInfo.calldataUnits
+        } else {
+            0
+        };
+        return (const::TxResultCode_success, tx);
+    }
+
+    let prices = gasAccountingInfo.currentPrices;
+    set tx.feeStats.units.tx = 1;
+    set tx.feeStats = txFeeStats_setL2Prices(tx.feeStats, prices);
+
+    let ignoreGasPrice = false;
+    let ignoreMaxGas = false;
+
+    let estimationCompGasLimit = if let Some(gep) = tx.incomingRequest.gasEstimationParams {
+        if gep.ignoreGasPrice {
+            set tx.feeStats.noFeeGasEstimationMode = true;
+            ignoreGasPrice = true;
+        }
+        if gep.ignoreMaxGas {
+            set tx.maxGas = account_getEthBalance(accountStore_get(safeGetGlobalAccountStore(), tx.gasPayer)) / gasAccountingInfo.currentPrices.perArbGasTotal;
+            ignoreMaxGas = true;
+        }
+        if ignoreGasPrice && ignoreMaxGas {
+            // high enough to never run out, but not so high as to overflow
+            set tx.maxGas = ~0 / prices.perArbGasTotal;
+        }
+        gep.computeGasLimit
+    } else {
+        0
+    };
+
+    if tx.gasPrice < prices.perArbGasTotal && !tx.feeStats.noFeeGasEstimationMode {
+        return (const::TxResultCode_gasPriceTooLow, tx);
+    }
+
+    let aggregator = None<address>;
+    if let Some(aggInfo) = tx.incomingRequest.aggregator {
+        set tx.feeStats.units.calldataUnit = aggInfo.calldataUnits;
+        aggregator = aggInfo.aggregator;
+    }
+
+    let (fullyPaid, feeStats, _totalWeiPaid) = payForTxAndL1Gas(
+        tx.gasPayer,
+        tx.caller,
+        aggregator,
+        gasAccountingInfo.feeConfig,
+        prices,
+        tx.feeStats,
+        tx.maxGas * prices.perArbGasTotal,
+    );
+    set tx.feeStats = feeStats;
+
+    if !fullyPaid && !feeStats.noFeeGasEstimationMode {
+        // sender didn't have enough gas funds
+        // we took all of the funds to make a partial payment to the aggregator
+        // now fail the tx
+        return (const::TxResultCode_insufficientGasFunds, tx);
+    }
+
+    // compute the number of ArbGas units corresponding to the aggregator fee, and deduct them from the tx
+    // round up to the nearest integer number of units -- this will burn the wei that would pay
+    //       for a fractional ArbGas unit (rounding down would credit the user with fractional
+    //       ETH that we don't have)
+    let roundedUpGasDelta = safeAdd(safeAdd(feeStats.weiPaid.tx, feeStats.weiPaid.calldataUnit), prices.perArbGasTotal - 1) / prices.perArbGasTotal;
+    if tx.maxGas >= roundedUpGasDelta {
+        set tx.maxGas = tx.maxGas - roundedUpGasDelta;
+    } else {
+        set tx.feeStats.units.calldataUnit = feeStats.units.calldataUnit;
+        return (const::TxResultCode_insufficientGasForBaseFee, tx);
+    }
+
+    if tx.incomingRequest.kind == const::L1MessageType_L2ForGasEstimation {
+        let gasPrice = gasAccountingInfo.currentPrices.perArbGasTotal;
+        let gasPayerFunds = account_getEthBalance(accountStore_get(safeGetGlobalAccountStore(), tx.gasPayer));
+        if tx.value > gasPayerFunds {
+            (const::TxResultCode_insufficientBalance, tx)
+        } else {
+            if !(ignoreMaxGas && ignoreGasPrice) {
+                let affordableGas = (gasPayerFunds - tx.value) / gasPrice;
+                if (tx.maxGas == 0) || (tx.maxGas > affordableGas) {
+                    set tx.maxGas = affordableGas;
                 }
-            } with {
-                gasPrice: 0   // ensure that we don't later reject the transaction for lack of gas funds
-            },
-        )
+            }
+            set tx.gasPrice = gasPrice;
+            (const::TxResultCode_success, tx)
+        }
+    } else if (gasAccountingInfo.gasRemainingThisBlock > 0) || (estimationCompGasLimit > 0) {
+        set tx.gasPrice = gasAccountingInfo.currentPrices.perArbGasTotal;
+        (const::TxResultCode_success, tx)
+    } else {
+        // the current block doesn't have enough gas left to run the tx
+        (const::TxResultCode_congestion, tx)
     }
 }
 

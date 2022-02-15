@@ -3,11 +3,15 @@
 //
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
+use accounts::AccountStore;
+use evmCallStack::EvmCallFrame;
+use evmCallStack::IncomingRequestAndLogs;
+use inbox::Inbox;
+use messages::TxRequestData;
 
 use gasAccounting::GasAccountingInfo;
 
 use std::rateEstimator::rateEstimator_new;
-
 
 public func set_globalChainParameters_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> map<uint, uint> {
     oldGlobals.globalChainParameters
@@ -49,4 +53,28 @@ public func set_gasAccountingInfo_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) ->
         retryablePrices: gai.retryablePrices,
         allowedSenders: gai.allowedSenders,
     }
+}
+
+
+// The following functions are for the renaming of IncomingRequest's `.adminMode` to `.doNotCharge`
+// This renaming only nominally alters the types of these variables, not their actual contents
+
+public func set_globalAccountStore_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> AccountStore {
+    unsafecast<AccountStore>(oldGlobals.globalAccountStore)
+}
+
+public func set_globalCallStack_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> option<EvmCallFrame> {
+    unsafecast<option<EvmCallFrame> >(oldGlobals.globalCallStack)
+}
+
+public func set_globalCurrentRetryableRequest_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> option<IncomingRequestAndLogs> {
+    unsafecast<option<IncomingRequestAndLogs> >(oldGlobals.globalCurrentRetryableRequest)
+}
+
+public func set_globalCurrentTxRequest_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> TxRequestData {
+    unsafecast<TxRequestData>(oldGlobals.globalCurrentTxRequest)
+}
+
+public func set_globalInbox_onUpgrade(oldGlobals: GlobalsBeforeUpgrade) -> Inbox {
+    unsafecast<Inbox>(oldGlobals.globalInbox)
 }

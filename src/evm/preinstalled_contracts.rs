@@ -1,7 +1,7 @@
 use super::*;
 #[cfg(test)]
 use crate::evm::live_code::ArbosTest;
-use crate::run::runtime_env::{_inverse_remap_l1_sender_address, remap_l1_sender_address};
+use crate::run::runtime_env::remap_l1_sender_address;
 use crate::run::{load_from_file, Machine, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use crate::upload::CodeUploader;
@@ -2431,16 +2431,12 @@ pub fn _evm_test_arbaggregator(log_to: Option<&Path>, debug: bool) -> Result<(),
 }
 
 #[test]
-fn test_retryable() {
-    match _test_retryable(None, false) {
-        Ok(()) => {}
-        Err(e) => panic!("{}", e),
-    }
-}
-
-pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
+fn test_retryable() -> Result<(), ethabi::Error> {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero(true);
+
+    let log_to = None;
+    let debug = false;
 
     let my_addr = Uint256::from_u64(1234);
 
@@ -2527,7 +2523,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
     arb_replayable._cancel(
         &mut machine,
         txid.clone(),
-        _inverse_remap_l1_sender_address(beneficiary.clone()),
+        crate::run::runtime_env::_inverse_remap_l1_sender_address(beneficiary.clone()),
     )?;
 
     assert_eq!(
