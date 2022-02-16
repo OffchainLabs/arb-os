@@ -204,6 +204,18 @@ public view write func emitTxReceipt(
 ) {
     arbStatistics_addTxReceipt();
 
+    test_only({
+        let (price, units, paid) = (feeStats.price, feeStats.units, feeStats.weiPaid);
+        debug((price, units, paid));
+
+        if resultCode == const::TxResultCode_success {
+            assert((price.tx           * units.tx           == paid.tx,           "mispaid tx"));
+            assert((price.calldataUnit * units.calldataUnit == paid.calldataUnit, "mispaid calldataUnit"));
+            assert((price.storage      * units.storage      == paid.storage,      "mispaid storage"));
+            assert((price.compute      * units.compute      == paid.compute,      "mispaid compute"));
+        }
+    });
+
     let realGasUsage = if let Some(gu) = gasUsage {
         gu
     } else {
@@ -250,7 +262,7 @@ public view write func emitTxReceipt(
         ),
         feeStats,
         originalSender,
-    ),) { log };
+    )) { log };
 }
 
 // The globalOutbox queues a sequence of outgoing messages that ArbOS wants to emit as sends.
