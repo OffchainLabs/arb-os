@@ -38,6 +38,7 @@ use inbox::inbox_currentTimestamp;
 use gasAccounting::GasUsage;
 use gasAccounting::TxFeeStats;
 use gasAccounting::gasAccounting_summaryToPublish;
+use gasAccounting::feesEnabled;
 
 use tracing::EvmTracer;
 use tracing::evmTracer_new;
@@ -192,7 +193,7 @@ view write func update_txReceiptsForBlock(
     return ret;
 }
 
-public view write func emitTxReceipt(
+public view write throw func emitTxReceipt(
     l1message: IncomingRequest,
     resultCode: uint,
     maybeReturnData: option<ByteArray>,
@@ -206,9 +207,8 @@ public view write func emitTxReceipt(
 
     test_only({
         let (price, units, paid) = (feeStats.price, feeStats.units, feeStats.weiPaid);
-        debug((price, units, paid));
 
-        if resultCode == const::TxResultCode_success {
+        if resultCode == const::TxResultCode_success && feesEnabled() {
             assert((price.tx           * units.tx           == paid.tx,           "mispaid tx"));
             assert((price.calldataUnit * units.calldataUnit == paid.calldataUnit, "mispaid calldataUnit"));
             assert((price.storage      * units.storage      == paid.storage,      "mispaid storage"));

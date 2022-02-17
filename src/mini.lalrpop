@@ -246,10 +246,7 @@ StatementKind: StatementKind = {
     "break" <e: Expr?> ";" => StatementKind::Break(e, None),
     "debug" "(" <e: Expr> ")" ";" => StatementKind::DebugPrint(e),
     "assert" "(" <e: Expr> ")" ";" => StatementKind::Assert(e),
-    "test_only" "(" <lno: @L> <e: Expr> ")" ";" => {
-        let constant = Expr::lno(ExprKind::Constant(Constant::Bool(true)), file_info, lno, filename);
-        StatementKind::Assert(Expr::lno(ExprKind::Tuple(vec![constant, e]), file_info, lno, filename))
-    },
+    "test_only" "(" <e: Expr> ")" ";" => StatementKind::TestOnly(e),
     <p: StatementExpr> => p,
     <lno: @L> "set" <i:Ident> <s: SubData+> "=" <e: Expr> ";" => {
 

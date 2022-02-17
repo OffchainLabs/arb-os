@@ -15,6 +15,9 @@ func tests() -> string {
     smash_stack2();
     smash_stack3();
     smash_stack4();
+    smash_stack5();
+    smash_stack6();
+    smash_stack7();
     
     let top = asm() string { noop };
     
@@ -42,4 +45,16 @@ sensitive func smash_stack3() {
 
 sensitive func smash_stack4() {
     load({ 8 }, { return; 8 });
+}
+
+sensitive func smash_stack5() {
+    test_only({32});
+}
+
+sensitive func smash_stack6() {
+    test_only({});
+}
+
+sensitive func smash_stack7() {
+    test_only({return; 32});
 }

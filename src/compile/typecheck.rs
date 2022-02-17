@@ -514,6 +514,7 @@ pub enum TypeCheckedStatementKind {
     While(TypeCheckedExpr, TypeCheckedCodeBlock),
     DebugPrint(TypeCheckedExpr),
     Assert(TypeCheckedExpr),
+    TestOnly(TypeCheckedExpr),
 }
 
 impl AbstractSyntaxTree for TypeCheckedStatement {
@@ -525,6 +526,7 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
             | TypeCheckedStatementKind::SetLocals(_, exp)
             | TypeCheckedStatementKind::AssignGlobal(_, exp)
             | TypeCheckedStatementKind::Assert(exp)
+            | TypeCheckedStatementKind::TestOnly(exp)
             | TypeCheckedStatementKind::DebugPrint(exp) => vec![TypeCheckedNode::Expression(exp)],
             TypeCheckedStatementKind::While(exp, block) => vec![TypeCheckedNode::Expression(exp)]
                 .into_iter()
@@ -1483,7 +1485,9 @@ fn typecheck_statement<'a>(
                 scopes,
             )?;
             match tce.get_type() {
-                Type::Tuple(vec) if vec.len() == 2 && vec[0] == Type::Bool => {
+                Type::Tuple(vec)
+                    if vec.len() == 2 && vec[0] == Type::Bool && vec[1] != Type::Void =>
+                {
                     Ok((TypeCheckedStatementKind::Assert(tce), vec![]))
                 }
                 _ => error!(
@@ -1491,6 +1495,21 @@ fn typecheck_statement<'a>(
                     tce.get_type().print(type_tree)
                 ),
             }
+        }
+        StatementKind::TestOnly(expr) => {
+            let expr = typecheck_expr(
+                expr,
+                type_table,
+                global_vars,
+                func_table,
+                func,
+                type_tree,
+                string_table,
+                undefinable_ids,
+                closures,
+                scopes,
+            )?;
+            Ok((TypeCheckedStatementKind::TestOnly(expr), vec![]))
         }
     }?;
     Ok((

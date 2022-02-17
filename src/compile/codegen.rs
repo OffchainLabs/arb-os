@@ -403,6 +403,16 @@ fn codegen(
                         cgen.code.push(opcode!(@Label(ok_label)));
                         cgen.code.push(opcode!(Pop));
                     }
+                    TypeCheckedStatementKind::TestOnly(expr) => {
+                        if cgen.release_build {
+                            // Release builds don't include test-only constructs
+                            continue;
+                        }
+                        expr!(expr);
+                        if expr.get_type() != Type::Void {
+                            cgen.code.push(opcode!(Pop));
+                        }
+                    }
                     TypeCheckedStatementKind::While(cond, body) => {
                         let loop_slot = cgen.next_slot();
                         let top_label = cgen.label_gen.next();

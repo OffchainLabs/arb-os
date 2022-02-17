@@ -1630,6 +1630,7 @@ pub enum StatementKind {
     While(Expr, CodeBlock),
     DebugPrint(Expr),
     Assert(Expr),
+    TestOnly(Expr),
 }
 
 /// An identifier or array index for left-hand-side substructure assignments
