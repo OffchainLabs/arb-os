@@ -108,7 +108,7 @@ upgradetests/%.mexe: upgradetests/%.mini upgradetests/*.mini stdlib/*.mini built
 	$(compile) -c $(consts) $< -o $@ -t
 
 arb_os/arbos.mexe: arb_os/*.mini arb_os/bridge_arbos_versions.mini arb_os/contractTemplates.mini stdlib/*.mini builtin/*.mini $(consts) $(globals) .make/tools
-	$(compile) arb_os -o $@ -m -r
+	$(compile) arb_os -o $@ -m
 
 parameters.json: arb_os/constants.json .make/tools
 	$(run) make-parameters-list -c arb_os/constants.json > $<
