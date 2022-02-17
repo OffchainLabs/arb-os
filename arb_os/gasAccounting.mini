@@ -816,9 +816,9 @@ public view write throw func gasAccounting_prepareTx(tx: TxRequestData) -> (
     TxRequestData,
 ) {
     let adminMode = tx.incomingRequest.adminMode;
-    let senderIsOwner = hasChainOwnerPrivileges(tx.caller);
+    let isOwner = hasChainOwnerPrivileges(tx.caller) || tx.caller == address(0) || tx.incomingRequest.sender == address(0);
 
-    if tx.incomingRequest.arbBlockNumber > gasAccountingInfo.congestionState.lastArbBlockNumSeen && !senderIsOwner {
+    if tx.incomingRequest.arbBlockNumber > gasAccountingInfo.congestionState.lastArbBlockNumSeen && !isOwner {
         gasAccounting_startNewBlock(tx.incomingRequest.arbBlockNumber, tx.incomingRequest.timestamp);
     }
 

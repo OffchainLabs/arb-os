@@ -31,7 +31,6 @@ use blockhash::blockhash_submitHash;
 use chainParameters::chainParams_gotParamsMessage;
 use chainParameters::chainParams_chainId;
 use chainParameters::chainParams_getOrDie;
-use chainParameters::hasChainOwnerPrivileges;
 
 use gasAccounting::gasAccounting_prepareTx;
 use gasAccounting::updateL1GasPriceEstimate;
@@ -152,7 +151,7 @@ view write throw func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox
         set newMsgRaw.timestamp = globalInbox.timestamp;
     }
 
-    let senderIsOwner = hasChainOwnerPrivileges(newMsgRaw.sender);
+    let senderIsZero = newMsgRaw.sender == address(0);
 
     struct {
         kind: newMsgRaw.kind,
@@ -168,7 +167,7 @@ view write throw func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox
             indexInParent: ~0,
         },
         aggregator: None,
-        adminMode: (senderIsOwner || fromSideload) && (newMsgRaw.kind != const::L1MessageType_L2ForGasEstimation),
+        adminMode: (senderIsZero || fromSideload) && (newMsgRaw.kind != const::L1MessageType_L2ForGasEstimation),
         gasEstimationParams: None,
     }
 }
