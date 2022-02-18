@@ -222,9 +222,10 @@ view write throw func getFromL1Inbox(inbox: Inbox) -> Inbox {
 
     let newMsg = incomingRequestFromRaw(asm() IncomingRequestFromInbox { inbox }, false);
 
-    if (newMsg.sender == address(0) && newMsg.kind == const::L1MessageType_rescueUpgrade) {
+    if (newMsg.sender == address(0) && newMsg.kind == const::L1MessageType_stateCorrection) {
         if let Some(code) = avmCodeBuilder_append(avmCodeBuilder_new(false), bytestream_new(newMsg.msgData)) {
-            unsafecast<view write sensitive func()>(avmCodeBuilder_finish(code))();
+            avmCodeBuilder_finish(code)();
+            error;
         } else {
             debug(667);
         }
