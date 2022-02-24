@@ -68,6 +68,11 @@ view write throw func arbFunctionTable_upload(topFrame: EvmCallFrame, calldata: 
         evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 190, 0, 0);
     }
 
+    let abiEncodedOffset = bytearray_get256(calldata, 4);
+    if abiEncodedOffset != 32 {
+        evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 191, 0, 0);
+    }
+
     let callerAddr = evmCallFrame_getCaller(topFrame);
     let nbytes = bytearray_get256(calldata, 4+32);
 
@@ -82,13 +87,13 @@ view write throw func arbFunctionTable_upload(topFrame: EvmCallFrame, calldata: 
             Some(funcTable)
         );
     } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 191, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 192, 0, 0);
     }
 
     if evmCallStack_setAccount(callerAddr, account) {
         evmOp_return(0, 0);
     } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 192, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 193, 0, 0);
     }
 }
 
