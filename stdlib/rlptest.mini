@@ -187,4 +187,12 @@ write throw func testAddrUintPair() {
         debug(21);
         error;
     }
+
+    addr = address(0x0000000031669ab4083265e0850030fa8dec8daf);
+    ui = 0;
+    let generatedAddr = address(keccakOfRlpEncodedAddrUintPair(addr, ui));
+    if generatedAddr != address(0x7f462B92F92114A2D57A03e5Ae2DB5DA28b77d73) {
+        debug(22);
+        error;
+    }
 }
