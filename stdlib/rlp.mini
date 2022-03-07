@@ -464,10 +464,8 @@ public throw func rlp_encodeUintPair(
     // It will always fit in one byte because max RLP size of address is 21 bytes, uint is 33,
     //        and one-byte indicator covers sum-of-lengths <= 55.
     //        (and the ui1 value will always be cast from an address)
-    let (uba, rlpLen1) = rlp_encodeUint(ui1, ba, offset+1);
-    ba = uba;
-    let (uba, rlpLen2) = rlp_encodeUint(ui2, ba, offset+1+rlpLen1);
-    ba = uba;
+    let (*ba, rlpLen1) = rlp_encodeUint(ui1, ba, offset+1);
+    let (*ba, rlpLen2) = rlp_encodeUint(ui2, ba, offset+1+rlpLen1);
     ba = bytearray_setByte(ba, offset, 0xc0+rlpLen1+rlpLen2);
     (ba, 1+rlpLen1+rlpLen2)
 }
