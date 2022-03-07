@@ -2,6 +2,8 @@
 // Copyright 2021, Offchain Labs, Inc. All rights reserved.
 //
 
+const BasisPointsForOne = 10000;
+
 public throw func safeAdd(x: uint, y: uint) -> uint {
     let ret = x + y;
     if ret < x {
@@ -128,4 +130,25 @@ public throw func safeToUint(x: int) -> uint {
         error;
     }
     uint(x)
+}
+
+// This takes an argument, denominated in basis points, and returns
+// exp(in) denominated in basis points.  This uses a Taylor series approximation, up to the x**4 term,
+// centered at x==0.  The result is clamped to a constant if the input is greater than 2**64.
+// The approximation error will about 5% when in == 2*BasisPointsForOne.  The result will be closer to
+// BasisPointsForOne than the true exp function would be.
+public func approxExpBasisPoints(in: int) -> uint {
+    let (x, wasNegative) = if in < int(0) {
+        (uint(-in), true)
+    } else {
+        (uint(in), false)
+    };
+    if x > (1<<64) {
+        x = 1<<64;
+    }
+    let res = const::BasisPointsForOne + x / 4;
+    res = const::BasisPointsForOne + res * x / (3 * const::BasisPointsForOne);
+    res = const::BasisPointsForOne + res * x / (2 * const::BasisPointsForOne);
+    res = const::BasisPointsForOne + res * x / const::BasisPointsForOne;
+    if wasNegative { (const::BasisPointsForOne * const::BasisPointsForOne) / res } else { res }
 }

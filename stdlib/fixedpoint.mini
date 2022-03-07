@@ -9,6 +9,9 @@
 use std::safeMath::safeAdd;
 use std::safeMath::safeSub;
 use std::safeMath::safeMul;
+use std::safeMath::trySafeAdd;
+use std::safeMath::trySafeMul;
+
 
 type FixedPoint = struct {
     val: uint,
@@ -60,6 +63,13 @@ public throw func fixedPoint_add(x: FixedPoint, y: FixedPoint) -> option<FixedPo
     } else {
         None
     }
+}
+
+public func fixedPoint_tryAddRescale(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {
+    Some(fixedPoint_new(
+        trySafeAdd(trySafeMul(x.val, y.shiftFactor)?, trySafeMul(y.val, x.shiftFactor)?)?,
+        trySafeMul(x.shiftFactor, y.shiftFactor)?,
+    ))
 }
 
 public throw func fixedPoint_plusOne(x: FixedPoint) -> FixedPoint {

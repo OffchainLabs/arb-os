@@ -90,6 +90,10 @@ public func chainParams_getDefaults() -> map<uint, uint> {
         with { [const::Atom_Param_GasPriceOracle] = const::Default_Param_GasPriceOracle }
         with { [const::Atom_Param_EnableL1ContractAddressAliasing] = const::Default_Param_EnableL1ContractAddressAliasing }
         with { [const::Atom_Param_MaxContractSize] = const::Default_Param_MaxContractSize }
+        with { [const::Atom_Param_GasUsageTimeConstant] = const::Default_Param_GasUsageTimeConstant }
+        with { [const::Atom_Param_GasPoolFullnessTargetPercent] = const::Default_Param_GasPoolFullnessTargetPercent }
+        with { [const::Atom_Param_L1GasEstimatorSampleUpdate] = const::Default_Param_L1GasEstimatorSampleUpdate }
+        with { [const::Atom_Param_PoolFullnessRatioWeightBasisPoints] = const::Default_Param_PoolFullnessRatioWeightBasisPoints }
 }
 
 public view write throw func chainParams_gotParamsMessage(data: ByteArray) {
