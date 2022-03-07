@@ -246,7 +246,7 @@ public throw func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) ->
         }
         offset = offset + ba.sliceOffset;
     }
-    ba with { contents: setbuffer8(ba.contents, offset, value) }
+    ba with { contents: setbuffer8(ba.contents, offset, value & 0xff) }
 }
 
 // bytearray_set64 writes an 8-byte chunk to a ByteArray, returning the resulting ByteArray
@@ -270,7 +270,7 @@ public throw func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> B
         offset = offset + ba.sliceOffset;
     }
 
-    ba with { contents: setbuffer64(ba.contents, offset, value) }
+    ba with { contents: setbuffer64(ba.contents, offset, value & 0xffffffffffffffff) }
 }
 
 // bytearray_set256 writes a 32-byte chunk to a ByteArray, returning the resulting ByteArray
