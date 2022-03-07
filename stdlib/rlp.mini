@@ -476,6 +476,28 @@ public throw func keccakOfRlpEncodedUintPair(ui1: uint, ui2: uint) -> bytes32 {
     keccak256(uba, 0, nbytes)
 }
 
+public throw func rlp_encodeAddrUintPair(
+    addr: address,
+    ui: uint,
+    ba: ByteArray,
+    offset: uint
+) -> (ByteArray, uint) {
+    // Leave one byte of space for the RLP list length indicator
+    // It will always fit in one byte because max RLP size of address is 21 bytes, uint is 33,
+    //        and one-byte indicator covers sum-of-lengths <= 55.
+    //        (and the ui1 value will always be cast from an address)
+    let (*ba, rlpLen1) = rlp_encodeAddress(addr, ba, offset+1);
+    let (*ba, rlpLen2) = rlp_encodeUint(ui, ba, offset+1+rlpLen1);
+    ba = bytearray_setByte(ba, offset, 0xc0+rlpLen1+rlpLen2);
+    (ba, 1+rlpLen1+rlpLen2)
+}
+
+public throw func keccakOfRlpEncodedAddrUintPair(addr: address, ui: uint) -> bytes32 {
+    let ba = bytearray_new(64);
+    let (uba, nbytes) = rlp_encodeAddrUintPair(addr, ui, ba, 0);
+    keccak256(uba, 0, nbytes)
+}
+
 public func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)> {
     // read an RLP-encoded uint from bs
     // return None if end-of-stream error, or Some((updated_bs, uint_read))

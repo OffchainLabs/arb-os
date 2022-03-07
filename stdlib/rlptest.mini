@@ -23,6 +23,8 @@ use std::rlp::rlp_encodeAndHashMessageInfoForSignature;
 use std::rlp::rlp_decodeMessageInfo;
 use std::rlp::rlp_decodeUint;
 use std::rlp::rlp_decodeBytes;
+use std::rlp::keccakOfRlpEncodedAddrUintPair;
+use std::rlp::keccakOfRlpEncodedUintPair;
 
 type SignedTx = struct {
     seqNum: uint,
@@ -100,6 +102,8 @@ throw write func main(kind: uint, value: any) {
     }
 
     testRlpHasher();
+
+    testAddrUintPair();
 }
 
 sensitive write throw func testRlpHasher() {
@@ -164,4 +168,23 @@ throw func randomByteArray() -> ByteArray {
         i = i+1;
     }
     ret
+}
+
+write throw func testAddrUintPair() {
+    let addr = address(~0);
+    let ui = 53891389015890;
+    let aukp = keccakOfRlpEncodedAddrUintPair(addr, ui);
+    let auup = keccakOfRlpEncodedUintPair(uint(addr), ui);
+    if aukp != auup {
+        debug(20);
+        error;
+    }
+
+    addr = address(uint(addr)>>8);
+    aukp = keccakOfRlpEncodedAddrUintPair(addr, ui);
+    auup = keccakOfRlpEncodedUintPair(uint(addr), ui);
+    if aukp == auup {
+        debug(21);
+        error;
+    }
 }
