@@ -1,5 +1,5 @@
 //
-// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
+// Copyright 2020-2022, Offchain Labs, Inc. All rights reserved.
 //
 
 
@@ -24,7 +24,7 @@ use retrybuffer::RetryableTx;
 
 use std::bytearray::bytearray_new;
 
-use std::rlp::keccakOfRlpEncodedUintPair;
+use std::rlp::keccakOfRlpEncodedAddrUintPair;
 
 use inbox::IncomingRequest;
 
@@ -112,7 +112,7 @@ public view write throw func processL2Request(request: TxRequestData) -> option<
             set request.seqNum = Some(fetchAndIncrSequenceNum(request.caller));
         }
 
-        set request.calleeAddr = address(keccakOfRlpEncodedUintPair(uint(request.caller), request.seqNum?));
+        set request.calleeAddr = address(keccakOfRlpEncodedAddrUintPair(request.caller, request.seqNum?));
 
         if account_hasContract(accountStore_get(safeGetGlobalAccountStore(), request.calleeAddr)) {
             // there's already an account at that address, revert the call

@@ -1,5 +1,5 @@
 //
-// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+// Copyright 2020-2022, Offchain Labs, Inc. All rights reserved.
 //
 
 use std::bytearray::ByteArray;
@@ -24,7 +24,6 @@ use std::rlp::rlp_decodeMessageInfo;
 use std::rlp::rlp_decodeUint;
 use std::rlp::rlp_decodeBytes;
 use std::rlp::keccakOfRlpEncodedAddrUintPair;
-use std::rlp::keccakOfRlpEncodedUintPair;
 
 type SignedTx = struct {
     seqNum: uint,
@@ -171,26 +170,8 @@ throw func randomByteArray() -> ByteArray {
 }
 
 write throw func testAddrUintPair() {
-    let addr = address(~0);
-    let ui = 53891389015890;
-    let aukp = keccakOfRlpEncodedAddrUintPair(addr, ui);
-    let auup = keccakOfRlpEncodedUintPair(uint(addr), ui);
-    if aukp != auup {
-        debug(20);
-        error;
-    }
-
-    addr = address(uint(addr)>>8);
-    aukp = keccakOfRlpEncodedAddrUintPair(addr, ui);
-    auup = keccakOfRlpEncodedUintPair(uint(addr), ui);
-    if aukp == auup {
-        debug(21);
-        error;
-    }
-
-    addr = address(0x0000000031669ab4083265e0850030fa8dec8daf);
-    ui = 0;
-    let generatedAddr = address(keccakOfRlpEncodedAddrUintPair(addr, ui));
+    let addr = address(0x0000000031669ab4083265e0850030fa8dec8daf);
+    let generatedAddr = address(keccakOfRlpEncodedAddrUintPair(addr, 0));
     if generatedAddr != address(0x7f462B92F92114A2D57A03e5Ae2DB5DA28b77d73) {
         debug(22);
         error;
