@@ -1,5 +1,5 @@
 //
-// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
+// Copyright 2020-2022, Offchain Labs, Inc. All rights reserved.
 //
 
 use accounts::Account;
@@ -67,7 +67,7 @@ use std::avmcodebuilder::avmCodeBuilder_finish;
 
 use std::bytestream::bytestream_new;
 
-use std::rlp::keccakOfRlpEncodedUintPair;
+use std::rlp::keccakOfRlpEncodedAddrUintPair;
 
 
 var upgradeInProgress: option<AvmCodeBuilder>;
@@ -355,7 +355,7 @@ view write throw func arbowner_deployContract(topFrame: EvmCallFrame, calldata: 
     let constructorData = bytearray_extract(calldata, 4+4*32, constructorDataSize);
     let callvalue = evmCallFrame_getCallvalue(topFrame);
 
-    let deployAddress = address(keccakOfRlpEncodedUintPair(uint(deemedSender), deemedNonce));
+    let deployAddress = address(keccakOfRlpEncodedAddrUintPair(deemedSender, deemedNonce));
 
     // The current account is supposed to pay for callvalue of the call, but after we change runningAs below,
     //     the callvalue will be taken from deemedSender. So we transfer the callvalue from the current account

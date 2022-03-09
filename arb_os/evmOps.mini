@@ -87,7 +87,7 @@ use std::codeSegment::getDummyAcceptContractCode;
 use std::codeSegment::translateEvmCodeSegment;
 
 use std::keccak::keccak256;
-use std::rlp::keccakOfRlpEncodedUintPair;
+use std::rlp::keccakOfRlpEncodedAddrUintPair;
 
 
 var evmOpJumpTable: [const::NumEvmOps]view write func();
@@ -1071,7 +1071,7 @@ public view write throw func evmOp_create(value: uint, offset: uint, length: uin
         if ! evmCallStack_setAccount(myAddr, updatedAcct) {
             return address(0);
         }
-        let newAddress = address(keccakOfRlpEncodedUintPair(uint(myAddr), seqNum));
+        let newAddress = address(keccakOfRlpEncodedAddrUintPair(myAddr, seqNum));
         let constructorCode = bytearray_extract(
             evmCallStack_getTopFrameMemoryOrDie(),
             offset,

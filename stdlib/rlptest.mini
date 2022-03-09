@@ -1,5 +1,5 @@
 //
-// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+// Copyright 2020-2022, Offchain Labs, Inc. All rights reserved.
 //
 
 use std::bytearray::ByteArray;
@@ -23,6 +23,7 @@ use std::rlp::rlp_encodeAndHashMessageInfoForSignature;
 use std::rlp::rlp_decodeMessageInfo;
 use std::rlp::rlp_decodeUint;
 use std::rlp::rlp_decodeBytes;
+use std::rlp::keccakOfRlpEncodedAddrUintPair;
 
 type SignedTx = struct {
     seqNum: uint,
@@ -100,6 +101,8 @@ throw write func main(kind: uint, value: any) {
     }
 
     testRlpHasher();
+
+    testAddrUintPair();
 }
 
 sensitive write throw func testRlpHasher() {
@@ -164,4 +167,13 @@ throw func randomByteArray() -> ByteArray {
         i = i+1;
     }
     ret
+}
+
+write throw func testAddrUintPair() {
+    let addr = address(0x0000000031669ab4083265e0850030fa8dec8daf);
+    let generatedAddr = address(keccakOfRlpEncodedAddrUintPair(addr, 0));
+    if generatedAddr != address(0x7f462B92F92114A2D57A03e5Ae2DB5DA28b77d73) {
+        debug(22);
+        error;
+    }
 }
