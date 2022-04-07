@@ -25,21 +25,21 @@ func tests() -> string {
     return "";
 }
 
-func load(_: uint, __: uint) {}
+sensitive func load(_: uint, __: uint) {}
 
-func smash_stack() -> uint {
+sensitive func smash_stack() -> uint {
     asm({ return 4; 4 }, {4}) { noop };
     return 8;
 }
 
-func smash_stack2() {
+sensitive func smash_stack2() {
     asm({ return; 4 }, {4}) { noop };
 }
 
-func smash_stack3() {
+sensitive func smash_stack3() {
     load({ return; 8 }, { 8 });
 }
 
-func smash_stack4() {
+sensitive func smash_stack4() {
     load({ 8 }, { return; 8 });
 }

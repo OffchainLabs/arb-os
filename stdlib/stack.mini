@@ -63,11 +63,11 @@ public func stack_size(stack: Stack) -> uint {
     }
 }
 
-public func stack_discardDeepestItems(stack: Stack, numToDiscard: uint) -> Stack {
+public throw func stack_discardDeepestItems(stack: Stack, numToDiscard: uint) -> Stack {
     stack_ddi2(stack, numToDiscard).0
 }
 
-func stack_ddi2(stack: Stack, numToDiscard: uint) -> (Stack, uint) {
+throw func stack_ddi2(stack: Stack, numToDiscard: uint) -> (Stack, uint) {
     if let Some(res) = stack_pop(stack) {
         let (ustack, val) = res;
         let (subStack, subNum) = stack_ddi2(ustack, numToDiscard);

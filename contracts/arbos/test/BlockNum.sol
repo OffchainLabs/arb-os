@@ -1,4 +1,4 @@
-pragma solidity >=0.4.21 <0.7.0;
+pragma solidity >=0.4.21 <0.9.0;
 
 import "../builtin/ArbSys.sol";
 import "../builtin/ArbosTest.sol";
@@ -14,6 +14,14 @@ contract BlockNum {
 
     function getBlock() public view returns (uint) {
         return block.number;
+    }
+
+    function getOrigin() public returns (address) {
+        return tx.origin;
+    }
+
+    function getBlockNumTimestamp() public returns (uint, uint) {
+        return (block.number, block.timestamp);
     }
 
     function getSender() public view returns (address) {

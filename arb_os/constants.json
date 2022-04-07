@@ -1,5 +1,5 @@
 {
-  "arbos_version": 47,
+  "arbos_version": 56,
   "integer": {
     "AVMSendType_batch": 0,
     "AVM_add": 1,
@@ -85,6 +85,7 @@
     "Address_ArbSys": 100,
     "Address_ArbosTest": 105,
     "Address_ReservedForEthBridge": 200,
+    "ChainID_ArbitrumOne": 42161,
     "Charging_MinArbGasForContractTx": 50,
     "Charging_MemoryChargeDenominator": 100000,
     "ContractStateVersion_original": 0,
@@ -154,6 +155,7 @@
     "L1MessageType_rollupProtocolEvent": 8,
     "L1MessageType_setChainParameters_v36_and_below": 4,
     "L1MessageType_setChainParameters": 11,
+    "L1MessageType_stateCorrection": 255,
     "L1MessageType_submitRetryableTx": 9,
     "L2MessageType_batch": 3,
     "L2MessageType_heartbeat": 6,
@@ -239,7 +241,12 @@
     "RetryableTxLifetimeSeconds": 604800,
     "ArbitrumNonZeroBalanceCallStipend": 1000,
     "GasPriceOracle": 0,
-    "EnableL1ContractAddressAliasing": 1
+    "EnableL1ContractAddressAliasing": 1,
+    "MaxContractSize": 49152,
+    "GasUsageTimeConstant": 60,
+    "GasPoolFullnessTargetPercent": 80,
+    "L1GasEstimatorSampleUpdate": 19,
+    "PoolFullnessRatioWeightBasisPoints": 6000
   },
   "parameters_hex": { }
 }

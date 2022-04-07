@@ -3,11 +3,11 @@ use std2::array::array_new;
 use std2::array::array_get;
 use std2::array::array_set;
 
-write func main() {
+throw write func main() {
     asm(tests().1) { log };
 }
 
-func tests() -> string {
+throw func tests() -> string {
     let a = test_1();
     let b = test_2();
     if (a != "") {
@@ -16,7 +16,7 @@ func tests() -> string {
     return b;
 }
 
-func test_1() -> string {
+throw func test_1() -> string {
     
     let a = array_new::<uint>(17, 8);
     if (array_get::<uint>(a, 6) != 8) {

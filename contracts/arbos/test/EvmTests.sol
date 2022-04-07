@@ -1,4 +1,4 @@
-pragma solidity >=0.4.21 <0.7.0;
+pragma solidity >=0.4.21 <0.9.0;
 
 import "./SelfDestructor.sol";
 
@@ -37,14 +37,6 @@ contract EvmTests {
         }
         if (reread != 73) {
             emit TestFail(5, reread);
-        }
-
-        uint memSize;
-        assembly {
-            memSize := msize()
-        }
-        if (memSize != 50016) {
-            emit TestFail(6, memSize);
         }
     }
 

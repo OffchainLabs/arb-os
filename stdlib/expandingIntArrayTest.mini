@@ -11,11 +11,11 @@ use std::expandingIntArray::expandingIntArray_op;
 use std::bytearray::opClosure;
 
 
-write func main() {
+throw write func main() {
     asm(tests()) { log };
 }
 
-func tests() -> uint {
+throw func tests() -> uint {
 
     let a = expandingIntArray_new();
 

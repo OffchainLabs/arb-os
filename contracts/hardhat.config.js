@@ -1,12 +1,28 @@
+const solcVersion = process.env.SOLC_VERSION || "0.8.10"
+
+if(solcVersion !== "0.6.11" && solcVersion !== "0.8.10" && solcVersion !== "0.7.5")
+  throw new Error("Select a supported solidity version.")
+
 /**
  * @type import('hardhat/config').HardhatUserConfig
  */
-require("@typechain/hardhat");
-
 module.exports = {
-  solidity: "0.6.11",
+  solidity: {
+     compilers: [
+      {
+        version: solcVersion,
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 100,
+          },
+        },
+      }
+    ],
+  },
   paths: {
     sources: "./arbos",
+    artifacts: process.env["HARDHAT_ARTIFACT_PATH"] || "./artifacts"
   },
   defaultNetwork: "localhost",
   networks: {
@@ -19,9 +35,5 @@ module.exports = {
         count: 10,
       },
     },
-  },
-  typechain: {
-    outDir: "src/types",
-    target: "ethers-v5",
-  },
+  }
 };

@@ -1,4 +1,4 @@
-pragma solidity >=0.4.21 <0.7.0;
+pragma solidity >=0.4.21 <0.9.0;
 
 import "./Fibonacci.sol";
 
@@ -27,7 +27,7 @@ contract PaymentChannel {
 	function withdraw(uint amount) public {
 		require(amount <= balances[msg.sender]);
 		balances[msg.sender] -= amount;
-		msg.sender.transfer(amount);
+		payable(msg.sender).transfer(amount);
 
 		emit Withdrawn(msg.sender, amount);
 	}

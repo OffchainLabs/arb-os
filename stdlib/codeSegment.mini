@@ -134,7 +134,7 @@ public view write func codeSegment_init() {
     };
 }
 
-view write func dummyAcceptFunction() {
+view write throw func dummyAcceptFunction() {
     evmOp_return(0, 0);
 }
 
@@ -148,11 +148,14 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
         || (opcode == 0x1e)  // invalid
         || (opcode == 0x1f)  // invalid
         || ((opcode >= 0x21) && (opcode <= 0x2f)) // invalid
-        || ((opcode >= 0x48) && (opcode <= 0x4f)) // invalid
+        || ((opcode >= 0x49) && (opcode <= 0x4f)) // invalid
         || (opcode == 0x56)  // JUMP
         || ((opcode >= 0x5c) && (opcode <= 0x5f)) // invalid
         || ((opcode >= 0xa5) && (opcode <= 0xef)) // invalid
         || (opcode == 0xf3)  // RETURN
+        || ((opcode >= 0xf6) && (opcode <= 0xf9)) // invalid
+        || (opcode == 0xfb)  // invalid
+        || (opcode == 0xfc)  // invalid
         || (opcode == 0xfd)  // REVERT
         || (opcode == 0xfe)  // INVALID
         || (opcode == 0xff); // SELFDESTRUCT
@@ -166,7 +169,7 @@ type GeneratedCode = (
     map<uint, AvmCodePoint>,   // for all EVM JUMPDESTs in the code, map the EVM PC to corresponding AVM codepoint
     Stack                      // PC table (if makePcTable is true)
 );
-view write func generateCodeForEvmSegment(
+view write throw func generateCodeForEvmSegment(
     insns: EvmInstructionStack,
     makePcTable: bool,
 ) -> GeneratedCode {
@@ -556,14 +559,14 @@ view write func _validateStackAtRuntime(origCode: AvmCodePoint, pc: uint, jumpTa
     return (code, jumpTable);
 }
 
-public view write func translateEvmCodeSegment(
+public view write throw func translateEvmCodeSegment(
     bs: ByteStream,
     makePcTable: bool,
 ) -> (AvmCodePoint, map<uint, AvmCodePoint>, Stack) {
     generateCodeForEvmSegment(parseEvmCodeSegment(bs), makePcTable)
 }
 
-view write func pushEvmInsnDenomCheck(
+view write throw func pushEvmInsnDenomCheck(
     opcode: uint,
     numStackOperands: uint,
     restOfCode: AvmCodePoint,
@@ -600,7 +603,7 @@ view write func prependPops(numPops: uint, restOfCode: AvmCodePoint) -> AvmCodeP
     restOfCode
 }
 
-view write func pushDupn(
+view write throw func pushDupn(
     n: uint, 
     restOfCode: AvmCodePoint,
 ) -> AvmCodePoint {
@@ -626,7 +629,7 @@ view write func pushDupn(
     }
 }
 
-view write func pushSwapn(
+view write throw func pushSwapn(
     n: uint, 
     restOfCode: AvmCodePoint,
 ) -> AvmCodePoint {

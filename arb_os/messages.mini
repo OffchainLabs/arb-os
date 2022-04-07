@@ -1,5 +1,5 @@
 //
-// Copyright 2020-2021, Offchain Labs, Inc. All rights reserved.
+// Copyright 2020-2022, Offchain Labs, Inc. All rights reserved.
 //
 
 
@@ -24,12 +24,12 @@ use retrybuffer::RetryableTx;
 
 use std::bytearray::bytearray_new;
 
-use std::rlp::keccakOfRlpEncodedUintPair;
+use std::rlp::keccakOfRlpEncodedAddrUintPair;
 
 use inbox::IncomingRequest;
 
 
-view write func fetchAndIncrSequenceNum(addr: address) -> uint {
+view write throw func fetchAndIncrSequenceNum(addr: address) -> uint {
     // Fetch sequence number, and increment it
     let globalAS = safeGetGlobalAccountStore();
     let (ret, updatedAcct) = account_fetchAndIncrSeqNum(
@@ -64,7 +64,7 @@ type TxRequestData = struct {
 
 // Process a request.
 // Return None if message is malformatted; otherwise handle errors and return Some(()); if no error, never return
-public view write func processL2Request(request: TxRequestData) -> option<()> {
+public view write throw func processL2Request(request: TxRequestData) -> option<()> {
     if let Some(sequenceNum) = request.seqNum {
         let expectedSeqNum = account_getNextSeqNum(accountStore_get(safeGetGlobalAccountStore(), request.caller));
         if sequenceNum != expectedSeqNum {
@@ -112,7 +112,7 @@ public view write func processL2Request(request: TxRequestData) -> option<()> {
             set request.seqNum = Some(fetchAndIncrSequenceNum(request.caller));
         }
 
-        set request.calleeAddr = address(keccakOfRlpEncodedUintPair(uint(request.caller), request.seqNum?));
+        set request.calleeAddr = address(keccakOfRlpEncodedAddrUintPair(request.caller, request.seqNum?));
 
         if account_hasContract(accountStore_get(safeGetGlobalAccountStore(), request.calleeAddr)) {
             // there's already an account at that address, revert the call
