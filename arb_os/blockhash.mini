@@ -26,7 +26,7 @@ public view write func blockhash_submitHash(ethBlockNum: uint, inboxAccumHash: b
     let b = if ethBlockNum > blockhashes.latestBlockNum + 255 {
         ethBlockNum - 255
     } else {
-        ethBlockNum
+        blockhashes.latestBlockNum + 1
     };
     while b <= ethBlockNum {  //FORLOOP
         set blockhashes.oldHashes[b%256] = hash(bytes32(b), inboxAccumHash);
