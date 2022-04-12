@@ -244,3 +244,38 @@ public throw func typesafe_kvsForall<K, V, S>(
         )
     );
 }
+
+// Iterate over the differences between two maps
+public throw func kvs_forallDiffs<K, V, S>(
+    s1: map<K, V>,
+    s2: map<K, V>,
+    applicator: func(K, option<V>, option<V>, S) -> S,
+    startState: S,
+) -> S {
+    startState = typesafe_kvsForall::<K, V, S>(
+        s1,
+        closure(key: K, value: V, state: S) -> S {
+            if let Some(value2) = s2[key] {
+                if value == value2 {
+                    state
+                } else {
+                    applicator(key, Some(value), Some(value2), state)
+                }
+            } else {
+                applicator(key, Some(value), None, state)
+            }
+        },
+        startState
+    );
+    typesafe_kvsForall::<K, V, S>(
+        s2,
+        closure(key: K, value2: V, state: S) -> S {
+            if s1[key] == None<V> {
+                applicator(key, None, Some(value2), state)
+            } else {
+                state
+            }
+        },
+        startState,
+    )
+}
