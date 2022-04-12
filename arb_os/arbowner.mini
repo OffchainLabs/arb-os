@@ -51,6 +51,8 @@ use inbox::addressRemapExceptions_set;
 use inbox::isL1MappingException;
 use inbox::serializeAllRemapExceptions;
 
+use output::outbox_send;
+
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
@@ -151,6 +153,8 @@ public view write throw func arbowner_txcall() {
             arbowner_isMappingException(topFrame, calldata);
         } else if funcCode == const::funcCode_ArbOwner_getAllMappingExceptions {
             arbowner_getAllMappingExceptions(topFrame, calldata);
+        } else if funcCode == const::funcCode_ArbOwner_flushL2toL1Sends {
+            arbowner_flushL2toL1Sends(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
@@ -724,4 +728,10 @@ view write throw func arbowner_getAllMappingExceptions(_topFrame: EvmCallFrame, 
     } else {
         evmOp_revert_knownPc(251, 0, 0);
     }
+}
+
+//  function flushL2toL1Sends() external;
+view write throw func arbowner_flushL2toL1Sends(_topFrame: EvmCallFrame, _calldata: ByteArray) {
+    outbox_send();
+    evmOp_return(0, 0);
 }

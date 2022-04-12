@@ -63,6 +63,9 @@ interface ArbOwner {
     function isMappingException(uint from, uint to) external view returns(bool);
     function getAllMappingExceptions() external view returns (bytes memory);
 
+    // Flush L2-to-L1 outbox
+    function flushL2toL1Sends() external;
+
     function getTotalOfEthBalances() external view returns(uint);
 }
 
