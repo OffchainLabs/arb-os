@@ -22,6 +22,7 @@ module.exports = {
   },
   paths: {
     sources: "./arbos",
+    artifacts: process.env["HARDHAT_ARTIFACT_PATH"] || "./artifacts"
   },
   defaultNetwork: "localhost",
   networks: {
