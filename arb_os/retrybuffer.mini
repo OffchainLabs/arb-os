@@ -147,14 +147,14 @@ view write throw func retryBuffer_trimOne(rbuf: RetryBuffer) -> option<RetryBuff
         let (uq, rawQitem) = res;
         let qitem = unsafecast<RetryQueueItem>(rawQitem);
         let currentTimestamp = inbox_currentTimestamp();
+        set rbuf.fifo = uq;
         if qitem.checkTime < currentTimestamp {
             if let Some(rtx) = rbuf.byTxId[qitem.txId] {
                 if rtx.expiryTime < currentTimestamp {
                     rbuf = retryBuffer_delete(rbuf, qitem.txId, true)?;
                 }
-                set rbuf.fifo = uq;
-                ret = Some(rbuf);
             }
+            ret = Some(rbuf);
         }
     }
     ret
