@@ -285,6 +285,11 @@ view write throw func arbRetryable_serializeAllRetryables(_topFrame: EvmCallFram
         64,
         bytearray_size(ret)
     );
+    let retSize = bytearray_size(ret);
+    if retSize % 32 > 0 {
+        // Round up to the next multiple of 32 bytes
+        ret = bytearray_extract(ret, 0, retSize + 32 - (retSize % 32));
+    }
     if evmCallStack_setTopFrameMemory(ret) {
         evmOp_return(0, bytearray_size(ret));
     } else {
