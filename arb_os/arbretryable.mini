@@ -28,6 +28,7 @@ use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_copy;
+use std::bytearray::bytearray_extract;
 
 use gasAccounting::getRetryableTxPrice;
 
