@@ -129,7 +129,7 @@ public view write throw func outputStats_endOfBlock(arbBlockNum: uint, ethBlockN
         gasAccounting_summaryToPublish(),
         globalBlockReceiptData.lastArbBlockNum,
         ethBlockNum,
-    )) { log }; 
+    )) { log };
 
     set globalBlockReceiptData.lastArbBlockNum = arbBlockNum;
 
@@ -300,7 +300,7 @@ public view write throw func outbox_append(item: ByteArray) {
     outputStats_addNonTxLog();
 }
 
-view write throw func outbox_send() {  // emit a send to summarize the current batch, then get ready for the next batch
+public view write throw func outbox_send() {  // emit a send to summarize the current batch, then get ready for the next batch
     let (tree, rootHash) = merkleTreeBuilder_finish(globalOutbox.batch);
 
     // queue a log that includes the whole batch
