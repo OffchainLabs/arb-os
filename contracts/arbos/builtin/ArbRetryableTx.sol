@@ -69,6 +69,20 @@ interface ArbRetryableTx {
     */
     function cancel(bytes32 userTxHash) external;
 
+    /**
+    * @notice Cannot be called manually, included for tx decoding
+    */
+    function createRetryableTicket(
+        address destAddr,
+        uint256 l2CallValue,
+        uint256 maxSubmissionCost,
+        address excessFeeRefundAddress,
+        address callValueRefundAddress,
+        uint256 maxGas,
+        uint256 gasPriceBid,
+        bytes calldata data
+    ) external;
+
     event TicketCreated(bytes32 indexed userTxHash);
     event LifetimeExtended(bytes32 indexed userTxHash, uint newTimeout);
     event Redeemed(bytes32 indexed userTxHash);
