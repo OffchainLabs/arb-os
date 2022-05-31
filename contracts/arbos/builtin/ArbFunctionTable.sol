@@ -12,6 +12,6 @@ interface ArbFunctionTable {
 
     // Get the entry from addr's function table, at index; revert if addr has no table or index out of bounds
     // Returns (functionCode, isPayable, gasLimit)
-    function get(address addr, uint index) external view returns(uint, bool, uint);
+    function get(address addr, uint index) external view returns(uint functionCode, bool isPayable, uint gasLimit);
 }
 

@@ -4,7 +4,7 @@ interface ArbAggregator {
     // Get the preferred aggregator for an address.
     // Returns (preferredAggregatorAddress, isDefault)
     //     isDefault is true if addr is set to prefer the default aggregator
-    function getPreferredAggregator(address addr) external view returns (address, bool);
+    function getPreferredAggregator(address addr) external view returns (address preferredAggregatorAddress, bool isDefault);
 
     // Set the caller's preferred aggregator.
     // If prefAgg is zero, this sets the caller to prefer the default aggregator

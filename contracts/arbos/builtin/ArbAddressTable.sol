@@ -9,13 +9,13 @@ interface ArbAddressTable {
     * @param addr address to register
     * @return index of the address (existing index, or newly created index if not already registered)
     */
-    function register(address addr) external returns(uint);
+    function register(address addr) external returns(uint index);
 
     /** 
     * @param addr address to lookup
     * @return index of an address in the address table (revert if address isn't in the table)
     */
-    function lookup(address addr) external view returns(uint);
+    function lookup(address addr) external view returns(uint index);
 
     /** 
     * @notice Check whether an address exists in the address table
@@ -39,9 +39,10 @@ interface ArbAddressTable {
     * @notice read a compressed address from a bytes buffer
     * @param buf bytes buffer containing an address 
     * @param offset offset of target address
-    * @return resulting address and updated offset into the buffer (revert if buffer is too short)
+    * @return addr resulting address
+    * @return newOffset updated offset into the buffer (revert if buffer is too short)
     */
-    function decompress(bytes calldata buf, uint offset) external pure returns(address, uint);
+    function decompress(bytes calldata buf, uint offset) external pure returns(address addr, uint newOffset);
 
     /**
     * @notice compress an address and return the result, possibly modifying the compression/decompression state
