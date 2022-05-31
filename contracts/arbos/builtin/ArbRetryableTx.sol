@@ -50,7 +50,7 @@ interface ArbRetryableTx {
     * If successful, emits LifetimeExtended event.
     * Revert if userTxHash does not exist, or if the timeout of userTxHash is already at least one lifetime period in the future, or if the sender has insufficient funds (after the deposit).
     * @param userTxHash unique ticket identifier
-    * @return New timeout of userTxHash.
+    * @return newTimeout New timeout of userTxHash.
     */
     function keepalive(bytes32 userTxHash) external payable returns(uint newTimeout);
 
