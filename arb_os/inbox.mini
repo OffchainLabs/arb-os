@@ -200,7 +200,7 @@ view write throw func getFromL1Inbox(inbox: Inbox) -> Inbox {
 
         // there are no more sideloads for this block, so do end of block processing
         outputStats_endOfBlock(inbox.arbBlockNum, inbox.ethBlockNum, inbox.timestamp);
-        blockhash_submitHash(inbox.ethBlockNum, inbox.inboxHashAccumulator);
+        blockhash_submitHash(pendingMsg.ethBlockNumber, inbox.inboxHashAccumulator);
 
         set inbox.pendingMessage = None<IncomingRequest>;
         set inbox.arbBlockNum = inbox.arbBlockNum + 1;
