@@ -18,6 +18,7 @@ use std::merkletree::MerkleTreeBuilder;
 use std::merkletree::merkleTreeBuilder_new;
 use std::merkletree::merkleTreeBuilder_add;
 use std::merkletree::merkleTreeBuilder_finish;
+use std::merkletree::merkleTreeBuilder_isEmpty;
 
 use std::queue::queue_isEmpty;
 use std::queue::queue_new;
@@ -301,6 +302,10 @@ public view write throw func outbox_append(item: ByteArray) {
 }
 
 public view write throw func outbox_send() {  // emit a send to summarize the current batch, then get ready for the next batch
+    if (merkleTreeBuilder_isEmpty(globalOutbox.batch)) {
+        return;
+    }
+
     let (tree, rootHash) = merkleTreeBuilder_finish(globalOutbox.batch);
 
     // queue a log that includes the whole batch
