@@ -32,6 +32,7 @@ use chainParameters::chainParams_gotParamsMessage;
 use chainParameters::chainParams_chainId;
 use chainParameters::chainParams_getOrDie;
 
+use gasAccounting::allowedSenders_allowNone;
 use gasAccounting::allowedSenders_contains;
 use gasAccounting::gasAccounting_prepareTx;
 use gasAccounting::updateL1GasPriceEstimate;
@@ -43,6 +44,7 @@ use messages::processL2Request;
 use messageBatch::messageBatch_tryNew;
 use messageBatch::messageBatch_get;
 
+use output::outbox_send;
 use output::outputStats_endOfBlock;
 use output::emitTxReceipt;
 
@@ -458,6 +460,13 @@ view write throw func handleUnpackedMessage(msg: IncomingRequest) {
             handleArrivingTx(txRequest);
         }
         // submission failed, or no immediate tx included; either way, ignore the messge
+    } else if msg.kind == const::L1MessageType_shutdownForNitro {
+        // get ready to relinquish control to Nitro
+        allowedSenders_allowNone();
+        outbox_send();
+        let _ = asm(1 << 128) any { sideload };
+        // prevent another sideload from immediately occurring
+        set globalInbox.atStartOfBlock = true;
     } else {
         // invalid message type -- ignore it
     }

@@ -155,6 +155,7 @@
     "L1MessageType_rollupProtocolEvent": 8,
     "L1MessageType_setChainParameters_v36_and_below": 4,
     "L1MessageType_setChainParameters": 11,
+    "L1MessageType_shutdownForNitro": 128,
     "L1MessageType_stateCorrection": 255,
     "L1MessageType_submitRetryableTx": 9,
     "L2MessageType_batch": 3,
