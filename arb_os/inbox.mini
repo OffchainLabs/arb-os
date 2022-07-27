@@ -464,9 +464,17 @@ view write throw func handleUnpackedMessage(msg: IncomingRequest) {
         // get ready to relinquish control to Nitro
         allowedSenders_allowNone();
         outbox_send();
-        let _ = asm(1 << 128) any { sideload };
-        // prevent another sideload from immediately occurring
+
+        // end the block
+        outputStats_endOfBlock(globalInbox.arbBlockNum, globalInbox.ethBlockNum, globalInbox.timestamp);
+        blockhash_submitHash(msg.ethBlockNumber, globalInbox.inboxHashAccumulator);
+        set globalInbox.arbBlockNum = globalInbox.arbBlockNum + 1;
+        set globalInbox.ethBlockNum = msg.ethBlockNumber;
+        set globalInbox.timestamp = msg.timestamp;
         set globalInbox.atStartOfBlock = true;
+
+        // emit a special sideload signaling to the node that the shutdown for Nitro has begun
+        let _ = asm(1 << 128) any { sideload };
     } else {
         // invalid message type -- ignore it
     }
