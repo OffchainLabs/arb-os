@@ -9,6 +9,11 @@ interface ArbStatistics {
     //      Total ArbGas used
     //      Number of transaction receipt issued
     //      Number of contracts created
-    function getStats() external view returns(uint, uint, uint, uint, uint, uint);
+    function getStats() external view returns(uint numArbBlock,
+                                              uint numAcct,
+                                              uint totalStorageAlloc,
+                                              uint totalArbGasUsed, 
+                                              uint numTxReceipt,
+                                              uint numContract);
 }
 

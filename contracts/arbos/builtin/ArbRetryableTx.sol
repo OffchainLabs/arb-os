@@ -32,25 +32,27 @@ interface ArbRetryableTx {
     /** 
     * @notice Return the price, in wei, of submitting a new retryable tx with a given calldata size.
     * @param calldataSize call data size to get price of (in wei)
-    * @return (price, nextUpdateTimestamp). Price is guaranteed not to change until nextUpdateTimestamp.
+    * @return price Price in wei
+    * @return nextUpdateTimestamp Price is guaranteed not to change until nextUpdateTimestamp
     */ 
-    function getSubmissionPrice(uint calldataSize) external view returns (uint, uint);
+    function getSubmissionPrice(uint calldataSize) external view returns (uint price, uint nextUpdateTimestamp);
 
     /** 
-     * @notice Return the price, in wei, of extending the lifetime of userTxHash by an additional lifetime period. Revert if userTxHash doesn't exist.
-     * @param userTxHash unique ticket identifier
-     * @return (price, nextUpdateTimestamp). Price is guaranteed not to change until nextUpdateTimestamp.
+    * @notice Return the price, in wei, of extending the lifetime of userTxHash by an additional lifetime period. Revert if userTxHash doesn't exist.
+    * @param userTxHash unique ticket identifier
+    * @return price Price in wei
+    * @return nextUpdateTimestamp Price is guaranteed not to change until nextUpdateTimestamp
     */
-    function getKeepalivePrice(bytes32 userTxHash) external view returns(uint, uint);
+    function getKeepalivePrice(bytes32 userTxHash) external view returns(uint price, uint nextUpdateTimestamp);
 
     /** 
-    @notice Deposits callvalue into the sender's L2 account, then adds one lifetime period to the life of userTxHash.
+    * @notice Deposits callvalue into the sender's L2 account, then adds one lifetime period to the life of userTxHash.
     * If successful, emits LifetimeExtended event.
     * Revert if userTxHash does not exist, or if the timeout of userTxHash is already at least one lifetime period in the future, or if the sender has insufficient funds (after the deposit).
     * @param userTxHash unique ticket identifier
-    * @return New timeout of userTxHash.
+    * @return newTimeout New timeout of userTxHash.
     */
-    function keepalive(bytes32 userTxHash) external payable returns(uint);
+    function keepalive(bytes32 userTxHash) external payable returns(uint newTimeout);
 
     /**
     * @notice Return the beneficiary of userTxHash.
@@ -66,6 +68,20 @@ interface ArbRetryableTx {
     * @param userTxHash unique ticket identifier
     */
     function cancel(bytes32 userTxHash) external;
+
+    /**
+    * @notice Cannot be called manually, included for tx decoding
+    */
+    function createRetryableTicket(
+        address destAddr,
+        uint256 l2CallValue,
+        uint256 maxSubmissionCost,
+        address excessFeeRefundAddress,
+        address callValueRefundAddress,
+        uint256 maxGas,
+        uint256 gasPriceBid,
+        bytes calldata data
+    ) external;
 
     event TicketCreated(bytes32 indexed userTxHash);
     event LifetimeExtended(bytes32 indexed userTxHash, uint newTimeout);
